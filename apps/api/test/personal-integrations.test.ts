@@ -137,6 +137,8 @@ describe("personal integration providers", () => {
   beforeAll(applyMigrations);
   beforeEach(async () => {
     await env.DB.exec(`
+      DELETE FROM jira_privacy_connections;
+      DELETE FROM jira_privacy_accounts;
       DELETE FROM personal_integration_audit_events;
       DELETE FROM personal_integration_connections;
       DELETE FROM identity_principal WHERE id = 'test-agency-member';
@@ -207,6 +209,116 @@ describe("personal integration providers", () => {
       );
     },
   );
+
+  it("verifies Jira identity before persisting its report inventory", async () => {
+    const nango = fakeNango();
+    nango.getConnection.mockResolvedValue({
+      connectionId: "jira-member",
+      providerConfigKey: "jira-savia",
+      tags: {
+        end_user_id: "test-agency-member",
+        end_user_email: "member@savia.test",
+        end_user_display_name: "Member",
+      },
+      metadata: {
+        scopes: ["read:jira-user"],
+        account_name: "Untrusted name",
+        account_id: "Untrusted-id",
+      },
+    });
+    nango.proxy
+      .mockResolvedValueOnce(
+        Response.json([
+          {
+            id: "12345678-1234-1234-1234-123456789abc",
+            scopes: ["read:jira-user"],
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          accountId: "verified:123",
+          displayName: "Verified Member",
+          active: true,
+        }),
+      );
+    const app = configuredApp(nango);
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/connections/jira/complete",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ connectionId: "jira-member" }),
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: { attributes: { externalAccountLabel: "Verified Member" } },
+    });
+    const account = await env.DB.prepare(
+      "SELECT account_id FROM jira_privacy_accounts",
+    ).first();
+    expect(account).toEqual({ account_id: "verified:123" });
+    const connection = await createPersonalIntegrationRepository(
+      env.DB,
+    ).findActiveConnection("test-agency-member", "jira");
+    expect(connection?.externalAccountId).toBe("verified:123");
+    expect(connection?.jiraPrivacyGeneration).toBeTruthy();
+    const listed = await app.request(
+      "https://savia.test/v1/personal-integrations/connections",
+    );
+    const body = JSON.stringify(await listed.json());
+    expect(body).not.toContain("verified:123");
+    expect(body).not.toContain(connection!.jiraPrivacyGeneration!);
+    expect(
+      (
+        await app.request(
+          "https://savia.test/v1/personal-integrations/connections/jira",
+          { method: "DELETE" },
+        )
+      ).status,
+    ).toBe(204);
+    expect(
+      await env.DB.prepare(
+        "SELECT account_id FROM jira_privacy_accounts",
+      ).first(),
+    ).toBeNull();
+    expect(
+      await createPersonalIntegrationRepository(env.DB).findActiveConnection(
+        "test-agency-member",
+        "jira",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("rejects Jira completion if Atlassian identity cannot be verified", async () => {
+    const nango = fakeNango();
+    nango.getConnection.mockResolvedValue({
+      connectionId: "jira-member",
+      providerConfigKey: "jira-savia",
+      tags: {
+        end_user_id: "test-agency-member",
+        end_user_email: "member@savia.test",
+        end_user_display_name: "Member",
+      },
+      metadata: { scopes: [], account_name: "Untrusted" },
+    });
+    nango.proxy.mockResolvedValue(Response.json([]));
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/connections/jira/complete",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ connectionId: "jira-member" }),
+      },
+    );
+    expect(response.status).toBe(502);
+    expect(
+      await env.DB.prepare(
+        "SELECT id FROM personal_integration_connections",
+      ).first(),
+    ).toBeNull();
+  });
 
   it("connects and lists only safe metadata for the authenticated user", async () => {
     const nango = fakeNango();

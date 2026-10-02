@@ -76,6 +76,8 @@ test("writes only the supported production workers and retains their runtime set
         NANGO_LINEAR_INTEGRATION_ID: "linear",
       },
     );
+    assert.equal("NANGO_JIRA_INTEGRATION_ID" in api.vars, false);
+    assert.equal("NANGO_JIRA_REPORTING_CONNECTION_ID" in api.vars, false);
     assert.deepEqual(
       api.ratelimits.find(
         (binding) => binding.name === "PUBLIC_FORMS_RATE_LIMITER",
@@ -154,6 +156,25 @@ test("writes only the supported production workers and retains their runtime set
     assert.ok(admin.assets.run_worker_first.includes("/public/forms/*"));
     assert.ok(admin.assets.run_worker_first.includes("/register"));
     assert.equal(admin.assets.not_found_handling, "single-page-application");
+  } finally {
+    await rm(outputRoot, { force: true, recursive: true });
+  }
+});
+
+test("renders Jira only when its integration ID is explicitly configured", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "savia-jira-config-"));
+  try {
+    await renderProductionConfigs({
+      authD1Id: "auth-d1-id",
+      domainD1Id: "domain-d1-id",
+      jiraIntegrationId: "jira",
+      outputRoot,
+    });
+    const api = await config(outputRoot, "api");
+    assert.equal(api.vars.NANGO_JIRA_INTEGRATION_ID, "jira");
+    assert.equal("NANGO_JIRA_REPORTING_CONNECTION_ID" in api.vars, false);
+    const admin = await config(outputRoot, "admin");
+    assert.equal(JSON.stringify(admin).includes("NANGO_JIRA"), false);
   } finally {
     await rm(outputRoot, { force: true, recursive: true });
   }

@@ -21,6 +21,7 @@ export type NangoConfiguration = {
   oneDrivePersonalIntegrationId?: string;
   oneDriveBusinessIntegrationId?: string;
   jiraIntegrationId?: string;
+  jiraReportingConnectionId?: string;
   linearIntegrationId?: string;
 };
 

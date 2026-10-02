@@ -23,6 +23,7 @@ type ConnectionRow = {
   scopes: string;
   last_validated_at: string | null;
   disconnected_at: string | null;
+  jira_privacy_generation?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -62,6 +63,7 @@ function connectionFromRow(
     updatedAt: row.updated_at,
     nangoConnectionId: row.nango_connection_id,
     nangoIntegrationId: row.nango_integration_id,
+    jiraPrivacyGeneration: row.jira_privacy_generation ?? null,
   };
 }
 
@@ -71,6 +73,7 @@ function publicConnection(row: ConnectionRow): PersonalIntegrationConnection {
     nangoConnectionId: _nangoConnectionId,
     nangoIntegrationId: _nangoIntegrationId,
     externalAccountId: _externalAccountId,
+    jiraPrivacyGeneration: _jiraPrivacyGeneration,
     ...connection
   } = connectionFromRow(row);
   return connection;
@@ -176,7 +179,11 @@ export function createPersonalIntegrationRepository(
       return stored;
     },
 
-    async markDisconnected(principalId, provider, now = new Date().toISOString()) {
+    async markDisconnected(
+      principalId,
+      provider,
+      now = new Date().toISOString(),
+    ) {
       const result = await database
         .prepare(
           `UPDATE personal_integration_connections
@@ -200,12 +207,7 @@ export function createPersonalIntegrationRepository(
       return result.meta.changes === 1;
     },
 
-    async appendAuditEvent({
-      connection,
-      eventType,
-      outcome,
-      errorCode,
-    }) {
+    async appendAuditEvent({ connection, eventType, outcome, errorCode }) {
       await database
         .prepare(
           `INSERT INTO personal_integration_audit_events (

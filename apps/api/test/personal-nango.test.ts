@@ -2,6 +2,25 @@ import { describe, expect, it, vi } from "vitest";
 import { createPersonalIntegrationNangoClient } from "../src/personal-integrations/nango";
 
 describe("personal Nango proxy", () => {
+  it("completes cleanup when a connection is already absent in Nango", async () => {
+    const client = createPersonalIntegrationNangoClient(
+      { baseUrl: "https://nango.example.test", apiKey: "test-key" },
+      async () => new Response(null, { status: 404 }),
+    );
+    await expect(
+      client.deleteConnection("removed-connection", "jira"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("keeps failed cleanup retryable when Nango rejects deletion", async () => {
+    const client = createPersonalIntegrationNangoClient(
+      { baseUrl: "https://nango.example.test", apiKey: "test-key" },
+      async () => new Response("private-error", { status: 503 }),
+    );
+    await expect(client.deleteConnection("connection", "jira")).rejects.toThrow(
+      "The personal integration request could not be completed",
+    );
+  });
   it("forwards a fixed raw OneDrive create request with its no-overwrite guard", async () => {
     const fetcher = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {

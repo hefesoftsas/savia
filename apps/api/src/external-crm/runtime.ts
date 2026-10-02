@@ -14,6 +14,7 @@ export type CrmSecrets = {
   NANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID?: string;
   NANGO_ONEDRIVE_BUSINESS_INTEGRATION_ID?: string;
   NANGO_JIRA_INTEGRATION_ID?: string;
+  NANGO_JIRA_REPORTING_CONNECTION_ID?: string;
   NANGO_LINEAR_INTEGRATION_ID?: string;
 };
 
@@ -35,6 +36,7 @@ export function nangoConfigurationFromEnvironment(
     oneDriveBusinessIntegrationId:
       environment.NANGO_ONEDRIVE_BUSINESS_INTEGRATION_ID,
     jiraIntegrationId: environment.NANGO_JIRA_INTEGRATION_ID,
+    jiraReportingConnectionId: environment.NANGO_JIRA_REPORTING_CONNECTION_ID,
     linearIntegrationId: environment.NANGO_LINEAR_INTEGRATION_ID,
   };
 }

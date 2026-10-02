@@ -24,6 +24,9 @@ import {
 import { createPersonalIntegrationNangoClient } from "../personal-integrations/nango";
 import { createPersonalIntegrationProviderRegistry } from "../personal-integrations/providers";
 import { createPersonalIntegrationRepository } from "../personal-integrations/repository";
+import { createJiraPrivacyRepository } from "../personal-integrations/jira-privacy-repository";
+import { resolveJiraIdentity } from "../personal-integrations/jira-privacy";
+import { cleanJiraPrivacySnapshots } from "../personal-integrations/jira-privacy-runtime";
 import {
   PersonalIntegrationOperations,
   type PersonalIntegrationActionResult,
@@ -616,6 +619,7 @@ export function registerPersonalIntegrationRoutes(
   const providers =
     dependencies?.providers ?? createPersonalIntegrationProviderRegistry({});
   const repository = createPersonalIntegrationRepository(database);
+  const jiraPrivacy = createJiraPrivacyRepository(database);
   const actions = new PendingActionRepository(database);
   const nango = dependencies?.nango;
   const personalActionPayloadCipher = dependencies?.personalActionPayloadCipher;
@@ -701,12 +705,12 @@ export function registerPersonalIntegrationRoutes(
       )
         throw new PersonalIntegrationAccessError();
       const metadata = summary.metadata;
-      const stored = await repository.saveConnection({
+      const completion = {
         principalId: actor.principal.id,
         provider: resolved.provider.id,
         nangoConnectionId: summary.connectionId,
         nangoIntegrationId: resolved.provider.integrationId,
-        status: "connected",
+        status: "connected" as const,
         externalAccountLabel:
           (typeof metadata.account_name === "string" &&
             metadata.account_name) ||
@@ -716,7 +720,22 @@ export function registerPersonalIntegrationRoutes(
           typeof metadata.account_id === "string" ? metadata.account_id : null,
         scopes: scopesFromMetadata(metadata),
         lastValidatedAt: new Date().toISOString(),
-      });
+      };
+      const stored =
+        resolved.provider.id === "jira"
+          ? await jiraPrivacy.saveVerifiedConnection(
+              completion,
+              await resolveJiraIdentity(
+                nango,
+                {
+                  provider: "jira",
+                  nangoConnectionId: summary.connectionId,
+                  nangoIntegrationId: resolved.provider.integrationId,
+                },
+                completion.lastValidatedAt,
+              ),
+            )
+          : await repository.saveConnection(completion);
       const {
         principalId: _principalId,
         nangoConnectionId: _nangoConnectionId,
@@ -810,14 +829,28 @@ export function registerPersonalIntegrationRoutes(
         404,
       );
     try {
-      await nango.deleteConnection(
-        connection.nangoConnectionId,
-        connection.nangoIntegrationId,
-      );
-      await repository.markDisconnected(
-        actor.principal.id,
-        resolved.provider.id,
-      );
+      if (connection.provider === "jira") {
+        const now = new Date().toISOString();
+        await jiraPrivacy.queueDisconnect(connection, "disconnect", now);
+        const pending = (
+          await jiraPrivacy.listCleanup(now, 90, connection.nangoIntegrationId)
+        ).filter(
+          (snapshot) =>
+            snapshot.connectionId === connection.id &&
+            snapshot.nangoConnectionId === connection.nangoConnectionId,
+        );
+        if (await cleanJiraPrivacySnapshots(jiraPrivacy, nango, pending, now))
+          throw new PersonalIntegrationUpstreamError();
+      } else {
+        await nango.deleteConnection(
+          connection.nangoConnectionId,
+          connection.nangoIntegrationId,
+        );
+        await repository.markDisconnected(
+          actor.principal.id,
+          resolved.provider.id,
+        );
+      }
       return context.body(null, 204);
     } catch (exception) {
       const response = personalErrorResponse(exception);

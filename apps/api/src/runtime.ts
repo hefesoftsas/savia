@@ -1,3 +1,4 @@
+import { runJiraPrivacyMaintenance } from "./personal-integrations/jira-privacy-runtime";
 import { runtimePluginRegistryForTenant } from "./studio/plugin-registry-config";
 import { createCollectionGateway } from "./studio/collection-gateway";
 import { remoteMcpResponse } from "./mcp-gateway";
@@ -260,6 +261,7 @@ async function runScheduledAuditRetention(db: D1Database): Promise<void> {
 
 export type RuntimeOverrides = {
   workflowFetch?: typeof fetch;
+  jiraPrivacyFetch?: typeof fetch;
   realtime?: import("./realtime/hub-client").RealtimeHubClient;
   publicForms?: import("./public-forms/routes").PublicFormsOptions;
   signing?: R2SigningCredentials;
@@ -385,6 +387,14 @@ const runtime = {
         ),
         runScheduledNotifications(environment.DB, realtime),
         runScheduledAuditRetention(environment.DB),
+        runJiraPrivacyMaintenance(
+          environment.DB,
+          nangoConfigurationFromEnvironment(environment),
+          createPersonalIntegrationNangoClient(
+            nangoConfigurationFromEnvironment(environment),
+            overrides.jiraPrivacyFetch,
+          ),
+        ),
       ]);
       const failures = results.filter((result) => result.status === "rejected");
       if (failures.length)
@@ -403,6 +413,14 @@ const runtime = {
       ),
       runScheduledNotifications(environment.DB, realtime),
       runScheduledAuditRetention(environment.DB),
+      runJiraPrivacyMaintenance(
+        environment.DB,
+        nangoConfigurationFromEnvironment(environment),
+        createPersonalIntegrationNangoClient(
+          nangoConfigurationFromEnvironment(environment),
+          overrides.jiraPrivacyFetch,
+        ),
+      ),
       maintainRecordHistory(environment.DB).then((report) => {
         console.info(
           JSON.stringify({ event: "record_history_cleanup", ...report }),

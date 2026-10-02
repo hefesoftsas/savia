@@ -7,6 +7,13 @@ import { fileURLToPath } from "node:url";
 export function buildSecretUploads(environment, values) {
   if (!["production", "preview"].includes(environment))
     throw new Error("Unsupported deployment environment");
+  const jiraIntegrationId = values.NANGO_JIRA_INTEGRATION_ID?.trim();
+  const jiraReportingConnectionId =
+    values.NANGO_JIRA_REPORTING_CONNECTION_ID?.trim();
+  if (jiraIntegrationId && !jiraReportingConnectionId)
+    throw new Error(
+      "NANGO_JIRA_REPORTING_CONNECTION_ID is required when Jira is enabled",
+    );
   const oauthCredentialPairs = [
     ["SAVIA_GOOGLE_CLIENT_ID", "SAVIA_GOOGLE_CLIENT_SECRET"],
     ["SAVIA_MICROSOFT_CLIENT_ID", "SAVIA_MICROSOFT_CLIENT_SECRET"],
@@ -116,6 +123,8 @@ export function buildSecretUploads(environment, values) {
       secrets.PLUGIN_REGISTRY_TENANTS = values.PLUGIN_REGISTRY_TENANTS;
     if (app === "api" && values.OPENROUTER_API_KEY)
       secrets.OPENROUTER_API_KEY = values.OPENROUTER_API_KEY;
+    if (app === "api" && jiraReportingConnectionId)
+      secrets.NANGO_JIRA_REPORTING_CONNECTION_ID = jiraReportingConnectionId;
     if (app === "api" && values.SQL_BRIDGE_URL) {
       secrets.SQL_BRIDGE_URL = values.SQL_BRIDGE_URL;
       secrets.SQL_BRIDGE_SECRET = values.SQL_BRIDGE_SECRET;

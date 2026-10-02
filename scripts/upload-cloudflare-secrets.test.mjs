@@ -39,6 +39,34 @@ test("preview secrets always use explicit preview configuration and names", () =
   assert.throws(() => buildSecretUploads("preview", {}), /required/);
 });
 
+test("Jira reporter connection is uploaded only to the matching API worker", () => {
+  for (const environment of ["preview", "production"]) {
+    const plans = buildSecretUploads(environment, {
+      ...values,
+      NANGO_JIRA_INTEGRATION_ID: "jira",
+      NANGO_JIRA_REPORTING_CONNECTION_ID: `jira-owner-${environment}`,
+    });
+    const api = plans.find((plan) => plan.app === "api");
+    assert.equal(
+      api.secrets.NANGO_JIRA_REPORTING_CONNECTION_ID,
+      `jira-owner-${environment}`,
+    );
+    for (const plan of plans.filter((item) => item.app !== "api"))
+      assert.equal("NANGO_JIRA_REPORTING_CONNECTION_ID" in plan.secrets, false);
+  }
+});
+
+test("enabled Jira deployments require an operational reporting connection", () => {
+  assert.throws(
+    () =>
+      buildSecretUploads("preview", {
+        ...values,
+        NANGO_JIRA_INTEGRATION_ID: "jira",
+      }),
+    /NANGO_JIRA_REPORTING_CONNECTION_ID is required when Jira is enabled/,
+  );
+});
+
 test("studio integration key prefers the canonical name over the legacy alias", () => {
   const canonical = buildSecretUploads("preview", {
     ...Object.fromEntries(

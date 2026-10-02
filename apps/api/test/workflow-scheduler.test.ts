@@ -13,6 +13,10 @@ vi.mock("../src/notifications", () => ({
     recoveredLeases: 0,
   })),
 }));
+vi.mock("../src/personal-integrations/jira-privacy-runtime", () => ({
+  runJiraPrivacyMaintenance: vi.fn(async () => undefined),
+}));
+import { runJiraPrivacyMaintenance } from "../src/personal-integrations/jira-privacy-runtime";
 import worker from "../src/index";
 import { runScheduledWorkflows } from "../src/workflows";
 beforeAll(async () => {
@@ -94,4 +98,38 @@ it("prunes domain audit history on the preview scheduled tick", async () => {
       "SELECT id FROM studio_audit WHERE id='scheduled-000'",
     ).first(),
   ).toBeNull();
+});
+
+it.each(["true", "false"])(
+  "runs Jira privacy maintenance in schedule mode %s",
+  async (mode) => {
+    vi.clearAllMocks();
+    await worker.scheduled({} as ScheduledController, {
+      ...env,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: mode,
+      NANGO_JIRA_INTEGRATION_ID: "jira-prod",
+      NANGO_JIRA_REPORTING_CONNECTION_ID: "owner-prod",
+    });
+    expect(runJiraPrivacyMaintenance).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(runJiraPrivacyMaintenance).mock.calls[0];
+    expect(call[0] === env.DB).toBe(true);
+    expect(call[1]).toMatchObject({
+      jiraIntegrationId: "jira-prod",
+      jiraReportingConnectionId: "owner-prod",
+    });
+  },
+);
+
+it("surfaces Jira maintenance failures while other scheduled jobs still run", async () => {
+  vi.clearAllMocks();
+  vi.mocked(runJiraPrivacyMaintenance).mockRejectedValueOnce(
+    new Error("Jira privacy maintenance failed"),
+  );
+  await expect(
+    worker.scheduled({} as ScheduledController, {
+      ...env,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+    }),
+  ).rejects.toThrow("Scheduled jobs failed");
+  expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
 });
