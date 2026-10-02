@@ -516,12 +516,8 @@ describe("admin OAuth bridge", () => {
           `${cookie}; savia.session_token=old-provider-session`,
         );
         expect(response.status).toBe(401);
-        expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
-        expect(response.headers.get("set-cookie")).toContain(
-          "savia.session_token=",
-        );
-        // A rejected switch also invalidates the old refresh session server-side.
-        expect((await f.refresh(source, cookie)).status).toBe(401);
+        // A stale tab must not revoke the valid session shared by another tab.
+        expect(response.headers.get("set-cookie")).toBeNull();
         expect(
           f.authFetch.mock.calls.filter(
             ([request]) =>
@@ -533,7 +529,8 @@ describe("admin OAuth bridge", () => {
             ([request]) =>
               new URL(request.url).pathname === "/api/auth/sign-out",
           ),
-        ).toBe(true);
+        ).toBe(false);
+        expect((await f.refresh(source, cookie)).status).toBe(200);
       },
     );
 

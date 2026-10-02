@@ -817,7 +817,9 @@ export function registerAdminOAuthRoutes(
       .bind(tokenHash, new Date().toISOString())
       .first<{ origin: string }>();
     if (!session || session.origin !== requestOrigin) {
-      await signOutSession(context.req.raw, headers);
+      // Another tab may have just signed in at this cookie's origin. Reject
+      // this tab without revoking that valid session or clearing shared cookies.
+      if (!session) await signOutSession(context.req.raw, headers);
       return Response.json(
         {
           error: {
