@@ -5,6 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/app";
 import type { AppServices } from "@/app-services";
 
+const originalElementScrollTo = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "scrollTo",
+);
+
 const tenant = {
   id: 101,
   name: "Comunidad",
@@ -108,6 +113,15 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  if (originalElementScrollTo) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "scrollTo",
+      originalElementScrollTo,
+    );
+  } else {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+  }
 });
 
 describe("generic tenant pages", () => {
@@ -224,6 +238,8 @@ describe("generic tenant pages", () => {
     open("/tenants/create");
     const appServices = services(),
       user = userEvent.setup();
+    // jsdom does not implement the scroll operation used by the command list.
+    HTMLElement.prototype.scrollTo = vi.fn();
     const person = {
       id: "principal-one",
       displayName: "Persona Uno",
@@ -246,8 +262,14 @@ describe("generic tenant pages", () => {
     };
     vi.mocked(appServices.dataProvider.getList).mockImplementation((resource) =>
       Promise.resolve({
-        data: resource === "users" ? [person] : [],
-        total: resource === "users" ? 1 : 0,
+        data:
+          resource === "users"
+            ? [
+                person,
+                { ...person, id: "principal-two", email: "other@example.test" },
+              ]
+            : [],
+        total: resource === "users" ? 2 : 0,
       }),
     );
     const createdTenant = {
@@ -292,9 +314,32 @@ describe("generic tenant pages", () => {
     await user.click(
       await screen.findByRole("combobox", { name: "Usuario existente" }),
     );
-    await user.click(
-      await screen.findByRole("option", { name: "Persona Uno" }),
+    expect(
+      await screen.findByRole("option", {
+        name: "Persona Uno other@example.test",
+      }),
+    ).toBeVisible();
+    await user.type(
+      screen.getByRole("combobox", { name: "" }),
+      "person@example.test",
     );
+    await waitFor(() =>
+      expect(appServices.dataProvider.getList).toHaveBeenCalledWith(
+        "users",
+        expect.objectContaining({ filter: { q: "person@example.test" } }),
+      ),
+    );
+    await user.click(
+      await screen.findByRole("option", {
+        name: "Persona Uno person@example.test",
+      }),
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Usuario existente" }),
+    ).toHaveTextContent("Persona Uno person@example.test");
+    expect(
+      screen.getByRole("combobox", { name: "Usuario existente" }),
+    ).toHaveAccessibleDescription("Persona Uno person@example.test");
     await user.click(screen.getByRole("button", { name: /Guardar/ }));
     await waitFor(() =>
       expect(appServices.dataProvider.create).toHaveBeenCalledWith(
