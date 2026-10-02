@@ -156,7 +156,7 @@ it("caps the visible inbox at ten messages and distinguishes an empty mailbox", 
 it.each([
   [
     "gmail",
-    "https://mail.google.com/mail/u/?authuser=gmail%40example.com#all/19f123",
+    "https://mail.google.com/mail/?authuser=gmail%40example.com#all/19f123",
   ],
   ["outlook", "https://outlook.live.com/mail/0/id/message-1"],
 ])(
