@@ -875,7 +875,10 @@ export class PersonalIntegrationOperations {
     const rows = (Array.isArray(payload?.messages) ? payload.messages : [])
       .slice(0, 25)
       .flatMap((item) => {
-        const message = normalizeGmailMessage(item);
+        const message = normalizeGmailMessage(
+          item,
+          connection.externalAccountLabel,
+        );
         return message ? [message] : [];
       });
     const messages: PersonalMessage[] = [];
@@ -893,8 +896,30 @@ export class PersonalIntegrationOperations {
                 connection,
               });
               if (!detail.ok) return row;
-              const message = normalizeGmailMessage(await detail.json());
-              return message?.id === row.id ? message : row;
+              const detailPayload = await detail.json();
+              const message = normalizeGmailMessage(
+                detailPayload,
+                connection.externalAccountLabel,
+              );
+              if (message?.id !== row.id) return row;
+              const detailItem =
+                detailPayload &&
+                typeof detailPayload === "object" &&
+                !Array.isArray(detailPayload)
+                  ? (detailPayload as Record<string, unknown>)
+                  : {};
+              const detailHasThreadId =
+                typeof detailItem.threadId === "string" &&
+                /^[a-f0-9]+$/i.test(detailItem.threadId);
+              return {
+                ...row,
+                subject: message.subject ?? row.subject,
+                sender: message.sender ?? row.sender,
+                receivedAt: message.receivedAt ?? row.receivedAt,
+                webLink: detailHasThreadId
+                  ? (message.webLink ?? row.webLink)
+                  : (row.webLink ?? message.webLink),
+              };
             } catch {
               return row;
             }

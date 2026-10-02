@@ -400,8 +400,8 @@ describe("personal integration providers", () => {
       Response.json({
         messages: [
           {
-            id: "gmail-message-1",
-            threadId: "gmail-thread-1",
+            id: "ab12",
+            threadId: "cd34",
           },
         ],
         nextPageToken: "gmail-page-2",
@@ -410,8 +410,8 @@ describe("personal integration providers", () => {
     await env.DB.prepare(
       `INSERT INTO personal_integration_connections (
         id, principal_id, provider, nango_connection_id, nango_integration_id,
-        status, scopes, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        status, external_account_label, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         "personal-gmail-read-connection",
@@ -420,6 +420,7 @@ describe("personal integration providers", () => {
         "nango-gmail-read-connection",
         "gmail-savia",
         "connected",
+        "member@savia.test",
         "[]",
         "2026-01-01T00:00:00.000Z",
         "2026-01-01T00:00:00.000Z",
@@ -435,11 +436,12 @@ describe("personal integration providers", () => {
     await expect(response.json()).resolves.toEqual({
       data: [
         {
-          id: "gmail-message-1",
+          id: "ab12",
           subject: null,
           sender: null,
           receivedAt: null,
-          webLink: null,
+          webLink:
+            "https://mail.google.com/mail/u/?authuser=member%40savia.test#all/cd34",
         },
       ],
       pagination: { nextCursor: expect.any(String) },

@@ -29,10 +29,27 @@ export function nativeMailLink(value: unknown): string | null {
 }
 export function normalizeGmailMessage(
   payload: unknown,
+  accountLabel?: string | null,
 ): PersonalMessage | null {
   const item = object(payload);
   const id = text(item.id);
   if (!id) return null;
+  const threadId = text(item.threadId);
+  const mailId =
+    threadId && /^[a-f0-9]+$/i.test(threadId)
+      ? threadId
+      : /^[a-f0-9]+$/i.test(id)
+        ? id
+        : null;
+  const account = accountLabel?.trim();
+  const credibleAccount =
+    account &&
+    account.length <= 320 &&
+    /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?$/i.test(
+      account,
+    )
+      ? account
+      : null;
   const headers = object(item.payload).headers;
   const header = (name: string) =>
     Array.isArray(headers)
@@ -56,7 +73,10 @@ export function normalizeGmailMessage(
       Number.isFinite(timestamp) && !Number.isNaN(new Date(timestamp).getTime())
         ? new Date(timestamp).toISOString()
         : null,
-    webLink: null,
+    webLink:
+      mailId && credibleAccount
+        ? `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(credibleAccount)}#all/${mailId}`
+        : null,
   };
 }
 export function normalizeOutlookMessage(

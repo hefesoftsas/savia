@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { PersonalIntegrationOperations } from "../src/personal-integrations/operations";
+import { normalizeGmailMessage } from "../src/personal-integrations/mail-metadata";
 import type {
   PersonalIntegrationRepository,
   PersonalIntegrationNangoClient,
@@ -29,9 +30,9 @@ function setup(provider: "gmail" | "outlook", responses: unknown[]) {
 describe("personal inbox", () => {
   it("lists recent inbox without a query and hydrates Gmail metadata", async () => {
     const { operations, paths } = setup("gmail", [
-      { messages: [{ id: "1" }] },
+      { messages: [{ id: "message-not-hex", threadId: "deadbeef" }] },
       {
-        id: "1",
+        id: "message-not-hex",
         internalDate: "1767225600000",
         payload: {
           headers: [
@@ -47,11 +48,12 @@ describe("personal inbox", () => {
     } as never);
     expect(messages).toEqual([
       {
-        id: "1",
+        id: "message-not-hex",
         subject: "Hello",
         sender: "Ana <ana@example.com>",
         receivedAt: "2026-01-01T00:00:00.000Z",
-        webLink: null,
+        webLink:
+          "https://mail.google.com/mail/u/?authuser=member%40gmail.com#all/deadbeef",
       },
     ]);
     expect(
@@ -102,6 +104,40 @@ describe("personal inbox", () => {
       new URL(paths[0]!, "https://example.test").searchParams.get("$filter"),
     ).toBe("contains(subject,'renewal')");
     expect(messages[0]?.webLink).toBeNull();
+  });
+});
+
+describe("Gmail browser permalinks", () => {
+  it("uses the Gmail thread ID and account-scoped authuser parameter", () => {
+    expect(
+      normalizeGmailMessage(
+        { id: "message-not-hex", threadId: "aB12ef" },
+        "member+label@gmail.com",
+      )?.webLink,
+    ).toBe(
+      "https://mail.google.com/mail/u/?authuser=member%2Blabel%40gmail.com#all/aB12ef",
+    );
+  });
+
+  it("falls back to a hex message ID and rejects unsafe identifiers or account labels", () => {
+    expect(
+      normalizeGmailMessage(
+        { id: "a1b2", threadId: "../../external" },
+        "member@gmail.com",
+      )?.webLink,
+    ).toBe(
+      "https://mail.google.com/mail/u/?authuser=member%40gmail.com#all/a1b2",
+    );
+    expect(
+      normalizeGmailMessage(
+        { id: "not-hex", threadId: "also-not-hex" },
+        "member@gmail.com",
+      )?.webLink,
+    ).toBeNull();
+    expect(
+      normalizeGmailMessage({ id: "a1b2" }, "member@gmail.com/evil")?.webLink,
+    ).toBeNull();
+    expect(normalizeGmailMessage({ id: "a1b2" })?.webLink).toBeNull();
   });
 });
 
