@@ -318,6 +318,64 @@ it("anchors the first slash menu to its block when the DOM range reports zero bo
   }
 });
 
+it.each([
+  {
+    contentTop: 100,
+    selectionTop: 108,
+    selectionBottom: 128,
+    expectedTop: -36,
+  },
+  { contentTop: 10, selectionTop: 12, selectionBottom: 32, expectedTop: 30 },
+])(
+  "keeps formatting tools outside the selection at $selectionTop px",
+  async ({ contentTop, selectionTop, selectionBottom, expectedTop }) => {
+    const { container } = render(
+      <PageEditor
+        pageId="one"
+        api={api}
+        pages={new PagesClient(api)}
+        readOnly={false}
+        initialValue={[{ type: "p", children: [{ text: "Select this text" }] }]}
+        onChange={() => {}}
+      />,
+    );
+    const content = container.querySelector<HTMLElement>(
+      ".page-editor-content",
+    )!;
+    vi.spyOn(content.parentElement!, "getBoundingClientRect").mockReturnValue({
+      left: 100,
+      top: contentTop,
+    } as DOMRect);
+    act(() => screen.getByRole("textbox", { name: "Page content" }).focus());
+    const text = screen.getByText("Select this text").firstChild!;
+    Object.defineProperty(text.parentElement!, "isContentEditable", {
+      value: true,
+      configurable: true,
+    });
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, 6);
+    Object.defineProperty(range, "getBoundingClientRect", {
+      value: () => ({
+        left: 100,
+        width: 60,
+        top: selectionTop,
+        bottom: selectionBottom,
+      }),
+    });
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent.mouseMove(text.parentElement!);
+    fireEvent(document, new Event("selectionchange"));
+    const toolbar = await screen.findByRole("toolbar", { name: "Formatting" });
+    expect(toolbar.style.top).toBe(`${expectedTop}px`);
+    expect(
+      screen.queryByRole("toolbar", { name: "Block actions" }),
+    ).not.toBeInTheDocument();
+  },
+);
+
 it("preserves the selected text range when applying compact formatting tools", async () => {
   const changed = vi.fn();
   const { container } = render(
