@@ -794,7 +794,12 @@ export const PageEditor = memo(function PageEditor({
     ) {
       const bounds = editorContentRef.current.getBoundingClientRect();
       const x = Math.max(8, rect.left + rect.width / 2 - bounds.left);
-      const y = Math.max(0, rect.top - bounds.top - 44);
+      // Allow the toolbar above the first line; flip below only at the viewport edge.
+      const y =
+        (rect.top >= 52
+          ? rect.top - 44
+          : Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 44))) -
+        bounds.top;
       setSelectionTools((previous) =>
         previous?.x === x && previous.y === y ? previous : { x, y },
       );
@@ -888,7 +893,7 @@ export const PageEditor = memo(function PageEditor({
         >
           {!readOnly && (
             <>
-              {hoverBlock && !slashMenu && !insert && (
+              {hoverBlock && !selectionTools && !slashMenu && !insert && (
                 <div
                   className="page-editor-block-controls"
                   ref={blockControlsRef}
