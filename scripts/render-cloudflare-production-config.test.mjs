@@ -58,6 +58,7 @@ test("writes only the supported production workers and retains their runtime set
     assert.equal(api.vars.SAVIA_MCP_URL, "https://savia-mcp.internal/mcp");
     assert.equal(api.vars.SHLINK_SERVER_URL, "https://go.cloud.hefesoft.com");
     assert.equal("OPENROUTER_MODEL" in api.vars, false);
+    assert.equal("COMPANION_ENABLED" in api.vars, false);
     assert.deepEqual(
       Object.fromEntries(
         Object.entries(api.vars).filter(([key]) => key.startsWith("NANGO_")),
@@ -202,6 +203,7 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
       if (app === "api") {
         assert.deepEqual(conf.triggers, { crons: ["* * * * *"] });
         assert.equal(conf.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE, "true");
+        assert.equal(conf.vars.COMPANION_ENABLED, "true");
         assert.equal(conf.r2_buckets[0].bucket_name, "savia-documents-preview");
         assert.equal(
           conf.vars.SAVIA_MCP_URL,

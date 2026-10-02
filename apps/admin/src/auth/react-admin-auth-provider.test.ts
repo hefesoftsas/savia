@@ -150,6 +150,23 @@ describe("React Admin authentication provider", () => {
     ).resolves.toBe(false);
     await expect(
       provider.canAccess?.({
+        resource: "companion-recordings",
+        action: "list",
+      }),
+    ).resolves.toBe(false);
+    session.getPermissions.mockResolvedValueOnce({
+      canReadDocuments: true,
+      canExecuteCommands: true,
+      canManageIdentity: true,
+    });
+    await expect(
+      provider.canAccess?.({
+        resource: "companion-recordings",
+        action: "list",
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      provider.canAccess?.({
         resource: "provider-credentials",
         action: "list",
       }),

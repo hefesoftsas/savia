@@ -127,6 +127,13 @@ export function AssistantConfigurationPanel({
   const [showGlobalKey, setShowGlobalKey] = useState(false);
   const [globalModel, setGlobalModel] = useState("");
   const [savingGlobal, setSavingGlobal] = useState(false);
+  const [transcriptionModel, setTranscriptionModel] = useState("");
+  const [summaryModel, setSummaryModel] = useState("");
+  const [savingMeetingModels, setSavingMeetingModels] = useState(false);
+  const [meetingModelError, setMeetingModelError] = useState<string | null>(
+    null,
+  );
+  const [meetingModelNotice, setMeetingModelNotice] = useState(false);
   const [confirmGlobalKeyClear, setConfirmGlobalKeyClear] = useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState<
     number | undefined
@@ -151,6 +158,8 @@ export function AssistantConfigurationPanel({
   draftSnapshot.current = JSON.stringify([
     globalKey,
     globalModel,
+    transcriptionModel,
+    summaryModel,
     tenantKey,
     tenantModel,
     clearTenantKey,
@@ -164,12 +173,14 @@ export function AssistantConfigurationPanel({
     try {
       const [nextSummary, activeTenant] = await Promise.all([
         client.summary(),
-        client.activeTenant(),
+        globalOnly ? Promise.resolve({ tenants: [] }) : client.activeTenant(),
       ]);
       if (draftSnapshot.current !== snapshot) return;
       setSummary(nextSummary);
       setTenants(activeTenant.tenants);
       setGlobalModel(nextSummary.global?.model ?? "");
+      setTranscriptionModel(nextSummary.global?.transcriptionModel ?? "");
+      setSummaryModel(nextSummary.global?.summaryModel ?? "");
       if (selectedTenantId !== undefined) {
         setTenantModel(
           nextSummary.tenants.find(
@@ -222,20 +233,22 @@ export function AssistantConfigurationPanel({
     globalKey ||
     tenantKey ||
     clearTenantKey ||
+    transcriptionModel !== (summary?.global?.transcriptionModel ?? "") ||
+    summaryModel !== (summary?.global?.summaryModel ?? "") ||
     globalModel !== (summary?.global?.model ?? "") ||
     tenantModel !== (selectedOverride?.model ?? ""),
   );
   const remoteGlobal = useRealtimeRefresh({
     topics: ["settings"],
     tenantId: 0,
-    blocked: draftDirty || savingGlobal || savingTenant,
+    blocked: draftDirty || savingGlobal || savingTenant || savingMeetingModels,
     refresh: load,
   });
   const remoteTenant = useRealtimeRefresh({
     topics: ["settings"],
     tenantId: selectedTenantId,
     enabled: selectedTenantId !== undefined && selectedTenantId !== 0,
-    blocked: draftDirty || savingGlobal || savingTenant,
+    blocked: draftDirty || savingGlobal || savingTenant || savingMeetingModels,
     refresh: load,
   });
 
@@ -281,6 +294,30 @@ export function AssistantConfigurationPanel({
       );
     } finally {
       setSavingGlobal(false);
+    }
+  };
+
+  const saveMeetingModels = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!summary) return;
+    setSavingMeetingModels(true);
+    setMeetingModelError(null);
+    setMeetingModelNotice(false);
+    try {
+      const next = await client.saveGlobal({
+        transcriptionModel: transcriptionModel.trim() || null,
+        summaryModel: summaryModel.trim() || null,
+      });
+      setSummary(next);
+      setTranscriptionModel(next.global?.transcriptionModel ?? "");
+      setSummaryModel(next.global?.summaryModel ?? "");
+      setMeetingModelNotice(true);
+    } catch (exception) {
+      setMeetingModelError(
+        failureMessage(exception, t("Could not save meeting models.")),
+      );
+    } finally {
+      setSavingMeetingModels(false);
     }
   };
 
@@ -502,7 +539,7 @@ export function AssistantConfigurationPanel({
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={savingGlobal}>
+        <Button type="submit" disabled={savingGlobal || savingMeetingModels}>
           {savingGlobal ? <LoaderCircle className="animate-spin" /> : null}
           {t("Guardar")}
         </Button>
@@ -510,12 +547,104 @@ export function AssistantConfigurationPanel({
           <Button
             type="button"
             variant="outline"
-            disabled={savingGlobal}
+            disabled={savingGlobal || savingMeetingModels}
             onClick={() => setConfirmGlobalKeyClear(true)}
           >
             {t("Eliminar clave")}
           </Button>
         ) : null}
+      </div>
+    </form>
+  );
+
+  const meetingModelsForm = (
+    <form className="grid max-w-3xl gap-4" onSubmit={saveMeetingModels}>
+      <p className="text-sm text-muted-foreground">
+        {t(
+          "Uses the configured OpenRouter key. Leave a model blank to use its default.",
+        )}
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid min-w-0 gap-2">
+          <Label htmlFor="meeting-transcription-model">
+            {t("Transcription model")}
+          </Label>
+          <Input
+            id="meeting-transcription-model"
+            value={transcriptionModel}
+            onChange={(event) => {
+              setTranscriptionModel(event.target.value);
+              setMeetingModelNotice(false);
+            }}
+            placeholder={
+              summary?.deployment?.transcriptionModel ??
+              "openai/whisper-large-v3"
+            }
+            aria-describedby="meeting-transcription-help"
+            disabled={savingMeetingModels}
+            maxLength={160}
+            pattern="[a-zA-Z0-9][a-zA-Z0-9._-]*/[a-zA-Z0-9][a-zA-Z0-9._:-]*"
+          />
+          <p
+            id="meeting-transcription-help"
+            className="text-xs text-muted-foreground"
+          >
+            {t(
+              "Use a model compatible with OpenRouter audio transcription (provider/model).",
+            )}
+          </p>
+        </div>
+        <div className="grid min-w-0 gap-2">
+          <Label htmlFor="meeting-summary-model">{t("Summary model")}</Label>
+          <Input
+            id="meeting-summary-model"
+            value={summaryModel}
+            onChange={(event) => {
+              setSummaryModel(event.target.value);
+              setMeetingModelNotice(false);
+            }}
+            placeholder={
+              summary?.global?.model ??
+              summary?.deployment?.summaryModel ??
+              summary?.deployment?.model ??
+              "deepseek/deepseek-v4-flash"
+            }
+            aria-describedby="meeting-summary-help"
+            disabled={savingMeetingModels}
+            maxLength={160}
+            pattern="[a-zA-Z0-9][a-zA-Z0-9._-]*/[a-zA-Z0-9][a-zA-Z0-9._:-]*"
+          />
+          <p
+            id="meeting-summary-help"
+            className="text-xs text-muted-foreground"
+          >
+            {t(
+              "Use a text model for meeting notes. Default: the effective assistant model.",
+            )}
+          </p>
+        </div>
+      </div>
+      {meetingModelError ? (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertDescription>{meetingModelError}</AlertDescription>
+        </Alert>
+      ) : null}
+      {meetingModelNotice ? (
+        <p className="text-sm text-primary" role="status">
+          {t("Meeting models saved.")}
+        </p>
+      ) : null}
+      <div>
+        <Button
+          type="submit"
+          disabled={savingMeetingModels || savingGlobal || summary === null}
+        >
+          {savingMeetingModels ? (
+            <LoaderCircle className="animate-spin" />
+          ) : null}
+          {t("Save models")}
+        </Button>
       </div>
     </form>
   );
@@ -533,22 +662,33 @@ export function AssistantConfigurationPanel({
         }}
       />
       {embedded && globalOnly ? (
-        <CredentialEntry
-          title="OpenRouter"
-          description={t(
-            "AI assistant: platform-wide default key and model.",
-          )}
-          descriptionAsTooltip
-          requirement="required"
-          status={
-            <CredentialStatusBadge
-              configured={globalKeyState === "configured"}
-              label={t(keyState(globalKeyState))}
-            />
-          }
-        >
-          {globalForm}
-        </CredentialEntry>
+        <>
+          <CredentialEntry
+            title="OpenRouter"
+            description={t(
+              "AI assistant: platform-wide default key and model.",
+            )}
+            descriptionAsTooltip
+            requirement="required"
+            status={
+              <CredentialStatusBadge
+                configured={globalKeyState === "configured"}
+                label={t(keyState(globalKeyState))}
+              />
+            }
+          >
+            {globalForm}
+          </CredentialEntry>
+          <CredentialEntry
+            title={t("Meeting recordings")}
+            description={t(
+              "OpenRouter models for transcription and meeting summaries.",
+            )}
+            requirement="optional"
+          >
+            {meetingModelsForm}
+          </CredentialEntry>
+        </>
       ) : (
         <Tabs
           className="gap-4"
@@ -595,6 +735,15 @@ export function AssistantConfigurationPanel({
               </CardHeader>
               <CardContent className="space-y-4">{globalForm}</CardContent>
             </Card>
+            <section
+              className="mt-6 space-y-4"
+              aria-labelledby="meeting-models-heading"
+            >
+              <h2 id="meeting-models-heading" className="text-lg font-semibold">
+                {t("Meeting recordings")}
+              </h2>
+              {meetingModelsForm}
+            </section>
           </TabsContent>
 
           {showTenantConfiguration ? (

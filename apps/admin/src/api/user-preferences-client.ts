@@ -13,6 +13,7 @@ export const sidebarNavigationItemIds = [
   "studio",
   "my-day",
   "pages",
+  "companion-recordings",
   "integrations",
   "provider-credentials",
   "assistant-configuration",

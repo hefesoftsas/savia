@@ -255,6 +255,8 @@ export async function createApplication(
         "SAVIA_INTERNAL_BRIDGE_KEY",
         "OPENROUTER_API_KEY",
         "OPENROUTER_MODEL",
+        "COMPANION_ENABLED",
+        "COMPANION_STT_MODEL",
         "NANGO_API_KEY",
         "NANGO_BASE_URL",
         "NANGO_CONNECT_URL",

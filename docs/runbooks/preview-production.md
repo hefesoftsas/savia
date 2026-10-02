@@ -71,6 +71,11 @@ operational audit events per domain. It does not invoke external CRM operations 
 scheduled collection record-history maintenance. Preview OAuth origins and service
 bindings point to preview.
 
+The Companion meeting-recording pilot is enabled in preview so its authenticated
+recordings routes are available against the isolated preview R2 bucket. The
+generated production Worker config omits `COMPANION_ENABLED`, so Companion stays
+disabled in production until it is deliberately enabled there.
+
 The public gateway uses an exact custom domain. Wildcard custom domains are not
 supported by Cloudflare; tenant-specific hostnames need separately provisioned
 routes/DNS/certificates before use.

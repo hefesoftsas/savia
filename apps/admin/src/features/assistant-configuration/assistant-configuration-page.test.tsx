@@ -61,6 +61,108 @@ function servicesWithSummary(
 }
 
 describe("AssistantConfigurationPage", () => {
+  it("prevents blank meeting overrides from being saved when configuration loading fails", async () => {
+    const services = servicesWithSummary();
+    services.assistantConfiguration.summary = vi
+      .fn()
+      .mockRejectedValue(new Error("Configuration unavailable"));
+    render(<AssistantConfigurationPage services={services} />);
+    await screen.findByText("Configuration unavailable");
+    expect(
+      screen.getByRole("button", { name: "Guardar modelos" }),
+    ).toBeDisabled();
+    expect(services.assistantConfiguration.saveGlobal).not.toHaveBeenCalled();
+  });
+
+  it("saves independent meeting models without changing the assistant key or chat model", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    const initial = await services.assistantConfiguration.summary();
+    services.assistantConfiguration.saveGlobal = vi.fn().mockResolvedValue({
+      ...initial,
+      global: {
+        ...initial.global,
+        transcriptionModel: "openai/whisper-large-v3",
+        summaryModel: "openai/gpt-5",
+      },
+    });
+    render(<AssistantConfigurationPage services={services} />);
+    await user.type(
+      await screen.findByLabelText("Modelo de transcripción"),
+      "openai/whisper-large-v3",
+    );
+    await user.type(screen.getByLabelText("Modelo de resumen"), "openai/gpt-5");
+    await user.click(screen.getByRole("button", { name: "Guardar modelos" }));
+    await waitFor(() =>
+      expect(services.assistantConfiguration.saveGlobal).toHaveBeenCalledWith({
+        transcriptionModel: "openai/whisper-large-v3",
+        summaryModel: "openai/gpt-5",
+      }),
+    );
+    expect(
+      await screen.findByText("Modelos de reuniones guardados."),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Modelo global")).toHaveValue(
+      "deepseek/deepseek-v4-flash",
+    );
+    cleanup();
+    services.assistantConfiguration.summary = vi
+      .fn()
+      .mockResolvedValue(await services.assistantConfiguration.saveGlobal({}));
+    render(<AssistantConfigurationPage services={services} />);
+    expect(await screen.findByLabelText("Modelo de transcripción")).toHaveValue(
+      "openai/whisper-large-v3",
+    );
+    expect(screen.getByLabelText("Modelo de resumen")).toHaveValue(
+      "openai/gpt-5",
+    );
+  });
+
+  it("clears meeting overrides to use defaults without requiring a new key", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    const initial = await services.assistantConfiguration.summary();
+    services.assistantConfiguration.summary = vi.fn().mockResolvedValue({
+      ...initial,
+      global: {
+        ...initial.global,
+        transcriptionModel: "openai/whisper-large-v3",
+        summaryModel: "openai/gpt-5",
+      },
+    });
+    services.assistantConfiguration.saveGlobal = vi
+      .fn()
+      .mockResolvedValue(initial);
+    render(<AssistantConfigurationPage services={services} />);
+    await user.clear(await screen.findByLabelText("Modelo de transcripción"));
+    await user.clear(screen.getByLabelText("Modelo de resumen"));
+    await user.click(screen.getByRole("button", { name: "Guardar modelos" }));
+    await waitFor(() =>
+      expect(services.assistantConfiguration.saveGlobal).toHaveBeenCalledWith({
+        transcriptionModel: null,
+        summaryModel: null,
+      }),
+    );
+  });
+
+  it("keeps meeting drafts when saving the assistant model", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    services.assistantConfiguration.saveGlobal = vi
+      .fn()
+      .mockResolvedValue(await services.assistantConfiguration.summary());
+    render(<AssistantConfigurationPage services={services} />);
+    await user.type(
+      await screen.findByLabelText("Modelo de resumen"),
+      "openai/gpt-5",
+    );
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText("Configuración global guardada.");
+    expect(screen.getByLabelText("Modelo de resumen")).toHaveValue(
+      "openai/gpt-5",
+    );
+  });
+
   it("shows saved-key state without rendering the key", async () => {
     render(<AssistantConfigurationPage services={servicesWithSummary()} />);
 

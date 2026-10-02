@@ -170,8 +170,102 @@ describe("assistant OpenRouter configuration", () => {
       deployment: {
         keyState: "deployment_fallback",
         model: "anthropic/claude-sonnet-4",
+        transcriptionModel: "openai/whisper-large-v3",
+        summaryModel: "anthropic/claude-sonnet-4",
       },
     });
+  });
+
+  it("persists global meeting models across partial key and chat-model updates", async () => {
+    const settings = repository();
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      apiKey: "not-a-real-key",
+      model: "deepseek/deepseek-v4-flash",
+      transcriptionModel: "openai/whisper-large-v3-turbo",
+      summaryModel: "openai/gpt-4o-mini",
+    });
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      model: "openai/gpt-5",
+    });
+
+    await expect(settings.summary()).resolves.toMatchObject({
+      global: {
+        model: "openai/gpt-5",
+        transcriptionModel: "openai/whisper-large-v3-turbo",
+        summaryModel: "openai/gpt-4o-mini",
+      },
+    });
+    await expect(
+      settings.effectiveConfigurationFor("test-platform-admin"),
+    ).resolves.toMatchObject({
+      apiKey: "not-a-real-key",
+      model: "openai/gpt-5",
+      transcriptionModel: "openai/whisper-large-v3-turbo",
+      summaryModel: "openai/gpt-4o-mini",
+    });
+  });
+
+  it("keeps meeting model choices global when saving a tenant assistant override", async () => {
+    const settings = repository();
+    await seedAgencyAndMember(101);
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      model: "deepseek/deepseek-v4-flash",
+      transcriptionModel: "openai/whisper-large-v3",
+      summaryModel: "openai/gpt-4o-mini",
+    });
+    await settings.saveAgencyOverride(101, {
+      actorId: "test-platform-admin",
+      model: "openai/gpt-5",
+    });
+
+    await expect(settings.summary()).resolves.toMatchObject({
+      global: {
+        transcriptionModel: "openai/whisper-large-v3",
+        summaryModel: "openai/gpt-4o-mini",
+      },
+    });
+    await expect(
+      settings.effectiveConfigurationFor("tenantless-user"),
+    ).resolves.toMatchObject({
+      model: "deepseek/deepseek-v4-flash",
+      transcriptionModel: "openai/whisper-large-v3",
+      summaryModel: "openai/gpt-4o-mini",
+    });
+  });
+
+  it("uses a tenant assistant model as the meeting summary fallback", async () => {
+    const settings = repository();
+    await seedAgencyAndMember(115);
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      model: "deepseek/deepseek-v4-flash",
+      transcriptionModel: "openai/whisper-large-v3",
+    });
+    await settings.saveAgencyOverride(115, {
+      actorId: "test-platform-admin",
+      model: "openai/gpt-5",
+    });
+    await settings.setActiveAgency("test-agency-member", 115, agencyActor(115));
+
+    await expect(
+      settings.effectiveConfigurationFor("test-agency-member"),
+    ).resolves.toMatchObject({
+      model: "openai/gpt-5",
+      transcriptionModel: "openai/whisper-large-v3",
+      summaryModel: "openai/gpt-5",
+    });
+  });
+
+  it("validates global meeting model identifiers", async () => {
+    await expect(
+      repository().saveGlobal({
+        actorId: "test-platform-admin",
+        transcriptionModel: "invalid",
+      }),
+    ).rejects.toThrow("provider/model format");
   });
 
   it("uses agency, global, and deployment values in field order", async () => {
@@ -193,6 +287,8 @@ describe("assistant OpenRouter configuration", () => {
     ).resolves.toEqual({
       apiKey: "not-a-real-global-key",
       model: "openai/gpt-5",
+      transcriptionModel: "openai/whisper-large-v3",
+      summaryModel: "openai/gpt-5",
       tenantId: 101,
     });
   });

@@ -10,6 +10,8 @@ export type AssistantSettingScope = "global" | "agency";
 export type EffectiveAssistantConfiguration = {
   apiKey?: string;
   model: string;
+  transcriptionModel?: string;
+  summaryModel?: string;
   tenantId?: number;
 };
 
@@ -41,6 +43,8 @@ export type AssistantConfigurationWrite = {
   apiKey?: string;
   clearApiKey?: boolean;
   model?: string | null;
+  transcriptionModel?: string | null;
+  summaryModel?: string | null;
 };
 
 type AssistantSettingRow = {
@@ -50,6 +54,8 @@ type AssistantSettingRow = {
   api_key_ciphertext: string | null;
   api_key_iv: string | null;
   model: string | null;
+  transcription_model: string | null;
+  summary_model: string | null;
   updated_at: string;
   updated_by: string;
 };
@@ -71,6 +77,8 @@ export type AssistantConfigurationSettingSummary = {
   tenantId?: number;
   keyState: AssistantConfigurationKeyState;
   model: string | null;
+  transcriptionModel?: string | null;
+  summaryModel?: string | null;
   updatedAt: string;
   updatedBy: string;
 };
@@ -78,6 +86,8 @@ export type AssistantConfigurationSettingSummary = {
 export type AssistantConfigurationDeploymentSummary = {
   keyState: "deployment_fallback" | "not_configured";
   model: string;
+  transcriptionModel: string;
+  summaryModel: string;
 };
 
 export class AssistantConfigurationUnavailableError extends Error {
@@ -142,6 +152,12 @@ function summary(
     ...(row.agency_id === null ? {} : { tenantId: row.agency_id }),
     keyState,
     model: row.model,
+    ...(row.scope === "global"
+      ? {
+          transcriptionModel: row.transcription_model,
+          summaryModel: row.summary_model,
+        }
+      : {}),
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
   };
@@ -241,6 +257,7 @@ export type AssistantConfigurationRepositoryOptions = {
   encryptionKey?: string;
   deploymentApiKey?: string;
   deploymentModel?: string;
+  deploymentTranscriptionModel?: string;
   now?: () => Date;
 };
 
@@ -249,6 +266,7 @@ export class AssistantConfigurationRepository {
   private readonly now: () => Date;
   private readonly deploymentApiKey?: string;
   private readonly deploymentModel: string;
+  private readonly deploymentTranscriptionModel: string;
 
   constructor(
     private readonly database: D1Database,
@@ -270,6 +288,13 @@ export class AssistantConfigurationRepository {
         defaultOpenRouterModel;
     } catch {
       this.deploymentModel = defaultOpenRouterModel;
+    }
+    try {
+      this.deploymentTranscriptionModel =
+        normalizeAssistantModel(options.deploymentTranscriptionModel) ??
+        "openai/whisper-large-v3";
+    } catch {
+      this.deploymentTranscriptionModel = "openai/whisper-large-v3";
     }
   }
 
@@ -308,7 +333,7 @@ export class AssistantConfigurationRepository {
   async summary(): Promise<AssistantConfigurationSummary> {
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
          FROM assistant_openrouter_settings
          ORDER BY CASE scope WHEN 'global' THEN 0 ELSE 1 END, agency_id`,
       )
@@ -319,6 +344,8 @@ export class AssistantConfigurationRepository {
         ? "deployment_fallback"
         : "not_configured",
       model: this.deploymentModel,
+      transcriptionModel: this.deploymentTranscriptionModel,
+      summaryModel: this.deploymentModel,
     } as const;
     const globalKeyState = global?.api_key_ciphertext
       ? "configured"
@@ -467,7 +494,7 @@ export class AssistantConfigurationRepository {
     const agencyId = await this.activeAgencyFor(principalId);
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
          FROM assistant_openrouter_settings
          WHERE id = ? OR id = 'global'`,
       )
@@ -491,6 +518,9 @@ export class AssistantConfigurationRepository {
     return {
       ...(apiKey ? { apiKey } : {}),
       model,
+      transcriptionModel:
+        global?.transcription_model ?? this.deploymentTranscriptionModel,
+      summaryModel: global?.summary_model ?? model,
       ...(agencyId === undefined ? {} : { tenantId: agencyId }),
     };
   }
@@ -503,7 +533,7 @@ export class AssistantConfigurationRepository {
     const id = settingId(scope, agencyId);
     const existing = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
          FROM assistant_openrouter_settings WHERE id = ?`,
       )
       .bind(id)
@@ -532,19 +562,39 @@ export class AssistantConfigurationRepository {
       input.model === undefined
         ? (existing?.model ?? null)
         : normalizeAssistantModel(input.model);
-    if (scope === "agency" && ciphertext === null && model === null) {
+    const transcriptionModel =
+      scope !== "global"
+        ? (existing?.transcription_model ?? null)
+        : input.transcriptionModel === undefined
+          ? (existing?.transcription_model ?? null)
+          : (normalizeAssistantModel(input.transcriptionModel) ?? null);
+    const summaryModel =
+      scope !== "global"
+        ? (existing?.summary_model ?? null)
+        : input.summaryModel === undefined
+          ? (existing?.summary_model ?? null)
+          : (normalizeAssistantModel(input.summaryModel) ?? null);
+    if (
+      scope === "agency" &&
+      ciphertext === null &&
+      model === null &&
+      transcriptionModel === null &&
+      summaryModel === null
+    ) {
       await this.clearAgencyOverride(agencyId!);
       return;
     }
     await this.database
       .prepare(
         `INSERT INTO assistant_openrouter_settings (
-          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, updated_at, updated_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           api_key_ciphertext = excluded.api_key_ciphertext,
           api_key_iv = excluded.api_key_iv,
           model = excluded.model,
+          transcription_model = excluded.transcription_model,
+          summary_model = excluded.summary_model,
           updated_at = excluded.updated_at,
           updated_by = excluded.updated_by`,
       )
@@ -555,6 +605,8 @@ export class AssistantConfigurationRepository {
         ciphertext,
         iv,
         model ?? null,
+        transcriptionModel,
+        summaryModel,
         this.now().toISOString(),
         input.actorId,
       )

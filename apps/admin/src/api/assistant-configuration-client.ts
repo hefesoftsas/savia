@@ -8,6 +8,8 @@ export type AssistantConfigurationSetting = {
   tenantId?: number;
   keyState: AssistantConfigurationKeyState;
   model: string | null;
+  transcriptionModel?: string | null;
+  summaryModel?: string | null;
   updatedAt: string;
   updatedBy: string;
 };
@@ -18,6 +20,8 @@ export type AssistantConfigurationSummary = {
   deployment: {
     keyState: "deployment_fallback" | "not_configured";
     model: string;
+    transcriptionModel?: string;
+    summaryModel?: string;
   };
 };
 
@@ -25,6 +29,8 @@ export type AssistantConfigurationWrite = {
   apiKey?: string;
   clearApiKey?: boolean;
   model?: string | null;
+  transcriptionModel?: string | null;
+  summaryModel?: string | null;
 };
 
 export type AssistantModelModalities = {

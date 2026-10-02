@@ -1,5 +1,9 @@
 import { registerPagesRoutes } from "./routes/pages";
 import { registerPublicPagesRoutes } from "./pages/public-routes";
+import {
+  registerCompanionRoutes,
+  type CompanionOptions,
+} from "./companion/routes";
 import { registerEmailRegistrationRoutes } from "./tenant-registration/provisioning";
 import {
   registerTenantRegistrationSettingsRoutes,
@@ -118,6 +122,7 @@ export function createApp(
   publicForms?: PublicFormsOptions,
   collectionGatewayFactory: typeof createCollectionGateway = createCollectionGateway,
   identityBridgeKey?: string,
+  companion?: CompanionOptions,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -132,6 +137,7 @@ export function createApp(
     identityBridgeKey,
     publicForms,
   );
+  registerCompanionRoutes(app, companion);
   registerRealtimeMutationHints(app, realtime, db);
   registerTenantEmailRoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);

@@ -357,6 +357,8 @@ export const assistantOpenRouterSettings = sqliteTable(
     apiKeyCiphertext: text("api_key_ciphertext"),
     apiKeyIv: text("api_key_iv"),
     model: text("model"),
+    transcriptionModel: text("transcription_model"),
+    summaryModel: text("summary_model"),
     updatedAt: text("updated_at").notNull(),
     updatedBy: text("updated_by").notNull(),
   },

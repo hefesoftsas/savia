@@ -301,6 +301,54 @@ describe("assistant routes", () => {
     );
   });
 
+  it("allows a platform admin to save meeting models as global-only partial settings", async () => {
+    const repository = configurationRepository();
+    await repository.saveGlobal({
+      actorId: "test-platform-admin",
+      apiKey: "not-a-real-global-key",
+      model: "deepseek/deepseek-v4-flash",
+    });
+    const app = createConfigurationApp(
+      platformAdministratorAuthenticator(),
+      repository,
+    );
+    const response = await app.request(
+      "http://api.savia.test/v1/assistant/configuration/global",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transcriptionModel: "openai/whisper-large-v3-turbo",
+          summaryModel: "openai/gpt-4o-mini",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      global: {
+        model: "deepseek/deepseek-v4-flash",
+        transcriptionModel: "openai/whisper-large-v3-turbo",
+        summaryModel: "openai/gpt-4o-mini",
+      },
+    });
+    await expect(
+      repository.effectiveConfigurationFor("test-platform-admin"),
+    ).resolves.toMatchObject({ apiKey: "not-a-real-global-key" });
+  });
+
+  it("rejects meeting model fields on tenant assistant configuration writes", async () => {
+    const response = await createConfigurationApp().request(
+      "http://api.savia.test/v1/assistant/configuration/tenants/101",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ transcriptionModel: "openai/whisper-large-v3" }),
+      },
+    );
+    expect(response.status).toBe(400);
+  });
+
   it("rejects an agency administrator from provider configuration", async () => {
     const response = await createConfigurationApp(
       agencyAdministratorAuthenticator(),

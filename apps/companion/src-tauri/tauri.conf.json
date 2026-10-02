@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Savia Companion",
+  "version": "0.1.0",
+  "identifier": "com.hefesoft.savia.companion",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://127.0.0.1:5181",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Savia Companion",
+        "width": 380,
+        "height": 540,
+        "minWidth": 320,
+        "minHeight": 460
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost",
+      "devCsp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:5181 ws://127.0.0.1:5181"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"],
+    "category": "Utility",
+    "shortDescription": "Manual microphone and system audio capture",
+    "longDescription": "Savia Companion creates short local audio captures when started by the user.",
+    "macOS": {
+      "minimumSystemVersion": "14.2"
+    }
+  }
+}

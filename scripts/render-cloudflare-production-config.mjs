@@ -264,6 +264,7 @@ export async function renderProductionConfigs({
     }
     configs.api.triggers = { crons: ["* * * * *"] };
     configs.api.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE = "true";
+    configs.api.vars.COMPANION_ENABLED = "true";
     configs.api.vars.SAVIA_MCP_URL = "https://savia-mcp-preview.internal/mcp";
     configs.admin.vars = {
       CANONICAL_HOST: new URL(rendered.publicOrigin).hostname,

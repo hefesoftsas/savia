@@ -18,6 +18,8 @@ const configurationWriteSchema = z
     apiKey: z.string().trim().min(1).max(512).optional(),
     clearApiKey: z.boolean().optional(),
     model: z.string().trim().max(160).nullable().optional(),
+    transcriptionModel: z.string().trim().max(160).nullable().optional(),
+    summaryModel: z.string().trim().max(160).nullable().optional(),
   })
   .superRefine((value, context) => {
     if (value.apiKey !== undefined && value.clearApiKey) {
@@ -29,7 +31,9 @@ const configurationWriteSchema = z
     if (
       value.apiKey === undefined &&
       value.clearApiKey === undefined &&
-      value.model === undefined
+      value.model === undefined &&
+      value.transcriptionModel === undefined &&
+      value.summaryModel === undefined
     ) {
       context.addIssue({ code: "custom", message: "A change is required" });
     }
@@ -164,6 +168,12 @@ export function registerAssistantConfigurationRoutes(
     if (!Number.isInteger(tenantId) || tenantId <= 0) return invalidResponse();
     const parsed = await parseWrite(context);
     if (!parsed.success) return invalidResponse();
+    if (
+      parsed.data.transcriptionModel !== undefined ||
+      parsed.data.summaryModel !== undefined
+    ) {
+      return invalidResponse();
+    }
     try {
       await repository.saveAgencyOverride(tenantId, {
         actorId: actor.principal.id,

@@ -13,6 +13,7 @@ import {
   Building2,
   CalendarDays,
   FileText,
+  AudioLines,
   Workflow,
   House,
   Link2,
@@ -152,6 +153,13 @@ export const navigationDefinitions: Record<
     route: "/my-day",
     section: "operation",
     icon: CalendarDays,
+  },
+  "companion-recordings": {
+    id: "companion-recordings",
+    labelKey: "savia.sidebar.items.companion-recordings",
+    route: "/companion-recordings",
+    section: "operation",
+    icon: AudioLines,
   },
   integrations: {
     id: "integrations",

@@ -1,0 +1,663 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #202925;
+  background: #f6f8f7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  line-height: 1.45;
+  font-weight: 400;
+  --ink: #202925;
+  --muted: #59665f;
+  --line: #e1e7e3;
+  --surface: #ffffff;
+  --soft: #f5f8f6;
+  --green: #176647;
+  --green-hover: #105438;
+  --green-wash: #eaf4ee;
+  --red: #a53839;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid #4d9874;
+  outline-offset: 3px;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 14px 18px 12px;
+  background: var(--surface);
+}
+
+.app-header {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--green);
+  color: white;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+h1 {
+  margin: 0 0 2px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.connection-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.connection-state i,
+.status-light {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #88958e;
+}
+
+.connection-state.is-connected i {
+  background: var(--green);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.open-savia,
+.saved-link {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.open-savia:hover,
+.saved-link:hover {
+  color: var(--green-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.settings-toggle {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #58655e;
+}
+
+.settings-toggle:hover,
+.settings-toggle.is-open {
+  border-color: var(--line);
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.settings-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+.preview-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.settings-panel {
+  position: relative;
+  z-index: 1;
+  margin: 12px 0 2px;
+  padding: 13px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.settings-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 11px;
+}
+
+.settings-heading h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.settings-heading p,
+.field-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.text-button {
+  min-height: 28px;
+  padding: 3px 5px;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-panel form {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-fields {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-panel label {
+  display: grid;
+  gap: 4px;
+  color: #35413a;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.settings-panel input {
+  width: 100%;
+  height: 34px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid #ccd6d0;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.settings-panel input::placeholder {
+  color: #66736b;
+}
+
+.field-hint {
+  margin-top: -4px;
+}
+
+.connect-button {
+  min-height: 35px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--green);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.connect-button:hover:not(:disabled),
+.primary-action:hover:not(:disabled) {
+  background: var(--green-hover);
+}
+
+main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 190px;
+}
+
+.recording-stage {
+  width: 100%;
+  padding: 30px 4px 32px;
+  text-align: center;
+}
+
+.stage-status {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #445149;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.recording-stage.is-recording .status-light {
+  background: var(--red);
+  animation: recording-pulse 1.4s ease-in-out infinite;
+}
+
+.timer {
+  margin: 10px 0 12px;
+  color: #18231d;
+  font-size: clamp(56px, 18vw, 72px);
+  font-weight: 450;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.timer span {
+  color: #87928c;
+  font-size: 17px;
+  font-weight: 450;
+  letter-spacing: -0.015em;
+}
+
+.time-track {
+  width: min(100%, 300px);
+  height: 3px;
+  overflow: hidden;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: #e7ece9;
+}
+
+.time-track span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+  transform-origin: left;
+  transition: transform 250ms linear;
+}
+
+.attribution-line {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.recording-stage.is-recording .time-track span {
+  background: var(--red);
+}
+
+.stage-hint {
+  max-width: 33ch;
+  margin: 12px auto 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preview-hint {
+  margin-top: 7px;
+}
+
+.captured-sources {
+  max-width: 300px;
+  margin: 16px auto 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.captured-sources li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  color: #3e4b43;
+  font-size: 11px;
+}
+
+.captured-sources li + li {
+  border-top: 1px solid #edf0ee;
+}
+
+.captured-sources li span:last-child {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.notice {
+  max-width: 330px;
+  margin: 12px auto 0;
+  color: var(--green);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.notice.is-error {
+  color: #872e30;
+}
+
+.capture-dock {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #edf0ee;
+}
+
+.source-picker {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.source-picker legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.source-choice {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  color: #36433b;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.source-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.source-choice .switch {
+  display: inline-flex;
+  width: 30px;
+  height: 18px;
+  flex: 0 0 30px;
+  align-items: center;
+  padding: 2px;
+  border-radius: 999px;
+  background: #adb8b1;
+  transition: background-color 140ms ease-out;
+}
+
+.source-choice .switch i {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+  transition: transform 140ms ease-out;
+}
+
+.source-choice input:checked + .switch {
+  background: var(--green);
+}
+
+.source-choice input:checked + .switch i {
+  transform: translateX(12px);
+}
+
+.source-choice input:focus-visible + .switch {
+  outline: 3px solid #4d9874;
+  outline-offset: 3px;
+}
+
+.source-picker:disabled .source-choice {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #4a574f;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.consent-row input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  margin: 0;
+  accent-color: var(--green);
+}
+
+.dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.primary-action {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 44px;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--green);
+  color: white;
+  font-size: 13px;
+  font-weight: 650;
+  transition:
+    background-color 120ms ease-out,
+    transform 120ms ease-out;
+}
+
+.primary-action:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.action-glyph {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.button-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgb(255 255 255 / 45%);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+.discard-action {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: #4d5a52;
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.discard-action:hover:not(:disabled) {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.action-guidance {
+  margin: -3px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.saved-link {
+  justify-self: center;
+  padding: 2px 0;
+}
+
+.privacy-line {
+  margin: 0;
+  color: #68756d;
+  font-size: 10px;
+  text-align: center;
+}
+
+@keyframes recording-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 360px) {
+  .app-shell {
+    padding-inline: 14px;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .open-savia {
+    font-size: 11px;
+  }
+
+  .source-choice {
+    gap: 5px;
+    font-size: 11px;
+  }
+}
+
+@media (max-height: 500px) {
+  .recording-stage {
+    padding-block: 14px;
+  }
+
+  .timer {
+    margin-block: 6px 8px;
+    font-size: 54px;
+  }
+
+  main {
+    min-height: 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

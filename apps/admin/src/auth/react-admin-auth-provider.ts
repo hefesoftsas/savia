@@ -86,6 +86,7 @@ export function createReactAdminAuthProvider(
           isPlatformAdmin ||
           hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
         );
+      if (resource === "companion-recordings") return isPlatformAdmin;
       if (resource === "tenants") return isPlatformAdmin;
       if (resource === "crm-connections") {
         return action === "list";

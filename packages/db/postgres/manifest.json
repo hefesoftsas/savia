@@ -53,6 +53,10 @@
     {
       "filename": "0013_pages_record_binding_uniqueness.sql",
       "sha256": "39bbba566146e58644c26b905a3112b3e5a972789370c7f8a65460eab51bb764"
+    },
+    {
+      "filename": "0014_assistant_meeting_models.sql",
+      "sha256": "8b3eee0510065149de9d2d8bab9df1f523842f0700cf7e9d99cd38954d0654ca"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1884,6 +1888,22 @@
           "name": "updated_by",
           "type": "TEXT",
           "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "transcription_model",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "summary_model",
+          "type": "TEXT",
+          "notnull": 0,
           "dflt_value": null,
           "pk": 0
         }

@@ -13,7 +13,13 @@ import {
   useState,
 } from "react";
 import { Building2 } from "lucide-react";
-import { CustomRoutes, memoryStore, Resource, useTranslate } from "ra-core";
+import {
+  CustomRoutes,
+  memoryStore,
+  Resource,
+  useTranslate,
+  useCanAccess,
+} from "ra-core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Navigate, Route } from "react-router-dom";
 import { getDefaultAppServices, type AppServices } from "@/app-services";
@@ -57,6 +63,23 @@ const PagesPage = lazy(() =>
   })),
 );
 
+const CompanionRecordingsPage = lazy(async () => ({
+  default: (await import("@/features/companion/recordings-page"))
+    .CompanionRecordingsPage,
+}));
+function CompanionRecordingsRoute({ services }: { services: AppServices }) {
+  const { canAccess, isPending } = useCanAccess({
+    resource: "companion-recordings",
+    action: "list",
+  });
+  if (isPending) return <RouteLoading />;
+  if (!canAccess) return <Navigate to="/my-day" replace />;
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <CompanionRecordingsPage services={services} />
+    </Suspense>
+  );
+}
 const MyDayPage = lazy(async () => {
   const module = await import("@/features/personal-integrations/my-day-page");
   return { default: module.MyDayPage };
@@ -393,6 +416,10 @@ function AppContent({ services }: { services?: AppServices } = {}) {
             <Route
               path="/assistant-configuration"
               element={<Navigate to="/service-credentials" replace />}
+            />
+            <Route
+              path="/companion-recordings"
+              element={<CompanionRecordingsRoute services={appServices} />}
             />
           </CustomRoutes>
         </Admin>

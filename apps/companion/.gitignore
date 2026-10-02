@@ -1,0 +1,5 @@
+# Future native build outputs and disposable validation evidence.
+/src-tauri/target/
+/src-tauri/gen/
+/artifacts/
+/recordings/

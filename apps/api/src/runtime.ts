@@ -73,6 +73,8 @@ type AssistantSecrets = {
 };
 
 export type RuntimeEnvironment = {
+  COMPANION_ENABLED?: string;
+  COMPANION_STT_MODEL?: string;
   SAVIA_WORKFLOW_ONLY_SCHEDULE?: string;
   PLUGIN_REGISTRY_TENANTS?: string;
   DB: D1Database;
@@ -181,7 +183,11 @@ export function studioIntegrationKeyFromEnvironment(
 }
 
 function assistantConfigurationFromEnvironment(
-  environment: Pick<RuntimeEnvironment, "DB" | "DOCUMENTS"> & AssistantSecrets,
+  environment: Pick<
+    RuntimeEnvironment,
+    "DB" | "DOCUMENTS" | "COMPANION_STT_MODEL"
+  > &
+    AssistantSecrets,
 ): AssistantConfigurationRepository {
   const encryptionKey =
     environment.ASSISTANT_SETTINGS_ENCRYPTION_KEY?.trim() ||
@@ -191,6 +197,7 @@ function assistantConfigurationFromEnvironment(
     encryptionKey,
     deploymentApiKey: environment.OPENROUTER_API_KEY?.trim(),
     deploymentModel: environment.OPENROUTER_MODEL?.trim(),
+    deploymentTranscriptionModel: environment.COMPANION_STT_MODEL?.trim(),
   });
 }
 
@@ -229,7 +236,11 @@ function assistantServiceFromEnvironment(
 }
 
 export function assistantRuntimeFromEnvironment(
-  environment: Pick<RuntimeEnvironment, "DB" | "DOCUMENTS"> & AssistantSecrets,
+  environment: Pick<
+    RuntimeEnvironment,
+    "DB" | "DOCUMENTS" | "COMPANION_STT_MODEL"
+  > &
+    AssistantSecrets,
 ): {
   configuration: AssistantConfigurationRepository;
   service: SaviaAssistantService | undefined;
@@ -349,6 +360,12 @@ const runtime = {
           ),
         }),
       identityBridgeKey,
+      {
+        enabled: environment.COMPANION_ENABLED === "true",
+        storage: environment.DOCUMENTS,
+        sttModel: environment.COMPANION_STT_MODEL,
+        configuration: assistant.configuration,
+      },
     ).fetch(request, environment);
     return response;
   },

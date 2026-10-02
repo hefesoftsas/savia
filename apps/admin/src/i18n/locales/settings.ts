@@ -1032,4 +1032,49 @@ export const settingsMessages = {
     "Get help from the core team via",
     "Obtenha ajuda da equipe por meio de",
   ],
+  "Meeting recordings": [
+    "Grabaciones de reuniones",
+    "Meeting recordings",
+    "Gravações de reuniões",
+  ],
+  "OpenRouter models for transcription and meeting summaries.": [
+    "Modelos de OpenRouter para transcripción y resúmenes de reuniones.",
+    "OpenRouter models for transcription and meeting summaries.",
+    "Modelos do OpenRouter para transcrição e resumos de reuniões.",
+  ],
+  "Transcription model": [
+    "Modelo de transcripción",
+    "Transcription model",
+    "Modelo de transcrição",
+  ],
+  "Summary model": ["Modelo de resumen", "Summary model", "Modelo de resumo"],
+  "Save models": ["Guardar modelos", "Save models", "Salvar modelos"],
+  "Meeting models saved.": [
+    "Modelos de reuniones guardados.",
+    "Meeting models saved.",
+    "Modelos de reuniões salvos.",
+  ],
+  "Could not save meeting models.": [
+    "No se pudieron guardar los modelos de reuniones.",
+    "Could not save meeting models.",
+    "Não foi possível salvar os modelos de reuniões.",
+  ],
+  "Uses the configured OpenRouter key. Leave a model blank to use its default.":
+    [
+      "Usa la clave de OpenRouter configurada. Deja un modelo en blanco para usar su valor predeterminado.",
+      "Uses the configured OpenRouter key. Leave a model blank to use its default.",
+      "Usa a chave do OpenRouter configurada. Deixe um modelo em branco para usar seu valor padrão.",
+    ],
+  "Use a model compatible with OpenRouter audio transcription (provider/model).":
+    [
+      "Usa un modelo compatible con la transcripción de audio de OpenRouter (provider/model).",
+      "Use a model compatible with OpenRouter audio transcription (provider/model).",
+      "Use um modelo compatível com a transcrição de áudio do OpenRouter (provider/model).",
+    ],
+  "Use a text model for meeting notes. Default: the effective assistant model.":
+    [
+      "Usa un modelo de texto para las notas. Predeterminado: el modelo efectivo del asistente.",
+      "Use a text model for meeting notes. Default: the effective assistant model.",
+      "Use um modelo de texto para as notas. Padrão: o modelo efetivo do assistente.",
+    ],
 } as const;

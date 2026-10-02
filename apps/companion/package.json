@@ -1,0 +1,32 @@
+{
+  "name": "@savia/companion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Savia Companion meeting capture feasibility workspace",
+  "license": "SEE LICENSE IN ../../LICENSE",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs && vitest run",
+    "audio:inspect": "node scripts/inspect-wav.mjs",
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "desktop:dev": "node scripts/desktop.mjs dev",
+    "desktop:build": "node scripts/desktop.mjs build",
+    "test:ui": "vitest run"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.12.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.1",
+    "@types/react": "^19.2.12",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}
