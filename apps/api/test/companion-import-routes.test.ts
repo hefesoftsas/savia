@@ -3,17 +3,18 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { expect, it, vi } from "vitest";
 import { authenticationMiddleware } from "../src/auth/middleware";
 import { registerCompanionRoutes } from "../src/companion/routes";
+import type { Authenticator } from "../src/auth/types";
 import { platformAdministratorAuthenticator } from "./auth-fixtures";
 import { opusFixture } from "./fixtures/companion-tone";
 
-function app(download = vi.fn()) {
+function app(
+  download = vi.fn(),
+  authenticator: Authenticator = platformAdministratorAuthenticator(),
+) {
   const instance = new OpenAPIHono();
   instance.use(
     "/v1/companion/*",
-    authenticationMiddleware(
-      {} as D1Database,
-      platformAdministratorAuthenticator(),
-    ),
+    authenticationMiddleware({} as D1Database, authenticator),
   );
   registerCompanionRoutes(instance, {
     enabled: true,
@@ -27,6 +28,37 @@ function app(download = vi.fn()) {
     personalFiles: { downloadRecordingFile: download },
   });
   return instance;
+}
+function memberAuthenticator(principalId: string, role: string): Authenticator {
+  return {
+    async authenticate() {
+      return {
+        principal: {
+          id: principalId,
+          issuer: "savia:better-auth",
+          subject: principalId,
+          email: `${principalId}@savia.test`,
+          displayName: principalId,
+          isActive: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        globalRoles: [],
+        memberships: [
+          {
+            id: `${principalId}-membership`,
+            principalId,
+            agencyId: 101,
+            tenantId: 101,
+            role,
+            isActive: true,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      };
+    },
+  };
 }
 it("uploads binary audio and serves the original content privately", async () => {
   const instance = app();
@@ -93,6 +125,52 @@ it.each(["google_drive", "onedrive_personal", "onedrive_business"] as const)(
     await instance.request(`/v1/companion/recordings/${id}`, {
       method: "DELETE",
     });
+  },
+);
+it.each(["viewer", "operator", "tenant_admin"])(
+  "allows active tenant %s to upload, list and download their own import",
+  async (role) => {
+    const principalId = `recording-owner-${role}`;
+    const instance = app(vi.fn(), memberAuthenticator(principalId, role));
+    const id = crypto.randomUUID();
+    const query = new URLSearchParams({
+      id,
+      name: "Member recording.ogg",
+      format: "ogg",
+      consent: "true",
+    });
+    try {
+      const upload = await instance.request(
+        `/v1/companion/recordings/upload?${query}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/octet-stream" },
+          body: opusFixture(),
+        },
+      );
+      expect(upload.status).toBe(200);
+      expect(await upload.json()).toMatchObject({
+        id,
+        source: "upload",
+        origin: "local",
+      });
+      expect(
+        await instance
+          .request("/v1/companion/recordings")
+          .then((r) => r.json()),
+      ).toMatchObject({
+        recordings: [expect.objectContaining({ id })],
+      });
+      const download = await instance.request(`/v1/companion/recordings/${id}`);
+      expect(download.status).toBe(200);
+      expect(new Uint8Array(await download.arrayBuffer())).toEqual(
+        opusFixture(),
+      );
+    } finally {
+      await instance.request(`/v1/companion/recordings/${id}`, {
+        method: "DELETE",
+      });
+    }
   },
 );
 it("rejects uploads above 50 MB before reading or storing bytes", async () => {

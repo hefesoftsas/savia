@@ -12,6 +12,17 @@ file do not synchronize with the saved recording.
 4. To generate a transcript and meeting notes, grant processing consent and choose
    **Generate summary**. Uploading alone does not send audio to the AI provider.
 
+## Access and privacy
+
+All active tenant members can use **Recordings**, regardless of role. Platform
+administrators can also use it. Users without an active membership cannot access
+the feature. Audio, transcripts, notes, and connected-drive imports belong to the
+authenticated user; tenant membership, including an administrator role, does not
+grant access to another member's recordings.
+
+The deployment must still enable `COMPANION_ENABLED=true`. Preview enables it;
+production remains disabled until explicitly configured.
+
 ## Limits and connections
 
 - Supported imports: MP3, WAV, M4A, and OGG/Opus (including `.opus` and `.oga`

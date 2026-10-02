@@ -13,8 +13,9 @@ publishing installers or registering application identifiers.
 ## What exists today
 
 `apps/companion` now includes a Tauri desktop host, capture controls and bounded
-source processing through Savia. Provider requests are opt-in, administrator-only,
-and keep credentials on the backend. Stopped tracks use mono Opus at a target
+source processing through Savia. Active tenant members and platform administrators
+can use their own recordings. Provider requests are opt-in and keep credentials on
+the backend. Stopped tracks use mono Opus at a target
 32 kbps. Explicit Upload stores private samples in R2; unsaved capture is temporary.
 The desktop is a compact capture window. The main Savia app has a Recordings
 page with authenticated playback/download and consented transcript/summary
