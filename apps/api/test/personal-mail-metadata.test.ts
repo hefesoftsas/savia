@@ -61,7 +61,7 @@ describe("personal inbox", () => {
         sender: "Ana <ana@example.com>",
         receivedAt: "2026-01-01T00:00:00.000Z",
         webLink:
-          "https://mail.google.com/mail/u/?authuser=member%40gmail.com#all/deadbeef",
+          "https://mail.google.com/mail/?authuser=member%40gmail.com#all/deadbeef",
       },
     ]);
     expect(
@@ -88,7 +88,7 @@ describe("personal inbox", () => {
     } as never);
 
     expect(messages[0]?.webLink).toBe(
-      "https://mail.google.com/mail/u/?authuser=actual%40gmail.com#all/deadbeef",
+      "https://mail.google.com/mail/?authuser=actual%40gmail.com#all/deadbeef",
     );
   });
 
@@ -106,7 +106,7 @@ describe("personal inbox", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
       id: "message-not-hex",
-      webLink: "https://mail.google.com/mail/u/#all/deadbeef",
+      webLink: "https://mail.google.com/mail/#all/deadbeef",
     });
   });
   it("uses Outlook inbox ordering and exposes native links", async () => {
@@ -162,7 +162,7 @@ describe("Gmail browser permalinks", () => {
         "member+label@gmail.com",
       )?.webLink,
     ).toBe(
-      "https://mail.google.com/mail/u/?authuser=member%2Blabel%40gmail.com#all/aB12ef",
+      "https://mail.google.com/mail/?authuser=member%2Blabel%40gmail.com#all/aB12ef",
     );
   });
 
@@ -173,7 +173,7 @@ describe("Gmail browser permalinks", () => {
         "member@gmail.com",
       )?.webLink,
     ).toBe(
-      "https://mail.google.com/mail/u/?authuser=member%40gmail.com#all/a1b2",
+      "https://mail.google.com/mail/?authuser=member%40gmail.com#all/a1b2",
     );
     expect(
       normalizeGmailMessage(
@@ -185,7 +185,7 @@ describe("Gmail browser permalinks", () => {
       normalizeGmailMessage({ id: "a1b2" }, "member@gmail.com/evil")?.webLink,
     ).toBeNull();
     expect(normalizeGmailMessage({ id: "a1b2" })?.webLink).toBe(
-      "https://mail.google.com/mail/u/#all/a1b2",
+      "https://mail.google.com/mail/#all/a1b2",
     );
   });
 });
@@ -223,6 +223,6 @@ it("keeps failed Gmail hydration rows and bounds provider metadata concurrency",
     id: "0",
     subject: null,
     receivedAt: null,
-    webLink: "https://mail.google.com/mail/u/#all/0",
+    webLink: "https://mail.google.com/mail/#all/0",
   });
 });

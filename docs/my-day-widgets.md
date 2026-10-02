@@ -93,7 +93,8 @@ Reconnect unavailable accounts through Personal integrations.
 
 Clicking anywhere in a linked message row opens its provider in another browser
 tab. Outlook uses its native message link. Gmail uses a browser permalink from
-the thread ID, falling back to the message ID when needed. A bounded profile read
+the thread ID, falling back to the message ID when needed. The base `/mail/`
+route preserves the message destination during account selection. A bounded profile read
 verifies the Gmail address before selecting that account in the link; Savia's
 identity and saved display labels are not used for account selection. If the
 profile cannot be verified, the link omits account selection and the user may

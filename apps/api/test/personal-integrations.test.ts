@@ -734,7 +734,7 @@ describe("personal integration providers", () => {
           sender: null,
           receivedAt: null,
           webLink:
-            "https://mail.google.com/mail/u/?authuser=actual%40savia.test#all/cd34",
+            "https://mail.google.com/mail/?authuser=actual%40savia.test#all/cd34",
         },
       ],
       pagination: { nextCursor: expect.any(String) },

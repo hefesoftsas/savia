@@ -35,9 +35,10 @@ export function gmailMessageLink(
   const account = credibleGmailAccountAddress(accountAddress);
   if (accountAddress !== undefined && accountAddress !== null && !account)
     return null;
+  // The base /mail/ route preserves the message fragment during account selection.
   return account
-    ? `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(account)}#all/${mailId}`
-    : `https://mail.google.com/mail/u/#all/${mailId}`;
+    ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${mailId}`
+    : `https://mail.google.com/mail/#all/${mailId}`;
 }
 export function nativeMailLink(value: unknown): string | null {
   if (typeof value !== "string") return null;
