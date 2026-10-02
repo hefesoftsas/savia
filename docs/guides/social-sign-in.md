@@ -36,6 +36,8 @@ For a local Wrangler run, put the values in the ignored `apps/auth/.dev.vars` fi
 
 On upgraded self-hosted PostgreSQL installations, startup makes the legacy `savia_auth.account.issuer` column nullable when it still has a `NOT NULL` constraint. This preserves existing account rows and issuer values while allowing the current Better Auth schema to start.
 
+Cloudflare D1 performs the equivalent compatibility repair during auth startup for the legacy Better Auth 1.7.0–1.7.2 account schema. It rebuilds the `account` table atomically, preserving account values, issuer values, foreign keys, and other indexes while making `issuer` nullable and removing the obsolete unique `(issuer, accountId)` index. Current Better Auth versions no longer write `issuer`.
+
 Restart or redeploy the auth service after changing deployment credentials. The tenant settings page shows whether each provider is available and displays the callback URL to register.
 
 ## Enable sign-in for a tenant
