@@ -143,6 +143,7 @@ export interface paths {
             /** Format: email */
             email: string;
             password: string;
+            oauth_query?: string;
           };
         };
       };
@@ -269,6 +270,7 @@ export interface paths {
         content: {
           "application/json": {
             code: string;
+            oauth_query?: string;
           };
         };
       };
@@ -328,6 +330,7 @@ export interface paths {
         content: {
           "application/json": {
             code: string;
+            oauth_query?: string;
           };
         };
       };

@@ -378,8 +378,9 @@ const oauthUiScript = String.raw`(() => {
 
   function requestError(payload, fallback) {
     const error = new Error(readableError(payload, fallback));
-    if (payload && typeof payload === "object" && typeof payload.error === "string") {
-      error.code = payload.error;
+    if (payload && typeof payload === "object") {
+      if (typeof payload.code === "string") error.code = payload.code;
+      else if (typeof payload.error === "string") error.code = payload.error;
     }
     return error;
   }
@@ -407,7 +408,7 @@ const oauthUiScript = String.raw`(() => {
   }
 
   function restartExpiredAuthorization(error) {
-    if (!(error instanceof Error) || error.code !== "invalid_signature") return false;
+    if (!(error instanceof Error) || !["invalid_signature", "INVALID_TWO_FACTOR_COOKIE"].includes(error.code)) return false;
     const restartUrl = document.body && document.body.dataset && document.body.dataset.oauthRestartUrl;
     if (typeof restartUrl !== "string" || !restartUrl) return false;
     redirecting = true;

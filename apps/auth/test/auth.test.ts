@@ -284,6 +284,8 @@ async function submitOAuthLogin(
 async function submitExpiredOAuthLogin(
   script: string,
   configuredRestartUrl: string,
+  failure: Record<string, string> = { error: "invalid_signature" },
+  formKind = "sign-in",
 ): Promise<{
   restartUrl: string | undefined;
   status: string;
@@ -293,7 +295,7 @@ async function submitExpiredOAuthLogin(
   let restartUrl: string | undefined;
   const status = { textContent: "" };
   const loginForm = {
-    dataset: { oauthForm: "sign-in" },
+    dataset: { oauthForm: formKind },
     hidden: false,
     querySelector: () => ({ disabled: false }),
     addEventListener: (
@@ -336,7 +338,7 @@ async function submitExpiredOAuthLogin(
       },
     },
     document,
-    async () => Response.json({ error: "invalid_signature" }, { status: 400 }),
+    async () => Response.json(failure, { status: 401 }),
     TestFormData,
   );
   await submit?.({ preventDefault() {} });
@@ -652,6 +654,39 @@ describe("Savia Better Auth worker", () => {
       restartUrl: "http://127.0.0.1:5173/#/login",
       status: "",
     });
+  });
+
+  it.each(["verify-totp", "verify-backup-code"])(
+    "restarts authorization when %s loses its MFA challenge",
+    async (formKind) => {
+      const script = await (await authRequest("/api/auth/oauth-ui.js")).text();
+      await expect(
+        submitExpiredOAuthLogin(
+          script,
+          "https://agency.savia-preview.hefesoft.com/#/login",
+          {
+            code: "INVALID_TWO_FACTOR_COOKIE",
+            message: "Invalid two factor cookie",
+          },
+          formKind,
+        ),
+      ).resolves.toEqual({
+        restartUrl: "https://agency.savia-preview.hefesoft.com/#/login",
+        status: "",
+      });
+    },
+  );
+
+  it("keeps MFA input available after an incorrect authenticator code", async () => {
+    const script = await (await authRequest("/api/auth/oauth-ui.js")).text();
+    await expect(
+      submitExpiredOAuthLogin(
+        script,
+        "https://agency.savia-preview.hefesoft.com/#/login",
+        { code: "INVALID_CODE", message: "Invalid code" },
+        "verify-totp",
+      ),
+    ).resolves.toEqual({ restartUrl: undefined, status: "Invalid code" });
   });
 
   it("requires unenrolled administrators to enroll TOTP before OAuth continues", async () => {
@@ -975,6 +1010,39 @@ describe("Savia Better Auth worker", () => {
     expect(await challengedSignIn.json()).toEqual({
       twoFactorRedirect: true,
       twoFactorMethods: ["totp"],
+    });
+
+    const challengeCookies = challengedSignIn.headers
+      .getSetCookie()
+      .map((value) => value.split(";")[0])
+      .join("; ");
+    const secondFactor = await authRequest("/api/auth/two-factor/verify-totp", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: challengeCookies,
+        origin,
+      },
+      body: JSON.stringify({ code: generated.code }),
+    });
+    expect(await secondFactor.clone().json()).not.toMatchObject({
+      code: "INVALID_TWO_FACTOR_COOKIE",
+    });
+    expect(secondFactor.status).toBe(200);
+    expect(secondFactor.headers.get("set-auth-token")).toBeTruthy();
+
+    const replay = await authRequest("/api/auth/two-factor/verify-totp", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: challengeCookies,
+        origin,
+      },
+      body: JSON.stringify({ code: generated.code }),
+    });
+    expect(replay.status).toBe(401);
+    expect(await replay.json()).toMatchObject({
+      code: "INVALID_TWO_FACTOR_COOKIE",
     });
   });
 

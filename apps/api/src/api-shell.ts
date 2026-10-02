@@ -89,6 +89,7 @@ const betterAuthSignInRoute = createRoute({
           schema: z.object({
             email: z.string().email(),
             password: z.string().min(1),
+            oauth_query: z.string().optional(),
           }),
         },
       },
@@ -217,7 +218,10 @@ const betterAuthTotpVerificationRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z.object({ code: z.string().regex(/^\d{6}$/) }),
+          schema: z.object({
+            code: z.string().regex(/^\d{6}$/),
+            oauth_query: z.string().optional(),
+          }),
         },
       },
       required: true,
@@ -249,7 +253,12 @@ const betterAuthRecoveryCodeRoute = createRoute({
   request: {
     body: {
       content: {
-        "application/json": { schema: z.object({ code: z.string().min(1) }) },
+        "application/json": {
+          schema: z.object({
+            code: z.string().min(1),
+            oauth_query: z.string().optional(),
+          }),
+        },
       },
       required: true,
     },

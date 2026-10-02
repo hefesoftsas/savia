@@ -412,6 +412,66 @@ describe("Identity and access", () => {
     });
   });
 
+  it("preserves oauth_query when proxying session-creating auth requests", async () => {
+    const forwardedBodies: Array<{ path: string; body: unknown }> = [];
+    const authService = {
+      async fetch(request: Request) {
+        forwardedBodies.push({
+          path: new URL(request.url).pathname,
+          body: await request.json(),
+        });
+        return Response.json({ ok: true });
+      },
+    };
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      authService,
+    );
+
+    const requests = [
+      {
+        path: "/api/auth/sign-in/email",
+        body: {
+          email: "admin@savia.test",
+          password: "session-token",
+          oauth_query: "client_id=admin&prompt=login&state=opaque",
+        },
+      },
+      {
+        path: "/api/auth/two-factor/verify-totp",
+        body: {
+          code: "123456",
+          oauth_query: "client_id=admin&prompt=login&state=opaque",
+        },
+      },
+      {
+        path: "/api/auth/two-factor/verify-backup-code",
+        body: {
+          code: "one-time-recovery-code",
+          oauth_query: "client_id=admin&prompt=login&state=opaque",
+        },
+      },
+    ];
+
+    for (const { path, body } of requests) {
+      const response = await app.request(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(200);
+    }
+
+    expect(forwardedBodies).toEqual(
+      requests.map(({ path, body }) => ({ path, body })),
+    );
+  });
+
   it("grants platform access to a Better Auth administrator after a legacy administrator", async () => {
     const legacyPrincipal = await upsertPrincipal(env.DB, {
       issuer: "savia:better-auth",
