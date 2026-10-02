@@ -36,6 +36,7 @@ function safeLink(value: string | null): string | undefined {
       !url.password &&
       !url.port &&
       [
+        "mail.google.com",
         "outlook.office.com",
         "outlook.office365.com",
         "outlook.live.com",
@@ -388,27 +389,18 @@ export function MailWidgetBody({
         <ul aria-label="Correos" className="divide-y">
           {pageRows.map((row) => {
             const link = safeLink(row.webLink);
-            return (
-              <li key={rowKey(row)} className="py-2.5 first:pt-0 last:pb-0">
+            const content = (
+              <>
                 <div className="flex items-start justify-between gap-2">
-                  {link ? (
-                    <a
-                      className="min-w-0 truncate text-sm font-medium text-foreground hover:underline"
-                      href={link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {row.subject ?? "Sin asunto"}
+                  <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                    {row.subject ?? "Sin asunto"}
+                    {link ? (
                       <ExternalLink
                         className="ml-1 inline size-3"
                         aria-hidden="true"
                       />
-                    </a>
-                  ) : (
-                    <p className="min-w-0 truncate text-sm font-medium">
-                      {row.subject ?? "Sin asunto"}
-                    </p>
-                  )}
+                    ) : null}
+                  </span>
                   <time
                     className="shrink-0 text-xs text-muted-foreground"
                     dateTime={row.receivedAt ?? undefined}
@@ -423,6 +415,23 @@ export function MailWidgetBody({
                   {mailProviderLabel(row.provider)} · {row.accountLabel}
                   {!link ? " · Enlace no disponible" : ""}
                 </p>
+              </>
+            );
+            return (
+              <li key={rowKey(row)} className="py-2.5 first:pt-0 last:pb-0">
+                {link ? (
+                  <a
+                    className="block min-w-0 rounded-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Abrir correo: ${row.subject ?? "Sin asunto"}`}
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  content
+                )}
               </li>
             );
           })}

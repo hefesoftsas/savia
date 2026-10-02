@@ -49,11 +49,10 @@ function Inbox({ service }: { service: PersonalMailLike }) {
 it("merges providers with distinct same-ID rows, missing dates last, and filters", async () => {
   const user = userEvent.setup();
   render(<Inbox service={client()} />);
-  expect(await screen.findByText("outlook message")).toHaveAttribute(
-    "target",
-    "_blank",
-  );
-  expect(screen.getByText("outlook message")).toHaveAttribute(
+  expect(
+    (await screen.findByText("outlook message")).closest("a"),
+  ).toHaveAttribute("target", "_blank");
+  expect(screen.getByText("outlook message").closest("a")).toHaveAttribute(
     "rel",
     "noopener noreferrer",
   );
@@ -152,4 +151,54 @@ it("caps the visible inbox at ten messages and distinguishes an empty mailbox", 
   expect(
     await screen.findByText("No hay correos en esta bandeja."),
   ).toBeInTheDocument();
+});
+
+it.each([
+  [
+    "gmail",
+    "https://mail.google.com/mail/u/?authuser=gmail%40example.com#all/19f123",
+  ],
+  ["outlook", "https://outlook.live.com/mail/0/id/message-1"],
+])(
+  "opens the entire %s message row in a new tab",
+  async (provider, webLink) => {
+    const service = client([provider]);
+    vi.mocked(service.listMessages).mockResolvedValue([
+      {
+        id: "19f123",
+        subject: "Open this message",
+        sender: "sender@example.com",
+        receivedAt: "2026-01-01T00:00:00Z",
+        webLink,
+      },
+    ]);
+    render(<Inbox service={service} />);
+    const subject = await screen.findByText("Open this message");
+    const link = subject.closest("a");
+    expect(link).toHaveAttribute("href", webLink);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getByText("sender@example.com").closest("a")).toBe(link);
+    expect(
+      screen
+        .getByText(
+          new RegExp(`${provider === "gmail" ? "Gmail" : "Outlook"} ·`),
+        )
+        .closest("a"),
+    ).toBe(link);
+  },
+);
+it("does not make an untrusted mail URL clickable", async () => {
+  const service = client(["gmail"]);
+  vi.mocked(service.listMessages).mockResolvedValue([
+    {
+      id: "1",
+      subject: "Unsafe link",
+      sender: null,
+      receivedAt: null,
+      webLink: "https://mail.google.com.evil.test/message",
+    },
+  ]);
+  render(<Inbox service={service} />);
+  expect((await screen.findByText("Unsafe link")).closest("a")).toBeNull();
 });
