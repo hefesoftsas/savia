@@ -14,7 +14,7 @@ import type { AppServices } from "@/app-services";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { PagesSidebar } from "./pages-sidebar";
 import { PagesPage } from "./pages-page";
-import type { PageDocument } from "./client";
+import { PagesClient, type PageDocument } from "./client";
 
 vi.mock("./editor", () => ({
   PageEditor: () => <textarea aria-label="Document body" />,
@@ -48,6 +48,7 @@ function setup(route = "/pages/project") {
     },
   ];
   const creates: unknown[] = [];
+  const deletes: string[] = [];
   const api = new ApiClient({
     baseUrl: "https://savia.test",
     tokenSource: { getAccessToken: async () => null },
@@ -67,6 +68,12 @@ function setup(route = "/pages/project") {
         return Response.json({ data: document });
       }
       const id = url.pathname.split("/").at(-1);
+      if (init?.method === "DELETE") {
+        deletes.push(`${id}?${url.searchParams.toString()}`);
+        const index = documents.findIndex((page) => page.id === id);
+        if (index !== -1) documents.splice(index, 1);
+        return Response.json({ data: { deleted: true } });
+      }
       const document = documents.find((page) => page.id === id);
       if (init?.method === "PUT" && document) {
         Object.assign(document, JSON.parse(String(init.body)), {
@@ -102,8 +109,47 @@ function setup(route = "/pages/project") {
       <RouterProvider router={router} />
     </StrictMode>,
   );
-  return { router, creates };
+  return { router, creates, deletes, api };
 }
+it("uses the latest saved version when deleting from an open sidebar dialog", async () => {
+  const { api, deletes } = setup("/pages/notes");
+  await screen.findByRole("link", { name: "Launch notes" });
+  await userEvent.click(
+    screen.getByRole("button", { name: "Delete Launch notes" }),
+  );
+  await new PagesClient(api).save("notes", {
+    title: "Launch notes",
+    content: [],
+    version: 1,
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Delete page" }));
+  await waitFor(() => expect(deletes).toEqual(["notes?version=2"]));
+});
+it("confirms sidebar deletion and removes the page only after confirmation", async () => {
+  const { deletes } = setup("/pages/project");
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Expand Projects" }),
+  );
+  await screen.findByRole("link", { name: "Launch notes" });
+  await userEvent.click(
+    screen.getByRole("button", { name: "Delete Launch notes" }),
+  );
+  expect(screen.getByRole("dialog", { name: "Delete page" })).toBeVisible();
+  expect(deletes).toEqual([]);
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.getByRole("link", { name: "Launch notes" })).toBeVisible();
+  expect(deletes).toEqual([]);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Delete Launch notes" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Delete page" }));
+  await waitFor(() => expect(deletes).toEqual(["notes?version=1"]));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("link", { name: "Launch notes" }),
+    ).not.toBeInTheDocument(),
+  );
+});
 it("keeps a collapsible folder tree in the main navigation and shows folder contents without an editor", async () => {
   const { router } = setup("/pages/notes");
   const collapse = await screen.findByRole("button", {

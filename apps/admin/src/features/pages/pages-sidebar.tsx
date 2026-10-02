@@ -1,7 +1,22 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { ChevronRight, FileText, Folder, FolderOpen, Plus } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  ChevronRight,
+  FileText,
+  Folder,
+  FolderOpen,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useAppServices } from "@/features/assistant/assistant-context";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useMessages } from "@/i18n/core";
 import {
   DropdownMenu,
@@ -11,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { pagesMessages } from "./messages";
 import { usePagesIndex } from "./use-pages-index";
-import type { PageSummary } from "./client";
+import { PagesClient, type PageSummary } from "./client";
 import "./pages.css";
 
 export function PageCreateMenu({
@@ -58,12 +73,16 @@ export function PagesSidebar({ onNavigate }: { onNavigate(): void }) {
   const t = useMessages(pagesMessages);
   const { apiClient } = useAppServices();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const active = pathname === "/pages" || pathname.startsWith("/pages/");
   const currentId = pathname.startsWith("/pages/")
     ? pathname.slice(7)
     : undefined;
   const [open, setOpen] = useState(active);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<PageSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
   const { pages, error, loading, refresh } = usePagesIndex(
     apiClient,
     open || active,
@@ -104,6 +123,25 @@ export function PagesSidebar({ onNavigate }: { onNavigate(): void }) {
       else next.add(id);
       return next;
     });
+  }
+  async function deletePage() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError(false);
+    try {
+      const currentPage = pages.find((page) => page.id === deleteTarget.id);
+      if (!currentPage) throw new Error("Page no longer available");
+      await new PagesClient(apiClient).remove(
+        currentPage.id,
+        currentPage.version,
+      );
+      if (currentId === deleteTarget.id) navigate("/pages");
+      setDeleteTarget(null);
+    } catch {
+      setDeleteError(true);
+    } finally {
+      setDeleting(false);
+    }
   }
   function row(
     page: PageSummary,
@@ -149,6 +187,20 @@ export function PagesSidebar({ onNavigate }: { onNavigate(): void }) {
           </Link>
           {page.role !== "reader" && (
             <PageCreateMenu parentId={page.id} onNavigate={onNavigate} />
+          )}
+          {page.role === "owner" && (
+            <button
+              type="button"
+              className="pages-tree-action pages-tree-delete"
+              aria-label={`${t("Delete item")} ${page.title}`}
+              title={`${t("Delete item")} ${page.title}`}
+              onClick={() => {
+                setDeleteError(false);
+                setDeleteTarget(page);
+              }}
+            >
+              <Trash2 size={14} aria-hidden />
+            </button>
           )}
         </div>
         {expandable && isOpen && (
@@ -227,6 +279,38 @@ export function PagesSidebar({ onNavigate }: { onNavigate(): void }) {
           )}
         </div>
       )}
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("Delete")}</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.title}: {t("Delete hint")}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && <p role="alert">{t("Unavailable")}</p>}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setDeleteTarget(null)}
+            >
+              {t("Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void deletePage()}
+            >
+              {t("Delete")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
