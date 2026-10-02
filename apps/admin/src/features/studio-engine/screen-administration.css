@@ -6,6 +6,8 @@
   overflow: hidden;
 }
 .screen-admin {
+  container-type: inline-size;
+  container-name: screen-administration;
   max-width: 980px;
   margin: 0 auto;
   display: grid;
@@ -356,10 +358,13 @@
 .screen-admin-row-title-wrap {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 8px;
 }
 .screen-admin-plugin-badge {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   padding: 1px 7px;
   font-size: 11px;
@@ -376,6 +381,7 @@
   color: var(--muted-foreground);
 }
 .screen-admin-row-title {
+  overflow-wrap: anywhere;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.35;
@@ -655,4 +661,59 @@
 }
 .screen-admin-menu-section .screen-admin-row {
   padding-left: 28px;
+}
+
+/* Give screen names their own row when the available content area is narrow. */
+@container screen-administration (max-width: 640px) {
+  .screen-admin-tabs-nav [role="tablist"] {
+    height: auto;
+    max-width: 100%;
+    gap: 4px;
+  }
+  .screen-admin-tabs-nav [role="tab"] {
+    height: auto;
+    min-height: 44px;
+  }
+  .screen-admin-row {
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+  }
+  .screen-admin-row-drag,
+  .screen-admin-row-drag-spacer {
+    width: 44px;
+    height: 44px;
+  }
+  .screen-admin-row-open {
+    min-height: 44px;
+    align-items: start;
+  }
+  .screen-admin-row-actions {
+    grid-column: 2;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 8px;
+  }
+  .screen-admin-row.is-inactive .screen-admin-row-actions {
+    grid-column: 1 / -1;
+  }
+  .screen-admin-row-actions > button {
+    width: 44px;
+    height: 44px;
+  }
+  .screen-admin-row-visibility {
+    min-height: 44px;
+    margin-inline-end: auto;
+  }
+  .screen-admin-row-visibility [role="switch"] {
+    position: relative;
+  }
+  .screen-admin-row-visibility [role="switch"]::after {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
+  }
+  .screen-admin-menu-section .screen-admin-row {
+    padding-left: 16px;
+  }
 }

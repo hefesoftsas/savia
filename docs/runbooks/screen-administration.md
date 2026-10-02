@@ -21,6 +21,10 @@ token so it remains consistent in both light and dark mode.
 
 ## Visibilidad en la barra lateral (Sidebar Visibility)
 
+On narrow screens, each screen row places visibility and management controls
+below its name and description. Plugin badges wrap with long titles, and touch
+targets remain accessible without squeezing the screen name into a narrow column.
+
 No todas las pantallas necesitan mostrarse en la barra lateral izquierda del CRM. Algunas pantallas se diseñan para ser invocadas exclusivamente desde otras páginas, enlaces contextuales o flujos de trabajo (por ejemplo, pantallas de detalle, asistentes o pantallas secundarias de extensiones).
 
 - **Al crear una pantalla**: El modal de «Nueva pantalla» incluye la opción «Mostrar en la barra lateral» (activa por defecto). Si se desactiva, la pantalla se crea con `studio: { screen: { hidden: true } }`. Permanece accesible directamente por URL (`/crm?object=<nombre>`), deep link y mensajes de navegación entre componentes (`postMessage`).

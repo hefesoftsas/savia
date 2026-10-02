@@ -1715,11 +1715,11 @@ export function AssistantBar() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button
-          className="fixed right-4 bottom-4 z-40 h-12 gap-2.5 rounded-full border border-primary/20 bg-primary px-4.5 font-medium text-primary-foreground shadow-xl transition-all hover:scale-[1.02] hover:bg-primary/90 active:scale-[0.98] sm:right-6 sm:bottom-6"
+          className="size-11 shrink-0 gap-2.5 rounded-full border border-primary/20 bg-primary p-0 font-medium text-primary-foreground transition-all hover:bg-primary/90 sm:fixed sm:right-6 sm:bottom-6 sm:z-40 sm:h-12 sm:w-auto sm:px-4.5 sm:shadow-xl sm:hover:scale-[1.02] sm:active:scale-[0.98]"
           aria-label={t("Abrir asistente")}
         >
           <Sparkles className="size-4" />
-          <span>{t("Asistente")}</span>
+          <span className="hidden sm:inline">{t("Asistente")}</span>
         </Button>
       </SheetTrigger>
       <SheetContent className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-xl">

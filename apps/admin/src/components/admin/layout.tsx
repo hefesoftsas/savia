@@ -177,6 +177,10 @@ export const Layout = (props: CoreLayoutProps) => {
               className="flex min-w-0 shrink-0 items-center gap-1"
             >
               <NotificationBell />
+              {/* Keep the assistant immediately available without covering mobile form actions. */}
+              <Suspense fallback={null}>
+                <AssistantBar />
+              </Suspense>
             </div>
           </header>
           <DeploymentUpdateNotice />
@@ -201,13 +205,6 @@ export const Layout = (props: CoreLayoutProps) => {
       <Notification />
       <PwaInstallBanner />
       <CookieConsentBanner />
-      {/* Intencionadamente inmediato: el contrato (app.test.tsx) exige el
-          trigger "Abrir asistente" disponible sin esperar al idle. Ya es un
-          chunk lazy no bloqueante y ahora con caché immutable + iconos
-          agrupados. */}
-      <Suspense fallback={null}>
-        <AssistantBar />
-      </Suspense>
     </SidebarProvider>
   );
 };

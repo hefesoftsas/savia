@@ -19,6 +19,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [Workspace layout](guides/workspace-layout.md) — mobile and desktop assistant access.
+
 - [Codex orchestration](guides/codex-orchestration.md) — Astra coordination, Luna workers, and local permissions.
 
 - [Core localization](localization.md) — ES/EN/PT coverage, translated labels, locale formatting and regression checks.
