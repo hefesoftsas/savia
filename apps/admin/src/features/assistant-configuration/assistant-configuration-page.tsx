@@ -63,6 +63,10 @@ import { SettingsPanelSkeleton } from "@/components/admin/page-skeletons";
 
 type ConfigurationServices = Pick<AppServices, "assistantConfiguration">;
 type ConfigurationTab = "global" | "tenant";
+const defaultMeetingModels = {
+  transcription: "openai/whisper-large-v3",
+  summary: "deepseek/deepseek-v4-flash",
+};
 
 function failureMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -578,7 +582,7 @@ export function AssistantConfigurationPanel({
             }}
             placeholder={
               summary?.deployment?.transcriptionModel ??
-              "openai/whisper-large-v3"
+              defaultMeetingModels.transcription
             }
             aria-describedby="meeting-transcription-help"
             disabled={savingMeetingModels}
@@ -607,7 +611,7 @@ export function AssistantConfigurationPanel({
               summary?.global?.model ??
               summary?.deployment?.summaryModel ??
               summary?.deployment?.model ??
-              "deepseek/deepseek-v4-flash"
+              defaultMeetingModels.summary
             }
             aria-describedby="meeting-summary-help"
             disabled={savingMeetingModels}

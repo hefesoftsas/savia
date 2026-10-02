@@ -36,7 +36,7 @@ Privilege boundaries; accurate state when permissions/devices fail; callbacks an
 
 ## Task 1 — Close scope and reuse decisions (CMP-00/CMP-01)
 
-- [ ] Confirm the product name and initial OS/build/device matrix in `docs/companion/README.md`.
+- [ ] Confirm the product name and initial OS/build/device coverage in `docs/companion/README.md`.
 - [ ] Record input/output selection, start/stop, gap and temporary-file lifecycle in `docs/companion/architecture.md`.
 - [ ] If upstream code is selected, create `apps/companion/THIRD_PARTY_NOTICES.md` with repository, immutable commit, file paths, licenses and complete transitive dependencies. Do not mark review passed with only a root license badge.
 - [ ] Record numeric quality/resource thresholds and permitted fixtures in `docs/companion/validation.md` before qualification runs.

@@ -31,7 +31,7 @@ unpassed hardware/provider gates and the remaining epic scope.
 | [Implementation status](implementation-status.md)                                     | Implemented prototype scope and remaining epic gates.                             |
 | [Architecture and research](architecture.md)                                          | Deployment decision, component boundaries, reusable OSS and source links.         |
 | [Detailed epics](epics.md)                                                            | Dependencies, stories, acceptance criteria, risks and completion gates.           |
-| [Validation protocol](validation.md)                                                  | Real-device matrix, controlled audio tests and evidence templates.                |
+| [Validation protocol](validation.md)                                                  | Real-device coverage, controlled audio tests and evidence templates.              |
 | [First implementation plan](../superpowers/plans/2026-10-01-companion-feasibility.md) | Ordered next steps and review constraints for the capture proof.                  |
 
 ## Delivery strategy
@@ -55,7 +55,7 @@ privacy, cost, throughput or offline requirements justify operating it.
 | G1: native feasibility  | Audible mic and system samples on each initial OS          | Pending real-device tests.                                       |
 | G2: service feasibility | Authorized upload and measured STT end-to-end              | One live synthetic sample passed; broader qualification pending. |
 | G3: internal pilot      | Reviewed minutes, recoverable sessions, tenancy and quotas | Pending.                                                         |
-| G4: distributable pilot | Signed packages, install/update/recovery matrix            | Pending.                                                         |
+| G4: distributable pilot | Signed packages, install/update/recovery test cases        | Pending.                                                         |
 | G5: general release     | Sustained pilot metrics and operational ownership          | Pending.                                                         |
 
 Do not set a delivery date from this document. After G1 and G2, estimate remaining

@@ -134,7 +134,7 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 
 **Dependencies:** CMP-02; CMP-01 consent contract.
 
-**Deliverables:** native capture implementation, permission/denial UX, separate source tracks, supported-device matrix.
+**Deliverables:** native capture implementation, permission/denial UX, separate source tracks, supported-device coverage.
 
 ### Stories
 
@@ -151,7 +151,7 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 **CMP-03.3 — Handle device changes during a meeting.**
 
 - Acceptance criteria: disconnect, re-pair, default-device change, and Bluetooth route changes are detected; the user is informed of gaps or route changes; the client does not silently switch to an unintended input.
-- Tests/evidence: hardware matrix covering wired, built-in, and Bluetooth devices with unplug/reconnect and route switch during a recording.
+- Tests/evidence: hardware coverage for wired, built-in, and Bluetooth devices with unplug/reconnect and route switch during a recording.
 
 **CMP-03.4 — Validate capture isolation and stop behavior.**
 
@@ -185,7 +185,7 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 **CMP-04.3 — Decide Windows 10 support independently.**
 
 - Acceptance criteria: Windows 10 is either explicitly excluded with a user-facing minimum version or supported only after a separate technical, security, and lifecycle review; no Windows 11 evidence is extrapolated to Windows 10.
-- Tests/evidence: decision record includes OS edition/build, API availability, device matrix, and maintenance cost; if supported, run the same core capture suite on declared builds.
+- Tests/evidence: decision record includes OS edition/build, API availability, device coverage, and maintenance cost; if supported, run the same core capture suite on declared builds.
 
 **CMP-04.4 — Qualify capture interruption paths.**
 
@@ -194,7 +194,7 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 
 **Risks:** WASAPI endpoint behavior and Bluetooth profiles vary; Windows 10 servicing status is a separate product and support decision.
 
-**Exit gate:** Windows 11 capture passes the agreed matrix; Windows 10 status is explicitly decided and must not be implied by the installer target.
+**Exit gate:** Windows 11 capture passes the agreed test cases; Windows 10 status is explicitly decided and must not be implied by the installer target.
 
 ## CMP-05 — Shared timebase, audio quality, and capture resilience
 
@@ -228,7 +228,7 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 
 **Risks:** clocks can drift independently; Bluetooth may change codec or endpoint mid-session; echo behavior depends on conferencing app and hardware.
 
-**Exit gate:** declared synchronization tolerances pass on the supported device matrix for both OSes, including long-session and route-change runs.
+**Exit gate:** declared synchronization tolerances pass across supported devices on both OSes, including long-session and route-change runs.
 
 ## CMP-06 — Valid chunk containers and upload-ready media
 
@@ -270,7 +270,7 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 
 **Dependencies:** CMP-06; CMP-01 provider/privacy policy.
 
-**Deliverables:** provider-neutral job contract, OpenRouter candidate adapter, capability matrix, rate/timeout/error policy, secret management.
+**Deliverables:** provider-neutral job contract, OpenRouter candidate adapter, capability coverage, rate/timeout/error policy, secret management.
 
 ### Stories
 
@@ -316,7 +316,7 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 **CMP-08.1 — Model meeting, upload, and transcript job ownership.**
 
 - Acceptance criteria: schemas link each meeting/job/object/transcript to an authenticated Savia principal and tenant; client-supplied tenant identifiers cannot widen access; authorization is checked on create, upload, polling, read, and delete; migrations preserve existing Savia data behavior.
-- Tests/evidence: API authorization matrix across two tenants, member roles, ownership changes, deletion, and revoked sessions; migration and schema review.
+- Tests/evidence: API authorization coverage across two tenants, member roles, ownership changes, deletion, and revoked sessions; migration and schema review.
 
 **CMP-08.2 — Define durable job states and partial outcomes.**
 
@@ -379,7 +379,7 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 
 **Risks:** local copies increase privacy impact; secure deletion on modern storage is not guaranteed; user expectations for offline recording may conflict with disk/retention limits.
 
-**Exit gate:** cross-platform crash/network matrix demonstrates bounded encrypted retention, correct resumption, reliable purge attempts, and honest failure states.
+**Exit gate:** cross-platform crash/network test cases demonstrate bounded encrypted retention, correct resumption, reliable purge attempts, and honest failure states.
 
 ## CMP-10 — Transcript review, diarization, and structured meeting outcomes
 
@@ -421,7 +421,7 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 
 **Dependencies:** CMP-02 through CMP-10 for any capability included in the release; CMP-01 product/privacy approval.
 
-**Deliverables:** signed and notarized packages where required, release/update process, operational metrics and runbooks, regression suite, explicit support matrix and go/no-go record.
+**Deliverables:** signed and notarized packages where required, release/update process, operational metrics and runbooks, regression suite, explicit support coverage and go/no-go record.
 
 ### Stories
 
@@ -442,15 +442,15 @@ CMP-00 is complete for the documented scaffold scope. CMP-01 through CMP-11 are 
 
 **CMP-11.4 — Complete end-to-end validation and support runbooks.**
 
-- Acceptance criteria: matrix covers supported OS versions, hardware, device switching/Bluetooth, permission denial, long sessions, clock drift, echo, crash, network interruption, queue/provider failure, Spanish quality, deletion, and tenant isolation; each supported claim cites an evidence record; owners and dates exist for operational procedures.
-- Tests/evidence: run the published matrix on actual hardware and a staging tenant; preserve redacted evidence; run restore/deletion and cost reconciliation drills.
+- Acceptance criteria: test cases cover supported OS versions, hardware, device switching/Bluetooth, permission denial, long sessions, clock drift, echo, crash, network interruption, queue/provider failure, Spanish quality, deletion, and tenant isolation; each supported claim cites an evidence record; owners and dates exist for operational procedures.
+- Tests/evidence: run the published test cases on actual hardware and a staging tenant; preserve redacted evidence; run restore/deletion and cost reconciliation drills.
 
 **CMP-11.5 — Make an explicit release decision.**
 
 - Acceptance criteria: release decision names included capabilities, known limitations, privacy/provider settings, supported OS/hardware, unresolved risks, and rollback owner; no roadmap status or mocked test is described as production evidence; release is blocked by unresolved critical security/privacy findings.
 - Tests/evidence: signed go/no-go review record and release checklist linked to actual run outputs.
 
-**Risks:** code signing credentials and updater compromise; matrix breadth; silent changes in OS/provider behavior; privacy claims that cannot be supported by current provider evidence.
+**Risks:** code signing credentials and updater compromise; coverage breadth; silent changes in OS/provider behavior; privacy claims that cannot be supported by current provider evidence.
 
 **Exit gate:** approved evidence exists for every release claim, installers pass clean-machine tests, operations and deletion procedures are rehearsed, and product/security owners explicitly approve the release.
 
