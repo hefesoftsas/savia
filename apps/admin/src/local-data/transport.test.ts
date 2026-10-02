@@ -20,7 +20,7 @@ function store() {
       syncState: { get: async () => ({ hydrated: true }) },
     },
     get: async () => document,
-    mutate: vi.fn().mockResolvedValue({ ...document, name: "Updated" }),
+    mutateWithReceipt: vi.fn().mockResolvedValue({ data: { ...document, name: "Updated" }, mutationId: "m1" }),
   };
 }
 describe("local CRM transport", () => {
@@ -76,7 +76,7 @@ it("forwards bulk operations without mistaking the reserved name for a record id
   });
   expect(result.ok).toBe(true);
   expect(network).toHaveBeenCalledOnce();
-  expect(local.mutate).not.toHaveBeenCalled();
+  expect(local.mutateWithReceipt).not.toHaveBeenCalled();
 });
 it("returns 404 for locally deleted detail records", async () => {
   const local = store();
@@ -122,7 +122,7 @@ it("does not turn record-detail endpoints into write routes", async () => {
     body: JSON.stringify({ name: "Wrong route" }),
   });
   expect(result.status).toBe(405);
-  expect(local.mutate).not.toHaveBeenCalled();
+  expect(local.mutateWithReceipt).not.toHaveBeenCalled();
 });
 
 it("reuses complete metadata on fetch failure even when the browser reports online", async () => {
@@ -452,4 +452,17 @@ it("always refreshes deletion previews from the backend and never falls back on 
   await expect(transport(path)).rejects.toThrow("Failed to fetch");
   expect(network).toHaveBeenCalledTimes(3);
   expect(network).toHaveBeenLastCalledWith(path, { cache: "no-store" });
+});
+it("preserves an explicit delete version for server conflict detection", async () => {
+  const local = store();
+  const transport = createLocalTransport(local as never, vi.fn(), async () => {});
+  const result = await transport('/api/records/contacts/one?version=7', { method: 'DELETE' });
+  expect(result.ok).toBe(true);
+  expect(local.mutateWithReceipt).toHaveBeenCalledWith('contacts', 'delete', 'one', undefined, 7);
+});
+it("rejects a malformed delete version without enqueueing", async () => {
+  const local = store();
+  const result = await createLocalTransport(local as never, vi.fn(), async () => {})('/api/records/contacts/one?version=bad', { method: 'DELETE' });
+  expect(result.status).toBe(422);
+  expect(local.mutateWithReceipt).not.toHaveBeenCalled();
 });

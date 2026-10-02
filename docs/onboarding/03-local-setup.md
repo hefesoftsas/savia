@@ -90,6 +90,13 @@ build context contains only `.devcontainer`, so it does not copy those secrets.
 | `assistant-api.dev.env`                       | assistant's OpenRouter + Nango | assistant disabled                                           |
 | `mcp.dev.env` (`SAVIA_MCP_SHARED_SECRET=...`) | MCP worker on `:8789`          | MCP does not start                                           |
 
+The API runtime creates a cryptographically random `STUDIO_INTEGRATION_KEY`
+when neither the core `.dev.vars` nor local secret files or environment provide
+one. It stores the key in `apps/api/.wrangler/local-runtime/` with private file
+permissions and reuses it across restarts. This gives the local Studio iframe a
+stable key; removing that ignored runtime directory rotates the local key. A
+configured `STUDIO_INTEGRATION_KEY` or legacy `CRM_INTEGRATION_KEY` is kept.
+
 ## Start
 
 ```sh

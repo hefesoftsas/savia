@@ -58,7 +58,7 @@ historical copy of external provider data. This release does not merge simultane
 
 ## Operations and limits
 
-Apply migrations `0008_pages.sql`, `0009_issue_connections.sql`, `0010_pages_folders.sql` and `0011_page_public_links.sql` using the existing deployment migration process; PostgreSQL equivalents are registered in its migration manifest. This feature does not deploy or apply production migrations automatically. Existing document storage and authenticated API configuration are reused. The API reference is generated from the Pages OpenAPI route declarations.
+Apply migrations `0008_pages.sql`, `0009_issue_connections.sql`, `0010_pages_folders.sql`, `0011_page_public_links.sql` and `0012_page_public_short_links.sql` using the existing deployment migration process; PostgreSQL equivalents are registered in its migration manifest. This feature does not deploy or apply production migrations automatically. Existing document storage and authenticated API configuration are reused. The API reference is generated from the Pages OpenAPI route declarations.
 
 Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Attachment blobs are retained when page metadata is deleted; bucket lifecycle/cleanup should follow deployment retention policy. Revision retention is unbounded unless the owner explicitly clears prior versions.
 

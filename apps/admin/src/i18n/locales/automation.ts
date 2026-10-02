@@ -178,10 +178,20 @@ export const automationMessages = {
     "Não foi possível conectar ao Studio",
   ],
   Reintentar: ["Reintentar", "Retry", "Tentar novamente"],
+  "Plugin session ended. Reload to reconnect.": [
+    "La sesión del plugin terminó. Actualiza la página para continuar.",
+    "Plugin session ended. Reload to reconnect.",
+    "A sessão do plugin terminou. Recarregue a página para continuar.",
+  ],
   "Plugin could not be loaded.": [
     "No se pudo cargar el plugin.",
     "Plugin could not be loaded.",
     "Não foi possível carregar o plugin.",
+  ],
+  "Editor de %{value}": [
+    "Editor de %{value}",
+    "%{value} editor",
+    "Editor de %{value}",
   ],
   "Fuentes y colecciones": [
     "Fuentes y colecciones",

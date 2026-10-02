@@ -1,3 +1,4 @@
+import { pluginDevelopmentReload } from "./build/plugin-development";
 import { officePlugin } from "./build/office-plugin";
 import { collectOfflineShellAssets } from "./build/offline-shell-assets";
 import { reactSandboxPlugin } from "./build/react-sandbox-plugin";
@@ -74,6 +75,7 @@ function offlineShellPlugin(): Plugin {
 export default defineConfig({
   plugins: [
     react(),
+    pluginDevelopmentReload(),
     officePlugin(),
     tailwindcss(),
     reactSandboxPlugin(),
@@ -89,8 +91,9 @@ export default defineConfig({
       injectRegister: false,
       manifest: false,
       workbox: {
-        // Custom registration (injectRegister:false) must explicitly activate
-        // updates. DeploymentUpdateNotice lets users reload after saving.
+        // Manual registration disables the plugin's autoUpdate defaults.
+        // Activate the replacement shell even while existing tabs are open;
+        // DeploymentUpdateNotice lets the user choose when to reload the page.
         skipWaiting: true,
         clientsClaim: true,
         navigateFallback: "index.html",

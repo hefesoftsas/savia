@@ -1,3 +1,5 @@
+import { sendPersonalMailSchema } from "@savia/studio-shared/mail-contracts";
+import { validateMailContext } from "../personal-integrations/mail-context";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { actorFromContext } from "../auth/middleware";
 import { PendingActionRepository } from "../assistant/pending-actions";
@@ -307,7 +309,8 @@ const messageListRoute = createRoute({
   request: {
     query: z.object({
       provider: z.enum(["gmail", "outlook"]),
-      query: z.string().trim().min(1).max(100),
+      query: z.string().trim().min(1).max(100).optional(),
+      cursor: z.string().min(1).max(2048).optional(),
     }),
   },
   responses: {
@@ -321,16 +324,53 @@ const messageListRoute = createRoute({
                 subject: z.string().nullable(),
                 sender: z.string().nullable(),
                 receivedAt: z.string().nullable(),
+                webLink: z.string().nullable(),
               }),
             ),
+            pagination: z.object({ nextCursor: z.string().nullable() }),
           }),
         },
       },
       description: "On-demand message metadata",
     },
+    400: { description: "Invalid message cursor" },
     403: { description: "Connection belongs to a different user" },
     502: { description: "Provider request failed" },
     503: { description: "Provider or connection unavailable" },
+  },
+});
+
+const sendMailRoute = createRoute({
+  method: "post",
+  path: "/v1/personal-integrations/messages",
+  tags: ["Personal integrations"],
+  summary: "Send caller-confirmed mail from a personal mailbox",
+  security: [{ oauth2: ["savia.api.write"] }],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: sendPersonalMailSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Mail submitted",
+      content: {
+        "application/json": {
+          schema: z.object({
+            data: z.object({
+              provider: z.enum(["gmail", "outlook"]),
+              action: z.literal("send-email"),
+            }),
+          }),
+        },
+      },
+    },
+    400: { description: "Invalid mail" },
+    403: { description: "Context access denied" },
+    404: { description: "Context record missing" },
+    502: { description: "Provider request failed" },
+    503: { description: "Connection unavailable" },
   },
 });
 
@@ -889,13 +929,63 @@ export function registerPersonalIntegrationRoutes(
       );
     try {
       const query = context.req.valid("query");
+      const page = await operations.listMessagePage({
+        principalId: actor.principal.id,
+        provider: query.provider,
+        query: query.query,
+        cursor: query.cursor,
+      });
       return context.json(
         {
-          data: await operations.listMessages({
-            principalId: actor.principal.id,
-            provider: query.provider,
-            query: query.query,
-          }),
+          data: page.messages,
+          pagination: { nextCursor: page.nextCursor },
+        },
+        200,
+      );
+    } catch (exception) {
+      const response = personalErrorResponse(exception);
+      if (!response) throw exception;
+      return context.json(response.body, response.status);
+    }
+  });
+
+  app.openapi(sendMailRoute, async (context) => {
+    const actor = actorFromContext(context);
+    if (!operations)
+      return context.json(
+        errorBody(
+          "PERSONAL_INTEGRATION_UNAVAILABLE",
+          "The requested personal integration is unavailable",
+        ),
+        503,
+      );
+    try {
+      const input = context.req.valid("json");
+      await validateMailContext(input.context ?? [], (path) => {
+        const url = new URL(context.req.url);
+        url.pathname = path;
+        url.search = "";
+        return Promise.resolve(
+          app.request(
+            new Request(url, {
+              method: "GET",
+              headers: context.req.raw.headers,
+            }),
+            undefined,
+            context.env,
+          ),
+        );
+      });
+      const result = await operations.sendMail({
+        ...input,
+        principalId: actor.principal.id,
+      });
+      return context.json(
+        {
+          data: {
+            provider: input.provider,
+            action: result.action as "send-email",
+          },
         },
         200,
       );

@@ -1,3 +1,12 @@
+import {
+  sendPersonalMailSchema,
+  type PersonalMailPage,
+  type SendPersonalMailInput,
+} from "@savia/studio-shared/mail-contracts";
+import {
+  normalizeGmailMessage,
+  normalizeOutlookMessage,
+} from "./mail-metadata";
 import type {
   ActivePersonalIntegrationConnection,
   PersonalIntegrationNangoClient,
@@ -20,6 +29,7 @@ export type PersonalFile = {
 };
 
 export type PersonalMessage = {
+  webLink: string | null;
   id: string;
   subject: string | null;
   sender: string | null;
@@ -67,6 +77,137 @@ function safeSearchTerm(value: string): string {
   if (!normalized || normalized.length > 100 || /['"\\]/.test(normalized))
     throw new PersonalIntegrationUnavailableError("The file search is invalid");
   return normalized;
+}
+
+type MailContinuation =
+  | { provider: "gmail"; kind: "page-token"; token: string }
+  | {
+      provider: "outlook";
+      kind: "skip" | "skip-token";
+      value: string;
+    };
+
+type MailCursor = {
+  version: 1;
+  provider: "gmail" | "outlook";
+  query: string | null;
+  connectionId: string;
+  continuation: MailContinuation;
+};
+
+function encodeMailCursor(cursor: MailCursor): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(cursor));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function decodeMailCursor(
+  value: string,
+  expected: Omit<MailCursor, "continuation">,
+): MailContinuation {
+  if (!/^[A-Za-z0-9_-]{1,2048}$/.test(value))
+    return invalidAction("The mail cursor is invalid");
+  try {
+    const standard = value.replace(/-/g, "+").replace(/_/g, "/");
+    const binary = atob(standard + "=".repeat((4 - (standard.length % 4)) % 4));
+    const bytes = Uint8Array.from(binary, (character) =>
+      character.charCodeAt(0),
+    );
+    const cursor = JSON.parse(new TextDecoder().decode(bytes)) as MailCursor;
+    if (
+      cursor.version !== 1 ||
+      cursor.provider !== expected.provider ||
+      cursor.query !== expected.query ||
+      cursor.connectionId !== expected.connectionId ||
+      !cursor.continuation ||
+      cursor.continuation.provider !== expected.provider
+    )
+      return invalidAction("The mail cursor is invalid");
+    if (
+      cursor.provider === "gmail" &&
+      cursor.continuation.kind === "page-token" &&
+      typeof cursor.continuation.token === "string" &&
+      cursor.continuation.token.length > 0 &&
+      cursor.continuation.token.length <= 1024
+    )
+      return cursor.continuation;
+    if (
+      cursor.provider === "outlook" &&
+      cursor.continuation.kind === "skip-token" &&
+      typeof cursor.continuation.value === "string" &&
+      cursor.continuation.value.length > 0 &&
+      cursor.continuation.value.length <= 1024
+    )
+      return cursor.continuation;
+    if (
+      cursor.provider === "outlook" &&
+      cursor.continuation.kind === "skip" &&
+      typeof cursor.continuation.value === "string" &&
+      /^(?:0|[1-9][0-9]{0,6})$/.test(cursor.continuation.value)
+    )
+      return cursor.continuation;
+  } catch {
+    // Invalid cursors are a client input error, with no upstream request made.
+  }
+  return invalidAction("The mail cursor is invalid");
+}
+
+function outlookContinuation(
+  value: unknown,
+  path: string,
+  parameters: URLSearchParams,
+): MailContinuation | null {
+  if (typeof value !== "string" || value.length > 4096) return null;
+  try {
+    const url = new URL(value);
+    // Graph canonicalizes the same Inbox with OData key syntax in nextLink.
+    const matchesPath =
+      url.pathname === path ||
+      (path === "/v1.0/me/mailFolders/inbox/messages" &&
+        url.pathname === "/v1.0/me/mailFolders('inbox')/messages");
+    if (
+      url.protocol !== "https:" ||
+      url.hostname !== "graph.microsoft.com" ||
+      url.port !== "" ||
+      url.username ||
+      url.password ||
+      !matchesPath ||
+      url.hash
+    )
+      return null;
+    const fixedKeys = new Set(
+      [...parameters.keys()].filter(
+        (key) => key !== "$skip" && key !== "$skiptoken",
+      ),
+    );
+    for (const key of url.searchParams.keys()) {
+      if (fixedKeys.has(key)) {
+        if (url.searchParams.getAll(key).length !== 1) return null;
+        if (url.searchParams.get(key) !== parameters.get(key)) return null;
+      } else if (key !== "$skip" && key !== "$skiptoken") {
+        return null;
+      }
+    }
+    const skipToken = url.searchParams.getAll("$skiptoken");
+    const skip = url.searchParams.getAll("$skip");
+    if (skipToken.length === 1 && skip.length === 0 && skipToken[0])
+      return skipToken[0].length <= 1024
+        ? { provider: "outlook", kind: "skip-token", value: skipToken[0] }
+        : null;
+    if (
+      skip.length === 1 &&
+      skipToken.length === 0 &&
+      /^(?:0|[1-9][0-9]{0,6})$/.test(skip[0] ?? "")
+    )
+      return { provider: "outlook", kind: "skip", value: skip[0] ?? "" };
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function stringValue(value: unknown): string | null {
@@ -456,45 +597,6 @@ function filesFromOneDrive(payload: unknown): PersonalFile[] {
   });
 }
 
-function messagesFromGmail(payload: unknown): PersonalMessage[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload))
-    return [];
-  const messages = (payload as { messages?: unknown }).messages;
-  if (!Array.isArray(messages)) return [];
-  return messages.flatMap((message) => {
-    if (!message || typeof message !== "object" || Array.isArray(message))
-      return [];
-    const id = stringValue((message as Record<string, unknown>).id);
-    return id ? [{ id, subject: null, sender: null, receivedAt: null }] : [];
-  });
-}
-
-function messagesFromOutlook(payload: unknown): PersonalMessage[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload))
-    return [];
-  const messages = (payload as { value?: unknown }).value;
-  if (!Array.isArray(messages)) return [];
-  return messages.flatMap((message) => {
-    if (!message || typeof message !== "object" || Array.isArray(message))
-      return [];
-    const item = message as Record<string, unknown>;
-    const id = stringValue(item.id);
-    if (!id) return [];
-    const from =
-      item.from && typeof item.from === "object" && !Array.isArray(item.from)
-        ? (item.from as { emailAddress?: { address?: unknown } }).emailAddress
-        : undefined;
-    return [
-      {
-        id,
-        subject: stringValue(item.subject),
-        sender: stringValue(from?.address),
-        receivedAt: stringValue(item.receivedDateTime),
-      },
-    ];
-  });
-}
-
 function eventsFromGoogle(payload: unknown): PersonalEvent[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return [];
@@ -856,38 +958,137 @@ export class PersonalIntegrationOperations {
   async listMessages(input: {
     principalId: string;
     provider: "gmail" | "outlook";
-    query: string;
+    query?: string;
   }): Promise<PersonalMessage[]> {
-    const connection = await this.repository.findActiveConnection(
+    return (await this.listMessagePage(input)).messages;
+  }
+
+  async listMessagePage(input: {
+    principalId: string;
+    provider: "gmail" | "outlook";
+    query?: string;
+    cursor?: string;
+  }): Promise<PersonalMailPage> {
+    const connection = await this.connectedConnection(
       input.principalId,
       input.provider,
     );
-    if (!connection || connection.status !== "connected")
-      throw new PersonalIntegrationUnavailableError(
-        "The personal integration connection is not ready",
-      );
-    const term = safeSearchTerm(input.query);
-    const path =
+    const term =
+      input.query === undefined ? undefined : safeSearchTerm(input.query);
+    const parameters =
       input.provider === "gmail"
-        ? `/gmail/v1/users/me/messages?${new URLSearchParams({
+        ? new URLSearchParams({
             maxResults: "25",
-            q: term,
-          }).toString()}`
-        : `/v1.0/me/messages?${new URLSearchParams({
+            ...(term === undefined ? { labelIds: "INBOX" } : { q: term }),
+          })
+        : new URLSearchParams({
             $top: "25",
-            $select: "id,subject,from,receivedDateTime",
-            $filter: `contains(subject,'${term}')`,
-          }).toString()}`;
+            $select: "id,subject,from,receivedDateTime,webLink",
+            ...(term === undefined
+              ? { $orderby: "receivedDateTime desc" }
+              : { $filter: `contains(subject,'${term}')` }),
+          });
+    const expectedCursor = {
+      version: 1 as const,
+      provider: input.provider,
+      query: term ?? null,
+      connectionId: connection.id,
+    };
+    const continuation = input.cursor
+      ? decodeMailCursor(input.cursor, expectedCursor)
+      : undefined;
+    if (
+      continuation?.provider !== undefined &&
+      continuation.provider !== input.provider
+    )
+      return invalidAction("The mail cursor is invalid");
+    if (input.provider === "gmail" && continuation?.kind === "page-token")
+      parameters.set("pageToken", continuation.token);
+    if (input.provider === "outlook" && continuation?.kind === "skip-token")
+      parameters.set("$skiptoken", continuation.value);
+    if (input.provider === "outlook" && continuation?.kind === "skip")
+      parameters.set("$skip", continuation.value);
+    const providerPath =
+      input.provider === "gmail"
+        ? "/gmail/v1/users/me/messages"
+        : `${term === undefined ? "/v1.0/me/mailFolders/inbox/messages" : "/v1.0/me/messages"}`;
+    const path = `${providerPath}?${parameters}`;
     const response = await this.nango.proxy({
       method: "GET",
       path,
       connection,
     });
     if (!response.ok) throw new PersonalIntegrationUpstreamError();
-    const payload = await response.json().catch(() => undefined);
-    return input.provider === "gmail"
-      ? messagesFromGmail(payload)
-      : messagesFromOutlook(payload);
+    const payload = (await response.json().catch(() => undefined)) as
+      | {
+          messages?: unknown[];
+          value?: unknown[];
+          nextPageToken?: unknown;
+          "@odata.nextLink"?: unknown;
+        }
+      | undefined;
+    let next: MailContinuation | null = null;
+    if (input.provider === "outlook") {
+      const nextLink = payload?.["@odata.nextLink"];
+      next = outlookContinuation(nextLink, providerPath, parameters);
+      if (nextLink !== undefined && nextLink !== null && !next)
+        throw new PersonalIntegrationUpstreamError();
+      const messages = (Array.isArray(payload?.value) ? payload.value : [])
+        .slice(0, 25)
+        .flatMap((item) => {
+          const message = normalizeOutlookMessage(item);
+          return message ? [message] : [];
+        });
+      return {
+        messages,
+        nextCursor: next
+          ? encodeMailCursor({ ...expectedCursor, continuation: next })
+          : null,
+      };
+    }
+    const rows = (Array.isArray(payload?.messages) ? payload.messages : [])
+      .slice(0, 25)
+      .flatMap((item) => {
+        const message = normalizeGmailMessage(item);
+        return message ? [message] : [];
+      });
+    const messages: PersonalMessage[] = [];
+    for (let offset = 0; offset < rows.length; offset += 4) {
+      messages.push(
+        ...(await Promise.all(
+          rows.slice(offset, offset + 4).map(async (row) => {
+            try {
+              const query = new URLSearchParams({ format: "metadata" });
+              query.append("metadataHeaders", "Subject");
+              query.append("metadataHeaders", "From");
+              const detail = await this.nango.proxy({
+                method: "GET",
+                path: `/gmail/v1/users/me/messages/${encodeURIComponent(row.id)}?${query}`,
+                connection,
+              });
+              if (!detail.ok) return row;
+              const message = normalizeGmailMessage(await detail.json());
+              return message?.id === row.id ? message : row;
+            } catch {
+              return row;
+            }
+          }),
+        )),
+      );
+    }
+    const nextPageToken = payload?.nextPageToken;
+    if (
+      typeof nextPageToken === "string" &&
+      nextPageToken.length > 0 &&
+      nextPageToken.length <= 1024
+    )
+      next = { provider: "gmail", kind: "page-token", token: nextPageToken };
+    return {
+      messages,
+      nextCursor: next
+        ? encodeMailCursor({ ...expectedCursor, continuation: next })
+        : null,
+    };
   }
 
   async listEvents(input: {
@@ -999,6 +1200,40 @@ export class PersonalIntegrationOperations {
     return event;
   }
 
+  async sendMail(
+    input: SendPersonalMailInput & { principalId: string },
+  ): Promise<PersonalIntegrationActionResult> {
+    const { principalId, ...mail } = input;
+    const parsed = sendPersonalMailSchema.safeParse(mail);
+    if (!parsed.success)
+      throw new PersonalIntegrationInputError("The email details are invalid");
+    const { provider, to, subject, body } = parsed.data;
+    const connection = await this.connectedConnection(principalId, provider);
+    const request =
+      provider === "gmail"
+        ? {
+            method: "POST" as const,
+            path: "/gmail/v1/users/me/messages/send",
+            body: { raw: gmailRawMessage({ to, subject, body }) },
+          }
+        : {
+            method: "POST" as const,
+            path: "/v1.0/me/sendMail",
+            body: {
+              message: {
+                subject,
+                body: { contentType: "Text", content: body },
+                toRecipients: to.map((address) => ({
+                  emailAddress: { address },
+                })),
+              },
+              saveToSentItems: true,
+            },
+          };
+    await this.write(connection, "send-email", request);
+    return { provider, action: "send-email" };
+  }
+
   async executeConfirmedAction(input: {
     principalId: string;
     command: string;
@@ -1006,37 +1241,13 @@ export class PersonalIntegrationOperations {
   }): Promise<PersonalIntegrationActionResult> {
     const action = actionObject(input.input);
     if (input.command === "send-email") {
-      const provider = emailProvider(action.provider);
-      const to = emailRecipients(action, "to", true);
-      const subject = requiredActionText(action, "subject", 2000);
-      const body = requiredActionText(action, "body", 10_000);
-      const connection = await this.connectedConnection(
-        input.principalId,
-        provider,
-      );
-      const request =
-        provider === "gmail"
-          ? {
-              method: "POST" as const,
-              path: "/gmail/v1/users/me/messages/send",
-              body: { raw: gmailRawMessage({ to, subject, body }) },
-            }
-          : {
-              method: "POST" as const,
-              path: "/v1.0/me/sendMail",
-              body: {
-                message: {
-                  subject,
-                  body: { contentType: "Text", content: body },
-                  toRecipients: to.map((address) => ({
-                    emailAddress: { address },
-                  })),
-                },
-                saveToSentItems: true,
-              },
-            };
-      await this.write(connection, "send-email", request);
-      return { provider, action: "send-email" };
+      return this.sendMail({
+        principalId: input.principalId,
+        provider: emailProvider(action.provider),
+        to: emailRecipients(action, "to", true),
+        subject: requiredActionText(action, "subject", 2000),
+        body: requiredActionText(action, "body", 10_000),
+      });
     }
     if (input.command === "create-event") {
       const provider = calendarProvider(action.provider);

@@ -3,6 +3,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 async function environmentFile(path) {
@@ -56,6 +57,8 @@ export async function prepareApiRuntime(
     resolve(root, "apps/api/.dev.vars"),
   );
   const runtime = resolve(root, "apps/api/.wrangler/local-runtime");
+  await mkdir(runtime, { recursive: true, mode: 0o700 });
+  await chmod(runtime, 0o700);
   const configs = [];
   for (const [name, directory, vars] of [
     ["core", "apps/api", { ...coreSecrets, ...overrides }],
@@ -84,6 +87,42 @@ export async function prepareApiRuntime(
         database.migrations_dir = resolve(source, database.migrations_dir);
     const target = resolve(runtime, name);
     await mkdir(target, { recursive: true, mode: 0o700 });
+    const configuredIntegrationKey =
+      vars.STUDIO_INTEGRATION_KEY ||
+      vars.CRM_INTEGRATION_KEY ||
+      config.vars?.STUDIO_INTEGRATION_KEY ||
+      config.vars?.CRM_INTEGRATION_KEY;
+    if (name === "core" && !configuredIntegrationKey) {
+      const keyFile = resolve(runtime, "studio-integration-key");
+      try {
+        vars.STUDIO_INTEGRATION_KEY = await readFile(keyFile, "utf8");
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+        const generated = randomBytes(32).toString("hex");
+        try {
+          await writeFile(keyFile, generated, { flag: "wx", mode: 0o600 });
+          vars.STUDIO_INTEGRATION_KEY = generated;
+        } catch (writeError) {
+          if (writeError.code !== "EEXIST") throw writeError;
+          vars.STUDIO_INTEGRATION_KEY = await readFile(keyFile, "utf8");
+        }
+      }
+      await chmod(keyFile, 0o600);
+    }
+    if (name === "core") {
+      const devKeyFile = resolve(runtime, "plugin-development-key");
+      try {
+        await writeFile(devKeyFile, randomBytes(32).toString("hex"), {
+          flag: "wx",
+          mode: 0o600,
+        });
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+      }
+      await chmod(devKeyFile, 0o600);
+      vars.SAVIA_PLUGIN_DEV_KEY = await readFile(devKeyFile, "utf8");
+      config.main = resolve(root, "scripts/plugin-development/worker.ts");
+    }
     const configFile = resolve(target, "wrangler.json");
     const variablesFile = resolve(target, ".dev.vars");
     await writeFile(configFile, JSON.stringify(config, null, 2), {

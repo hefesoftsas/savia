@@ -11,6 +11,14 @@ The preview workflow accepts only successful CI runs caused by a push to `main`
 in this repository. It checks out the tested SHA and rejects superseded commits.
 PR CI and fork CI cannot access preview credentials or trigger deployment.
 
+The private app registers its service worker manually. Its generated worker
+explicitly enables `skipWaiting` and `clientsClaim`: `registerType: autoUpdate`
+does not supply those defaults when `injectRegister` is disabled. A deployed
+replacement activates while existing tabs are open and triggers the app's
+update notice. The user chooses **Actualizar y recargar** to load the new app;
+activation itself does not reload an open form or discard its draft. Do not
+clear site data to recover a stale shell, because it can contain offline edits.
+
 ## Isolated resources
 
 | Component    | Production                  | Preview                    |

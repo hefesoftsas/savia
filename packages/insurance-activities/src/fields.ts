@@ -21,22 +21,22 @@ export const closedStages = ["completed", "cancelled"];
 export const dateField = "due_date";
 export const fields = [
   {
-    key: "name",
+    key: "name", lookup: true,
     label: "Actividad",
     maxLength: 120,
     required: true,
   },
   {
-    key: "customer",
+    key: "customer", lookup: true,
     label: "Cliente o prospecto",
   },
   {
-    key: "policy_reference",
+    key: "policy_reference", lookup: true,
     label: "Póliza o caso relacionado",
     maxLength: 120,
   },
   {
-    key: "owner",
+    key: "owner", lookup: true,
     label: "Responsable",
     maxLength: 120,
     required: true,
@@ -92,7 +92,7 @@ export const fields = [
     required: true,
   },
   {
-    key: "outcome",
+    key: "outcome", lookup: true,
     label: "Resultado o motivo de cancelación",
     requiredStages: ["completed", "cancelled"],
     maxLength: 500,

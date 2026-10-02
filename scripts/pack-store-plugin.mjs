@@ -162,10 +162,11 @@ function assertBundle(source) {
     fail("dist/plugin.js debe exportar render() o widgets.");
 }
 
-function packageStorePlugin({ portDir, outputPath }) {
+function packageStorePlugin({ portDir, outputPath, versionOverride }) {
   const portRoot = resolve(workspaceRoot, portDir);
   if (!existsSync(portRoot)) fail(`no existe ${portDir}.`);
   const manifest = readJson(join(portRoot, "savia-extension.json"));
+  if (versionOverride !== undefined) manifest.version = versionOverride;
   assertManifest(manifest);
   const storePath = join(portRoot, "store.json");
   const store = existsSync(storePath) ? readJson(storePath) : null;
@@ -186,6 +187,7 @@ function packageStorePlugin({ portDir, outputPath }) {
       [
         entry,
         "--bundle",
+        `--metafile=${join(temporaryRoot, "metafile.json")}`,
         "--format=esm",
         "--jsx=automatic",
         "--minify",
@@ -196,6 +198,7 @@ function packageStorePlugin({ portDir, outputPath }) {
         "--log-level=warning",
       ],
       {
+        cwd: workspaceRoot,
         env: {
           ...process.env,
           NODE_PATH: [adminNodeModules, join(workspaceRoot, "node_modules")]
@@ -214,10 +217,16 @@ function packageStorePlugin({ portDir, outputPath }) {
       );
     }
     assertBundle(readFileSync(bundlePath, "utf8"));
-    cpSync(
-      join(portRoot, "savia-extension.json"),
-      join(stagingRoot, "savia-extension.json"),
-    );
+    if (versionOverride === undefined)
+      cpSync(
+        join(portRoot, "savia-extension.json"),
+        join(stagingRoot, "savia-extension.json"),
+      );
+    else
+      writeFileSync(
+        join(stagingRoot, "savia-extension.json"),
+        JSON.stringify(manifest, null, 2),
+      );
     const zipInputs = ["savia-extension.json", "dist/plugin.js"];
     if (store) {
       cpSync(join(portRoot, "store.json"), join(stagingRoot, "store.json"));
@@ -245,6 +254,10 @@ function packageStorePlugin({ portDir, outputPath }) {
       artifactPath: relative(workspaceRoot, artifact),
       sha256,
       manifest,
+      inputs: Object.keys(
+        JSON.parse(readFileSync(join(temporaryRoot, "metafile.json"), "utf8"))
+          .inputs,
+      ).map((path) => resolve(workspaceRoot, path)),
     };
   } finally {
     rmSync(temporaryRoot, { force: true, recursive: true });

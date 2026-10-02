@@ -1,3 +1,4 @@
+import { myDaySystemWidgetKinds } from "@savia/studio-shared/my-day-widgets";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { actorFromContext } from "../auth/middleware";
 import {
@@ -115,7 +116,7 @@ const myDayCollectionWidgetSchema = z.object({
 
 const myDaySystemWidgetSchema = z.object({
   id: z.string().regex(/^[a-z0-9_-]{1,48}$/),
-  kind: z.enum(["agenda", "quick_task"]),
+  kind: z.enum(myDaySystemWidgetKinds),
   title: z.string().trim().min(1).max(80).optional(),
   size: z.enum(["sm", "md", "lg"]).optional(),
 });

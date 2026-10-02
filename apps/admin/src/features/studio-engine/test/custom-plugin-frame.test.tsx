@@ -17,6 +17,67 @@ afterEach(() => {
   setStudioRuntime({ embedded: false });
 });
 
+it("sizes plugin screens to their content and resets on navigation", () => {
+  const { rerender } = render(
+    <CustomPluginFrame
+      pluginId="custom.demo"
+      title="Plugin"
+      screen={{ object: "demo", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Plugin") as HTMLIFrameElement;
+  const resize = (
+    height: unknown,
+    source: Window | null = frame.contentWindow,
+  ) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source,
+        data: { ns: "savia-plugin", type: "resize", height },
+      }),
+    );
+  resize(1250);
+  expect(frame).toHaveStyle({ height: "1250px" });
+  resize(480);
+  expect(frame).toHaveStyle({ height: "480px" });
+  resize(1_000_000);
+  expect(frame).toHaveStyle({ height: "100000px" });
+  resize(480);
+  for (const invalid of [-1, 0, "900", Number.NaN, Number.POSITIVE_INFINITY])
+    resize(invalid);
+  resize(900, window);
+  expect(frame).toHaveStyle({ height: "480px" });
+  rerender(
+    <CustomPluginFrame
+      pluginId="custom.demo"
+      title="Plugin"
+      screen={{ object: "other", view: "records" }}
+    />,
+  );
+  expect(screen.getByTitle("Plugin")).toHaveStyle({ height: "512px" });
+});
+
+it("keeps widget frames at their configured height", () => {
+  render(
+    <CustomPluginFrame
+      pluginId="custom.demo"
+      title="Widget"
+      heightClassName="h-[320px]"
+    />,
+  );
+  const frame = screen.getByTitle("Widget") as HTMLIFrameElement;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: { ns: "savia-plugin", type: "resize", height: 1500 },
+    }),
+  );
+  expect(frame.style.height).toBe("");
+  expect(frame.parentElement).toHaveClass("h-[320px]");
+});
+
 it("passes the selected store screen to the plugin shell", () => {
   render(
     <CustomPluginFrame
@@ -449,7 +510,8 @@ it("does not prefetch again after the session is cleared", async () => {
       },
     }),
   );
-  await waitFor(() => expect(transport).toHaveBeenCalledTimes(2));
+  await act(async () => Promise.resolve());
+  expect(transport).toHaveBeenCalledTimes(1);
 });
 
 it("sends the current host theme when the plugin becomes ready", () => {
@@ -800,4 +862,215 @@ it("opens a host editor from the store viewer without a selected screen", () => 
   const editor = screen.getByTitle("Store editor") as HTMLIFrameElement;
   expect(new URL(editor.src).pathname).toBe(new URL(owner.src).pathname);
   expect(new URL(editor.src).searchParams.get("panel")).toBe("1");
+});
+
+it("retains an inert prepared frame across cancellable loading and fresh activations", () => {
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, { type: "prepare", session: main.session });
+  const editor = document.querySelector(
+    'iframe[src*="standby=1"]',
+  ) as HTMLIFrameElement;
+  expect(editor).not.toBeNull();
+  expect(editor.closest("[inert]")).not.toBeNull();
+  const child = handshake(editor);
+  const request = { view: "record-editor", title: "Editor", params: {} };
+  uiMessage(list, {
+    type: "open",
+    id: "first",
+    request,
+    session: main.session,
+  });
+  expect(screen.getByRole("dialog")).toBeVisible();
+  const activation = child.send.mock.calls.find(
+    ([m]) => m.type === "activate",
+  )![0];
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(document.querySelector('iframe[src*="standby=1"]')).toBe(editor);
+  uiMessage(list, {
+    type: "open",
+    id: "second",
+    request,
+    session: main.session,
+  });
+  expect(document.querySelector('iframe[src*="standby=1"]')).toBe(editor);
+  const activations = child.send.mock.calls.filter(
+    ([m]) => m.type === "activate",
+  );
+  expect(activations).toHaveLength(2);
+  expect(activations[1][0].panel.panelId).not.toBe(activation.panel.panelId);
+});
+it("blocks new requests from a disposed frame after logout", async () => {
+  const transport = vi.fn().mockResolvedValue(Response.json({ data: [] }));
+  setStudioRuntime({ embedded: false, pluginTransport: transport });
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const frame = screen.getByTitle("List") as HTMLIFrameElement;
+  handshake(frame);
+  fireEvent(window, new Event("savia:session-cleared"));
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "late",
+        path: "/records/contacts",
+        method: "POST",
+        body: {},
+      },
+    }),
+  );
+  await act(async () => {});
+  expect(transport).not.toHaveBeenCalled();
+});
+it("drops an old activation's delayed reply when the retained iframe is reopened", async () => {
+  let respond!: (response: Response) => void;
+  setStudioRuntime({
+    embedded: false,
+    pluginTransport: () =>
+      new Promise((resolve) => {
+        respond = resolve;
+      }),
+  });
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, { type: "prepare", session: main.session });
+  const editor = document.querySelector(
+    'iframe[src*="standby=1"]',
+  ) as HTMLIFrameElement;
+  const child = handshake(editor);
+  const request = { view: "record-editor", title: "Editor", params: {} };
+  uiMessage(list, { type: "open", id: "a", request, session: main.session });
+  const first = child.send.mock.calls.find(([m]) => m.type === "activate")![0]
+    .panel.panelId;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: editor.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "old-read",
+        path: "/records/contacts/a",
+        panelId: first,
+      },
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  uiMessage(list, { type: "open", id: "b", request, session: main.session });
+  await act(async () => respond(Response.json({ data: { id: "a" } })));
+  expect(
+    child.send.mock.calls.some(
+      ([m]) => m.type === "response" && m.id === "old-read",
+    ),
+  ).toBe(false);
+  expect(screen.getByRole("dialog")).toBeVisible();
+});
+it("disposes both frames when the installed plugin version changes", () => {
+  const { rerender } = render(
+    <CustomPluginFrame
+      pluginId="custom.editor"
+      title="List"
+      installationVersion="1.0.0"
+    />,
+  );
+  const first = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(first);
+  uiMessage(first, { type: "prepare", session: main.session });
+  expect(document.querySelectorAll("iframe")).toHaveLength(2);
+  rerender(
+    <CustomPluginFrame
+      pluginId="custom.editor"
+      title="List"
+      installationVersion="1.0.1"
+    />,
+  );
+  expect(screen.getByTitle("List")).not.toBe(first);
+  expect(document.querySelectorAll("iframe")).toHaveLength(1);
+});
+it("offers retry immediately when a prepared shell fails before activation", () => {
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, { type: "prepare", session: main.session });
+  const editor = document.querySelector(
+    'iframe[src*="standby=1"]',
+  ) as HTMLIFrameElement;
+  handshake(editor);
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: editor.contentWindow,
+      data: { ns: "savia-plugin", type: "error", error: "Import unavailable" },
+    }),
+  );
+  uiMessage(list, {
+    type: "open",
+    id: "a",
+    session: main.session,
+    request: { view: "record-editor", title: "Editor", params: {} },
+  });
+  expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(document.querySelector('iframe[src*="standby=1"]')).not.toBe(editor);
+});
+it("removes both frames and cached rendered content on workspace authorization revocation", () => {
+  let change!: (event: any) => void;
+  setStudioRuntime({
+    embedded: false,
+    pluginTransport: vi.fn(),
+    localWorkspace: {
+      store: {
+        subscribe: () => () => {},
+        subscribeQueryChanges: (listener: typeof change) => {
+          change = listener;
+          return () => {};
+        },
+      },
+    } as never,
+  });
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, { type: "prepare", session: main.session });
+  expect(document.querySelectorAll("iframe")).toHaveLength(2);
+  act(() =>
+    change({
+      authorizationError: "Denied",
+      changed: new Set(),
+      metadataChanged: false,
+    }),
+  );
+  expect(document.querySelectorAll("iframe")).toHaveLength(0);
+  expect(screen.getByRole("alert")).toBeVisible();
+});
+it("forwards outbox-only conflicts even when no record revision changes", async () => {
+  let notify!: () => void;
+  const status = { pending: 0, conflicts: 1, errors: 0 };
+  setStudioRuntime({
+    embedded: false,
+    pluginTransport: vi.fn(),
+    localWorkspace: {
+      store: {
+        subscribeQueryChanges: () => () => {},
+        subscribe: (listener: () => void) => {
+          notify = listener;
+          return () => {};
+        },
+        status: async () => status,
+      },
+    } as never,
+  });
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  await act(async () => notify());
+  expect(main.send).toHaveBeenCalledWith(
+    expect.objectContaining({ type: "records-changed", status }),
+    "*",
+  );
 });

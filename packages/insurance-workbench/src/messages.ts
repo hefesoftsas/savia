@@ -2,6 +2,66 @@ import type { PluginMessages } from "@savia/studio-shared/plugin-localization";
 
 /** Authored extension captions; persisted values and provider details are never catalog keys. */
 export const messages = {
+  "Buscar por %{field}": [
+    "Buscar por %{field}",
+    "Search %{field}",
+    "Buscar por %{field}"
+  ],
+  "Referencia guardada": [
+    "Referencia guardada",
+    "Saved reference",
+    "Referência salva"
+  ],
+  "ID sin etiqueta": [
+    "ID sin etiqueta",
+    "ID without a label",
+    "ID sem rótulo"
+  ],
+  "Quitar referencia": [
+    "Quitar referencia",
+    "Clear reference",
+    "Remover referência"
+  ],
+  "Buscando referencias…": [
+    "Buscando referencias…",
+    "Searching references…",
+    "Buscando referências…"
+  ],
+  "No se pudieron cargar las opciones. Revisa el acceso y vuelve a intentarlo.": [
+    "No se pudieron cargar las opciones. Revisa el acceso y vuelve a intentarlo.",
+    "Options could not be loaded. Check access and try again.",
+    "Não foi possível carregar as opções. Verifique o acesso e tente novamente."
+  ],
+  "No hay referencias que coincidan.": [
+    "No hay referencias que coincidan.",
+    "No matching references.",
+    "Nenhuma referência corresponde à busca."
+  ],
+  "Opciones de %{field}": [
+    "Opciones de %{field}",
+    "%{field} options",
+    "Opções de %{field}"
+  ],
+  "Sin etiqueta": [
+    "Sin etiqueta",
+    "No label",
+    "Sem rótulo"
+  ],
+  "Referencia actual": [
+    "Referencia actual",
+    "Current reference",
+    "Referência atual"
+  ],
+  "Paginación de referencias": [
+    "Paginación de referencias",
+    "Reference pagination",
+    "Paginação de referências"
+  ],
+  "Página %{page}": [
+    "Página %{page}",
+    "Page %{page}",
+    "Página %{page}"
+  ],
   "Archivos del registro": [
     "Archivos del registro",
     "Record files",
@@ -432,6 +492,8 @@ export const messages = {
     "Next",
     "Próxima"
   ],
+  "Revisa la sincronización: hay cambios que requieren atención.": ["Revisa la sincronización: hay cambios que requieren atención.", "Check synchronization: some changes need attention.", "Verifique a sincronização: há alterações que precisam de atenção."],
+  "Guardado en este dispositivo. Pendiente de sincronización.": ["Guardado en este dispositivo. Pendiente de sincronización.", "Saved on this device. Pending synchronization.", "Salvo neste dispositivo. Sincronização pendente."],
   "Cambios guardados.": [
     "Cambios guardados.",
     "Changes saved.",

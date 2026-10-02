@@ -68,7 +68,7 @@ function blockText(node: Node): string {
 function table(node: Node): string {
   const rows = children(node).filter((row) => typeOf(row) === "table_row");
   if (!rows.length) return "";
-  const matrix = rows.map((row) =>
+  const cellRows = rows.map((row) =>
     children(row)
       .filter((cell) => typeOf(cell) === "table_cell")
       .map((cell) =>
@@ -77,13 +77,13 @@ function table(node: Node): string {
         ),
       ),
   );
-  const width = Math.max(1, ...matrix.map((row) => row.length));
+  const width = Math.max(1, ...cellRows.map((row) => row.length));
   const renderRow = (row: string[]) =>
     `| ${Array.from({ length: width }, (_, index) => row[index] ?? "").join(" | ")} |`;
   return [
-    renderRow(matrix[0]),
+    renderRow(cellRows[0]),
     renderRow(Array(width).fill("---")),
-    ...matrix.slice(1).map(renderRow),
+    ...cellRows.slice(1).map(renderRow),
   ].join("\n");
 }
 

@@ -11,7 +11,7 @@ export const dateField = "due_date";
 export const fields = [
   { key: "escalation_date", label: "Fecha de escalamiento", type: "date" },
   {
-    key: "escalation_owner",
+    key: "escalation_owner", lookup: true,
     label: "Responsable de escalamiento",
     maxLength: 120,
   },
@@ -19,27 +19,27 @@ export const fields = [
   { key: "response_date", label: "Respuesta enviada el", type: "date" },
 
   {
-    key: "name",
+    key: "name", lookup: true,
     label: "Referencia",
     required: true,
     maxLength: 120,
   },
   {
-    key: "customer",
+    key: "customer", lookup: true,
     label: "Cliente",
     required: true,
   },
   {
-    key: "policy_reference",
+    key: "policy_reference", lookup: true,
     label: "Póliza o caso relacionado",
     maxLength: 120,
   },
   {
-    key: "insurer",
+    key: "insurer", lookup: true,
     label: "Aseguradora",
   },
   {
-    key: "owner",
+    key: "owner", lookup: true,
     label: "Responsable",
     required: true,
     maxLength: 120,

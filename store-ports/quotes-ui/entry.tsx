@@ -7,6 +7,8 @@ import {
 } from "../../packages/insurance-quotes/src/screens/quote-screens";
 import type { PluginApi } from "../../packages/studio-shared/src/plugin-api";
 
+import "../quotes/entry.css";
+
 type Tab = "direct" | "wizard" | "admin";
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
@@ -23,8 +25,8 @@ const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
 function Shell({ savia }: { savia: PluginApi }) {
   const [tab, setTab] = useState<Tab>("direct");
   return (
-    <div>
-      <nav aria-label="Cotizador">
+    <div className="store-quote">
+      <nav className="store-quote__tabs" aria-label="Cotizador">
         {TABS.map((item) => (
           <button
             key={item.id}

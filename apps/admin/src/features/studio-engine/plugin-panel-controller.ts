@@ -8,6 +8,7 @@ export type ActivePluginPanel = {
   requestId: string;
   request: PluginPanelRequest;
   state: PluginPanelState;
+  phase: "loading" | "active";
 };
 export function createPluginPanelController() {
   let current: ActivePluginPanel | null = null;
@@ -23,6 +24,7 @@ export function createPluginPanelController() {
         id: crypto.randomUUID(),
         requestId,
         request,
+        phase: "loading",
         state: { dirty: false, busy: true },
       };
       return current;
@@ -32,10 +34,11 @@ export function createPluginPanelController() {
       const state = value as PluginPanelState;
       if (typeof state.dirty !== "boolean" || typeof state.busy !== "boolean")
         return;
+      current.phase = "active";
       current.state = { dirty: state.dirty, busy: state.busy };
     },
     close(discard = false): "blocked" | "confirm" | "closed" {
-      if (current?.state.busy) return "blocked";
+      if (current?.phase === "active" && current.state.busy) return "blocked";
       if (current?.state.dirty && !discard) return "confirm";
       current = null;
       return "closed";

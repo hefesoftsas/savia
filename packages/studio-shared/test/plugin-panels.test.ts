@@ -149,3 +149,35 @@ it("keeps the serialized client self-contained after the Worker production trans
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+it("keeps standby inert and gives each activation a revocable API", async () => {
+  const f = frame();
+  const changed = vi.fn();
+  const connected = connectPluginPanelHost(f.win, true, { standby: true, onChange: changed });
+  f.send({ type: "init", nonce: "nonce", panel: null });
+  const api = (await connected)!;
+  expect(api.panel).toBeNull();
+  expect(changed).not.toHaveBeenCalled();
+  const panel = { panelId: "a", request: { view: "record-editor", title: "Account", params: {} } };
+  f.send({ type: "activate", panel }, {});
+  f.send({ type: "activate", panel, session: "foreign" });
+  expect(changed).not.toHaveBeenCalled();
+  f.send({ type: "activate", panel });
+  const first = changed.mock.calls[0][0];
+  expect(first.panel).toEqual(panel);
+  f.send({ type: "deactivate", panelId: "wrong" });
+  expect(changed).toHaveBeenCalledTimes(1);
+  f.send({ type: "deactivate", panelId: "a" });
+  expect(changed).toHaveBeenLastCalledWith(null);
+  f.send({ type: "deactivate", panelId: "a" });
+  expect(changed).toHaveBeenCalledTimes(2);
+  f.send({ type: "activate", panel: { ...panel, panelId: "b" } });
+  f.parent.postMessage.mockClear();
+  first.setPanelState({ dirty: true, busy: true });
+  first.completePanel({ status: "saved" });
+  expect(f.parent.postMessage).not.toHaveBeenCalled();
+  changed.mock.calls[2][0].setPanelState({ dirty: false, busy: false });
+  expect(f.parent.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "state", panelId: "b" }), "*");
+  f.send({ type: "dispose" });
+  expect(changed).toHaveBeenLastCalledWith(null);
+});

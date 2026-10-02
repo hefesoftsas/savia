@@ -13,6 +13,10 @@ import {
   type StudioObject,
 } from "@savia/studio-shared/metadata";
 import {
+  getPluginLookup,
+  validatePluginLookupTargets,
+} from "@savia/studio-shared/plugin-field-lookups";
+import {
   getObject,
   assertLocalCollection,
   guard,
@@ -36,9 +40,25 @@ async function validateMetadataRelations(
   tenant: string,
   object: StudioObject,
 ) {
-  for (const [, field] of fieldEntries(object))
+  const lookupCollections = new Set<string>();
+  for (const [, field] of fieldEntries(object)) {
     if (field.config?.relation && field.config.relation !== object.name)
       await getObject(db, tenant, String(field.config.relation));
+    const lookup = getPluginLookup(field);
+    if (lookup) lookupCollections.add(lookup.collection);
+  }
+  if (lookupCollections.size) {
+    const definitions: StudioObject[] = [];
+    for (const collection of lookupCollections) {
+      try {
+        definitions.push(await getObject(db, tenant, collection));
+      } catch {
+        return fail("La colección de búsqueda no está disponible.", 422);
+      }
+    }
+    const issues = validatePluginLookupTargets(object, definitions);
+    if (issues.length) return fail(issues.join(" "), 422);
+  }
 }
 function recordSummaryConfigurationLock(
   db: D1Database,

@@ -29,28 +29,28 @@ export const closedStages = ["closed", "rejected"];
 export const dateField = "next_follow_up";
 export const fields = [
   {
-    key: "name",
+    key: "name", lookup: true,
     label: "Referencia",
     maxLength: 120,
     required: true,
   },
   {
-    key: "customer",
+    key: "customer", lookup: true,
     label: "Cliente",
     required: true,
   },
   {
-    key: "policy_reference",
+    key: "policy_reference", lookup: true,
     label: "Póliza",
     maxLength: 120,
     required: true,
   },
   {
-    key: "insurer",
+    key: "insurer", lookup: true,
     label: "Aseguradora",
   },
   {
-    key: "owner",
+    key: "owner", lookup: true,
     label: "Responsable",
     maxLength: 120,
   },
@@ -66,12 +66,12 @@ export const fields = [
     type: "date",
   },
   {
-    key: "insurer_reference",
+    key: "insurer_reference", lookup: true,
     label: "Radicado de la aseguradora",
     maxLength: 120,
   },
   {
-    key: "adjuster",
+    key: "adjuster", lookup: true,
     label: "Ajustador",
   },
   {
@@ -94,7 +94,7 @@ export const fields = [
     type: "date",
   },
   {
-    key: "outcome",
+    key: "outcome", lookup: true,
     label: "Resultado del caso",
     requiredStages: ["closed", "rejected"],
     maxLength: 500,

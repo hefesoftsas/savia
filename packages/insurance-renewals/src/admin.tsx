@@ -36,16 +36,16 @@ const config: WorkbenchConfig = {
   stages,
   defaults: { stage: "pending", premium: 0 },
   fields: [
-    { key: "name", label: t("Referencia"), required: true, maxLength: 120 },
-    { key: "customer", label: t("Cliente"), required: true },
+    { key: "name", lookup: true, label: t("Referencia"), required: true, maxLength: 120 },
+    { key: "customer", lookup: true, label: t("Cliente"), required: true },
     {
-      key: "policy_reference",
+      key: "policy_reference", lookup: true,
       label: t("Póliza actual"),
       required: true,
       maxLength: 120,
     },
-    { key: "insurer", label: t("Aseguradora") },
-    { key: "owner", label: t("Responsable"), maxLength: 120 },
+    { key: "insurer", lookup: true, label: t("Aseguradora") },
+    { key: "owner", lookup: true, label: t("Responsable"), maxLength: 120 },
     {
       key: "expiry_date",
       label: t("Vencimiento de la póliza"),
@@ -68,7 +68,7 @@ const config: WorkbenchConfig = {
     },
     { key: "next_follow_up", label: t("Próximo seguimiento"), type: "date" },
     {
-      key: "outcome",
+      key: "outcome", lookup: true,
       label: t("Nueva póliza o motivo de cierre"),
       maxLength: 500,
       help: t("Obligatorio al marcar Renovada o No renovada."),

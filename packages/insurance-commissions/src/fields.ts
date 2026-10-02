@@ -17,28 +17,28 @@ export const closedStages = [];
 export const dateField = "due_date";
 export const fields = [
   {
-    key: "name",
+    key: "name", lookup: true,
     label: "Referencia",
     maxLength: 120,
     required: true,
   },
   {
-    key: "customer",
+    key: "customer", lookup: true,
     label: "Cliente",
     required: true,
   },
   {
-    key: "policy_reference",
+    key: "policy_reference", lookup: true,
     label: "Póliza",
     maxLength: 120,
     required: true,
   },
   {
-    key: "insurer",
+    key: "insurer", lookup: true,
     label: "Aseguradora",
   },
   {
-    key: "owner",
+    key: "owner", lookup: true,
     label: "Responsable",
     maxLength: 120,
   },

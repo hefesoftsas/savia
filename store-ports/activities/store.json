@@ -241,7 +241,14 @@
   "screens": [
     {
       "object": "insurance_activities",
-      "view": "records"
+      "view": "records",
+      "lookupFields": [
+        "name",
+        "customer",
+        "policy_reference",
+        "owner",
+        "outcome"
+      ]
     }
   ]
 }

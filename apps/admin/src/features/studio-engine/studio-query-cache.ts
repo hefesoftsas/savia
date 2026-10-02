@@ -169,3 +169,11 @@ export function studioCacheOwner(
 ): string {
   return `${environment}|${String(identityId)}`;
 }
+
+/** Mark one tenant's retained Studio queries stale after a local plugin install. */
+export function invalidateStudioTenantQueries(tenantId: string): Promise<void> {
+  const entry = entries.get(tenantKeyOf(tenantId));
+  return entry
+    ? entry.client.invalidateQueries({ refetchType: "none" })
+    : Promise.resolve();
+}

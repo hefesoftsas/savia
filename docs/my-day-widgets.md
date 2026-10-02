@@ -1,94 +1,156 @@
 # My Day widgets
 
-Owner: Platform UI team. Reviewed: 2026-09-22.
+Owner: Platform UI team. Reviewed: 2026-10-01.
 
-Mi día es un tablero único que combina la agenda personal con widgets:
-representaciones visuales rápidas de las colecciones del usuario (resúmenes,
-gráficas, acciones, elementos). Cada widget enlaza a su pantalla completa;
-nunca la reemplaza. Todo el tablero se guarda automáticamente y se puede
-reordenar arrastrando.
+My Day combines personal calendar events, personal mail, and quick views of
+collections. Each collection widget links to its full screen. Layout changes
+save automatically to the backend and support drag, keyboard, and menu ordering.
 
-## Tipos
+## Widget types
 
-| Tipo                      | Contenido                                                                          |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `agenda`                  | Eventos de hoy (Google Calendar + Outlook) con enlaces directos.                   |
-| `quick_task`              | Formulario compacto para bloquear tiempo en los calendarios conectados.            |
-| `summary`                 | Total de registros + conteo por estado + suma opcional.                            |
-| `items`                   | Últimos N registros (título, estado, fecha).                                       |
-| `chart`                   | Barras por estado (conteo + suma opcional, sin librerías).                         |
-| `actions`                 | Vencidos, hoy y próximos 7 días según campo de fecha.                              |
-| `plugin:<extension>:<id>` | Vista diseñada por un plugin (ej. `plugin:insurance.portfolio-dashboard:summary`). |
+| Kind                      | Content                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------ |
+| `agenda`                  | Today's Google Calendar and Outlook events with native links.                                    |
+| `quick_task`              | Create a time block in a connected calendar.                                                     |
+| `mail`                    | Recent inbox messages from connected Gmail and Outlook accounts, with an editable mail composer. |
+| `summary`                 | Record total, counts by status, and optional amount sum.                                         |
+| `items`                   | Recent records with title, status, and date.                                                     |
+| `chart`                   | Counts and optional sums grouped by status.                                                      |
+| `actions`                 | Overdue records and records due today or in the next seven days.                                 |
+| `plugin:<extension>:<id>` | An enabled extension's collection widget.                                                        |
 
-Los widgets de sistema (`agenda`, `quick_task`) no pertenecen a ningún
-dominio ni colección: se agregan desde la pestaña Agenda del diálogo y se
-pueden quitar y volver a agregar en cualquier momento. Los usuarios nuevos
-empiezan con `{ agenda, quick_task }` por defecto.
+New layouts include agenda, quick task, and mail. Mail is visible only when a
+personal Gmail or Outlook connection is connected. Existing saved layouts are
+preserved; use **Show mail** or **Add widget → Personal → Mail inbox** to restore
+mail when connected. Removing or disconnecting a provider does not rewrite the
+saved layout. Hidden mail still counts toward the twelve-widget limit.
 
-Los widgets de plugin solo aparecen en el diálogo si su colección coincide
-y la extensión está activa en ese dominio; si se desactiva después, la
-tarjeta pide activarla en lugar de fallar.
+Plugin widgets are offered only when their collection matches and their
+extension is enabled. If an extension becomes unavailable, its card explains
+how to restore it.
 
-## Agregar un widget
+## Add and arrange widgets
 
-Mi día → Mi tablero → Agregar widget:
+Use **My Day → My dashboard → Add widget**. Choose a workspace and an authorized,
+visible collection, then a summary, items, chart, or actions view. Hidden screens
+and request pages are excluded. Status, amount, and date fields are detected
+from the collection schema and can be adjusted where applicable.
 
-1. Pestaña Colección: elige dominio y colección. Solo aparecen colecciones
-   visibles y autorizadas para tu usuario (pantallas ocultas y páginas de
-   solicitud quedan excluidas).
-2. Elige tipo (Resumen, Elementos, Gráfica o Acciones). El widget
-   auto-detecta campo de estado (primera lista `Dropdown`, preferencia a
-   `estado`), campo de monto (`Number`/`Currency`) y campo de fecha. Puedes
-   ajustarlos.
-3. Pestaña Agenda: restaura la agenda del día o la creación rápida de
-   tareas si las quitaste del tablero.
-4. Guardar persiste en `PUT /v1/user-preferences/my-day-widgets`.
+The Personal tab restores system widgets. At most twelve widgets can be saved.
+Collection widgets show at most ten items. Drag handles support keyboard
+ordering; the card menu also offers Move before, Move after, and Remove. Hidden
+mail entries retain their saved positions when visible cards are reordered.
 
-Límites: 12 widgets por usuario, 10 elementos visibles por widget. El
-orden se cambia arrastrando desde el asa de cada tarjeta (con alternativa
-de teclado y menú ⋯ mover antes/después para accesibilidad).
+## Personal inbox
 
-Los avisos sobre carga, guardado y cambios del tablero se pueden cerrar con
-el botón «Cerrar aviso».
+Mail uses the current user's Savia personal integration connections. It does
+not use Codex connectors or another user's mailbox. One active account per
+provider is supported. With both providers connected, messages are merged by
+received date, newest first, and can be filtered to All, Gmail, or Outlook.
+The widget uses shadcn tabs for account filters and pagination controls, showing
+ten messages per page. **Previous** returns to a loaded page; **Next** loads older
+messages when needed using Gmail and Outlook continuation cursors. Each provider
+request retrieves at most twenty-five messages. Outlook continuations accept
+Microsoft Graph's canonical Inbox path while retaining the fixed mailbox, host,
+and query validation. The merged inbox checks each
+provider's loaded boundary before showing the next page so older messages from
+one account do not hide unseen newer messages from the other. Exhausted accounts
+stop requesting pages. Errors retain the current page and allow retry.
 
-## Datos y permisos
+Changing the account filter starts at page one. Refresh updates the latest inbox
+and announces new messages, but keeps the currently displayed historical page
+stable. Return to page one to see the latest messages. Loaded pages and cursors
+stay in memory for the current session; account disconnection, denied access, or
+identity changes clear the relevant history. This is not full mailbox
+synchronization.
 
-- El layout (`{ version: 1, widgets: [...] }`) es personal y privado por
-  `principal_id` (tabla `user_my_day_widgets`). Validación con zod en
-  `packages/studio-shared/src/my-day-widgets.ts`, compartida por API y admin.
-- Cada widget lee con la API existente del dominio:
-  `GET {apiBasePath}/api/records/{collection}?page&perPage&sort&order`
-  (total + página), `GET .../records/{collection}/summary?group=&amountField=`
-  (conteo por estado, con control de acceso del servidor) y la misma lista
-  ordenada por fecha para acciones (comparación por día de calendario).
-- Visibilidad no es autorización: si la colección deja de estar autorizada,
-  el widget muestra estado no disponible en lugar de filtrar datos.
-- Sin ejecución dinámica: los widgets built-in son código del release. Los
-  plugins contribuyen React propio vía `releaseCatalog.extensionWidgets`
-  (`plugin:<extension>:<id>`), renderizado por el host con el mismo `savia`
-  limitado que las pantallas de extensión (colecciones, servicios propios,
-  `access.effective()`). Los errores del widget quedan contenidos en su
-  tarjeta.
+While My Day is visible and online, the inbox refreshes automatically every
+sixty seconds after the previous read finishes. Returning to the tab or
+regaining connectivity triggers a fresh read. Hidden or offline pages pause
+periodic reads. Existing Savia integration events also trigger refreshes;
+direct Gmail/Outlook incoming-message push subscriptions are not configured.
 
-## Archivos
+Manual, timed, focus, and event-triggered reads share one pending request.
+Previously loaded messages remain visible during refresh and transient failures.
+Failed providers retain their last successful rows alongside a recovery notice;
+the next successful read replaces them. Repeated failures increase the interval
+from two to four minutes, capped at five minutes, then recovery restores sixty
+seconds. A connection explicitly marked disconnected/reconnect-required removes
+that account's messages; denied access and identity changes clear cached state.
 
-| Área         | Archivos                                                                                                                                                                     |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Contrato     | `packages/studio-shared/src/my-day-widgets.ts`                                                                                                                                  |
-| Persistencia | migración `0060`, `user-preferences/{contracts,repository}.ts`, rutas `user-preferences.ts`                                                                                  |
-| Admin        | `apps/admin/src/features/my-day-widgets/` (`data`, `summarize`, `widgets`, `agenda-widget`, `add-widget-dialog`, `section`), `my-day-page.tsx`, `user-preferences-client.ts` |
-| Plugins      | `packages/release-catalog/src/index.ts` (`ExtensionWidgetContribution`), ejemplo `packages/insurance-portfolio-dashboard/src/widgets.tsx`                                    |
+The first successful read per account establishes a baseline. Later reads with
+new message IDs display **There are new emails in the inbox**, with an explicit
+dismiss action. The bounded inbox window can also discover a message newly moved
+into Inbox. Initial loading and account/session changes do not trigger this notice.
+Notifications are shown inside My Day while open; there are no operating-system
+notifications or background checks after the page closes. Automatic reads do not
+reset a composer draft or send mail.
 
-## Crear un widget de plugin
+Each message shows its subject, sender, timestamp, and source account. Gmail
+metadata is loaded through bounded header-only requests. A failed provider
+shows a recovery notice while the other provider's messages remain available.
+Reconnect unavailable accounts through Personal integrations.
 
-1. Copia el patrón de `insurance-portfolio-dashboard/src/widgets.tsx`:
-   componente `({ savia, widget })` + entrada `{ id, extensionId,
-collection, title: { es, en?, pt? }, Widget }`.
-2. Expón el arreglo desde el `admin.ts` del plugin y regístralo en
-   `releaseCatalog.extensionWidgets`.
-3. Usa `savia.collections` y `savia.services.get()` como en una pantalla;
-   el host resuelve permisos y muestra la tarjeta con el pie estándar.
+Outlook's native message link opens another browser tab. Unsafe or missing
+links are unavailable. Gmail's API has no supported native message web link;
+Gmail messages display **Link unavailable** rather than an unverified URL.
+Savia does not render email HTML, bodies, or attachments in the widget.
 
-## Fases siguientes
+## Compose with record context
 
-- Más contribuidores (renovaciones, cobranzas).
+Choose **New email**, select the connected sending account, and enter recipients,
+subject, and a plain-text message. Switching accounts preserves the draft.
+Recipients are entered manually, with commas or semicolons between addresses.
+Sending requires an explicit **Send email** action; merely selecting a record
+or inserting context does not send anything.
+
+**Add record context** lets the user select an authorized workspace, collection,
+and record. Record lists are paginated in groups of twenty-five. Select readable
+fields and review the preview, then **Insert context** to append labeled values
+without replacing existing prose. Long field values are limited in the preview.
+The user can edit all inserted text. Removing context and clearing the message
+removes references so a stale/deleted context can be discarded deliberately.
+
+The server rechecks the selected collection, record, and fields before sending.
+Revoked access, deleted records, and unavailable context stop the provider write.
+Visibility alone never grants access. The message text remains user-authored;
+context validation governs Savia's record insertion feature.
+
+Limits: twenty recipients, 2,000 subject characters, 10,000 message characters,
+ten context records, and fifty unique fields per record. Header injection is
+rejected. No AI provider is required. Attachments, replies, forwarding, mailbox
+mutations, saved drafts, and multiple accounts per provider are outside scope.
+
+Failed sends preserve the draft. For an unknown provider outcome, check Sent
+mail before retrying; Savia does not automatically retry a write. Pending sends
+prevent duplicate submissions. Successful sends close and clear the composer.
+Drafts and mailbox data are transient memory, cleared on identity/session changes;
+closing and reopening a composer in the same session preserves an unsent draft.
+
+## Data and authorization
+
+Layout is private per principal and saved by
+`PUT /v1/user-preferences/my-day-widgets`. Shared Zod schemas validate it. Mail
+listing and sending use the generated personal integrations OpenAPI contracts.
+Credentials and provider writes stay on the server; sends use existing audits.
+
+Collection widgets read authorized tenant record and summary endpoints. A widget
+whose collection becomes unavailable shows a recovery state. Extension widgets
+receive the same limited runtime and effective permissions as extension screens;
+errors are contained within their cards.
+
+## Implementation
+
+- Shared layout contract: `packages/studio-shared/src/my-day-widgets.ts`.
+- Mail payload contract: `packages/studio-shared/src/mail-contracts.ts`.
+- Layout persistence: user-preferences repository/routes and migration `0060`.
+- Admin widgets, inbox, and composer: `apps/admin/src/features/my-day-widgets/`.
+- Personal integration API: `apps/api/src/routes/personal-integrations.ts` and
+  `apps/api/src/personal-integrations/`.
+- Plugin contribution contract: `packages/release-catalog/src/index.ts`.
+
+To contribute a plugin widget, follow
+`packages/insurance-portfolio-dashboard/src/widgets.tsx`: export a React widget
+and a contribution with extension ID, widget ID, collection, and localized title.
+Register it through the extension's admin entry and release catalog. Use the
+provided collection/service APIs and effective permissions.

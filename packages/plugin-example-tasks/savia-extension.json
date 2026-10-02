@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "custom.example-tasks",
+  "version": "1.0.0",
+  "label": "Example Tasks",
+  "description": "Example Tasks workspace plugin",
+  "requires": [],
+  "apiVersion": 1
+}

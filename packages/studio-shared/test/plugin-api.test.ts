@@ -257,6 +257,7 @@ describe("plugin collection API", () => {
         conditions: [{ field: "documento", op: "eq", value: "12345" }],
       },
       q: "búsqueda",
+      searchFields: ["name", "email"],
       perPage: 5,
     });
 
@@ -264,6 +265,7 @@ describe("plugin collection API", () => {
     expect(url.pathname).toBe("/records/polizas");
     expect(url.searchParams.get("perPage")).toBe("5");
     expect(url.searchParams.get("q")).toBe("búsqueda");
+    expect(url.searchParams.get("searchFields")).toBe("name,email");
     expect(JSON.parse(url.searchParams.get("filters") ?? "{}")).toEqual({
       logic: "and",
       conditions: [{ field: "documento", op: "eq", value: "12345" }],

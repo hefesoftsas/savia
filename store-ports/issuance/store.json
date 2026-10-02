@@ -312,7 +312,16 @@
   "screens": [
     {
       "object": "insurance_issuance",
-      "view": "records"
+      "view": "records",
+      "lookupFields": [
+        "name",
+        "customer",
+        "policy_reference",
+        "insurer",
+        "owner",
+        "product",
+        "outcome"
+      ]
     }
   ]
 }

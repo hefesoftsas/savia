@@ -93,3 +93,5 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Shared private plugin registry](guides/plugin-registry.md): publish immutable releases once and import them across environments.
 
 - [Tenant email registration](guides/tenant-registration.md): independent tenant opt-in, Turnstile/ALTCHA configuration, verified Viewer provisioning and quota handling.
+
+- [Plugin development kit](guides/plugin-development.md): scaffold, SDK, generic UI, local iframe development, and testing.

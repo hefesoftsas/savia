@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.automation",
-  "version": "1.1.1",
+  "version": "1.1.3",
   "label": "Operación conectada",
   "description": "Relaciones reales y plantillas de automatización para los plugins de seguros.",
   "labels": {

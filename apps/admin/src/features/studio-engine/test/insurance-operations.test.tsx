@@ -24,6 +24,11 @@ function setup(
       data: records,
       total: records.length,
     })),
+    get: vi
+      .fn()
+      .mockImplementation(async (id: string) =>
+        records.find((record) => record.id === id),
+      ),
     update: vi.fn().mockResolvedValue({}),
     create: vi.fn().mockResolvedValue({}),
   };
