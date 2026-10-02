@@ -32,6 +32,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { applyRealtimeListEvent } from "@/realtime/realtime-list";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
+import type { UserRecord } from "@/api/identity-user-data-provider";
 import type { TenantRecord } from "@/api/tenant-data-provider";
 
 function TenantFields() {
@@ -135,6 +136,21 @@ function InitialTenantUserFields() {
   );
 }
 
+function tenantMemberLabel(user: UserRecord) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left whitespace-normal">
+      <span className="break-words font-medium">
+        {user.displayName || user.email}
+      </span>{" "}
+      {user.displayName && (
+        <span className="break-all text-xs text-muted-foreground">
+          {user.email}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function ExistingTenantMemberFields() {
   const translate = useTranslate();
   return (
@@ -146,6 +162,9 @@ function ExistingTenantMemberFields() {
         sort={{ field: "displayName", order: "ASC" }}
       >
         <AutocompleteInput
+          optionText={tenantMemberLabel}
+          inputText={tenantMemberLabel}
+          popoverClassName="w-(--radix-popover-trigger-width)"
           label={translate("savia.tenants.fields.existingUser", {
             _: "Usuario existente",
           })}

@@ -11,6 +11,9 @@ API preserves that conflict and rolls back the new tenant. The existing account
 and its membership remain unchanged. To create a tenant around an existing
 account, a platform administrator must explicitly use `existingMember`; that
 operation transfers the user's membership and applies its usual tenant rules.
+The existing-user selector shows each account's name and email, including the
+selected account, so administrators can distinguish identical display names.
+Search accepts either name or email.
 
 SQLite migration `0078_identity_principal_email_uniqueness.sql` and PostgreSQL migration `0020_identity_principal_email_uniqueness.sql` add database guards for inserts, changes to an active email and reactivation. Database enforcement covers concurrent requests as well as application checks. Deploy the migration with the API change.
 
