@@ -28,6 +28,7 @@ it("only accepts the public identity and owned asset URL shape", () => {
 });
 it("accepts owned login animation URLs and defaults legacy records", () => {
   const value = defaultTenantBranding("Agency");
+  expect(value.loginAnimationRepeat).toBe(true);
   const animation =
     "/api/public/tenant-branding/assets/1/12345678-1234-4234-8234-123456789012";
   expect(
@@ -35,6 +36,14 @@ it("accepts owned login animation URLs and defaults legacy records", () => {
   ).toEqual({ ...value, loginAnimationUrl: animation });
   const { loginAnimationUrl, ...legacy } = value;
   expect(parseTenantBranding(legacy)).toEqual(value);
+  const { loginAnimationRepeat: _repeat, ...olderLegacy } = value;
+  expect(parseTenantBranding(olderLegacy)).toEqual(value);
+  expect(
+    parseTenantBranding({ ...value, loginAnimationRepeat: false }),
+  ).toEqual({ ...value, loginAnimationRepeat: false });
+  expect(
+    parseTenantBranding({ ...value, loginAnimationRepeat: "false" }),
+  ).toBeNull();
   expect(
     parseTenantBranding({
       ...value,

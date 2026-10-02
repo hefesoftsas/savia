@@ -65,7 +65,9 @@ OAuth transaction is present; unrelated hosts use the configured Admin origin.
 The default web login shows Savia's animated logo and wordmark on a navy panel. The
 Lottie player, animation JSON and wordmark font are served from the admin site's
 public assets at `/login/`, under the same origin as the login. The animation plays to completion, waits five seconds, then restarts. This cycle
-repeats for both the default and custom login animation. Playback and the replay
+repeats for both the default and custom login animation when **Repeat animation**
+is enabled (the default). Disable this switch to play once and keep the last
+frame. The setting is saved with the tenant branding. Playback and the replay
 timer pause while the tab is hidden; returning after completion starts a fresh
 five-second wait. Visitors who prefer reduced motion see its
 completed frame. A tenant can upload its own Lottie JSON animation (validated,
@@ -91,35 +93,15 @@ and server-rendered authentication pages retain their tenant identity. Foregroun
 are computed for contrast, and tenant styles are removed when the provider changes host
 or unmounts. Branding adds no persistent browser cache.
 
-## Free animation catalog
+## Finding free animations
 
-The login animation section includes **Browse free animations**. Search the
-reviewed collection by English or Spanish keywords, preview its animations,
-and choose one to import into the tenant's branding draft. The selected animation
-appears in the editor preview; **Save changes** publishes it. Uploading a local
-Lottie JSON file remains available.
-
-The initial collection contains four self-contained animations from Hyouk Seo's
-[MIT-licensed collection](https://github.com/spemer/lottie-animations-json/tree/d5bc5ecf1db13f1a051224b5c76f4d07756b57d8).
-This is a small reviewed catalog, not a live search of the entire LottieFiles
-library. LottieFiles does not currently offer a public API to search and download
-its free library. No paid service, account, or API key is required for this
-collection.
-
-Only reviewed animation IDs are listed and imported. The API fetches the approved
-file from a pinned source revision, checks its SHA-256 digest, validates the
-Lottie payload, and enforces the 2 MiB limit and a download timeout. Unknown IDs,
-unavailable sources, redirects, and changed files are rejected. The full MIT
-copyright and permission notice is retained in imported JSON metadata. Adding
-another animation requires reviewing its source, license and file digest; premium
-or unverified licenses are excluded. Local manual uploads keep their existing
-validation and are outside this catalog's license guarantee.
-
-Catalog reads and previews require access to the selected tenant. Import requires
-the same administrator permissions as uploads. Imported animations use the
-existing tenant-owned R2 asset flow and are publicly readable only after saving.
-The login does not depend on the upstream catalog provider. Previews pause in
-hidden tabs, respect reduced motion, and destroy their players on unmount.
+The login animation section links to
+[LottieFiles free dog animations](https://lottiefiles.com/free-animations/dog).
+Open LottieFiles to choose an animation, check its license, download its Lottie
+JSON file, and upload it in the tenant branding editor. **Save changes** publishes
+the uploaded animation. The editor does not search or import from a provider API
+and needs no catalog credentials. Previously imported animations remain available
+through their existing tenant-owned assets.
 
 ## Images and public boundary
 

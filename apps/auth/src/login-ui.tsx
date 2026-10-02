@@ -86,6 +86,9 @@ function Shell({
           <div
             className="oauth-login-animation"
             data-oauth-login-animation
+            data-repeat={
+              branding?.loginAnimationRepeat === false ? "false" : "true"
+            }
             data-oauth-login-animation-custom={
               customLoginAnimation ? "true" : undefined
             }
