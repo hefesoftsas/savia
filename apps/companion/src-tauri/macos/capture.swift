@@ -69,7 +69,7 @@ private final class TapCapture {
         sampleRate = format.mSampleRate
         started = DispatchTime.now().uptimeNanoseconds
 
-        status = AudioDeviceCreateIOProcIDWithBlock(&ioProcID, aggregateID, DispatchQueue(label: "com.synergias.savia.capture.audio")) { [weak self] _, input, _, _, _ in
+        status = AudioDeviceCreateIOProcIDWithBlock(&ioProcID, aggregateID, DispatchQueue(label: "com.hefesoft.savia.capture.audio")) { [weak self] _, input, _, _, _ in
             self?.append(input)
         }
         guard status == noErr, let ioProcID else { throw CaptureError("macOS could not start the system audio stream (\(status)).") }

@@ -19,7 +19,7 @@ build toolchain and the [Tauri prerequisites](https://v2.tauri.app/start/prerequ
 for your platform. macOS capture needs macOS 14.2+ and Xcode command-line tools
 with a SDK that includes CoreAudio process taps; Windows targets Windows 11 x64
 with the Microsoft C++ build tools. macOS signing/permission behavior and actual
-Windows capture still need the real-device qualification matrix.
+Windows capture still needs real-device qualification coverage.
 
 The validation machine used an isolated Rust installation under
 `artifacts/toolchain`; it is ignored and is not required on another developer's

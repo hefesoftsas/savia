@@ -80,7 +80,7 @@ unavailable during that implementation run. A subsequent user-authorized
 and captured 36.149 seconds of non-silent PCM while YouTube played, with the
 microphone disabled. The stopped sample, WAV evidence copy and screenshots were subsequently deleted
 at the user's request. Only the metrics report remains. Listening/intelligibility, microphone capture, the full macOS device and
-permission matrix, Windows installation/capture and live OpenRouter
+permission coverage, Windows installation/capture and live OpenRouter
 billing/quality/privacy checks remain pending. No provider requests or credentials
 were used in the capture smoke test; G1/G2 are not marked qualified.
 

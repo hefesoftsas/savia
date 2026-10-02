@@ -16,9 +16,9 @@ A passing unit test with generated WAV data only verifies the inspector. It does
 not prove actual recording, permission behavior or transcription accuracy. Real
 OS capture gates require native binaries and listening to produced files.
 
-## Platform and device matrix
+## Platform and device coverage
 
-| Target                   | Minimum initial matrix                                                                                                             | Current status                                 |
+| Target                   | Minimum initial test cases                                                                                                         | Current status                                 |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | macOS                    | Apple Silicon on oldest selected 14.2+ build and current supported release; built-in mic/output, USB headset and Bluetooth headset | Not run.                                       |
 | Windows                  | Windows 11 x64 on oldest selected and current supported build; built-in audio, USB headset and Bluetooth headset                   | Not run.                                       |

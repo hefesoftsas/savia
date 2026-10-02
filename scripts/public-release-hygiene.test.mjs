@@ -18,7 +18,13 @@ const technicalIdentifiers = new Set(["AES128", "SHA256"]);
 
 // This exact third-party Lottie build contains math terms that resemble private
 // identifiers and registration values. Any changed build is scanned as usual.
+// The exact generated native lockfile also contains a public numeric crate name
+// resembling a restricted identifier; changed lockfiles are scanned normally.
 const approvedVendorHashes = new Map([
+  [
+    "apps/companion/src-tauri/Cargo.lock",
+    "1790dbecfd68b70cc1e587870154078223a5d08fc3c6eda7ee99cf290e8cbf4b",
+  ],
   [
     "apps/admin/public/login/lottie-light.min.js",
     "9588432bec30c8ef8200bac4a67d8aaad881047bc2a6c9fa624d90ec96402410",
