@@ -43,6 +43,7 @@ async function localDevelopmentCommands({
     pnpm,
     `#!/bin/sh
 printf '%s|%s|%s|%s|%s|%s|%s|auth-secret=%s\\n' "$MCP_TRANSPORT" "$MCP_HOST" "$SAVIA_API_URL" "$SAVIA_MCP_URL" "$OPENROUTER_API_KEY" "$SAVIA_MCP_SHARED_SECRET" "$*" "$BETTER_AUTH_SECRET" >> "$TMPDIR/commands.txt"
+printf 'jira-reporting=%s\\n' "$NANGO_JIRA_REPORTING_CONNECTION_ID" >> "$TMPDIR/commands.txt"
 `,
   );
   await chmod(pnpm, 0o700);
@@ -70,6 +71,7 @@ exit 1
       PATH: `${directory}:${process.env.PATH}`,
       SAVIA_SECRETS_DIR: secrets,
       SAVIA_DEV_HOST: devHost,
+      NANGO_JIRA_REPORTING_CONNECTION_ID: "jira-owner-local",
       TMPDIR: directory,
       ...(adminPort === null ? {} : { SAVIA_ADMIN_PORT: adminPort }),
     },
@@ -102,12 +104,14 @@ test("starts the application locally with the private Savia request Worker", asy
     /--filter @savia\/request exec wrangler dev --local --ip 127\.0\.0\.1 --port 8797 --inspector-port 9232 --config wrangler\.jsonc/,
   );
   assert.match(commands, /exec node scripts\/dev-api-runtime\.mjs/);
+  assert.match(commands, /jira-reporting=jira-owner-local/);
   assert.match(commands, /exec node scripts\/crm-sync-local-scheduler\.mjs/);
   assert.doesNotMatch(
     commands,
     /--filter @savia\/legacy-api exec wrangler dev/,
   );
   assert.doesNotMatch(commands, /--var NANGO_API_KEY/);
+  assert.doesNotMatch(commands, /--var NANGO_JIRA_REPORTING_CONNECTION_ID/);
   assert.match(
     commands,
     /\|\|\|http:\/\/127\.0\.0\.1:8789\/mcp\|\|\|--filter @savia\/admin exec vite --host 127\.0\.0\.1 --port 5174 --strictPort/,

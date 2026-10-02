@@ -86,6 +86,7 @@ jobs:
         env:
           SAVIA_AUTH_D1_ID: ${{ vars.SAVIA_AUTH_D1_ID }}
           SAVIA_DOMAIN_D1_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
 
       - name: Upload secrets using explicit environment configuration
         run: node scripts/upload-cloudflare-secrets.mjs
@@ -101,6 +102,8 @@ jobs:
           CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
           PLUGIN_REGISTRY_TENANTS: ${{ secrets.PLUGIN_REGISTRY_TENANTS }}
           NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_JIRA_REPORTING_CONNECTION_ID: ${{ secrets.NANGO_JIRA_REPORTING_CONNECTION_ID }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           SQL_BRIDGE_URL: ${{ secrets.SQL_BRIDGE_URL }}
           SQL_BRIDGE_SECRET: ${{ secrets.SQL_BRIDGE_SECRET }}

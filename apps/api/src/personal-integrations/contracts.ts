@@ -48,6 +48,7 @@ export type ActivePersonalIntegrationConnection =
     nangoConnectionId: string;
     nangoIntegrationId: string;
     externalAccountId: string | null;
+    jiraPrivacyGeneration?: string | null;
   };
 
 export type PersonalNangoConnectionSummary = {
@@ -85,7 +86,11 @@ export type PersonalIntegrationNangoClient = {
   proxy(request: {
     method: "GET" | "POST" | "PUT";
     path: string;
-    connection: ActivePersonalIntegrationConnection;
+    connection: Pick<
+      ActivePersonalIntegrationConnection,
+      "provider" | "nangoConnectionId" | "nangoIntegrationId"
+    > &
+      Partial<ActivePersonalIntegrationConnection>;
     body?: unknown;
     rawBody?: string | Uint8Array<ArrayBuffer>;
     contentType?: string;

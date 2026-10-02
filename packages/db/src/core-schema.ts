@@ -207,6 +207,69 @@ export const tenantCrmConnections = sqliteTable(
   ],
 );
 
+export const jiraPrivacyAccounts = sqliteTable(
+  "jira_privacy_accounts",
+  {
+    integrationId: text("integration_id").notNull(),
+    accountId: text("account_id").notNull(),
+    oldestDataAt: text("oldest_data_at").notNull(),
+    version: integer("version").notNull().default(1),
+    lastReportedAt: text("last_reported_at"),
+    nextReportAt: text("next_report_at").notNull(),
+    retryAt: text("retry_at"),
+    leaseToken: text("lease_token"),
+    leaseUntil: text("lease_until"),
+    pendingErasure: text("pending_erasure"),
+    blockedReason: text("blocked_reason"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.integrationId, table.accountId] }),
+    index("jira_privacy_accounts_due_index").on(
+      table.integrationId,
+      table.nextReportAt,
+      table.retryAt,
+    ),
+  ],
+);
+
+export const jiraPrivacyConnections = sqliteTable(
+  "jira_privacy_connections",
+  {
+    generation: text("generation").primaryKey().notNull(),
+    connectionId: text("connection_id"),
+    principalId: text("principal_id"),
+    integrationId: text("integration_id").notNull(),
+    nangoConnectionId: text("nango_connection_id").notNull(),
+    accountId: text("account_id"),
+    retrievedAt: text("retrieved_at").notNull(),
+    cleanupReason: text("cleanup_reason"),
+    cleanupRetryAt: text("cleanup_retry_at"),
+  },
+  (table) => [
+    index("jira_privacy_connections_account_index").on(
+      table.integrationId,
+      table.accountId,
+    ),
+    uniqueIndex("jira_privacy_connections_nango_unique").on(
+      table.integrationId,
+      table.nangoConnectionId,
+    ),
+  ],
+);
+
+export const jiraPrivacyIntegrations = sqliteTable(
+  "jira_privacy_integrations",
+  {
+    integrationId: text("integration_id").primaryKey().notNull(),
+    ownerAuthorizationRequired: integer("owner_authorization_required")
+      .notNull()
+      .default(0),
+    revokedReportingConnectionId: text("revoked_reporting_connection_id"),
+    cycleBlocked: integer("cycle_blocked").notNull().default(0),
+    reporterRetryAt: text("reporter_retry_at"),
+  },
+);
+
 export const personalIntegrationConnections = sqliteTable(
   "personal_integration_connections",
   {
@@ -223,6 +286,7 @@ export const personalIntegrationConnections = sqliteTable(
     scopes: text("scopes").notNull(),
     lastValidatedAt: text("last_validated_at"),
     disconnectedAt: text("disconnected_at"),
+    jiraPrivacyGeneration: text("jira_privacy_generation"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
