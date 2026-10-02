@@ -353,3 +353,55 @@ it("offers sign-in again when the session expires instead of a dead reload", asy
     screen.getByRole("button", { name: "Volver a cargar" }),
   ).toBeInTheDocument();
 });
+it("imports a free catalog animation into the draft and only publishes on save", async () => {
+  const entry = {
+    id: "favorite",
+    name: "Favorite star",
+    author: "Hyouk Seo",
+    license: "MIT",
+    licenseUrl:
+      "https://github.com/spemer/lottie-animations-json/blob/main/LICENSE",
+    sourceUrl:
+      "https://github.com/spemer/lottie-animations-json/blob/main/ic_fav/ic_fav.json",
+    keywords: ["star"],
+  };
+  const get = vi.fn().mockImplementation(async (path: string) => {
+    if (path.endsWith("/animations/favorite")) return JSON.parse(lottie);
+    if (path.includes("/animations?")) return { data: [entry] };
+    if (path.endsWith("/branding")) return { data: branding, canManage: true };
+    return { data: [{ id: 1, name: "Agencia Uno" }] };
+  });
+  const url =
+    "/api/public/tenant-branding/assets/1/00000000-0000-4000-8000-000000000001";
+  const upload = vi
+    .fn()
+    .mockResolvedValue(Response.json({ data: { url } }, { status: 201 }));
+  const put = vi.fn().mockResolvedValue({
+    data: { ...branding, loginAnimationUrl: url, version: 2 },
+  });
+  render(<TenantBrandingPage services={service(get, put, upload)} />);
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Explorar animaciones gratuitas",
+    }),
+  );
+  const choose = await screen.findByRole("button", {
+    name: "Usar Favorite star",
+  });
+  await waitFor(() => expect(choose).toBeEnabled());
+  fireEvent.click(choose);
+  await screen.findByText(
+    "Animación lista. Guarda los cambios para publicarla.",
+  );
+  expect(upload).toHaveBeenCalledWith(
+    "/v1/tenants/1/branding/animations/favorite",
+    expect.objectContaining({ method: "POST" }),
+  );
+  expect(put).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+  await screen.findByText("Marca guardada.");
+  expect(put).toHaveBeenCalledWith(
+    "/v1/tenants/1/branding",
+    expect.objectContaining({ loginAnimationUrl: url }),
+  );
+});
