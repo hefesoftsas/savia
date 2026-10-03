@@ -1,6 +1,6 @@
 # My Day widgets
 
-Owner: Platform UI team. Reviewed: 2026-10-01.
+Owner: Platform UI team. Reviewed: 2026-10-03.
 
 My Day combines personal calendar events, personal mail, and quick views of
 collections. Each collection widget links to its full screen. Layout changes
@@ -10,7 +10,7 @@ save automatically to the backend and support drag, keyboard, and menu ordering.
 
 | Kind                      | Content                                                                                                  |
 | ------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `agenda`                  | Today's Google Calendar and Outlook events with native links.                                            |
+| `agenda`                  | Day, week and month views of Google Calendar, Outlook and shared iCalendar sources.                      |
 | `quick_task`              | Create a time block in a connected calendar.                                                             |
 | `mail`                    | Recent inbox messages from connected Gmail and Outlook accounts, with an editable mail composer.         |
 | `office_documents`        | Up to five recent private Savia and connected-drive documents, shown only while Office suite is enabled. |
@@ -49,6 +49,67 @@ The Personal tab restores system widgets. At most twelve widgets can be saved.
 Collection widgets show at most ten items. Drag handles support keyboard
 ordering; the card menu also offers Move before, Move after, and Remove. Hidden
 mail entries retain their saved positions when visible cards are reordered.
+
+## Calendar views and shared sources
+
+Use **Day / Week / Month** in the agenda. Weeks begin on Monday; months include
+the full weeks touching their boundary. Previous/Next moves by the selected unit
+and **Today** returns to today without changing the view. The display timezone
+comes from the browser. Week/month use the full dashboard width. On mobile,
+weeks stack vertically and month cells show event counts; select a date/count
+to open its complete day list. Narrow cards keep the view selector and calendar
+settings in one row; settings retain their accessible name while showing only
+the icon. Mobile cards use compact spacing, a short date and touch-sized
+navigation. A failed day read offers a retry directly in the agenda. Desktop
+month cells show three events and a
+**more** action for additional events. Multi-day events appear on every
+overlapping date, with exclusive ends handled internally.
+
+**Manage calendars** accepts public HTTPS and `webcal://` iCalendar subscriptions
+or UTF-8 `.ics` files. A subscription updates from its feed; an imported copy
+persists the file's events and does not receive later upstream changes. Re-import
+creates another copy, which can replace the old one by deleting the old source.
+No OAuth connection is required to read these sources. Authenticated CalDAV and
+publishing or editing feed events are not provided. Existing OAuth integrations
+still read Google's primary calendar and Outlook's default calendar.
+
+Assign a source name, color and fallback IANA timezone such as `Europe/Madrid`.
+The fallback applies to floating times; explicit UTC, IANA TZID and embedded
+VTIMEZONE values retain their timezone semantics. Recurrence rules, additions,
+exclusions and detached moved/cancelled instances are expanded for the requested
+range. Unsupported `RANGE=THISANDFUTURE` exceptions or unresolvable timezones
+produce a source error. All-day dates retain their original calendar dates.
+Colors are accompanied by source names; selecting a feed event opens its details.
+Safe native HTTPS links open in another tab. Feed text is never rendered as HTML.
+
+Source names/colors/visibility and imported content persist privately per
+principal. Toggle Google/Outlook visibility without disconnecting the account.
+Hide, rename, recolor or delete added sources from the manager; only subscriptions
+offer upstream refresh. Subscriptions show their last successful update time.
+The full subscription URL is not returned by the source list or displayed after
+saving, because feed URL tokens may grant access to private calendars.
+
+**Synchronize** refreshes all connected providers and visible added sources.
+While visible and online, calendars refresh every five minutes; focus and online
+recovery trigger reads. Hidden/offline pages pause periodic reads. Feed bodies
+younger than five minutes are reused on ordinary reads; manual synchronization
+bypasses freshness. Last successful rows remain visible with a source-specific
+notice after transient failures. Errors do not mean that a calendar is empty.
+
+Limits are 20 added sources per principal, 1 MiB per file/feed, 62 days per query,
+2,000 occurrences per source/range and 20 upstream pages per provider read.
+Exceeded limits produce errors instead of silently truncated calendars. No
+background scheduler runs after My Day closes. Quick tasks continue to create
+today's event in connected OAuth calendars, and show that date explicitly even
+when the agenda is displaying another period.
+
+Deployment requires D1 migration `0023_personal_calendars.sql`; self-hosted
+PostgreSQL uses its matching native migration and source manifest. Both use the
+existing `SAVIA_MCP_SHARED_SECRET` for calendar-specific AES-GCM payload encryption. With
+the key unavailable, private feed storage fails closed. Permit the configured
+public feed destinations and `cloudflare-dns.com` under the runtime's outbound
+network policy for subscriptions. Local verification uses controlled feeds and
+does not establish live connectivity to arbitrary calendar hosts.
 
 ## Personal inbox
 

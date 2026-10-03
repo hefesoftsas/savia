@@ -2,7 +2,7 @@
 
 Owner: Savia API and Admin. Reviewed: 2026-10-01.
 
-**Work → Pages** expands directly in the main sidebar. It contains your page and folder tree; there is no second navigation panel. Select Pages itself to search the workspace, create a root page or folder, or browse its contents. The document breadcrumb returns to a parent or the workspace. Create a page, edit its title and body, and wait for **Saved** before navigating away. Search matches accessible page titles and text. Pages are private until their owner grants member access or explicitly creates a public link. Subpages inherit the root's reader/editor permissions for member access. Administrators do not automatically receive private document access.
+**Work → Pages** expands directly in the main sidebar. It contains your page and folder tree; there is no second navigation panel. Select Pages itself to search the workspace, create a root page or folder, or browse its contents. The document breadcrumb returns to a parent or the workspace. Create a page, edit its title and body, and wait for **Saved** before navigating away. Search matches accessible page titles and text. Results show a short content excerpt, highlight the literal search phrase, and include the last update date so pages can be recognized before opening them. Pages are private until their owner grants member access or explicitly creates a public link. Subpages inherit the root's reader/editor permissions for member access. Administrators do not automatically receive private document access.
 
 ## Folders and navigation
 
@@ -104,7 +104,7 @@ historical copy of external provider data. This release does not merge simultane
 
 Apply migrations `0008_pages.sql`, `0009_issue_connections.sql`, `0010_pages_folders.sql`, `0011_page_public_links.sql`, `0012_page_public_short_links.sql` and `0013_pages_record_binding_uniqueness.sql` using the existing deployment migration process; PostgreSQL equivalents are registered in its migration manifest. This feature does not deploy or apply production migrations automatically. Existing document storage and authenticated API configuration are reused. The API reference is generated from the Pages OpenAPI route declarations.
 
-Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Deleting a page removes its attachment metadata and attempts to delete every stored attachment blob from the document bucket. It is not a retention mechanism: preserve any required copies before deleting the page. Failed bucket deletions may leave orphaned blobs for deployment cleanup. Revision retention is unbounded unless the owner explicitly clears prior versions.
+Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. Search excerpts are bounded to 360 plain-text characters and are returned only for authorized results; ordinary browsing does not fetch excerpts. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Deleting a page removes its attachment metadata and attempts to delete every stored attachment blob from the document bucket. It is not a retention mechanism: preserve any required copies before deleting the page. Failed bucket deletions may leave orphaned blobs for deployment cleanup. Revision retention is unbounded unless the owner explicitly clears prior versions.
 
 ### Cloudflare semantic search
 
@@ -127,12 +127,20 @@ titles and saved rich-text leaves in batches. Attachments, embedded collection
 records and external provider data are excluded. Vectorize submissions are
 asynchronous; new results may take a few seconds to become searchable.
 
+Semantic results include an excerpt from the matched content chunk when available,
+or a short excerpt around the query. Excerpts are derived from the current
+authorized page rather than stored vector metadata.
+
 Vectors use a tenant namespace. Search returns only pages that the caller can
 currently read in that tenant, checks the indexed version, and reads titles from
 the authorized backend document. Vector metadata contains page IDs and versions,
 not document bodies. Removing access or deleting a page prevents its appearance
 in results even while an older vector remains in Cloudflare. Turning search off
 stops new indexing and querying; it does not erase previously submitted vectors.
+A platform administrator can also activate or deactivate an already granted
+capability directly in the tenant editor. Changing activation preserves the
+existing grant; revocation still disables activation.
+
 The ordinary server text/title search remains available in all cases. Deployed
 semantic queries are limited to 30 per minute per tenant to bound repeated AI
 requests; the browser also debounces typing.

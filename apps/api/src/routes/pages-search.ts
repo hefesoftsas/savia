@@ -81,6 +81,7 @@ const summary = z.object({
     })
     .nullable(),
   score: z.number(),
+  excerpt: z.string().max(360).optional(),
 });
 const search = createRoute({
   method: "get",

@@ -1,5 +1,6 @@
 import { PersonalApiKeys } from "./auth/personal-api-keys";
 import { registerPagesSearchSettingsRoutes } from "./routes/pages-search-settings";
+import { registerBookingRoutes } from "./bookings/routes";
 import { registerPagesSearchRoutes } from "./routes/pages-search";
 import type { PagesSearchBindings } from "./pages/cloudflare-search";
 import { PersonalIntegrationOperations } from "./personal-integrations/operations";
@@ -94,6 +95,7 @@ import {
   type PersonalIntegrationRouteDependencies,
 } from "./routes/personal-integrations";
 import { registerUserPreferenceRoutes } from "./routes/user-preferences";
+import { registerPersonalCalendarRoutes } from "./personal-calendars/routes";
 import { registerNotifications } from "@savia/studio-server/notifications/routes";
 import { createNotificationPolicy } from "./notifications";
 import { actorFromContext, authenticationMiddleware } from "./auth/middleware";
@@ -166,6 +168,10 @@ export function createApp(
   );
   registerRealtimeMutationHints(app, realtime, db);
   registerTenantEmailRoutes(app, db, resolvedAuthService, identityBridgeKey);
+  registerBookingRoutes(app, db, {
+    captcha: publicForms,
+    nango: personalIntegrations?.nango,
+  });
   registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSocialRoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantRegistrationSettingsRoutes(
@@ -254,6 +260,9 @@ export function createApp(
   registerTenantWorkspaceRoutes(app, db);
   registerTenantUserCapacityRoutes(app, db);
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
+  registerPersonalCalendarRoutes(app, db, {
+    secret: personalIntegrations?.calendarSecret,
+  });
   registerPagesSearchSettingsRoutes(app, db);
   registerPagesSearchRoutes(app, db, pagesSearch);
   registerPagesRoutes(app, db, documents);

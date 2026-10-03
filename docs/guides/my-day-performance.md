@@ -23,3 +23,26 @@ documents only while Office suite is enabled for the active tenant. It shows at
 most five links ordered by their most recent update or creation time. It does
 not cache document details in browser storage, and it refreshes when the
 identity, active tenant, Office settings, or connected integrations change.
+
+The agenda now reads selected day/week/month ranges. OAuth caches are keyed by
+the requested range; shared-source display caches also include the display
+timezone and keep at most sixteen ranges per client. Switching ranges cannot
+display a previous range's rows while the new range loads. Removing or modifying
+a source invalidates cached source ranges. Session/identity events clear private
+state and obsolete responses cannot restore it.
+
+Added iCalendar sources use an independent caller-owned D1 repository. Feed
+bodies and URL tokens are encrypted; imported files are persisted snapshots.
+Subscriptions use a five-minute freshness window, conditional HTTP validators,
+and bounded server fetch/parsing. Ordinary range reads reuse fresh bodies and
+expand only the requested occurrences. Manual Synchronize bypasses freshness.
+Revision checks stop old upstream responses from replacing edited/deleted rows.
+
+Visible online pages refresh calendars every five minutes and refresh on focus
+or connectivity recovery. Timers pause reads while hidden/offline and are removed
+on unmount. There is no background job or provider push subscription. Pending
+source reads share a request, and successes publish without waiting for slower
+sources. Transient failures retain last successful rows with a stale/error notice;
+denied access clears private rows. Google/Outlook follow bounded continuation
+pages so a busy month does not stop after the first 25/50 events. Source/page/
+occurrence limits fail explicitly rather than reporting a truncated success.

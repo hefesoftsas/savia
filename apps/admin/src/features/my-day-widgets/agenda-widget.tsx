@@ -15,6 +15,17 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { PersonalCalendarEvent } from "@/api/personal-integrations-client";
+import type { CalendarSourcesClient } from "@/api/personal-integrations-client";
+import {
+  calendarRange,
+  dateKey,
+  type CalendarViewMode,
+} from "./calendar-dates";
+import {
+  isCalendarSourcesClient,
+  useCalendarSources,
+} from "./use-calendar-sources";
+import { CalendarView } from "./calendar-view";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,6 +104,7 @@ type AgendaSnapshot = {
   calendarProviders: CalendarProvider[];
   loading: boolean;
   feedback: string | null;
+  syncError: string | null;
 };
 type AgendaCacheRecord = {
   snapshot: AgendaSnapshot;
@@ -107,7 +119,13 @@ const agendaCache = new Map<
 let agendaSessionGeneration = 0;
 
 function emptyAgendaSnapshot(): AgendaSnapshot {
-  return { events: [], calendarProviders: [], loading: true, feedback: null };
+  return {
+    events: [],
+    calendarProviders: [],
+    loading: true,
+    feedback: null,
+    syncError: null,
+  };
 }
 
 function agendaRecord(
@@ -324,10 +342,27 @@ function calendarSyncFeedback(providers: CalendarProvider[]): string {
 }
 
 export function useMyDayAgenda(
-  personalIntegrations?: PersonalIntegrationsLike,
+  personalIntegrations?: PersonalIntegrationsLike &
+    Partial<CalendarSourcesClient>,
+  options?: { from: string; to: string },
 ) {
   const [day] = useState(() => startOfLocalDay(new Date()));
-  const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+  const [selectedDay, setSelectedDay] = useState(day);
+  const [view, setView] = useState<CalendarViewMode>("day");
+  const bounds = useMemo(
+    () => calendarRange(selectedDay, view),
+    [selectedDay, view],
+  );
+  const from = options?.from ?? bounds.from;
+  const to = options?.to ?? bounds.to;
+  const dayKey = `${from}/${to}`;
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const sources = useCalendarSources(
+    isCalendarSourcesClient(personalIntegrations)
+      ? personalIntegrations
+      : undefined,
+    { from, to, timeZone },
+  );
   const record = personalIntegrations
     ? agendaRecord(personalIntegrations, dayKey)
     : undefined;
@@ -335,10 +370,12 @@ export function useMyDayAgenda(
     () => record?.snapshot ?? emptyAgendaSnapshot(),
   );
   const [snapshotOwner, setSnapshotOwner] = useState(personalIntegrations);
+  const [snapshotKey, setSnapshotKey] = useState(dayKey);
   const [localEvents, setLocalEvents] = useState<CalendarEvent[]>([]);
   const localEventsRef = useRef(localEvents);
   localEventsRef.current = localEvents;
   const generationRef = useRef(agendaSessionGeneration);
+  const snapshotSession = agendaSessionGeneration;
 
   const dismissConnectNotice = useCallback(() => {
     try {
@@ -351,12 +388,9 @@ export function useMyDayAgenda(
     );
   }, []);
 
-  const range = useMemo(
-    () => ({ from: day.toISOString(), to: endOfLocalDay(day).toISOString() }),
-    [day],
-  );
+  const range = useMemo(() => ({ from, to }), [from, to]);
   const snapshot =
-    snapshotOwner === personalIntegrations
+    snapshotOwner === personalIntegrations && snapshotKey === dayKey
       ? snapshotState
       : (record?.snapshot ?? emptyAgendaSnapshot());
   const snapshotRef = useRef(snapshot);
@@ -390,6 +424,7 @@ export function useMyDayAgenda(
           ...target.snapshot,
           loading: true,
           feedback: null,
+          syncError: null,
         });
       }
       try {
@@ -409,12 +444,14 @@ export function useMyDayAgenda(
             connectedSet.has(event.provider),
           ),
           feedback: null,
+          syncError: null,
         });
         if (connectedCalendars.length === 0) {
           publishAgenda(target, {
             events: [],
             calendarProviders: [],
             loading: false,
+            syncError: null,
             feedback: isCalendarConnectNoticeDismissed()
               ? null
               : CALENDAR_CONNECT_MESSAGE,
@@ -461,6 +498,10 @@ export function useMyDayAgenda(
                   failedProviders.length > 0
                     ? calendarSyncFeedback(failedProviders)
                     : null,
+                syncError:
+                  failedProviders.length > 0
+                    ? calendarSyncFeedback(failedProviders)
+                    : null,
               });
             } catch {
               if (!isCurrent()) return;
@@ -470,6 +511,7 @@ export function useMyDayAgenda(
                 ...target.snapshot,
                 loading: false,
                 feedback: calendarSyncFeedback(failedProviders),
+                syncError: calendarSyncFeedback(failedProviders),
               });
             }
           }),
@@ -484,6 +526,10 @@ export function useMyDayAgenda(
               failedProviders.length > 0
                 ? calendarSyncFeedback(failedProviders)
                 : null,
+            syncError:
+              failedProviders.length > 0
+                ? calendarSyncFeedback(failedProviders)
+                : null,
           });
         }
       } catch (error) {
@@ -492,6 +538,7 @@ export function useMyDayAgenda(
             ...target.snapshot,
             loading: false,
             feedback: feedbackFrom(error),
+            syncError: feedbackFrom(error),
           });
         }
       } finally {
@@ -503,15 +550,19 @@ export function useMyDayAgenda(
 
   useEffect(() => {
     if (!record) return;
-    const listener = (next: AgendaSnapshot) => setSnapshot(next);
+    const listener = (next: AgendaSnapshot) => {
+      setSnapshot(next);
+      setSnapshotKey(dayKey);
+    };
     record.listeners.add(listener);
     setSnapshot(record.snapshot);
     setSnapshotOwner(personalIntegrations);
+    setSnapshotKey(dayKey);
     void refresh(true);
     return () => {
       record.listeners.delete(listener);
     };
-  }, [record, refresh, personalIntegrations]);
+  }, [record, refresh, personalIntegrations, dayKey]);
 
   useEffect(() => {
     const reset = () => {
@@ -530,16 +581,67 @@ export function useMyDayAgenda(
     };
   }, [personalIntegrations, refresh]);
 
+  useEffect(() => {
+    if (!personalIntegrations) return;
+    let timer: ReturnType<typeof setTimeout>;
+    let disposed = false;
+    const visible = () =>
+      document.visibilityState !== "hidden" && navigator.onLine;
+    const schedule = () => {
+      if (!disposed) timer = setTimeout(tick, 300000);
+    };
+    const tick = async () => {
+      clearTimeout(timer);
+      if (visible()) await refresh(true);
+      schedule();
+    };
+    const resume = () => {
+      clearTimeout(timer);
+      if (visible()) void tick();
+    };
+    schedule();
+    window.addEventListener("focus", resume);
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
+  }, [personalIntegrations, refresh]);
+
   const setEvents = useCallback<
     React.Dispatch<React.SetStateAction<CalendarEvent[]>>
   >(
     (update) => {
+      if (snapshotSession !== agendaSessionGeneration) return;
       if (record) {
         const events =
           typeof update === "function"
-            ? update(snapshotRef.current.events)
+            ? update(record.snapshot.events)
             : update;
-        publishAgenda(record, { ...record.snapshot, events: sorted(events) });
+        const visibleEvents = events.filter((event) => {
+          if (!event.startsAt) return false;
+          const end = event.endsAt ?? event.startsAt;
+          if (event.allDay || /^\d{4}-\d{2}-\d{2}$/.test(event.startsAt))
+            return (
+              event.startsAt < dateKey(new Date(to)) &&
+              end > dateKey(new Date(from))
+            );
+          const startsAt = Date.parse(event.startsAt),
+            endsAt = Date.parse(end);
+          return (
+            startsAt < Date.parse(to) &&
+            (endsAt > Date.parse(from) ||
+              (endsAt === startsAt && startsAt >= Date.parse(from)))
+          );
+        });
+        publishAgenda(record, {
+          ...record.snapshot,
+          events: sorted(visibleEvents),
+        });
       } else {
         const events =
           typeof update === "function"
@@ -549,13 +651,14 @@ export function useMyDayAgenda(
         setLocalEvents(events);
       }
     },
-    [record],
+    [record, from, to, snapshotSession],
   );
 
   const setFeedback = useCallback<
     React.Dispatch<React.SetStateAction<string | null>>
   >(
     (update) => {
+      if (snapshotSession !== agendaSessionGeneration) return;
       const next =
         typeof update === "function"
           ? update(snapshotRef.current.feedback)
@@ -563,26 +666,57 @@ export function useMyDayAgenda(
       if (record) publishAgenda(record, { ...record.snapshot, feedback: next });
       else setSnapshot((current) => ({ ...current, feedback: next }));
     },
-    [record],
+    [record, snapshotSession],
   );
 
   return {
     day,
+    selectedDay,
+    setSelectedDay,
+    view,
+    setView,
+    bounds,
+    timeZone,
+    sources,
+    personalIntegrations,
     events,
     setEvents,
     eventGroups,
     calendarProviders,
     loading,
     feedback,
+    syncError: snapshot.syncError,
     setFeedback,
     dismissConnectNotice,
-    refresh,
+    refresh: async () => {
+      await Promise.all([refresh(), sources.refresh()]);
+    },
   };
 }
 
 export type AgendaState = ReturnType<typeof useMyDayAgenda>;
 
 export function AgendaWidgetBody({ agenda }: { agenda: AgendaState }) {
+  const visibleEvents = agenda.events.filter(
+    (event) => agenda.sources.preferences[event.provider],
+  );
+  return (
+    <CalendarView
+      agenda={agenda}
+      legacyDay={
+        <ProviderAgendaBody
+          agenda={{
+            ...agenda,
+            events: visibleEvents,
+            eventGroups: groupCalendarEvents(visibleEvents),
+          }}
+        />
+      }
+    />
+  );
+}
+
+function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
   const { eventGroups, loading, refresh } = agenda;
 
   if (loading) {
@@ -623,7 +757,9 @@ export function AgendaWidgetBody({ agenda }: { agenda: AgendaState }) {
           <CalendarDays aria-hidden="true" className="size-6 text-primary" />
         </div>
         <h3 className="mt-4 text-base font-semibold text-foreground">
-          Sin eventos para hoy
+          {agenda.selectedDay.toDateString() === agenda.day.toDateString()
+            ? "Sin eventos para hoy"
+            : "Sin eventos para este día"}
         </h3>
         <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground">
           Tu agenda está libre. Crea una tarea para bloquear tiempo en tu
@@ -668,7 +804,9 @@ export function AgendaWidgetBody({ agenda }: { agenda: AgendaState }) {
             className="flex flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
           >
             <span className="min-w-20 text-sm font-semibold tabular-nums text-muted-foreground">
-              {formatTime(group.startsAt)}
+              {group.events[0]?.allDay
+                ? "Todo el día"
+                : formatTime(group.startsAt)}
             </span>
             <div className="min-w-44 flex-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -683,7 +821,9 @@ export function AgendaWidgetBody({ agenda }: { agenda: AgendaState }) {
                 </div>
               </div>
               <p className="text-sm tabular-nums text-muted-foreground">
-                Hasta {formatTime(group.endsAt)}
+                {group.events[0]?.allDay
+                  ? "Todo el día"
+                  : `Hasta ${formatTime(group.endsAt)}`}
               </p>
             </div>
             {linkedCalendars.length > 1 ? (
@@ -756,6 +896,21 @@ export function QuickTaskWidgetBody({
   );
   const [creating, setCreating] = useState(false);
   const { day, calendarProviders, setEvents, setFeedback } = agenda;
+
+  useEffect(() => {
+    const reset = () => {
+      setPendingTask(null);
+      setTitle("");
+      setCreating(false);
+    };
+    reset();
+    window.addEventListener("savia:identity-changed", reset);
+    window.addEventListener("savia:session-cleared", reset);
+    return () => {
+      window.removeEventListener("savia:identity-changed", reset);
+      window.removeEventListener("savia:session-cleared", reset);
+    };
+  }, [personalIntegrations]);
 
   function prepareEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -840,6 +995,9 @@ export function QuickTaskWidgetBody({
   return (
     <>
       <form className="space-y-4" onSubmit={prepareEvent}>
+        <p className="text-xs text-muted-foreground">
+          Crear para hoy: {formatDay(day)}
+        </p>
         <div className="space-y-2">
           <Label htmlFor="my-day-task">Tarea</Label>
           <Input

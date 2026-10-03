@@ -27,6 +27,8 @@ import {
 } from "./studio/sql-bridge";
 import type { R2SigningCredentials } from "./lib/r2-presign";
 import { createPersonalIntegrationNangoClient } from "./personal-integrations/nango";
+import { createBookingCalendarAdapter } from "./bookings/calendar";
+import { runBookingJobs } from "./bookings/jobs";
 import { createPersonalIntegrationProviderRegistry } from "./personal-integrations/providers";
 import { publicAuthUrls } from "./public-origin";
 import {
@@ -109,6 +111,7 @@ export function personalIntegrationRoutesFromEnvironment(
 ): PersonalIntegrationRouteDependencies {
   const mcpSharedSecret = environment.SAVIA_MCP_SHARED_SECRET?.trim();
   return {
+    calendarSecret: mcpSharedSecret,
     providers: createPersonalIntegrationProviderRegistry(
       nangoConfigurationFromEnvironment(environment),
     ),
@@ -387,8 +390,58 @@ const runtime = {
     overrides: RuntimeOverrides = {},
   ): Promise<void> {
     const realtime = createRealtimeHubClient(environment.REALTIME_HUB);
+    const runBookings = async () => {
+      const bridgeKey = await identityAdministrationBridgeKey(
+        environment.SAVIA_INTERNAL_BRIDGE_KEY,
+        environment.SAVIA_MCP_SHARED_SECRET,
+      );
+      const timedFetch: typeof fetch = (input, init) =>
+        fetch(input, { ...init, signal: AbortSignal.timeout(15000) });
+      return runBookingJobs(environment.DB, {
+        publicOrigin:
+          environment.SAVIA_PUBLIC_ORIGIN ?? "http://localhost:5173",
+        calendar: createBookingCalendarAdapter(
+          environment.DB,
+          createPersonalIntegrationNangoClient(
+            nangoConfigurationFromEnvironment(environment),
+            timedFetch,
+          ),
+        ),
+        ...(environment.AUTH && bridgeKey
+          ? {
+              sendMail: async (mail: {
+                tenantId: number;
+                to: string;
+                subject: string;
+                text: string;
+              }) => {
+                const response = await environment.AUTH!.fetch(
+                  new Request(
+                    `https://savia-auth.internal/_internal/tenant-email/${mail.tenantId}/send`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "x-savia-bridge-key": bridgeKey,
+                        "content-type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        to: mail.to,
+                        subject: mail.subject,
+                        text: mail.text,
+                      }),
+                      signal: AbortSignal.timeout(15000),
+                    },
+                  ),
+                );
+                if (!response.ok) throw new Error("Booking email unavailable");
+              },
+            }
+          : {}),
+      });
+    };
     if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
       const results = await Promise.allSettled([
+        runBookings(),
         runScheduledWorkflows(
           environment.DB,
           studioIntegrationKeyFromEnvironment(environment),
@@ -415,6 +468,7 @@ const runtime = {
       return;
     }
     const results = await Promise.allSettled([
+      runBookings(),
       runScheduledWorkflows(
         environment.DB,
         studioIntegrationKeyFromEnvironment(environment),

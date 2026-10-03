@@ -6,12 +6,22 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 import type { AppServices } from "@/app-services";
 import { MyDayPage } from "./my-day-page";
 
+beforeEach(() => vi.setSystemTime(new Date("2026-01-03T12:00:00Z")));
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 

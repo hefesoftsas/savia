@@ -23,3 +23,10 @@ condition = "AND"
 paths = ['''^docs/workflows\.md$''', '''^apps/admin/src/features/crm-engine/workflow-webhooks\.tsx$''']
 regexTarget = "secret"
 regexes = ['''^(?:Bearer )?YOUR_SECRET$''']
+
+[[allowlists]]
+description = "Booking design prose describing ineligible professionals"
+condition = "AND"
+paths = ['''^docs/superpowers/specs/2026-10-03-tenant-booking-design\.md$''']
+regexTarget = "secret"
+regexes = ['''^foreign/disabled$''']

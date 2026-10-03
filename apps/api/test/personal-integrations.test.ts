@@ -1459,6 +1459,8 @@ describe("personal integration providers", () => {
           startsAt: "2026-01-03T09:00:00-05:00",
           endsAt: "2026-01-03T09:30:00-05:00",
           webLink: null,
+          allDay: false,
+          timeZone: null,
         },
       ],
     });
@@ -1523,6 +1525,8 @@ describe("personal integration providers", () => {
           startsAt: "2026-01-03T09:00:00.0000000Z",
           endsAt: "2026-01-03T09:30:00.0000000Z",
           webLink: "https://outlook.office.com/calendar/item/outlook-event-1",
+          allDay: false,
+          timeZone: "UTC",
         },
       ],
     });

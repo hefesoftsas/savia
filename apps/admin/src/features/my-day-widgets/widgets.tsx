@@ -612,16 +612,18 @@ export function WidgetCard({
   return (
     <Card
       data-testid={`my-day-widget-${widget.id}`}
-      className="rounded-2xl border-border/60 shadow-sm transition-shadow hover:shadow-md"
+      className="min-w-0 gap-3 rounded-2xl border-border/60 py-4 shadow-sm transition-shadow hover:shadow-md sm:gap-6 sm:py-6"
     >
-      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
+      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 px-4 pb-0 sm:px-6 sm:pb-3">
         <div className="flex min-w-0 items-start gap-1.5">
           {dragHandle}
           <div className="min-w-0">
             <CardTitle className="truncate text-[15px] font-semibold tracking-tight">
               {title}
             </CardTitle>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            <p
+              className={`mt-0.5 truncate text-xs text-muted-foreground ${isSystem ? "hidden sm:block" : ""}`}
+            >
               {collectionLabel} ·{" "}
               {pluginTitle ?? widgetKindLabels[widget.kind] ?? "Vista previa"}
             </p>
@@ -667,7 +669,7 @@ export function WidgetCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="px-4 pt-0 sm:px-6">
         {!supported ? (
           <p className="text-sm text-muted-foreground">
             Este tipo de widget estará disponible próximamente. Mientras tanto

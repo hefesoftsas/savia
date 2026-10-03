@@ -161,6 +161,53 @@ describe("Pages API", () => {
     expect(stale.status).toBe(409);
   });
 
+  it("returns bounded literal-match excerpts only for authorized queried pages", async () => {
+    const searchText = `${"earlier text ".repeat(80)}Literal [needle]%_\\ match ${"later text ".repeat(80)}`;
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO pages(id,tenant_id,owner_id,parent_id,root_id,title,kind,content_json,search_text,binding_json,version,share_version,created_at,updated_at)
+         VALUES('page-excerpt-match',9201,'page-owner',NULL,'page-excerpt-match','Excerpt','page','[]',?,NULL,1,1,'2026-10-03','2026-10-03')`,
+      ).bind(searchText),
+      env.DB.prepare(
+        `INSERT INTO pages(id,tenant_id,owner_id,parent_id,root_id,title,kind,content_json,search_text,binding_json,version,share_version,created_at,updated_at)
+         VALUES('page-excerpt-private',9201,'page-outsider',NULL,'page-excerpt-private','Private','page','[]',?,NULL,1,1,'2026-10-03','2026-10-03')`,
+      ).bind(searchText),
+      env.DB.prepare(
+        `INSERT INTO pages(id,tenant_id,owner_id,parent_id,root_id,title,kind,content_json,search_text,binding_json,version,share_version,created_at,updated_at)
+         VALUES('page-excerpt-title-match',9201,'page-owner',NULL,'page-excerpt-title-match','Title-only clue','page','[]','Body text has no title terms',NULL,1,1,'2026-10-03','2026-10-03')`,
+      ),
+    ]);
+    const app = appFor(actor("page-owner", 9201));
+    const query = encodeURIComponent("[needle]%_\\");
+    const search = (await app
+      .request(`/v1/pages?q=${query}`)
+      .then((r) => r.json())) as any;
+
+    expect(search.data).toHaveLength(1);
+    expect(search.data[0].id).toBe("page-excerpt-match");
+    expect(search.data[0].excerpt).toContain("Literal [needle]%_\\ match");
+    expect(search.data[0].excerpt.length).toBeLessThanOrEqual(360);
+    expect(search.data[0].excerpt.indexOf("[needle]")).toBeLessThanOrEqual(61);
+
+    const unfiltered = (await app
+      .request("/v1/pages")
+      .then((r) => r.json())) as any;
+    expect(
+      unfiltered.data.find((page: any) => page.id === "page-excerpt-match"),
+    ).not.toHaveProperty("excerpt");
+    expect(
+      unfiltered.data.some((page: any) => page.id === "page-excerpt-private"),
+    ).toBe(false);
+
+    const titleSearch = (await app
+      .request("/v1/pages?q=Title-only%20clue")
+      .then((r) => r.json())) as any;
+    expect(titleSearch.data[0]).toMatchObject({
+      id: "page-excerpt-title-match",
+      excerpt: "Body text has no title terms",
+    });
+  });
+
   it("resolves a record-bound page beyond the first 200 entries and serializes concurrent requests", async () => {
     const binding = {
       domain: "/v1/studio/1",

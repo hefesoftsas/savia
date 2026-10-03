@@ -86,6 +86,8 @@ export function createReactAdminAuthProvider(
           isPlatformAdmin ||
           hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
         );
+      if (resource === "bookings")
+        return Boolean(permissions.memberships?.length);
       if (resource === "companion-recordings")
         return isPlatformAdmin || Boolean(permissions.memberships?.length);
       if (resource === "tenants") return isPlatformAdmin;

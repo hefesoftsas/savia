@@ -32,6 +32,7 @@ const pageSummarySchema = z.object({
   role: z.enum(["owner", "editor", "reader"]),
   isShared: z.boolean(),
   binding: bindingSchema.nullable(),
+  excerpt: z.string().max(360).optional(),
 });
 const pageDocumentSchema = pageSummarySchema.extend({
   content: z.array(z.record(z.string(), z.unknown())),
