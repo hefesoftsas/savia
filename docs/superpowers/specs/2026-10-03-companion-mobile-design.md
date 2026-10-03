@@ -1,6 +1,6 @@
 # Savia Companion mobile
 
-Status: proposed design for user review; no mobile implementation yet.
+Status: approved by the user on 2026-10-03; implementation plan under review.
 Date: 2026-10-03.
 
 ## Intent and scope
