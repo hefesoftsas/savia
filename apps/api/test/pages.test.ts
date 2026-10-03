@@ -1,10 +1,11 @@
 import { env } from "cloudflare:workers";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppActor, Authenticator } from "../src/auth/types";
 import { authenticationMiddleware } from "../src/auth/middleware";
 import { PagesService } from "../src/pages/service";
 import { registerPagesRoutes } from "../src/routes/pages";
+import type { PagesSearchBindings } from "../src/pages/cloudflare-search";
 
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
@@ -61,7 +62,11 @@ function actor(id: string, tenantId?: number): AppActor {
   };
 }
 
-function appFor(user: AppActor, documents?: R2Bucket) {
+function appFor(
+  user: AppActor,
+  documents?: R2Bucket,
+  pagesSearch?: PagesSearchBindings,
+) {
   const app = new OpenAPIHono();
   const auth: Authenticator = {
     async authenticate() {
@@ -69,8 +74,28 @@ function appFor(user: AppActor, documents?: R2Bucket) {
     },
   };
   app.use("*", authenticationMiddleware(env.DB, auth));
-  registerPagesRoutes(app, env.DB, documents);
+  registerPagesRoutes(app, env.DB, documents, pagesSearch);
   return app;
+}
+
+function searchBindings(
+  schedule: (task: Promise<unknown>) => void,
+  failEmbedding = false,
+): PagesSearchBindings {
+  return {
+    schedule,
+    AI: {
+      run: vi.fn(async (_model, input) => {
+        if (failEmbedding) throw new Error("private embedding failure details");
+        return { data: input.text.map(() => Array(1024).fill(0.25)) };
+      }),
+    },
+    PAGES_VECTORIZE: {
+      upsert: vi.fn(async () => ({})),
+      query: vi.fn(async () => ({ matches: [] })),
+      deleteByIds: vi.fn(async () => ({})),
+    },
+  };
 }
 
 async function seed() {
@@ -206,6 +231,158 @@ describe("Pages API", () => {
       id: "page-excerpt-title-match",
       excerpt: "Body text has no title terms",
     });
+  });
+
+  it("schedules indexing after page changes and serially catches up imported pages", async () => {
+    await env.DB.prepare(
+      `INSERT INTO tenant_pages_search_settings(tenant_id,allowed,enabled,updated_at)
+       VALUES(9201,1,1,'2026-10-03')
+       ON CONFLICT(tenant_id) DO UPDATE SET allowed=1,enabled=1`,
+    ).run();
+    const scheduled: Promise<unknown>[] = [];
+    const bindings = searchBindings((task) => scheduled.push(task));
+    const app = appFor(actor("page-owner", 9201), undefined, bindings);
+
+    const folder = await app.request("/v1/pages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Not indexed", kind: "folder" }),
+    });
+    expect(folder.status).toBe(201);
+    expect(scheduled).toHaveLength(0);
+
+    const created = await app.request("/v1/pages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Auto indexed" }),
+    });
+    expect(created.status).toBe(201);
+    const page = ((await created.json()) as any).data;
+    expect(scheduled).toHaveLength(1);
+    await scheduled.shift();
+    expect(bindings.AI!.run).toHaveBeenCalledTimes(1);
+
+    const saved = await app.request(`/v1/pages/${page.id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Auto indexed",
+        content: [{ type: "p", children: [{ text: "saved content" }] }],
+        version: 1,
+      }),
+    });
+    expect(saved.status).toBe(200);
+    expect(scheduled).toHaveLength(1);
+    await scheduled.shift();
+    expect(bindings.AI!.run).toHaveBeenCalledTimes(2);
+
+    const savedAgain = await app.request(`/v1/pages/${page.id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Auto indexed",
+        content: [{ type: "p", children: [{ text: "updated content" }] }],
+        version: 2,
+      }),
+    });
+    expect(savedAgain.status).toBe(200);
+    await scheduled.shift();
+    expect(bindings.AI!.run).toHaveBeenCalledTimes(3);
+
+    const restored = await app.request(`/v1/pages/${page.id}/restore`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ revision: 2, version: 3 }),
+    });
+    expect(restored.status).toBe(200);
+    expect(scheduled).toHaveLength(1);
+    await scheduled.shift();
+    expect(bindings.AI!.run).toHaveBeenCalledTimes(4);
+
+    const imported = await app.request("/v1/pages/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        format: "savia-pages",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        pages: [
+          {
+            id: "source-imported-page",
+            parentId: null,
+            title: "Imported page",
+            kind: "page",
+            content: [{ type: "p", children: [{ text: "imported content" }] }],
+          },
+        ],
+        files: [],
+      }),
+    });
+    expect(imported.status).toBe(200);
+    expect(scheduled).toHaveLength(1);
+    await scheduled.shift();
+    expect(bindings.AI!.run).toHaveBeenCalledTimes(5);
+    expect(bindings.PAGES_VECTORIZE!.upsert).toHaveBeenCalledTimes(5);
+  });
+
+  it("keeps page saves successful on indexing failures and avoids AI when disabled", async () => {
+    await env.DB.prepare(
+      `INSERT INTO tenant_pages_search_settings(tenant_id,allowed,enabled,updated_at)
+       VALUES(9201,1,1,'2026-10-03')
+       ON CONFLICT(tenant_id) DO UPDATE SET allowed=1,enabled=1`,
+    ).run();
+    const scheduled: Promise<unknown>[] = [];
+    const bindings = searchBindings((task) => scheduled.push(task), true);
+    const app = appFor(actor("page-owner", 9201), undefined, bindings);
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const created = await app.request("/v1/pages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Resilient save" }),
+    });
+    const page = ((await created.json()) as any).data;
+    await scheduled.shift();
+
+    const failedIndexSave = await app.request(`/v1/pages/${page.id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Saved despite index error",
+        content: [{ type: "p", children: [{ text: "durable content" }] }],
+        version: 1,
+      }),
+    });
+    expect(failedIndexSave.status).toBe(200);
+    const failedIndexJob = scheduled.shift();
+    expect(failedIndexJob).toBeDefined();
+    await failedIndexJob;
+    expect(bindings.AI!.run).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(warning.mock.calls)).not.toContain(
+      "private embedding failure details",
+    );
+    expect(
+      ((await app.request(`/v1/pages/${page.id}`).then((r) => r.json())) as any)
+        .data.content,
+    ).toEqual([{ type: "p", children: [{ text: "durable content" }] }]);
+
+    await env.DB.prepare(
+      "UPDATE tenant_pages_search_settings SET allowed=0,enabled=0 WHERE tenant_id=9201",
+    ).run();
+    const disabledSave = await app.request(`/v1/pages/${page.id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Saved while search disabled",
+        content: [{ type: "p", children: [{ text: "new durable content" }] }],
+        version: 2,
+      }),
+    });
+    expect(disabledSave.status).toBe(200);
+    const disabledJob = scheduled.shift();
+    expect(disabledJob).toBeDefined();
+    await disabledJob;
+    expect(bindings.AI!.run).toHaveBeenCalledTimes(2);
+    warning.mockRestore();
   });
 
   it("resolves a record-bound page beyond the first 200 entries and serializes concurrent requests", async () => {

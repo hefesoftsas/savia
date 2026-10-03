@@ -265,7 +265,7 @@ export function createApp(
   });
   registerPagesSearchSettingsRoutes(app, db);
   registerPagesSearchRoutes(app, db, pagesSearch);
-  registerPagesRoutes(app, db, documents);
+  registerPagesRoutes(app, db, documents, pagesSearch);
   registerOfficeDocumentRoutes(app, db, documents);
   registerConnectedOfficeDocumentRoutes(
     app,

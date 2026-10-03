@@ -5,9 +5,9 @@ export default {
   fetch(
     request: Request,
     environment: import("./runtime").RuntimeEnvironment,
-    _context?: ExecutionContext,
+    context?: ExecutionContext,
   ) {
-    return runtime.fetch(request, environment);
+    return runtime.fetch(request, environment, undefined, context);
   },
   scheduled: runtime.scheduled,
 };

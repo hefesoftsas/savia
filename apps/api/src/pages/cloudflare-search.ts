@@ -5,6 +5,7 @@ import { readPagesSearchSettings } from "./search-settings";
 import { makePageExcerpt } from "./excerpt";
 
 export type PagesSearchBindings = {
+  schedule?: (task: Promise<unknown>) => void;
   PAGES_SEARCH_RATE_LIMITER?: {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };
@@ -38,6 +39,7 @@ export type PagesSearchBindings = {
 };
 const unavailable = () =>
   new PagesError(503, "SEARCH_UNAVAILABLE", "Cloudflare search is unavailable");
+const INDEX_LEASE_MS = 90_000;
 
 function pageTextLeaves(nodes: unknown): string {
   if (Array.isArray(nodes)) return nodes.map(pageTextLeaves).join(" ");
@@ -131,7 +133,7 @@ export class CloudflarePagesSearch {
     const page = await this.pages.get(pageId);
     if (page.kind !== "page")
       throw new PagesError(400, "INVALID_PAGE", "Only pages can be indexed");
-    const previous = await this.db
+    let previous = await this.db
       .prepare(
         "SELECT version,vector_ids FROM tenant_page_search_index WHERE page_id=? AND tenant_id=?",
       )
@@ -139,66 +141,103 @@ export class CloudflarePagesSearch {
       .first<{ version: number; vector_ids: string }>();
     if (previous?.version === page.version)
       return { id: page.id, version: page.version, reused: true };
-    const chunks = chunkText(
-      `${page.title}\n\n${pageTextLeaves(page.content)}`,
-    );
-    const response: { data: number[][] } = { data: [] };
-    for (let offset = 0; offset < chunks.length; offset += 32) {
-      await this.authorized();
-      response.data.push(
-        ...(
-          await ai.run(CLOUDFLARE_EMBEDDING_MODEL, {
-            text: chunks.slice(offset, offset + 32),
-          })
-        ).data,
-      );
-    }
-    if (
-      response.data.length !== chunks.length ||
-      response.data.some(
-        (vector) =>
-          !Array.isArray(vector) ||
-          vector.length !== 1024 ||
-          vector.some((value) => !Number.isFinite(value)),
+    const leaseToken = crypto.randomUUID();
+    const now = Date.now();
+    const lease = await this.db
+      .prepare(
+        `INSERT INTO tenant_page_search_index_leases(tenant_id,page_id,token,expires_at)
+        VALUES(?,?,?,?)
+        ON CONFLICT(tenant_id,page_id) DO UPDATE SET token=excluded.token,expires_at=excluded.expires_at
+        WHERE tenant_page_search_index_leases.expires_at<=?
+        RETURNING token`,
       )
-    )
-      throw unavailable();
-    await this.authorized();
-    const current = await this.pages.get(page.id);
-    if (current.version !== page.version)
+      .bind(tenantId, page.id, leaseToken, now + INDEX_LEASE_MS, now)
+      .first<{ token: string }>();
+    if (!lease)
       throw new PagesError(
         409,
-        "VERSION_CONFLICT",
-        "Page changed during indexing",
+        "INDEX_IN_PROGRESS",
+        "Page indexing is already in progress",
       );
-    const prefix = await pageVectorPrefix(tenantId, page.id, page.version);
-    const vectors = response.data.map((values, i) => ({
-      id: `${prefix}:${i}`,
-      values,
-      namespace: `pages-tenant-${tenantId}`,
-      metadata: { pageId: page.id, version: page.version },
-    }));
-    await index.upsert(vectors);
-    await this.db
-      .prepare(
-        `INSERT INTO tenant_page_search_index(page_id,tenant_id,version,vector_ids,updated_at)
+    try {
+      // The first manifest read is only a fast path. Another job may have
+      // completed while this request waited to acquire the lease.
+      previous = await this.db
+        .prepare(
+          "SELECT version,vector_ids FROM tenant_page_search_index WHERE page_id=? AND tenant_id=?",
+        )
+        .bind(page.id, tenantId)
+        .first<{ version: number; vector_ids: string }>();
+      if (previous?.version === page.version)
+        return { id: page.id, version: page.version, reused: true };
+      const chunks = chunkText(
+        `${page.title}\n\n${pageTextLeaves(page.content)}`,
+      );
+      const response: { data: number[][] } = { data: [] };
+      for (let offset = 0; offset < chunks.length; offset += 32) {
+        await this.authorized();
+        response.data.push(
+          ...(
+            await ai.run(CLOUDFLARE_EMBEDDING_MODEL, {
+              text: chunks.slice(offset, offset + 32),
+            })
+          ).data,
+        );
+      }
+      if (
+        response.data.length !== chunks.length ||
+        response.data.some(
+          (vector) =>
+            !Array.isArray(vector) ||
+            vector.length !== 1024 ||
+            vector.some((value) => !Number.isFinite(value)),
+        )
+      )
+        throw unavailable();
+      await this.authorized();
+      const current = await this.pages.get(page.id);
+      if (current.version !== page.version)
+        throw new PagesError(
+          409,
+          "VERSION_CONFLICT",
+          "Page changed during indexing",
+        );
+      const prefix = await pageVectorPrefix(tenantId, page.id, page.version);
+      const vectors = response.data.map((values, i) => ({
+        id: `${prefix}:${i}`,
+        values,
+        namespace: `pages-tenant-${tenantId}`,
+        metadata: { pageId: page.id, version: page.version },
+      }));
+      await index.upsert(vectors);
+      await this.db
+        .prepare(
+          `INSERT INTO tenant_page_search_index(page_id,tenant_id,version,vector_ids,updated_at)
       SELECT id,tenant_id,version,?,? FROM pages WHERE id=? AND tenant_id=? AND version=?
       ON CONFLICT(page_id) DO UPDATE SET version=excluded.version,vector_ids=excluded.vector_ids,updated_at=excluded.updated_at WHERE tenant_page_search_index.version<=excluded.version`,
-      )
-      .bind(
-        JSON.stringify(vectors.map((vector) => vector.id)),
-        new Date().toISOString(),
-        page.id,
-        tenantId,
-        page.version,
-      )
-      .run();
-    if (previous)
-      await index
-        .deleteByIds(JSON.parse(previous.vector_ids) as string[])
-        .catch(() => undefined);
-    await this.authorized();
-    return { id: page.id, version: page.version, reused: false };
+        )
+        .bind(
+          JSON.stringify(vectors.map((vector) => vector.id)),
+          new Date().toISOString(),
+          page.id,
+          tenantId,
+          page.version,
+        )
+        .run();
+      if (previous)
+        await index
+          .deleteByIds(JSON.parse(previous.vector_ids) as string[])
+          .catch(() => undefined);
+      await this.authorized();
+      return { id: page.id, version: page.version, reused: false };
+    } finally {
+      await this.db
+        .prepare(
+          "DELETE FROM tenant_page_search_index_leases WHERE tenant_id=? AND page_id=? AND token=?",
+        )
+        .bind(tenantId, page.id, leaseToken)
+        .run();
+    }
   }
   async search(query: string) {
     const { tenantId, ai, index } = await this.authorized();

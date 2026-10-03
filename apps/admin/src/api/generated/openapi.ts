@@ -11494,7 +11494,7 @@ export interface paths {
             };
           };
         };
-        /** @description Page changed */
+        /** @description Page changed or indexing is already in progress */
         409: {
           headers: {
             [name: string]: unknown;
@@ -11610,7 +11610,7 @@ export interface paths {
             };
           };
         };
-        /** @description Page changed */
+        /** @description Page changed or indexing is already in progress */
         409: {
           headers: {
             [name: string]: unknown;
@@ -11738,7 +11738,7 @@ export interface paths {
             };
           };
         };
-        /** @description Page changed */
+        /** @description Page changed or indexing is already in progress */
         409: {
           headers: {
             [name: string]: unknown;
