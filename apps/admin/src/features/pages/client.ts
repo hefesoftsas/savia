@@ -1,3 +1,4 @@
+import { pagesReadCache } from "./read-cache";
 import { publishPageChange } from "./page-events";
 import type { ApiClient } from "@/api/api-client";
 import type { Value } from "platejs";
@@ -33,27 +34,48 @@ export class PagesClient {
   private path(id = "") {
     return `/v1/pages${id ? `/${encodeURIComponent(id)}` : ""}`;
   }
-  async list(q = "") {
-    return (
-      await this.api.get<{ data: PageSummary[] }>(
-        `${this.path()}?q=${encodeURIComponent(q)}`,
-      )
-    ).data;
+  cachedList(q = "") {
+    return pagesReadCache(this.api).peek<PageSummary[]>(`list:${q}`);
+  }
+  cachedDocument(id: string) {
+    return pagesReadCache(this.api).peek<PageDocument>(`document:${id}`);
+  }
+  async list(q = "", force = false) {
+    return pagesReadCache(this.api).read(
+      `list:${q}`,
+      async (signal) =>
+        (
+          await this.api.get<{ data: PageSummary[] }>(
+            `${this.path()}?q=${encodeURIComponent(q)}`,
+            { signal },
+          )
+        ).data,
+      force,
+    );
   }
   async exportAll() {
     return (await this.api.get<{ data: PagesArchive }>(`${this.path()}/export`))
       .data;
   }
   async importArchive(archive: PagesArchive) {
-    return (
+    const cache = pagesReadCache(this.api);
+    const result = (
       await this.api.post<{ data: PagesImportResult }>(
         `${this.path()}/import`,
         archive,
       )
     ).data;
+    cache.invalidate();
+    return result;
   }
-  async get(id: string) {
-    return (await this.api.get<{ data: PageDocument }>(this.path(id))).data;
+  async get(id: string, force = false) {
+    return pagesReadCache(this.api).read(
+      `document:${id}`,
+      async (signal) =>
+        (await this.api.get<{ data: PageDocument }>(this.path(id), { signal }))
+          .data,
+      force,
+    );
   }
   async create(input: {
     title: string;
@@ -61,9 +83,11 @@ export class PagesClient {
     kind?: "page" | "folder";
     binding?: RecordBinding;
   }) {
+    const cache = pagesReadCache(this.api);
     const page = (
       await this.api.post<{ data: PageDocument }>(this.path(), input)
     ).data;
+    cache.changed(page);
     publishPageChange({ api: this.api, page });
     return page;
   }
@@ -74,16 +98,20 @@ export class PagesClient {
     id: string,
     input: { title: string; content: Value; version: number },
   ) {
+    const cache = pagesReadCache(this.api);
     const page = (
       await this.api.put<{ data: PageDocument }>(this.path(id), input)
     ).data;
+    cache.changed(page);
     publishPageChange({ api: this.api, page });
     return page;
   }
   async remove(id: string, version: number) {
+    const cache = pagesReadCache(this.api);
     await this.api.request(`${this.path(id)}?version=${version}`, {
       method: "DELETE",
     });
+    cache.changed(undefined, id);
     publishPageChange({ api: this.api, removedId: id });
   }
   async revisions(id: string) {
@@ -104,12 +132,16 @@ export class PagesClient {
     ).data;
   }
   async restore(id: string, revision: number, version: number) {
-    return (
+    const cache = pagesReadCache(this.api);
+    const page = (
       await this.api.post<{ data: PageDocument }>(`${this.path(id)}/restore`, {
         revision,
         version,
       })
     ).data;
+    cache.changed(page);
+    publishPageChange({ api: this.api, page });
+    return page;
   }
   async members() {
     return (
@@ -130,7 +162,14 @@ export class PagesClient {
     ).data;
   }
   async share(id: string, shares: PageShare[], version: number) {
-    return this.api.put(`${this.path(id)}/shares`, { shares, version });
+    const cache = pagesReadCache(this.api);
+    const result = await this.api.put(`${this.path(id)}/shares`, {
+      shares,
+      version,
+    });
+    cache.invalidate();
+    publishPageChange({ api: this.api });
+    return result;
   }
   async publicLinks(id: string) {
     return (
