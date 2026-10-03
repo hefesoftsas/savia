@@ -10,7 +10,7 @@ Open **Bookings** in the tenant navigation. A tenant administrator can enable bo
 
 Each professional has weekly availability and date exceptions. An exception replaces that day's weekly periods; an empty exception closes the day. Periods cannot overlap or cross midnight. Administrators can configure all professionals. A professional can update their own availability without changing services or other professionals.
 
-Publish when an enabled service has an enabled professional. Copy the generated public link. Customers choose a service, professional, date and time, then provide their name and email and complete the configured captcha. Public pages bypass the authenticated app and its offline storage. Public catalogs contain names and opaque booking identifiers, never internal principal identifiers or customer lists.
+Publish when an enabled service has an enabled professional. Copy the generated public link. Customers choose a service, professional, date and time, then provide their name and email and complete the configured captcha. Public pages bypass the authenticated app and its offline storage. Their HTML uses no-store, no-referrer and noindex headers, and booking navigation is excluded from the service worker fallback. Public catalogs contain names and opaque booking identifiers, never internal principal identifiers or customer lists.
 
 ## Reservations and management
 
