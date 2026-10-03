@@ -52,7 +52,12 @@ describe("edge gateway", () => {
     const assets = { fetch: vi.fn(async () => new Response("admin")) };
     const request = new Request(
       "https://savia-catalog-routing.test/companion-downloads.json?cache=bust",
-      { headers: { Authorization: "Bearer user-token", Cookie: "session=secret" } },
+      {
+        headers: {
+          Authorization: "Bearer user-token",
+          Cookie: "session=secret",
+        },
+      },
     );
 
     const response = await gatewayFetch(request, { API: api, ASSETS: assets });

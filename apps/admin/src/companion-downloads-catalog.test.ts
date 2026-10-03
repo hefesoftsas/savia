@@ -84,7 +84,9 @@ describe("Companion download catalog", () => {
   it("returns a generic non-cacheable 503 for upstream errors and retries next time", async () => {
     const fetchUpstream = vi
       .fn()
-      .mockResolvedValueOnce(new Response("private upstream details", { status: 500 }))
+      .mockResolvedValueOnce(
+        new Response("private upstream details", { status: 500 }),
+      )
       .mockResolvedValueOnce(Response.json(sample));
     vi.stubGlobal("fetch", fetchUpstream);
     const request = new Request(
