@@ -124,3 +124,55 @@ it("reports sequential indexing progress and stops before the next page on cance
     expect.anything(),
   );
 });
+
+it("does not announce zero results when focus invalidates a completed search", async () => {
+  const status = {
+    enabled: true,
+    available: true,
+    total: 1,
+    indexed: 1,
+    needed: [],
+  };
+  const api = {
+    get: vi.fn(async (path: string) => ({
+      data:
+        path === "/v1/pages/search/status"
+          ? status
+          : [
+              {
+                id: "found",
+                title: "Found page",
+                updatedAt: "2026-10-03",
+                parentId: null,
+                rootId: "found",
+                ownerId: "owner",
+                kind: "page",
+                version: 1,
+                role: "owner",
+                isShared: false,
+                score: 0.9,
+                excerpt: "Hello context",
+              },
+            ],
+    })),
+    post: vi.fn(),
+  };
+  renderSearch(api);
+  fireEvent.change(
+    await screen.findByRole("textbox", { name: "Search pages by meaning" }),
+    { target: { value: "Hello" } },
+  );
+  await screen.findByRole("link", { name: /Found page/ });
+  expect(screen.getByText("1 result")).toBeVisible();
+  fireEvent(window, new Event("focus"));
+  await waitFor(() =>
+    expect(
+      api.get.mock.calls.filter(([path]) => path === "/v1/pages/search/status"),
+    ).toHaveLength(2),
+  );
+  expect(screen.queryByRole("link", { name: /Found page/ })).toBeNull();
+  expect(screen.queryByText("0 results")).toBeNull();
+  expect(
+    screen.getByRole("textbox", { name: "Search pages by meaning" }),
+  ).toHaveValue("Hello");
+});

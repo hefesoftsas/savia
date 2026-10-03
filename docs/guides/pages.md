@@ -129,7 +129,8 @@ asynchronous; new results may take a few seconds to become searchable.
 
 Semantic results include an excerpt from the matched content chunk when available,
 or a short excerpt around the query. Excerpts are derived from the current
-authorized page rather than stored vector metadata.
+authorized page rather than stored vector metadata. An empty result message is
+shown only after a search completes, not while stale results are cleared.
 
 Vectors use a tenant namespace. Search returns only pages that the caller can
 currently read in that tenant, checks the indexed version, and reads titles from

@@ -69,6 +69,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
       searchAbortRef.current?.abort();
       setSearching(false);
       setResults([]);
+      setSearchComplete(false);
       void refreshStatus();
     };
     const unsubscribe = subscribePageChanges((change) => {
