@@ -31,6 +31,7 @@
     "better-auth": "1.7.6",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.5",
+    "ical.js": "^2.2.1",
     "jose": "^6.2.10",
     "openapi-fetch": "^0.17.0"
   }

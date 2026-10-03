@@ -39,6 +39,7 @@ export type PersonalIntegrationRouteDependencies = {
   >;
   nango?: PersonalIntegrationNangoClient;
   personalActionPayloadCipher?: PersonalActionPayloadCipher;
+  calendarSecret?: string;
 };
 
 const providerDocumentSchema = z.object({
@@ -406,6 +407,8 @@ const eventListRoute = createRoute({
                 startsAt: z.string().nullable(),
                 endsAt: z.string().nullable(),
                 webLink: z.string().url().nullable(),
+                allDay: z.boolean().optional(),
+                timeZone: z.string().nullable().optional(),
               }),
             ),
           }),

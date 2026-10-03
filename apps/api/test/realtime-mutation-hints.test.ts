@@ -73,6 +73,13 @@ describe("realtime mutation hint classification", () => {
       collection: "connections",
     });
     expect(
+      classifyRealtimeMutation("PUT", "/v1/user-preferences/calendar"),
+    ).toMatchObject({
+      room: "principal",
+      topic: "personal-integrations",
+      collection: "connections",
+    });
+    expect(
       classifyRealtimeMutation("POST", "/api/notifications/notice/read"),
     ).toMatchObject({ room: "principal", topic: "notifications" });
     expect(
