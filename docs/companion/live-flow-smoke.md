@@ -108,3 +108,31 @@ credentials or model settings.
   Native capture, native authenticated upload, audio playback, summaries and
   question answering were **not validated** by this follow-up. Full package and
   monorepo suites were not run.
+
+## Scoped credentials and questions — 2026-10-03 (local verification)
+
+The personal API key implementation adds account creation/revocation with four
+recording scopes, one-time secret reveal, digest-only storage, expiry and a bound
+workspace/deployment. Companion accepts the credential in memory and checks its
+upload permission. The recordings page can ask a consented question against the
+selected saved transcript; answers are temporary drafts with an explicit
+insufficient-evidence outcome.
+
+Local verification includes real D1/R2 lifecycle, scope and tenant-isolation
+tests, provider-boundary Q&A tests, account and recording UI tests, a Companion
+frontend build, and 24 native Rust tests. A browser check rendered the production
+panels with local fixture data; its answer was simulated. It is not provider or
+preview validation. The PostgreSQL manifest checks passed, but 10 live PostgreSQL
+cases were skipped because no test database was configured.
+
+The fresh review's deployment-origin fallback, tenant hostname contradiction and
+last-use timing findings were corrected. Keys fail closed on remote deployments
+without a configured canonical public origin; both hostname and gateway tenant
+hints must agree with the bound workspace. Last use records successful requests.
+
+Preview has not yet received this increment. The earlier synthetic upload remains
+the only preview upload evidence. Its processing failure still needs a sanitized
+backend/provider diagnosis. Native connection/upload, successful preview summary
+persistence, real grounded answers and a successful CoreAudio capture remain
+unverified. Integration must follow the documented main → CI → preview workflow;
+no production deployment or provider configuration change was performed here.
