@@ -21,8 +21,8 @@ upload queue, or expose cloud-drive import or deletion.
 
 ## Native public OAuth client
 
-After reviewed backend deployment to preview, an authorized administrator creates
-a managed OAuth client through the existing OAuth management API/UI:
+After reviewed backend deployment to preview, register a public native OAuth
+client. The existing OAuth management API/UI is the preferred route:
 
 - Application type: `native`.
 - Client authentication: `none`; PKCE S256 is required.
@@ -37,6 +37,12 @@ repository variable `SAVIA_MOBILE_CLIENT_ID` for internal CI artifacts. No
 registered ID is fabricated or bundled in the repository. A client secret must
 never be added to Flutter configuration. Generated OpenAPI remains the canonical
 API reference.
+
+Authorization and refresh explicitly request the preview API resource
+(`https://savia-preview.hefesoft.com`). The authorization-code exchange inherits
+the resource bound to its code, so access tokens carry the audience required by
+recording endpoints. The combined AppAuth flow retains its PKCE, state, nonce
+and ID-token validation.
 
 The new authenticated session discovery endpoint returns only subject, display
 name, eligible workspaces, and recording scopes. Recording requests select a
@@ -119,11 +125,19 @@ qualification was performed. The dedicated mobile CI run [37129079279](https://g
 successfully built both Android and an unsigned iOS simulator app for commit
 `67705861`. This establishes compilation, not physical-device qualification.
 
-The existing preview browser session is at sign-in. Public native client
-registration and the authenticated synthetic smoke remain blocked on account
-access and reviewed backend deployment. No live mobile upload, real microphone,
-audible playback, paid notes/answers, signing or store release is claimed.
-The debug APK without a client ID intentionally shows the setup screen.
+On 2026-10-03, the preview native client was registered through the deployed
+OAuth dynamic-registration endpoint and its public ID configured in the repository
+variable `SAVIA_MOBILE_CLIENT_ID`. Dynamic registration adds provider default
+scopes, so the newly created client's scopes were explicitly narrowed by the
+preview infrastructure administrator to the six scopes listed above. PKCE was
+set to required and consent skipping disabled. Read-back confirmed the exact
+callback, grants, scopes and flags. Authorization checks accepted the configured
+client and rejected missing PKCE and a different callback.
+
+The preview browser session remains at sign-in. Authenticated synthetic upload,
+real microphone capture, audible playback and paid notes/answers still require
+account access and device qualification. No store release is claimed. Older debug
+APKs built without a client ID intentionally show the setup screen.
 
 Follow-up regressions preserve the administrative client's original scope list
 and legacy public loopback callbacks. Mobile processing resolves AI configuration
