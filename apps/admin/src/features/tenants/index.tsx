@@ -1,3 +1,6 @@
+import "@/features/service-credentials/service-credentials.css";
+import { OfficeSettingsPanel } from "@/features/office-settings/office-settings-panel";
+import { useAppServices } from "@/features/assistant/assistant-context";
 import { TenantAccessUrl } from "@/features/tenant-branding/tenant-access-url";
 import "@/features/tenant-branding/tenant-branding.css";
 import { ResourceEditSync } from "@/realtime/resource-realtime";
@@ -342,6 +345,21 @@ function TenantCapacityEditor() {
   );
 }
 
+function TenantOfficeSettings() {
+  const record = useRecordContext<TenantRecord>();
+  const services = useAppServices();
+  if (!record || record.kind !== "commercial") return null;
+  return (
+    <div className="md:col-span-2">
+      <OfficeSettingsPanel
+        key={record.id}
+        tenantId={Number(record.id)}
+        services={services}
+      />
+    </div>
+  );
+}
+
 function TenantAuthenticationLinks() {
   const record = useRecordContext<TenantRecord>();
   if (record?.kind !== "commercial" || !record.isActive) return null;
@@ -363,6 +381,7 @@ function TenantEdit() {
         <SavedTenantAccessUrl />
         <TenantFields />
         <TenantCapacityEditor />
+        <TenantOfficeSettings />
         <TenantAuthenticationLinks />
       </SimpleForm>
     </Edit>

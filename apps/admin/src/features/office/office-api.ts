@@ -4,9 +4,9 @@ export type OfficeMetadata = {
   mime: string;
   size: number;
   version: number;
-  field: string;
-  object: string;
-  recordId: string;
+  field: string | null;
+  object: string | null;
+  recordId: string | null;
   maxSize: number;
   readOnly: boolean;
 };
@@ -19,7 +19,7 @@ export type OfficeRevision = {
 export function officeEditorUrl(base: string | undefined, file: string) {
   if (
     !base ||
-    !/^\/v1\/(?:(?:studio|dynamic-crm)\/[0-9]+)$/.test(base) ||
+    !/^\/v1\/(?:(?:studio|dynamic-crm)\/[0-9]+|office-documents)$/.test(base) ||
     !/^[A-Za-z0-9_-]{1,128}$/.test(file)
   )
     return null;

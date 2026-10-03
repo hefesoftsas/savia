@@ -1,3 +1,4 @@
+import { useOfficeAvailability } from "@/features/office-settings/office-availability";
 import { useId, useState } from "react";
 import { FilePlus2 } from "lucide-react";
 import type { OfficeFormat } from "@savia/studio-shared/office";
@@ -6,14 +7,6 @@ import { documentDeliveryMessages } from "@/i18n/locales/document-delivery";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { createBlankOfficeFile } from "../office/new-office-file";
 import { officeEditorUrl } from "../office/office-api";
 import { getStudioRuntime } from "./runtime";
@@ -30,6 +23,7 @@ export function CreateOfficeAttachment({
   formats?: OfficeFormat[];
   maxSize?: number;
 }) {
+  const office = useOfficeAvailability();
   const t = useMessages(documentDeliveryMessages);
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -46,7 +40,7 @@ export function CreateOfficeAttachment({
           ? "Hoja de cálculo"
           : "Presentación",
     );
-  if (!formats.length) return null;
+  if (!office.enabled || !formats.length) return null;
   const editorUrl = created
     ? officeEditorUrl(getStudioRuntime().apiBasePath, created.id)
     : null;
@@ -78,7 +72,8 @@ export function CreateOfficeAttachment({
       <Button
         type="button"
         variant="outline"
-        disabled={disabled}
+        disabled={disabled || busy}
+        aria-expanded={open}
         onClick={() => {
           const initial = formats[0];
           setFormat(initial);
@@ -91,23 +86,23 @@ export function CreateOfficeAttachment({
         <FilePlus2 size={16} aria-hidden="true" />
         {t("Crear archivo")}
       </Button>
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          if (!busy) setOpen(next);
-        }}
-      >
-        <DialogContent className="min-w-0 grid-cols-[minmax(0,1fr)]">
-          <DialogHeader>
-            <DialogTitle>{t("Crear archivo")}</DialogTitle>
-            <DialogDescription>
+      {open && (
+        <section
+          aria-labelledby={id + "-title"}
+          className="mt-3 grid min-w-0 gap-4 rounded-lg border bg-background p-4"
+        >
+          <header className="space-y-1">
+            <h3 id={id + "-title"} className="text-sm font-semibold">
+              {t("Crear archivo")}
+            </h3>
+            <p className="text-sm text-muted-foreground">
               {t(
                 created
                   ? "Archivo guardado en los adjuntos."
-                  : "Crea un archivo en blanco para editarlo con ZetaOffice.",
+                  : "Crea un archivo en blanco en la suite de ofimática.",
               )}
-            </DialogDescription>
-          </DialogHeader>
+            </p>
+          </header>
           {!created && (
             <div className="grid min-w-0 gap-4">
               <div className="grid gap-2">
@@ -157,7 +152,7 @@ export function CreateOfficeAttachment({
               {error}
             </p>
           )}
-          <DialogFooter>
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -170,7 +165,7 @@ export function CreateOfficeAttachment({
               editorUrl && (
                 <Button asChild>
                   <a href={editorUrl} target="_blank" rel="noopener noreferrer">
-                    {t("Abrir en ZetaOffice")}
+                    {t("Abrir en la suite de ofimática")}
                   </a>
                 </Button>
               )
@@ -183,9 +178,9 @@ export function CreateOfficeAttachment({
                 {t(busy ? "Creando archivo…" : "Crear y adjuntar")}
               </Button>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </section>
+      )}
     </>
   );
 }

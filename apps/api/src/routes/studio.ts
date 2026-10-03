@@ -23,6 +23,10 @@ import type { SolutionOptions } from "@savia/studio-server/solutions";
 import type { RealtimeHubClient } from "../realtime/hub-client";
 import { publishRealtime } from "../realtime/hub-client";
 import { tenantRoom } from "../realtime/protocol";
+import {
+  assertOfficeSuiteEnabled,
+  OfficeSettingsError,
+} from "../office-settings/service";
 
 export async function resolveStudioTenantKey(
   tenantId: number,
@@ -122,6 +126,9 @@ export function registerStudioRoutes(
         ? `/v1/studio/${paramValue}`
         : `/v1/dynamic-crm/${paramValue}`;
     const requestedPath = url.pathname.slice(routePrefix.length);
+    const officeEditorPath =
+      /^\/api\/file\/[^/]+\/office$/.test(requestedPath) ||
+      /^\/api\/file\/[^/]+\/revisions(?:\/\d+\/download)?$/.test(requestedPath);
     const readOnlyBootstrap =
       c.req.method === "POST" &&
       ["/api/bootstrap", "/api/business/setup"].includes(requestedPath);
@@ -234,6 +241,19 @@ export function registerStudioRoutes(
         );
       path = `/api/records/${match[1]}${match[2] ? "/" + match[2] : ""}`;
     }
+    if (officeEditorPath) {
+      try {
+        await assertOfficeSuiteEnabled(db, tenantId);
+      } catch (error) {
+        if (error instanceof OfficeSettingsError) {
+          return c.json(
+            { error: { code: error.code, message: error.message } },
+            error.status,
+          );
+        }
+        throw error;
+      }
+    }
     const headers = new Headers();
     for (const name of [
       "content-type",
@@ -259,7 +279,12 @@ export function registerStudioRoutes(
       files,
       tenant: tenantKey,
       publicApiBasePath: routePrefix,
-      documentDelivery: documentDeliveryBridge(db, actor.principal.id, personalIntegrations, actor.principal.displayName),
+      documentDelivery: documentDeliveryBridge(
+        db,
+        actor.principal.id,
+        personalIntegrations,
+        actor.principal.displayName,
+      ),
       actor,
       accessPolicy,
       crm: dependencies,
@@ -304,13 +329,26 @@ export function registerStudioRoutes(
             { action?: string; id?: string } | undefined)
         : undefined;
     const response = await gateway.fetch(request);
-    const deliveryMatch = /^\/api\/file\/([^/]+)\/delivery\/confirm$/.exec(path);
-    if (deliveryMatch && c.req.method === "POST" && (response.ok || response.status === 502)) {
+    const deliveryMatch = /^\/api\/file\/([^/]+)\/delivery\/confirm$/.exec(
+      path,
+    );
+    if (
+      deliveryMatch &&
+      c.req.method === "POST" &&
+      (response.ok || response.status === 502)
+    ) {
       publishRealtime(realtime, tenantRoom(tenantId), {
-        topic:"studio", type:"updated", collection:"document-delivery", id:decodeURIComponent(deliveryMatch[1]), actor:actor.principal.id,
+        topic: "studio",
+        type: "updated",
+        collection: "document-delivery",
+        id: decodeURIComponent(deliveryMatch[1]),
+        actor: actor.principal.id,
       });
       publishRealtime(realtime, tenantRoom(tenantId), {
-        topic:"studio", type:"updated", collection:"audit", actor:actor.principal.id,
+        topic: "studio",
+        type: "updated",
+        collection: "audit",
+        actor: actor.principal.id,
       });
     }
     const bundleMatch = /^\/api\/record-bundles\/([^/]+)$/.exec(path);

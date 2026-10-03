@@ -54,3 +54,21 @@ Si un proveedor devuelve un error de autorización o una conexión revocada, mar
 ## Saved record document delivery
 
 The [Documents and deliveries](../guides/document-delivery.md) flow extends Microsoft connections with folder browsing, binary create-only OneDrive copies, and Outlook file attachments. It uses a separate encrypted, five-minute, single-use review token scoped to the authenticated user, tenant, file, version and connection. The assistant text-file upload flow remains unchanged.
+
+## Connected Office creation
+
+The **Office suite** can create documents using the caller's connected Google
+Drive, OneDrive Personal or OneDrive for Business account. This direct form
+submission is the user's instruction to create the named document; it does not
+reuse the assistant's deferred-action confirmation flow. The API resolves the
+current caller-owned connection and stores a private document reference in D1.
+File contents stay with the provider. Google uses native Docs/Sheets/Slides MIME
+types; OneDrive uploads a validated blank DOCX/XLSX/PPTX package without replacing
+existing files or adding anonymous sharing permissions.
+
+Connected creation requires the same tenant Office availability policy as the
+local editor. Provider configuration and a connected account are required for
+creation options to appear. Existing links remain in Savia after disconnecting;
+opening them is governed by the provider's own permissions. The UI does not
+claim to synchronize edits back into R2. See [Office documents and editing](../office-editing.md)
+for the workflow, writable scopes and retry behavior.

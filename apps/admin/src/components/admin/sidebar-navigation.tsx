@@ -1,3 +1,4 @@
+import { useOfficeAvailability } from "@/features/office-settings/office-availability";
 import type { AuthPermissions } from "@/auth/auth-session";
 import { useMemo } from "react";
 import {
@@ -140,6 +141,13 @@ export const navigationDefinitions: Record<
     section: "operation",
     icon: House,
   },
+  "office-suite": {
+    id: "office-suite",
+    labelKey: "savia.sidebar.items.office-suite",
+    route: "/office-suite",
+    section: "operation",
+    icon: FileText,
+  },
   pages: {
     id: "pages",
     labelKey: "savia.sidebar.items.pages",
@@ -222,6 +230,7 @@ export function useVisibleSidebarNavigation(): {
   layout: SidebarNavigationLayout;
   itemsById: Partial<Record<SidebarNavigationItemId, SidebarNavigationItem>>;
 } {
+  const office = useOfficeAvailability();
   const resources = useResourceDefinitions();
   const { permissions } = usePermissions<AuthPermissions>();
   const hasDashboard = useHasDashboard();
@@ -242,6 +251,7 @@ export function useVisibleSidebarNavigation(): {
     }
 
     const visibleItemIds = sidebarNavigationItemIds.filter((id) => {
+      if (id === "office-suite" && !office.enabled) return false;
       if (
         id.startsWith("domain-") ||
         id === "assistant-configuration" ||
@@ -302,6 +312,7 @@ export function useVisibleSidebarNavigation(): {
     };
   }, [
     canAccess,
+    office.enabled,
     hasDashboard,
     isPending,
     location.pathname,

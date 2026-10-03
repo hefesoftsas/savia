@@ -1,3 +1,4 @@
+import { useOfficeAvailability } from "@/features/office-settings/office-availability";
 import { useMessages } from "@/i18n/core";
 import { recordsMessages } from "@/i18n/locales/records";
 import { FilePenLine } from "lucide-react";
@@ -12,10 +13,12 @@ export function OfficeEditButton({
   file: { id: string; name: string; mime: string; size: number };
   disabled?: boolean;
 }) {
+  const office = useOfficeAvailability();
   const t = useMessages(recordsMessages);
 
   const url = officeEditorUrl(getStudioRuntime().apiBasePath, file.id);
   if (
+    !office.enabled ||
     !url ||
     !officeFormat(file.name, file.mime) ||
     file.size > OFFICE_MAX_SIZE ||

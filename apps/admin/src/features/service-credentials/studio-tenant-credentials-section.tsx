@@ -1,3 +1,5 @@
+import { OfficeSettingsPanel } from "@/features/office-settings/office-settings-panel";
+import { officeSuiteMessages } from "@/features/office-suite/messages";
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
@@ -173,6 +175,7 @@ export function StudioTenantCredentialsSection({
   globalCredentials?: ReactNode;
 }) {
   const t = useMessages(settingsMessages);
+  const officeT = useMessages(officeSuiteMessages);
   const emailT = useMessages(tenantEmailMessages);
   const ssoT = useMessages(tenantSSOMessages);
   const socialT = useMessages(tenantSocialMessages);
@@ -444,7 +447,9 @@ export function StudioTenantCredentialsSection({
     "integrations",
     "sources",
     "email",
-    ...(!isPlatformWorkspace ? ["sso", "social", "registration"] : []),
+    ...(!isPlatformWorkspace
+      ? ["office", "sso", "social", "registration"]
+      : []),
   ].includes(requestedTab)
     ? requestedTab
     : "global";
@@ -698,6 +703,11 @@ export function StudioTenantCredentialsSection({
           >
             {emailT("Tenant email delivery")}
           </CredentialTab>
+          {!isPlatformWorkspace && (
+            <CredentialTab value="office" tooltip={officeT("Office suite")}>
+              {officeT("Office suite")}
+            </CredentialTab>
+          )}
           {!isPlatformWorkspace ? (
             <>
               <CredentialTab value="sso" tooltip={ssoT("Tenant SAML SSO")}>
@@ -733,6 +743,15 @@ export function StudioTenantCredentialsSection({
             {sourcesPanel}
           </TabsContent>
         ) : null}
+        {!isPlatformWorkspace && (
+          <TabsContent value="office" className="credentials-tabs-panel">
+            <OfficeSettingsPanel
+              key={tenant.tenantId}
+              tenantId={tenant.tenantId}
+              services={services}
+            />
+          </TabsContent>
+        )}
         <TabsContent value="email" className="credentials-tabs-panel">
           <TenantEmailSettingsPanel
             key={tenant.tenantId}
