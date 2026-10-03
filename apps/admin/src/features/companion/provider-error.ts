@@ -2,14 +2,19 @@ import { ApiClientError } from "@/api/api-client";
 import type { MessageParams } from "@/i18n/core";
 import { companionMessages } from "@/i18n/locales/companion";
 
-type ProviderOperation = "transcription" | "summary" | "question";
+export type ProviderOperation = "transcription" | "summary" | "question";
+export type ProviderFailure = Readonly<{
+  operation: ProviderOperation;
+  status: number;
+}>;
+export type ProcessingFailure = Readonly<{ kind: "processing-failed" }>;
+export const processingFailure: ProcessingFailure = {
+  kind: "processing-failed",
+};
 type CompanionMessageKey = keyof typeof companionMessages & string;
 type Translate = (key: CompanionMessageKey, params?: MessageParams) => string;
 
-export function providerFailureMessage(
-  error: unknown,
-  t: Translate,
-): string | null {
+export function readProviderFailure(error: unknown): ProviderFailure | null {
   if (!(error instanceof ApiClientError) || !error.details) return null;
   const details = error.details as {
     error?: { providerOperation?: unknown; upstreamStatus?: unknown };
@@ -27,10 +32,17 @@ export function providerFailureMessage(
   )
     return null;
 
+  return { operation, status };
+}
+
+export function providerFailureMessage(
+  failure: ProviderFailure,
+  t: Translate,
+): string {
   const message: Record<ProviderOperation, CompanionMessageKey> = {
     transcription: "Transcription provider returned HTTP %{status}.",
     summary: "Summary provider returned HTTP %{status}.",
     question: "Question provider returned HTTP %{status}.",
   };
-  return t(message[operation], { status });
+  return t(message[failure.operation], { status: failure.status });
 }

@@ -3,7 +3,13 @@ import { Button } from "@/components/ui/button";
 import { useMessages } from "@/i18n/core";
 import { companionMessages } from "@/i18n/locales/companion";
 import type { CompanionRecordingsClient, RecordingAnswer } from "./client";
-import { providerFailureMessage } from "./provider-error";
+import {
+  processingFailure,
+  providerFailureMessage,
+  readProviderFailure,
+  type ProcessingFailure,
+  type ProviderFailure,
+} from "./provider-error";
 
 export function RecordingQuestions({
   id,
@@ -17,21 +23,20 @@ export function RecordingQuestions({
   const [consent, setConsent] = useState(false);
   const [answer, setAnswer] = useState<RecordingAnswer | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<
+    string | ProviderFailure | ProcessingFailure | null
+  >(null);
   const inFlight = useRef(false);
   async function ask() {
     if (!question.trim() || !consent || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
-    setError("");
+    setError(null);
     setAnswer(null);
     try {
       setAnswer(await client.answer(id, question.trim()));
     } catch (error) {
-      setError(
-        providerFailureMessage(error, t) ??
-          t("Processing failed. Check provider usage before trying again."),
-      );
+      setError(readProviderFailure(error) ?? processingFailure);
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -86,7 +91,13 @@ export function RecordingQuestions({
       </form>
       {error && (
         <p role="alert" className="mt-4 text-sm text-destructive">
-          {error}
+          {typeof error === "string"
+            ? error
+            : "kind" in error
+              ? t(
+                  "Processing failed. Check provider usage before trying again.",
+                )
+              : providerFailureMessage(error, t)}
         </p>
       )}
       {answer && (
