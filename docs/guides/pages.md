@@ -137,7 +137,12 @@ again does not reactivate it. Ordinary members cannot change either setting.
 Both controls are enforced by the API, including indexing and querying.
 
 When enabled and available, the Pages search box adds semantic matches backed by
-Cloudflare Workers AI (`@cf/baai/bge-m3`) and a dedicated Vectorize index. Text
+Cloudflare Workers AI (`@cf/baai/bge-m3`) and a dedicated Vectorize index.
+Docker installations can instead run the same authorized semantic-search flow
+with local Ollama `bge-m3` embeddings and Qdrant; see
+[local Pages semantic search](self-hosted-docker.md#local-pages-semantic-search)
+for startup, tenant activation and backup requirements. Cloudflare bindings are
+not required for that deployment. Text
 search remains available when semantic search is disabled or unavailable. Pages
 automatically catches up older saved versions when you open the workspace, with
 visible progress and controls to pause or resume. The information icon beside the

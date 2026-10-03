@@ -1,0 +1,42 @@
+# Add to the self-hosted Compose stack to run Pages semantic search locally.
+services:
+  ollama:
+    image: ollama/ollama:0.11.11
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - pages-models:/root/.ollama
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    restart: unless-stopped
+  pages-model-init:
+    image: ollama/ollama:0.11.11
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: [pull, bge-m3]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    volumes:
+      - pages-vectors:/qdrant/storage
+    restart: unless-stopped
+  savia:
+    environment:
+      SAVIA_PAGES_SEARCH_ENABLED: "true"
+      SAVIA_PAGES_OLLAMA_URL: http://ollama:11434
+      SAVIA_PAGES_QDRANT_URL: http://qdrant:6333
+    depends_on:
+      pages-model-init:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_started
+volumes:
+  pages-models:
+  pages-vectors:
