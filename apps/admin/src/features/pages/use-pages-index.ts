@@ -59,17 +59,15 @@ export function usePagesIndex(api: ApiClient, enabled = true, query = "") {
         request.current++;
         setLoading(false);
         setError(false);
-        setPages((current) =>
-          change.removedId
-            ? current.filter((page) => page.id !== change.removedId)
-            : change.page
-              ? current.some((page) => page.id === change.page!.id)
-                ? current.map((page) =>
-                    page.id === change.page!.id ? change.page! : page,
-                  )
-                : [...current, change.page]
-              : current,
-        );
+        setPages((current) => {
+          const next = current.filter(
+            (page) => page.id !== (change.page?.id ?? change.removedId),
+          );
+          if (change.page) next.push(change.page);
+          return next
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+            .slice(0, 200);
+        });
       }),
     [api, enabled, query, refresh],
   );

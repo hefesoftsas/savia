@@ -34,12 +34,12 @@ class PagesReadCache {
     return structuredClone(entry.value) as T;
   }
 
-  private put(key: string, value: unknown) {
+  private put(key: string, value: unknown, savedAt = Date.now()) {
     if (this.session !== session) return;
     this.entries.delete(key);
     this.entries.set(key, {
       value: structuredClone(value),
-      savedAt: Date.now(),
+      savedAt,
     });
     while (this.entries.size > MAX_ENTRIES)
       this.entries.delete(this.entries.keys().next().value!);
@@ -111,7 +111,7 @@ class PagesReadCache {
       }
       // The server index is bounded and ordered by recent updates.
       next.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-      this.put("list:", next.slice(0, 200));
+      this.put("list:", next.slice(0, 200), index.savedAt);
     }
   }
 

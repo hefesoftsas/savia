@@ -1,3 +1,5 @@
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { usePagesIndex } from "./use-pages-index";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiClient } from "@/api/api-client";
 import { PagesClient, type PageDocument } from "./client";
@@ -36,6 +38,7 @@ function setup() {
   return { api, fetcher, client: new PagesClient(api) };
 }
 afterEach(() => {
+  cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -182,4 +185,36 @@ it("does not populate the next session with a late save response", async () => {
   release(Response.json({ data: { ...page, title: "Private" } }));
   await pending.catch(() => undefined);
   expect(client.cachedDocument("notes")).toBeUndefined();
+});
+
+it.each([30_000, 61_000])(
+  "preserves the original index expiry when saving after %i ms",
+  async (delay) => {
+    vi.useFakeTimers();
+    const { client, fetcher } = setup();
+    await client.list();
+    await vi.advanceTimersByTimeAsync(delay);
+    await client.save("notes", { title: "Renamed", content: [], version: 1 });
+    await vi.advanceTimersByTimeAsync(Math.max(0, 60_000 - delay));
+    expect(client.cachedList()).toBeUndefined();
+    await client.list();
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  },
+);
+
+it("keeps the live index ordered and bounded after saving a page outside the list", async () => {
+  const { api, client, fetcher } = setup();
+  const rows = Array.from({ length: 200 }, (_, i) => ({
+    ...page,
+    id: `row-${i}`,
+    updatedAt: "2026-09-01T00:00:00Z",
+  }));
+  fetcher.mockResolvedValueOnce(Response.json({ data: rows }));
+  const { result } = renderHook(() => usePagesIndex(api));
+  await waitFor(() => expect(result.current.pages).toHaveLength(200));
+  await act(async () => {
+    await client.save("notes", { title: "Latest", content: [], version: 1 });
+  });
+  expect(result.current.pages).toHaveLength(200);
+  expect(result.current.pages[0].id).toBe("notes");
 });
