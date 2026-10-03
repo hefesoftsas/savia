@@ -83,13 +83,17 @@ export const EditButton = (props: EditButtonProps) => {
       className={buttonVariants({
         variant: "outline",
         size: iconOnly ? "icon" : "default",
+        className: "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
       })}
       to={href}
       onClick={stopPropagation}
       aria-label={typeof label === "string" ? label : undefined}
+      title={typeof label === "string" ? label : undefined}
     >
-      <Pencil />
-      {!iconOnly ? label : null}
+      <Pencil aria-hidden="true" />
+      {!iconOnly ? (
+        <span className="sr-only sm:not-sr-only">{label}</span>
+      ) : null}
     </LinkBase>
   );
 

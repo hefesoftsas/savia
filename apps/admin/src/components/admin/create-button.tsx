@@ -66,13 +66,17 @@ export const CreateButton = (props: CreateButtonProps) => {
       className={buttonVariants({
         variant,
         size: iconOnly ? "icon" : "default",
+        className: "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
       })}
       to={href}
       onClick={stopPropagation}
       aria-label={typeof label === "string" ? label : undefined}
+      title={typeof label === "string" ? label : undefined}
     >
-      <Plus />
-      {!iconOnly ? label : null}
+      <Plus aria-hidden="true" />
+      {!iconOnly ? (
+        <span className="sr-only sm:not-sr-only">{label}</span>
+      ) : null}
     </LinkBase>
   );
 

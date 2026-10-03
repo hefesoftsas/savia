@@ -479,7 +479,7 @@ export function PublicLinkManager({
 
   return (
     <section
-      className="grid min-w-0 gap-6 pb-20"
+      className="public-link-manager grid min-w-0 gap-6 pb-20"
       aria-labelledby={`${id}-heading`}
       lang={locale}
     >
@@ -1062,6 +1062,7 @@ export function PublicLinkManager({
                               target="_blank"
                               rel="noopener noreferrer"
                               aria-label={t("Abrir enlace")}
+                              className="max-sm:size-11"
                             >
                               <ExternalLink
                                 className="size-4"

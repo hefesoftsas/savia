@@ -3,6 +3,7 @@ import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { it, expect, vi, afterEach } from "vitest";
 import { screen, fireEvent, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { render } from "./studio-test-render";
 import { setStudioRuntime } from "../runtime";
 import ScreenAdministration from "../screen-administration";
@@ -66,6 +67,35 @@ const loadPreviewWithDependents = async (target: {
   ],
   totalRecords: 9,
   token: "cascade-preview-token",
+});
+it("recovers an inactive screen from its compact actions menu", async () => {
+  Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
+    configurable: true,
+    value: () => false,
+  });
+  const user = userEvent.setup();
+  const onVisibilityChange = vi.fn(async () => undefined);
+  render(
+    <ScreenAdministration
+      objects={objects}
+      selected="screen_0"
+      detail={false}
+      tenantTools
+      onNavigate={vi.fn()}
+      onVisibilityChange={onVisibilityChange}
+      onMenuLayoutChange={vi.fn(async () => undefined)}
+      onDeletePermanent={vi.fn(async () => undefined)}
+      onLoadDeletionPreview={loadDeletionPreview}
+    />,
+  );
+  await user.click(screen.getByRole("button", { name: "Acciones de Oculta" }));
+  await user.click(
+    screen.getByRole("menuitem", { name: "Recuperar en el menú" }),
+  );
+  expect(onVisibilityChange).toHaveBeenCalledWith(
+    expect.objectContaining({ name: "screen_2" }),
+    false,
+  );
 });
 it("lists active screens dynamically and opens the selected screen configuration", () => {
   const navigate = vi.fn();

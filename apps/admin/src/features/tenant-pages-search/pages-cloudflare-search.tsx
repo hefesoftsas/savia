@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, FileText, Folder, Info, Search } from "lucide-react";
+import {
+  ChevronRight,
+  FileText,
+  Info,
+  Folder,
+  Pause,
+  Play,
+  RotateCcw,
+  Search,
+} from "lucide-react";
 import { ApiClientError } from "@/api/api-client";
 import type { PagesClient, PageSummary } from "@/features/pages/client";
 import { subscribePageChanges } from "@/features/pages/page-events";
@@ -583,18 +592,26 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                     onClick={pauseIndexing}
                   >
-                    {t("Pause indexing")}
+                    <Pause aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">
+                      {t("Pause indexing")}
+                    </span>
                   </Button>
                 ) : indexPaused && status.needed.length ? (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                     onClick={resumeIndexing}
                   >
-                    {t("Resume indexing")}
+                    <Play aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">
+                      {t("Resume indexing")}
+                    </span>
                   </Button>
                 ) : null}
                 {indexError && status.needed.length ? (
@@ -602,9 +619,13 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                     onClick={retryIndexing}
                   >
-                    {t("Retry indexing")}
+                    <RotateCcw aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">
+                      {t("Retry indexing")}
+                    </span>
                   </Button>
                 ) : null}
               </div>

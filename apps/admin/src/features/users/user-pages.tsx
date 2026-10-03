@@ -20,6 +20,7 @@ import {
   ShieldOff,
   Trash2,
   Info,
+  UsersRound,
 } from "lucide-react";
 import {
   required,
@@ -256,10 +257,12 @@ function UserDeleteButton({
           event.stopPropagation();
           setConfirmOpen(true);
         }}
-        className="cursor-pointer hover:bg-destructive/10! text-destructive! border-destructive! focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40"
+        className="max-sm:size-11 cursor-pointer hover:bg-destructive/10! text-destructive! border-destructive! focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40"
       >
         <Trash2 className="size-4" />
-        {iconOnly ? null : displayLabel}
+        {iconOnly ? null : (
+          <span className="sr-only sm:not-sr-only">{displayLabel}</span>
+        )}
       </Button>
       <Confirm
         isOpen={confirmOpen}
@@ -340,7 +343,7 @@ function TenantUserScope() {
               label={t(
                 "Este listado muestra únicamente las personas asignadas a este tenant.",
               )}
-              className="size-5 p-0"
+              className="size-11 p-0 sm:size-5"
             >
               <Info className="size-3.5" aria-hidden="true" />
             </IconButtonWithTooltip>
@@ -349,10 +352,18 @@ function TenantUserScope() {
         <div className="flex flex-wrap gap-2">
           {tenantId > 0 && <TenantSignInSettingsLink tenantId={tenantId} />}
           {isPlatformAdmin && (
-            <Button type="button" variant="outline" onClick={clearTenantScope}>
-              {translate("savia.users.viewAllUsers", {
-                _: "Ver todos los usuarios",
-              })}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={clearTenantScope}
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            >
+              <UsersRound aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">
+                {translate("savia.users.viewAllUsers", {
+                  _: "Ver todos los usuarios",
+                })}
+              </span>
             </Button>
           )}
         </div>
@@ -380,7 +391,7 @@ function UserListActions() {
     },
   });
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-wrap items-center justify-end gap-2 [&_button]:max-sm:size-11 [&_a]:max-sm:min-h-11 [&_a]:max-sm:min-w-11">
       <ExportButton
         iconOnly
         label={translate("savia.users.exportExcel", {
@@ -418,7 +429,7 @@ function UserTabbedTable() {
       onValueChange={(value) => setStatus(value as UserStatusView)}
       className="mb-4 gap-2"
     >
-      <TabsList className="group-data-[orientation=horizontal]/tabs:h-auto min-h-9 w-full flex-wrap justify-start overflow-visible [&>[role=tab]]:min-h-8">
+      <TabsList className="group-data-[orientation=horizontal]/tabs:h-auto min-h-11 w-full flex-wrap justify-start overflow-visible [&>[role=tab]]:min-h-11">
         <TabsTrigger value="active">
           {translate("savia.users.tabs.active", { _: "Activos" })}
           <Badge variant="outline" className="hidden md:inline-flex">
@@ -499,7 +510,7 @@ function UserTable({ storeKey }: { storeKey: string }) {
         headerClassName="w-px text-right"
       >
         <div
-          className="flex justify-end gap-2 py-1"
+          className="flex justify-end gap-2 py-1 [&_button]:max-sm:size-11"
           onClick={(event) => event.stopPropagation()}
         >
           <ShowButton iconOnly />
@@ -586,6 +597,7 @@ export function UserEdit() {
               aria-label={translate("savia.users.tabs.ariaLabel", {
                 _: "Configuración del usuario",
               })}
+              className="[&>[role=tab]]:min-h-11"
             >
               <TabsTrigger value="identity">
                 {translate("savia.users.tabs.identity", { _: "Identidad" })}
@@ -653,7 +665,7 @@ function UserEditTitle() {
 function UserEditActions() {
   const translate = useTranslate();
   return (
-    <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-wrap justify-end gap-2 [&_button]:max-sm:size-11 [&_a]:max-sm:min-h-11 [&_a]:max-sm:min-w-11">
       <ShowButton
         iconOnly
         label={translate("savia.users.actions.showCard", { _: "Ver ficha" })}
@@ -693,7 +705,7 @@ function UserShowTitle() {
 function UserShowActions() {
   const translate = useTranslate();
   return (
-    <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-wrap justify-end gap-2 [&_button]:max-sm:size-11 [&_a]:max-sm:min-h-11 [&_a]:max-sm:min-w-11">
       <EditButton
         iconOnly
         label={translate("savia.users.editUser", { _: "Editar usuario" })}
@@ -1155,15 +1167,18 @@ function UserMembershipEditor() {
           type="button"
           disabled={pending}
           onClick={() => void transferMembership()}
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
         >
           <Plus className="size-4" />
-          {record.memberships.length
-            ? translate("savia.users.actions.transfer", {
-                _: "Transferir usuario",
-              })
-            : translate("savia.users.actions.assignTenant", {
-                _: "Asignar tenant",
-              })}
+          <span className="sr-only sm:not-sr-only">
+            {record.memberships.length
+              ? translate("savia.users.actions.transfer", {
+                  _: "Transferir usuario",
+                })
+              : translate("savia.users.actions.assignTenant", {
+                  _: "Asignar tenant",
+                })}
+          </span>
         </Button>
       </div>
     </UserSection>
@@ -1223,6 +1238,7 @@ function UserAccountActions({ record }: { record: UserRecord }) {
         <Button
           type="button"
           variant="outline"
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
           disabled={pending !== null}
           onClick={() =>
             void run(
@@ -1235,13 +1251,16 @@ function UserAccountActions({ record }: { record: UserRecord }) {
           }
         >
           <KeyRound className="size-4" />
-          {translate("savia.users.actions.resendPassword", {
-            _: "Reenviar contraseña",
-          })}
+          <span className="sr-only sm:not-sr-only">
+            {translate("savia.users.actions.resendPassword", {
+              _: "Reenviar contraseña",
+            })}
+          </span>
         </Button>
         <Button
           type="button"
           variant="outline"
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
           disabled={pending !== null}
           onClick={() =>
             void run(
@@ -1254,13 +1273,16 @@ function UserAccountActions({ record }: { record: UserRecord }) {
           }
         >
           <LogOut className="size-4" />
-          {translate("savia.users.actions.revokeSessions", {
-            _: "Cerrar sesiones",
-          })}
+          <span className="sr-only sm:not-sr-only">
+            {translate("savia.users.actions.revokeSessions", {
+              _: "Cerrar sesiones",
+            })}
+          </span>
         </Button>
         <Button
           type="button"
           variant={suspended ? "outline" : "destructive"}
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
           disabled={pending !== null}
           onClick={() =>
             void run(
@@ -1284,13 +1306,15 @@ function UserAccountActions({ record }: { record: UserRecord }) {
           ) : (
             <Ban className="size-4" />
           )}
-          {suspended
-            ? translate("savia.users.actions.reactivate", {
-                _: "Reactivar usuario",
-              })
-            : translate("savia.users.actions.suspend", {
-                _: "Suspender usuario",
-              })}
+          <span className="sr-only sm:not-sr-only">
+            {suspended
+              ? translate("savia.users.actions.reactivate", {
+                  _: "Reactivar usuario",
+                })
+              : translate("savia.users.actions.suspend", {
+                  _: "Suspender usuario",
+                })}
+          </span>
         </Button>
       </div>
     </UserSection>
@@ -1307,7 +1331,7 @@ function UserSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border bg-card p-6 shadow-sm">
+    <section className="rounded-xl border bg-card p-4 shadow-sm sm:p-6">
       <h3 className="font-semibold">{title}</h3>
       <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       <div className="mt-6 grid gap-5 md:grid-cols-2">{children}</div>

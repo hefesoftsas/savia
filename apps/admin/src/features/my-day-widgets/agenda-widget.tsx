@@ -20,6 +20,7 @@ import {
   CalendarDays,
   ExternalLink,
   LoaderCircle,
+  Plus,
   RefreshCw,
 } from "lucide-react";
 import type { PersonalCalendarEvent } from "@/api/personal-integrations-client";
@@ -815,22 +816,27 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
             type="button"
             variant="secondary"
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            title="Agregar tarea"
             onClick={() =>
               document.getElementById("my-day-task")?.focus({
                 preventScroll: false,
               })
             }
           >
-            {t("Agregar tarea")}
+            <Plus aria-hidden="true" className="size-4 sm:hidden" />
+            <span className="sr-only sm:not-sr-only">{t("Agregar tarea")}</span>
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            title="Sincronizar"
             onClick={() => void refresh()}
           >
             <RefreshCw aria-hidden="true" className="size-3.5" />
-            {t("Sincronizar")}
+            <span className="sr-only sm:not-sr-only">{t("Sincronizar")}</span>
           </Button>
         </div>
       </div>

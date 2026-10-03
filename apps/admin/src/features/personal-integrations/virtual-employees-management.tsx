@@ -586,16 +586,19 @@ export function VirtualEmployeesManagement({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-2.5 text-xs gap-1"
+                    className="h-8 px-2.5 text-xs gap-1 max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                     onClick={() => void openEdit(emp)}
                   >
                     <Pencil className="size-3.5" />
-                    {t("Editar")}
+                    <span className="sr-only sm:not-sr-only">
+                      {t("Editar")}
+                    </span>
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+                    aria-label={`${t("Quitar")} ${emp.name}`}
                     onClick={() => void handleDelete(emp)}
                   >
                     <Trash2 className="size-3.5" />
@@ -630,12 +633,22 @@ export function VirtualEmployeesManagement({
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="grid grid-cols-5 w-full">
-              <TabsTrigger value="profile">{t("Perfil")}</TabsTrigger>
-              <TabsTrigger value="prompt">{t("Rol & Prompt")}</TabsTrigger>
-              <TabsTrigger value="collections">{t("Colecciones")}</TabsTrigger>
-              <TabsTrigger value="rag">{t("Base RAG")}</TabsTrigger>
-              <TabsTrigger value="model">{t("Modelo")}</TabsTrigger>
+            <TabsList className="grid h-auto w-full grid-cols-2 sm:h-9 sm:grid-cols-5">
+              <TabsTrigger className="min-h-11 sm:min-h-0" value="profile">
+                {t("Perfil")}
+              </TabsTrigger>
+              <TabsTrigger className="min-h-11 sm:min-h-0" value="prompt">
+                {t("Rol & Prompt")}
+              </TabsTrigger>
+              <TabsTrigger className="min-h-11 sm:min-h-0" value="collections">
+                {t("Colecciones")}
+              </TabsTrigger>
+              <TabsTrigger className="min-h-11 sm:min-h-0" value="rag">
+                {t("Base RAG")}
+              </TabsTrigger>
+              <TabsTrigger className="min-h-11 sm:min-h-0" value="model">
+                {t("Modelo")}
+              </TabsTrigger>
             </TabsList>
 
             {/* TAB 1: PERFIL */}
@@ -691,7 +704,9 @@ export function VirtualEmployeesManagement({
                       key={key}
                       type="button"
                       onClick={() => setAvatar(key)}
-                      className={`flex size-10 items-center justify-center rounded-xl border transition ${
+                      aria-label={key}
+                      aria-pressed={avatar === key}
+                      className={`flex size-11 items-center justify-center rounded-xl border transition ${
                         avatar === key
                           ? "border-primary bg-primary/15 text-primary shadow-xs ring-2 ring-primary/30"
                           : "border-border bg-card text-muted-foreground hover:border-primary/50"
@@ -802,7 +817,7 @@ export function VirtualEmployeesManagement({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs px-2"
+                        className="h-7 text-xs px-2 max-sm:h-11"
                         onClick={selectAllCollections}
                         disabled={filteredCollections.length === 0}
                       >
@@ -812,7 +827,7 @@ export function VirtualEmployeesManagement({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs px-2 text-muted-foreground hover:text-destructive"
+                        className="h-7 text-xs px-2 text-muted-foreground hover:text-destructive max-sm:h-11"
                         onClick={clearSelectedCollections}
                         disabled={selectedCollections.length === 0}
                       >
@@ -961,8 +976,9 @@ export function VirtualEmployeesManagement({
                               <button
                                 type="button"
                                 onClick={() => toggleCollection(colName)}
-                                className="ml-1 hover:text-destructive text-muted-foreground transition"
+                                className="ml-1 hover:text-destructive text-muted-foreground transition max-sm:ml-0 max-sm:flex max-sm:size-11 max-sm:shrink-0 max-sm:items-center max-sm:justify-center"
                                 title={t("Quitar")}
+                                aria-label={`${t("Quitar")} ${colName}`}
                               >
                                 ×
                               </button>
@@ -1087,7 +1103,8 @@ export function VirtualEmployeesManagement({
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="size-7 p-0 text-destructive hover:bg-destructive/10"
+                              className="size-7 p-0 text-destructive hover:bg-destructive/10 max-sm:size-11"
+                              aria-label={`${t("Quitar")} ${file.name}`}
                               onClick={() => void handleDeleteFile(file.id)}
                             >
                               <Trash2 className="size-3.5" />

@@ -1,5 +1,12 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { render } from "../studio-engine/test/locale-test-render";
 import { afterEach, expect, it, vi } from "vitest";
 import { MyDayWidgetsSection } from "./section";
@@ -57,7 +64,7 @@ it("hides mail without connected account without rewriting saved layout", async 
   expect(screen.queryByTestId("my-day-widget-mail")).not.toBeInTheDocument();
   expect(preferences.saveMyDayWidgets).not.toHaveBeenCalled();
 });
-it("offers inbox restoration for existing layouts and disables at twelve widgets", async () => {
+it("disables adding widgets at twelve widgets without a separate mail shortcut", async () => {
   const preferences = {
     getMyDayWidgets: vi.fn(async () => ({
       version: 1,
@@ -74,10 +81,52 @@ it("offers inbox restoration for existing layouts and disables at twelve widgets
       userPreferences={preferences as never}
     />,
   );
+  await screen.findByTestId("my-day-widget-agenda_0");
   expect(
-    await screen.findByRole("button", { name: "Mostrar correos" }),
-  ).toBeDisabled();
+    screen.queryByRole("button", { name: "Mostrar correos" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Agregar widget" })).toBeDisabled();
+});
+it("restores the connected inbox through Add widget and saves the layout", async () => {
+  Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
+    configurable: true,
+    value: () => false,
+  });
+  Object.defineProperty(HTMLElement.prototype, "setPointerCapture", {
+    configurable: true,
+    value: vi.fn(),
+  });
+  Object.defineProperty(HTMLElement.prototype, "releasePointerCapture", {
+    configurable: true,
+    value: vi.fn(),
+  });
+  const user = userEvent.setup();
+  const preferences = {
+    getMyDayWidgets: vi.fn(async () => ({ version: 1, widgets: [] })),
+    saveMyDayWidgets: vi.fn(async (layout: unknown) => layout),
+  };
+  render(
+    <MyDayWidgetsSection
+      personalIntegrations={service()}
+      userPreferences={preferences as never}
+    />,
+  );
+  await screen.findByTestId("my-day-widgets-empty");
+  await user.click(screen.getByRole("button", { name: "Agregar widget" }));
+  const dialog = await screen.findByRole("dialog", { name: "Agregar widget" });
+  await user.click(within(dialog).getByRole("button", { name: "Personal" }));
+  await user.click(
+    within(dialog).getByRole("combobox", { name: "Widget del sistema" }),
+  );
+  await user.click(screen.getByRole("option", { name: "Bandeja de correo" }));
+  await user.click(
+    within(dialog).getByRole("button", { name: "Agregar widget" }),
+  );
+  expect(await screen.findByText("Mail in My Day")).toBeInTheDocument();
+  expect(preferences.saveMyDayWidgets).toHaveBeenCalledWith({
+    version: 1,
+    widgets: [{ id: "mail", kind: "mail" }],
+  });
 });
 it("shows connection lookup failure outside hidden mail card", async () => {
   const client = service(false);

@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { useTranslate } from "ra-core";
 import { Button } from "@/components/ui/button";
-import {
-  notificationClient,
-  type NotificationClient,
-} from "./client";
+import { notificationClient, type NotificationClient } from "./client";
 
 export function AdminNoticeForm({
   scope,
@@ -43,16 +40,23 @@ export function AdminNoticeForm({
           ? { kind: "workspace-members" }
           : {
               kind: "explicit",
-              principals: principals.split(",").map((entry) => entry.trim()).filter(Boolean),
+              principals: principals
+                .split(",")
+                .map((entry) => entry.trim())
+                .filter(Boolean),
             },
       });
       setNotice(
-        result.duplicate ? t("duplicateAccepted") : `${t("accepted")}: ${result.eventId}`,
+        result.duplicate
+          ? t("duplicateAccepted")
+          : `${t("accepted")}: ${result.eventId}`,
       );
       onSent?.(result.eventId);
     } catch (exception) {
       setError(
-        String(exception).includes("429") ? t("quotaExceeded") : t("actionError"),
+        String(exception).includes("429")
+          ? t("quotaExceeded")
+          : t("actionError"),
       );
     } finally {
       setBusy(false);
@@ -72,7 +76,7 @@ export function AdminNoticeForm({
       <label className="flex flex-col gap-1 text-sm">
         {t("adminSubject")}
         <input
-          className="rounded border px-2 py-1"
+          className="min-h-11 rounded border px-2 py-2"
           value={title}
           maxLength={200}
           onChange={(event) => setTitle(event.target.value)}
@@ -82,7 +86,7 @@ export function AdminNoticeForm({
       <label className="flex flex-col gap-1 text-sm">
         {t("adminBody")}
         <textarea
-          className="rounded border px-2 py-1"
+          className="min-h-24 rounded border px-2 py-2"
           value={body}
           maxLength={4000}
           onChange={(event) => setBody(event.target.value)}
@@ -90,6 +94,7 @@ export function AdminNoticeForm({
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input
+          className="size-5"
           type="checkbox"
           checked={allMembers}
           onChange={(event) => setAllMembers(event.target.checked)}
@@ -100,7 +105,7 @@ export function AdminNoticeForm({
         <label className="flex flex-col gap-1 text-sm">
           {t("adminRecipients")}
           <input
-            className="rounded border px-2 py-1"
+            className="min-h-11 rounded border px-2 py-2"
             value={principals}
             placeholder="alice, bob"
             onChange={(event) => setPrincipals(event.target.value)}
@@ -110,7 +115,12 @@ export function AdminNoticeForm({
       )}
       {notice && <p role="status">{notice}</p>}
       {error && <p role="alert">{error}</p>}
-      <Button type="submit" size="sm" disabled={busy || !title.trim()}>
+      <Button
+        type="submit"
+        size="sm"
+        className="max-sm:h-11"
+        disabled={busy || !title.trim()}
+      >
         {t("adminSend")}
       </Button>
     </form>

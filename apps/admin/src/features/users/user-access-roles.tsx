@@ -1,5 +1,6 @@
 import { useAccessRealtime } from "@/realtime/use-access-realtime";
 import { useEffect, useRef } from "react";
+import { RotateCcw } from "lucide-react";
 import { useWatch } from "react-hook-form";
 import { useInput } from "ra-core";
 import { useQuery } from "@tanstack/react-query";
@@ -54,9 +55,13 @@ export function UserAccessRoles() {
           <Button
             type="button"
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             onClick={() => void roles.refetch()}
           >
-            {t("Reload permissions")}
+            <RotateCcw aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">
+              {t("Reload permissions")}
+            </span>
           </Button>
         </div>
       ) : available.length === 0 ? (

@@ -1,5 +1,6 @@
 import { useMessages } from "@/i18n/core";
 import { accessMessages } from "@/i18n/locales/access";
+import { Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { AccessCatalog, RoleInput } from "@/api/access-control-client";
@@ -11,7 +12,7 @@ const emptyCondition = (): AccessPredicate => ({
   value: { literal: "" },
 });
 const selectClass =
-  "h-9 rounded-md border bg-background px-2 text-sm focus-visible:ring-2 focus-visible:ring-ring";
+  "h-11 rounded-md border bg-background px-2 text-sm focus-visible:ring-2 focus-visible:ring-ring sm:h-9";
 export function PredicateEditor({
   value,
   onChange,
@@ -70,9 +71,9 @@ export function PredicateEditor({
         <option value="or">{t("Any condition matches")}</option>
       </select>
       {("and" in value || "or" in value) && (
-        <div className="ml-3 space-y-3 border-l pl-3">
+        <div className="ml-2 min-w-0 space-y-3 border-l pl-2 sm:ml-3 sm:pl-3">
           {("and" in value ? value.and : value.or).map((p, i) => (
-            <div key={i} className="flex flex-wrap items-start gap-2">
+            <div key={i} className="flex min-w-0 flex-wrap items-start gap-2">
               <PredicateEditor
                 entry={entry}
                 value={p}
@@ -87,6 +88,7 @@ export function PredicateEditor({
               <Button
                 type="button"
                 variant="ghost"
+                className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                 onClick={() => {
                   const children = (
                     "and" in value ? value.and : value.or
@@ -100,13 +102,17 @@ export function PredicateEditor({
                   );
                 }}
               >
-                {t("Remove condition")}
+                <Trash2 aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">
+                  {t("Remove condition")}
+                </span>
               </Button>
             </div>
           ))}
           <Button
             type="button"
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             onClick={() =>
               onChange(
                 "and" in value
@@ -115,7 +121,8 @@ export function PredicateEditor({
               )
             }
           >
-            {t("Add condition")}
+            <Plus aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">{t("Add condition")}</span>
           </Button>
         </div>
       )}
@@ -158,7 +165,7 @@ export function PredicateEditor({
           </select>
           <Input
             aria-label={t("Condition value")}
-            className="w-40"
+            className="w-full min-w-0 sm:w-40"
             value={
               "value" in value && "literal" in value.value
                 ? String(value.value.literal ?? "")
