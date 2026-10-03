@@ -2,6 +2,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { StoreContextProvider, memoryStore } from "ra-core";
+import { ApiClientError } from "@/api/api-client";
 import { RecordingQuestions } from "./recording-questions";
 afterEach(cleanup);
 it("requires consent, shows insufficient evidence, and clears answers on recording change", async () => {
@@ -36,4 +37,38 @@ it("requires consent, shows insufficient evidence, and clears answers on recordi
   view.rerender(show("two"));
   expect(screen.queryByText("No budget was agreed.")).not.toBeInTheDocument();
   expect(screen.getByRole("checkbox")).not.toBeChecked();
+});
+
+it("shows safe provider diagnostics after one rejected question request", async () => {
+  const answer = vi.fn().mockRejectedValue(
+    new ApiClientError(
+      502,
+      "PROVIDER_REQUEST_FAILED",
+      "Provider request failed",
+      {
+        error: {
+          code: "PROVIDER_REQUEST_FAILED",
+          message: "Provider request failed",
+          providerOperation: "question",
+          upstreamStatus: 401,
+        },
+      },
+    ),
+  );
+  const user = userEvent.setup();
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingQuestions id="one" client={{ answer }} />
+    </StoreContextProvider>,
+  );
+  await user.type(screen.getByLabelText("Your question"), "Who agreed?");
+  await user.click(screen.getByRole("checkbox"));
+  await user.click(screen.getByRole("button", { name: "Ask about recording" }));
+
+  expect(
+    await screen.findByText(
+      "Question provider returned HTTP 401. Check provider usage before trying again.",
+    ),
+  ).toBeVisible();
+  expect(answer).toHaveBeenCalledExactlyOnceWith("one", "Who agreed?");
 });

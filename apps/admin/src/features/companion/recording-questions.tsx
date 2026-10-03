@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useMessages } from "@/i18n/core";
 import { companionMessages } from "@/i18n/locales/companion";
 import type { CompanionRecordingsClient, RecordingAnswer } from "./client";
+import { providerFailureMessage } from "./provider-error";
 
 export function RecordingQuestions({
   id,
@@ -16,18 +17,21 @@ export function RecordingQuestions({
   const [consent, setConsent] = useState(false);
   const [answer, setAnswer] = useState<RecordingAnswer | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const inFlight = useRef(false);
   async function ask() {
     if (!question.trim() || !consent || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
-    setError(false);
+    setError("");
     setAnswer(null);
     try {
       setAnswer(await client.answer(id, question.trim()));
-    } catch {
-      setError(true);
+    } catch (error) {
+      setError(
+        providerFailureMessage(error, t) ??
+          t("Processing failed. Check provider usage before trying again."),
+      );
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -82,7 +86,7 @@ export function RecordingQuestions({
       </form>
       {error && (
         <p role="alert" className="mt-4 text-sm text-destructive">
-          {t("Processing failed. Check provider usage before trying again.")}
+          {error}
         </p>
       )}
       {answer && (

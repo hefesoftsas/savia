@@ -105,6 +105,21 @@ export const companionMessages = {
     "Processing failed. Check provider usage before trying again.",
     "O processamento falhou. Confira o uso do provedor antes de tentar novamente.",
   ],
+  "Transcription provider returned HTTP %{status}.": [
+    "El proveedor de transcripción respondió HTTP %{status}. Revisa el consumo del proveedor antes de reintentar.",
+    "Transcription provider returned HTTP %{status}. Check provider usage before trying again.",
+    "O provedor de transcrição respondeu HTTP %{status}. Confira o uso do provedor antes de tentar novamente.",
+  ],
+  "Summary provider returned HTTP %{status}.": [
+    "El proveedor de resúmenes respondió HTTP %{status}. Revisa el consumo del proveedor antes de reintentar.",
+    "Summary provider returned HTTP %{status}. Check provider usage before trying again.",
+    "O provedor de resumo respondeu HTTP %{status}. Confira o uso do provedor antes de tentar novamente.",
+  ],
+  "Question provider returned HTTP %{status}.": [
+    "El proveedor respondió HTTP %{status} al contestar la pregunta. Revisa el consumo del proveedor antes de reintentar.",
+    "Question provider returned HTTP %{status}. Check provider usage before trying again.",
+    "O provedor respondeu HTTP %{status} ao responder à pergunta. Confira o uso do provedor antes de tentar novamente.",
+  ],
   "Loading recording…": [
     "Cargando grabación…",
     "Loading recording…",

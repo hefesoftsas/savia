@@ -47,6 +47,10 @@ production remains disabled until explicitly configured.
   transcription provider accepts it. A processing failure preserves the saved
   audio and any successfully saved transcript. Processing is never automatically
   retried.
+- When OpenRouter rejects a processing request, Savia shows the operation and
+  upstream HTTP status. Provider response content and credentials are not shown.
+  If transcription completed before a later summary failure, reload the saved
+  notes to recover the transcript and retry only the summary when appropriate.
 
 ## API
 

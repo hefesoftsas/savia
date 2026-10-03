@@ -136,3 +136,33 @@ backend/provider diagnosis. Native connection/upload, successful preview summary
 persistence, real grounded answers and a successful CoreAudio capture remain
 unverified. Integration must follow the documented main → CI → preview workflow;
 no production deployment or provider configuration change was performed here.
+
+
+## Preview connection and upload — 2026-10-03
+
+PR #124 was merged and deployed successfully to preview (commit
+`ad4abf62313cc8608c91c6665001c5127f6816f5`). After action-time approval, the account
+UI created **Companion preview**, bound to **Plataforma Savia**, with
+`recordings:read` and `recordings:upload` and a seven-day expiry. The one-time
+secret was entered only into the native application's secure credential field;
+it was not saved to a file or printed. The account reveal was dismissed.
+The freshly compiled native application displayed **Connected** against
+`https://savia-preview.hefesoft.com`.
+
+A microphone-only attempt ended with the bounded message that microphone
+permission did not resolve within 60 seconds. Inspection located this wait in
+the macOS authorization helper, before the CPAL microphone worker starts. No
+native audio was uploaded. This does not prove an audio worker startup failure.
+
+A new synthetic Spanish WAV (13.0 seconds, 410 KiB) uploaded through the signed-in
+web recordings page and remained listed after a reload. It contains only a
+fabricated meeting about publishing a Friday test, Ana reviewing audio, Luis
+preparing a summary, and an undecided budget. This validates web upload and
+persistence on the new deployment, not native upload.
+
+The earlier processing retry returned HTTP 502 without a transcript. Successful
+preview transcription, summary and grounded question answering remain
+unverified. A diagnostic increment adds the fixed
+processing stage and upstream HTTP status without exposing provider response
+bodies, audio, prompts, headers or credentials. No provider configuration was
+changed and no additional provider request was made during this connection run.

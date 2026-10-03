@@ -2,6 +2,7 @@ import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { StoreContextProvider, memoryStore } from "ra-core";
+import { ApiClientError } from "@/api/api-client";
 import { CompanionRecordingsPage } from "./recordings-page";
 import type { CompanionRecordingsClient } from "./client";
 const recording = {
@@ -64,6 +65,81 @@ it("requires consent before processing and restores saved notes after remount", 
   show(client);
   expect(await screen.findByText("Backend saved notes")).toBeVisible();
   expect(client.generate).toHaveBeenCalledTimes(1);
+});
+
+it("shows safe provider diagnostics and recovers a transcript after summary processing fails", async () => {
+  const client = mockClient();
+  client.generate.mockRejectedValue(
+    new ApiClientError(
+      502,
+      "PROVIDER_REQUEST_FAILED",
+      "Provider request failed",
+      {
+        error: {
+          code: "PROVIDER_REQUEST_FAILED",
+          message: "Provider request failed",
+          providerOperation: "summary",
+          upstreamStatus: 429,
+        },
+      },
+    ),
+  );
+  client.notes.mockResolvedValue({
+    transcript: {
+      text: "A transcript persisted before summary generation failed.",
+      source: "system",
+      model: "openai/whisper-large-v3",
+      durationSeconds: 10,
+    },
+    summary: null,
+  });
+  const user = userEvent.setup();
+  show(client);
+  await user.click(await screen.findByRole("checkbox"));
+  await user.click(screen.getByRole("button", { name: "Generate summary" }));
+
+  expect(
+    await screen.findByText(
+      "Summary provider returned HTTP 429. Check provider usage before trying again.",
+    ),
+  ).toBeVisible();
+  expect(
+    await screen.findByText(
+      "A transcript persisted before summary generation failed.",
+    ),
+  ).toBeInTheDocument();
+  expect(client.notes).toHaveBeenCalledWith("one");
+});
+
+it("ignores unrecognized provider diagnostic values", async () => {
+  const client = mockClient();
+  client.generate.mockRejectedValue(
+    new ApiClientError(
+      502,
+      "PROVIDER_REQUEST_FAILED",
+      "Provider request failed",
+      {
+        error: {
+          code: "PROVIDER_REQUEST_FAILED",
+          message: "Provider request failed",
+          providerOperation: "transcription\nprivate detail",
+          upstreamStatus: "429 private detail",
+        },
+      },
+    ),
+  );
+  client.notes.mockResolvedValue({ transcript: null, summary: null });
+  const user = userEvent.setup();
+  show(client);
+  await user.click(await screen.findByRole("checkbox"));
+  await user.click(screen.getByRole("button", { name: "Generate summary" }));
+
+  expect(
+    await screen.findByText(
+      "Processing failed. Check provider usage before trying again.",
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText(/private detail/)).not.toBeInTheDocument();
 });
 it("exposes an empty state without fictional samples", async () => {
   const client = mockClient();

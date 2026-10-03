@@ -18,6 +18,7 @@ import {
 
 import { RecordingQuestions } from "./recording-questions";
 import { RecordingUpload } from "./recording-upload";
+import { providerFailureMessage } from "./provider-error";
 
 // Operate: an owner-private audio inbox, using Savia's neutral surfaces and
 // emerald actions. The list leads to one listening/review workspace; generated
@@ -161,11 +162,12 @@ export function CompanionRecordingsPage({
     try {
       const result = await client.generate(selected.id);
       if (mounted.current) setNotes(result);
-    } catch {
+    } catch (error) {
       if (mounted.current) {
-        setError(
-          t("Processing failed. Check provider usage before trying again."),
-        );
+        const diagnosticMessage =
+          providerFailureMessage(error, t) ??
+          t("Processing failed. Check provider usage before trying again.");
+        setError(diagnosticMessage);
         const partial = await client.notes(selected.id).catch(() => null);
         if (mounted.current && partial) setNotes(partial);
       }
