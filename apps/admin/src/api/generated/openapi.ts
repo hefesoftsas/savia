@@ -6417,7 +6417,135 @@ export interface paths {
           content: {
             "application/json": {
               data: {
-                [key: string]: unknown;
+                reservation: {
+                  /** Format: uuid */
+                  id: string;
+                  /** Format: uuid */
+                  serviceId: string;
+                  /** Format: uuid */
+                  professionalId: string;
+                  serviceName: string;
+                  professionalName: string;
+                  startsAt: string;
+                  endsAt: string;
+                  customerName: string;
+                  customerEmail: string;
+                  /** @enum {string} */
+                  status: "confirmed" | "cancelled";
+                  version: number;
+                  deliveryStatus: string;
+                  calendarStatus: string;
+                };
+                publicUrl: string | null;
+                timeZone: string;
+                cancellationMinutes: number;
+                horizonDays: number;
+                leadMinutes: number;
+                canReschedule: boolean;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/manage/{token}/availability": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          serviceId: string;
+          professionalId?: string;
+          from: string;
+          to: string;
+          displayTimeZone?: string;
+        };
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                displayTimeZone: string;
+                businessTimeZone: string;
+                days: {
+                  date: string;
+                  slots: {
+                    startsAt: string;
+                    endsAt: string;
+                  }[];
+                }[];
               };
             };
           };

@@ -5,6 +5,9 @@ import {
   type AvailabilityRange,
   type ResolvedBookingLink,
   type BusyInterval,
+  type BookingSettings,
+  type BookingProfessional,
+  type BookingService,
 } from "./contracts";
 import { assertBookingLinkSelection } from "./public-links";
 import { dateInZone, slotsForDate } from "./domain";
@@ -34,14 +37,45 @@ export async function getPublicAvailability(
       query.serviceId,
       query.professionalId,
     );
-  const displayTimeZone = query.displayTimeZone ?? link.settings.timeZone,
+  const professional = link.settings.professionals.find(
+    (p) => p.id === selection.professionalId,
+  )!;
+  const service = link.settings.services.find(
+    (s) => s.id === selection.serviceId,
+  )!;
+  return getBookingAvailability(
+    { settings: link.settings, professional, service },
+    query,
+    deps,
+  );
+}
+
+/** Both public booking and private management use the same trusted schedule. */
+export async function getBookingAvailability(
+  context: {
+    settings: BookingSettings;
+    professional: BookingProfessional;
+    service: BookingService;
+  },
+  input: Pick<AvailabilityRangeQuery, "from" | "to" | "displayTimeZone">,
+  deps: PublicAvailabilityDependencies,
+): Promise<AvailabilityRange> {
+  const { settings, professional, service } = context;
+  const parsed = availabilityRangeQuerySchema.safeParse({
+    ...input,
+    serviceId: service.id,
+    professionalId: professional.id,
+  });
+  if (!parsed.success)
+    throw new HTTPException(422, {
+      message: "Choose a valid time zone and a range of at most 31 dates.",
+    });
+  const query = parsed.data;
+  const displayTimeZone = query.displayTimeZone ?? settings.timeZone,
     now = deps.now();
   const first = Date.parse(query.from + "T00:00:00Z"),
     last = Date.parse(query.to + "T00:00:00Z");
-  if (
-    first < now - 35 * day ||
-    first > now + (link.settings.horizonDays + 32) * day
-  )
+  if (first < now - 35 * day || first > now + (settings.horizonDays + 32) * day)
     throw new HTTPException(422, {
       message: "Choose a date in the booking horizon.",
     });
@@ -54,15 +88,9 @@ export async function getPublicAvailability(
   );
   const output = {
     displayTimeZone,
-    businessTimeZone: link.settings.timeZone,
+    businessTimeZone: settings.timeZone,
     days,
   };
-  const professional = link.settings.professionals.find(
-    (p) => p.id === selection.professionalId,
-  )!;
-  const service = link.settings.services.find(
-    (s) => s.id === selection.serviceId,
-  )!;
   // ±36h covers the full range of IANA offsets and adjacent business dates;
   // trailing duration/buffer is included when querying occupied intervals.
   const from = new Date(first - 36 * 3600000).toISOString();
@@ -72,21 +100,21 @@ export async function getPublicAvailability(
       (service.durationMinutes + service.bufferMinutes) * 60000,
   ).toISOString();
   if (
-    Date.parse(to) < now + link.settings.leadMinutes * 60000 ||
-    Date.parse(from) > now + link.settings.horizonDays * day
+    Date.parse(to) < now + settings.leadMinutes * 60000 ||
+    Date.parse(from) > now + settings.horizonDays * day
   )
     return output;
   const busy = await deps.loadBusy(professional.principalId, from, to);
   const buckets = new Map(days.map((d) => [d.date, d.slots]));
   const businessStart = Date.parse(
-    dateInZone(from, link.settings.timeZone) + "T00:00:00Z",
+    dateInZone(from, settings.timeZone) + "T00:00:00Z",
   );
   const businessEnd = Date.parse(
-    dateInZone(to, link.settings.timeZone) + "T00:00:00Z",
+    dateInZone(to, settings.timeZone) + "T00:00:00Z",
   );
   for (let date = businessStart; date <= businessEnd; date += day) {
     for (const slot of slotsForDate(
-      link.settings,
+      settings,
       professional,
       service,
       new Date(date).toISOString().slice(0, 10),

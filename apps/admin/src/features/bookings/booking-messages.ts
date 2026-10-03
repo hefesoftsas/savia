@@ -538,6 +538,49 @@ export const bookingMessages = {
     "This booking could not be rescheduled. Refresh the times and retry.",
     "Não foi possível remarcar. Atualize os horários e tente novamente.",
   ],
+  "Choose a new time": [
+    "Elige un nuevo horario",
+    "Choose a new time",
+    "Escolha um novo horário",
+  ],
+  "Review your change": [
+    "Revisa el cambio",
+    "Review your change",
+    "Revise a alteração",
+  ],
+  "Current appointment": [
+    "Cita actual",
+    "Current appointment",
+    "Agendamento atual",
+  ],
+  "Updated appointment": [
+    "Cita actualizada",
+    "Updated appointment",
+    "Agendamento atualizado",
+  ],
+  "Your appointment has been updated.": [
+    "Tu cita se actualizó.",
+    "Your appointment has been updated.",
+    "Seu agendamento foi atualizado.",
+  ],
+  "Stop rescheduling": [
+    "Dejar de cambiar la cita",
+    "Stop rescheduling",
+    "Parar de remarcar",
+  ],
+  Continue: ["Continuar", "Continue", "Continuar"],
+  Back: ["Atrás", "Back", "Voltar"],
+  "Confirm reschedule": [
+    "Confirmar el cambio",
+    "Confirm reschedule",
+    "Confirmar alteração",
+  ],
+  "Saving…": ["Guardando…", "Saving…", "Salvando…"],
+  "To change this appointment, contact the booking business.": [
+    "Para cambiar esta cita, contacta al negocio que la reservó.",
+    "To change this appointment, contact the booking business.",
+    "Para alterar este agendamento, entre em contato com a empresa.",
+  ],
   "Calendar needs reconnection": [
     "Se debe volver a conectar el calendario",
     "Calendar needs reconnection",

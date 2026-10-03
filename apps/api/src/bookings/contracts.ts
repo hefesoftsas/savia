@@ -150,6 +150,15 @@ export const reservationSchema = z.object({
   deliveryStatus: z.string(),
   calendarStatus: z.string(),
 });
+export const managementBootstrapSchema = z.object({
+  reservation: reservationSchema,
+  publicUrl: z.string().nullable(),
+  timeZone: zone,
+  cancellationMinutes: z.number().int().nonnegative(),
+  horizonDays: z.number().int().positive(),
+  leadMinutes: z.number().int().nonnegative(),
+  canReschedule: z.boolean(),
+});
 export type Reservation = z.infer<typeof reservationSchema>;
 export const publicBookingSchema = z
   .object({

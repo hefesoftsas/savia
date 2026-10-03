@@ -18,6 +18,7 @@ import {
   bootstrapSchema,
   settingsSchema,
   reservationSchema,
+  managementBootstrapSchema,
   revisionSchema,
   ownAvailabilitySchema,
   calendarGrantSchema,
@@ -37,7 +38,10 @@ import {
   bookingLinkToken,
   type BookingLinkRow,
 } from "./public-links";
-import { getPublicAvailability } from "./public-availability";
+import {
+  getPublicAvailability,
+  getBookingAvailability,
+} from "./public-availability";
 import { admitBookingRequest, findBookingAdmission } from "./public-policy";
 import { digest, dateInZone, slotsForDate } from "./domain";
 import {
@@ -302,6 +306,40 @@ export function registerBookingRoutes(
       },
     };
   }
+  async function loadBusy(
+    tenantId: number,
+    principalId: string,
+    from: string,
+    to: string,
+    exceptId?: string,
+  ) {
+    const busy = await nativeBusy(
+      db,
+      tenantId,
+      principalId,
+      from,
+      to,
+      exceptId,
+    );
+    const grant = await readGrant(db, tenantId, principalId);
+    if (grant) {
+      if (!calendar) throw unavailable();
+      try {
+        busy.push(
+          ...(await calendar.busy({
+            principalId,
+            provider: grant.provider,
+            connectionId: grant.connection_id,
+            from,
+            to,
+          })),
+        );
+      } catch {
+        throw unavailable();
+      }
+    }
+    return { busy, grant };
+  }
   async function slots(
     state: { tenantId: number; settings: BookingSettings },
     query: z.infer<typeof slotQuerySchema>,
@@ -330,31 +368,13 @@ export function registerBookingRoutes(
       });
     const from = new Date(center - 36 * 3600000).toISOString(),
       to = new Date(center + 36 * 3600000).toISOString();
-    const busy = await nativeBusy(
-        db,
-        state.tenantId,
-        professional.principalId,
-        from,
-        to,
-        exceptId,
-      ),
-      grant = await readGrant(db, state.tenantId, professional.principalId);
-    if (grant) {
-      if (!calendar) throw unavailable();
-      try {
-        busy.push(
-          ...(await calendar.busy({
-            principalId: professional.principalId,
-            provider: grant.provider,
-            connectionId: grant.connection_id,
-            from,
-            to,
-          })),
-        );
-      } catch {
-        throw unavailable();
-      }
-    }
+    const { busy, grant } = await loadBusy(
+      state.tenantId,
+      professional.principalId,
+      from,
+      to,
+      exceptId,
+    );
     return {
       professional,
       service,
@@ -784,33 +804,8 @@ export function registerBookingRoutes(
         parsed(availabilityRangeQuerySchema, c.req.query()),
         {
           now,
-          loadBusy: async (principalId, from, to) => {
-            const busy = await nativeBusy(
-                db,
-                link.tenantId,
-                principalId,
-                from,
-                to,
-              ),
-              grant = await readGrant(db, link.tenantId, principalId);
-            if (grant) {
-              if (!calendar) throw unavailable();
-              try {
-                busy.push(
-                  ...(await calendar.busy({
-                    principalId,
-                    provider: grant.provider,
-                    connectionId: grant.connection_id,
-                    from,
-                    to,
-                  })),
-                );
-              } catch {
-                throw unavailable();
-              }
-            }
-            return busy;
-          },
+          loadBusy: async (principalId, from, to) =>
+            (await loadBusy(link.tenantId, principalId, from, to)).busy,
         },
       );
       return c.json({ data: result });
@@ -946,34 +941,136 @@ export function registerBookingRoutes(
     z.object({ reservation: reservationSchema, managementUrl: z.string() }),
     true,
   );
+  const cutoff = (row: BookingRow, settings: BookingSettings) => {
+    if (
+      Date.parse(row.starts_at) - now() <
+      settings.cancellationMinutes * 60000
+    )
+      throw new HTTPException(409, {
+        message:
+          "The cancellation or rescheduling deadline has passed. Contact the business.",
+      });
+  };
+  async function reschedulingContext(
+    row: BookingRow,
+    state: Awaited<ReturnType<typeof readSettings>>,
+  ) {
+    cutoff(row, state.settings);
+    if (row.status !== "confirmed") throw conflict();
+    // The private capability remains independent of public sharing-link lifecycle.
+    await publishedSettings(db, state.publicToken ?? "");
+    const professional = state.settings.professionals.find(
+      (p) => p.id === row.professional_id && p.enabled,
+    );
+    const service = state.settings.services.find(
+      (s) =>
+        s.id === row.service_id &&
+        s.enabled &&
+        s.professionalIds.includes(row.professional_id),
+    );
+    if (
+      !professional ||
+      professional.principalId !== row.principal_id ||
+      !service
+    )
+      throw new HTTPException(404, {
+        message: "Service or professional unavailable.",
+      });
+    if (
+      !(await candidates(db, row.tenant_id)).some(
+        (p) => p.principalId === professional.principalId,
+      )
+    )
+      throw conflict();
+    if (
+      service.durationMinutes !==
+        (Date.parse(row.ends_at) - Date.parse(row.starts_at)) / 60000 ||
+      service.bufferMinutes !== row.buffer_minutes
+    )
+      throw new HTTPException(409, {
+        message:
+          "The service changed. Contact the business to update this reservation.",
+      });
+    return { settings: state.settings, professional, service };
+  }
   const management = "/api/public/bookings/manage/{token}";
-  route("get", management, async (c) => {
-    const row = await managedBooking(db, c.req.param("token")!),
-      state = await readSettings(db, row.tenant_id);
-    return c.json({
-      data: {
-        reservation: await reservationView(db, row),
-        publicUrl: state.publicToken
-          ? pageUrl(options, state.publicToken)
-          : null,
-        timeZone: state.settings.timeZone,
-        cancellationMinutes: state.settings.cancellationMinutes,
-      },
-    });
-  });
+  route(
+    "get",
+    management,
+    async (c) => {
+      const row = await managedBooking(db, c.req.param("token")!),
+        state = await readSettings(db, row.tenant_id);
+      let canReschedule = false;
+      try {
+        await reschedulingContext(row, state);
+        canReschedule = true;
+      } catch (error) {
+        if (
+          !(error instanceof HTTPException) ||
+          ![404, 409].includes(error.status)
+        )
+          throw error;
+      }
+      let publicUrl: string | null = null;
+      if (state.publicToken) {
+        try {
+          await resolveBookingLink(db, state.publicToken, now());
+          publicUrl = pageUrl(options, state.publicToken);
+        } catch (error) {
+          if (!(error instanceof HTTPException) || error.status !== 404)
+            throw error;
+        }
+      }
+      return c.json({
+        data: {
+          reservation: await reservationView(db, row),
+          publicUrl,
+          timeZone: state.settings.timeZone,
+          cancellationMinutes: state.settings.cancellationMinutes,
+          horizonDays: state.settings.horizonDays,
+          leadMinutes: state.settings.leadMinutes,
+          canReschedule,
+        },
+      });
+    },
+    undefined,
+    undefined,
+    managementBootstrapSchema,
+  );
+  route(
+    "get",
+    `${management}/availability`,
+    async (c) => {
+      const row = await managedBooking(db, c.req.param("token")!);
+      const state = await readSettings(db, row.tenant_id);
+      const context = await reschedulingContext(row, state);
+      const query = parsed(availabilityRangeQuerySchema, c.req.query());
+      if (
+        query.serviceId !== row.service_id ||
+        (query.professionalId && query.professionalId !== row.professional_id)
+      )
+        throw new HTTPException(404, {
+          message: "Service or professional unavailable.",
+        });
+      return c.json({
+        data: await getBookingAvailability(context, query, {
+          now,
+          loadBusy: async (principalId, from, to) =>
+            (await loadBusy(row.tenant_id, principalId, from, to, row.id)).busy,
+        }),
+      });
+    },
+    undefined,
+    availabilityRangeQuerySchema,
+    availabilityRangeSchema,
+  );
   route(
     "get",
     `${management}/slots`,
     async (c) => {
       const row = await managedBooking(db, c.req.param("token")!),
         state = await readSettings(db, row.tenant_id);
-      if (
-        !state.settings.enabled ||
-        !state.settings.published ||
-        row.status !== "confirmed"
-      )
-        throw conflict();
-      await publishedSettings(db, state.publicToken ?? "");
+      await reschedulingContext(row, state);
       const date = parsed(z.string().date(), c.req.query("date"));
       const result = await slots(
         { tenantId: row.tenant_id, settings: state.settings },
@@ -991,16 +1088,7 @@ export function registerBookingRoutes(
     undefined,
     z.object({ date: z.string() }),
   );
-  const cutoff = (row: BookingRow, settings: BookingSettings) => {
-    if (
-      Date.parse(row.starts_at) - now() <
-      settings.cancellationMinutes * 60000
-    )
-      throw new HTTPException(409, {
-        message:
-          "The cancellation or rescheduling deadline has passed. Contact the business.",
-      });
-  };
+
   route(
     "post",
     `${management}/cancel`,
@@ -1045,6 +1133,16 @@ export function registerBookingRoutes(
         row.status !== "confirmed"
       )
         throw conflict();
+      if (
+        !state.settings.professionals.some(
+          (professional) =>
+            professional.id === row.professional_id &&
+            professional.principalId === row.principal_id,
+        )
+      )
+        throw new HTTPException(404, {
+          message: "Service or professional unavailable.",
+        });
       const startsAt = new Date(input.startsAt).toISOString();
       if (startsAt === row.starts_at)
         return c.json({ data: await reservationView(db, row) });
