@@ -198,6 +198,7 @@ function gatewayConfig({ publicOrigin, documentsBucket }) {
       binding: "ASSETS",
       not_found_handling: "single-page-application",
       run_worker_first: [
+        "/companion-downloads.json",
         "/register",
         "/public/forms",
         "/public/forms/*",
