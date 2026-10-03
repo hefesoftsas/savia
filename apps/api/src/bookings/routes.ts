@@ -40,6 +40,7 @@ import {
   ensureLegacyBookingLink,
   bookingLinkView,
   bookingLinkToken,
+  bookingShortCode,
   type BookingLinkRow,
 } from "./public-links";
 import {
@@ -67,6 +68,7 @@ import {
 export type BookingOptions = {
   captcha?: CaptchaOptions;
   nango?: PersonalIntegrationNangoClient;
+  shortener?: { shorten(url: string): Promise<string> };
   now?: () => number;
 };
 const unavailable = () =>
@@ -173,7 +175,7 @@ export function registerBookingRoutes(
     await next();
   });
   function route(
-    method: "get" | "put" | "post",
+    method: "get" | "put" | "post" | "delete",
     path: string,
     handler: (c: Context) => Promise<Response>,
     input?: z.ZodType,
@@ -704,12 +706,31 @@ export function registerBookingRoutes(
   route("get", linkRoot, async (c) => {
     const { id, auth, own } = await linkAccess(c);
     await ensureLegacyBookingLink(db, id);
-    const rows = await db
+    let rows = await db
       .prepare(
-        "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? ORDER BY legacy DESC,id",
+        "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND deleted_at IS NULL AND (?=1 OR (scope_kind='professional' AND professional_id=?)) ORDER BY legacy DESC,id",
       )
-      .bind(id)
+      .bind(id, auth.canManage ? 1 : 0, own?.id ?? "")
       .all<BookingLinkRow>();
+    let assignedCode = false;
+    for (const link of rows.results) {
+      if (link.short_code) continue;
+      const code = bookingShortCode();
+      const update = await db
+        .prepare(
+          "UPDATE tenant_booking_public_links SET short_code=? WHERE tenant_id=? AND id=? AND short_code IS NULL AND deleted_at IS NULL",
+        )
+        .bind(code, id, link.id)
+        .run();
+      assignedCode ||= update.meta.changes > 0;
+    }
+    if (assignedCode)
+      rows = await db
+        .prepare(
+          "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND deleted_at IS NULL AND (?=1 OR (scope_kind='professional' AND professional_id=?)) ORDER BY legacy DESC,id",
+        )
+        .bind(id, auth.canManage ? 1 : 0, own?.id ?? "")
+        .all<BookingLinkRow>();
     return c.json({
       data: {
         links: rows.results
@@ -798,10 +819,11 @@ export function registerBookingRoutes(
         daily_limit: input.dailyLimit,
         version: 1,
         legacy: 0,
+        short_code: bookingShortCode(),
       };
       await db
         .prepare(
-          "INSERT INTO tenant_booking_public_links(id,tenant_id,created_by,token,scope_kind,professional_id,service_id,expires_at,revoked_at,daily_limit,version,legacy) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO tenant_booking_public_links(id,tenant_id,created_by,token,scope_kind,professional_id,service_id,expires_at,revoked_at,daily_limit,version,legacy,short_code) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(
           row.id,
@@ -816,8 +838,25 @@ export function registerBookingRoutes(
           row.daily_limit,
           1,
           0,
+          row.short_code!,
         )
         .run();
+      if (options.shortener) {
+        try {
+          const shortUrl = await options.shortener.shorten(
+            pageUrl(options, row.token),
+          );
+          await db
+            .prepare(
+              "UPDATE tenant_booking_public_links SET short_url=? WHERE tenant_id=? AND id=? AND deleted_at IS NULL AND short_url IS NULL",
+            )
+            .bind(shortUrl, id, row.id)
+            .run();
+          row.short_url = shortUrl;
+        } catch {
+          // The persisted Savia-hosted short code remains available.
+        }
+      }
       return c.json({ data: bookingLinkView(row, origin(options)) }, 201);
     },
     bookingPublicLinkInputSchema,
@@ -833,7 +872,7 @@ export function registerBookingRoutes(
         input = await body(c, revisionSchema);
       const link = await db
         .prepare(
-          "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=?",
+          "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL",
         )
         .bind(id, c.req.param("id"))
         .first<BookingLinkRow>();
@@ -846,7 +885,7 @@ export function registerBookingRoutes(
         throw new HTTPException(404, { message: "Booking link unavailable." });
       const changed = await db
         .prepare(
-          "UPDATE tenant_booking_public_links SET revoked_at=?,version=version+1 WHERE tenant_id=? AND id=? AND version=? RETURNING *",
+          "UPDATE tenant_booking_public_links SET revoked_at=?,version=version+1 WHERE tenant_id=? AND id=? AND version=? AND deleted_at IS NULL RETURNING *",
         )
         .bind(new Date(now()).toISOString(), id, link.id, input.version)
         .first<BookingLinkRow>();
@@ -857,6 +896,132 @@ export function registerBookingRoutes(
       return c.json({ data: bookingLinkView(changed, origin(options)) });
     },
     revisionSchema,
+  );
+  route("post", `${linkRoot}/{id}/short-url`, async (c) => {
+    const { id, auth, own } = await linkAccess(c);
+    const link = await db
+      .prepare(
+        "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)",
+      )
+      .bind(id, c.req.param("id"), new Date(now()).toISOString())
+      .first<BookingLinkRow>();
+    if (
+      !link ||
+      (!auth.canManage &&
+        (link.scope_kind !== "professional" ||
+          link.professional_id !== own?.id))
+    )
+      throw new HTTPException(404, { message: "Booking link unavailable." });
+    if (link.short_url) return c.json({ data: { shortUrl: link.short_url } });
+    if (options.shortener) {
+      try {
+        const shortUrl = await options.shortener.shorten(
+          pageUrl(options, link.token),
+        );
+        await db
+          .prepare(
+            "UPDATE tenant_booking_public_links SET short_url=? WHERE tenant_id=? AND id=? AND deleted_at IS NULL AND short_url IS NULL",
+          )
+          .bind(shortUrl, id, link.id)
+          .run();
+        const saved = await db
+          .prepare(
+            "SELECT short_url FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL",
+          )
+          .bind(id, link.id)
+          .first<{ short_url: string | null }>();
+        if (saved?.short_url)
+          return c.json({ data: { shortUrl: saved.short_url } });
+      } catch {
+        // Keep the Savia-hosted URL available when Shlink is unreachable.
+      }
+    }
+    if (!link.short_code) {
+      const code = bookingShortCode();
+      await db
+        .prepare(
+          "UPDATE tenant_booking_public_links SET short_code=? WHERE tenant_id=? AND id=? AND short_code IS NULL AND deleted_at IS NULL",
+        )
+        .bind(code, id, link.id)
+        .run();
+    }
+    const current = await db
+      .prepare(
+        "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL",
+      )
+      .bind(id, link.id)
+      .first<BookingLinkRow>();
+    if (!current)
+      throw new HTTPException(404, { message: "Booking link unavailable." });
+    return c.json({
+      data: {
+        shortUrl: bookingLinkView(current, origin(options)).shortUrl,
+      },
+    });
+  });
+  route(
+    "delete",
+    `${linkRoot}/{id}`,
+    async (c) => {
+      const { id, auth, own } = await linkAccess(c),
+        input = await body(c, revisionSchema),
+        link = await db
+          .prepare(
+            "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL",
+          )
+          .bind(id, c.req.param("id"))
+          .first<BookingLinkRow>();
+      if (
+        !link ||
+        (!auth.canManage &&
+          (link.scope_kind !== "professional" ||
+            link.professional_id !== own?.id))
+      )
+        throw new HTTPException(404, { message: "Booking link unavailable." });
+      const changed = await db
+        .prepare(
+          "UPDATE tenant_booking_public_links SET deleted_at=?,version=version+1 WHERE tenant_id=? AND id=? AND version=? AND deleted_at IS NULL RETURNING id",
+        )
+        .bind(new Date(now()).toISOString(), id, link.id, input.version)
+        .first();
+      if (!changed)
+        throw new HTTPException(409, {
+          message: "The link changed. Refresh and try again.",
+        });
+      return c.json({ data: { deleted: true } });
+    },
+    revisionSchema,
+  );
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/s/b/{code}",
+      security: [],
+      tags: ["Booking"],
+      request: {
+        params: z.object({ code: z.string().regex(/^[a-f0-9]{16}$/) }),
+      },
+      responses: {
+        302: { description: "Redirect to the public booking page" },
+        404: { description: "Unavailable link" },
+      },
+    }),
+    async (c) => {
+      c.header("Cache-Control", "no-store");
+      c.header("X-Robots-Tag", "noindex, nofollow");
+      c.header("Referrer-Policy", "no-referrer");
+      const { code } = c.req.valid("param");
+      const link = await db
+        .prepare(
+          "SELECT token FROM tenant_booking_public_links WHERE short_code=? AND deleted_at IS NULL AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)",
+        )
+        .bind(code, new Date(now()).toISOString())
+        .first<{ token: string }>();
+      if (!link)
+        throw new HTTPException(404, { message: "Booking page unavailable." });
+      await resolveBookingLink(db, link.token, now());
+      return c.redirect(pageUrl(options, link.token), 302);
+    },
   );
   const publicRoot = "/api/public/bookings/{token}";
   route("get", publicRoot, async (c) => {
