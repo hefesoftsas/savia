@@ -3,7 +3,11 @@ import { registerPagesSearchRoutes } from "./routes/pages-search";
 import type { PagesSearchBindings } from "./pages/cloudflare-search";
 import { PersonalIntegrationOperations } from "./personal-integrations/operations";
 import { createPersonalIntegrationRepository } from "./personal-integrations/repository";
+import { createPersonalIntegrationProviderRegistry } from "./personal-integrations/providers";
 import { registerPagesRoutes } from "./routes/pages";
+import { registerOfficeDocumentRoutes } from "./routes/office-documents";
+import { registerConnectedOfficeDocumentRoutes } from "./routes/connected-office-documents";
+import { registerOfficeSettingsRoutes } from "./routes/office-settings";
 import { registerPublicPagesRoutes } from "./pages/public-routes";
 import {
   registerCompanionRoutes,
@@ -252,6 +256,15 @@ export function createApp(
   registerPagesSearchSettingsRoutes(app, db);
   registerPagesSearchRoutes(app, db, pagesSearch);
   registerPagesRoutes(app, db, documents);
+  registerOfficeDocumentRoutes(app, db, documents);
+  registerConnectedOfficeDocumentRoutes(
+    app,
+    db,
+    personalIntegrations ?? {
+      providers: createPersonalIntegrationProviderRegistry({}),
+    },
+  );
+  registerOfficeSettingsRoutes(app, db);
   registerPublicPagesRoutes(app, db, documents, publicForms);
   registerUserPreferenceRoutes(app, db);
   const notificationAuth = authenticationMiddleware(

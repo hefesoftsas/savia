@@ -1,3 +1,6 @@
+import "@/features/service-credentials/service-credentials.css";
+import { OfficeSettingsPanel } from "@/features/office-settings/office-settings-panel";
+import { useAppServices } from "@/features/assistant/assistant-context";
 import { TenantAccessUrl } from "@/features/tenant-branding/tenant-access-url";
 import "@/features/tenant-branding/tenant-branding.css";
 import { ResourceEditSync } from "@/realtime/resource-realtime";
@@ -11,7 +14,6 @@ import {
 } from "ra-core";
 import { TenantUserCapacity } from "@/features/users/tenant-user-capacity";
 import { TenantPagesSearchSettingsPanel } from "@/features/tenant-pages-search/tenant-pages-search-settings-panel";
-import { useAppServices } from "@/features/assistant/assistant-context";
 import { TenantSignInLinks } from "@/features/tenant-sso/tenant-sign-in-links";
 import { useWatch } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
@@ -344,6 +346,21 @@ function TenantCapacityEditor() {
   );
 }
 
+function TenantOfficeSettings() {
+  const record = useRecordContext<TenantRecord>();
+  const services = useAppServices();
+  if (!record || record.kind !== "commercial") return null;
+  return (
+    <div className="md:col-span-2">
+      <OfficeSettingsPanel
+        key={record.id}
+        tenantId={Number(record.id)}
+        services={services}
+      />
+    </div>
+  );
+}
+
 function TenantPagesSearchEditor() {
   const record = useRecordContext<TenantRecord>();
   const { apiClient } = useAppServices();
@@ -379,6 +396,7 @@ function TenantEdit() {
         <SavedTenantAccessUrl />
         <TenantFields />
         <TenantCapacityEditor />
+        <TenantOfficeSettings />
         <TenantPagesSearchEditor />
         <TenantAuthenticationLinks />
       </SimpleForm>

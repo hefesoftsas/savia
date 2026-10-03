@@ -226,9 +226,14 @@ function Shell({
 
 function Status({ initialNotice }: { initialNotice?: string } = {}) {
   return (
-    <p id="oauth-status" role="status" aria-live="polite">
-      {initialNotice}
-    </p>
+    <>
+      <p id="oauth-status" role="status" aria-live="polite">
+        {initialNotice}
+      </p>
+      <a data-oauth-resume href="/" hidden>
+        Continuar a Savia
+      </a>
+    </>
   );
 }
 

@@ -49,3 +49,33 @@ describe("AssistantConfigurationClient", () => {
     expect(JSON.stringify(saved)).not.toContain("not-a-real-browser-input");
   });
 });
+
+it("refreshes tenant policy only after the active tenant change commits", async () => {
+  let succeed = true;
+  const events: string[] = [];
+  const listener = (event: Event) => events.push(event.type);
+  window.addEventListener("savia:active-tenant-changed", listener);
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => null },
+    fetcher: async () =>
+      succeed
+        ? Response.json({ activeTenantId: 101, tenants: [] })
+        : Response.json(
+            { error: { code: "FORBIDDEN", message: "Forbidden" } },
+            { status: 403 },
+          ),
+  });
+  try {
+    const client = new AssistantConfigurationClient(api);
+    await expect(client.setActiveTenant(101)).resolves.toMatchObject({
+      activeTenantId: 101,
+    });
+    expect(events).toEqual(["savia:active-tenant-changed"]);
+    succeed = false;
+    await expect(client.setActiveTenant(102)).rejects.toThrow("Forbidden");
+    expect(events).toEqual(["savia:active-tenant-changed"]);
+  } finally {
+    window.removeEventListener("savia:active-tenant-changed", listener);
+  }
+});

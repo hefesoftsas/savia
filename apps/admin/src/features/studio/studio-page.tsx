@@ -1,3 +1,4 @@
+import { OfficeAvailabilityProvider } from "@/features/office-settings/office-availability";
 import { useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
 import {
@@ -360,7 +361,12 @@ function StudioWorkspace({
     <div className="min-w-0 w-full" title={t("Studio")}>
       {workspace && <LocalSyncStatus workspace={workspace} />}
       <Suspense fallback={<RouteLoading variant="screens" />}>
-        <StudioRoot embedded search={query} queryClient={studioClient} />
+        <OfficeAvailabilityProvider
+          apiClient={services.apiClient}
+          tenantId={tenant.tenantId}
+        >
+          <StudioRoot embedded search={query} queryClient={studioClient} />
+        </OfficeAvailabilityProvider>
       </Suspense>
     </div>
   );

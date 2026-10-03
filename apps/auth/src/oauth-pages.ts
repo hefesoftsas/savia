@@ -451,8 +451,7 @@ const oauthUiScript = String.raw`(() => {
     if (!(error instanceof Error) || !["invalid_signature", "INVALID_TWO_FACTOR_COOKIE"].includes(error.code)) return false;
     const restartUrl = document.body && document.body.dataset && document.body.dataset.oauthRestartUrl;
     if (typeof restartUrl !== "string" || !restartUrl) return false;
-    redirecting = true;
-    window.location.replace(restartUrl);
+    navigateTo(restartUrl, true);
     return true;
   }
 
@@ -466,8 +465,7 @@ const oauthUiScript = String.raw`(() => {
     ];
     const redirect = candidates.find((value) => typeof value === "string");
     if (typeof redirect !== "string") return false;
-    redirecting = true;
-    window.location.assign(redirect);
+    navigateTo(redirect);
     return true;
   }
 
@@ -477,8 +475,7 @@ const oauthUiScript = String.raw`(() => {
       if (typeof restartUrl !== "string" || !restartUrl) {
         throw new Error("Abre Savia para iniciar una nueva solicitud de acceso.");
       }
-      redirecting = true;
-      window.location.replace(restartUrl);
+      navigateTo(restartUrl, true);
       return;
     }
     const result = await request("oauth2/continue", { postLogin: true });
@@ -493,9 +490,31 @@ const oauthUiScript = String.raw`(() => {
   }
 
   let redirecting = false;
+  let navigationTimer;
+  function navigateTo(destination, replace = false) {
+    redirecting = true;
+    clearTimeout(navigationTimer);
+    navigationTimer = setTimeout(() => {
+      redirecting = false;
+      const loading = document.querySelector("[data-oauth-loading]");
+      const content = document.querySelector("[data-oauth-content]");
+      const resume = document.querySelector("[data-oauth-resume]");
+      if (loading) loading.hidden = true;
+      if (content) content.hidden = false;
+      if (resume) {
+        resume.href = destination;
+        resume.hidden = false;
+      }
+      setStatus("La redirección no se completó. Pulsa Continuar a Savia para seguir.");
+    }, 10000);
+    if (replace) window.location.replace(destination);
+    else window.location.assign(destination);
+  }
   function setSubmitting(form, submitting) {
     const loading = document.querySelector("[data-oauth-loading]");
     const content = document.querySelector("[data-oauth-content]");
+    const resume = document.querySelector("[data-oauth-resume]");
+    if (submitting && resume) resume.hidden = true;
     const showLoading = submitting || redirecting;
     if (loading) loading.hidden = !showLoading;
     if (content) content.hidden = showLoading;
