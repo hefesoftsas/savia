@@ -751,3 +751,204 @@ it("does not publish a personal link for a professional without an eligible serv
     ).status,
   ).toBe(422);
 });
+
+it("returns private month availability after sharing revocation, excluding only its own occupied time", async () => {
+  const f = await fixture();
+  const result = ((await (await f.reserve()).json()) as any).data;
+  const manage = new URL(result.managementUrl).pathname.replace(
+    "/public/",
+    "/api/public/",
+  );
+  await env.DB.prepare(
+    "UPDATE tenant_booking_public_links SET revoked_at=? WHERE tenant_id=?",
+  )
+    .bind(new Date().toISOString(), f.tenantId)
+    .run();
+  const bootstrap = await f.app.request(manage);
+  expect(bootstrap.status).toBe(200);
+  const state = ((await bootstrap.json()) as any).data;
+  expect(state).toMatchObject({
+    horizonDays: 60,
+    leadMinutes: 0,
+    canReschedule: true,
+    publicUrl: null,
+  });
+  const date = f.payload.startsAt.slice(0, 10);
+  const query = new URLSearchParams({
+    serviceId: f.serviceId,
+    professionalId: f.professionalId,
+    from: date,
+    to: date,
+    displayTimeZone: "America/Bogota",
+  });
+  const response = await f.app.request(`${manage}/availability?${query}`);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+  expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
+  const availability = ((await response.json()) as any).data;
+  expect(availability.displayTimeZone).toBe("America/Bogota");
+  const slots = availability.days.flatMap((day: any) => day.slots);
+  expect(slots.some((slot: any) => slot.startsAt === f.payload.startsAt)).toBe(
+    true,
+  );
+  expect(JSON.stringify(availability)).not.toContain(f.principalId);
+  expect(JSON.stringify(availability)).not.toContain("customer@example.test");
+  const next = slots.find(
+    (slot: any) =>
+      Date.parse(slot.startsAt) > Date.parse(f.payload.startsAt) + 60 * 60000,
+  );
+  const changed = await f.app.request(`${manage}/reschedule`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: 1, startsAt: next.startsAt }),
+  });
+  expect(changed.status).toBe(200);
+});
+
+it("binds private availability to its reservation and bounds its display dates", async () => {
+  const f = await fixture(),
+    other = await fixture();
+  const data = ((await (await f.reserve()).json()) as any).data;
+  const manage = new URL(data.managementUrl).pathname.replace(
+    "/public/",
+    "/api/public/",
+  );
+  const date = f.payload.startsAt.slice(0, 10);
+  const query = new URLSearchParams({
+    serviceId: f.serviceId,
+    professionalId: f.professionalId,
+    from: date,
+    to: date,
+  });
+  const request = () => f.app.request(`${manage}/availability?${query}`);
+  query.set("professionalId", other.professionalId);
+  expect((await request()).status).toBe(404);
+  query.set("professionalId", f.professionalId);
+  query.set("serviceId", other.serviceId);
+  expect((await request()).status).toBe(404);
+  query.set("serviceId", f.serviceId);
+  query.set(
+    "to",
+    new Date(Date.parse(date) + 31 * 86400000).toISOString().slice(0, 10),
+  );
+  expect((await request()).status).toBe(422);
+  query.set("to", date);
+  query.set("displayTimeZone", "Not/A_Timezone");
+  expect((await request()).status).toBe(422);
+  expect(
+    (
+      await f.app.request(
+        `/api/public/bookings/manage/${crypto.randomUUID()}/availability?${query}`,
+      )
+    ).status,
+  ).toBe(404);
+});
+
+it("disables private rescheduling after its cutoff while retaining management details", async () => {
+  const f = await fixture();
+  const data = ((await (await f.reserve()).json()) as any).data;
+  const manage = new URL(data.managementUrl).pathname.replace(
+    "/public/",
+    "/api/public/",
+  );
+  await env.DB.prepare("UPDATE tenant_bookings SET starts_at=? WHERE id=?")
+    .bind(new Date(Date.now() - 60000).toISOString(), data.reservation.id)
+    .run();
+  const state = ((await (await f.app.request(manage)).json()) as any).data;
+  expect(state.canReschedule).toBe(false);
+  const date = f.payload.startsAt.slice(0, 10);
+  expect(
+    (
+      await f.app.request(
+        `${manage}/availability?serviceId=${f.serviceId}&professionalId=${f.professionalId}&from=${date}&to=${date}`,
+      )
+    ).status,
+  ).toBe(409);
+});
+
+it("keeps cancellation available when changed service rules prevent rescheduling", async () => {
+  const f = await fixture();
+  const data = ((await (await f.reserve()).json()) as any).data;
+  const manage = new URL(data.managementUrl).pathname.replace(
+    "/public/",
+    "/api/public/",
+  );
+  const save = await f.app.request(f.base, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...f.settings,
+      services: [{ ...f.settings.services[0], durationMinutes: 45 }],
+    }),
+  });
+  expect(save.status).toBe(200);
+  expect(
+    ((await (await f.app.request(manage)).json()) as any).data.canReschedule,
+  ).toBe(false);
+  const date = f.payload.startsAt.slice(0, 10);
+  expect(
+    (
+      await f.app.request(
+        `${manage}/availability?serviceId=${f.serviceId}&professionalId=${f.professionalId}&from=${date}&to=${date}`,
+      )
+    ).status,
+  ).toBe(409);
+  const cancelled = await f.app.request(`${manage}/cancel`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: 1 }),
+  });
+  expect(cancelled.status).toBe(200);
+});
+
+it("never moves a private reservation after its professional profile is reassigned", async () => {
+  const f = await fixture();
+  const result = ((await (await f.reserve()).json()) as any).data;
+  const manage = new URL(result.managementUrl).pathname.replace(
+    "/public/",
+    "/api/public/",
+  );
+  const principal = crypto.randomUUID(),
+    stamp = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?,'savia:better-auth',?,'other@example.test','Other professional',1,?,?)",
+  )
+    .bind(principal, principal, stamp, stamp)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at) VALUES(?,?,?,'operator',1,?,?)",
+  )
+    .bind(crypto.randomUUID(), principal, f.tenantId, stamp, stamp)
+    .run();
+  const changedSettings = await f.app.request(f.base, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...f.settings,
+      professionals: [
+        { ...f.settings.professionals[0], principalId: principal },
+      ],
+    }),
+  });
+  expect(changedSettings.status).toBe(200);
+  const date = f.payload.startsAt.slice(0, 10);
+  const range = await f.app.request(
+    `${manage}/availability?serviceId=${f.serviceId}&professionalId=${f.professionalId}&from=${date}&to=${date}`,
+  );
+  expect(range.status).toBe(404);
+  expect(
+    ((await (await f.app.request(manage)).json()) as any).data.canReschedule,
+  ).toBe(false);
+  const update = await f.app.request(`${manage}/reschedule`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      version: 1,
+      startsAt: new Date(
+        Date.parse(f.payload.startsAt) + 120 * 60000,
+      ).toISOString(),
+    }),
+  });
+  expect(update.status).toBe(404);
+});

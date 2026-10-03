@@ -1,7 +1,10 @@
 import { Button } from "@/components/ui/button";
-import { useMessages, useAppLocale } from "@/i18n/core";
-import { useEffect, useState } from "react";
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { bookingMessages } from "./booking-messages";
+import { PublicBookingAvailability } from "./public-booking-availability";
+import { PublicBookingSummary } from "./public-booking-summary";
+import type { BookingSelection } from "./booking-types";
 
 type Reservation = {
   id: string;
@@ -20,11 +23,14 @@ type Reservation = {
 };
 type ManageBootstrap = {
   reservation: Reservation;
-  publicUrl: string;
+  publicUrl: string | null;
   timeZone: string;
   cancellationMinutes: number;
+  horizonDays: number;
+  leadMinutes: number;
+  canReschedule: boolean;
 };
-type Slot = { startsAt: string; endsAt: string };
+type ApiError = Error & { status?: number };
 
 async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -36,20 +42,14 @@ async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
     data?: T;
     error?: { message?: string };
   };
-  if (!response.ok) throw new Error(value.error?.message ?? "Request failed");
+  if (!response.ok) {
+    const error = new Error(
+      value.error?.message ?? "Request failed",
+    ) as ApiError;
+    error.status = response.status;
+    throw error;
+  }
   return value.data as T;
-}
-
-function dateForZone(iso: string, zone: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: zone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(iso));
-  const get = (type: string) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 function timeForZone(iso: string, zone: string, locale: string) {
@@ -63,26 +63,29 @@ function timeForZone(iso: string, zone: string, locale: string) {
 export function PublicBookingManagePage({ token }: { token: string }) {
   const t = useMessages(bookingMessages);
   const locale = useAppLocale();
+  const managePath = `/api/public/bookings/manage/${encodeURIComponent(token)}`;
   const [bootstrap, setBootstrap] = useState<ManageBootstrap>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
-  const [date, setDate] = useState("");
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [startsAt, setStartsAt] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+  const [updated, setUpdated] = useState(false);
+  const [selection, setSelection] = useState<BookingSelection>();
+  const [displayTimeZone, setDisplayTimeZone] = useState("");
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError("");
-    void publicRequest<ManageBootstrap>(
-      `/api/public/bookings/manage/${encodeURIComponent(token)}`,
-    )
+    void publicRequest<ManageBootstrap>(managePath)
       .then((data) => {
         if (active) {
           setBootstrap(data);
-          setDate(dateForZone(data.reservation.startsAt, data.timeZone));
+          setDisplayTimeZone(data.timeZone);
         }
       })
       .catch(() => {
@@ -99,49 +102,55 @@ export function PublicBookingManagePage({ token }: { token: string }) {
     return () => {
       active = false;
     };
-  }, [token, t]);
+  }, [managePath, t]);
 
   useEffect(() => {
-    if (!rescheduling || !bootstrap || !date) return;
-    let active = true;
-    setSlotsLoading(true);
-    setError("");
-    void publicRequest<{ slots: Slot[]; timeZone: string }>(
-      `/api/public/bookings/manage/${encodeURIComponent(token)}/slots?date=${encodeURIComponent(date)}`,
-    )
-      .then((data) => {
-        if (active) setSlots(data.slots);
-      })
-      .catch(() => {
-        if (active)
-          setError(
-            t(
-              "Available times could not be loaded. Choose another date and retry.",
-            ),
-          );
-      })
-      .finally(() => {
-        if (active) setSlotsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [rescheduling, bootstrap, token, date, t]);
+    if (rescheduling) stepHeading.current?.focus();
+  }, [rescheduling, reviewing]);
+
+  const reservation = bootstrap?.reservation;
+  const summaryCatalog = useMemo(
+    () =>
+      bootstrap
+        ? {
+            timeZone: bootstrap.timeZone,
+            services: [
+              {
+                id: bootstrap.reservation.serviceId,
+                name: bootstrap.reservation.serviceName,
+                durationMinutes: Math.round(
+                  (Date.parse(bootstrap.reservation.endsAt) -
+                    Date.parse(bootstrap.reservation.startsAt)) /
+                    60000,
+                ),
+              },
+            ],
+            professionals: [
+              {
+                id: bootstrap.reservation.professionalId,
+                name: bootstrap.reservation.professionalName,
+              },
+            ],
+          }
+        : undefined,
+    [bootstrap],
+  );
 
   async function cancel() {
     if (!bootstrap) return;
     setBusy(true);
     setError("");
     try {
-      const reservation = await publicRequest<Reservation>(
-        `/api/public/bookings/manage/${encodeURIComponent(token)}/cancel`,
+      const nextReservation = await publicRequest<Reservation>(
+        `${managePath}/cancel`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ version: bootstrap.reservation.version }),
         },
       );
-      setBootstrap({ ...bootstrap, reservation });
+      setBootstrap({ ...bootstrap, reservation: nextReservation });
+      setUpdated(false);
     } catch {
       setError(
         t("This booking could not be cancelled. Refresh the page and retry."),
@@ -152,30 +161,74 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   }
 
   async function reschedule() {
-    if (!bootstrap || !startsAt) return;
+    if (!bootstrap || !selection) return;
+    const submittedStartsAt = selection.slot.startsAt;
     setBusy(true);
     setError("");
     try {
-      const reservation = await publicRequest<Reservation>(
-        `/api/public/bookings/manage/${encodeURIComponent(token)}/reschedule`,
+      const nextReservation = await publicRequest<Reservation>(
+        `${managePath}/reschedule`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             version: bootstrap.reservation.version,
-            startsAt,
+            startsAt: submittedStartsAt,
           }),
         },
       );
-      setBootstrap({ ...bootstrap, reservation });
+      setBootstrap({ ...bootstrap, reservation: nextReservation });
       setRescheduling(false);
-      setStartsAt("");
-    } catch {
-      setError(
-        t(
-          "This booking could not be rescheduled. Refresh the times and retry.",
-        ),
-      );
+      setReviewing(false);
+      setUpdated(true);
+    } catch (requestError) {
+      if ((requestError as ApiError)?.status === 409) {
+        try {
+          const current = await publicRequest<ManageBootstrap>(managePath);
+          setBootstrap(current);
+          setDisplayTimeZone(selection.displayTimeZone);
+          setReviewing(false);
+          if (
+            current.reservation.status === "confirmed" &&
+            current.reservation.startsAt === submittedStartsAt
+          ) {
+            setUpdated(true);
+            setRescheduling(false);
+          } else {
+            setSelection(undefined);
+            const canContinueRescheduling =
+              current.reservation.status === "confirmed" &&
+              current.canReschedule &&
+              Date.parse(current.reservation.startsAt) - Date.now() >=
+                current.cancellationMinutes * 60000;
+            if (canContinueRescheduling) {
+              setAvailabilityRefreshKey((key) => key + 1);
+              setError(
+                t(
+                  "That time is no longer available. Choose another available time.",
+                ),
+              );
+            } else {
+              setRescheduling(false);
+              setError(
+                t("To change this appointment, contact the booking business."),
+              );
+            }
+          }
+        } catch {
+          setError(
+            t(
+              "This booking could not be rescheduled. Refresh the times and retry.",
+            ),
+          );
+        }
+      } else {
+        setError(
+          t(
+            "This booking could not be rescheduled. Refresh the times and retry.",
+          ),
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -187,7 +240,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
         {t("Loading booking settings…")}
       </main>
     );
-  if (!bootstrap)
+  if (!bootstrap || !reservation)
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
         <p role="alert" className="text-sm text-destructive">
@@ -195,12 +248,19 @@ export function PublicBookingManagePage({ token }: { token: string }) {
         </p>
       </main>
     );
-  const reservation = bootstrap.reservation;
+
   const canChange =
     Date.parse(reservation.startsAt) - Date.now() >=
     bootstrap.cancellationMinutes * 60000;
+  const bookingCatalog = {
+    id: reservation.id,
+    timeZone: bootstrap.timeZone,
+    horizonDays: bootstrap.horizonDays,
+    leadMinutes: bootstrap.leadMinutes,
+  };
+
   return (
-    <main className="mx-auto grid max-w-2xl gap-5 px-4 py-8 md:py-12">
+    <main className="mx-auto grid max-w-3xl gap-5 px-4 py-8 md:py-12">
       <header className="grid gap-2">
         <h1 className="text-2xl font-semibold">
           {t("Manage or cancel this appointment")}
@@ -209,8 +269,12 @@ export function PublicBookingManagePage({ token }: { token: string }) {
           {reservation.serviceName} · {reservation.professionalName}
         </p>
         <p>
-          {timeForZone(reservation.startsAt, bootstrap.timeZone, locale)} ·{" "}
-          {bootstrap.timeZone}
+          {timeForZone(
+            reservation.startsAt,
+            bootstrap.timeZone,
+            intlLocale(locale),
+          )}{" "}
+          · {bootstrap.timeZone}
         </p>
         <p>
           {reservation.customerName} · {reservation.customerEmail}
@@ -222,19 +286,35 @@ export function PublicBookingManagePage({ token }: { token: string }) {
       <p role="status" className="text-sm">
         {t(reservation.status === "confirmed" ? "Confirmed" : "Cancelled")}
       </p>
+      {updated && summaryCatalog && selection && (
+        <section className="grid gap-2" aria-live="polite">
+          <h2 className="text-lg font-semibold">{t("Updated appointment")}</h2>
+          <p role="status">{t("Your appointment has been updated.")}</p>
+          <PublicBookingSummary
+            catalog={summaryCatalog}
+            selection={selection}
+          />
+        </section>
+      )}
       {reservation.status === "confirmed" && (
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy || !canChange}
-            onClick={() => {
-              setRescheduling((current) => !current);
-              setDate(dateForZone(reservation.startsAt, bootstrap.timeZone));
-            }}
-          >
-            {rescheduling ? t("Cancel") : t("Reschedule")}
-          </Button>
+          {!rescheduling && bootstrap.canReschedule && canChange && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                setSelection(undefined);
+                setDisplayTimeZone(bootstrap.timeZone);
+                setError("");
+                setUpdated(false);
+                setReviewing(false);
+                setRescheduling(true);
+              }}
+            >
+              {t("Reschedule")}
+            </Button>
+          )}
           <Button
             type="button"
             variant="destructive"
@@ -250,47 +330,118 @@ export function PublicBookingManagePage({ token }: { token: string }) {
           {t("The cancellation and rescheduling window has closed.")}
         </p>
       )}
+      {reservation.status === "confirmed" &&
+        !bootstrap.canReschedule &&
+        error !==
+          t("To change this appointment, contact the booking business.") && (
+          <p className="text-sm text-muted-foreground">
+            {t("To change this appointment, contact the booking business.")}
+          </p>
+        )}
       {rescheduling && reservation.status === "confirmed" && (
-        <section className="grid gap-3 rounded-lg border p-4">
-          <label className="grid gap-1.5 text-sm">
-            {t("Date")}
-            <input
-              className="h-10 rounded-md border bg-background px-3"
-              type="date"
-              value={date}
-              onChange={(event) => {
-                setDate(event.target.value);
-                setStartsAt("");
-              }}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm">
-            {t("Available time")}
-            <select
-              className="h-10 rounded-md border bg-background px-3"
-              value={startsAt}
-              disabled={slotsLoading || !slots.length}
-              onChange={(event) => setStartsAt(event.target.value)}
-            >
-              <option value="">
-                {slotsLoading
-                  ? t("Loading available times…")
-                  : t("Choose a time")}
-              </option>
-              {slots.map((slot) => (
-                <option key={slot.startsAt} value={slot.startsAt}>
-                  {timeForZone(slot.startsAt, bootstrap.timeZone, locale)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Button
-            type="button"
-            disabled={!startsAt || busy}
-            onClick={() => void reschedule()}
-          >
-            {t("Save new time")}
-          </Button>
+        <section className="grid gap-4" aria-live="polite">
+          {!reviewing && (
+            <>
+              <h2
+                id="booking-step-heading"
+                ref={stepHeading}
+                tabIndex={-1}
+                className="text-lg font-semibold focus:outline-none"
+              >
+                {t("Choose a new time")}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {t("Current appointment")}:{" "}
+                {timeForZone(
+                  reservation.startsAt,
+                  displayTimeZone,
+                  intlLocale(locale),
+                )}
+              </p>
+              <PublicBookingAvailability
+                token={token}
+                mode="management"
+                catalog={bookingCatalog}
+                serviceId={reservation.serviceId}
+                professionalId={reservation.professionalId}
+                displayTimeZone={displayTimeZone}
+                onTimeZoneChange={setDisplayTimeZone}
+                value={selection}
+                onChange={setSelection}
+                onLoadingChange={setSlotsLoading}
+                refreshKey={availabilityRefreshKey}
+                hideHeading
+                excludedStartsAt={[reservation.startsAt]}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => {
+                    setRescheduling(false);
+                    setSelection(undefined);
+                    setError("");
+                  }}
+                >
+                  {t("Stop rescheduling")}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={
+                    !selection ||
+                    selection.slot.startsAt === reservation.startsAt ||
+                    slotsLoading ||
+                    busy
+                  }
+                  onClick={() => setReviewing(true)}
+                >
+                  {t("Continue")}
+                </Button>
+              </div>
+            </>
+          )}
+          {reviewing && summaryCatalog && (
+            <>
+              <h2
+                id="booking-step-heading"
+                ref={stepHeading}
+                tabIndex={-1}
+                className="text-lg font-semibold focus:outline-none"
+              >
+                {t("Review your change")}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {t("Current appointment")}:{" "}
+                {timeForZone(
+                  reservation.startsAt,
+                  displayTimeZone,
+                  intlLocale(locale),
+                )}
+              </p>
+              <PublicBookingSummary
+                catalog={summaryCatalog}
+                selection={selection}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setReviewing(false)}
+                >
+                  {t("Back")}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={busy || !selection}
+                  onClick={() => void reschedule()}
+                >
+                  {busy ? t("Saving…") : t("Confirm reschedule")}
+                </Button>
+              </div>
+            </>
+          )}
         </section>
       )}
       {error && (
@@ -298,12 +449,14 @@ export function PublicBookingManagePage({ token }: { token: string }) {
           {error}
         </p>
       )}
-      <a
-        className="text-sm underline underline-offset-4"
-        href={bootstrap.publicUrl}
-      >
-        {t("Book another appointment")}
-      </a>
+      {bootstrap.publicUrl && (
+        <a
+          className="text-sm underline underline-offset-4"
+          href={bootstrap.publicUrl}
+        >
+          {t("Book another appointment")}
+        </a>
+      )}
     </main>
   );
 }
