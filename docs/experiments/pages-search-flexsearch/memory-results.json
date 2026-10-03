@@ -1,0 +1,898 @@
+{
+  "capturedAt": "2026-10-03T01:38:53.905Z",
+  "browser": "Chromium 154 on macOS",
+  "api": "performance.measureUserAgentSpecificMemory",
+  "unit": "bytes",
+  "runs": [
+    [
+      {
+        "mode": "flex",
+        "count": 1000
+      },
+      {
+        "phase": "page-baseline",
+        "bytes": 2516353,
+        "MiB": 2.3997812271118164,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 769625,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1711824,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "loaded"
+      },
+      {
+        "phase": "engine-baseline",
+        "bytes": 3178790,
+        "MiB": 3.0315303802490234,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 453000,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 615779,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 2075107,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "indexed",
+        "elapsedMs": 1166.625
+      },
+      {
+        "phase": "index-retained",
+        "bytes": 3108527,
+        "MiB": 2.964522361755371,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 1571482,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 704123,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 798018,
+            "types": ["JavaScript"]
+          }
+        ]
+      },
+      {
+        "phase": "searched",
+        "hits": [42]
+      },
+      {
+        "phase": "after-search",
+        "bytes": 4283969,
+        "MiB": 4.085511207580566,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 1165865,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 691939,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 2391261,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "complete"
+      }
+    ],
+    [
+      {
+        "mode": "orama",
+        "count": 1000
+      },
+      {
+        "phase": "page-baseline",
+        "bytes": 2564695,
+        "MiB": 2.4458837509155273,
+        "breakdown": [
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 756914,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1772877,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "loaded"
+      },
+      {
+        "phase": "engine-baseline",
+        "bytes": 3223160,
+        "MiB": 3.0738449096679688,
+        "breakdown": [
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 1177193,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1212208,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 798855,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          }
+        ]
+      },
+      {
+        "phase": "indexed",
+        "elapsedMs": 282.07499998807907
+      },
+      {
+        "phase": "index-retained",
+        "bytes": 8505067,
+        "MiB": 8.111063957214355,
+        "breakdown": [
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 6098447,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 1171704,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1200012,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "searched",
+        "hits": ["42"]
+      },
+      {
+        "phase": "after-search",
+        "bytes": 8394619,
+        "MiB": 8.005732536315918,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 1492514,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 784822,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 6082379,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          }
+        ]
+      },
+      {
+        "phase": "complete"
+      }
+    ],
+    [
+      {
+        "mode": "flex",
+        "count": 10000
+      },
+      {
+        "phase": "page-baseline",
+        "bytes": 2275693,
+        "MiB": 2.1702699661254883,
+        "breakdown": [
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 1157652,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 1083137,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "loaded"
+      },
+      {
+        "phase": "engine-baseline",
+        "bytes": 2718516,
+        "MiB": 2.592578887939453,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 1457418,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [],
+            "bytes": 34904,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 772922,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 453272,
+            "types": ["JavaScript"]
+          }
+        ]
+      },
+      {
+        "phase": "indexed",
+        "elapsedMs": 7861.140000000596
+      },
+      {
+        "phase": "index-retained",
+        "bytes": 2902538,
+        "MiB": 2.768075942993164,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1355147,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 724528,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 786039,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          }
+        ]
+      },
+      {
+        "phase": "searched",
+        "hits": [42]
+      },
+      {
+        "phase": "after-search",
+        "bytes": 2970611,
+        "MiB": 2.8329954147338867,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 713484,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 772745,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1447558,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "complete"
+      }
+    ],
+    [
+      {
+        "mode": "orama",
+        "count": 10000
+      },
+      {
+        "phase": "page-baseline",
+        "bytes": 2253980,
+        "MiB": 2.1495628356933594,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1405807,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 811349,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          }
+        ]
+      },
+      {
+        "phase": "loaded"
+      },
+      {
+        "phase": "engine-baseline",
+        "bytes": 3040466,
+        "MiB": 2.8996143341064453,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 798855,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1430503,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 774284,
+            "types": ["JavaScript"]
+          }
+        ]
+      },
+      {
+        "phase": "indexed",
+        "elapsedMs": 840.7150000035763
+      },
+      {
+        "phase": "index-retained",
+        "bytes": 27595979,
+        "MiB": 26.31757640838623,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 25362391,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 782344,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 1414420,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "searched",
+        "hits": ["42"]
+      },
+      {
+        "phase": "after-search",
+        "bytes": 27570249,
+        "MiB": 26.293038368225098,
+        "breakdown": [
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 828690,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1351596,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 25353139,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          }
+        ]
+      },
+      {
+        "phase": "complete"
+      }
+    ],
+    [
+      {
+        "mode": "reopen",
+        "count": 10000
+      },
+      {
+        "phase": "page-baseline",
+        "bytes": 2278874,
+        "MiB": 2.1733036041259766,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 1013504,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 1228546,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          }
+        ]
+      },
+      {
+        "phase": "loaded"
+      },
+      {
+        "phase": "engine-baseline",
+        "bytes": 2751807,
+        "MiB": 2.6243276596069336,
+        "breakdown": [
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 453272,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 798602,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1463109,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "indexed",
+        "elapsedMs": 76.54000000655651
+      },
+      {
+        "phase": "index-retained",
+        "bytes": 2740376,
+        "MiB": 2.6134262084960938,
+        "breakdown": [
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 797394,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 1421410,
+            "types": ["Shared"]
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 484748,
+            "types": ["JavaScript"]
+          }
+        ]
+      },
+      {
+        "phase": "searched",
+        "hits": [42]
+      },
+      {
+        "phase": "after-search",
+        "bytes": 2700780,
+        "MiB": 2.575664520263672,
+        "breakdown": [
+          {
+            "attribution": [
+              {
+                "scope": "Window",
+                "url": "http://127.0.0.1:5184/memory.html"
+              }
+            ],
+            "bytes": 1234774,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 0,
+            "types": []
+          },
+          {
+            "attribution": [
+              {
+                "scope": "DedicatedWorkerGlobalScope",
+                "url": "http://127.0.0.1:5184/memory.worker.js?worker_file&type=module"
+              }
+            ],
+            "bytes": 499760,
+            "types": ["JavaScript"]
+          },
+          {
+            "attribution": [],
+            "bytes": 36824,
+            "types": ["DOM"]
+          },
+          {
+            "attribution": [],
+            "bytes": 929422,
+            "types": ["Shared"]
+          }
+        ]
+      },
+      {
+        "phase": "complete"
+      }
+    ]
+  ]
+}

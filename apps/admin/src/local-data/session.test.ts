@@ -1,4 +1,5 @@
 import "fake-indexeddb/auto";
+import Dexie from "dexie";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createLocalSession,
@@ -175,4 +176,14 @@ it("plugin development invalidation clears current-principal transport caches on
     expect(await readWorkspaceMetadata(key)).toBeUndefined();
   expect(await readWorkspaceMetadata(keys[4])).toBe(keys[4]);
   await Promise.all(keys.map((key) => removeWorkspaceMetadata(key)));
+});
+
+it("removes derived page search indexes when the authenticated session clears", async () => {
+  const cache = new Dexie("savia-pages-search-v1-session-test");
+  cache.version(1).stores({ pages: "id" });
+  await cache.table("pages").put({ id: "private-page", version: 1 });
+  cache.close();
+  const session = createLocalSession(remote(), "test");
+  await session.clearSession();
+  expect(await Dexie.exists(cache.name)).toBe(false);
 });

@@ -56,6 +56,7 @@ import type { Value } from "platejs";
 import { publishPageChange, subscribePageChanges } from "./page-events";
 import { exportPageMarkdown } from "./markdown-export";
 import { useIssueProviders, type IssueProvider } from "./use-issue-providers";
+import { BrowserPagesSearch } from "./browser-pages-search";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -105,7 +106,8 @@ function isPagesArchive(value: unknown): value is PagesArchive {
 export function PagesPage({
   services,
 }: {
-  services: Pick<AppServices, "apiClient">;
+  services: Pick<AppServices, "apiClient"> &
+    Partial<Pick<AppServices, "authSession">>;
 }) {
   const t = useMessages(pagesMessages),
     navigate = useNavigate(),
@@ -116,6 +118,17 @@ export function PagesPage({
     () => new PagesClient(services.apiClient),
     [services.apiClient],
   );
+  const getSearchScope = useCallback(async () => {
+    const identity = await services.authSession?.getIdentity();
+    if (
+      !identity ||
+      identity.id === undefined ||
+      identity.id === null ||
+      identity.id === ""
+    )
+      throw new Error("Authenticated identity required for search cache");
+    return `${import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin}|${String(identity.id)}`;
+  }, [services.authSession]);
   const [pages, setPages] = useState<PageSummary[]>([]),
     [document, setDocument] = useState<PageDocument | null>(null);
   const [query, setQuery] = useState(""),
@@ -130,6 +143,7 @@ export function PagesPage({
     [archiveError, setArchiveError] = useState<string | null>(null),
     [archiveNotice, setArchiveNotice] = useState<string | null>(null);
   const archiveInput = useRef<HTMLInputElement>(null);
+  const [browserSearch, setBrowserSearch] = useState(false);
   const canLeave = useRef<() => boolean>(() => true);
   const bindingRequests = useMemo(
     () => new Map<string, Promise<PageSummary>>(),
@@ -520,30 +534,45 @@ export function PagesPage({
                 </Button>
               </div>
             )}
-            <div className="pages-search">
-              <Search size={16} aria-hidden />
-              <Input
-                aria-label={t("Search pages")}
-                placeholder={t("Search hint")}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </div>
-            {loading || busy ? (
-              <div className="pages-loading" role="status">
-                {t("Loading")}
-              </div>
+            <Button
+              variant="outline"
+              className="mb-3"
+              aria-pressed={browserSearch}
+              onClick={() => setBrowserSearch((current) => !current)}
+            >
+              {t("Local text search")}
+            </Button>
+            {browserSearch ? (
+              <BrowserPagesSearch client={client} getScope={getSearchScope} />
             ) : (
-              <PageListing
-                pages={
-                  query
-                    ? pages
-                    : pages.filter(
-                        (page) => !page.parentId || !byId.has(page.parentId),
-                      )
-                }
-                empty={query ? t("No results") : t("Empty")}
-              />
+              <>
+                <div className="pages-search">
+                  <Search size={16} aria-hidden />
+                  <Input
+                    aria-label={t("Search pages")}
+                    placeholder={t("Search hint")}
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                </div>
+                {loading || busy ? (
+                  <div className="pages-loading" role="status">
+                    {t("Loading")}
+                  </div>
+                ) : (
+                  <PageListing
+                    pages={
+                      query
+                        ? pages
+                        : pages.filter(
+                            (page) =>
+                              !page.parentId || !byId.has(page.parentId),
+                          )
+                    }
+                    empty={query ? t("No results") : t("Empty")}
+                  />
+                )}
+              </>
             )}
             <Dialog
               open={archiveDialogOpen}
