@@ -2,15 +2,25 @@
   "name": "Savia development",
   "dockerComposeFile": "../docker-compose.yml",
   "service": "dev",
+  "runServices": ["dev", "mailpit"],
   "workspaceFolder": "/workspace",
   "remoteUser": "node",
+  "updateRemoteUserUID": true,
   "overrideCommand": false,
   "shutdownAction": "stopCompose",
+  "forwardPorts": [5173, 8787, "mailpit:8025"],
+  "portsAttributes": {
+    "5173": { "label": "Savia Admin", "onAutoForward": "notify" },
+    "8787": { "label": "Savia API", "onAutoForward": "silent" },
+    "8025": { "label": "Mailpit inbox", "onAutoForward": "silent" }
+  },
+  "postStartCommand": "node .devcontainer/verify.mjs --wait",
   "customizations": {
     "vscode": {
       "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash"
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "remote.autoForwardPorts": false
       }
     }
   },

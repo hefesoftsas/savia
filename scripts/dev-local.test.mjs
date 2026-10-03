@@ -71,9 +71,9 @@ exit 1
       PATH: `${directory}:${process.env.PATH}`,
       SAVIA_SECRETS_DIR: secrets,
       SAVIA_DEV_HOST: devHost,
+      SAVIA_ADMIN_PORT: adminPort ?? "",
       NANGO_JIRA_REPORTING_CONNECTION_ID: "jira-owner-local",
       TMPDIR: directory,
-      ...(adminPort === null ? {} : { SAVIA_ADMIN_PORT: adminPort }),
     },
   });
   return readFile(output, "utf8");
