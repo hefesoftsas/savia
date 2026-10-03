@@ -51,16 +51,18 @@ With Docker Desktop (or Docker Engine with Compose) running, start from the
 repository root:
 
 ```sh
-docker compose up --build
+docker compose up --build --wait --wait-timeout 600
 ```
 
 Open [Admin](http://127.0.0.1:5173/) or the
 [API reference](http://127.0.0.1:8787/docs). The container installs the pinned
 pnpm dependencies, applies local migrations, and starts the development stack
-with live reload. Node and pnpm are not required on the host.
+with live reload. Mailpit captures development email at
+[the local inbox](http://127.0.0.1:8025/). Node and pnpm are not required on the host.
 
 VS Code users can also select **Dev Containers: Reopen in Container**; the
 included `.devcontainer/devcontainer.json` uses the same Compose service.
+It forwards the application ports and validates service readiness after startup.
 See [local setup](docs/onboarding/03-local-setup.md) for login, persistent data,
 optional secrets, and troubleshooting.
 

@@ -305,7 +305,18 @@ it("keeps an administrator's agenda limited to their own current membership", as
   const url = `/v1/personal-integrations/bookings?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&timeZone=UTC`;
   const first = ((await (await f.app.request(url)).json()) as any).data;
   expect(first.map((entry: any) => entry.customerName)).toEqual(["Customer"]);
+  f.actor.credential = { kind: "oauth", scopes: ["savia.api.read"] };
+  const oauthResponse = await f.app.request(url);
+  expect(oauthResponse.status).toBe(200);
+  expect(((await oauthResponse.json()) as any).data).toEqual(first);
   f.actor.credential = { kind: "oauth", scopes: [] };
+  expect((await f.app.request(url)).status).toBe(403);
+  f.actor.credential = {
+    kind: "personal-api-key",
+    keyId: crypto.randomUUID(),
+    tenantId: f.tenantId,
+    scopes: ["recordings:read"],
+  };
   expect((await f.app.request(url)).status).toBe(403);
   delete f.actor.credential;
   await env.DB.prepare(
@@ -449,6 +460,54 @@ it("requires an authenticated session for the personal booking feed", async () =
     "/v1/personal-integrations/bookings?from=2026-10-03T00%3A00%3A00.000Z&to=2026-10-04T00%3A00%3A00.000Z&timeZone=UTC",
   );
   expect(response.status).toBe(401);
+});
+
+it("loads the personal booking feed through the browser's OAuth authentication path", async () => {
+  const f = await fixture();
+  const reservation = ((await (await f.reserve()).json()) as any).data
+    .reservation;
+  const scopes = new Set(["savia.api.read"]);
+  const args: Parameters<typeof createApp> = [env.DB];
+  args[7] = {
+    configuration: {
+      issuer: "https://auth.savia.test",
+      resource: "https://api.savia.test",
+    },
+    authenticate: async () => ({
+      subject: f.principalId,
+      email: f.actor.principal.email,
+      displayName: f.actor.principal.displayName,
+      roles: [],
+      scopes,
+      twoFactorEnabled: false,
+    }),
+  };
+  const app = createApp(...args);
+  const query = new URLSearchParams({
+    from: new Date(Date.parse(reservation.startsAt) - 60000).toISOString(),
+    to: new Date(Date.parse(reservation.endsAt) + 60000).toISOString(),
+    timeZone: "America/Bogota",
+  });
+  const request = () =>
+    app.request(`/v1/personal-integrations/bookings?${query}`, {
+      headers: { authorization: "Bearer test.browser.token" },
+    });
+  const response = await request();
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  expect(((await response.json()) as any).data).toMatchObject([
+    { id: reservation.id, customerName: "Customer" },
+  ]);
+
+  scopes.clear();
+  expect((await request()).status).toBe(403);
+  scopes.add("savia.api.read");
+  await env.DB.prepare(
+    "UPDATE identity_tenant_membership SET is_active=0 WHERE principal_id=?",
+  )
+    .bind(f.principalId)
+    .run();
+  expect(((await (await request()).json()) as any).data).toEqual([]);
 });
 
 it("publishes only safe catalog data and reserves without exposing principal or customer lists", async () => {
