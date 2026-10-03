@@ -79,3 +79,32 @@ available; a sanitized UI screenshot and this report retain the evidence.
 This run does not qualify Windows, microphone capture, long meetings, provider
 privacy/retention, diarization or general speech accuracy. Provider billing totals
 were not exported; the application currently does not persist returned STT usage.
+
+## Preview follow-up — 2026-10-02
+
+The deployed preview at `https://savia-preview.hefesoft.com` was exercised through
+the signed-in Chrome UI. This follow-up did not deploy code or change provider
+credentials or model settings.
+
+- The existing native app's API and application origins were set to preview for
+  its current in-memory session. It remained **Not connected** because no Savia
+  access token had been entered; native authentication is still unverified.
+- An anonymous capabilities request returned HTTP 401 with
+  `AUTHENTICATION_REQUIRED`.
+- A generated Spanish WAV named `savia-preview-validation.wav` uploaded through
+  **Recordings** successfully. The UI reported 15.3 seconds and 479 KiB. The sample
+  remained listed after navigating away and returning. No private meeting audio
+  was used. The synthetic recording was retained for further diagnosis.
+- After explicit processing consent, **Generate summary** failed. The UI showed
+  “Processing failed. Check provider usage before trying again.” No transcript or
+  summary was displayed. No processing retry was made. Provider billing and the
+  underlying response status were not available from that UI result.
+- Platform settings showed an encrypted OpenRouter key configured, a global chat
+  model of `deepseek/deepseek-v4-flash-0731`, and blank transcription and summary
+  overrides. A configured key alone does not establish provider availability.
+- Source inspection confirmed that recording question answering is not yet
+  implemented: there is no per-recording question endpoint or question UI.
+- The five dependency-free audio inspector tests passed in the current checkout.
+  Native capture, native authenticated upload, audio playback, summaries and
+  question answering were **not validated** by this follow-up. Full package and
+  monorepo suites were not run.
