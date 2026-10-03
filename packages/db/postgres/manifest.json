@@ -69,6 +69,14 @@
     {
       "filename": "0017_github_issue_connections.sql",
       "sha256": "202711425facd93253847e2a8ebf9c1bf36190cf3224791f6ca381e833190bcc"
+    },
+    {
+      "filename": "0018_pages_search_settings.sql",
+      "sha256": "b95cd28776f210a09b6aeb56cc4653bc214670a0712cda06428af353c9da9b8c"
+    },
+    {
+      "filename": "0019_pages_search_index.sql",
+      "sha256": "7de59c53e165cd290e4b88ff568545c23dc01d6981338cbdb5f6c2079f62359b"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -9624,6 +9632,132 @@
         }
       ],
       "checkCount": 0
+    },
+    {
+      "name": "tenant_page_search_index",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "page_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "version",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "vector_ids",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "table": "pages",
+          "from": "page_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["page_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_pages_search_settings",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "allowed",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "enabled",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 3
     },
     {
       "name": "tenant_slug_aliases",
