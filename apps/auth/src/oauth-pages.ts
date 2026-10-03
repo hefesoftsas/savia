@@ -249,6 +249,7 @@ const oauthUiScript = String.raw`(() => {
     const wordmark = loginAnimation.querySelector("[data-oauth-login-wordmark]");
     const wordmarkAI = loginAnimation.querySelector("[data-oauth-login-wordmark-ai]");
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const repeatAnimation = loginAnimation.dataset.repeat !== "false";
     const animation = window.lottie.loadAnimation({
       container: frame,
       renderer: "svg",
@@ -273,7 +274,7 @@ const oauthUiScript = String.raw`(() => {
     let pageHidden = false;
 
     function scheduleReplay() {
-      if (reducedMotion || !finished || document.hidden || pageHidden) return;
+      if (!repeatAnimation || reducedMotion || !finished || document.hidden || pageHidden) return;
       clearTimeout(replayTimer);
       replayTimer = setTimeout(() => {
         replayTimer = undefined;

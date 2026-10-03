@@ -8,6 +8,7 @@ export type TenantBranding = {
   logoUrl: string | null;
   coverUrl: string | null;
   loginAnimationUrl: string | null;
+  loginAnimationRepeat: boolean;
   version: number;
 };
 export type TenantBrandingConfig = TenantBranding;
@@ -24,6 +25,7 @@ export function defaultTenantBranding(name: string): TenantBranding {
     logoUrl: null,
     coverUrl: null,
     loginAnimationUrl: null,
+    loginAnimationRepeat: true,
     version: 0,
   };
 }
@@ -40,14 +42,20 @@ export function parseTenantBranding(value: unknown): TenantBranding | null {
       "logoUrl",
       "coverUrl",
       "loginAnimationUrl",
+      "loginAnimationRepeat",
       "version",
     ];
     if (Object.keys(raw).some((key) => !fields.includes(key))) return null;
     // Records saved before the login animation existed omit the field.
-    const normalized =
-      raw.loginAnimationUrl === undefined
-        ? { ...raw, loginAnimationUrl: null }
-        : raw;
+    const normalized = {
+      ...raw,
+      ...(raw.loginAnimationUrl === undefined
+        ? { loginAnimationUrl: null }
+        : {}),
+      ...(raw.loginAnimationRepeat === undefined
+        ? { loginAnimationRepeat: true }
+        : {}),
+    };
     for (const [key, max] of [
       ["displayName", 120],
       ["loginTitle", 120],
@@ -73,6 +81,7 @@ export function parseTenantBranding(value: unknown): TenantBranding | null {
           !assetPath.test(normalized[key]))
       )
         return null;
+    if (typeof normalized.loginAnimationRepeat !== "boolean") return null;
     if (!Number.isSafeInteger(normalized.version) || normalized.version < 0)
       return null;
     return Object.fromEntries(

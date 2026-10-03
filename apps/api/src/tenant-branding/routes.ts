@@ -4,11 +4,6 @@ import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { actorFromContext } from "../auth/middleware";
 import {
-  findApprovedAnimation,
-  listApprovedAnimations,
-  readApprovedAnimation,
-} from "./animation-catalog";
-import {
   activeTenant,
   authorizeBranding,
   brandingSchema,
@@ -94,123 +89,6 @@ export function registerTenantBrandingRoutes(
           canManage: true,
         },
         200,
-      );
-    },
-  );
-  app.openapi(
-    createRoute({
-      method: "get",
-      path: "/v1/tenants/{tenantId}/branding/animations",
-      tags: ["Tenant branding"],
-      request: {
-        params,
-        query: z.object({ q: z.string().trim().max(80).optional() }),
-      },
-      responses: {
-        200: {
-          description: "Approved free Lottie animations",
-          content: {
-            "application/json": {
-              schema: z.object({
-                data: z.array(
-                  z.object({
-                    id: z.string(),
-                    name: z.string(),
-                    keywords: z.array(z.string()),
-                    author: z.string(),
-                    license: z.literal("MIT"),
-                    licenseUrl: z.string().url(),
-                    sourceUrl: z.string().url(),
-                  }),
-                ),
-              }),
-            },
-          },
-        },
-      },
-    }),
-    async (c) => {
-      const { tenantId } = c.req.valid("param");
-      await authorizeBranding(db, actorFromContext(c), tenantId);
-      c.header("Cache-Control", "no-store");
-      return c.json(
-        { data: listApprovedAnimations(c.req.valid("query").q) },
-        200,
-      );
-    },
-  );
-  app.openapi(
-    createRoute({
-      method: "get",
-      path: "/v1/tenants/{tenantId}/branding/animations/{animationId}",
-      tags: ["Tenant branding"],
-      request: {
-        params: params.extend({ animationId: z.string().min(1).max(80) }),
-      },
-      responses: {
-        200: {
-          description: "Pinned Lottie JSON with its MIT attribution notice",
-          content: {
-            "application/json": {
-              schema: z.record(z.string(), z.unknown()),
-            },
-          },
-        },
-      },
-    }),
-    async (c) => {
-      const { tenantId, animationId } = c.req.valid("param");
-      await authorizeBranding(db, actorFromContext(c), tenantId);
-      const item = findApprovedAnimation(animationId);
-      if (!item)
-        throw new HTTPException(404, { message: "Animation not found." });
-      c.header("Cache-Control", "no-store");
-      return c.json(await readApprovedAnimation(item), 200);
-    },
-  );
-  app.openapi(
-    createRoute({
-      method: "post",
-      path: "/v1/tenants/{tenantId}/branding/animations/{animationId}",
-      tags: ["Tenant branding"],
-      request: {
-        params: params.extend({ animationId: z.string().min(1).max(80) }),
-      },
-      responses: {
-        201: {
-          description: "Animation copied to tenant asset storage",
-          content: {
-            "application/json": {
-              schema: z.object({ data: z.object({ url: z.string() }) }),
-            },
-          },
-        },
-      },
-    }),
-    async (c) => {
-      const { tenantId, animationId } = c.req.valid("param");
-      const actor = actorFromContext(c);
-      // Check write authority before revealing catalogue membership or making a source request.
-      await authorizeBranding(db, actor, tenantId, true);
-      const item = findApprovedAnimation(animationId);
-      if (!item)
-        throw new HTTPException(404, { message: "Animation not found." });
-      const animation = await readApprovedAnimation(item);
-      const file = new File([JSON.stringify(animation)], `${item.id}.json`, {
-        type: "application/json",
-      });
-      return c.json(
-        {
-          data: await uploadBrandingAsset(
-            db,
-            bucket,
-            tenantId,
-            "login-animation",
-            actor,
-            file,
-          ),
-        },
-        201,
       );
     },
   );
