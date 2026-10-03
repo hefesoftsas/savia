@@ -195,3 +195,9 @@ an earlier provider request may already have incurred a charge.
 
 See [recording sessions](long-recording-next-phase.md) for ownership, limits,
 processing leases, desktop recovery and the remaining physical-device qualification.
+
+Phase 2 local verification: Flutter analyzer passed, all 64 tests passed, and the
+Android debug APK compiled with the configured preview public OAuth client.
+Regression coverage includes segment retry identity, separate ambiguous-job retry
+consent, desktop Ogg/mobile M4A metadata, and playback switching/close races.
+iOS compilation remains a CI check; no physical-device qualification is implied.

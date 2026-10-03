@@ -18,48 +18,110 @@ class PlaybackController extends ChangeNotifier {
   final Future<void> Function(String, String, CancelToken) download;
   bool loading = false, playing = false;
   CompanionFailure? failure;
+  String? get cacheKey => _cacheKey;
   String? _path;
+  String? _cacheKey;
   CancelToken? _cancel;
   Future<void>? _opening;
+  Future<void>? _toggleInFlight;
   int _generation = 0;
   bool _disposed = false;
+  bool _closingStarted = false;
   Future<void>? _closing;
   void _notify() {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> toggle(Recording recording) async {
-    if (loading || _disposed) return;
-    if (playing) {
-      await player.pause();
-      playing = false;
-      _notify();
-      return;
-    }
-    final generation = _generation;
-    failure = null;
+  Future<void> toggle(Recording recording) => toggleAudio(
+    cacheKey: 'recording:${recording.id}',
+    extension: recording.format.name,
+    download: (path, cancel) => download(recording.id, path, cancel),
+  );
+
+  Future<void> pause() async {
+    if (!playing || loading || _disposed) return;
     loading = true;
     _notify();
-    final opening = _open(recording, generation);
-    _opening = opening;
     try {
-      await opening;
+      await player.pause();
+      playing = false;
     } finally {
-      if (generation == _generation) {
+      loading = false;
+      _notify();
+    }
+  }
+
+  Future<void> toggleAudio({
+    required String cacheKey,
+    required String extension,
+    required Future<void> Function(String path, CancelToken cancellation)
+    download,
+  }) {
+    // Claim the transition synchronously, before the first await. A second
+    // segment tap cannot race the cleanup started by this tap.
+    if (loading || _disposed || _closingStarted) return Future.value();
+    final operation = _toggleAudio(
+      cacheKey: cacheKey,
+      extension: extension,
+      download: download,
+    );
+    _toggleInFlight = operation;
+    operation.whenComplete(() {
+      if (identical(_toggleInFlight, operation)) _toggleInFlight = null;
+    });
+    return operation;
+  }
+
+  Future<void> _toggleAudio({
+    required String cacheKey,
+    required String extension,
+    required Future<void> Function(String path, CancelToken cancellation)
+    download,
+  }) async {
+    if (loading || _disposed || _closingStarted) return;
+    if (playing && cacheKey == _cacheKey) {
+      loading = true;
+      _notify();
+      try {
+        await player.pause();
+        playing = false;
+      } finally {
         loading = false;
         _notify();
       }
+      return;
+    }
+    failure = null;
+    loading = true;
+    _notify();
+    var generation = _generation;
+    try {
+      if (_cacheKey != cacheKey) await _discardCurrent();
+      if (_disposed || _closingStarted) return;
+      generation = _generation;
+      final opening = _open(cacheKey, extension, download, generation);
+      _opening = opening;
+      await opening;
+    } finally {
+      loading = false;
+      _notify();
       _opening = null;
     }
   }
 
-  Future<void> _open(Recording recording, int generation) async {
+  Future<void> _open(
+    String cacheKey,
+    String extension,
+    Future<void> Function(String path, CancelToken cancellation) download,
+    int generation,
+  ) async {
     try {
       if (_path == null) {
-        final path = await files.createPath(recording.format.name);
+        final path = await files.createPath(extension);
         _path = path;
+        _cacheKey = cacheKey;
         _cancel = CancelToken();
-        await download(recording.id, path, _cancel!);
+        await download(path, _cancel!);
         if (generation != _generation) return;
         await player.openFile(path);
       }
@@ -93,15 +155,32 @@ class PlaybackController extends ChangeNotifier {
       if (_path != null) {
         await files.remove(_path!);
         _path = null;
+        _cacheKey = null;
       }
     }
   }
 
-  Future<void> close() => _closing ??= _close();
+  Future<void> _discardCurrent() async {
+    _generation++;
+    _cancel?.cancel();
+    await _opening;
+    await player.stop();
+    if (_path != null) await files.remove(_path!);
+    _path = null;
+    _cacheKey = null;
+    _cancel = null;
+    playing = false;
+  }
+
+  Future<void> close() {
+    _closingStarted = true;
+    return _closing ??= _close();
+  }
 
   Future<void> _close() async {
     _generation++;
     _cancel?.cancel();
+    await _toggleInFlight;
     await _opening;
     await player.stop();
     // Dispose native decoder handles before deleting the downloaded file.
@@ -109,7 +188,11 @@ class PlaybackController extends ChangeNotifier {
     if (_path != null) {
       await files.remove(_path!);
       _path = null;
+      _cacheKey = null;
     }
+    loading = false;
+    playing = false;
+    _notify();
   }
 
   @override

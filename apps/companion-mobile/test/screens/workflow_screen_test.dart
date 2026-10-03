@@ -19,6 +19,8 @@ import 'package:companion_mobile/playback/audio_player_adapter.dart';
 import 'package:companion_mobile/playback/playback_controller.dart';
 import 'package:companion_mobile/recordings/models.dart';
 import 'package:companion_mobile/recordings/recordings_controller.dart';
+import 'package:companion_mobile/recordings/recording_sessions_controller.dart';
+import 'package:companion_mobile/recordings/session_models.dart';
 import 'package:companion_mobile/screens/library_screen.dart';
 import 'package:companion_mobile/screens/recording_detail_screen.dart';
 
@@ -94,6 +96,15 @@ Future<void> main() async {
           );
         },
       );
+      final sessions = RecordingSessionsController(
+        list: ({cursor}) async =>
+            const RecordingSessionPage(sessions: [], cursor: null),
+        get: (_) async => throw UnimplementedError(),
+        process: (_, {required consent, required retryAmbiguous}) async =>
+            throw UnimplementedError(),
+        cancel: (_) async => throw UnimplementedError(),
+        answer: (_, _, {required consent}) async => throw UnimplementedError(),
+      );
       await controller.select(recording.id);
       final playback = PlaybackController(
         player: SilentPlayer(),
@@ -167,7 +178,9 @@ Future<void> main() async {
             child: Scaffold(
               body: LibraryScreen(
                 controller: controller,
+                sessions: sessions,
                 onSelect: (_) {},
+                onSelectSession: (_) {},
                 onRefresh: controller.reload,
               ),
             ),
@@ -194,7 +207,9 @@ Future<void> main() async {
             home: Scaffold(
               body: LibraryScreen(
                 controller: controller,
+                sessions: sessions,
                 onSelect: (_) {},
+                onSelectSession: (_) {},
                 onRefresh: controller.reload,
               ),
             ),

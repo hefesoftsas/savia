@@ -8,6 +8,7 @@ class RecordingDraft {
     required this.format,
     required this.bytes,
     this.durationSeconds,
+    this.isCapture = false,
   });
 
   final String id;
@@ -16,4 +17,5 @@ class RecordingDraft {
   final String format;
   final int bytes;
   final double? durationSeconds;
+  final bool isCapture;
 }

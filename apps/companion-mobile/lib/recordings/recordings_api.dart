@@ -4,13 +4,15 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 
 import '../capture/draft.dart';
+import '../capture/session_uploader.dart';
 import '../session/session_controller.dart';
 import 'models.dart';
+import 'session_models.dart';
 
 /// Typed, workspace-bound client for the private Companion recording API.
 /// It deliberately installs no logging or retry interceptors and disables
 /// redirects on each authenticated request.
-class RecordingsApi {
+class RecordingsApi implements RecordingSessionUploadApi {
   RecordingsApi({
     required this.dio,
     required this.apiOrigin,
@@ -71,6 +73,212 @@ class RecordingsApi {
       },
     );
     return value;
+  }
+
+  Future<RecordingSessionPage> listSessions({String? cursor}) => _requestJson(
+    'GET',
+    '/v1/companion/sessions',
+    queryParameters: cursor == null ? null : {'cursor': cursor},
+    decode: RecordingSessionPage.fromJson,
+  );
+
+  Future<RecordingSession> getSession(String id, {CancelToken? cancellation}) =>
+      _requestJson(
+        'GET',
+        '/v1/companion/sessions/${Uri.encodeComponent(id)}',
+        cancellation: cancellation,
+        decode: RecordingSession.fromJson,
+      );
+
+  @override
+  Future<RecordingSession> createSession({
+    required String id,
+    required String name,
+    required bool consent,
+  }) {
+    if (!consent) throw const CompanionFailure('CONSENT_REQUIRED');
+    return _requestJson(
+      'POST',
+      '/v1/companion/sessions',
+      body: {
+        'id': id,
+        'name': name,
+        'sources': ['microphone'],
+        'consent': true,
+      },
+      mutation: true,
+      decode: RecordingSession.fromJson,
+    );
+  }
+
+  @override
+  Future<RecordingSession> uploadSessionChunk({
+    required String sessionId,
+    required int sequence,
+    required double startSeconds,
+    required String path,
+    required int expectedBytes,
+    required CancelToken cancellation,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    if (sequence < 0 ||
+        sequence >= 120 ||
+        !startSeconds.isFinite ||
+        startSeconds < 0 ||
+        expectedBytes < 1 ||
+        expectedBytes > 512 * 1024) {
+      throw const CompanionFailure('INVALID_AUDIO');
+    }
+    final file = File(path);
+    final actualLength = await file.length().catchError((_) => -1);
+    if (actualLength != expectedBytes ||
+        actualLength < 1 ||
+        actualLength > 512 * 1024) {
+      throw const CompanionFailure('INVALID_AUDIO');
+    }
+    final token = await _token();
+    try {
+      final response = await dio.post<Object?>(
+        _url('/v1/companion/sessions/${Uri.encodeComponent(sessionId)}/chunks'),
+        data: {
+          'source': 'microphone',
+          'sequence': sequence,
+          'startSeconds': startSeconds,
+          'audio': {
+            'data': base64Encode(await file.readAsBytes()),
+            'format': 'm4a',
+          },
+        },
+        cancelToken: cancellation,
+        onSendProgress: onProgress,
+        options: _options(
+          token,
+          workspaceIdProvider(),
+          contentType: Headers.jsonContentType,
+        ),
+      );
+      return await _decodeResponse(
+        response,
+        RecordingSession.fromJson,
+        mutation: true,
+      );
+    } on CompanionFailure {
+      rethrow;
+    } on DioException catch (error) {
+      throw _failureFromDio(error, mutation: true);
+    } on FormatException {
+      throw const CompanionFailure(
+        'UPLOAD_OUTCOME_UNKNOWN',
+        unknownOutcome: true,
+      );
+    } catch (_) {
+      throw const CompanionFailure(
+        'UPLOAD_OUTCOME_UNKNOWN',
+        unknownOutcome: true,
+      );
+    }
+  }
+
+  @override
+  Future<RecordingSession> finalizeSession({
+    required String id,
+    required int expectedChunks,
+    required double durationSeconds,
+  }) => _requestJson(
+    'POST',
+    '/v1/companion/sessions/${Uri.encodeComponent(id)}/finalize',
+    body: {
+      'expectedChunks': expectedChunks,
+      'durationSeconds': durationSeconds,
+    },
+    mutation: true,
+    decode: RecordingSession.fromJson,
+  );
+
+  Future<RecordingSession> processSession(
+    String id, {
+    required bool consent,
+    bool retryAmbiguous = false,
+  }) {
+    if (!consent) throw const CompanionFailure('CONSENT_REQUIRED');
+    return _requestJson(
+      'POST',
+      '/v1/companion/sessions/${Uri.encodeComponent(id)}/notes',
+      body: {'consent': true, if (retryAmbiguous) 'retryAmbiguous': true},
+      mutation: true,
+      decode: RecordingSession.fromJson,
+    );
+  }
+
+  Future<RecordingSession> cancelSession(String id) => _requestJson(
+    'POST',
+    '/v1/companion/sessions/${Uri.encodeComponent(id)}/cancel',
+    mutation: true,
+    decode: RecordingSession.fromJson,
+  );
+
+  Future<SessionAnswer> answerSession(
+    String id,
+    String question, {
+    required bool consent,
+  }) {
+    final trimmed = question.trim();
+    if (!consent) throw const CompanionFailure('CONSENT_REQUIRED');
+    if (trimmed.isEmpty || trimmed.length > 2000) {
+      throw const CompanionFailure('INVALID_QUESTION');
+    }
+    return _requestJson(
+      'POST',
+      '/v1/companion/sessions/${Uri.encodeComponent(id)}/questions',
+      body: {'question': trimmed, 'consent': true},
+      mutation: true,
+      decode: SessionAnswer.fromJson,
+    );
+  }
+
+  Future<void> sessionChunkAudio(
+    String sessionId,
+    String source,
+    int sequence,
+    String destination, {
+    CancelToken? cancellation,
+    void Function(int received, int total)? onProgress,
+  }) async {
+    if (!_isUuid(sessionId) ||
+        !const ['microphone', 'system'].contains(source) ||
+        sequence < 0 ||
+        sequence >= 120) {
+      throw const CompanionFailure('AUDIO_UNAVAILABLE');
+    }
+    final tenantId = workspaceIdProvider();
+    final token = await _token();
+    final url = _url(
+      '/v1/companion/sessions/${Uri.encodeComponent(sessionId)}/chunks/$source/$sequence',
+    );
+    try {
+      final response = await dio.download(
+        url,
+        destination,
+        cancelToken: cancellation,
+        onReceiveProgress: onProgress,
+        options: _options(token, tenantId, responseType: ResponseType.bytes),
+      );
+      if (response.statusCode == null ||
+          response.statusCode! < 200 ||
+          response.statusCode! >= 300) {
+        _throwResponseFailure(
+          response.statusCode,
+          response.data,
+          mutation: false,
+        );
+      }
+    } on CompanionFailure {
+      rethrow;
+    } on DioException catch (error) {
+      throw _failureFromDio(error, mutation: false);
+    } catch (_) {
+      throw const CompanionFailure('AUDIO_UNAVAILABLE');
+    }
   }
 
   Future<void> audio(
