@@ -189,6 +189,40 @@ const saveRoute = createRoute({
     },
   },
 });
+const deleteRoute = createRoute({
+  method: "delete",
+  path: "/v1/office-documents/{id}",
+  tags: ["Office documents"],
+  summary: "Delete a private office document and its revisions",
+  security: writeSecurity,
+  request: {
+    params: idParam,
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({ version: z.number().int().positive() }),
+        },
+      },
+    },
+  },
+  responses: {
+    204: { description: "Document and revisions deleted" },
+    400: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Invalid request",
+    },
+    404: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Document not found",
+    },
+    409: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Document version conflict",
+    },
+    ...disabledResponse,
+  },
+});
 
 export function registerOfficeDocumentRoutes(
   app: OpenAPIHono,
@@ -326,6 +360,23 @@ export function registerOfficeDocumentRoutes(
         () => service(c).revise(c.req.param("id")!, version, file),
         201,
       );
+    } catch (failure) {
+      if (failure instanceof OfficeDocumentsError)
+        return Response.json(
+          { error: { code: failure.code, message: failure.message } },
+          { status: failure.status, headers: { "cache-control": "no-store" } },
+        );
+      throw failure;
+    }
+  });
+  register(deleteRoute, async (c) => {
+    try {
+      const { version } = await c.req.json<{ version: number }>();
+      await service(c).remove(c.req.param("id")!, version);
+      return new Response(null, {
+        status: 204,
+        headers: { "cache-control": "no-store" },
+      });
     } catch (failure) {
       if (failure instanceof OfficeDocumentsError)
         return Response.json(

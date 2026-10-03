@@ -1,4 +1,11 @@
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiClient } from "@/api/api-client";
 import { OfficeSuitePage } from "./office-suite-page";
@@ -15,6 +22,7 @@ function setup(
   options: {
     failConnectedOnce?: boolean;
     failConnectedList?: boolean;
+    failDelete?: boolean;
     initialLocal?: unknown;
     providers?: {
       provider: string;
@@ -32,6 +40,23 @@ function setup(
     tokenSource: { getAccessToken: async () => null },
     fetcher: async (_url, init) => {
       const pathname = new URL(String(_url)).pathname;
+      if (init?.method === "DELETE") {
+        if (options.failDelete)
+          return Response.json(
+            { error: { code: "FAILED", message: "Deletion unavailable" } },
+            { status: 503 },
+          );
+        const target = pathname.startsWith("/v1/connected-office-documents/")
+          ? connectedFiles
+          : files;
+        const index = target.findIndex(
+          (file) =>
+            (file as { id: string }).id ===
+            decodeURIComponent(pathname.split("/").pop()!),
+        );
+        if (index >= 0) target.splice(index, 1);
+        return new Response(null, { status: 204 });
+      }
       if (pathname === "/v1/connected-office-documents/providers")
         return Response.json({
           data: options.providers ?? [
@@ -362,4 +387,154 @@ it("keeps Savia documents visible when the connected-drive list is unavailable",
     await screen.findByText("Could not load connected-drive documents."),
   ).toBeTruthy();
   expect(screen.getByRole("link", { name: "Budget.xlsx" })).toBeTruthy();
+});
+
+const localDocument = {
+  id: "delete-1",
+  name: "Delete me.docx",
+  mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  size: 100,
+  version: 2,
+  updatedAt: "2026-10-02T10:00:00Z",
+};
+it("hides disconnected storage filters and resets the filter on disconnect", async () => {
+  const view = setup(false, { initialLocal: localDocument });
+  await screen.findByRole("link", { name: localDocument.name });
+  fireEvent.click(screen.getByRole("button", { name: "Google Drive" }));
+  view.options.providers = [];
+  fireEvent(window, new Event("savia:personal-integrations-changed"));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Google Drive" }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(
+    screen.queryByRole("button", { name: "OneDrive" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "All storage" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(
+    screen.getByRole("link", { name: localDocument.name }),
+  ).toBeInTheDocument();
+});
+it("only shows the connected cloud filter", async () => {
+  setup(false, {
+    providers: [
+      { provider: "onedrive_business", label: "OneDrive", accountLabel: null },
+    ],
+  });
+  await screen.findByText("You have no documents yet");
+  expect(
+    screen.queryByRole("button", { name: "Google Drive" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "OneDrive" })).toBeInTheDocument();
+});
+it("confirms document deletion and keeps it deleted after refresh", async () => {
+  const view = setup(false, { initialLocal: localDocument });
+  const remove = vi.spyOn(view.apiClient, "delete");
+  await screen.findByRole("link", { name: localDocument.name });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: `Delete document: ${localDocument.name}`,
+    }),
+  );
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }),
+  );
+  expect(remove).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: `Delete document: ${localDocument.name}`,
+    }),
+  );
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Delete document",
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("link", { name: localDocument.name }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(remove).toHaveBeenCalledWith(
+    "/v1/office-documents/delete-1",
+    expect.objectContaining({ body: JSON.stringify({ version: 2 }) }),
+  );
+  fireEvent(window, new Event("focus"));
+  await screen.findByText("You have no documents yet");
+});
+it("preserves the document and offers retry when deletion fails", async () => {
+  const view = setup(false, { initialLocal: localDocument, failDelete: true });
+  await screen.findByRole("link", { name: localDocument.name });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: `Delete document: ${localDocument.name}`,
+    }),
+  );
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Delete document",
+    }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Deletion unavailable",
+  );
+  expect(
+    screen.getByRole("link", { name: localDocument.name, hidden: true }),
+  ).toBeInTheDocument();
+  await waitFor(() =>
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Delete document",
+      }),
+    ).toBeEnabled(),
+  );
+  view.options.failDelete = false;
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Delete document",
+    }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+});
+it("removes a connected reference with an explicit provider-file explanation", async () => {
+  const view = setup(false, { providers: [] });
+  await screen.findByText("You have no documents yet");
+  view.connectedFiles.push({
+    id: "ref-1",
+    name: "Cloud.docx",
+    format: "docx",
+    provider: "google_drive",
+    url: "https://drive.example.test/cloud",
+    createdAt: "2026-10-02T10:00:00Z",
+  });
+  fireEvent(window, new Event("focus"));
+  await screen.findByRole("link", { name: "Cloud.docx" });
+  expect(
+    screen
+      .getByRole("link", { name: "Cloud.docx" })
+      .closest("li")
+      ?.querySelector("svg:not(.lucide)"),
+  ).toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Remove reference: Cloud.docx" }),
+  );
+  expect(screen.getByRole("dialog")).toHaveTextContent(
+    "The file will remain in Google Drive or OneDrive. Only its saved link in Savia will be removed.",
+  );
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Remove reference",
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("link", { name: "Cloud.docx" }),
+    ).not.toBeInTheDocument(),
+  );
 });

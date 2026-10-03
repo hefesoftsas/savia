@@ -1,5 +1,5 @@
 import type { AppActor } from "../auth/types";
-import { activeTenant, PagesError } from "../pages/service";
+import { activeTenant, activeTenantScope, PagesError } from "../pages/service";
 import {
   assertOfficeSuiteEnabled,
   OfficeSettingsError,
@@ -247,6 +247,38 @@ export class ConnectedOfficeDocumentsService {
           ]
         : [],
     );
+  }
+
+  async remove(id: string): Promise<void> {
+    const tenantId = await this.tenant();
+    const result = await this.db
+      .prepare(
+        `DELETE FROM connected_office_document_operations
+        WHERE id=? AND tenant_id=? AND owner_id=? AND state='ready'
+          AND EXISTS(
+            SELECT 1 FROM identity_principal p
+            WHERE p.id=? AND p.is_active=1
+              AND ${activeTenantScope("p.id", "connected_office_document_operations.tenant_id")}
+          )
+          AND NOT EXISTS(
+            SELECT 1 FROM office_settings os
+            WHERE os.tenant_id=? AND (os.platform_allowed=0 OR os.tenant_enabled=0)
+          )`,
+      )
+      .bind(
+        id,
+        tenantId,
+        this.actor.principal.id,
+        this.actor.principal.id,
+        tenantId,
+      )
+      .run();
+    if (!result.meta.changes)
+      throw new ConnectedOfficeDocumentsError(
+        404,
+        "DOCUMENT_NOT_FOUND",
+        "Document not found",
+      );
   }
 
   private async validateFile(

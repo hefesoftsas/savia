@@ -14,7 +14,9 @@ database is used for either workflow.
 Open **Office suite** from the sidebar to create a Document (DOCX), Spreadsheet
 (XLSX), or Presentation (PPTX). Choose a type and name inline, then select
 **Create and save**. The saved-document list opens each file in a separate editor
-tab. Files are private to their owner and active workspace; document bytes stay
+tab. Use **Delete document** beside a Savia file and confirm to permanently
+remove it and all its versions. Deletion checks the displayed version so a
+concurrent edit cannot be silently discarded; reload and review before retrying. Files are private to their owner and active workspace; document bytes stay
 in R2 and metadata and immutable revision history stay in D1. Returning to the
 list refreshes its current versions. There is no browser document persistence.
 
@@ -50,8 +52,12 @@ these entries do not have Savia R2 revisions or automatic synchronization.
 Disconnecting an integration stops new creation but preserves existing references.
 Provider permissions still govern who can open each external document.
 The saved list shows the storage provider's icon and name beside each file.
-Use the storage filters to narrow the list to Savia, Google Drive, or either
-OneDrive account type without changing the saved references.
+Use the storage filters to narrow the list to Savia or connected Google Drive
+and OneDrive accounts. Cloud filters and provider icons appear only for active
+connections; disconnecting the selected provider resets the filter to all storage.
+Existing references remain visible by name after disconnection. Use **Remove
+reference** and confirm to remove a saved link from Savia. The confirmation
+explains that the file remains in Google Drive or OneDrive.
 
 Creation requests use a stable request ID for the same attempt. A retry does not
 silently repeat an uncertain external creation. Check the provider's files if a
