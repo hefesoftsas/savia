@@ -176,3 +176,43 @@ it("does not announce zero results when focus invalidates a completed search", a
     screen.getByRole("textbox", { name: "Search pages by meaning" }),
   ).toHaveValue("Hello");
 });
+
+it("refreshes the retained query after focus without waiting for another edit", async () => {
+  let searches = 0;
+  const api = {
+    get: vi.fn(async (path: string) => ({
+      data:
+        path === "/v1/pages/search/status"
+          ? { enabled: true, available: true, total: 1, indexed: 1, needed: [] }
+          : [
+              {
+                id: "found",
+                title: ++searches === 1 ? "Initial page" : "Updated page",
+                updatedAt: "2026-10-03",
+                parentId: null,
+                rootId: "found",
+                ownerId: "owner",
+                kind: "page",
+                version: 1,
+                role: "owner",
+                isShared: false,
+                score: 0.9,
+                excerpt: "Hello context",
+              },
+            ],
+    })),
+    post: vi.fn(),
+  };
+  renderSearch(api);
+  fireEvent.change(
+    await screen.findByRole("textbox", { name: "Search pages by meaning" }),
+    { target: { value: "Hello" } },
+  );
+  await screen.findByRole("link", { name: /Initial page/ });
+  fireEvent(window, new Event("focus"));
+  await screen.findByRole("link", { name: /Updated page/ });
+  expect(searches).toBe(2);
+  expect(
+    screen.getByRole("textbox", { name: "Search pages by meaning" }),
+  ).toHaveValue("Hello");
+});

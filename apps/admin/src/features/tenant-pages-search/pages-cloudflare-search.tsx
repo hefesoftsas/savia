@@ -28,6 +28,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[]>([]);
   const [searchComplete, setSearchComplete] = useState(false);
+  const [searchRevision, setSearchRevision] = useState(0);
   const [searchError, setSearchError] = useState(false);
   const [searching, setSearching] = useState(false);
   const [indexing, setIndexing] = useState(false);
@@ -70,6 +71,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
       setSearching(false);
       setResults([]);
       setSearchComplete(false);
+      setSearchRevision((revision) => revision + 1);
       void refreshStatus();
     };
     const unsubscribe = subscribePageChanges((change) => {
@@ -123,7 +125,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [client, query, status?.available, status?.enabled]);
+  }, [client, query, searchRevision, status?.available, status?.enabled]);
 
   async function updateIndex() {
     if (!status?.enabled || !status.available || indexing) return;
