@@ -169,7 +169,7 @@ export const Layout = (props: CoreLayoutProps) => {
             <LayoutSidebarTrigger />
             <GlobalHistoryNav />
             <div
-              className="min-w-0 flex flex-1 items-center pr-2"
+              className="min-w-0 flex flex-1 items-center overflow-hidden pr-2"
               id="breadcrumb"
             />
             <div
