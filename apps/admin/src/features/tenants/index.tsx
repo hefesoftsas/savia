@@ -10,6 +10,8 @@ import {
   useTranslate,
 } from "ra-core";
 import { TenantUserCapacity } from "@/features/users/tenant-user-capacity";
+import { TenantPagesSearchSettingsPanel } from "@/features/tenant-pages-search/tenant-pages-search-settings-panel";
+import { useAppServices } from "@/features/assistant/assistant-context";
 import { TenantSignInLinks } from "@/features/tenant-sso/tenant-sign-in-links";
 import { useWatch } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
@@ -342,6 +344,20 @@ function TenantCapacityEditor() {
   );
 }
 
+function TenantPagesSearchEditor() {
+  const record = useRecordContext<TenantRecord>();
+  const { apiClient } = useAppServices();
+  if (record?.kind !== "commercial" || !record.isActive || !apiClient?.get)
+    return null;
+  return (
+    <TenantPagesSearchSettingsPanel
+      key={record.id}
+      services={{ apiClient }}
+      tenantId={Number(record.id)}
+    />
+  );
+}
+
 function TenantAuthenticationLinks() {
   const record = useRecordContext<TenantRecord>();
   if (record?.kind !== "commercial" || !record.isActive) return null;
@@ -363,6 +379,7 @@ function TenantEdit() {
         <SavedTenantAccessUrl />
         <TenantFields />
         <TenantCapacityEditor />
+        <TenantPagesSearchEditor />
         <TenantAuthenticationLinks />
       </SimpleForm>
     </Edit>

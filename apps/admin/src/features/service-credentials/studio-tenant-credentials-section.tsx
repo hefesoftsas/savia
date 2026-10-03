@@ -38,6 +38,8 @@ import { TenantSocialSettingsPanel } from "@/features/tenant-social/tenant-socia
 import { tenantSocialMessages } from "@/features/tenant-social/tenant-social-messages";
 import { TenantRegistrationSettingsPanel } from "@/features/tenant-registration/tenant-registration-settings-panel";
 import { tenantRegistrationMessages } from "@/features/tenant-registration/tenant-registration-messages";
+import { TenantPagesSearchSettingsPanel } from "@/features/tenant-pages-search/tenant-pages-search-settings-panel";
+import { tenantPagesSearchMessages } from "@/features/tenant-pages-search/messages";
 import { setStudioRuntime } from "@/features/studio-engine/runtime";
 import { api } from "@/features/studio-engine/api";
 import {
@@ -177,6 +179,7 @@ export function StudioTenantCredentialsSection({
   const ssoT = useMessages(tenantSSOMessages);
   const socialT = useMessages(tenantSocialMessages);
   const registrationT = useMessages(tenantRegistrationMessages);
+  const pagesSearchT = useMessages(tenantPagesSearchMessages);
   const signInT = useMessages(tenantSignInMessages);
   const locale = intlLocale(useAppLocale());
   const navigate = useNavigate();
@@ -444,7 +447,9 @@ export function StudioTenantCredentialsSection({
     "integrations",
     "sources",
     "email",
-    ...(!isPlatformWorkspace ? ["sso", "social", "registration"] : []),
+    ...(!isPlatformWorkspace
+      ? ["sso", "social", "registration", "pages-search"]
+      : []),
   ].includes(requestedTab)
     ? requestedTab
     : "global";
@@ -700,6 +705,12 @@ export function StudioTenantCredentialsSection({
           </CredentialTab>
           {!isPlatformWorkspace ? (
             <>
+              <CredentialTab
+                value="pages-search"
+                tooltip={pagesSearchT("Page search settings description")}
+              >
+                {pagesSearchT("Page search")}
+              </CredentialTab>
               <CredentialTab value="sso" tooltip={ssoT("Tenant SAML SSO")}>
                 {ssoT("Tenant SAML SSO")}
               </CredentialTab>
@@ -742,6 +753,16 @@ export function StudioTenantCredentialsSection({
         </TabsContent>
         {!isPlatformWorkspace ? (
           <>
+            <TabsContent
+              value="pages-search"
+              className="credentials-tabs-panel"
+            >
+              <TenantPagesSearchSettingsPanel
+                key={tenant.tenantId}
+                tenantId={tenant.tenantId}
+                services={services}
+              />
+            </TabsContent>
             <TabsContent value="sso" className="credentials-tabs-panel">
               <TenantSSOSettingsPanel
                 key={tenant.tenantId}

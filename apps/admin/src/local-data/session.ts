@@ -1,7 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type { UserIdentity } from "ra-core";
 import type { AuthSession, AuthPermissions } from "@/auth/auth-session";
-import { clearPageSearchCaches } from "@/features/pages/browser-search-cache";
 import { isOfflineError } from "@/offline/offline-error";
 
 const LEASE_MS = 12 * 60 * 60 * 1000;
@@ -111,11 +110,6 @@ export function createLocalSession(
     cached = undefined;
     leasePromise = null;
     await clearSessionCache(environment);
-    try {
-      await clearPageSearchCaches();
-    } catch {
-      /* Derived cache cannot block logout. */
-    }
   };
   const capture = async () => {
     const [identity, permissions] = await Promise.all([

@@ -1,3 +1,6 @@
+import { registerPagesSearchSettingsRoutes } from "./routes/pages-search-settings";
+import { registerPagesSearchRoutes } from "./routes/pages-search";
+import type { PagesSearchBindings } from "./pages/cloudflare-search";
 import { PersonalIntegrationOperations } from "./personal-integrations/operations";
 import { createPersonalIntegrationRepository } from "./personal-integrations/repository";
 import { registerPagesRoutes } from "./routes/pages";
@@ -125,6 +128,7 @@ export function createApp(
   collectionGatewayFactory: typeof createCollectionGateway = createCollectionGateway,
   identityBridgeKey?: string,
   companion?: CompanionOptions,
+  pagesSearch?: PagesSearchBindings,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -245,6 +249,8 @@ export function createApp(
   registerTenantWorkspaceRoutes(app, db);
   registerTenantUserCapacityRoutes(app, db);
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
+  registerPagesSearchSettingsRoutes(app, db);
+  registerPagesSearchRoutes(app, db, pagesSearch);
   registerPagesRoutes(app, db, documents);
   registerPublicPagesRoutes(app, db, documents, publicForms);
   registerUserPreferenceRoutes(app, db);

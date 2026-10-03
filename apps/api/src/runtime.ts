@@ -1,3 +1,4 @@
+import type { PagesSearchBindings } from "./pages/cloudflare-search";
 import { runJiraPrivacyMaintenance } from "./personal-integrations/jira-privacy-runtime";
 import { runtimePluginRegistryForTenant } from "./studio/plugin-registry-config";
 import { createCollectionGateway } from "./studio/collection-gateway";
@@ -367,6 +368,15 @@ const runtime = {
         storage: environment.DOCUMENTS,
         sttModel: environment.COMPANION_STT_MODEL,
         configuration: assistant.configuration,
+      },
+      {
+        AI: (environment as RuntimeEnvironment & PagesSearchBindings).AI,
+        PAGES_SEARCH_RATE_LIMITER: (
+          environment as RuntimeEnvironment & PagesSearchBindings
+        ).PAGES_SEARCH_RATE_LIMITER,
+        PAGES_VECTORIZE: (
+          environment as RuntimeEnvironment & PagesSearchBindings
+        ).PAGES_VECTORIZE,
       },
     ).fetch(request, environment);
     return response;

@@ -68,6 +68,12 @@ jobs:
           SAVIA_DOMAIN_D1_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
           SAVIA_DOCUMENTS_BUCKET: ${{ vars.SAVIA_DOCUMENTS_BUCKET }}
 
+      - name: Provision isolated Pages semantic search
+        run: node scripts/ensure-preview-pages-search.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       - name: Render Worker configuration
         run: node scripts/render-cloudflare-production-config.mjs
         env:
