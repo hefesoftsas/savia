@@ -7,7 +7,7 @@ import { pagesMessages } from "./messages";
 
 export type PageSearchResult = PageSummary & { excerpt?: string };
 
-function highlightQuery(value: string, query: string) {
+export function highlightPageSearchText(value: string, query: string) {
   const literal = query.trim();
   if (!literal) return value;
   const escaped = literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -30,6 +30,36 @@ function formattedUpdatedDate(value: string, locale: string) {
   if (!Number.isFinite(timestamp)) return undefined;
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
     timestamp,
+  );
+}
+
+export function PageSearchResultContent({
+  page,
+  query,
+}: {
+  page: PageSearchResult;
+  query: string;
+}) {
+  const t = useMessages(pagesMessages);
+  const locale = intlLocale(useAppLocale());
+  const excerpt = page.excerpt?.trim();
+  const updated = formattedUpdatedDate(page.updatedAt, locale);
+  return (
+    <span className="pages-search-result-copy">
+      <span className="pages-list-title">
+        {highlightPageSearchText(page.title, query)}
+      </span>
+      {excerpt ? (
+        <span className="pages-search-result-excerpt">
+          {highlightPageSearchText(excerpt, query)}
+        </span>
+      ) : null}
+      {updated ? (
+        <span className="pages-search-result-updated">
+          {t("Page updated date", { date: updated })}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -69,8 +99,6 @@ export function PageSearchResults({
       ) : (
         <ul className="pages-list pages-search-results">
           {sorted.map((page) => {
-            const excerpt = page.excerpt?.trim();
-            const updated = formattedUpdatedDate(page.updatedAt, locale);
             return (
               <li key={page.id}>
                 <Link to={`/pages/${encodeURIComponent(page.id)}`}>
@@ -79,21 +107,7 @@ export function PageSearchResults({
                   ) : (
                     <FileText size={20} strokeWidth={1.5} aria-hidden />
                   )}
-                  <span className="pages-search-result-copy">
-                    <span className="pages-list-title">
-                      {highlightQuery(page.title, query)}
-                    </span>
-                    {excerpt ? (
-                      <span className="pages-search-result-excerpt">
-                        {highlightQuery(excerpt, query)}
-                      </span>
-                    ) : null}
-                    {updated ? (
-                      <span className="pages-search-result-updated">
-                        {t("Page updated date", { date: updated })}
-                      </span>
-                    ) : null}
-                  </span>
+                  <PageSearchResultContent page={page} query={query} />
                   <span className="pages-list-access">
                     {t(page.isShared ? "Team shared" : "Team private")}
                   </span>

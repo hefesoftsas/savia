@@ -41,6 +41,40 @@ const privateIdentifiers = [
   [100, 117, 113, 117, 101],
   [97, 108, 101, 106, 97, 110, 100, 114, 111],
 ].map((codes) => String.fromCharCode(...codes));
+// GitHub Actions uses a reserved strategy expansion keyword that also matches
+// one of the restricted names. Ignore only its YAML key and expression access;
+// prose, values, paths, and every other private identifier remain scanned.
+function searchableWorkflowContent(file, content) {
+  if (!/^\.github\/workflows\/[^/]+\.ya?ml$/.test(file)) return content;
+  const keyword = String.fromCharCode(109, 97, 116, 114, 105, 120);
+  return content
+    .replace(new RegExp(`(^[ \t]*)${keyword}(?=:[ \t]*(?:#.*)?$)`, "gm"), "$1")
+    .replace(/\$\{\{[\s\S]*?\}\}/g, (expression) =>
+      expression.replace(
+        new RegExp(`\\b${keyword}(?=\\.[A-Za-z_]\\w*)`, "g"),
+        "",
+      ),
+    );
+}
+
+const workflowKeyword = String.fromCharCode(109, 97, 116, 114, 105, 120);
+const workflowPath = ".github/workflows/example.yml";
+assert.equal(
+  searchableWorkflowContent(
+    workflowPath,
+    `    ${workflowKeyword}:\n      include: []\nname: \${{ ${workflowKeyword}.id }}\n`,
+  ).includes(workflowKeyword),
+  false,
+  "reserved workflow syntax must not be mistaken for private data",
+);
+for (const [file, content] of [
+  [workflowPath, `name: ${workflowKeyword}`],
+  [workflowPath, `# ${workflowKeyword}`],
+  ["docs/example.md", `    ${workflowKeyword}:`],
+]) {
+  assert.ok(searchableWorkflowContent(file, content).includes(workflowKeyword));
+}
+
 const privateIdentifierFiles = [];
 const dumpFiles = trackedFiles.filter((file) => dumpExtensions.test(file));
 const registrationFiles = [];
@@ -85,7 +119,9 @@ for (const file of trackedFiles) {
 
   if (
     pathHasPrivateIdentifier ||
-    privateIdentifiers.some((value) => content.toLowerCase().includes(value))
+    privateIdentifiers.some((value) =>
+      searchableWorkflowContent(file, content).toLowerCase().includes(value),
+    )
   ) {
     privateIdentifierFiles.push(file);
   }

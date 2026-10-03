@@ -3,6 +3,11 @@ import { bodyLimit } from "hono/body-limit";
 import type { Context } from "hono";
 import { actorFromContext } from "../auth/middleware";
 import { PagesError, PagesService } from "../pages/service";
+import {
+  CloudflarePagesSearch,
+  type PagesSearchBindings,
+} from "../pages/cloudflare-search";
+import type { AppActor } from "../auth/types";
 import { exportPages, importPages } from "../pages/transfer";
 
 const errorResponse = z.object({
@@ -97,6 +102,11 @@ const shareInputSchema = z
   .strict();
 const apiSecurity = [{ oauth2: ["savia.api.read"] }];
 const writeSecurity = [{ oauth2: ["savia.api.write"] }];
+// Keep import work comfortably inside Workers' post-response waitUntil window.
+const MAX_IMPORT_AUTO_INDEX_PAGES = 5;
+const INDEX_LEASE_RETRY_INTERVAL_MS = 1_000;
+const AUTO_INDEX_LEASE_WAIT_MS = 24_000;
+const MAX_INDEX_LEASE_RETRIES = 48;
 const response = <T extends z.ZodType>(schema: T, description: string) => ({
   200: {
     content: { "application/json": { schema: envelope(schema) } },
@@ -460,10 +470,114 @@ async function withBody<T>(
   }
 }
 
+function logAutoIndexFailure(failure: unknown): void {
+  console.warn(
+    JSON.stringify({
+      event: "pages_auto_index_failed",
+      code: failure instanceof PagesError ? failure.code : "AUTO_INDEX_FAILED",
+    }),
+  );
+}
+
+function scheduleBestEffort(
+  pagesSearch: PagesSearchBindings | undefined,
+  operation: () => Promise<unknown>,
+): void {
+  if (!pagesSearch?.schedule) return;
+  let accepted = false;
+  const task = Promise.resolve()
+    .then(() => (accepted ? operation() : undefined))
+    .catch(logAutoIndexFailure);
+  try {
+    pagesSearch.schedule(task);
+    accepted = true;
+  } catch {
+    logAutoIndexFailure(new PagesError(503, "SCHEDULER_UNAVAILABLE", ""));
+  }
+}
+
+async function indexPageAfterLease(
+  search: CloudflarePagesSearch,
+  pageId: string,
+  deadlineAt = Date.now() + AUTO_INDEX_LEASE_WAIT_MS,
+) {
+  for (;;) {
+    try {
+      return await search.indexPage(pageId);
+    } catch (failure) {
+      if (
+        !(failure instanceof PagesError) ||
+        failure.code !== "INDEX_IN_PROGRESS"
+      )
+        throw failure;
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs <= 0) throw failure;
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          Math.min(INDEX_LEASE_RETRY_INTERVAL_MS, remainingMs),
+        ),
+      );
+      if (Date.now() >= deadlineAt) throw failure;
+    }
+  }
+}
+
+function schedulePageIndex(
+  db: D1Database,
+  pagesSearch: PagesSearchBindings | undefined,
+  actor: AppActor,
+  page: { id: string; kind?: "page" | "folder" },
+): void {
+  if (page.kind === "folder") return;
+  scheduleBestEffort(pagesSearch, async () => {
+    if (!pagesSearch?.AI || !pagesSearch.PAGES_VECTORIZE) return;
+    const search = new CloudflarePagesSearch(db, actor, pagesSearch);
+    try {
+      await indexPageAfterLease(search, page.id);
+    } catch (failure) {
+      if (
+        failure instanceof PagesError &&
+        (failure.code === "SEARCH_DISABLED" ||
+          failure.code === "VERSION_CONFLICT")
+      )
+        return;
+      throw failure;
+    }
+  });
+}
+
+function scheduleImportIndexing(
+  db: D1Database,
+  pagesSearch: PagesSearchBindings | undefined,
+  actor: AppActor,
+): void {
+  scheduleBestEffort(pagesSearch, async () => {
+    const search = new CloudflarePagesSearch(db, actor, pagesSearch);
+    const deadlineAt = Date.now() + AUTO_INDEX_LEASE_WAIT_MS;
+    const status = await search.status();
+    if (!status.enabled || !status.available) return;
+    for (const pageId of status.needed.slice(0, MAX_IMPORT_AUTO_INDEX_PAGES)) {
+      if (Date.now() >= deadlineAt) break;
+      try {
+        await indexPageAfterLease(search, pageId, deadlineAt);
+      } catch (failure) {
+        logAutoIndexFailure(failure);
+        if (
+          failure instanceof PagesError &&
+          (failure.status === 403 || failure.status === 503)
+        )
+          return;
+      }
+    }
+  });
+}
+
 export function registerPagesRoutes(
   app: OpenAPIHono,
   db: D1Database,
   documents?: R2Bucket,
+  pagesSearch?: PagesSearchBindings,
 ) {
   const service = (context: Context) =>
     new PagesService(db, actorFromContext(context));
@@ -496,9 +610,14 @@ export function registerPagesRoutes(
     run(() => exportPages(db, actorFromContext(c), documents)),
   );
   register(importRoute, (c) =>
-    withBody<unknown>(c, (input) =>
-      run(() => importPages(db, actorFromContext(c), documents, input)),
-    ),
+    withBody<unknown>(c, async (input) => {
+      const actor = actorFromContext(c);
+      const response = await run(() =>
+        importPages(db, actor, documents, input),
+      );
+      if (response.ok) scheduleImportIndexing(db, pagesSearch, actor);
+      return response;
+    }),
   );
   register(listRoute, (c) =>
     run(() => service(c).list(c.req.query("q") ?? "")),
@@ -509,7 +628,13 @@ export function registerPagesRoutes(
       kind?: "page" | "folder";
       parentId?: string;
       binding?: unknown;
-    }>(c, (input) => run(() => service(c).create(input), 201)),
+    }>(c, (input) =>
+      run(async () => {
+        const page = await service(c).create(input);
+        schedulePageIndex(db, pagesSearch, actorFromContext(c), page);
+        return page;
+      }, 201),
+    ),
   );
   register(membersRoute, (c) =>
     run(() => service(c).members(c.req.query("q") ?? "")),
@@ -517,7 +642,11 @@ export function registerPagesRoutes(
   register(getRoute, (c) => run(() => service(c).get(requiredParam(c, "id"))));
   register(saveRoute, (c) =>
     withBody<{ title: string; content: unknown; version: number }>(c, (input) =>
-      run(() => service(c).save(requiredParam(c, "id"), input)),
+      run(async () => {
+        const page = await service(c).save(requiredParam(c, "id"), input);
+        schedulePageIndex(db, pagesSearch, actorFromContext(c), page);
+        return page;
+      }),
     ),
   );
   register(deleteRoute, (c) =>
@@ -554,7 +683,11 @@ export function registerPagesRoutes(
   );
   register(restoreRoute, (c) =>
     withBody<{ revision: number; version: number }>(c, (input) =>
-      run(() => service(c).restore(requiredParam(c, "id"), input)),
+      run(async () => {
+        const page = await service(c).restore(requiredParam(c, "id"), input);
+        schedulePageIndex(db, pagesSearch, actorFromContext(c), page);
+        return page;
+      }),
     ),
   );
   register(sharesRoute, (c) =>

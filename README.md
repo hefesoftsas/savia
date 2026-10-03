@@ -13,6 +13,11 @@ See the [licensing guide](docs/licensing.md) and [NOTICE](NOTICE).
 
 > New developers: start at [docs/](docs/) (onboarding track + guides index).
 
+Run the JavaScript and TypeScript coverage suite and build its merged report
+with `pnpm test:coverage`. See the
+[test coverage guide](docs/guides/test-coverage.md) for local groups, CI reports,
+and coverage scope.
+
 Savia es una plataforma low code independiente de la industria. Permite crear
 colecciones, relaciones, formularios y pantallas por organización, con API,
 permisos y persistencia en Cloudflare Workers/D1 y R2.

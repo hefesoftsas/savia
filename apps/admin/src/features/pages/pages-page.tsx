@@ -33,7 +33,6 @@ import {
   FilePlus2,
   FileText,
   Plus,
-  Search,
   LockKeyhole,
   Users,
   ChevronRight,
@@ -59,7 +58,6 @@ import { exportPageMarkdown } from "./markdown-export";
 import { useIssueProviders, type IssueProvider } from "./use-issue-providers";
 import { PagesCloudflareSearch } from "@/features/tenant-pages-search/pages-cloudflare-search";
 import { retireLocalPageSearchCaches } from "@/features/tenant-pages-search/retire-local-search-cache";
-import { PageSearchResults } from "./page-search-results";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -116,7 +114,6 @@ export function PagesPage({
     { pageId } = useParams();
   const [searchParams] = useSearchParams();
   const issueProviders = useIssueProviders(services.apiClient);
-  const [query, setQuery] = useState("");
   const {
     client,
     pages,
@@ -124,7 +121,7 @@ export function PagesPage({
     loading,
     error: indexError,
     refresh,
-  } = usePagesIndex(services.apiClient, true, query);
+  } = usePagesIndex(services.apiClient);
   const [document, setDocument] = useState<PageDocument | null>(() =>
     pageId ? (client.cachedDocument(pageId) ?? null) : null,
   );
@@ -226,7 +223,6 @@ export function PagesPage({
         kind,
         ...(parentId ? { parentId } : {}),
       });
-      setQuery("");
       navigate(`/pages/${page.id}`);
     } catch {
       setError(true);
@@ -330,7 +326,6 @@ export function PagesPage({
         return;
       }
       const result = await client.importArchive(parsed);
-      setQuery("");
       setArchiveNotice(
         t("Pages imported", {
           pages: result.pages,
@@ -514,30 +509,16 @@ export function PagesPage({
               </div>
             )}
             <PagesCloudflareSearch client={client} />
-            <div className="pages-search">
-              <Search size={16} aria-hidden />
-              <Input
-                aria-label={t("Search pages")}
-                placeholder={t("Search hint")}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </div>
             {loading || busy ? (
               <div className="pages-loading" role="status">
                 {t("Loading")}
               </div>
             ) : (
               <PageListing
-                pages={
-                  query
-                    ? pages
-                    : pages.filter(
-                        (page) => !page.parentId || !byId.has(page.parentId),
-                      )
-                }
-                empty={query ? t("No results") : t("Empty")}
-                query={query}
+                pages={pages.filter(
+                  (page) => !page.parentId || !byId.has(page.parentId),
+                )}
+                empty={t("Empty")}
               />
             )}
             <Dialog
@@ -1100,22 +1081,11 @@ function DocumentPane({
 function PageListing({
   pages,
   empty,
-  query = "",
 }: {
   pages: PageSummary[];
   empty: string;
-  query?: string;
 }) {
   const t = useMessages(pagesMessages);
-  if (query.trim())
-    return (
-      <PageSearchResults
-        pages={pages}
-        query={query}
-        empty={empty}
-        sortByTitle
-      />
-    );
   const sorted = [...pages].sort(
     (a, b) =>
       Number(b.kind === "folder") - Number(a.kind === "folder") ||

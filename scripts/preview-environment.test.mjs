@@ -1,3 +1,4 @@
+import { workerConfig } from "./preview-deploy.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -71,4 +72,16 @@ test("parses CLI flags", () => {
   assert.throws(() => flagValue([], "--branch"), /Missing/);
   assert.equal(hasFlag(["--dry-run"], "--dry-run"), true);
   assert.equal(hasFlag([], "--dry-run"), false);
+});
+
+test("routes preview download catalogs through the worker before SPA fallback", () => {
+  const config = workerConfig(
+    "gateway",
+    previewNames("download-test"),
+    {},
+    "https://preview.example.test",
+  );
+  assert.ok(
+    config.assets.run_worker_first.includes("/companion-downloads.json"),
+  );
 });

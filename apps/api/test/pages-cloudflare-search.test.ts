@@ -120,6 +120,83 @@ it("indexes authorized page versions and reuses them without model calls", async
   });
   expect(await f.search.status()).toMatchObject({ needed: [f.page.id] });
 });
+it("uses a per-page lease to prevent duplicate concurrent embeddings", async () => {
+  const f = await fixture();
+  await enable(f.tenantId);
+  let started!: () => void;
+  const embeddingStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let release!: () => void;
+  const embeddingGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  f.bindings.AI.run.mockImplementationOnce(async (_model, input) => {
+    started();
+    await embeddingGate;
+    return { data: input.text.map(() => Array(1024).fill(0.5)) };
+  });
+
+  const indexing = f.search.indexPage(f.page.id);
+  await embeddingStarted;
+  await expect(f.search.indexPage(f.page.id)).rejects.toMatchObject({
+    status: 409,
+    code: "INDEX_IN_PROGRESS",
+  });
+  expect(f.bindings.AI.run).toHaveBeenCalledTimes(1);
+  release();
+  await indexing;
+  await f.search.indexPage(f.page.id);
+  expect(f.bindings.AI.run).toHaveBeenCalledTimes(1);
+});
+it("releases its indexing lease after a failed job so a retry can run", async () => {
+  const f = await fixture();
+  await enable(f.tenantId);
+  f.bindings.AI.run.mockRejectedValueOnce(
+    new Error("temporary embedding failure"),
+  );
+
+  await expect(f.search.indexPage(f.page.id)).rejects.toThrow(
+    "temporary embedding failure",
+  );
+  expect(
+    await env.DB.prepare(
+      "SELECT token FROM tenant_page_search_index_leases WHERE tenant_id=? AND page_id=?",
+    )
+      .bind(f.tenantId, f.page.id)
+      .first(),
+  ).toBeNull();
+
+  await expect(f.search.indexPage(f.page.id)).resolves.toMatchObject({
+    id: f.page.id,
+    version: 1,
+    reused: false,
+  });
+  expect(f.bindings.AI.run).toHaveBeenCalledTimes(2);
+});
+it("reclaims an expired indexing lease", async () => {
+  const f = await fixture();
+  await enable(f.tenantId);
+  await env.DB.prepare(
+    "INSERT INTO tenant_page_search_index_leases(tenant_id,page_id,token,expires_at) VALUES(?,?,?,?)",
+  )
+    .bind(f.tenantId, f.page.id, "expired-worker", Date.now() - 1)
+    .run();
+
+  await expect(f.search.indexPage(f.page.id)).resolves.toMatchObject({
+    id: f.page.id,
+    version: 1,
+    reused: false,
+  });
+  expect(f.bindings.AI.run).toHaveBeenCalledTimes(1);
+  expect(
+    await env.DB.prepare(
+      "SELECT token FROM tenant_page_search_index_leases WHERE tenant_id=? AND page_id=?",
+    )
+      .bind(f.tenantId, f.page.id)
+      .first(),
+  ).toBeNull();
+});
 it("scopes retrieval to tenant and drops unauthorized, deleted, stale and duplicate matches", async () => {
   const f = await fixture();
   await enable(f.tenantId);

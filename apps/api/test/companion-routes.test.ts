@@ -98,7 +98,101 @@ function memberAuthenticator(
     },
   };
 }
+function recordingOAuthAuthenticator(
+  scopes = ["recordings:read"],
+): Authenticator {
+  return {
+    async authenticate() {
+      return {
+        principal: {
+          id: "oauth-companion-member",
+          issuer: "savia:better-auth",
+          subject: "oauth-companion-member",
+          email: "mobile@savia.test",
+          displayName: "Mobile Member",
+          isActive: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        credential: { kind: "oauth", scopes },
+        globalRoles: [],
+        memberships: [
+          {
+            id: "mobile-membership",
+            principalId: "oauth-companion-member",
+            tenantId: 101,
+            agencyId: 101,
+            tenantName: "Acme",
+            tenantSlug: "acme",
+            role: "viewer",
+            isActive: true,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      };
+    },
+  };
+}
 describe("Companion API boundaries", () => {
+  it("binds recording-scoped OAuth requests to an active selected workspace", async () => {
+    const instance = app(true, true, true, {}, recordingOAuthAuthenticator());
+    expect((await instance.request("/v1/companion/recordings")).status).toBe(
+      403,
+    );
+    expect(
+      (
+        await instance.request("/v1/companion/recordings", {
+          headers: { "x-savia-tenant-id": "999" },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await instance.request(
+          "https://other.savia.app.hefesoft.com/v1/companion/recordings",
+          {
+            headers: {
+              "x-savia-tenant-id": "101",
+              "x-savia-tenant-slug": "acme",
+            },
+          },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await instance.request("/v1/companion/recordings", {
+          headers: {
+            "x-savia-tenant-id": "101",
+            "x-savia-tenant-slug": "other",
+          },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await instance.request("/v1/companion/recordings", {
+          headers: {
+            "x-savia-tenant-id": "101",
+            "x-savia-tenant-slug": "acme",
+          },
+        })
+      ).status,
+    ).toBe(200);
+  });
+  it("preserves broad OAuth recording access without a mobile workspace selector", async () => {
+    const instance = app(
+      true,
+      true,
+      true,
+      {},
+      recordingOAuthAuthenticator(["savia.api.read", "savia.api.write"]),
+    );
+    expect((await instance.request("/v1/companion/recordings")).status).toBe(
+      200,
+    );
+  });
   it("is registered behind authentication in the real Savia app", async () => {
     const instance = createApp(
       env.DB,
@@ -109,12 +203,17 @@ describe("Companion API boundaries", () => {
     expect((await instance.request("/v1/companion/capabilities")).status).toBe(
       503,
     );
+    const document = instance.getOpenAPI31Document({
+      openapi: "3.1.0",
+      info: { title: "Savia", version: "1" },
+    });
+    expect(document.paths).toHaveProperty("/v1/companion/transcribe");
     expect(
-      instance.getOpenAPI31Document({
-        openapi: "3.1.0",
-        info: { title: "Savia", version: "1" },
-      }).paths,
-    ).toHaveProperty("/v1/companion/transcribe");
+      document.paths["/v1/companion/recordings/upload"]?.post?.security,
+    ).toContainEqual({ oauth2: ["recordings:upload"] });
+    expect(
+      document.paths["/v1/companion/recordings/{id}/notes"]?.post?.security,
+    ).toContainEqual({ oauth2: ["recordings:process"] });
   });
   it("rejects unauthenticated requests but accepts active tenant members", async () => {
     expect(

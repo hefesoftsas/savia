@@ -8,6 +8,7 @@ import {
   normalizeCanonicalHost,
   parseTenantSlugFromHostname,
 } from "@savia/tenant-host/tenant-host";
+import { companionDownloadsResponse } from "./companion-downloads-catalog";
 
 export type GatewayFetcher = {
   fetch(request: Request): Response | Promise<Response>;
@@ -104,6 +105,8 @@ export async function gatewayFetch(
   env: GatewayEnv,
 ): Promise<Response> {
   const pathname = new URL(request.url).pathname;
+  if (pathname === "/companion-downloads.json")
+    return companionDownloadsResponse(request);
   if (pathname.startsWith("/office/runtime/"))
     return officeAssetResponse(request, env.OFFICE_RUNTIME);
   if (pathname === "/office" || pathname.startsWith("/office/")) {

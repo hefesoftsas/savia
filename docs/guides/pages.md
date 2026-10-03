@@ -2,7 +2,7 @@
 
 Owner: Savia API and Admin. Reviewed: 2026-10-01.
 
-**Work → Pages** expands directly in the main sidebar. It contains your page and folder tree; there is no second navigation panel. Select Pages itself to search the workspace, create a root page or folder, or browse its contents. The document breadcrumb returns to a parent or the workspace. Create a page, edit its title and body, and wait for **Saved** before navigating away. Search matches accessible page titles and text. Results show a short content excerpt, highlight the literal search phrase, and include the last update date so pages can be recognized before opening them. Pages are private until their owner grants member access or explicitly creates a public link. Subpages inherit the root's reader/editor permissions for member access. Administrators do not automatically receive private document access.
+**Work → Pages** expands directly in the main sidebar. It contains your page and folder tree; there is no second navigation panel. Select Pages itself to search the workspace, create a root page or folder, or browse its contents. The document breadcrumb returns to a parent or the workspace. Create a page, edit its title and body, and wait for **Saved** before navigating away. One search box offers up to nine accessible title and content matches as you type. When tenant semantic search is enabled and available, semantic matches are added after text matches, with duplicates removed. Suggestions show a short excerpt, highlight the literal search phrase, and include the last update date. Use the arrow keys and Enter to open a suggestion, or Escape to close the list. Searching does not filter the root folder listing. Pages are private until their owner grants member access or explicitly creates a public link. Subpages inherit the root's reader/editor permissions for member access. Administrators do not automatically receive private document access.
 
 ## Folders and navigation
 
@@ -136,13 +136,21 @@ the tenant settings. Revoking the grant also turns activation off; granting it
 again does not reactivate it. Ordinary members cannot change either setting.
 Both controls are enforced by the API, including indexing and querying.
 
-When enabled, Pages offers semantic search backed by Cloudflare Workers AI
-(`@cf/baai/bge-m3`) and a dedicated Vectorize index. **Update index** sends missing
-or changed saved page versions to Cloudflare, with visible progress and cancel.
-It works on the first 200 accessible page summaries, skips folders, and indexes
-titles and saved rich-text leaves in batches. Attachments, embedded collection
-records and external provider data are excluded. Vectorize submissions are
-asynchronous; new results may take a few seconds to become searchable.
+When enabled and available, the Pages search box adds semantic matches backed by
+Cloudflare Workers AI (`@cf/baai/bge-m3`) and a dedicated Vectorize index. Text
+search remains available when semantic search is disabled or unavailable. Pages
+automatically catches up older saved versions when you open the workspace, with
+visible progress and controls to pause or resume. New, saved and restored pages
+are submitted for background indexing on a best-effort basis. Imports submit up
+to five pages in the background; other pending pages catch up the next time you
+open Pages. A failed catch-up batch stops until you choose **Retry indexing**; it
+does not loop through the same failure. If another request is already indexing a
+page, Pages waits and checks status again instead of submitting duplicate work.
+The catch-up uses the first 200 accessible page summaries, skips folders, and
+includes titles and saved rich-text leaves.
+Attachments, embedded collection records and external provider data are excluded.
+Vectorize submissions are asynchronous; new results may take a few seconds to
+become searchable.
 
 Semantic results include an excerpt from the matched content chunk when available,
 or a short excerpt around the query. Excerpts are derived from the current
@@ -161,7 +169,7 @@ A platform administrator can also activate or deactivate an already granted
 capability directly in the tenant editor. Changing activation preserves the
 existing grant; revocation still disables activation.
 
-The ordinary server text/title search remains available in all cases. Deployed
+The ordinary server title and content search remains available in all cases. Deployed
 semantic queries are limited to 30 per minute per tenant to bound repeated AI
 requests; the browser also debounces typing.
 

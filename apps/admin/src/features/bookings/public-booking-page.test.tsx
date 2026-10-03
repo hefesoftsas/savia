@@ -29,22 +29,42 @@ it("mounts the configured PublicForms Turnstile adapter with booking page identi
   window.turnstile = turnstile;
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () =>
-      Response.json({
-        data: {
-          id: "booking-page-identity",
-          title: "Book a visit",
-          description: "Choose a time",
-          timeZone: "America/Bogota",
-          cancellationMinutes: 120,
-          services: [],
-          professionals: [],
-          captcha: {
-            captchaProvider: "turnstile",
-            siteKey: "booking-site-key",
-          },
-        },
-      }),
+    vi.fn(async (input: RequestInfo | URL) =>
+      new URL(String(input), "https://savia.test").pathname.endsWith("/slots")
+        ? Response.json({
+            data: {
+              slots: [
+                {
+                  startsAt: "2026-10-05T14:00:00Z",
+                  endsAt: "2026-10-05T14:30:00Z",
+                },
+              ],
+              timeZone: "America/Bogota",
+            },
+          })
+        : Response.json({
+            data: {
+              id: "booking-page-identity",
+              title: "Book a visit",
+              description: "Choose a time",
+              timeZone: "America/Bogota",
+              cancellationMinutes: 120,
+              services: [
+                {
+                  id: "consult",
+                  name: "Consultation",
+                  description: "First visit",
+                  durationMinutes: 30,
+                  professionalIds: ["pro-1"],
+                },
+              ],
+              professionals: [{ id: "pro-1", name: "Ari" }],
+              captcha: {
+                captchaProvider: "turnstile",
+                siteKey: "booking-site-key",
+              },
+            },
+          }),
     ),
   );
   const view = render(
@@ -55,6 +75,21 @@ it("mounts the configured PublicForms Turnstile adapter with booking page identi
     </StoreContextProvider>,
   );
   await screen.findByRole("heading", { name: "Book a visit" });
+  fireEvent.change(screen.getByLabelText("Service"), {
+    target: { value: "consult" },
+  });
+  fireEvent.change(screen.getByLabelText("Professional"), {
+    target: { value: "pro-1" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.change(screen.getByLabelText("Date"), {
+    target: { value: "2026-10-05" },
+  });
+  await screen.findByRole("option", { name: /9:00 AM/ });
+  fireEvent.change(screen.getByLabelText("Available time"), {
+    target: { value: "2026-10-05T14:00:00Z" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   await waitFor(() => expect(turnstile.render).toHaveBeenCalled());
   expect(optionsSeen[0]).toEqual(
     expect.objectContaining({
@@ -70,6 +105,7 @@ it("mounts the configured PublicForms Turnstile adapter with booking page identi
 
 it("loads public data without private services and retains one idempotency key for retries", async () => {
   const posts: Array<{ headers: Headers; body: Record<string, unknown> }> = [];
+  let finishFirstAttempt: ((response: Response) => void) | undefined;
   let failed = false;
   vi.stubGlobal(
     "fetch",
@@ -115,10 +151,9 @@ it("loads public data without private services and retains one idempotency key f
         });
         if (!failed) {
           failed = true;
-          return Response.json(
-            { error: { code: "TEMPORARY", message: "Try again" } },
-            { status: 503 },
-          );
+          return new Promise<Response>((resolve) => {
+            finishFirstAttempt = resolve;
+          });
         }
         return Response.json({
           data: {
@@ -150,6 +185,7 @@ it("loads public data without private services and retains one idempotency key f
   fireEvent.change(screen.getByLabelText("Professional"), {
     target: { value: "pro-1" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   fireEvent.change(screen.getByLabelText("Date"), {
     target: { value: "2026-10-05" },
   });
@@ -157,6 +193,7 @@ it("loads public data without private services and retains one idempotency key f
   fireEvent.change(screen.getByLabelText("Available time"), {
     target: { value: "2026-10-05T14:00:00Z" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   fireEvent.change(screen.getByLabelText("Your name"), {
     target: { value: "Casey" },
   });
@@ -164,6 +201,17 @@ it("loads public data without private services and retains one idempotency key f
     target: { value: "casey@example.test" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Book appointment" }));
+  await waitFor(() => expect(posts).toHaveLength(1));
+  expect(screen.getByLabelText("Your name")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+  await act(async () => {
+    finishFirstAttempt?.(
+      Response.json(
+        { error: { code: "TEMPORARY", message: "Try again" } },
+        { status: 503 },
+      ),
+    );
+  });
   expect(await screen.findByRole("alert")).toHaveTextContent(
     /Retry with the same request/,
   );
@@ -182,6 +230,127 @@ it("loads public data without private services and retains one idempotency key f
       customerEmail: "casey@example.test",
     }),
   );
+});
+
+it("guides a customer through booking steps, preserves choices on back, and clears dependent choices", async () => {
+  let slotsAvailable = true;
+  let reservationRequests = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://savia.test");
+      if (url.pathname === "/api/public/bookings/public-token-1234567890123456")
+        return Response.json({
+          data: {
+            id: "page-id",
+            title: "Book a visit",
+            description: "Choose a time",
+            timeZone: "America/Bogota",
+            cancellationMinutes: 120,
+            services: [
+              {
+                id: "consult",
+                name: "Consultation",
+                description: "First visit",
+                durationMinutes: 30,
+                professionalIds: ["pro-1"],
+              },
+              {
+                id: "follow-up",
+                name: "Follow-up",
+                description: "Returning visit",
+                durationMinutes: 20,
+                professionalIds: ["pro-2"],
+              },
+            ],
+            professionals: [
+              { id: "pro-1", name: "Ari" },
+              { id: "pro-2", name: "Bo" },
+            ],
+            captcha: { captchaProvider: "disabled" },
+          },
+        });
+      if (url.pathname.endsWith("/slots"))
+        return Response.json({
+          data: {
+            slots: slotsAvailable
+              ? [
+                  {
+                    startsAt: "2026-10-05T14:00:00Z",
+                    endsAt: "2026-10-05T14:30:00Z",
+                  },
+                ]
+              : [],
+            timeZone: "America/Bogota",
+          },
+        });
+      if (url.pathname.endsWith("/reservations")) {
+        reservationRequests += 1;
+        return Response.json(
+          { error: { message: "Unexpected submission" } },
+          { status: 400 },
+        );
+      }
+      throw new Error(`Unexpected public request: ${url.pathname}`);
+    }),
+  );
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <AppLocaleProvider>
+        <PublicBookingPage token="public-token-1234567890123456" />
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+
+  await screen.findByRole("heading", { name: "Book a visit" });
+  fireEvent.change(screen.getByLabelText("Service"), {
+    target: { value: "consult" },
+  });
+  fireEvent.change(screen.getByLabelText("Professional"), {
+    target: { value: "pro-1" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.change(screen.getByLabelText("Date"), {
+    target: { value: "2026-10-05" },
+  });
+  await screen.findByRole("option", { name: /9:00 AM/ });
+  fireEvent.change(screen.getByLabelText("Available time"), {
+    target: { value: "2026-10-05T14:00:00Z" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  expect(await screen.findByLabelText("Your name")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Your name"), {
+    target: { value: "Casey" },
+  });
+  fireEvent.change(screen.getByLabelText("Email"), {
+    target: { value: "casey@example.test" },
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: "Back" }));
+  expect(screen.getByLabelText("Date")).toHaveValue("2026-10-05");
+  await screen.findByRole("option", { name: /9:00 AM/ });
+  expect(screen.getByLabelText("Available time")).toHaveValue(
+    "2026-10-05T14:00:00Z",
+  );
+  fireEvent.submit(document.querySelector("form")!);
+  expect(reservationRequests).toBe(0);
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  slotsAvailable = false;
+  fireEvent.click(screen.getByRole("button", { name: "Back" }));
+  await screen.findByRole("option", { name: "No available times" });
+  expect(screen.getByLabelText("Available time")).toHaveValue("");
+  fireEvent.submit(document.querySelector("form")!);
+  expect(reservationRequests).toBe(0);
+  expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Back" }));
+  expect(screen.getByLabelText("Service")).toHaveValue("consult");
+  expect(screen.getByLabelText("Professional")).toHaveValue("pro-1");
+
+  fireEvent.change(screen.getByLabelText("Service"), {
+    target: { value: "follow-up" },
+  });
+  expect(screen.getByLabelText("Professional")).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
 
 it("refreshes consumed captcha and stale slots after a definitive conflict", async () => {
@@ -271,13 +440,13 @@ it("refreshes consumed captcha and stale slots after a definitive conflict", asy
     </StoreContextProvider>,
   );
   await screen.findByRole("heading", { name: "Book a visit" });
-  await waitFor(() => expect(captchaOptions).toHaveLength(1));
   fireEvent.change(screen.getByLabelText("Service"), {
     target: { value: "consult" },
   });
   fireEvent.change(screen.getByLabelText("Professional"), {
     target: { value: "pro-1" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   fireEvent.change(screen.getByLabelText("Date"), {
     target: { value: "2026-10-05" },
   });
@@ -286,12 +455,14 @@ it("refreshes consumed captcha and stale slots after a definitive conflict", asy
   fireEvent.change(screen.getByLabelText("Available time"), {
     target: { value: "2026-10-05T14:00:00Z" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   fireEvent.change(screen.getByLabelText("Your name"), {
     target: { value: "Casey" },
   });
   fireEvent.change(screen.getByLabelText("Email"), {
     target: { value: "casey@example.test" },
   });
+  await waitFor(() => expect(captchaOptions).toHaveLength(1));
   act(() =>
     (captchaOptions[0].callback as (value: string) => void)("consumed-proof"),
   );
@@ -299,13 +470,14 @@ it("refreshes consumed captcha and stale slots after a definitive conflict", asy
   expect(await screen.findByRole("alert")).toHaveTextContent(
     /Retry with the same request/,
   );
-  await waitFor(() => expect(captchaOptions).toHaveLength(2));
   await waitFor(() => expect(slotRequests).toBe(initialSlotRequests + 1));
   expect(turnstile.remove).toHaveBeenCalledWith("widget-1");
   expect(screen.getByLabelText("Available time")).toHaveValue("");
   fireEvent.change(screen.getByLabelText("Available time"), {
     target: { value: "2026-10-05T14:00:00Z" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  await waitFor(() => expect(captchaOptions).toHaveLength(2));
   act(() =>
     (captchaOptions[1].callback as (value: string) => void)("fresh-proof"),
   );

@@ -10,7 +10,10 @@ import {
   type PersonalNangoConnectFactory,
 } from "./personal-integrations-page";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const providers = [
   {
@@ -158,6 +161,36 @@ function createServices() {
 }
 
 describe("PersonalIntegrationsPage", () => {
+  it("opens the applications tab from its URL and keeps other integration tabs available", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [] }),
+    );
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/integrations?tab=apps"]}>
+        <PersonalIntegrationsPage services={createServices()} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("tab", { name: "Aplicaciones" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      await screen.findByText(
+        "Todavía no hay una versión de Companion publicada para descargar.",
+      ),
+    ).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "Cuentas y Conexiones" }));
+    expect(
+      await screen.findByRole("heading", { name: "Google" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "Aplicaciones" }));
+    expect(
+      await screen.findByRole("heading", { name: "Savia Companion" }),
+    ).toBeVisible();
+  });
+
   it("combines personal accounts and private CRM connections in one integrations screen", async () => {
     const services = createServices();
     const user = userEvent.setup();

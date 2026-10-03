@@ -2,6 +2,36 @@ import type { MessageCatalog } from "@/i18n/core";
 
 export const tenantPagesSearchMessages = {
   "Page search": ["Búsqueda de páginas", "Page search", "Busca de páginas"],
+  "Search suggestions": [
+    "Sugerencias de búsqueda",
+    "Search suggestions",
+    "Sugestões de busca",
+  ],
+  "Showing page suggestions": [
+    "Mostrando %{count} sugerencias",
+    "Showing %{count} suggestions",
+    "Mostrando %{count} sugestões",
+  ],
+  "No page search matches": [
+    "No hay páginas que coincidan.",
+    "No matching pages.",
+    "Nenhuma página correspondente.",
+  ],
+  "Page search failed": [
+    "No se pudo completar la búsqueda. Inténtalo de nuevo.",
+    "Page search could not be completed. Try again.",
+    "Não foi possível concluir a busca. Tente novamente.",
+  ],
+  "Semantic search fallback": [
+    "Se muestran coincidencias por título y contenido.",
+    "Showing title and content matches.",
+    "Mostrando correspondências por título e conteúdo.",
+  ],
+  "Search status unavailable": [
+    "No se pudo cargar el estado del índice; la búsqueda por texto sigue disponible.",
+    "Index status could not be loaded; text search is still available.",
+    "Não foi possível carregar o estado do índice; a busca por texto continua disponível.",
+  ],
   "Page search settings description": [
     "Configura la búsqueda semántica de páginas de este tenant.",
     "Configure semantic search for this tenant’s pages.",
@@ -37,11 +67,6 @@ export const tenantPagesSearchMessages = {
     "Page search settings could not be saved.",
     "Não foi possível salvar as configurações de busca de páginas.",
   ],
-  "Search pages by meaning": [
-    "Buscar páginas por significado",
-    "Search pages by meaning",
-    "Buscar páginas por significado",
-  ],
   "Cloudflare search unavailable": [
     "La búsqueda semántica no está disponible en este momento.",
     "Semantic search is unavailable right now.",
@@ -52,26 +77,25 @@ export const tenantPagesSearchMessages = {
     "%{indexed} of %{total} pages sent for indexing",
     "%{indexed} de %{total} páginas enviadas para indexação",
   ],
-  "Index updates can take a few seconds": [
-    "La disponibilidad de las páginas nuevas en la búsqueda puede tardar unos segundos.",
-    "Newly indexed pages may take a few seconds to appear in search.",
-    "Páginas novas podem levar alguns segundos para aparecer na busca.",
-  ],
-  "Update page search index": [
-    "Actualizar índice",
-    "Update index",
-    "Atualizar índice",
+  "Pages are indexed automatically": [
+    "Las páginas antiguas se ponen al día al abrir Páginas. Las páginas nuevas, guardadas o restauradas se envían a indexar en segundo plano. Las importaciones envían hasta cinco páginas; las demás se ponen al día la próxima vez que abras Páginas. Puede tardar unos segundos en aparecer en la búsqueda.",
+    "Older pages catch up when you open Pages. New, saved, and restored pages are submitted for background indexing. Imports submit up to five pages; the rest catch up the next time you open Pages. Results may take a few seconds to appear.",
+    "Páginas antigas são atualizadas ao abrir Páginas. Páginas novas, salvas ou restauradas são enviadas para indexação em segundo plano. As importações enviam até cinco páginas; as demais são atualizadas na próxima vez que você abrir Páginas. Os resultados podem levar alguns segundos para aparecer.",
   ],
   "Indexing pages": [
     "Indexando páginas: %{done} de %{total}",
     "Indexing pages: %{done} of %{total}",
     "Indexando páginas: %{done} de %{total}",
   ],
-  "Search semantic pages": ["Buscar", "Search", "Buscar"],
-  "Semantic page search query": [
-    "Buscar páginas por significado…",
-    "Search pages by meaning…",
-    "Buscar páginas por significado…",
+  "Indexing paused": [
+    "Puesta al día pausada: %{done} de %{total}",
+    "Catch-up paused: %{done} of %{total}",
+    "Atualização pausada: %{done} de %{total}",
+  ],
+  "Waiting for page indexing": [
+    "Otra solicitud está indexando estas páginas. Comprobaremos el estado de nuevo en unos segundos.",
+    "Another request is indexing these pages. Checking again in a few seconds.",
+    "Outra solicitação está indexando estas páginas. Vamos verificar novamente em alguns segundos.",
   ],
   "Semantic search results": [
     "Resultados de búsqueda semántica",
@@ -88,10 +112,20 @@ export const tenantPagesSearchMessages = {
     "A page could not be indexed. You can update the index again.",
     "Não foi possível indexar uma página. Você pode atualizar o índice novamente.",
   ],
-  "Cancel indexing": [
-    "Cancelar indexación",
-    "Cancel indexing",
-    "Cancelar indexação",
+  "Pause indexing": [
+    "Pausar puesta al día",
+    "Pause catch-up",
+    "Pausar atualização",
+  ],
+  "Resume indexing": [
+    "Reanudar puesta al día",
+    "Resume catch-up",
+    "Retomar atualização",
+  ],
+  "Retry indexing": [
+    "Reintentar indexación",
+    "Retry indexing",
+    "Tentar indexar novamente",
   ],
   "Searching pages": ["Buscando…", "Searching…", "Buscando…"],
   Retry: ["Reintentar", "Retry", "Tentar novamente"],
