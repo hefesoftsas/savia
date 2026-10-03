@@ -5,7 +5,10 @@ import { subscribePageChanges } from "./page-events";
 
 export function usePagesIndex(api: ApiClient, enabled = true, query = "") {
   const client = useMemo(() => new PagesClient(api), [api]);
-  const initial = useMemo(() => client.cachedList(query), [client, query]);
+  const initial = useMemo(
+    () => (enabled ? client.cachedList(query) : undefined),
+    [client, enabled, query],
+  );
   const [pages, setPages] = useState<PageSummary[]>(() => initial ?? []);
   const [loading, setLoading] = useState(enabled && initial === undefined);
   const [error, setError] = useState(false);
@@ -31,7 +34,7 @@ export function usePagesIndex(api: ApiClient, enabled = true, query = "") {
     [client, query],
   );
   useEffect(() => {
-    const cached = client.cachedList(query);
+    const cached = enabled ? client.cachedList(query) : undefined;
     loaded.current = cached !== undefined;
     setPages(cached ?? []);
     setError(false);
