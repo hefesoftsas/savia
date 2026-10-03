@@ -4,25 +4,24 @@ import Foundation
 
 // Bound temporary raw PCM independently; Ogg encoding has its own 512 KiB cap.
 private let limitBytes = 8 * 1024 * 1024
-private let limitSeconds: Double = 60
+private let segmentSeconds: Double = 30
+private let sessionLimitSeconds: Double = 3_600
 
 private final class TapCapture {
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
     private let lock = NSLock()
-    private var pcm = Data()
+    private var pcm = Data(capacity: 48_000 * 30 * 2)
     private var sampleRate: Double = 0
     private var started = DispatchTime.now().uptimeNanoseconds
+    private var segmentStarted = DispatchTime.now().uptimeNanoseconds
     private var stopped = false
     private var captureError: String?
-    private let output: URL
 
     var outputSampleRate: Int { Int(sampleRate) }
 
-    init(output: URL) {
-        self.output = output
-    }
+    init() {}
 
     func start() throws {
         guard #available(macOS 14.2, *) else {
@@ -68,6 +67,7 @@ private final class TapCapture {
         }
         sampleRate = format.mSampleRate
         started = DispatchTime.now().uptimeNanoseconds
+        segmentStarted = started
 
         status = AudioDeviceCreateIOProcIDWithBlock(&ioProcID, aggregateID, DispatchQueue(label: "com.hefesoft.savia.capture.audio")) { [weak self] _, input, _, _, _ in
             self?.append(input)
@@ -80,7 +80,7 @@ private final class TapCapture {
     private func append(_ buffers: UnsafePointer<AudioBufferList>?) {
         guard let buffers else { return }
         let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
-        guard elapsed < limitSeconds else { return }
+        guard elapsed < sessionLimitSeconds else { return }
         let list = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: buffers))
         guard let buffer = list.first, let data = buffer.mData else { return }
         let channels = max(1, Int(buffer.mNumberChannels))
@@ -100,22 +100,23 @@ private final class TapCapture {
         lock.lock()
         defer { lock.unlock() }
         guard !stopped else { return }
-        let maxFrames = Int(sampleRate * limitSeconds)
-        let durationRemaining = max(0, (maxFrames - pcm.count / 2) * 2)
-        let byteRemaining = max(0, limitBytes - pcm.count)
-        let remaining = min(byteRemaining, durationRemaining)
-        if output.count > remaining && byteRemaining < durationRemaining {
-            captureError = "Capture reached the 8 MiB per-track PCM limit."
-        }
-        if remaining > 0 {
-            pcm.append(output.prefix(remaining))
+        let maxFrames = Int(sampleRate * sessionLimitSeconds)
+        let maxSegmentFrames = Int(sampleRate * segmentSeconds)
+        var consumedFrames = 0
+        while consumedFrames < frames && pcm.count / 2 < maxSegmentFrames && pcm.count < limitBytes && pcm.count / 2 < maxFrames {
+            let remainingFrames = min(frames - consumedFrames, maxSegmentFrames - pcm.count / 2)
+            let byteStart = consumedFrames * 2
+            let byteEnd = min(output.count, byteStart + remainingFrames * 2)
+            guard byteEnd > byteStart else { break }
+            pcm.append(output[byteStart..<byteEnd])
+            consumedFrames += (byteEnd - byteStart) / 2
+            if pcm.count / 2 >= maxSegmentFrames || pcm.count >= limitBytes { flushSegment() }
         }
     }
 
     func stop() throws {
         lock.lock()
         stopped = true
-        let captureError = captureError
         lock.unlock()
         if aggregateID != kAudioObjectUnknown, let ioProcID {
             AudioDeviceStop(aggregateID, ioProcID)
@@ -130,8 +131,30 @@ private final class TapCapture {
             AudioHardwareDestroyProcessTap(tapID)
             tapID = kAudioObjectUnknown
         }
+        lock.lock()
+        flushSegment()
+        let captureError = captureError
+        lock.unlock()
         if let captureError { throw CaptureError(captureError) }
-        try pcm.write(to: output, options: .atomic)
+    }
+
+    private func flushSegment() {
+        guard !pcm.isEmpty else { return }
+        let now = DispatchTime.now().uptimeNanoseconds
+        var packet = Data("SSEG".utf8)
+        var start = segmentStarted &- started
+        var size = UInt32(pcm.count).littleEndian
+        start = start.littleEndian
+        withUnsafeBytes(of: &start) { packet.append(contentsOf: $0) }
+        withUnsafeBytes(of: &size) { packet.append(contentsOf: $0) }
+        packet.append(pcm)
+        do {
+            try FileHandle.standardOutput.write(contentsOf: packet)
+        } catch {
+            captureError = "Could not send a system audio segment to the host."
+        }
+        pcm.removeAll(keepingCapacity: true)
+        segmentStarted = now
     }
 }
 
@@ -165,20 +188,18 @@ if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--authorize-
     exit(1)
 }
 
-guard CommandLine.arguments.count == 2 else {
-    fputs("Capture helper requires one host-owned output path.\n", stderr)
+guard CommandLine.arguments.count == 1 else {
+    fputs("Capture helper does not accept capture paths.\n", stderr)
     exit(2)
 }
 
-private let capture = TapCapture(output: URL(fileURLWithPath: CommandLine.arguments[1]))
+private let capture = TapCapture()
 do {
     try capture.start()
     print("READY \(capture.outputSampleRate)")
     fflush(stdout)
     _ = readLine()
     try capture.stop()
-    print("STOPPED")
-    fflush(stdout)
 } catch {
     fputs("\(error)\n", stderr)
     try? capture.stop()

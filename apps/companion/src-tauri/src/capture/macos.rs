@@ -1,16 +1,19 @@
 use std::{
     fs,
-    io::{BufRead, BufReader, Read, Write},
+    io::{Read, Write},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, ExitStatus, Stdio},
-    sync::mpsc,
+    sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
-use super::audio::RawAudio;
-use super::lifecycle::MAX_PCM_BYTES;
+use super::{
+    lifecycle::{Source, MAX_PCM_BYTES},
+    segments::{SegmentAssembler, SegmentWorker},
+    spool::CaptureSpool,
+};
 
 const EMBEDDED_HELPER: &[u8] = include_bytes!(env!("SAVIA_CAPTURE_HELPER"));
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(12);
@@ -20,10 +23,9 @@ const MAX_STARTUP_ERROR_BYTES: u64 = 4096;
 pub struct SystemCapture {
     child: Option<Child>,
     stdin: Option<ChildStdin>,
-    _stdout: Option<ChildStdout>,
     stderr_worker: Option<JoinHandle<String>>,
-    output: PathBuf,
-    sample_rate: u32,
+    stdout_worker: Option<JoinHandle<Result<(), String>>>,
+    segments: Option<SegmentWorker>,
 }
 
 impl SystemCapture {
@@ -44,18 +46,21 @@ impl SystemCapture {
         }
     }
 
-    pub fn start(temp_dir: &Path) -> Result<Self, String> {
+    pub fn start(
+        temp_dir: &Path,
+        spool: Arc<Mutex<CaptureSpool>>,
+        origin: Instant,
+    ) -> Result<Self, String> {
         let helper = helper_path(temp_dir)?;
-        let output = temp_dir.join("system.pcm");
-        let mut command = Command::new(&helper);
-        command.arg(&output);
-        Self::start_helper(command, output, STARTUP_TIMEOUT)
+        let command = Command::new(&helper);
+        Self::start_helper(command, STARTUP_TIMEOUT, spool, origin)
     }
 
     fn start_helper(
         mut command: Command,
-        output: PathBuf,
         timeout: Duration,
+        spool: Arc<Mutex<CaptureSpool>>,
+        origin: Instant,
     ) -> Result<Self, String> {
         command
             .stdin(Stdio::piped())
@@ -74,11 +79,7 @@ impl SystemCapture {
         };
         let (ready_sender, ready_receiver) = mpsc::channel();
         let stdout_thread = thread::spawn(move || {
-            let mut reader = BufReader::new(stdout);
-            let mut line = String::new();
-            let result = reader
-                .read_line(&mut line)
-                .map(|_| (line, reader.into_inner()));
+            let result = read_ready_line(stdout);
             let _ = ready_sender.send(result);
         });
         let stderr_thread = thread::spawn(move || collect_stderr(stderr));
@@ -88,8 +89,17 @@ impl SystemCapture {
             Ok(Err(_)) => {
                 kill_child(&mut child);
                 let _ = stdout_thread.join();
-                let _ = stderr_thread.join();
-                return Err("Could not read the macOS capture startup result.".into());
+                let details = stderr_thread.join().unwrap_or_default();
+                let message = if details.contains("could not create the system audio tap")
+                    || details.contains("capture permission")
+                {
+                    "macOS could not start the system audio tap. Check System Settings > Privacy & Security > Screen & System Audio Recording."
+                } else if details.contains("macOS 14.2") {
+                    "System audio capture requires macOS 14.2 or later."
+                } else {
+                    "Could not read the macOS capture startup result."
+                };
+                return Err(message.into());
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 kill_child(&mut child);
@@ -143,17 +153,56 @@ impl SystemCapture {
             let _ = stderr_thread.join();
             return Err("The macOS capture helper has no control pipe.".into());
         };
+        let segments = SegmentWorker::start(
+            Source::System,
+            sample_rate,
+            origin.elapsed().as_secs_f64(),
+            spool,
+        )?;
+        let assembler = segments.assembler();
+        let stdout_worker = thread::Builder::new()
+            .name("savia-macos-segment-reader".into())
+            .spawn(move || read_segments(stdout, assembler))
+            .map_err(|_| "Could not start the macOS audio segment reader.".to_string())?;
         Ok(Self {
             child: Some(child),
             stdin: Some(stdin),
-            _stdout: Some(stdout),
             stderr_worker: Some(stderr_thread),
-            output,
-            sample_rate,
+            stdout_worker: Some(stdout_worker),
+            segments: Some(segments),
         })
     }
 
-    pub fn stop(mut self) -> Result<RawAudio, String> {
+    pub fn stop(mut self) -> Result<(), String> {
+        self.request_stop()?;
+        if let Some(mut child) = self.child.take() {
+            let status = wait_child(&mut child)?;
+            if !status.success() {
+                return Err("macOS could not finalize system audio capture.".into());
+            }
+        }
+        let reader_result = self
+            .stdout_worker
+            .take()
+            .map(|worker| {
+                worker.join().map_err(|_| {
+                    "The macOS audio segment reader stopped unexpectedly.".to_string()
+                })?
+            })
+            .unwrap_or(Ok(()));
+        let segment_result = self
+            .segments
+            .take()
+            .map(SegmentWorker::finish)
+            .unwrap_or(Ok(()));
+        if let Some(worker) = self.stderr_worker.take() {
+            let _ = worker.join();
+        }
+        reader_result?;
+        segment_result
+    }
+
+    pub fn request_stop(&mut self) -> Result<(), String> {
         if let Some(mut stdin) = self.stdin.take() {
             stdin
                 .write_all(b"stop\n")
@@ -162,27 +211,60 @@ impl SystemCapture {
                 .flush()
                 .map_err(|_| "Could not finalize system audio capture.".to_string())?;
         }
-        if let Some(mut child) = self.child.take() {
-            let status = wait_child(&mut child)?;
-            if !status.success() {
-                return Err("macOS could not finalize system audio capture.".into());
-            }
+        Ok(())
+    }
+}
+
+fn read_ready_line(mut stdout: ChildStdout) -> std::io::Result<(String, ChildStdout)> {
+    let mut line = Vec::with_capacity(32);
+    loop {
+        let mut byte = [0u8; 1];
+        stdout.read_exact(&mut byte)?;
+        if byte[0] == b'\n' {
+            break;
         }
-        if let Some(worker) = self.stderr_worker.take() {
-            let _ = worker.join();
+        if line.len() >= 128 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "capture helper readiness line is too long",
+            ));
         }
-        let metadata = fs::metadata(&self.output)
-            .map_err(|_| "macOS did not produce system audio samples.".to_string())?;
-        if metadata.len() > MAX_PCM_BYTES as u64 {
-            return Err("Capture reached the 8 MiB per-track limit.".into());
+        line.push(byte[0]);
+    }
+    Ok((String::from_utf8_lossy(&line).into_owned(), stdout))
+}
+
+fn read_segments(
+    mut stdout: ChildStdout,
+    assembler: Arc<Mutex<SegmentAssembler>>,
+) -> Result<(), String> {
+    loop {
+        let mut header = [0u8; 16];
+        let mut first = [0u8; 1];
+        match stdout.read(&mut first) {
+            Ok(0) => return Ok(()),
+            Ok(_) => header[0] = first[0],
+            Err(_) => return Err("Could not read a macOS system audio segment.".into()),
         }
-        let pcm = fs::read(&self.output)
-            .map_err(|_| "Could not read the captured system audio samples.".to_string())?;
-        Ok(RawAudio {
-            pcm,
-            sample_rate: self.sample_rate,
-            error: None,
-        })
+        stdout
+            .read_exact(&mut header[1..])
+            .map_err(|_| "macOS sent an incomplete audio segment header.".to_string())?;
+        if &header[..4] != b"SSEG" {
+            return Err("macOS sent an invalid audio segment header.".into());
+        }
+        let start_nanos = u64::from_le_bytes(header[4..12].try_into().unwrap());
+        let size = u32::from_le_bytes(header[12..16].try_into().unwrap()) as usize;
+        if size == 0 || size > MAX_PCM_BYTES || size % 2 != 0 {
+            return Err("macOS sent an oversized or malformed audio segment.".into());
+        }
+        let mut pcm = vec![0; size];
+        stdout
+            .read_exact(&mut pcm)
+            .map_err(|_| "macOS sent an incomplete audio segment.".to_string())?;
+        assembler
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_external_segment(start_nanos as f64 / 1_000_000_000.0, pcm)?;
     }
 }
 
@@ -197,12 +279,15 @@ fn helper_path(temp_dir: &Path) -> Result<PathBuf, String> {
 
 impl Drop for SystemCapture {
     fn drop(&mut self) {
-        if let Some(mut stdin) = self.stdin.take() {
-            let _ = stdin.write_all(b"stop\n");
-            let _ = stdin.flush();
-        }
+        let _ = self.request_stop();
         if let Some(mut child) = self.child.take() {
             let _ = wait_child(&mut child);
+        }
+        if let Some(worker) = self.stdout_worker.take() {
+            let _ = worker.join();
+        }
+        if let Some(segments) = self.segments.take() {
+            let _ = segments.finish();
         }
         if let Some(worker) = self.stderr_worker.take() {
             let _ = worker.join();
@@ -312,13 +397,26 @@ mod tests {
         command
     }
 
+    fn spool() -> (tempfile::TempDir, Arc<Mutex<CaptureSpool>>) {
+        let dir = tempfile::tempdir().unwrap();
+        let spool = CaptureSpool::create(
+            dir.path(),
+            "1f2c83ab-4d6e-4a10-9f71-c11a3f4d2e80".into(),
+            vec![Source::System],
+        )
+        .unwrap();
+        (dir, Arc::new(Mutex::new(spool)))
+    }
+
     #[test]
     fn startup_timeout_kills_a_helper_that_never_sends_ready() {
         let started = std::time::Instant::now();
+        let (_dir, spool) = spool();
         let error = SystemCapture::start_helper(
             shell_command("exec sleep 30"),
-            PathBuf::from("unused.pcm"),
             Duration::from_millis(100),
+            spool,
+            Instant::now(),
         )
         .err()
         .expect("startup should time out");
@@ -329,10 +427,12 @@ mod tests {
 
     #[test]
     fn helper_failure_reads_bounded_stderr_without_waiting_for_a_live_child() {
+        let (_dir, spool) = spool();
         let error = SystemCapture::start_helper(
             shell_command("printf 'could not create the system audio tap\\n' >&2; exit 1"),
-            PathBuf::from("unused.pcm"),
             Duration::from_secs(1),
+            spool,
+            Instant::now(),
         )
         .err()
         .expect("helper should fail before READY");

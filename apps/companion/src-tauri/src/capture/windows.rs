@@ -9,16 +9,17 @@ use std::{
 };
 
 use super::{
-    audio::RawAudio,
-    lifecycle::{MAX_CAPTURE_DURATION, MAX_PCM_BYTES},
+    lifecycle::{Source, MAX_CAPTURE_DURATION},
+    segments::{SegmentAssembler, SegmentWorker},
+    spool::CaptureSpool,
 };
 
 const SAMPLE_RATE: u32 = 48_000;
 
 struct CaptureBuffer {
-    pcm: Vec<u8>,
     started: Instant,
     error: Option<String>,
+    segmenter: Option<Arc<Mutex<SegmentAssembler>>>,
 }
 
 struct ComApartment;
@@ -33,29 +34,45 @@ pub struct SystemCapture {
     stop: Arc<AtomicBool>,
     buffer: Arc<Mutex<CaptureBuffer>>,
     worker: Option<JoinHandle<()>>,
+    segments: Option<SegmentWorker>,
 }
 
 impl SystemCapture {
-    pub fn start(_temp_dir: &std::path::Path) -> Result<Self, String> {
+    pub fn start(
+        _temp_dir: &std::path::Path,
+        spool: Arc<Mutex<CaptureSpool>>,
+        origin: Instant,
+    ) -> Result<Self, String> {
         let stop = Arc::new(AtomicBool::new(false));
         let buffer = Arc::new(Mutex::new(CaptureBuffer {
-            pcm: Vec::with_capacity(MAX_PCM_BYTES),
             started: Instant::now(),
             error: None,
+            segmenter: None,
         }));
         let (started_tx, started_rx) = mpsc::sync_channel(1);
         let thread_stop = Arc::clone(&stop);
         let thread_buffer = Arc::clone(&buffer);
+        let thread_spool = spool;
+        let thread_origin = origin;
         let worker = thread::Builder::new()
             .name("savia-wasapi-loopback".into())
-            .spawn(move || loopback_worker(thread_stop, thread_buffer, started_tx))
+            .spawn(move || {
+                loopback_worker(
+                    thread_stop,
+                    thread_buffer,
+                    thread_spool,
+                    thread_origin,
+                    started_tx,
+                )
+            })
             .map_err(|_| "Could not start the Windows system audio worker.".to_string())?;
 
         match started_rx.recv_timeout(Duration::from_secs(8)) {
-            Ok(Ok(())) => Ok(Self {
+            Ok(Ok(segments)) => Ok(Self {
                 stop,
                 buffer,
                 worker: Some(worker),
+                segments: Some(segments),
             }),
             Ok(Err(error)) => {
                 let _ = worker.join();
@@ -69,33 +86,43 @@ impl SystemCapture {
         }
     }
 
-    pub fn stop(mut self) -> Result<RawAudio, String> {
-        self.stop.store(true, Ordering::Release);
+    pub fn stop(mut self) -> Result<(), String> {
+        self.request_stop();
         if let Some(worker) = self.worker.take() {
             worker
                 .join()
                 .map_err(|_| "The Windows system audio worker stopped unexpectedly.".to_string())?;
         }
-        let buffer = self
+        let capture_error = self
             .buffer
             .lock()
-            .map_err(|_| "The Windows system audio buffer is unavailable.".to_string())?;
-        if let Some(error) = &buffer.error {
-            return Err(error.clone());
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .error
+            .clone();
+        let result = self
+            .segments
+            .take()
+            .map(SegmentWorker::finish)
+            .unwrap_or(Ok(()));
+        if let Some(error) = capture_error {
+            return Err(error);
         }
-        Ok(RawAudio {
-            pcm: buffer.pcm.clone(),
-            sample_rate: SAMPLE_RATE,
-            error: None,
-        })
+        result
+    }
+
+    pub fn request_stop(&self) {
+        self.stop.store(true, Ordering::Release);
     }
 }
 
 impl Drop for SystemCapture {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Release);
+        self.request_stop();
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
+        }
+        if let Some(segments) = self.segments.take() {
+            let _ = segments.finish();
         }
     }
 }
@@ -103,11 +130,12 @@ impl Drop for SystemCapture {
 fn loopback_worker(
     stop: Arc<AtomicBool>,
     buffer: Arc<Mutex<CaptureBuffer>>,
-    started: mpsc::SyncSender<Result<(), String>>,
+    spool: Arc<Mutex<CaptureSpool>>,
+    origin: Instant,
+    started: mpsc::SyncSender<Result<SegmentWorker, String>>,
 ) {
     use wasapi::{initialize_mta, DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat};
 
-    let mut notified = false;
     let result = (|| -> Result<(), String> {
         initialize_mta()
             .ok()
@@ -134,15 +162,23 @@ fn loopback_worker(
         let capture = client
             .get_audiocaptureclient()
             .map_err(|error| format!("Could not open Windows loopback stream: {error}"))?;
+        let segments = SegmentWorker::start(
+            Source::System,
+            SAMPLE_RATE,
+            origin.elapsed().as_secs_f64(),
+            spool,
+        )?;
+        if let Ok(mut target) = buffer.lock() {
+            target.segmenter = Some(segments.assembler());
+        }
         client
             .start_stream()
             .map_err(|error| format!("Could not start Windows loopback capture: {error}"))?;
-        let _ = started.send(Ok(()));
-        notified = true;
+        let _ = started.send(Ok(segments));
 
         while !stop.load(Ordering::Acquire) {
             match capture.get_next_packet_size() {
-                Ok(Some(frames)) if frames > 0 => {
+                Ok(Some(_frames)) => {
                     let mut raw = VecDeque::new();
                     if let Err(error) = capture.read_from_device_to_deque(&mut raw) {
                         set_worker_error(
@@ -179,15 +215,9 @@ fn loopback_worker(
     })();
 
     match result {
-        Ok(()) => {
-            if !notified {
-                let _ = started.send(Ok(()));
-            }
-        }
+        Ok(()) => {}
         Err(error) => {
-            if !notified {
-                let _ = started.send(Err(error.clone()));
-            }
+            let _ = started.send(Err(error.clone()));
             set_worker_error(&buffer, error);
         }
     }
@@ -203,22 +233,19 @@ fn append_float_stereo(buffer: &Arc<Mutex<CaptureBuffer>>, input: &[u8]) {
     let Ok(mut buffer) = buffer.lock() else {
         return;
     };
-    if buffer.started.elapsed() >= MAX_CAPTURE_DURATION
-        || buffer.pcm.len() / 2 >= SAMPLE_RATE as usize * MAX_CAPTURE_DURATION.as_secs() as usize
-    {
+    if buffer.started.elapsed() >= MAX_CAPTURE_DURATION {
         return;
     }
+    let Some(segmenter) = buffer.segmenter.as_ref().cloned() else {
+        return;
+    };
+    let Ok(mut segmenter) = segmenter.lock() else {
+        return;
+    };
     for frame in input.chunks_exact(8) {
-        if buffer.pcm.len() / 2 >= SAMPLE_RATE as usize * MAX_CAPTURE_DURATION.as_secs() as usize {
-            break;
-        }
-        if buffer.pcm.len() + 2 > MAX_PCM_BYTES {
-            buffer.error = Some("Capture reached the 8 MiB per-track limit.".into());
-            break;
-        }
         let left = f32::from_le_bytes(frame[0..4].try_into().unwrap());
         let right = f32::from_le_bytes(frame[4..8].try_into().unwrap());
         let value = (((left + right) * 0.5).clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-        buffer.pcm.extend_from_slice(&value.to_le_bytes());
+        segmenter.push_i16(value);
     }
 }

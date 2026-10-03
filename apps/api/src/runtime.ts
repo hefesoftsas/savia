@@ -1,3 +1,6 @@
+import { CompanionSessions } from "./companion/sessions";
+import { CompanionSessionJobs } from "./companion/session-jobs";
+import { CompanionService, CompanionError } from "./companion/service";
 import type { PagesSearchBindings } from "./pages/cloudflare-search";
 import { runJiraPrivacyMaintenance } from "./personal-integrations/jira-privacy-runtime";
 import { runtimePluginRegistryForTenant } from "./studio/plugin-registry-config";
@@ -395,6 +398,32 @@ const runtime = {
     overrides: RuntimeOverrides = {},
   ): Promise<void> {
     const realtime = createRealtimeHubClient(environment.REALTIME_HUB);
+    const runCompanion = async () => {
+      if (environment.COMPANION_ENABLED !== "true" || !environment.DOCUMENTS)
+        return;
+      const configuration = assistantConfigurationFromEnvironment(environment);
+      const jobs = new CompanionSessionJobs(
+        new CompanionSessions(environment.DOCUMENTS),
+        new CompanionService({ sttModel: environment.COMPANION_STT_MODEL }),
+        async (ownerId, tenantId) => {
+          if (tenantId === undefined)
+            throw new CompanionError(
+              "WORKSPACE_REQUIRED",
+              "A workspace is required for recording processing.",
+              403,
+            );
+          return configuration.effectiveConfigurationForTenant(
+            ownerId,
+            tenantId,
+          );
+        },
+      );
+      // Each operation persists independently; overlapping cron invocations use R2 leases.
+      for (let step = 0; step < 8; step++) {
+        const result = await jobs.processOne();
+        if (!result.processed) break;
+      }
+    };
     const runBookings = async () => {
       const bridgeKey = await identityAdministrationBridgeKey(
         environment.SAVIA_INTERNAL_BRIDGE_KEY,
@@ -447,6 +476,7 @@ const runtime = {
     if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
       const results = await Promise.allSettled([
         runBookings(),
+        runCompanion(),
         runScheduledWorkflows(
           environment.DB,
           studioIntegrationKeyFromEnvironment(environment),
@@ -474,6 +504,7 @@ const runtime = {
     }
     const results = await Promise.allSettled([
       runBookings(),
+      runCompanion(),
       runScheduledWorkflows(
         environment.DB,
         studioIntegrationKeyFromEnvironment(environment),

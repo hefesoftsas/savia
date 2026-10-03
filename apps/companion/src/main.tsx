@@ -14,8 +14,6 @@ import {
   native,
   type Capabilities,
   type CaptureStatus,
-  type SavedRecording,
-  type Source,
 } from "./client";
 import "./styles.css";
 
@@ -25,12 +23,12 @@ const empty: CaptureStatus = {
   tracks: [],
   error: null,
 };
-const DEFAULT_API_ORIGIN = "http://127.0.0.1:8787";
-const DEFAULT_APP_ORIGIN = "http://127.0.0.1:5173";
+const DEFAULT_API_ORIGIN = "https://savia-preview.hefesoft.com";
+const DEFAULT_APP_ORIGIN = "https://savia-preview.hefesoft.com";
 
 function recordingReviewHref(value: string): string | null {
   try {
-    return `${validateApiOrigin(value)}/#/companion-recordings`;
+    return `${validateApiOrigin(value)}/#/companion-recordings?tab=sessions`;
   } catch {
     return null;
   }
@@ -48,9 +46,8 @@ function App() {
   const [consent, setConsent] = useState(false);
   const [notice, setNotice] = useState("");
   const [noticeIsError, setNoticeIsError] = useState(false);
-  const [savedSources, setSavedSources] = useState<Source[]>([]);
+  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const recordingIds = useRef<Partial<Record<Source, string>>>({});
   const inFlight = useRef(false);
   const mounted = useRef(true);
 
@@ -93,12 +90,12 @@ function App() {
   const start = () =>
     run("Starting recording", async () => {
       const next = await native<CaptureStatus>("start_capture", {
+        sessionId: crypto.randomUUID(),
         sources: { microphone, system },
       });
       setStatus(next);
       setConsent(false);
-      setSavedSources([]);
-      recordingIds.current = {};
+      setSaved(false);
     });
 
   const stop = () =>
@@ -106,17 +103,16 @@ function App() {
       const next = await native<CaptureStatus>("stop_capture");
       setStatus(next);
       setConsent(false);
-      setSavedSources([]);
+      setSaved(false);
     });
 
   const discard = () =>
     run("Discarding audio", async () => {
       setStatus(await native<CaptureStatus>("discard_capture"));
       setConsent(false);
-      setSavedSources([]);
+      setSaved(false);
       setNotice("");
       setNoticeIsError(false);
-      recordingIds.current = {};
     });
 
   const connect = (event: FormEvent) => {
@@ -153,23 +149,58 @@ function App() {
         throw new Error(
           "Connect storage and confirm permission before upload.",
         );
-      const completed = [...savedSources];
-      for (const track of status.tracks) {
-        if (completed.includes(track.source)) continue;
-        const audio = await native<{ base64: string; format: "ogg" }>(
-          "read_capture",
-          { source: track.source },
-        );
-        const id = (recordingIds.current[track.source] ??= crypto.randomUUID());
-        await companionRequest<SavedRecording>(apiOrigin, token, "save", {
-          id,
-          source: track.source,
-          audio: { data: audio.base64, format: audio.format },
-          consent: true,
-        });
-        completed.push(track.source);
-        setSavedSources([...completed]);
+      if (!status.sessionId || !status.chunks?.length)
+        throw new Error("No recoverable audio is available to upload.");
+      const session = await companionRequest<{
+        state: string;
+        chunks: { source: string; sequence: number }[];
+      }>(apiOrigin, token, "sessioncreate", {
+        id: status.sessionId,
+        name: `Recording ${status.sessionId.slice(0, 8)}`,
+        sources: [...new Set(status.chunks.map((chunk) => chunk.source))],
+        consent: true,
+      });
+      let uploaded = 0;
+      for (const chunk of status.chunks) {
+        if (
+          !session.chunks.some(
+            (saved) =>
+              saved.source === chunk.source &&
+              saved.sequence === chunk.sequence,
+          )
+        ) {
+          const audio = await native<{ base64: string; format: "ogg" }>(
+            "read_capture_chunk",
+            { source: chunk.source, sequence: chunk.sequence },
+          );
+          await companionRequest(apiOrigin, token, "sessionchunk", {
+            sessionId: status.sessionId,
+            payload: {
+              source: chunk.source,
+              sequence: chunk.sequence,
+              startSeconds: chunk.startSeconds,
+              audio: { data: audio.base64, format: audio.format },
+            },
+          });
+        }
+        uploaded++;
+        setBusy(`Uploading ${uploaded} of ${status.chunks.length}`);
       }
+      await companionRequest(apiOrigin, token, "sessionfinalize", {
+        sessionId: status.sessionId,
+        payload: {
+          expectedChunks: status.chunks.length,
+          durationSeconds: Math.min(
+            3600,
+            Math.max(
+              ...status.chunks.map(
+                (chunk) => chunk.startSeconds + chunk.durationSeconds,
+              ),
+            ),
+          ),
+        },
+      });
+      setSaved(true);
       setNotice("Audio saved privately in Savia.");
     });
 
@@ -177,21 +208,23 @@ function App() {
     change();
     setCapabilities(null);
     setConsent(false);
-    setSavedSources([]);
+    setSaved(false);
     setNotice("");
     setNoticeIsError(false);
   };
 
   const seconds = Math.floor(status.elapsedSeconds);
-  const duration = `${Math.floor(seconds / 60)
+  const duration = `${Math.floor(seconds / 3600)
+    .toString()
+    .padStart(2, "0")}:${Math.floor((seconds % 3600) / 60)
     .toString()
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
-  const ready = status.state === "ready";
+  const ready =
+    status.state === "ready" ||
+    (["error", "interrupted"].includes(status.state) &&
+      Boolean(status.chunks?.length));
   const connected = Boolean(capabilities);
-  const complete =
-    ready &&
-    status.tracks.length > 0 &&
-    savedSources.length === status.tracks.length;
+  const complete = ready && saved;
   const selectedSources = microphone || system;
   const reviewHref = recordingReviewHref(appOrigin);
   const locked = Boolean(busy) || status.state === "recording";
@@ -359,25 +392,25 @@ function App() {
                   ? complete
                     ? "Saved to Savia"
                     : "Ready to upload"
-                  : status.state === "error"
+                  : status.state === "error" || status.state === "interrupted"
                     ? "Capture needs attention"
                     : "Ready to record"}
             </span>
           </div>
           <p className="timer" aria-label={`${seconds} seconds recorded`}>
             {duration}
-            <span> / 01:00</span>
+            <span> / 01:00:00</span>
           </p>
           <div
             className="time-track"
             role="progressbar"
             aria-label="Recording time"
             aria-valuemin={0}
-            aria-valuemax={60}
-            aria-valuenow={Math.min(seconds, 60)}
+            aria-valuemax={3600}
+            aria-valuenow={Math.min(seconds, 3600)}
           >
             <span
-              style={{ transform: `scaleX(${Math.min(seconds / 60, 1)})` }}
+              style={{ transform: `scaleX(${Math.min(seconds / 3600, 1)})` }}
             />
           </div>
           <p className="stage-hint">
@@ -385,9 +418,9 @@ function App() {
               ? "Your audio stays on this device until you upload it."
               : ready
                 ? "Check the captured sources, then upload when ready."
-                : status.state === "error"
+                : status.state === "error" || status.state === "interrupted"
                   ? "Review the message below, then try another recording."
-                  : "Capture up to 60 seconds from your selected sources."}
+                  : "Capture up to one hour from your selected sources."}
           </p>
           {ready && status.tracks.length > 0 && (
             <ul className="captured-sources" aria-label="Captured audio">
@@ -405,6 +438,12 @@ function App() {
                 </li>
               ))}
             </ul>
+          )}
+          {status.recovered && (
+            <p className="notice" role="status">
+              Recovered a saved recording from this device. Review it and upload
+              when ready.
+            </p>
           )}
           {status.error && (
             <p className="notice is-error" role="alert">
@@ -463,7 +502,7 @@ function App() {
               onChange={(event) => setConsent(event.target.checked)}
             />
             <span>
-              I have permission to record and store this sample in Savia.
+              I have permission to record and store this recording in Savia.
             </span>
           </label>
         )}
@@ -486,7 +525,8 @@ function App() {
           </button>
           {(status.state === "recording" ||
             ready ||
-            status.state === "error") && (
+            status.state === "error" ||
+            status.state === "interrupted") && (
             <button
               className="discard-action"
               type="button"
