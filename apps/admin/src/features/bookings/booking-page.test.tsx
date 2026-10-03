@@ -62,6 +62,7 @@ it("explains missing publication requirements before submitting settings", async
   };
   mount(apiClient);
   await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Review and publish" }));
   fireEvent.click(screen.getByLabelText("Published"));
   fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -119,6 +120,7 @@ it("offers the public page after published settings are saved", async () => {
   };
   mount(apiClient);
   await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Review and publish" }));
   fireEvent.click(screen.getByLabelText("Published"));
   expect(
     screen.queryByRole("link", { name: "Open public booking page" }),
@@ -200,7 +202,9 @@ it("loads booking settings and candidates, then saves the edited configuration",
   expect(
     await screen.findByRole("heading", { name: "Appointments" }),
   ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Team" }));
   expect(screen.getByLabelText("Professional")).toHaveValue("principal-1");
+  fireEvent.click(screen.getByRole("button", { name: "Details" }));
   fireEvent.change(screen.getByLabelText("Public title"), {
     target: { value: "Savia visits" },
   });
@@ -465,4 +469,139 @@ it("edits multiple weekly periods with time controls and saves each interval", a
       ],
     }),
   );
+});
+
+function managementClient() {
+  const bootstrap = {
+    settings: structuredClone(settings),
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+  };
+  return {
+    get: vi.fn().mockResolvedValue({ data: bootstrap }),
+    put: vi.fn().mockImplementation(async (_path, value) => ({
+      data: { ...bootstrap, settings: { ...value, version: 4 } },
+    })),
+  };
+}
+
+it("guides configuration through steps and keeps edits when going back", async () => {
+  mount(managementClient());
+  await screen.findByLabelText("Public title");
+  expect(screen.queryByLabelText("Service name")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Public title"), {
+    target: { value: "New agenda" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  expect(screen.getByLabelText("Professional")).toHaveValue("principal-1");
+  fireEvent.click(screen.getByRole("button", { name: "Back" }));
+  expect(screen.getByLabelText("Public title")).toHaveValue("New agenda");
+});
+
+it("removes a service from the saved configuration", async () => {
+  const apiClient = managementClient();
+  mount(apiClient);
+  await screen.findByLabelText("Public title");
+  fireEvent.click(screen.getByRole("button", { name: "Services" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Remove service Consultation" }),
+  );
+  expect(screen.queryByLabelText("Service name")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  await screen.findByText("Booking settings saved.");
+  expect(apiClient.put).toHaveBeenCalledWith(
+    "/v1/tenants/42/booking",
+    expect.objectContaining({ services: [], published: false }),
+  );
+});
+
+it("removes a professional and cleans service assignments", async () => {
+  const apiClient = managementClient();
+  mount(apiClient);
+  await screen.findByLabelText("Public title");
+  fireEvent.click(screen.getByRole("button", { name: "Team" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Remove professional Ari" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  await screen.findByText("Booking settings saved.");
+  expect(apiClient.put).toHaveBeenCalledWith(
+    "/v1/tenants/42/booking",
+    expect.objectContaining({
+      professionals: [],
+      services: [expect.objectContaining({ professionalIds: [] })],
+    }),
+  );
+});
+
+it("edits weekly availability inside the setup wizard", async () => {
+  const apiClient = managementClient();
+  mount(apiClient);
+  await screen.findByLabelText("Public title");
+  fireEvent.click(screen.getByRole("button", { name: "Hours" }));
+  fireEvent.change(screen.getByLabelText("Monday start"), {
+    target: { value: "10:00" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  await screen.findByText("Booking settings saved.");
+  expect(apiClient.put).toHaveBeenCalledWith(
+    "/v1/tenants/42/booking",
+    expect.objectContaining({
+      professionals: [
+        expect.objectContaining({
+          weekly: [{ day: 1, start: "10:00", end: "12:00" }],
+        }),
+      ],
+    }),
+  );
+});
+
+it("blocks saving overlapping weekly periods and opens the hours step", async () => {
+  const apiClient = managementClient();
+  const data = await apiClient.get();
+  data.data.settings.professionals[0].weekly.push({
+    day: 1,
+    start: "11:00",
+    end: "14:00",
+  });
+  mount(apiClient);
+  await screen.findByLabelText("Public title");
+  fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "non-overlapping periods",
+  );
+  expect(screen.getByRole("heading", { name: "Hours" })).toBeInTheDocument();
+  expect(apiClient.put).not.toHaveBeenCalled();
+});
+
+it("saves deleting the last published service as an unpublished draft", async () => {
+  const apiClient = managementClient();
+  const data = await apiClient.get();
+  data.data.settings.published = true;
+  mount(apiClient);
+  await screen.findByLabelText("Public title");
+  fireEvent.click(screen.getByRole("button", { name: "Services" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Remove service Consultation" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  await screen.findByText("Booking settings saved.");
+  expect(apiClient.put).toHaveBeenCalledWith(
+    "/v1/tenants/42/booking",
+    expect.objectContaining({ published: false, services: [] }),
+  );
+});
+
+it("restores a removed service when discarding unsaved changes", async () => {
+  mount(managementClient());
+  await screen.findByLabelText("Public title");
+  fireEvent.click(screen.getByRole("button", { name: "Services" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Remove service Consultation" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+  expect(screen.getByLabelText("Service name")).toHaveValue("Consultation");
 });
