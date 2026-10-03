@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMessages, useAppLocale } from "@/i18n/core";
 import { officeSuiteMessages } from "./messages";
+import { StorageProviderIcon } from "./storage-provider-icon";
 import { createBlankOfficeFile } from "../office/new-office-file";
 import { officeEditorUrl } from "../office/office-api";
 import { officeFormat, type OfficeFormat } from "@savia/studio-shared/office";
@@ -117,6 +118,7 @@ export function OfficeSuitePage({
   const [name, setName] = useState("");
   const [storage, setStorage] = useState<StorageChoice>("savia");
   const [search, setSearch] = useState("");
+  const [storageFilter, setStorageFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [connectedLoading, setConnectedLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -373,15 +375,22 @@ export function OfficeSuitePage({
       if (mounted.current) setCreating(false);
     }
   }
-  const filtered = documents.filter((document) =>
-    document.name
-      .toLocaleLowerCase()
-      .includes(search.trim().toLocaleLowerCase()),
+  const filtered = documents.filter(
+    (document) =>
+      (storageFilter === "all" || storageFilter === "savia") &&
+      document.name
+        .toLocaleLowerCase()
+        .includes(search.trim().toLocaleLowerCase()),
   );
-  const filteredConnected = connectedDocuments.filter((document) =>
-    document.name
-      .toLocaleLowerCase()
-      .includes(search.trim().toLocaleLowerCase()),
+  const filteredConnected = connectedDocuments.filter(
+    (document) =>
+      (storageFilter === "all" ||
+        (storageFilter === "onedrive"
+          ? document.provider.startsWith("onedrive_")
+          : storageFilter === document.provider)) &&
+      document.name
+        .toLocaleLowerCase()
+        .includes(search.trim().toLocaleLowerCase()),
   );
   const cloudProviderLabel = (provider: ConnectedOfficeProviderId) => {
     switch (provider) {
@@ -403,7 +412,10 @@ export function OfficeSuitePage({
           {t("Create Office documents and choose where each one is stored.")}
         </p>
       </header>
-      <section aria-labelledby="new-office-document" className="space-y-4">
+      <section
+        aria-labelledby="new-office-document"
+        className="space-y-4 border-b pb-8"
+      >
         <h2 id="new-office-document" className="text-base font-semibold">
           {t("New document")}
         </h2>
@@ -448,26 +460,31 @@ export function OfficeSuitePage({
             <Label htmlFor="office-document-storage">
               {t("Save document in")}
             </Label>
-            <select
-              id="office-document-storage"
-              value={storage}
-              onChange={(event) => {
-                setStorage(event.target.value as StorageChoice);
-                requestRef.current = undefined;
-                setConnectedSaved(undefined);
-                setSaved(false);
-              }}
-              disabled={creating}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="savia">{t("Savia (default)")}</option>
-              {connectedProviders.map((provider) => (
-                <option key={provider.provider} value={provider.provider}>
-                  {cloudProviderLabel(provider.provider)}
-                  {provider.accountLabel ? ` — ${provider.accountLabel}` : ""}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+                <StorageProviderIcon provider={storage} />
+              </span>
+              <select
+                id="office-document-storage"
+                value={storage}
+                onChange={(event) => {
+                  setStorage(event.target.value as StorageChoice);
+                  requestRef.current = undefined;
+                  setConnectedSaved(undefined);
+                  setSaved(false);
+                }}
+                disabled={creating}
+                className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="savia">{t("Savia (default)")}</option>
+                {connectedProviders.map((provider) => (
+                  <option key={provider.provider} value={provider.provider}>
+                    {cloudProviderLabel(provider.provider)}
+                    {provider.accountLabel ? ` — ${provider.accountLabel}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
             <p className="text-xs text-muted-foreground">
               {t(
                 "Savia stores the document content. Connected-drive entries save a reference in Savia.",
@@ -548,10 +565,7 @@ export function OfficeSuitePage({
           ) : null}
         </form>
       </section>
-      <section
-        aria-labelledby="saved-office-documents"
-        className="space-y-4 border-t pt-6"
-      >
+      <section aria-labelledby="saved-office-documents" className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 id="saved-office-documents" className="text-base font-semibold">
             {t("Saved documents")}
@@ -569,6 +583,39 @@ export function OfficeSuitePage({
               className="pl-9"
             />
           </div>
+        </div>
+        <div
+          role="group"
+          aria-label={t("Filter by storage")}
+          className="flex flex-wrap gap-1.5"
+        >
+          {[
+            { id: "all", label: t("All storage") },
+            { id: "savia", label: "Savia", provider: "savia" as const },
+            {
+              id: "google_drive",
+              label: t("Google Drive"),
+              provider: "google_drive" as const,
+            },
+            {
+              id: "onedrive",
+              label: "OneDrive",
+              provider: "onedrive_personal" as const,
+            },
+          ].map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              aria-pressed={storageFilter === filter.id}
+              onClick={() => setStorageFilter(filter.id)}
+              className={`inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${storageFilter === filter.id ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+            >
+              {filter.provider ? (
+                <StorageProviderIcon provider={filter.provider} />
+              ) : null}
+              {filter.label}
+            </button>
+          ))}
         </div>
         {connectedDocumentsError ? (
           <div role="alert" className="flex flex-wrap items-center gap-3">
@@ -623,7 +670,7 @@ export function OfficeSuitePage({
             </p>
           </div>
         ) : filtered.length || filteredConnected.length ? (
-          <ul className="divide-y">
+          <ul className="divide-y overflow-hidden rounded-xl border">
             {filtered.map((document) => {
               const type =
                 types.find(
@@ -634,12 +681,14 @@ export function OfficeSuitePage({
               return (
                 <li
                   key={document.id}
-                  className="flex min-w-0 items-center gap-3 py-4"
+                  className="flex min-w-0 items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/30 sm:gap-4"
                 >
-                  <type.icon
-                    className={`size-5 shrink-0 ${type.color}`}
-                    aria-hidden="true"
-                  />
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted/50">
+                    <type.icon
+                      className={`size-5 shrink-0 ${type.color}`}
+                      aria-hidden="true"
+                    />
+                  </span>
                   <div className="min-w-0 flex-1">
                     {url && (
                       <a
@@ -655,12 +704,21 @@ export function OfficeSuitePage({
                         />
                       </a>
                     )}
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("Version")} {document.version} ·{" "}
-                      {new Intl.DateTimeFormat(locale, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      }).format(new Date(document.updatedAt))}
+                    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <StorageProviderIcon
+                          provider="savia"
+                          className="size-3.5"
+                        />
+                        Savia
+                      </span>
+                      <span>
+                        {t("Version")} {document.version} ·{" "}
+                        {new Intl.DateTimeFormat(locale, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        }).format(new Date(document.updatedAt))}
+                      </span>
                     </p>
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground">
@@ -676,12 +734,14 @@ export function OfficeSuitePage({
               return (
                 <li
                   key={`connected:${document.id}`}
-                  className="flex min-w-0 items-center gap-3 py-4"
+                  className="flex min-w-0 items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/30 sm:gap-4"
                 >
-                  <type.icon
-                    className={`size-5 shrink-0 ${type.color}`}
-                    aria-hidden="true"
-                  />
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted/50">
+                    <type.icon
+                      className={`size-5 shrink-0 ${type.color}`}
+                      aria-hidden="true"
+                    />
+                  </span>
                   <div className="min-w-0 flex-1">
                     <a
                       href={document.url}
@@ -695,9 +755,21 @@ export function OfficeSuitePage({
                         aria-hidden="true"
                       />
                     </a>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {cloudProviderLabel(document.provider)} ·{" "}
-                      {t("Stored in connected drive; linked from Savia.")}
+                    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <StorageProviderIcon
+                          provider={document.provider}
+                          className="size-3.5"
+                        />
+                        {cloudProviderLabel(document.provider)}
+                      </span>
+                      {Number.isFinite(Date.parse(document.createdAt)) ? (
+                        <span>
+                          {new Intl.DateTimeFormat(locale, {
+                            dateStyle: "medium",
+                          }).format(new Date(document.createdAt))}
+                        </span>
+                      ) : null}
                     </p>
                   </div>
                 </li>
