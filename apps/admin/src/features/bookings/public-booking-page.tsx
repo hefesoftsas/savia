@@ -342,8 +342,10 @@ export function PublicBookingPage({ token }: { token: string }) {
     );
 
   const disabledCaptcha = catalog.captcha.captchaProvider === "disabled";
-  const selectedProfessional = eligibleProfessionals.find(
-    (person) => person.id === professionalId,
+  const selectedProfessional = (
+    catalog.fixedProfessionalId ? catalog.professionals : eligibleProfessionals
+  ).find(
+    (person) => person.id === (catalog.fixedProfessionalId ?? professionalId),
   );
   const serviceSelectionNeeded =
     !catalog.fixedServiceId && catalog.services.length > 1;

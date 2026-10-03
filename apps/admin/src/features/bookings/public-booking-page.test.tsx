@@ -136,6 +136,7 @@ it("uses an accurately numbered service step for a multi-service personal link",
   expect(
     screen.getByText("Review progress and agree on next steps."),
   ).toBeInTheDocument();
+  expect(screen.getByText("Booking with Ari Ramirez")).toBeInTheDocument();
   expect(screen.queryByLabelText("Professional")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("radio", { name: /Follow-up/ }));
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
