@@ -98,9 +98,11 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
       if (request !== refreshRef.current) return;
       setStatus(data);
       setStatusError(false);
+      if (!data.enabled || !data.available) setIndexInfoOpen(false);
     } catch {
       if (controller.signal.aborted || request !== refreshRef.current) return;
       setStatusError(true);
+      setIndexInfoOpen(false);
     } finally {
       if (request === refreshRef.current) setStatusRefreshing(false);
     }
@@ -461,7 +463,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
             }
           }}
         />
-        {status?.enabled && status.available ? (
+        {status?.enabled && status.available && !statusError ? (
           <Tooltip open={indexInfoOpen} onOpenChange={setIndexInfoOpen}>
             <TooltipTrigger asChild>
               <Button

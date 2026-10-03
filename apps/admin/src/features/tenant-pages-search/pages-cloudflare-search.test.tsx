@@ -449,3 +449,20 @@ it("keeps indexing details in a tooltip that can be opened with a tap", async ()
   fireEvent.keyDown(information, { key: "Escape" });
   await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
 });
+
+it("closes and hides indexing details if a later status refresh fails", async () => {
+  const api = apiFor({ settings: status(true) });
+  renderSearch(api);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Page indexing information" }),
+  );
+  await screen.findByRole("tooltip");
+  api.get.mockRejectedValue(new Error("Status unavailable"));
+  fireEvent.focus(window);
+  await screen.findByText(/Index status could not be loaded/);
+  expect(screen.queryByRole("tooltip")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Page indexing information" }),
+  ).toBeNull();
+  expect(screen.queryByText("1 of 2 pages sent for indexing")).toBeNull();
+});
