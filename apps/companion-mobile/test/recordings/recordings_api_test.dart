@@ -277,6 +277,73 @@ void main() {
       );
     },
   );
+
+  test(
+    'uploads one captured M4A session chunk with consent and tenant context',
+    () async {
+      final id = '8b87d175-a584-4e3d-95cb-e96c84248e15';
+      final path = '${temp.path}/segment.m4a';
+      await File(path).writeAsBytes([1, 2, 3, 4]);
+      adapter
+        ..enqueue(200, jsonEncode(sessionJson(id: id)))
+        ..enqueue(
+          200,
+          jsonEncode(sessionJson(id: id, chunks: [sessionChunkJson()])),
+        )
+        ..enqueue(
+          200,
+          jsonEncode(
+            sessionJson(
+              id: id,
+              state: 'ready',
+              chunks: [sessionChunkJson()],
+              durationSeconds: 30,
+            ),
+          ),
+        );
+
+      await api.createSession(id: id, name: 'Recording.m4a', consent: true);
+      await api.uploadSessionChunk(
+        sessionId: id,
+        sequence: 0,
+        startSeconds: 0,
+        path: path,
+        expectedBytes: 4,
+        cancellation: CancelToken(),
+      );
+      await api.finalizeSession(id: id, expectedChunks: 1, durationSeconds: 30);
+
+      expect(adapter.requests, hasLength(3));
+      final create = jsonDecode(
+        utf8.decode(adapter.requests[0].bytes),
+      ) as Map<String, dynamic>;
+      expect(create, {
+        'id': id,
+        'name': 'Recording.m4a',
+        'sources': ['microphone'],
+        'consent': true,
+      });
+      final uploaded = jsonDecode(
+        utf8.decode(adapter.requests[1].bytes),
+      ) as Map<String, dynamic>;
+      expect(uploaded['source'], 'microphone');
+      expect(uploaded['sequence'], 0);
+      expect(uploaded['startSeconds'], 0);
+      expect(uploaded['audio'], {
+        'data': base64Encode([1, 2, 3, 4]),
+        'format': 'm4a',
+      });
+      final finalize = jsonDecode(
+        utf8.decode(adapter.requests[2].bytes),
+      ) as Map<String, dynamic>;
+      expect(finalize, {'expectedChunks': 1, 'durationSeconds': 30});
+      for (final request in adapter.requests) {
+        expect(request.headers['x-savia-tenant-id'], '27');
+        expect(request.headers['authorization'], 'Bearer access-token-secret');
+        expect(request.followRedirects, isFalse);
+      }
+    },
+  );
 }
 
 class RecordingApiHarness extends RecordingsApi {
@@ -298,6 +365,36 @@ Map<String, Object?> recordingJson({required String id}) => {
   'sha256': 'a' * 64,
   'name': 'interview.wav',
   'origin': 'local',
+};
+
+Map<String, Object?> sessionJson({
+  required String id,
+  String state = 'uploading',
+  List<Map<String, Object?>> chunks = const [],
+  double? durationSeconds,
+}) => {
+  'id': id,
+  'name': 'Recording.m4a',
+  'createdAt': '2026-10-03T12:00:00.000Z',
+  'state': state,
+  'durationSeconds': durationSeconds,
+  'chunks': chunks,
+  'job': {
+    'status': 'idle',
+    'completedChunks': 0,
+    'totalChunks': 0,
+    'transcripts': <String, Object?>{},
+    'summary': null,
+  },
+};
+
+Map<String, Object?> sessionChunkJson() => {
+  'source': 'microphone',
+  'format': 'm4a',
+  'sequence': 0,
+  'startSeconds': 0,
+  'durationSeconds': 30,
+  'bytes': 4,
 };
 
 Future<CompanionFailure> captureFailure(Future<void> Function() action) async {

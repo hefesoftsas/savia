@@ -126,6 +126,7 @@ class CaptureController extends ChangeNotifier {
         format: 'm4a',
         bytes: bytes,
         durationSeconds: elapsed.inMilliseconds / 1000,
+        isCapture: true,
       );
       phase = CapturePhase.ready;
     } catch (error) {
@@ -249,6 +250,8 @@ class CaptureController extends ChangeNotifier {
       await native.cancel();
     }
     final paths = {if (draft != null) draft!.path, ?_capturePath};
+    final draftId = draft?.isCapture == true ? draft?.id : null;
+    if (draftId != null) await files.removeDraftSegments(draftId);
     for (final path in paths) {
       await files.remove(path);
     }
