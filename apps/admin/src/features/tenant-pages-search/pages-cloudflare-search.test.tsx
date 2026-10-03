@@ -433,3 +433,19 @@ it("aborts catchup on a page change and indexes the refreshed needed list", asyn
   );
   expect(api.post).toHaveBeenCalledTimes(2);
 });
+
+it("keeps indexing details in a tooltip that can be opened with a tap", async () => {
+  renderSearch(apiFor({ settings: status(true) }));
+  const information = await screen.findByRole("button", {
+    name: "Page indexing information",
+  });
+  expect(screen.queryByText("1 of 2 pages sent for indexing")).toBeNull();
+  expect(screen.queryByRole("tooltip")).toBeNull();
+
+  fireEvent.click(information);
+  const tooltip = await screen.findByRole("tooltip");
+  expect(tooltip).toHaveTextContent("1 of 2 pages sent for indexing");
+  expect(tooltip).toHaveTextContent("Older pages catch up");
+  fireEvent.keyDown(information, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+});

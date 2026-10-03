@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, FileText, Folder, Search } from "lucide-react";
+import { ChevronRight, FileText, Folder, Info, Search } from "lucide-react";
 import { ApiClientError } from "@/api/api-client";
 import type { PagesClient, PageSummary } from "@/features/pages/client";
 import { subscribePageChanges } from "@/features/pages/page-events";
@@ -11,6 +11,11 @@ import {
 import { pagesMessages } from "@/features/pages/messages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useMessages } from "@/i18n/core";
 import { tenantPagesSearchMessages } from "./messages";
 
@@ -50,6 +55,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
   const [statusError, setStatusError] = useState(false);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [indexInfoOpen, setIndexInfoOpen] = useState(false);
   const [results, setResults] = useState<Result[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchComplete, setSearchComplete] = useState(false);
@@ -455,6 +461,37 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
             }
           }}
         />
+        {status?.enabled && status.available ? (
+          <Tooltip open={indexInfoOpen} onOpenChange={setIndexInfoOpen}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={t("Page indexing information")}
+                onFocus={() => setOpen(false)}
+                onClick={() => {
+                  setOpen(false);
+                  setIndexInfoOpen(true);
+                }}
+              >
+                <Info size={18} aria-hidden />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent
+              side="bottom"
+              className="max-w-[min(320px,calc(100vw-32px))] space-y-2 text-left"
+            >
+              <p>
+                {t("Pages sent for indexing", {
+                  indexed: status.indexed,
+                  total: status.total,
+                })}
+              </p>
+              <p>{t("Pages are indexed automatically")}</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         {popoverOpen ? (
           <div className="pages-search-popover">
             {searchComplete && results.length > 0 ? (
@@ -524,7 +561,13 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
           <p role="status">{t("Search status unavailable")}</p>
         </div>
       ) : null}
-      {status?.enabled ? (
+      {status?.enabled &&
+      (statusError ||
+        !status.available ||
+        indexing ||
+        indexPaused ||
+        indexWaiting ||
+        indexError) ? (
         <div className="pages-search-index-status">
           {statusError ? (
             <p role="status">{t("Search status unavailable")}</p>
@@ -532,12 +575,6 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
             <p role="status">{t("Cloudflare search unavailable")}</p>
           ) : (
             <>
-              <p role="status">
-                {t("Pages sent for indexing", {
-                  indexed: status.indexed,
-                  total: status.total,
-                })}
-              </p>
               <div className="pages-search-index-actions">
                 {indexing ? (
                   <Button
@@ -578,9 +615,6 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
                       : t("Indexing pages", indexProgress)}
                 </p>
               ) : null}
-              <p className="pages-search-index-help">
-                {t("Pages are indexed automatically")}
-              </p>
               {indexError ? (
                 <p role="alert">{t("Page indexing failed")}</p>
               ) : null}
