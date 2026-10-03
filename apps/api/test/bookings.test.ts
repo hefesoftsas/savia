@@ -149,7 +149,11 @@ async function fixture(captchaOptions?: Parameters<typeof createApp>[22]) {
   const reserve = (key = crypto.randomUUID(), body = payload) =>
     app.request(`${publicBase}/reservations`, {
       method: "POST",
-      headers: { "content-type": "application/json", "Idempotency-Key": key },
+      headers: {
+        "content-type": "application/json",
+        "Idempotency-Key": key,
+        "cf-connecting-ip": `192.0.${Math.floor(tenantId / 256) % 256}.${tenantId % 256}`,
+      },
       body: JSON.stringify(body),
     });
   return {
@@ -254,7 +258,7 @@ it("rejects disabled membership after an availability read", async () => {
   )
     .bind(f.principalId)
     .run();
-  expect((await f.reserve()).status).toBe(409);
+  expect((await f.reserve()).status).toBe(404);
   const rows = await env.DB.prepare(
     "SELECT id FROM tenant_bookings WHERE tenant_id=?",
   )
@@ -452,4 +456,298 @@ it("defers reservation mutations while a delivery lease is active", async () => 
     .bind(f.tenantId)
     .run();
   expect((await cancel()).status).toBe(200);
+});
+
+async function personalLink(
+  f: Awaited<ReturnType<typeof fixture>>,
+  overrides = {},
+) {
+  const r = await f.app.request(`${f.base}/public-links`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      scope: { kind: "professional", professionalId: f.professionalId },
+      serviceId: null,
+      expiresAt: null,
+      dailyLimit: 25,
+      ...overrides,
+    }),
+  });
+  expect(r.status).toBe(201);
+  const link = ((await r.json()) as any).data;
+  return {
+    ...link,
+    base: `/api/public/bookings/${new URL(link.publicUrl).pathname.split("/").at(-1)}`,
+  };
+}
+it("personal links fix their professional and reject caller scope widening on every route", async () => {
+  const f = await fixture(),
+    link = await personalLink(f);
+  const catalog = ((await (await f.app.request(link.base)).json()) as any).data;
+  expect(catalog.fixedProfessionalId).toBe(f.professionalId);
+  expect(catalog.linkScope.kind).toBe("professional");
+  expect(JSON.stringify(catalog)).not.toContain(f.principalId);
+  const otherId = crypto.randomUUID(),
+    date = f.payload.startsAt.slice(0, 10);
+  expect(
+    (
+      await f.app.request(
+        `${link.base}/slots?serviceId=${f.serviceId}&professionalId=${otherId}&date=${date}`,
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (
+      await f.app.request(`${link.base}/reservations`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({ ...f.payload, professionalId: otherId }),
+      })
+    ).status,
+  ).toBe(404);
+  await env.DB.prepare(
+    "UPDATE identity_tenant_membership SET is_active=0 WHERE tenant_id=?",
+  )
+    .bind(f.tenantId)
+    .run();
+  expect((await f.app.request(`${link.base}/challenge`)).status).toBe(404);
+});
+it("expired or revoked personal links stop new bookings while management links survive", async () => {
+  const f = await fixture(),
+    link = await personalLink(f);
+  const r = await f.app.request(`${link.base}/reservations`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify(f.payload),
+  });
+  expect(r.status).toBe(201);
+  const managementUrl = ((await r.json()) as any).data.managementUrl;
+  const revoke = await f.app.request(
+    `${f.base}/public-links/${link.id}/revoke`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: link.version }),
+    },
+  );
+  expect(revoke.status).toBe(200);
+  for (const suffix of [
+    "",
+    "/challenge",
+    `/slots?serviceId=${f.serviceId}&professionalId=${f.professionalId}&date=${f.payload.startsAt.slice(0, 10)}`,
+  ])
+    expect((await f.app.request(link.base + suffix)).status).toBe(404);
+  expect(
+    (
+      await f.app.request(
+        new URL(managementUrl).pathname.replace("/public/", "/api/public/"),
+      )
+    ).status,
+  ).toBe(200);
+  const expiring = await personalLink(f);
+  await env.DB.prepare(
+    "UPDATE tenant_booking_public_links SET expires_at=? WHERE id=?",
+  )
+    .bind("2000-01-01T00:00:00.000Z", expiring.id)
+    .run();
+  expect((await f.app.request(expiring.base)).status).toBe(404);
+});
+it("legacy URLs remain team-scoped and have independent revocation controls", async () => {
+  const f = await fixture();
+  expect(
+    ((await (await f.app.request(f.publicBase)).json()) as any).data.linkScope
+      .kind,
+  ).toBe("team");
+  const listed = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  const legacy = listed.find(
+    (l: any) =>
+      new URL(l.publicUrl).pathname === f.publicBase.replace("/api", ""),
+  );
+  expect(legacy).toBeTruthy();
+  await f.app.request(`${f.base}/public-links/${legacy.id}/revoke`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: legacy.version }),
+  });
+  expect((await f.app.request(f.publicBase)).status).toBe(404);
+});
+it("link daily admission counts failed attempts once and preserves identical reservation retries", async () => {
+  const f = await fixture(),
+    link = await personalLink(f, { dailyLimit: 2 }),
+    key = crypto.randomUUID();
+  const submit = (id: string, payload = f.payload) =>
+    f.app.request(`${link.base}/reservations`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "Idempotency-Key": id,
+        "cf-connecting-ip": "192.0.2.42",
+      },
+      body: JSON.stringify(payload),
+    });
+  expect((await submit(key)).status).toBe(201);
+  expect((await submit(key)).status).toBe(200);
+  expect((await submit(crypto.randomUUID())).status).toBe(409);
+  expect((await submit(crypto.randomUUID())).status).toBe(429);
+  expect((await submit(key)).status).toBe(200);
+  expect(
+    (await submit(key, { ...f.payload, customerName: "Different" })).status,
+  ).toBe(409);
+});
+it("anonymous booking bodies are capped at 32 KiB", async () => {
+  const f = await fixture();
+  const r = await f.app.request(`${f.publicBase}/reservations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ padding: "x".repeat(33000) }),
+  });
+  expect(r.status).toBe(413);
+});
+
+it("returns bookable calendar dates and scoped UTC slots in one bounded range", async () => {
+  const f = await fixture(),
+    link = await personalLink(f),
+    from = f.payload.startsAt.slice(0, 10),
+    to = new Date(Date.parse(from) + 2 * 86400000).toISOString().slice(0, 10);
+  const r = await f.app.request(
+    `${link.base}/availability?serviceId=${f.serviceId}&from=${from}&to=${to}&displayTimeZone=America%2FBogota`,
+  );
+  expect(r.status).toBe(200);
+  const data = ((await r.json()) as any).data;
+  expect(data.displayTimeZone).toBe("America/Bogota");
+  expect(data.days).toHaveLength(3);
+  expect(
+    data.days[0].slots.some(
+      (slot: any) => slot.startsAt === f.payload.startsAt,
+    ),
+  ).toBe(true);
+  expect(JSON.stringify(data)).not.toContain(f.principalId);
+  expect(
+    (
+      await f.app.request(
+        `${link.base}/availability?serviceId=${f.serviceId}&professionalId=${crypto.randomUUID()}&from=${from}&to=${to}`,
+      )
+    ).status,
+  ).toBe(404);
+  const far = new Date(Date.parse(from) + 31 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  expect(
+    (
+      await f.app.request(
+        `${link.base}/availability?serviceId=${f.serviceId}&from=${from}&to=${far}`,
+      )
+    ).status,
+  ).toBe(422);
+});
+
+it("service-scoped personal links reject a different configured service", async () => {
+  const f = await fixture(),
+    other = crypto.randomUUID();
+  const changed = await f.app.request(f.base, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...f.settings,
+      services: [
+        ...f.settings.services,
+        { ...f.settings.services[0], id: other, name: "Another service" },
+      ],
+    }),
+  });
+  expect(changed.status).toBe(200);
+  const link = await personalLink(f, { serviceId: f.serviceId });
+  const catalog = ((await (await f.app.request(link.base)).json()) as any).data;
+  expect(catalog.services).toHaveLength(1);
+  expect(catalog.fixedServiceId).toBe(f.serviceId);
+  expect(
+    (
+      await f.app.request(
+        `${link.base}/availability?serviceId=${other}&from=${f.payload.startsAt.slice(0, 10)}&to=${f.payload.startsAt.slice(0, 10)}`,
+      )
+    ).status,
+  ).toBe(404);
+});
+it("a professional can share only their own agenda and cannot revoke another scope", async () => {
+  const f = await fixture();
+  f.actor.memberships[0].role = "viewer";
+  const link = await personalLink(f);
+  expect(
+    (
+      await f.app.request(`${f.base}/public-links`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope: { kind: "team" } }),
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await f.app.request(`${f.base}/public-links`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          scope: { kind: "professional", professionalId: crypto.randomUUID() },
+        }),
+      })
+    ).status,
+  ).toBe(403);
+  const list = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  expect(list).toHaveLength(1);
+  expect(list[0].id).toBe(link.id);
+  expect(
+    (
+      await f.app.request(
+        `${f.base}/public-links/${crypto.randomUUID()}/revoke`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ version: 1 }),
+        },
+      )
+    ).status,
+  ).toBe(404);
+});
+
+it("does not publish a personal link for a professional without an eligible service", async () => {
+  const f = await fixture(),
+    other = await fixture();
+  await env.DB.prepare(
+    "UPDATE identity_tenant_membership SET tenant_id=?,role='viewer' WHERE principal_id=?",
+  )
+    .bind(f.tenantId, other.principalId)
+    .run();
+  const save = await f.app.request(f.base, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...f.settings,
+      professionals: [
+        ...f.settings.professionals,
+        other.settings.professionals[0],
+      ],
+    }),
+  });
+  expect(save.status).toBe(200);
+  expect(
+    (
+      await f.app.request(`${f.base}/public-links`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          scope: { kind: "professional", professionalId: other.professionalId },
+        }),
+      })
+    ).status,
+  ).toBe(422);
 });

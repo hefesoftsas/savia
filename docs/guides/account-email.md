@@ -39,3 +39,7 @@ Run `pnpm --filter @savia/self-hosted test:email` with Mailpit running for a dis
 ## API
 
 The authenticated API exposes `GET`, `PUT` and `DELETE /v1/tenants/{tenantId}/email-settings`, plus `POST /v1/tenants/{tenantId}/email-settings/test`. The API authorizes the tenant administrator, then forwards the request to the auth worker over the bridge-key protected internal route. The auth worker owns encrypted settings and selects them for account mail when the account's tenant matches; otherwise it uses the global SMTP sender.
+
+## Appointment notifications
+
+Native tenant booking reuses this delivery service: a configured tenant sender takes precedence, otherwise the global SMTP/transactional transport is used. The scheduler sends appointment confirmations, changes, cancellations and reminders through a bridge-protected internal endpoint. Readiness is checked without exposing sender credentials publicly. Intentionally unconfigured mail is skipped while the appointment remains confirmed; unreadable configuration and transient delivery errors are retried. Appointment messages use the saved customer locale and include the appointment summary and private management link. See [Tenant booking](tenant-booking.md) for delivery status and retry semantics.
