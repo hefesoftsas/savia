@@ -2,9 +2,9 @@
 
 Owner: Savia platform maintainers. Reviewed: 2026-10-01.
 
-A Tauri desktop validation application for short microphone/system audio samples,
+A Tauri desktop preview for manually recorded microphone/system audio,
 connected to Savia's opt-in OpenRouter processing adapter. Sessions are limited to
-60 seconds, 8 MiB temporary PCM and 512 KiB compressed audio per source. This is an implementation increment, not a
+one hour, with 30-second segments bounded to 8 MiB temporary PCM and 512 KiB compressed audio each. This is an implementation increment, not a
 qualified meeting recorder for long or confidential meetings.
 
 See the [implementation status](../../docs/companion/implementation-status.md),
@@ -137,30 +137,13 @@ Third-party dependencies retain their licenses; see the native
 [dependency notes](THIRD_PARTY_NOTICES.md). No commercial Anarlog enterprise code
 has been imported. Keep required Savia attribution in distributed UI and artifacts.
 
-## Compressed sample storage
+## Segmented recording sessions
 
-Stopping capture encodes each source as mono Ogg/Opus, targeting 32 kbps, and
-discards temporary PCM. Capture commands run off the UI thread. On macOS,
-system-helper readiness has a 12-second timeout and microphone authorization a
-60-second timeout. Closing or quitting waits for capture disposal before exiting.
-Encoding and resampling run locally without a system
-FFmpeg installation. The raw WAV inspector remains a diagnostic tool. At the
-target bitrate, one hour would use about 14.4 MB per source before container
-overhead; this build still limits recordings to 60 seconds. Actual sizes vary.
-Inputs above roughly 69 kHz can reach the 8 MiB raw cap before 60 seconds;
-that condition is reported as a capture error. Use a 44.1/48 kHz device for the
-full 60-second validation sample.
+Desktop capture keeps devices open and encodes bounded 30-second Ogg/Opus segments
+for up to one hour. A private native spool preserves completed segments on close;
+Discard deletes the local draft. Upload resumes missing immutable segments in an
+owner/workspace session. Savia provides playback, durable background processing,
+summary and evidence-grounded questions with separate provider consent.
 
-Saving is explicit and requires the existing R2 binding and an authenticated
-active tenant member or platform administrator. Savia validates Ogg page checksums, mono headers, packet
-duration, final granule, the 60-second limit and the 512 KiB encoded limit. R2
-stores the audio and authoritative metadata under a hashed principal prefix;
-list/download/delete endpoints enforce that same owner and the normal API scopes.
-No public audio URL is created. Same-ID retries are idempotent; changing that
-sample's audio or source returns a conflict. Save does not require a provider key.
-
-Discard audio removes the local capture, not previously saved samples. Saved
-samples can be retrieved/deleted through the authenticated generated API. This
-increment does not yet implement automatic retention, tenant quotas or resumable
-meeting uploads. Saved playback and transcript/notes persistence are implemented.
-Compression quality and provider qualification still need the broader validation gate.
+See [phase 2](../../docs/companion/long-recording-next-phase.md) for limits,
+recovery semantics and the distinction between synthetic and real-device validation.

@@ -25,6 +25,125 @@ export const companionMessages = {
       "Savia sends this audio to OpenRouter for transcription and a summary. No automatic retries.",
       "Savia envia este áudio ao OpenRouter para transcrição e resumo. Sem novas tentativas automáticas.",
     ],
+  "Retry audio": ["Reintentar audio", "Retry audio", "Tentar áudio novamente"],
+  "Loading audio…": ["Cargando audio…", "Loading audio…", "Carregando áudio…"],
+  "Action items": ["Acciones", "Action items", "Ações"],
+  "Evidence used": [
+    "Evidencia utilizada",
+    "Evidence used",
+    "Evidências utilizadas",
+  ],
+  "This answer uses selected transcript excerpts, not the entire recording.": [
+    "Esta respuesta usa fragmentos seleccionados de la transcripción, no la grabación completa.",
+    "This answer uses selected transcript excerpts, not the entire recording.",
+    "Esta resposta usa trechos selecionados da transcrição, não a gravação inteira.",
+  ],
+  "Audio unavailable": [
+    "Audio no disponible",
+    "Audio unavailable",
+    "Áudio indisponível",
+  ],
+  "There is a gap before this part of the recording.": [
+    "Hay un intervalo sin audio antes de esta parte de la grabación.",
+    "There is a gap before this part of the recording.",
+    "Há um intervalo sem áudio antes desta parte da gravação.",
+  ],
+  "Listen from": ["Escuchar desde", "Listen from", "Ouvir a partir de"],
+  "Unable to update this session. Refresh and try again.": [
+    "No se pudo actualizar esta sesión. Actualiza e inténtalo de nuevo.",
+    "Unable to update this session. Refresh and try again.",
+    "Não foi possível atualizar esta sessão. Atualize e tente novamente.",
+  ],
+  "Finish uploading this session from Companion before processing.": [
+    "Termina de subir esta sesión desde Companion antes de procesarla.",
+    "Finish uploading this session from Companion before processing.",
+    "Termine de enviar esta sessão pelo Companion antes de processá-la.",
+  ],
+  "Generate transcript and summary": [
+    "Generar transcripción y resumen",
+    "Generate transcript and summary",
+    "Gerar transcrição e resumo",
+  ],
+  "Starting processing…": [
+    "Iniciando procesamiento…",
+    "Starting processing…",
+    "Iniciando processamento…",
+  ],
+  "I accept that retrying may incur another charge.": [
+    "Acepto que reintentar puede generar otro cargo.",
+    "I accept that retrying may incur another charge.",
+    "Aceito que tentar novamente pode gerar outra cobrança.",
+  ],
+  "I agree to send audio and transcripts to OpenRouter. Processing may incur charges.":
+    [
+      "Acepto enviar audio y transcripciones a OpenRouter. El procesamiento puede generar cargos.",
+      "I agree to send audio and transcripts to OpenRouter. Processing may incur charges.",
+      "Concordo em enviar áudio e transcrições ao OpenRouter. O processamento pode gerar cobranças.",
+    ],
+  "Processing stopped. Saved results are preserved. A previous provider request may have incurred charges.":
+    [
+      "El procesamiento se detuvo. Los resultados guardados se conservan. Una solicitud anterior al proveedor pudo generar cargos.",
+      "Processing stopped. Saved results are preserved. A previous provider request may have incurred charges.",
+      "O processamento parou. Os resultados salvos são preservados. Uma solicitação anterior ao provedor pode ter gerado cobranças.",
+    ],
+  "Cancel processing": [
+    "Cancelar procesamiento",
+    "Cancel processing",
+    "Cancelar processamento",
+  ],
+  "You can close this page. Processing continues in Savia.": [
+    "Puedes cerrar esta página. El procesamiento continúa en Savia.",
+    "You can close this page. Processing continues in Savia.",
+    "Você pode fechar esta página. O processamento continua no Savia.",
+  ],
+  "Transcript and summary": [
+    "Transcripción y resumen",
+    "Transcript and summary",
+    "Transcrição e resumo",
+  ],
+  Cancelled: ["Cancelado", "Cancelled", "Cancelado"],
+  "Needs attention": ["Requiere atención", "Needs attention", "Requer atenção"],
+  Complete: ["Completado", "Complete", "Concluído"],
+  "Preparing summary": [
+    "Preparando resumen",
+    "Preparing summary",
+    "Preparando resumo",
+  ],
+  Transcribing: ["Transcribiendo", "Transcribing", "Transcrevendo"],
+  Queued: ["En espera", "Queued", "Na fila"],
+  "Not processed": ["Sin procesar", "Not processed", "Não processada"],
+  "Ready to review": [
+    "Lista para revisar",
+    "Ready to review",
+    "Pronta para revisar",
+  ],
+  "Upload incomplete": [
+    "Subida incompleta",
+    "Upload incomplete",
+    "Envio incompleto",
+  ],
+  "Record in Companion desktop and choose Upload to Savia. Your session will appear here.":
+    [
+      "Graba en Companion desktop y elige Subir a Savia. Tu sesión aparecerá aquí.",
+      "Record in Companion desktop and choose Upload to Savia. Your session will appear here.",
+      "Grave no Companion desktop e escolha Enviar ao Savia. Sua sessão aparecerá aqui.",
+    ],
+  "No recording sessions yet": [
+    "Todavía no hay sesiones grabadas",
+    "No recording sessions yet",
+    "Ainda não há sessões gravadas",
+  ],
+  "Up to one hour, with private audio and saved processing progress.": [
+    "Hasta una hora, con audio privado y progreso de procesamiento guardado.",
+    "Up to one hour, with private audio and saved processing progress.",
+    "Até uma hora, com áudio privado e progresso de processamento salvo.",
+  ],
+  "Audio files": ["Archivos de audio", "Audio files", "Arquivos de áudio"],
+  "Recording sessions": [
+    "Sesiones grabadas",
+    "Recording sessions",
+    "Sessões gravadas",
+  ],
   "Ask about this recording": [
     "Pregunta sobre esta grabación",
     "Ask about this recording",

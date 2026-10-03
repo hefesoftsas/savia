@@ -1,6 +1,8 @@
 pub mod audio;
 pub mod codec;
 pub mod lifecycle;
+pub mod segments;
+pub mod spool;
 
 #[cfg(target_os = "macos")]
 mod macos;

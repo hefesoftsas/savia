@@ -1,3 +1,5 @@
+import { CompanionSessions } from "./sessions";
+import { registerCompanionSessionRoutes } from "./session-routes";
 import type { Context } from "hono";
 import {
   DEFAULT_CANONICAL_HOST,
@@ -154,6 +156,9 @@ const capabilitiesSchema = z.object({
   sttModel: z.string(),
   summaryModel: z.string(),
   maxDurationSeconds: z.number(),
+  maxSessionDurationSeconds: z.literal(3600),
+  maxSessionChunksPerSource: z.literal(120),
+  sessionAudioFormats: z.array(z.enum(["ogg", "m4a"])),
   maxAudioBytes: z.number(),
   maxCompressedAudioBytes: z.number(),
   audioFormats: z.array(z.enum(["wav", "ogg"])),
@@ -254,7 +259,8 @@ export function registerCompanionRoutes(
         ? MAX_RECORDING_BYTES
         : c.req.path.endsWith("/transcribe")
           ? 12 * 1024 * 1024
-          : c.req.path.endsWith("/recordings")
+          : c.req.path.endsWith("/recordings") ||
+              /^\/v1\/companion\/sessions\/[^/]+\/chunks$/.test(c.req.path)
             ? 768 * 1024
             : 128 * 1024;
       const advertised = Number(c.req.header("content-length"));
@@ -414,6 +420,27 @@ export function registerCompanionRoutes(
       requireTenant: Boolean(keyed || recordingScopedOAuth),
     };
   };
+  registerCompanionSessionRoutes(app, {
+    sessions: new CompanionSessions(options?.storage),
+    service,
+    access,
+    configuration: async (c, owner) => {
+      const repo = options?.configuration;
+      if (
+        owner.tenantId === undefined ||
+        !repo?.effectiveConfigurationForTenant
+      )
+        throw new CompanionError(
+          "COMPANION_UNAVAILABLE",
+          "Workspace processing configuration is unavailable.",
+          503,
+        );
+      return repo.effectiveConfigurationForTenant(
+        actorFromContext(c).principal.id,
+        owner.tenantId,
+      );
+    },
+  });
   app.openapi(capabilities, async (c) => {
     const actor = actorFromContext(c);
     const owner = await access(c);
@@ -423,6 +450,9 @@ export function registerCompanionRoutes(
         sttModel: config.transcriptionModel ?? service.sttModel,
         summaryModel: config.summaryModel ?? config.model,
         maxDurationSeconds: 60,
+        maxSessionDurationSeconds: 3600 as const,
+        maxSessionChunksPerSource: 120 as const,
+        sessionAudioFormats: ["ogg", "m4a"] as ("ogg" | "m4a")[],
         maxAudioBytes: MAX_AUDIO_BYTES,
         maxCompressedAudioBytes: MAX_OPUS_BYTES,
         audioFormats: ["wav", "ogg"] as ("wav" | "ogg")[],

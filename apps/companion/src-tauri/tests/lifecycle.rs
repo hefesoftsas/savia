@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use savia_companion_lib::capture::lifecycle::{
-    Lifecycle, Source, Sources, State, MAX_CAPTURE_DURATION, MAX_PCM_BYTES, MAX_WAV_BYTES,
+    Lifecycle, Source, Sources, State, MAX_PCM_BYTES, MAX_WAV_BYTES,
 };
 
 #[test]
@@ -54,7 +54,7 @@ fn stop_is_idempotent_and_discard_resets_session() {
 }
 
 #[test]
-fn capture_duration_is_capped_at_sixty_seconds() {
+fn capture_duration_is_capped_at_one_hour() {
     let mut capture = Lifecycle::default();
     let started = Instant::now();
     capture
@@ -66,9 +66,9 @@ fn capture_duration_is_capped_at_sixty_seconds() {
             started,
         )
         .unwrap();
-    capture.stop(started + Duration::from_secs(70));
+    capture.stop(started + Duration::from_secs(3_700));
 
-    assert_eq!(capture.elapsed, MAX_CAPTURE_DURATION);
+    assert_eq!(capture.elapsed, Duration::from_secs(3_600));
 }
 
 #[test]

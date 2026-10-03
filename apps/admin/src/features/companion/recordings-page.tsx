@@ -1,3 +1,5 @@
+import { useSearchParams } from "react-router-dom";
+import { RecordingSessions } from "./recording-sessions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
@@ -29,10 +31,65 @@ import {
   type ProviderFailure,
 } from "./provider-error";
 
+export function CompanionRecordingsPage(props: {
+  services?: Pick<AppServices, "apiClient">;
+  client?: CompanionRecordingsClient;
+}) {
+  return props.services ? (
+    <RecordingsTabs {...props} />
+  ) : (
+    <AudioFilesPage {...props} />
+  );
+}
+
+function RecordingsTabs(props: {
+  services?: Pick<AppServices, "apiClient">;
+  client?: CompanionRecordingsClient;
+}) {
+  const t = useMessages(companionMessages);
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") === "sessions" ? "sessions" : "files";
+  const setTab = (value: string) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set("tab", value);
+      return next;
+    });
+  if (!props.services) return <AudioFilesPage {...props} />;
+  return (
+    <>
+      <nav
+        className="mx-auto flex max-w-6xl gap-2 border-b px-4 pt-6 md:px-8"
+        aria-label={t("Recordings")}
+      >
+        <Button
+          variant={tab === "files" ? "secondary" : "ghost"}
+          aria-pressed={tab === "files"}
+          onClick={() => setTab("files")}
+        >
+          {t("Audio files")}
+        </Button>
+        <Button
+          variant={tab === "sessions" ? "secondary" : "ghost"}
+          aria-pressed={tab === "sessions"}
+          onClick={() => setTab("sessions")}
+        >
+          {t("Recording sessions")}
+        </Button>
+      </nav>
+      {tab === "files" ? (
+        <AudioFilesPage {...props} />
+      ) : (
+        <RecordingSessions api={props.services.apiClient} />
+      )}
+    </>
+  );
+}
+
 // Operate: an owner-private audio inbox, using Savia's neutral surfaces and
 // emerald actions. The list leads to one listening/review workspace; generated
 // notes are the content, with consent immediately beside the processing action.
-export function CompanionRecordingsPage({
+function AudioFilesPage({
   services,
   client: supplied,
 }: {
