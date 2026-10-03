@@ -13256,7 +13256,8 @@ export interface paths {
                   | {
                       id: string;
                       /** @enum {string} */
-                      kind: "agenda" | "quick_task" | "mail";
+                      kind:
+                        "agenda" | "quick_task" | "mail" | "office_documents";
                       title?: string;
                       /** @enum {string} */
                       size?: "sm" | "md" | "lg";
@@ -13316,7 +13317,8 @@ export interface paths {
                   | {
                       id: string;
                       /** @enum {string} */
-                      kind: "agenda" | "quick_task" | "mail";
+                      kind:
+                        "agenda" | "quick_task" | "mail" | "office_documents";
                       title?: string;
                       /** @enum {string} */
                       size?: "sm" | "md" | "lg";

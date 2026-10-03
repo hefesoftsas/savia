@@ -479,7 +479,7 @@ describe("user sidebar navigation preferences", () => {
     await expect(response.json()).resolves.toEqual({ data: layout });
   });
 
-  it.each(["agenda", "mail"] as const)(
+  it.each(["agenda", "mail", "office_documents"] as const)(
     "persists %s system widgets without a collection",
     async (kind) => {
       const layout = {
@@ -520,6 +520,15 @@ describe("user sidebar navigation preferences", () => {
           ],
         },
       });
+      const reloaded = await appFor("principal-a").request(
+        "https://savia.test/v1/user-preferences/my-day-widgets",
+      );
+      expect(reloaded.status).toBe(200);
+      await expect(reloaded.json()).resolves.toMatchObject({
+        data: {
+          widgets: expect.arrayContaining([{ id: kind, kind, size: "lg" }]),
+        },
+      });
     },
   );
 });
@@ -548,4 +557,5 @@ it("documents the persisted mail system widget in generated OpenAPI", () => {
       "200"
     ];
   expect(JSON.stringify(response)).toContain('"mail"');
+  expect(JSON.stringify(response)).toContain('"office_documents"');
 });

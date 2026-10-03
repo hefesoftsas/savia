@@ -35,6 +35,17 @@ describe("my-day widgets layout", () => {
     expect(layout.widgets[0]).not.toHaveProperty("config");
   });
 
+  it("accepts the optional office documents system widget", () => {
+    expect(
+      parseMyDayWidgets({
+        version: 1,
+        widgets: [{ id: "office_documents", kind: "office_documents" }],
+      }).widgets,
+    ).toEqual([
+      { id: "office_documents", kind: "office_documents", size: "md" },
+    ]);
+  });
+
   it("applies per-widget defaults", () => {
     const layout = parseMyDayWidgets({
       version: 1,

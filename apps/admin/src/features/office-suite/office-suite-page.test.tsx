@@ -214,9 +214,7 @@ it("creates a Google Drive document, persists its link, and lists it after reloa
   );
   expect(link).toHaveAttribute("target", "_blank");
   expect(link).toHaveAttribute("rel", "noopener noreferrer");
-  expect(
-    screen.getByText(/Google Drive · Stored in connected drive/),
-  ).toBeTruthy();
+  expect(link.closest("li")).toHaveTextContent("Google Drive");
   expect(open).toHaveBeenCalledWith("about:blank", "_blank");
   expect(view.connectedPosts).toHaveLength(1);
   const body = view.connectedPosts[0];
@@ -299,6 +297,53 @@ it("includes a generated Office template for OneDrive and reuses an idempotency 
     await screen.findByRole("link", { name: "Quarterly plan revised.xlsx" }),
   ).toBeTruthy();
   expect(view.connectedPosts[2].get("requestId")).not.toBe(requestId);
+});
+
+it("filters saved documents by storage without changing their persisted links", async () => {
+  const view = setup(false, {
+    initialLocal: {
+      id: "local-1",
+      name: "Local.docx",
+      mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      size: 100,
+      version: 1,
+      updatedAt: "2026-10-02T10:00:00Z",
+    },
+  });
+  await screen.findByRole("link", { name: "Local.docx" });
+  view.connectedFiles.push(
+    ...["google_drive", "onedrive_personal", "onedrive_business"].map(
+      (provider) => ({
+        id: provider,
+        name: `${provider}.docx`,
+        format: "docx",
+        provider,
+        url: `https://drive.example.test/${provider}`,
+        createdAt: "2026-10-02T10:00:00Z",
+      }),
+    ),
+  );
+  fireEvent(window, new Event("focus"));
+  await screen.findByRole("link", { name: "google_drive.docx" });
+  fireEvent.click(screen.getByRole("button", { name: "Google Drive" }));
+  expect(
+    screen.queryByRole("link", { name: "Local.docx" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("link", { name: "onedrive_personal.docx" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "google_drive.docx" }),
+  ).toHaveAttribute("href", "https://drive.example.test/google_drive");
+  fireEvent.click(screen.getByRole("button", { name: "OneDrive" }));
+  expect(
+    screen.getByRole("link", { name: "onedrive_personal.docx" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "onedrive_business.docx" }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "All storage" }));
+  expect(screen.getByRole("link", { name: "Local.docx" })).toBeInTheDocument();
 });
 
 it("keeps Savia documents visible when the connected-drive list is unavailable", async () => {

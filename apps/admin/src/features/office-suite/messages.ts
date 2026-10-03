@@ -1,6 +1,12 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const officeSuiteMessages = {
+  "Filter by storage": [
+    "Filtrar por almacenamiento",
+    "Filter by storage",
+    "Filtrar por armazenamento",
+  ],
+  "All storage": ["Todos", "All storage", "Todos"],
   "My integrations": [
     "Mis integraciones",
     "My integrations",

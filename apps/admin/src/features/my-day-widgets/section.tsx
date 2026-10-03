@@ -245,6 +245,7 @@ export function MyDayWidgetsSection({
       if (widget.kind === "agenda") return "Agenda";
       if (widget.kind === "quick_task") return "Tarea rápida";
       if (widget.kind === "mail") return "Correos";
+      if (widget.kind === "office_documents") return "Documentos de Office";
       return widget.title ?? widget.kind;
     }
     return (

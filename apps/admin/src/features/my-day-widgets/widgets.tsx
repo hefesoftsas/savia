@@ -43,6 +43,7 @@ import {
 import { PluginWidgetBody } from "./plugin-widget";
 import { parsePluginKind, pluginWidgetTitle } from "./plugins";
 import { AgendaWidgetBody, QuickTaskWidgetBody } from "./agenda-widget";
+import { OfficeDocumentsWidgetBody } from "./office-documents-widget";
 import type { WidgetCollectionSchema } from "./types";
 
 function WidgetError({
@@ -547,6 +548,7 @@ const widgetKindLabels: Record<string, string> = {
   agenda: "Agenda",
   quick_task: "Tarea rápida",
   mail: "Bandeja de entrada",
+  office_documents: "Documentos de Office",
 };
 
 function isBuiltInWidget(widget: MyDayWidget): boolean {
@@ -603,7 +605,8 @@ export function WidgetCard({
   const isSystem =
     widget.kind === "agenda" ||
     widget.kind === "quick_task" ||
-    widget.kind === "mail";
+    widget.kind === "mail" ||
+    widget.kind === "office_documents";
   const supported = isBuiltInWidget(widget) || isSystem || isPlugin;
 
   return (
@@ -691,6 +694,8 @@ export function WidgetCard({
               Conecta tu calendario para crear tareas aquí.
             </p>
           )
+        ) : widget.kind === "office_documents" ? (
+          <OfficeDocumentsWidgetBody apiClient={apiClient} />
         ) : isPlugin && isCollectionWidget(widget) ? (
           <PluginWidgetBody apiClient={apiClient} widget={widget} />
         ) : widget.kind === "summary" && isCollectionWidget(widget) ? (
