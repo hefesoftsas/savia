@@ -5,6 +5,13 @@ import '../capture/capture_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'failure_notice.dart';
 
+String formatCaptureDuration(Duration duration) {
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60);
+  final seconds = duration.inSeconds.remainder(60);
+  return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+}
+
 class CaptureScreen extends StatefulWidget {
   const CaptureScreen({
     super.key,
@@ -59,7 +66,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              l.duration(c.elapsed.inSeconds),
+                              formatCaptureDuration(c.elapsed),
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.headlineMedium,
                             ),
@@ -107,7 +114,11 @@ class _CaptureScreenState extends State<CaptureScreen> {
                             '${NumberFormat('0.00', l.localeName).format(c.draft!.bytes / 1000000)} MB',
                         duration: c.draft!.durationSeconds == null
                             ? null
-                            : l.duration(c.draft!.durationSeconds!.round()),
+                            : formatCaptureDuration(
+                                Duration(
+                                  seconds: c.draft!.durationSeconds!.round(),
+                                ),
+                              ),
                       ),
                       const SizedBox(height: 16),
                       _DraftNotice(

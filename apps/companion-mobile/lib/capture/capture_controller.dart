@@ -11,6 +11,12 @@ import 'document_import.dart';
 import 'native_capture.dart';
 import 'temp_files.dart';
 
+const mobileCaptureDurationLimit = Duration(hours: 1);
+typedef CaptureTimerFactory = Timer Function(
+  Duration duration,
+  void Function() callback,
+);
+
 enum CapturePhase { idle, recording, ready, uploading, unknownOutcome, error }
 
 enum _CaptureOperation { start, stop, import, upload }
@@ -27,7 +33,8 @@ class CaptureController extends ChangeNotifier {
     required this.importer,
     required this.files,
     required this.uploader,
-    this.limit = const Duration(seconds: 60),
+    this.limit = mobileCaptureDurationLimit,
+    this.timerFactory = Timer.new,
   }) {
     _interruption = native.interruptions.listen((_) {
       unawaited(stop());
@@ -38,6 +45,7 @@ class CaptureController extends ChangeNotifier {
   final TempFiles files;
   final DraftUploader uploader;
   final Duration limit;
+  final CaptureTimerFactory timerFactory;
   CapturePhase phase = CapturePhase.idle;
   RecordingDraft? draft;
   CompanionFailure? failure;
@@ -81,7 +89,7 @@ class CaptureController extends ChangeNotifier {
       _elapsedTicker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (phase == CapturePhase.recording) _notify();
       });
-      _timer = Timer(limit, () {
+      _timer = timerFactory(limit, () {
         unawaited(stop());
       });
     } catch (error) {

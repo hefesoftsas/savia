@@ -7,7 +7,7 @@ fixed to `https://savia-preview.hefesoft.com`; production is not configured.
 ## User flow
 
 1. Sign in using the system browser and choose an eligible Savia workspace.
-2. Record microphone audio while the app is in the foreground, up to 60 seconds,
+2. Record microphone audio while the app is in the foreground, up to one hour,
    or import MP3, WAV, M4A or Ogg/Opus audio of up to 50,000,000 bytes.
 3. Review the temporary draft, grant upload consent, and upload explicitly.
 4. Read the backend library and play a private downloaded recording.
@@ -99,7 +99,7 @@ system-picker, audible-playback or process-kill tests below.
 
 On one physical Android and one physical iOS device, record evidence for:
 
-- Microphone denied, then allowed; 60-second stop; app background and interruption.
+- Microphone denied, then allowed; one-hour automatic stop; app background and interruption.
 - System document picker cancellation/import, upload consent and unchanged source.
 - Browser login return, user cancellation, refresh rotation and sign-out.
 - App process restart followed by server retrieval, and audible playback.
@@ -151,3 +151,23 @@ Recording names, metadata, playback, notes and questions have distinct typograph
 and spacing. Capture emphasizes its primary microphone action; upload and provider
 consents remain adjacent to the actions they authorize. Error notices include an
 icon and text, and layouts adapt to enlarged text and tablet widths.
+
+## One-hour capture increment
+
+The mobile source now caps foreground microphone capture at one hour and targets
+mono AAC at 32 kbps. An hour is approximately 14.4 MB of encoded audio before
+container overhead; actual encoder output varies and the existing 50 MB file
+check remains authoritative. The native recorder writes to an app-owned temporary
+file. Backgrounding, interruption, cancellation and explicit upload consent keep
+their existing behavior. This change does not enable locked-screen capture.
+
+Automated timer tests can establish the stop boundary without waiting an hour.
+A continuous physical-device recording, audible playback and live one-hour
+transcription remain separate qualification checks. The synchronous transcription
+path is not a durable long-recording job. Desktop capture retains its existing
+short-sample limits until its capture and upload architecture is replaced.
+
+A synthetic 3,600-second FFmpeg AAC file at the new target bitrate was 14,820,156
+bytes and passed the existing API M4A validator. Its media-header duration was
+3,600.043 seconds (AAC padding); ffprobe reported 3,600 seconds of presentation.
+This is file-format evidence, not a physical-device capture or live STT result.

@@ -2,6 +2,14 @@ import 'package:record/record.dart';
 
 import '../recordings/models.dart';
 
+const mobileMicrophoneConfig = RecordConfig(
+  encoder: AudioEncoder.aacLc,
+  numChannels: 1,
+  sampleRate: 24000,
+  bitRate: 32000,
+  audioInterruption: AudioInterruptionMode.pause,
+);
+
 abstract interface class NativeCapture {
   Stream<void> get interruptions;
   Future<void> start(String path);
@@ -25,16 +33,7 @@ class MicrophoneCapture implements NativeCapture {
     if (!await _recorder.isEncoderSupported(AudioEncoder.aacLc)) {
       throw const CompanionFailure('UNSUPPORTED_CODEC');
     }
-    await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        numChannels: 1,
-        sampleRate: 24000,
-        bitRate: 64000,
-        audioInterruption: AudioInterruptionMode.pause,
-      ),
-      path: path,
-    );
+    await _recorder.start(mobileMicrophoneConfig, path: path);
   }
 
   @override
