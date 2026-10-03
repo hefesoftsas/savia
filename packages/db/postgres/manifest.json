@@ -105,6 +105,10 @@
     {
       "filename": "0024_tenant_page_search_index_leases.sql",
       "sha256": "56d6b5ac6b6d63cc20bf66d0b0c53bf975d967e0fb321fea7620f66dec72e958"
+    },
+    {
+      "filename": "0026_booking_public_links.sql",
+      "sha256": "0d3314051183fe7d6cbe5ca64fe8ff458d54131b79a72ff4db030a7f983a46e3"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1504,6 +1508,36 @@
       "type": "table",
       "name": "user_calendar_preferences",
       "table": "user_calendar_preferences"
+    },
+    {
+      "type": "table",
+      "name": "tenant_booking_public_links",
+      "table": "tenant_booking_public_links"
+    },
+    {
+      "type": "index",
+      "name": "tenant_booking_public_links_tenant",
+      "table": "tenant_booking_public_links"
+    },
+    {
+      "type": "table",
+      "name": "tenant_booking_request_receipts",
+      "table": "tenant_booking_request_receipts"
+    },
+    {
+      "type": "index",
+      "name": "tenant_booking_receipts_ip_day",
+      "table": "tenant_booking_request_receipts"
+    },
+    {
+      "type": "index",
+      "name": "tenant_booking_receipts_link_day",
+      "table": "tenant_booking_request_receipts"
+    },
+    {
+      "type": "index",
+      "name": "tenant_booking_receipts_tenant_day",
+      "table": "tenant_booking_request_receipts"
     }
   ],
   "tables": [
@@ -13049,6 +13083,14 @@
           "notnull": 1,
           "dflt_value": null,
           "pk": 0
+        },
+        {
+          "cid": 21,
+          "name": "customer_locale",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'en'",
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -13082,7 +13124,7 @@
           "origin": "pk"
         }
       ],
-      "checkCount": 1
+      "checkCount": 2
     },
     {
       "name": "personal_calendar_sources",
@@ -13265,6 +13307,246 @@
       "uniqueKeys": [
         {
           "columns": ["principal_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_booking_public_links",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "created_by",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "token",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "scope_kind",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "professional_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "service_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "expires_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "revoked_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "daily_limit",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "25",
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "version",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "1",
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "legacy",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["token"],
+          "origin": "u"
+        },
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 4
+    },
+    {
+      "name": "tenant_booking_request_receipts",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "link_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "request_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "request_hash",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "ip_hash",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "day",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "captcha_hash",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenant_booking_public_links",
+          "from": "link_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["captcha_hash"],
+          "origin": "u"
+        },
+        {
+          "columns": ["request_key"],
+          "origin": "u"
+        },
+        {
+          "columns": ["id"],
           "origin": "pk"
         }
       ],

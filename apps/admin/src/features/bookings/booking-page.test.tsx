@@ -88,7 +88,7 @@ it("does not offer an unpublished public page even when its token exists", async
   mount(apiClient);
   await screen.findByRole("heading", { name: "Appointments" });
   expect(
-    screen.queryByRole("link", { name: "Open public booking page" }),
+    screen.queryByRole("link", { name: "Open team booking page" }),
   ).not.toBeInTheDocument();
   expect(
     screen.queryByRole("link", { name: /page-token/ }),
@@ -100,7 +100,7 @@ it("does not offer an unpublished public page even when its token exists", async
   ).toBeInTheDocument();
 });
 
-it("offers the public page after published settings are saved", async () => {
+it("offers the legacy team agenda after published settings are saved", async () => {
   const bootstrap = {
     settings,
     candidates: [{ principalId: "principal-1", displayName: "Ari" }],
@@ -123,11 +123,11 @@ it("offers the public page after published settings are saved", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Review and publish" }));
   fireEvent.click(screen.getByLabelText("Published"));
   expect(
-    screen.queryByRole("link", { name: "Open public booking page" }),
+    screen.queryByRole("link", { name: "Open team booking page" }),
   ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
   expect(
-    await screen.findByRole("link", { name: "Open public booking page" }),
+    await screen.findByRole("link", { name: "Open team booking page" }),
   ).toHaveAttribute("href", bootstrap.publicUrl);
 });
 

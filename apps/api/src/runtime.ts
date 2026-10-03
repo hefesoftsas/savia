@@ -402,6 +402,29 @@ const runtime = {
       );
       const timedFetch: typeof fetch = (input, init) =>
         fetch(input, { ...init, signal: AbortSignal.timeout(15000) });
+      const availability =
+        environment.AUTH && bridgeKey
+          ? async (tenantId: number) => {
+              const response = await environment.AUTH!.fetch(
+                new Request(
+                  `https://savia-auth.internal/_internal/tenant-email/${tenantId}/availability`,
+                  {
+                    method: "GET",
+                    headers: { "x-savia-bridge-key": bridgeKey },
+                    signal: AbortSignal.timeout(15000),
+                  },
+                ),
+              );
+              if (!response.ok)
+                throw new Error("Booking email availability unavailable");
+              const result = (await response.json()) as {
+                available?: unknown;
+              };
+              if (typeof result.available !== "boolean")
+                throw new Error("Invalid booking email availability response");
+              return result.available;
+            }
+          : undefined;
       return runBookingJobs(environment.DB, {
         publicOrigin:
           environment.SAVIA_PUBLIC_ORIGIN ?? "http://localhost:5173",
@@ -414,6 +437,7 @@ const runtime = {
         ),
         ...(environment.AUTH && bridgeKey
           ? {
+              ...(availability ? { mailAvailability: availability } : {}),
               sendMail: async (mail: {
                 tenantId: number;
                 to: string;

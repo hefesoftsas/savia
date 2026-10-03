@@ -196,3 +196,113 @@ live("native PostgreSQL tenant booking integration", () => {
     });
   });
 });
+
+live("public booking admission parity", () => {
+  it("does not over-admit concurrent requests sharing the last daily budget", async () => {
+    await withPostgresFixture(async (db, connectionString) => {
+      await migratePostgres({
+        connectionString,
+        schema: "savia_core",
+        directory: coreDirectory,
+        seed: false,
+      });
+      const { admitBookingRequest } =
+        await import("../../api/src/bookings/public-policy");
+      const { defaultSettings } =
+        await import("../../api/src/bookings/contracts");
+      const tenantId = Date.now(),
+        id = randomUUID();
+      await db
+        .prepare(
+          "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,?,?,1,'now','now','commercial')",
+        )
+        .bind(tenantId, `quota-${tenantId}`, "Quota fixture")
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO tenant_booking_public_links(id,tenant_id,token,scope_kind,daily_limit) VALUES(?,?,?,'team',1)",
+        )
+        .bind(id, tenantId, id)
+        .run();
+      const link = {
+        id,
+        tenantId,
+        publicToken: id,
+        scope: { kind: "team" as const },
+        serviceId: null,
+        dailyLimit: 1,
+        settings: defaultSettings("Quota fixture"),
+        legacy: false,
+      };
+      await db.exec(
+        "CREATE FUNCTION booking_slow_admission() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(0.05); RETURN NEW; END; $$",
+      );
+      await db.exec(
+        "CREATE TRIGGER booking_slow_admission BEFORE INSERT ON tenant_booking_request_receipts FOR EACH ROW EXECUTE FUNCTION booking_slow_admission()",
+      );
+      const admit = () =>
+        admitBookingRequest(db, {
+          link,
+          requestKey: randomUUID(),
+          requestHash: "same-details",
+          ipHash: randomUUID(),
+          captchaIdentityHash: null,
+          now: Date.parse("2026-10-03T20:00:00Z"),
+        });
+      const results = await Promise.allSettled(
+        Array.from({ length: 8 }, () => admit()),
+      );
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(
+        results
+          .filter((r) => r.status === "rejected")
+          .map((r) => (r.status === "rejected" ? r.reason.status : null)),
+      ).toEqual(Array(7).fill(429));
+      expect(
+        await db
+          .prepare(
+            "SELECT count(*) AS n FROM tenant_booking_request_receipts WHERE link_id=?",
+          )
+          .bind(id)
+          .first("n"),
+      ).toBe(1);
+    });
+  });
+});
+
+live("booking professional catalog parity", () => {
+  it("returns the same professional identifier and display-name contract as SQLite", async () => {
+    await withPostgresFixture(async (db, connectionString) => {
+      await migratePostgres({
+        connectionString,
+        schema: "savia_core",
+        directory: coreDirectory,
+        seed: false,
+      });
+      const { candidates } = await import("../../api/src/bookings/repository");
+      const tenantId = Date.now(),
+        id = randomUUID();
+      await db
+        .prepare(
+          "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,?,?,1,'now','now','commercial')",
+        )
+        .bind(tenantId, `candidate-${tenantId}`, "Candidate fixture")
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?,'savia:better-auth',?,?,?,1,'now','now')",
+        )
+        .bind(id, id, `${id}@example.test`, "Professional fixture")
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at) VALUES(?,?,?,'tenant_admin',1,'now','now')",
+        )
+        .bind(randomUUID(), id, tenantId)
+        .run();
+      expect(await candidates(db, tenantId)).toEqual([
+        { principalId: id, displayName: "Professional fixture" },
+      ]);
+    });
+  });
+});

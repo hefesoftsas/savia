@@ -1,5 +1,6 @@
 import type { createBookingCalendarAdapter } from "./calendar";
 import { readBooking, readSettings, readGrant } from "./repository";
+import { formatBookingEmail } from "./email";
 export type BookingJobsOptions = {
   now?: () => number;
   publicOrigin: string;
@@ -10,6 +11,7 @@ export type BookingJobsOptions = {
     subject: string;
     text: string;
   }) => Promise<void>;
+  mailAvailability?: (tenantId: number) => Promise<boolean>;
 };
 type Job = {
   id: string;
@@ -156,30 +158,33 @@ export async function runBookingJobs(
               )
               .run();
         } else {
+          if (!options.sendMail && !options.mailAvailability) {
+            await finish("skipped", "BOOKING_EMAIL_NOT_CONFIGURED");
+            continue;
+          }
+          if (
+            options.mailAvailability &&
+            !(await options.mailAvailability(job.tenant_id))
+          ) {
+            await finish("skipped", "BOOKING_EMAIL_NOT_CONFIGURED");
+            continue;
+          }
           if (!options.sendMail) throw Error();
           const state = await readSettings(db, job.tenant_id),
             managementUrl = new URL(
               `/public/bookings/manage/${booking.manage_token}`,
               options.publicOrigin,
             ).toString();
-          const action = {
-            confirmation: "Booking confirmed",
-            change: "Booking rescheduled",
-            cancellation: "Booking cancelled",
-            reminder: "Upcoming appointment",
-          }[job.kind];
-          const formatted = new Intl.DateTimeFormat("en", {
+          const message = formatBookingEmail({
+            booking,
+            kind: job.kind,
             timeZone: state.settings.timeZone,
-            dateStyle: "full",
-            timeStyle: "short",
-          }).format(new Date(booking.starts_at));
+            managementUrl,
+          });
           await options.sendMail({
             tenantId: job.tenant_id,
             to: booking.customer_email,
-            subject: `${action}: ${booking.service_name}`
-              .replace(/\s+/g, " ")
-              .slice(0, 200),
-            text: `${action}\n\n${booking.service_name}\n${booking.professional_name}\n${formatted} (${state.settings.timeZone})\n\nManage your reservation: ${managementUrl}`,
+            ...message,
           });
         }
         await finish("completed");

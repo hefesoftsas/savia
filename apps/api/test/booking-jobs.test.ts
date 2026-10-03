@@ -101,6 +101,34 @@ it("leases jobs once across concurrent schedulers and sends a scoped management 
     )?.status,
   ).toBe("completed");
 });
+
+it("sends the full appointment summary in the booking's saved locale", async () => {
+  const f = await seed();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET customer_locale='es' WHERE id=?",
+  )
+    .bind(f.id)
+    .run();
+  const messages: Array<{ subject: string; text: string }> = [];
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://preview.example.test",
+    sendMail: async ({ subject, text }) => {
+      messages.push({ subject, text });
+    },
+  });
+  expect(messages).toHaveLength(1);
+  expect(messages[0].text).toContain("Tu cita está confirmada.");
+  expect(messages[0].text).toContain("Customer");
+  expect(messages[0].text).toContain("Consultation");
+  expect(messages[0].text).toContain("Professional");
+  expect(messages[0].text).toContain("Inicio:");
+  expect(messages[0].text).toContain("Fin:");
+  expect(messages[0].text).toContain("Duración: 30 minutos");
+  expect(messages[0].text).toContain("Zona horaria:");
+  expect(messages[0].text).toContain(`/public/bookings/manage/${f.token}`);
+});
+
 it("persists safe retry state and retries only after its due time", async () => {
   const f = await seed();
   let time = f.now,
@@ -162,4 +190,73 @@ it("skips cancelled reminders and obsolete booking revisions", async () => {
         .first<any>()
     )?.status,
   ).toBe("skipped");
+});
+
+it("keeps the booking confirmed and skips mail when no transport is configured", async () => {
+  const f = await seed();
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://preview.example.test",
+    mailAvailability: async () => false,
+    sendMail: async () => {
+      throw new Error("must not attempt an unavailable transport");
+    },
+  });
+  const job = await env.DB.prepare(
+    "SELECT status,error_code FROM tenant_booking_jobs WHERE booking_id=?",
+  )
+    .bind(f.id)
+    .first<{ status: string; error_code: string | null }>();
+  expect(job).toEqual({
+    status: "skipped",
+    error_code: "BOOKING_EMAIL_NOT_CONFIGURED",
+  });
+  expect(
+    (
+      await env.DB.prepare("SELECT status FROM tenant_bookings WHERE id=?")
+        .bind(f.id)
+        .first<{ status: string }>()
+    )?.status,
+  ).toBe("confirmed");
+});
+
+it("records an explicit skip when the auth mail bridge is unavailable", async () => {
+  const f = await seed();
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://preview.example.test",
+  });
+  const job = await env.DB.prepare(
+    "SELECT status,error_code FROM tenant_booking_jobs WHERE booking_id=?",
+  )
+    .bind(f.id)
+    .first<{ status: string; error_code: string | null }>();
+  expect(job).toEqual({
+    status: "skipped",
+    error_code: "BOOKING_EMAIL_NOT_CONFIGURED",
+  });
+});
+
+it("retries transient mail readiness failures", async () => {
+  const f = await seed();
+  let calls = 0;
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://preview.example.test",
+    mailAvailability: async () => {
+      calls++;
+      throw new Error("bridge unavailable");
+    },
+    sendMail: async () => undefined,
+  });
+  const job = await env.DB.prepare(
+    "SELECT status,error_code FROM tenant_booking_jobs WHERE booking_id=?",
+  )
+    .bind(f.id)
+    .first<{ status: string; error_code: string | null }>();
+  expect(calls).toBe(1);
+  expect(job).toEqual({
+    status: "failed",
+    error_code: "BOOKING_EMAIL_UNAVAILABLE",
+  });
 });

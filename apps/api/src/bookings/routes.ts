@@ -23,8 +23,22 @@ import {
   calendarGrantSchema,
   publicBookingSchema,
   slotQuerySchema,
+  bookingPublicLinkInputSchema,
+  availabilityRangeQuerySchema,
+  availabilityRangeSchema,
+  publicSlotQuerySchema,
   type BookingSettings,
 } from "./contracts";
+import {
+  resolveBookingLink,
+  assertBookingLinkSelection,
+  ensureLegacyBookingLink,
+  bookingLinkView,
+  bookingLinkToken,
+  type BookingLinkRow,
+} from "./public-links";
+import { getPublicAvailability } from "./public-availability";
+import { admitBookingRequest, findBookingAdmission } from "./public-policy";
 import { digest, dateInZone, slotsForDate } from "./domain";
 import {
   candidates,
@@ -113,7 +127,13 @@ export function registerBookingRoutes(
   });
   app.use("/v1/tenants/:tenantId/booking", limitBody);
   app.use("/v1/tenants/:tenantId/booking/*", limitBody);
-  app.use("/api/public/bookings/*", limitBody);
+  app.use(
+    "/api/public/bookings/*",
+    bodyLimit({
+      maxSize: 32 * 1024,
+      onError: (c) => c.json({ error: "Request is too large." }, 413),
+    }),
+  );
   app.use("/api/public/bookings/*", async (c, next) => {
     c.header("Cache-Control", "no-store");
     c.header("X-Robots-Tag", "noindex, nofollow");
@@ -509,9 +529,176 @@ export function registerBookingRoutes(
     undefined,
     reservationSchema,
   );
+  const linkRoot = `${root}/public-links`;
+  async function linkAccess(c: Context) {
+    const id = tenant(c),
+      auth = await authorizeBranding(db, actorFromContext(c), id),
+      state = await readSettings(db, id);
+    const own = state.settings.professionals.find(
+      (p) => p.principalId === actorFromContext(c).principal.id && p.enabled,
+    );
+    return { id, auth, state, own, actor: actorFromContext(c) };
+  }
+  route("get", linkRoot, async (c) => {
+    const { id, auth, own } = await linkAccess(c);
+    await ensureLegacyBookingLink(db, id);
+    const rows = await db
+      .prepare(
+        "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? ORDER BY legacy DESC,id",
+      )
+      .bind(id)
+      .all<BookingLinkRow>();
+    return c.json({
+      data: {
+        links: rows.results
+          .filter(
+            (l) =>
+              auth.canManage ||
+              (l.scope_kind === "professional" &&
+                l.professional_id === own?.id),
+          )
+          .map((l) => bookingLinkView(l, origin(options))),
+      },
+    });
+  });
+  route(
+    "post",
+    linkRoot,
+    async (c) => {
+      const { id, auth, state, own, actor } = await linkAccess(c),
+        input = await body(c, bookingPublicLinkInputSchema);
+      if (
+        !auth.canManage &&
+        (input.scope.kind !== "professional" ||
+          input.scope.professionalId !== own?.id)
+      )
+        throw new HTTPException(403, {
+          message: "Booking link access denied.",
+        });
+      const eligible = await candidates(db, id);
+      const scopedProfessionalId =
+        input.scope.kind === "professional" ? input.scope.professionalId : null;
+      const professional =
+        input.scope.kind === "professional"
+          ? state.settings.professionals.find(
+              (p) =>
+                p.id === scopedProfessionalId &&
+                p.enabled &&
+                eligible.some((e) => e.principalId === p.principalId),
+            )
+          : undefined;
+      if (
+        !state.settings.enabled ||
+        !state.settings.published ||
+        (input.scope.kind === "professional" && !professional)
+      )
+        throw new HTTPException(422, {
+          message: "Configure and publish booking before sharing.",
+        });
+      const scopeProfessionals = state.settings.professionals.filter(
+        (p) =>
+          p.enabled &&
+          eligible.some((e) => e.principalId === p.principalId) &&
+          (!professional || p.id === professional.id),
+      );
+      if (
+        !state.settings.services.some(
+          (service) =>
+            service.enabled &&
+            (!input.serviceId || service.id === input.serviceId) &&
+            service.professionalIds.some((id) =>
+              scopeProfessionals.some((p) => p.id === id),
+            ),
+        )
+      )
+        throw new HTTPException(422, {
+          message:
+            "Assign an enabled service to this professional before sharing.",
+        });
+      const expiresAt =
+        input.expiresAt === undefined
+          ? new Date(now() + 30 * 86400000).toISOString()
+          : input.expiresAt === null
+            ? null
+            : new Date(input.expiresAt).toISOString();
+      if (expiresAt && Date.parse(expiresAt) <= now())
+        throw new HTTPException(422, { message: "Choose a future expiry." });
+      const row: BookingLinkRow = {
+        id: crypto.randomUUID(),
+        tenant_id: id,
+        created_by: actor.principal.id,
+        token: bookingLinkToken(),
+        scope_kind: input.scope.kind,
+        professional_id: professional?.id ?? null,
+        service_id: input.serviceId,
+        expires_at: expiresAt,
+        revoked_at: null,
+        daily_limit: input.dailyLimit,
+        version: 1,
+        legacy: 0,
+      };
+      await db
+        .prepare(
+          "INSERT INTO tenant_booking_public_links(id,tenant_id,created_by,token,scope_kind,professional_id,service_id,expires_at,revoked_at,daily_limit,version,legacy) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        )
+        .bind(
+          row.id,
+          id,
+          row.created_by,
+          row.token,
+          row.scope_kind,
+          row.professional_id,
+          row.service_id,
+          row.expires_at,
+          null,
+          row.daily_limit,
+          1,
+          0,
+        )
+        .run();
+      return c.json({ data: bookingLinkView(row, origin(options)) }, 201);
+    },
+    bookingPublicLinkInputSchema,
+    undefined,
+    objectResponse,
+    true,
+  );
+  route(
+    "post",
+    `${linkRoot}/{id}/revoke`,
+    async (c) => {
+      const { id, auth, own } = await linkAccess(c),
+        input = await body(c, revisionSchema);
+      const link = await db
+        .prepare(
+          "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=?",
+        )
+        .bind(id, c.req.param("id"))
+        .first<BookingLinkRow>();
+      if (
+        !link ||
+        (!auth.canManage &&
+          (link.scope_kind !== "professional" ||
+            link.professional_id !== own?.id))
+      )
+        throw new HTTPException(404, { message: "Booking link unavailable." });
+      const changed = await db
+        .prepare(
+          "UPDATE tenant_booking_public_links SET revoked_at=?,version=version+1 WHERE tenant_id=? AND id=? AND version=? RETURNING *",
+        )
+        .bind(new Date(now()).toISOString(), id, link.id, input.version)
+        .first<BookingLinkRow>();
+      if (!changed)
+        throw new HTTPException(409, {
+          message: "The link changed. Refresh and try again.",
+        });
+      return c.json({ data: bookingLinkView(changed, origin(options)) });
+    },
+    revisionSchema,
+  );
   const publicRoot = "/api/public/bookings/{token}";
   route("get", publicRoot, async (c) => {
-    const state = await publishedSettings(db, c.req.param("token")!),
+    const state = await resolveBookingLink(db, c.req.param("token")!, now()),
       eligible = await candidates(db, state.tenantId);
     const professionals = state.settings.professionals
       .filter(
@@ -531,6 +718,14 @@ export function registerBookingRoutes(
         description: state.settings.description,
         timeZone: state.settings.timeZone,
         cancellationMinutes: state.settings.cancellationMinutes,
+        linkScope: state.scope,
+        fixedProfessionalId:
+          state.scope.kind === "professional"
+            ? state.scope.professionalId
+            : null,
+        fixedServiceId: state.serviceId,
+        horizonDays: state.settings.horizonDays,
+        leadMinutes: state.settings.leadMinutes,
         services: state.settings.services
           .filter((s) => s.enabled)
           .map(
@@ -555,28 +750,81 @@ export function registerBookingRoutes(
     });
   });
   route("get", `${publicRoot}/challenge`, async (c) => {
-    await publishedSettings(db, c.req.param("token")!);
+    await resolveBookingLink(db, c.req.param("token")!, now());
     return c.json(await publicFormChallenge(captcha, c.req.param("token")!));
   });
   route(
     "get",
     `${publicRoot}/slots`,
     async (c) => {
-      const state = await publishedSettings(db, c.req.param("token")!),
-        result = await slots(state, parsed(slotQuerySchema, c.req.query()));
+      const state = await resolveBookingLink(db, c.req.param("token")!, now()),
+        query = parsed(publicSlotQuerySchema, c.req.query()),
+        result = await slots(state, {
+          ...query,
+          ...assertBookingLinkSelection(
+            state,
+            query.serviceId,
+            query.professionalId,
+          ),
+        });
       return c.json({
         data: { slots: result.slots, timeZone: result.timeZone },
       });
     },
     undefined,
-    slotQuerySchema,
+    publicSlotQuerySchema,
+  );
+  route(
+    "get",
+    `${publicRoot}/availability`,
+    async (c) => {
+      const link = await resolveBookingLink(db, c.req.param("token")!, now());
+      const result = await getPublicAvailability(
+        link,
+        parsed(availabilityRangeQuerySchema, c.req.query()),
+        {
+          now,
+          loadBusy: async (principalId, from, to) => {
+            const busy = await nativeBusy(
+                db,
+                link.tenantId,
+                principalId,
+                from,
+                to,
+              ),
+              grant = await readGrant(db, link.tenantId, principalId);
+            if (grant) {
+              if (!calendar) throw unavailable();
+              try {
+                busy.push(
+                  ...(await calendar.busy({
+                    principalId,
+                    provider: grant.provider,
+                    connectionId: grant.connection_id,
+                    from,
+                    to,
+                  })),
+                );
+              } catch {
+                throw unavailable();
+              }
+            }
+            return busy;
+          },
+        },
+      );
+      return c.json({ data: result });
+    },
+    undefined,
+    availabilityRangeQuerySchema,
+    availabilityRangeSchema,
   );
   route(
     "post",
     `${publicRoot}/reservations`,
     async (c) => {
       const token = c.req.param("token")!,
-        state = await publishedSettings(db, token),
+        state = await resolveBookingLink(db, token, now()),
         input = await body(c, publicBookingSchema),
         key = parsed(
           z
@@ -588,11 +836,23 @@ export function registerBookingRoutes(
         );
       const normalized = {
         ...input,
+        ...assertBookingLinkSelection(
+          state,
+          input.serviceId,
+          input.professionalId,
+        ),
         startsAt: new Date(input.startsAt).toISOString(),
         customerEmail: input.customerEmail.toLowerCase(),
       };
       const hash = await digest(
-          JSON.stringify({ ...normalized, captchaToken: undefined }),
+          JSON.stringify({
+            ...normalized,
+            customerLocale:
+              normalized.customerLocale === "en"
+                ? undefined
+                : normalized.customerLocale,
+            captchaToken: undefined,
+          }),
         ),
         requestKey = `${token}:${key}`;
       const existing = await findRequest(db, state.tenantId, requestKey);
@@ -613,29 +873,34 @@ export function registerBookingRoutes(
           });
         return response(existing, 200);
       }
-      await verifyCaptcha(captcha, {
-        token: input.captchaToken,
-        submissionId: crypto.randomUUID(),
-        formId: token,
-        ip: c.req.header("cf-connecting-ip") ?? "unknown",
-      });
-      if (captchaConfiguration(captcha).provider !== "disabled") {
-        const identity = captchaIdentity(captcha, input.captchaToken),
-          bucket = `captcha:${await digest(identity.key)}`;
-        const used = await db
-          .prepare(
-            "INSERT INTO tenant_booking_rate_limits(bucket,count,expires_at) VALUES(?,1,?) ON CONFLICT(bucket) DO NOTHING RETURNING count",
-          )
-          .bind(bucket, now() + 86400000)
-          .first();
-        if (!used)
-          throw new HTTPException(403, {
-            message: "Verification was already used. Complete a new challenge.",
-          });
+      const admitted = await findBookingAdmission(db, requestKey, hash);
+      if (!admitted) {
+        await verifyCaptcha(captcha, {
+          token: input.captchaToken,
+          submissionId: crypto.randomUUID(),
+          formId: token,
+          ip: c.req.header("cf-connecting-ip") ?? "unknown",
+        });
+        const config = captchaConfiguration(captcha);
+        await admitBookingRequest(db, {
+          link: state,
+          requestKey,
+          requestHash: hash,
+          ipHash: await digest(
+            config.secretKey +
+              ":" +
+              (c.req.header("cf-connecting-ip") ?? "unknown"),
+          ),
+          captchaIdentityHash:
+            config.provider === "disabled"
+              ? null
+              : await digest(captchaIdentity(captcha, input.captchaToken).key),
+          now: now(),
+        });
       }
       const result = await slots(state, {
           serviceId: input.serviceId,
-          professionalId: input.professionalId,
+          professionalId: normalized.professionalId,
           date: dateInZone(input.startsAt, state.settings.timeZone),
         }),
         selected = result.slots.find((s) => s.startsAt === normalized.startsAt);
@@ -643,7 +908,7 @@ export function registerBookingRoutes(
       const row: BookingRow = {
         id: crypto.randomUUID(),
         tenant_id: state.tenantId,
-        professional_id: input.professionalId,
+        professional_id: normalized.professionalId,
         principal_id: result.professional.principalId,
         service_id: input.serviceId,
         service_name: result.service.name,
@@ -653,6 +918,7 @@ export function registerBookingRoutes(
         buffer_minutes: result.service.bufferMinutes,
         customer_name: input.customerName,
         customer_email: normalized.customerEmail,
+        customer_locale: input.customerLocale,
         manage_token:
           crypto.randomUUID().replaceAll("-", "") +
           crypto.randomUUID().replaceAll("-", ""),
@@ -666,7 +932,7 @@ export function registerBookingRoutes(
         created_at: new Date(now()).toISOString(),
       };
       try {
-        await createReservation(db, row, state.settings);
+        await createReservation(db, row, state.settings, state.id, now());
       } catch (e) {
         const replay = await findRequest(db, state.tenantId, requestKey);
         if (replay && replay.request_hash === hash)
