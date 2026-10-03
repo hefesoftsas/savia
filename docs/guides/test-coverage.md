@@ -13,6 +13,8 @@ Coverage uses Vitest's native V8 provider for Node environments, preserving
 functions that are serialized into isolated runtimes. Workspaces using the
 Cloudflare Vitest plugin use Istanbul, which supports Workers without V8
 inspector access. Keep both providers aligned with the Vitest version.
+Coverage runs allow 60 seconds for test/hooks and 5 seconds for Admin async UI
+queries to accommodate instrumentation overhead; normal test budgets stay unchanged.
 
 ## Run coverage locally
 

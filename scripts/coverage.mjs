@@ -220,6 +220,8 @@ function run(values) {
       "vitest",
       "run",
       "--maxWorkers=1",
+      "--testTimeout=60000",
+      "--hookTimeout=60000",
       "--coverage.enabled",
       `--coverage.provider=${project.provider}`,
       "--coverage.include=src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
@@ -238,6 +240,7 @@ function run(values) {
     const result = spawnSync("pnpm", args, {
       cwd: join(root, project.path),
       stdio: "inherit",
+      env: { ...process.env, SAVIA_COVERAGE: "1" },
       timeout: 20 * 60 * 1000,
     });
     const exitCode = result.status ?? 1;
