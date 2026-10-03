@@ -376,7 +376,10 @@ export function MyDayWidgetsSection({
       ) : null}
 
       {agenda.feedback &&
-      !(agenda.isCalendarConnectNotice && agenda.sources.sources.length > 0) ? (
+      !(agenda.isCalendarConnectNotice && agenda.sources.sources.length > 0) &&
+      !(
+        agenda.isCalendarConnectNotice && agenda.bookings.entries.length > 0
+      ) ? (
         <Alert className="mb-4" aria-label={agenda.feedback}>
           <div className="col-start-2 flex items-start gap-2">
             <AlertDescription className="flex-1">

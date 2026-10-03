@@ -14,6 +14,16 @@ export const bookingMessages = {
   ],
   Availability: ["Disponibilidad", "Availability", "Disponibilidade"],
   Reservations: ["Reservas", "Reservations", "Reservas"],
+  "Reservations for %{date}": [
+    "Reservas del %{date}",
+    "Reservations for %{date}",
+    "Reservas de %{date}",
+  ],
+  "Show upcoming reservations": [
+    "Ver próximas reservas",
+    "Show upcoming reservations",
+    "Ver próximas reservas",
+  ],
   "Loading booking settings…": [
     "Cargando configuración de citas…",
     "Loading booking settings…",
