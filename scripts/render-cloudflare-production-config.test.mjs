@@ -190,6 +190,7 @@ test("writes only the supported production workers and retains their runtime set
     assert.ok(admin.assets.run_worker_first.includes("/mcp"));
     assert.ok(admin.assets.run_worker_first.includes("/public/forms/*"));
     assert.ok(admin.assets.run_worker_first.includes("/public/bookings/*"));
+    assert.ok(admin.assets.run_worker_first.includes("/s/*"));
     assert.ok(admin.assets.run_worker_first.includes("/register"));
     assert.equal(admin.assets.not_found_handling, "single-page-application");
   } finally {
