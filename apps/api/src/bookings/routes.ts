@@ -2,6 +2,10 @@ import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import { bodyLimit } from "hono/body-limit";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import {
+  bookingAgendaEntrySchema,
+  bookingAgendaRangeSchema,
+} from "@savia/studio-shared/booking-agenda-contracts";
 import { actorFromContext } from "../auth/middleware";
 import { authorizeBranding } from "../tenant-branding/service";
 import {
@@ -232,6 +236,144 @@ export function registerBookingRoutes(
   }
   const tenant = (c: Context) =>
     parsed(params, { tenantId: c.req.param("tenantId") }).tenantId;
+  route(
+    "get",
+    "/v1/personal-integrations/bookings",
+    async (c) => {
+      c.header("Cache-Control", "no-store");
+      const actor = actorFromContext(c);
+      if (
+        !actor.principal.isActive ||
+        (actor.credential !== undefined &&
+          actor.credential.kind !== "interactive")
+      )
+        throw new HTTPException(403, {
+          message: "Booking agenda access denied.",
+        });
+      const range = parsed(bookingAgendaRangeSchema, c.req.query());
+      const from = new Date(range.from).toISOString();
+      const to = new Date(range.to).toISOString();
+      const result = await db
+        .prepare(
+          `SELECT
+             b.id,
+             b.tenant_id AS "tenantId",
+             t.id_slug AS "tenantSlug",
+             t.name AS "tenantName",
+             b.service_name AS "serviceName",
+             b.professional_name AS "professionalName",
+             b.customer_name AS "customerName",
+             b.customer_email AS "customerEmail",
+             b.starts_at AS "startsAt",
+             b.ends_at AS "endsAt",
+             b.status,
+             b.version,
+             b.calendar_provider AS "calendarProvider",
+             b.external_id AS "externalId",
+             b.calendar_connection_id AS "savedConnectionId",
+             c.id AS "activeConnectionId",
+             s.config AS "settingsConfig"
+           FROM tenant_bookings b
+           JOIN tenants t ON t.id = b.tenant_id
+           LEFT JOIN tenant_booking_settings s ON s.tenant_id = b.tenant_id
+           LEFT JOIN personal_integration_connections c
+             ON c.id = b.calendar_connection_id
+            AND c.principal_id = b.principal_id
+            AND c.provider = b.calendar_provider
+            AND c.disconnected_at IS NULL
+            AND c.id = (
+              SELECT active_connection.id
+              FROM personal_integration_connections active_connection
+              WHERE active_connection.principal_id = b.principal_id
+                AND active_connection.provider = b.calendar_provider
+                AND active_connection.disconnected_at IS NULL
+              ORDER BY active_connection.updated_at DESC
+              LIMIT 1
+            )
+           WHERE b.principal_id = ?
+             AND b.tenant_id IN (
+               SELECT m.tenant_id
+               FROM identity_tenant_membership m
+               JOIN identity_principal p ON p.id = m.principal_id
+               WHERE m.principal_id = ?
+                 AND m.is_active = 1
+                 AND p.is_active = 1
+             )
+             AND b.status = 'confirmed'
+             AND t.kind = 'commercial'
+             AND b.starts_at < ?
+             AND b.ends_at > ?
+           ORDER BY b.starts_at, b.id
+           LIMIT 2001`,
+        )
+        .bind(actor.principal.id, actor.principal.id, to, from)
+        .all<{
+          id: string;
+          tenantId: number;
+          tenantSlug: string;
+          tenantName: string;
+          serviceName: string;
+          professionalName: string;
+          customerName: string;
+          customerEmail: string;
+          startsAt: string;
+          endsAt: string;
+          status: "confirmed";
+          version: number;
+          calendarProvider: "google_calendar" | "outlook" | null;
+          externalId: string | null;
+          savedConnectionId: string | null;
+          activeConnectionId: string | null;
+          settingsConfig: string | null;
+        }>();
+      if (result.results.length > 2000)
+        throw new HTTPException(422, {
+          message:
+            "The booking agenda is too large. Request a shorter date range.",
+        });
+      const data = result.results.map((row) => {
+        let timeZone = "UTC";
+        if (row.settingsConfig) {
+          try {
+            const configured = JSON.parse(row.settingsConfig).timeZone;
+            if (typeof configured === "string") {
+              const valid =
+                bookingAgendaEntrySchema.shape.timeZone.safeParse(configured);
+              if (valid.success) timeZone = valid.data;
+            }
+          } catch {
+            // Keep the safe UTC fallback when persisted settings are malformed.
+          }
+        }
+        return {
+          id: row.id,
+          tenantId: row.tenantId,
+          tenantSlug: row.tenantSlug,
+          tenantName: row.tenantName,
+          serviceName: row.serviceName,
+          professionalName: row.professionalName,
+          customerName: row.customerName,
+          customerEmail: row.customerEmail,
+          startsAt: row.startsAt,
+          endsAt: row.endsAt,
+          timeZone,
+          status: row.status,
+          version: row.version,
+          externalEvent:
+            row.savedConnectionId &&
+            row.activeConnectionId === row.savedConnectionId &&
+            row.calendarProvider &&
+            row.externalId
+              ? { provider: row.calendarProvider, id: row.externalId }
+              : null,
+        };
+      });
+      return c.json({ data });
+    },
+    undefined,
+    bookingAgendaRangeSchema,
+    z.array(bookingAgendaEntrySchema),
+  );
   async function authorizeHistory(c: Context, id: number) {
     const actor = actorFromContext(c),
       platform = actor.globalRoles.includes("platform_admin"),

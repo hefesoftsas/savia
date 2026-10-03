@@ -46,3 +46,18 @@ sources. Transient failures retain last successful rows with a stale/error notic
 denied access clears private rows. Google/Outlook follow bounded continuation
 pages so a busy month does not stop after the first 25/50 events. Source/page/
 occurrence limits fail explicitly rather than reporting a truncated success.
+
+Native Savia appointments use one authenticated range read across the caller's
+commercial workspace memberships, rather than a request per tenant or calendar
+connection. The server fixes the principal to the session and checks current
+persisted membership. Reads include overlapping confirmed appointments and reject
+ranges above 62 days or results above 2,000 appointments. There is no OAuth
+requirement and no management capability token in the response.
+
+Native appointment state stays in memory. Range, client and session changes clear
+private rows and invalidate pending responses. Same-range transient failures keep
+previous rows with a retry notice; denied access clears them. Manual refresh,
+focus/connectivity recovery and visible five-minute polling read updated booking
+state, so reschedules move and cancellations disappear. Exact external event
+identities tied to the current connection suppress provider copies; title/time
+matching is not used.

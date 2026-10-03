@@ -1,7 +1,11 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
 import { createApp } from "../src/app";
-import type { AppActor, Authenticator } from "../src/auth/types";
+import {
+  AuthenticationError,
+  type AppActor,
+  type Authenticator,
+} from "../src/auth/types";
 
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
@@ -192,6 +196,259 @@ it("configures only active same-tenant Savia professionals and rejects stale set
   ).toBe(422);
   expect((await save({ ...f.settings, version: 0 })).status).toBe(409);
   expect((await f.app.request(other.base)).status).toBe(403);
+});
+
+it("lists a professional's own confirmed agenda with interval overlap and safe fields", async () => {
+  const f = await fixture();
+  const reservation = ((await (await f.reserve()).json()) as any).data
+    .reservation;
+  const disabled = {
+    ...f.settings,
+    enabled: false,
+    published: false,
+    professionals: f.settings.professionals.map((professional: any) => ({
+      ...professional,
+      enabled: false,
+    })),
+    services: f.settings.services.map((service: any) => ({
+      ...service,
+      enabled: false,
+    })),
+  };
+  await env.DB.prepare(
+    "UPDATE tenant_booking_settings SET config=? WHERE tenant_id=?",
+  )
+    .bind(JSON.stringify(disabled), f.tenantId)
+    .run();
+  const from = new Date(
+    Date.parse(reservation.startsAt) + 5 * 60000,
+  ).toISOString();
+  const to = new Date(Date.parse(reservation.endsAt) + 5 * 60000).toISOString();
+  const response = await f.app.request(
+    `/v1/personal-integrations/bookings?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&timeZone=UTC`,
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  const body = (await response.json()) as any;
+  expect(body.data).toHaveLength(1);
+  expect(body.data[0]).toMatchObject({
+    id: reservation.id,
+    tenantId: f.tenantId,
+    tenantSlug: `booking-${f.tenantId}`,
+    tenantName: "Booking tenant",
+    serviceName: "Consultation",
+    professionalName: "Professional",
+    customerName: "Customer",
+    customerEmail: "customer@example.test",
+    startsAt: reservation.startsAt,
+    endsAt: reservation.endsAt,
+    timeZone: "UTC",
+    status: "confirmed",
+    version: 1,
+    externalEvent: null,
+  });
+  expect(JSON.stringify(body)).not.toMatch(
+    /manage_token|request_hash|request_key|connection_id|access_token/i,
+  );
+  const touchesOnlyAtEnd = await f.app.request(
+    `/v1/personal-integrations/bookings?from=${encodeURIComponent(reservation.endsAt)}&to=${encodeURIComponent(new Date(Date.parse(reservation.endsAt) + 60000).toISOString())}&timeZone=UTC`,
+  );
+  expect(((await touchesOnlyAtEnd.json()) as any).data).toHaveLength(0);
+});
+
+it("keeps an administrator's agenda limited to their own current membership", async () => {
+  const f = await fixture();
+  const own = ((await (await f.reserve()).json()) as any).data.reservation;
+  const otherPrincipalId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?)",
+  )
+    .bind(
+      otherPrincipalId,
+      "savia:better-auth",
+      otherPrincipalId,
+      `${otherPrincipalId}@example.test`,
+      "Other professional",
+      now,
+      now,
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at) VALUES(?,?,?,'operator',1,?,?)",
+  )
+    .bind(crypto.randomUUID(), otherPrincipalId, f.tenantId, now, now)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO tenant_bookings(id,tenant_id,professional_id,principal_id,service_id,service_name,professional_name,starts_at,ends_at,buffer_minutes,customer_name,customer_email,manage_token,request_key,request_hash,status,version,calendar_provider,calendar_connection_id,external_id,created_at,customer_locale) VALUES(?,?,?,?,?,?,?,?,?,0,?,?,?, ?,?,'confirmed',1,NULL,NULL,NULL,?,'en')",
+  )
+    .bind(
+      crypto.randomUUID(),
+      f.tenantId,
+      crypto.randomUUID(),
+      otherPrincipalId,
+      crypto.randomUUID(),
+      "Other service",
+      "Other professional",
+      own.startsAt,
+      own.endsAt,
+      "Private customer",
+      "private@example.test",
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+      now,
+    )
+    .run();
+  const from = new Date(Date.parse(own.startsAt) - 60000).toISOString();
+  const to = new Date(Date.parse(own.endsAt) + 60000).toISOString();
+  const url = `/v1/personal-integrations/bookings?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&timeZone=UTC`;
+  const first = ((await (await f.app.request(url)).json()) as any).data;
+  expect(first.map((entry: any) => entry.customerName)).toEqual(["Customer"]);
+  f.actor.credential = { kind: "oauth", scopes: [] };
+  expect((await f.app.request(url)).status).toBe(403);
+  delete f.actor.credential;
+  await env.DB.prepare(
+    "UPDATE identity_tenant_membership SET is_active=0 WHERE principal_id=?",
+  )
+    .bind(f.principalId)
+    .run();
+  expect(((await (await f.app.request(url)).json()) as any).data).toEqual([]);
+});
+
+it("validates agenda ranges and follows only the current saved calendar connection", async () => {
+  const f = await fixture();
+  const booking = ((await (await f.reserve()).json()) as any).data;
+  const from = new Date(
+    Date.parse(booking.reservation.startsAt) - 60000,
+  ).toISOString();
+  const to = new Date(
+    Date.parse(booking.reservation.endsAt) + 60000,
+  ).toISOString();
+  const url = (query: string) => `/v1/personal-integrations/bookings?${query}`;
+  const valid = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&timeZone=UTC`;
+  expect(
+    (
+      await f.app.request(
+        url(valid.replace("timeZone=UTC", "timeZone=Invalid%2FZone")),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await f.app.request(
+        url(
+          `from=${encodeURIComponent(to)}&to=${encodeURIComponent(from)}&timeZone=UTC`,
+        ),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await f.app.request(
+        url(
+          `from=${encodeURIComponent(from)}&to=${encodeURIComponent(new Date(Date.parse(from) + 63 * 86400000).toISOString())}&timeZone=UTC`,
+        ),
+      )
+    ).status,
+  ).toBe(422);
+
+  const connectionId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,external_account_label,external_account_id,scopes,last_validated_at,disconnected_at,created_at,updated_at) VALUES(?,?, 'google_calendar', ?, 'calendar', 'connected', NULL, NULL, '[]', ?, NULL, ?, ?)",
+  )
+    .bind(
+      connectionId,
+      f.principalId,
+      connectionId,
+      timestamp,
+      timestamp,
+      timestamp,
+    )
+    .run();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET calendar_provider='google_calendar',calendar_connection_id=?,external_id='saved-event' WHERE id=?",
+  )
+    .bind(connectionId, booking.reservation.id)
+    .run();
+  const first = ((await (await f.app.request(url(valid))).json()) as any)
+    .data[0];
+  expect(first.externalEvent).toEqual({
+    provider: "google_calendar",
+    id: "saved-event",
+  });
+
+  await env.DB.prepare(
+    "UPDATE personal_integration_connections SET status='disconnected',disconnected_at=?,updated_at=? WHERE id=?",
+  )
+    .bind(timestamp, timestamp, connectionId)
+    .run();
+  const replacementId = crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,external_account_label,external_account_id,scopes,last_validated_at,disconnected_at,created_at,updated_at) VALUES(?,?, 'google_calendar', ?, 'calendar', 'connected', NULL, NULL, '[]', ?, NULL, ?, ?)",
+  )
+    .bind(
+      replacementId,
+      f.principalId,
+      replacementId,
+      timestamp,
+      timestamp,
+      timestamp,
+    )
+    .run();
+  const stale = ((await (await f.app.request(url(valid))).json()) as any)
+    .data[0];
+  expect(stale.externalEvent).toBeNull();
+
+  const move = new Date(
+    Date.parse(booking.reservation.startsAt) + 60 * 60000,
+  ).toISOString();
+  const manageToken = new URL(booking.managementUrl).pathname.split("/").at(-1);
+  const rescheduled = await f.app.request(
+    `/api/public/bookings/manage/${manageToken}/reschedule`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: 1, startsAt: move }),
+    },
+  );
+  expect(rescheduled.status).toBe(200);
+  expect(
+    ((await (await f.app.request(url(valid))).json()) as any).data,
+  ).toEqual([]);
+  const newRange = `from=${encodeURIComponent(move)}&to=${encodeURIComponent(new Date(Date.parse(move) + 31 * 60000).toISOString())}&timeZone=UTC`;
+  expect(
+    ((await (await f.app.request(url(newRange))).json()) as any).data[0]
+      .startsAt,
+  ).toBe(move);
+  const cancelled = await f.app.request(
+    `/api/public/bookings/manage/${manageToken}/cancel`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: 2 }),
+    },
+  );
+  expect(cancelled.status).toBe(200);
+  expect(
+    ((await (await f.app.request(url(newRange))).json()) as any).data,
+  ).toEqual([]);
+});
+
+it("requires an authenticated session for the personal booking feed", async () => {
+  const app = createApp(env.DB, undefined, undefined, {
+    authenticate: async () => {
+      throw new AuthenticationError(
+        "AUTHENTICATION_REQUIRED",
+        "An active session is required",
+      );
+    },
+  });
+  const response = await app.request(
+    "/v1/personal-integrations/bookings?from=2026-10-03T00%3A00%3A00.000Z&to=2026-10-04T00%3A00%3A00.000Z&timeZone=UTC",
+  );
+  expect(response.status).toBe(401);
 });
 
 it("publishes only safe catalog data and reserves without exposing principal or customer lists", async () => {

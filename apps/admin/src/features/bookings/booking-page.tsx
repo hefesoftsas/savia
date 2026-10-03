@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { bookingMessages } from "./booking-messages";
 
 import type { Period, Exception, Settings } from "./booking-types";
@@ -77,7 +77,18 @@ export function BookingPage({
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [tab, setTab] = useState<Tab>("settings");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab: Tab =
+    searchParams.get("tab") === "reservations" ? "reservations" : "settings";
+  const [tab, setTab] = useState<Tab>(requestedTab);
+  const dateParam = searchParams.get("date");
+  const appointmentDate =
+    dateParam &&
+    /^\d{4}-\d{2}-\d{2}$/.test(dateParam) &&
+    Number.isFinite(Date.parse(dateParam)) &&
+    new Date(dateParam).toISOString().slice(0, 10) === dateParam
+      ? dateParam
+      : null;
   const [settings, setSettings] = useState<Settings>();
   const [weekly, setWeekly] = useState<Period[]>([]);
   const [exceptions, setExceptions] = useState<Exception[]>([]);
@@ -122,7 +133,7 @@ export function BookingPage({
     setSettings(undefined);
     setReservations([]);
     setLoadedTenant(undefined);
-    setTab("settings");
+    setTab(requestedTab);
     void services.apiClient
       .get<{ data: Bootstrap }>(`/v1/tenants/${tenantId}/booking`)
       .then(({ data }) => {
@@ -140,18 +151,23 @@ export function BookingPage({
     return () => {
       active = false;
     };
-  }, [tenantId, services.apiClient, attempt, t]);
+  }, [tenantId, services.apiClient, attempt, t, requestedTab]);
 
   useEffect(() => {
     if (tab !== "reservations" || !ready) return;
     let active = true;
     setReservationsLoading(true);
     setError("");
-    const from = new Date();
-    const to = new Date(
-      from.getTime() +
-        Math.min(90, Math.max(1, settings?.horizonDays ?? 30)) * 86400000,
-    );
+    const from = appointmentDate
+      ? new Date(`${appointmentDate}T00:00:00`)
+      : new Date();
+    const to = new Date(from);
+    if (appointmentDate) to.setDate(to.getDate() + 1);
+    else
+      to.setTime(
+        from.getTime() +
+          Math.min(90, Math.max(1, settings?.horizonDays ?? 30)) * 86400000,
+      );
     void services.apiClient
       .get<{ data: Reservation[] }>(
         `/v1/tenants/${tenantId}/booking/reservations?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
@@ -175,6 +191,7 @@ export function BookingPage({
     services.apiClient,
     reservationsAttempt,
     settings?.horizonDays,
+    appointmentDate,
     t,
   ]);
 
@@ -796,6 +813,31 @@ export function BookingPage({
               {t("Retry")}
             </Button>
           </div>
+          {appointmentDate && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <p className="text-muted-foreground">
+                {t("Reservations for %{date}", {
+                  date: new Intl.DateTimeFormat(locale, {
+                    dateStyle: "long",
+                  }).format(new Date(`${appointmentDate}T00:00:00`)),
+                })}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setSearchParams((current) => {
+                    const next = new URLSearchParams(current);
+                    next.delete("date");
+                    return next;
+                  })
+                }
+              >
+                {t("Show upcoming reservations")}
+              </Button>
+            </div>
+          )}
           {reservationsLoading ? (
             <div role="status" className="grid gap-2">
               <span className="sr-only">{t("Reservations")}</span>
