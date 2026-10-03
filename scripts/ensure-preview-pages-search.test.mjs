@@ -48,7 +48,52 @@ test("permission errors do not trigger creation", async () => {
         return Response.json({ success: false }, { status: 403 });
       },
     }),
-    /Vectorize edit/,
+    /HTTP 403/,
+  );
+  assert.equal(calls, 1);
+});
+
+test("creates after Vectorize index-not-found error 3000", async () => {
+  let calls = 0;
+  await ensurePreviewPagesSearch({
+    accountId: "account",
+    apiToken: "token",
+    fetcher: async () => {
+      calls++;
+      return calls === 1
+        ? Response.json(
+            {
+              success: false,
+              errors: [
+                {
+                  code: 3000,
+                  message:
+                    'vectorize.index.not_found - Index name "savia-pages-search-preview"',
+                },
+              ],
+            },
+            { status: 400 },
+          )
+        : Response.json(result);
+    },
+  });
+  assert.equal(calls, 2);
+});
+test("unrelated error 3000 does not trigger creation", async () => {
+  let calls = 0;
+  await assert.rejects(
+    ensurePreviewPagesSearch({
+      accountId: "account",
+      apiToken: "token",
+      fetcher: async () => {
+        calls++;
+        return Response.json(
+          { success: false, errors: [{ code: 3000, message: "unrelated" }] },
+          { status: 400 },
+        );
+      },
+    }),
+    /HTTP 400; Cloudflare codes: 3000/,
   );
   assert.equal(calls, 1);
 });
