@@ -83,6 +83,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   const stepHeading = useRef<HTMLHeadingElement>(null);
+  const refreshSequence = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -116,18 +117,48 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   }, [rescheduling, reviewing]);
 
   const reservation = bootstrap?.reservation;
+  function updateBootstrap(next: ManageBootstrap) {
+    setBootstrap((current) => {
+      if (!current) return next;
+      if (
+        next.reservation.version < current.reservation.version ||
+        (current.reservation.status === "cancelled" &&
+          next.reservation.status !== "cancelled")
+      )
+        return current;
+      return next;
+    });
+  }
+  function updateReservation(nextReservation: Reservation) {
+    setBootstrap((current) => {
+      if (!current) return current;
+      if (
+        nextReservation.version < current.reservation.version ||
+        (current.reservation.status === "cancelled" &&
+          nextReservation.status !== "cancelled")
+      )
+        return current;
+      return { ...current, reservation: nextReservation };
+    });
+  }
+  function invalidateRefresh() {
+    refreshSequence.current += 1;
+    setRefreshing(false);
+  }
   async function refreshAppointment() {
+    const request = ++refreshSequence.current;
     setRefreshing(true);
     setConferenceRefreshError("");
     try {
       const data = await publicRequest<ManageBootstrap>(managePath);
-      setBootstrap(data);
+      if (request === refreshSequence.current) updateBootstrap(data);
     } catch {
-      setConferenceRefreshError(
-        t("The appointment could not be refreshed. Try again."),
-      );
+      if (request === refreshSequence.current)
+        setConferenceRefreshError(
+          t("The appointment could not be refreshed. Try again."),
+        );
     } finally {
-      setRefreshing(false);
+      if (request === refreshSequence.current) setRefreshing(false);
     }
   }
   const summaryCatalog = useMemo(
@@ -159,6 +190,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
 
   async function cancel() {
     if (!bootstrap) return;
+    invalidateRefresh();
     setBusy(true);
     setError("");
     try {
@@ -170,7 +202,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
           body: JSON.stringify({ version: bootstrap.reservation.version }),
         },
       );
-      setBootstrap({ ...bootstrap, reservation: nextReservation });
+      updateReservation(nextReservation);
       setUpdated(false);
     } catch {
       setError(
@@ -184,6 +216,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   async function reschedule() {
     if (!bootstrap || !selection) return;
     const submittedStartsAt = selection.slot.startsAt;
+    invalidateRefresh();
     setBusy(true);
     setError("");
     try {
@@ -198,7 +231,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
           }),
         },
       );
-      setBootstrap({ ...bootstrap, reservation: nextReservation });
+      updateReservation(nextReservation);
       setRescheduling(false);
       setReviewing(false);
       setUpdated(true);
@@ -206,7 +239,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
       if ([404, 409].includes((requestError as ApiError)?.status ?? 0)) {
         try {
           const current = await publicRequest<ManageBootstrap>(managePath);
-          setBootstrap(current);
+          updateBootstrap(current);
           setDisplayTimeZone(selection.displayTimeZone);
           setReviewing(false);
           if (
@@ -316,7 +349,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
           <Button
             type="button"
             variant="outline"
-            disabled={refreshing}
+            disabled={refreshing || busy}
             onClick={() => void refreshAppointment()}
           >
             {refreshing

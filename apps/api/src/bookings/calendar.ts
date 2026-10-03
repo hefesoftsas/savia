@@ -119,6 +119,9 @@ function safeJoinUrl(
             "teams.microsoft.com",
             "teams.live.com",
             "teams.cloud.microsoft",
+            "gov.teams.microsoft.us",
+            "dod.teams.microsoft.us",
+            "teams.microsoftonline.cn",
           ].includes(url.hostname);
     if (
       url.protocol !== "https:" ||

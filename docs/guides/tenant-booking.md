@@ -91,6 +91,10 @@ Rescheduling updates the existing calendar event and preserves its call. Cancell
 hides the join action immediately and queues deletion of the same provider event.
 Links are accepted only as HTTPS participant URLs. The existing tenant grant,
 professional membership and pinned Nango connection checks apply to every job.
+Teams link validation includes the documented [sovereign cloud client hosts](https://learn.microsoft.com/en-us/microsoftteams/platform/concepts/sovereign-cloud)
+as well as commercial Teams hosts; the connection must still be configured for
+the correct cloud. Refreshing a pending link cannot overwrite a later appointment
+cancellation or reschedule.
 
 Deploy the forward migrations `0028_booking_conferences.sql` for D1 and PostgreSQL
 before the updated API. No live provider calls are required by the automated

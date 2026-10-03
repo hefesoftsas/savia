@@ -31,6 +31,9 @@ function safeHttpsUrl(
           "teams.microsoft.com",
           "teams.live.com",
           "teams.cloud.microsoft",
+          "gov.teams.microsoft.us",
+          "dod.teams.microsoft.us",
+          "teams.microsoftonline.cn",
         ].includes(host))
     )
       return undefined;

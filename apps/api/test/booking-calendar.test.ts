@@ -396,49 +396,57 @@ describe("booking calendar adapter", () => {
     expect(requests[1]?.body).not.toHaveProperty("conferenceData");
   });
 
-  it("creates a Teams meeting when Outlook advertises Teams support", async () => {
-    await seedConnection("outlook");
-    const requests: Array<{ method: string; path: string; body?: unknown }> =
-      [];
-    const nango = fakeNango(async ({ method, path, body }) => {
-      requests.push({ method, path, body });
-      if (path.startsWith("/v1.0/me/calendar?"))
+  it.each([
+    "teams.microsoft.com",
+    "gov.teams.microsoft.us",
+    "dod.teams.microsoft.us",
+    "teams.microsoftonline.cn",
+  ])(
+    "creates a Teams meeting at %s when Outlook advertises Teams support",
+    async (host) => {
+      await seedConnection("outlook");
+      const requests: Array<{ method: string; path: string; body?: unknown }> =
+        [];
+      const nango = fakeNango(async ({ method, path, body }) => {
+        requests.push({ method, path, body });
+        if (path.startsWith("/v1.0/me/calendar?"))
+          return Response.json({
+            allowedOnlineMeetingProviders: ["teamsForBusiness"],
+          });
+        if (method === "GET") return Response.json({ value: [] });
         return Response.json({
-          allowedOnlineMeetingProviders: ["teamsForBusiness"],
+          id: "teams-event",
+          isOnlineMeeting: true,
+          onlineMeetingProvider: "teamsForBusiness",
+          onlineMeeting: {
+            joinUrl: `https://${host}/l/meetup-join/abc`,
+          },
         });
-      if (method === "GET") return Response.json({ value: [] });
-      return Response.json({
-        id: "teams-event",
-        isOnlineMeeting: true,
-        onlineMeetingProvider: "teamsForBusiness",
-        onlineMeeting: {
-          joinUrl: "https://teams.microsoft.com/l/meetup-join/abc",
+      });
+      const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+        ...calendarInput,
+        provider: "outlook",
+        id: "booking-teams-ready",
+        title: "Consultation",
+        startsAt: "2026-03-01T09:00:00Z",
+        endsAt: "2026-03-01T10:00:00Z",
+        externalId: null,
+        cancelled: false,
+      });
+      expect(result).toEqual({
+        externalId: "teams-event",
+        conference: {
+          provider: "teams",
+          joinUrl: `https://${host}/l/meetup-join/abc`,
+          status: "ready",
         },
       });
-    });
-    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
-      ...calendarInput,
-      provider: "outlook",
-      id: "booking-teams-ready",
-      title: "Consultation",
-      startsAt: "2026-03-01T09:00:00Z",
-      endsAt: "2026-03-01T10:00:00Z",
-      externalId: null,
-      cancelled: false,
-    });
-    expect(result).toEqual({
-      externalId: "teams-event",
-      conference: {
-        provider: "teams",
-        joinUrl: "https://teams.microsoft.com/l/meetup-join/abc",
-        status: "ready",
-      },
-    });
-    expect(requests[2]?.body).toMatchObject({
-      isOnlineMeeting: true,
-      onlineMeetingProvider: "teamsForBusiness",
-    });
-  });
+      expect(requests[2]?.body).toMatchObject({
+        isOnlineMeeting: true,
+        onlineMeetingProvider: "teamsForBusiness",
+      });
+    },
+  );
 
   it("fails retryably when conference capability data is malformed", async () => {
     await seedConnection();

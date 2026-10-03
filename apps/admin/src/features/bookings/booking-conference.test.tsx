@@ -27,6 +27,9 @@ it.each([
   ["google_meet", "https://meet.google.com/abc-defg-hij", "Join Google Meet"],
   ["teams", "https://teams.microsoft.com/l/meetup-join/123", "Join Teams"],
   ["teams", "https://teams.cloud.microsoft/meet/123", "Join Teams"],
+  ["teams", "https://gov.teams.microsoft.us/l/meetup-join/123", "Join Teams"],
+  ["teams", "https://dod.teams.microsoft.us/l/meetup-join/123", "Join Teams"],
+  ["teams", "https://teams.microsoftonline.cn/l/meetup-join/123", "Join Teams"],
 ] as const)("renders the safe %s join link", (provider, joinUrl, label) => {
   renderConference({ provider, joinUrl, status: "ready" });
   expect(screen.getByRole("link", { name: label })).toHaveAttribute(
