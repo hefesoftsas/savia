@@ -4,7 +4,11 @@ Module.zetajs
   .then(function (zeta) {
     const css = zeta.uno.com.sun.star;
     const desktop = css.frame.Desktop.create(zeta.getUnoComponentContext());
-    let model, listener, path, interceptor;
+    let model,
+      listener,
+      path,
+      interceptor,
+      readOnly = false;
     const port = zeta.mainPort;
     const property = (Name, Value) =>
       new css.beans.PropertyValue({ Name, Value });
@@ -14,10 +18,12 @@ Module.zetajs
           if (model) throw new Error("Abre cada archivo en su propia ventana.");
           if (!/^document\.(docx|xlsx|pptx)$/.test(data.filename))
             throw new Error("Nombre de documento inválido.");
+          readOnly = Boolean(data.readOnly);
           path = "file:///tmp/savia-office/" + data.filename;
           model = desktop.loadComponentFromURL(path, "_default", 0, [
             property("MacroExecutionMode", new zeta.Any(zeta.type.short, 0)),
             property("UpdateDocMode", new zeta.Any(zeta.type.short, 0)),
+            property("ReadOnly", new zeta.Any(zeta.type.boolean, readOnly)),
           ]);
           if (!model) throw new Error("No se pudo abrir el documento.");
           model
@@ -27,7 +33,8 @@ Module.zetajs
           listener = zeta.unoObject([css.util.XModifyListener], {
             disposing: function () {},
             modified: function () {
-              if (model.isModified()) port.postMessage({ cmd: "dirty" });
+              if (!readOnly && model.isModified())
+                port.postMessage({ cmd: "dirty" });
             },
           });
           model.addModifyListener(listener);
@@ -60,7 +67,8 @@ Module.zetajs
             removeStatusListener: function () {},
           });
           function query(url, target, flags) {
-            if (url.Complete === ".uno:Save") return saver;
+            if (url.Complete === ".uno:Save") return readOnly ? null : saver;
+            if (readOnly && url.Complete === ".uno:EditDoc") return null;
             if (blocked.has(url.Complete) || url.Protocol === "private:")
               return null;
             return slave ? slave.queryDispatch(url, target, flags) : null;
@@ -95,6 +103,7 @@ Module.zetajs
           port.postMessage({ cmd: "opened", id: data.id });
         } else if (data.cmd === "save") {
           if (!model) throw new Error("El documento no está abierto.");
+          if (readOnly) throw new Error("El documento es de solo lectura.");
           if (model.getURL() !== path)
             throw new Error(
               "El documento cambió de ubicación. Vuelve a abrirlo desde Savia.",

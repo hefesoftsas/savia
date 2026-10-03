@@ -4,7 +4,11 @@ import {
   validateOfficePackage,
 } from "@savia/studio-shared/office";
 export type OfficeEngine = {
-  open(bytes: Uint8Array, name: string): Promise<void>;
+  open(
+    bytes: Uint8Array,
+    name: string,
+    options?: { readOnly?: boolean },
+  ): Promise<void>;
   save(): Promise<Uint8Array>;
   dispose(): void;
 };
@@ -48,6 +52,7 @@ export async function loadOfficeEngine(
   const script = document.createElement("script");
   let port: MessagePort | undefined,
     filename = "",
+    optionsReadOnly = false,
     disposed = false,
     sequence = 0;
   const pending = new Map<
@@ -191,11 +196,12 @@ export async function loadOfficeEngine(
     document.body.appendChild(script);
   });
   return {
-    async open(bytes, name) {
+    async open(bytes, name, options) {
       const format = officeFormat(name);
       if (!format)
         throw new Error("El formato del documento no está admitido.");
       await validateOfficePackage(bytes, format);
+      optionsReadOnly = Boolean(options?.readOnly);
       filename = "document." + format;
       try {
         window.FS!.mkdir("/tmp/savia-office");
@@ -203,10 +209,11 @@ export async function loadOfficeEngine(
         /* directory may exist */
       }
       window.FS!.writeFile("/tmp/savia-office/" + filename, bytes);
-      await send("open", { filename });
+      await send("open", { filename, readOnly: Boolean(options?.readOnly) });
       window.dispatchEvent(new Event("resize"));
     },
     async save() {
+      if (optionsReadOnly) throw new Error("Este archivo es de solo lectura.");
       await send("save");
       return window.FS!.readFile("/tmp/savia-office/" + filename).slice();
     },
