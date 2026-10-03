@@ -74,6 +74,11 @@ booking page or disabling a service does not hide existing confirmed appointment
 Cancelled appointments disappear, and rescheduled appointments move to the new
 time on the next refresh.
 
+The native appointment feed accepts the browser's authenticated OAuth access
+token with `savia.api.read`, as well as an authenticated cookie session. Tokens
+without the read scope and personal API keys cannot access the feed. In either
+case, results stay limited to the user's own appointments and current memberships.
+
 Select a Savia appointment to see its service, customer, professional, workspace
 and business time zone. Where the current deployment supports tenant hostnames,
 **Open bookings in tenant** opens that workspace's authenticated reservations
