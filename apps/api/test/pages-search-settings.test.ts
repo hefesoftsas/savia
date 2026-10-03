@@ -228,3 +228,24 @@ it("requires an active tenant administrator for tenant access and an active tena
   ).toBe(404);
   expect((await platform.request(path(99999999))).status).toBe(404);
 });
+
+it("lets platform admins activate an existing grant with an enabled-only patch", async () => {
+  const tenantId = await createTenant();
+  const path = `https://api.test/v1/tenants/${tenantId}/pages-search-settings`;
+  const platform = appFor(actor(["platform_admin"]));
+  expect((await platform.request(path, put({ allowed: true }))).status).toBe(
+    200,
+  );
+  const enabled = await platform.request(path, put({ enabled: true }));
+  expect(enabled.status).toBe(200);
+  expect(await enabled.json()).toMatchObject({
+    data: { allowed: true, enabled: true, effectiveEnabled: true },
+  });
+  expect((await platform.request(path, put({ enabled: false }))).status).toBe(
+    200,
+  );
+  expect(await readPagesSearchSettings(env.DB, tenantId)).toMatchObject({
+    allowed: true,
+    enabled: false,
+  });
+});
