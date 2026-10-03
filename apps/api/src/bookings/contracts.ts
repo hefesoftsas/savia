@@ -154,7 +154,8 @@ export type Reservation = z.infer<typeof reservationSchema>;
 export const publicBookingSchema = z
   .object({
     serviceId: id,
-    professionalId: id,
+    professionalId: id.optional(),
+    customerLocale: z.enum(["en", "es", "pt"]).default("en"),
     startsAt: z.string().datetime({ offset: true }),
     customerName: text(120).min(1),
     customerEmail: z.string().trim().email().max(254),
@@ -208,3 +209,57 @@ export function defaultSettings(title: string): BookingSettings {
     professionals: [],
   };
 }
+
+export const bookingLinkScopeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("team") }).strict(),
+  z.object({ kind: z.literal("professional"), professionalId: id }).strict(),
+]);
+export const bookingPublicLinkInputSchema = z
+  .object({
+    scope: bookingLinkScopeSchema,
+    serviceId: id.nullable().default(null),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    dailyLimit: z.number().int().min(1).max(1000).default(25),
+  })
+  .strict();
+export type BookingLinkScope = z.infer<typeof bookingLinkScopeSchema>;
+export type ResolvedBookingLink = {
+  id: string;
+  tenantId: number;
+  publicToken: string;
+  scope: BookingLinkScope;
+  serviceId: string | null;
+  dailyLimit: number;
+  settings: BookingSettings;
+  legacy: boolean;
+};
+export const publicSlotQuerySchema = slotQuerySchema.extend({
+  professionalId: id.optional(),
+});
+export const availabilityRangeQuerySchema = z
+  .object({
+    serviceId: id,
+    professionalId: id.optional(),
+    from: date,
+    to: date,
+    displayTimeZone: zone.optional(),
+  })
+  .refine(
+    (v) =>
+      v.to >= v.from && (Date.parse(v.to) - Date.parse(v.from)) / 86400000 < 31,
+    "Choose a range of at most 31 dates.",
+  );
+export type AvailabilityRangeQuery = z.infer<
+  typeof availabilityRangeQuerySchema
+>;
+export const availabilityRangeSchema = z.object({
+  displayTimeZone: zone,
+  businessTimeZone: zone,
+  days: z.array(
+    z.object({
+      date,
+      slots: z.array(z.object({ startsAt: z.string(), endsAt: z.string() })),
+    }),
+  ),
+});
+export type AvailabilityRange = z.infer<typeof availabilityRangeSchema>;

@@ -3,6 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppActor, Authenticator } from "../src/auth/types";
 import { authenticationMiddleware } from "../src/auth/middleware";
+import { OfficeDocumentsService } from "../src/office-documents/service";
 import { registerOfficeDocumentRoutes } from "../src/routes/office-documents";
 
 const migrations = Object.entries(
@@ -137,7 +138,7 @@ async function seed() {
     "DELETE FROM office_documents WHERE tenant_id IN (9461,9462)",
   ).run();
   await env.DB.prepare(
-    "DELETE FROM identity_tenant_membership WHERE tenant_id IN (9461,9462)",
+    "DELETE FROM identity_tenant_membership WHERE tenant_id IN (0,9461,9462)",
   ).run();
   await env.DB.prepare(
     "DELETE FROM identity_principal WHERE id IN ('office-owner','office-peer','office-other')",
@@ -168,9 +169,401 @@ async function seed() {
   }
 }
 
+async function createDoc(app: OpenAPIHono, name = "Plan.docx"): Promise<any> {
+  const form = new FormData();
+  form.set(
+    "file",
+    new File([officeZip("docx")], name, {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }),
+  );
+  const response = await app.request("/v1/office-documents", {
+    method: "POST",
+    body: form,
+  });
+  expect(response.status, await response.clone().text()).toBe(201);
+  return ((await response.json()) as any).data;
+}
+
+async function setShare(
+  app: OpenAPIHono,
+  id: string,
+  version: number,
+  shares: Array<{ principalId: string; role: "reader" | "editor" }>,
+) {
+  return app.request(`/v1/office-documents/${id}/shares`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version, shares }),
+  });
+}
+
+async function saveDoc(app: OpenAPIHono, id: string, version: number) {
+  const form = new FormData();
+  form.set("version", String(version));
+  form.set(
+    "file",
+    new File([officeZip("docx")], "Plan.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }),
+  );
+  return app.request(`/v1/office-documents/api/file/${id}/revisions`, {
+    method: "POST",
+    body: form,
+  });
+}
+
 describe("private office document API", () => {
   beforeAll(applyMigrations);
   beforeEach(seed);
+
+  it("shares documents with active tenant members using reader and editor roles", async () => {
+    const owner = appFor(actor("office-owner", 9461));
+    const reader = appFor(actor("office-peer", 9461));
+    const created = await createDoc(owner);
+    const id = created.id as string;
+
+    const members = await owner.request(
+      "/v1/office-documents/members?q=office",
+    );
+    expect(members.status).toBe(200);
+    expect(((await members.json()) as any).data).toEqual([
+      {
+        principalId: "office-peer",
+        displayName: "office-peer",
+        email: "office-peer@savia.test",
+      },
+    ]);
+
+    const readerShare = await setShare(owner, id, 1, [
+      { principalId: "office-peer", role: "reader" },
+    ]);
+    expect(readerShare.status).toBe(200);
+    const readerShareBody = ((await readerShare.json()) as any).data;
+    expect(readerShareBody).toEqual({
+      version: 2,
+      shares: [
+        {
+          principalId: "office-peer",
+          role: "reader",
+          displayName: "office-peer",
+          email: "office-peer@savia.test",
+        },
+      ],
+    });
+    const shares = await owner.request(`/v1/office-documents/${id}/shares`);
+    expect(((await shares.json()) as any).data).toEqual(readerShareBody);
+
+    const ownerList = (
+      (await owner
+        .request("/v1/office-documents")
+        .then((response) => response.json())) as any
+    ).data;
+    expect(ownerList[0]).toMatchObject({
+      id,
+      role: "owner",
+      ownerName: "office-owner",
+    });
+    const readerList = (
+      (await reader
+        .request("/v1/office-documents")
+        .then((response) => response.json())) as any
+    ).data;
+    expect(readerList).toEqual([
+      expect.objectContaining({
+        id,
+        role: "reader",
+        ownerName: "office-owner",
+      }),
+    ]);
+    const metadata = await reader.request(
+      `/v1/office-documents/api/file/${id}/office`,
+    );
+    expect(((await metadata.json()) as any).data).toMatchObject({
+      role: "reader",
+      ownerName: "office-owner",
+      readOnly: true,
+    });
+    expect(
+      (
+        await reader.request(
+          `/v1/office-documents/api/file/${id}/revisions/1/download`,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await reader.request(`/v1/office-documents/api/file/${id}/revisions`))
+        .status,
+    ).toBe(200);
+    const readerSave = await saveDoc(reader, id, 1);
+    expect(readerSave.status).toBe(403);
+    expect(
+      (
+        await reader.request(`/v1/office-documents/${id}`, {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ version: 1 }),
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await owner.request(`/v1/office-documents/${id}/shares`)).status,
+    ).toBe(200);
+
+    const editorShare = await setShare(owner, id, 2, [
+      { principalId: "office-peer", role: "editor" },
+    ]);
+    expect(editorShare.status).toBe(200);
+    const editorSave = await saveDoc(reader, id, 1);
+    expect(editorSave.status).toBe(201);
+    const staleSave = await saveDoc(reader, id, 1);
+    expect(staleSave.status).toBe(409);
+    expect(((await editorSave.json()) as any).data).toMatchObject({
+      role: "editor",
+      ownerName: "office-owner",
+      version: 2,
+    });
+    const revision = await env.DB.prepare(
+      "SELECT storage_key,created_by FROM office_document_revisions WHERE document_id=? AND version=2",
+    )
+      .bind(id)
+      .first<{ storage_key: string; created_by: string }>();
+    expect(revision).toMatchObject({ created_by: "office-peer" });
+    expect(revision!.storage_key).toContain("9461/office-owner/");
+    expect(
+      (
+        await reader.request(`/v1/office-documents/${id}`, {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ version: 2 }),
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await reader.request(`/v1/office-documents/${id}/shares`)).status,
+    ).toBe(404);
+
+    const deleted = await owner.request(`/v1/office-documents/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: 2 }),
+    });
+    expect(deleted.status).toBe(204);
+  });
+
+  it("rejects stale share versions, duplicate and inactive or cross-tenant recipients", async () => {
+    const owner = appFor(actor("office-owner", 9461));
+    const created = await createDoc(owner);
+
+    const duplicate = await setShare(owner, created.id, 1, [
+      { principalId: "office-peer", role: "reader" },
+      { principalId: "office-peer", role: "editor" },
+    ]);
+    expect(duplicate.status).toBe(400);
+    const otherTenant = await setShare(owner, created.id, 1, [
+      { principalId: "office-other", role: "reader" },
+    ]);
+    expect(otherTenant.status).toBe(400);
+    const selfShare = await setShare(owner, created.id, 1, [
+      { principalId: "office-owner", role: "reader" },
+    ]);
+    expect(selfShare.status).toBe(400);
+    await env.DB.prepare(
+      "UPDATE identity_tenant_membership SET is_active=0 WHERE principal_id='office-peer' AND tenant_id=9461",
+    ).run();
+    const inactive = await setShare(owner, created.id, 1, [
+      { principalId: "office-peer", role: "reader" },
+    ]);
+    expect(inactive.status).toBe(400);
+
+    await env.DB.prepare(
+      "UPDATE identity_tenant_membership SET is_active=1 WHERE principal_id='office-peer' AND tenant_id=9461",
+    ).run();
+    const granted = await setShare(owner, created.id, 1, [
+      { principalId: "office-peer", role: "reader" },
+    ]);
+    expect(granted.status).toBe(200);
+    await env.DB.prepare(
+      "UPDATE identity_tenant_membership SET is_active=0 WHERE principal_id='office-peer' AND tenant_id=9461",
+    ).run();
+    expect(
+      (
+        (await owner
+          .request(`/v1/office-documents/${created.id}/shares`)
+          .then((response) => response.json())) as any
+      ).data.shares,
+    ).toEqual([
+      {
+        principalId: "office-peer",
+        role: "reader",
+        displayName: "office-peer",
+        email: "office-peer@savia.test",
+      },
+    ]);
+    await env.DB.prepare(
+      "UPDATE identity_tenant_membership SET is_active=1 WHERE principal_id='office-peer' AND tenant_id=9461",
+    ).run();
+    const stale = await setShare(owner, created.id, 1, []);
+    expect(stale.status).toBe(409);
+    expect(
+      (await appFor(actor("office-peer", 9461)).request("/v1/office-documents"))
+        .status,
+    ).toBe(200);
+    const revoked = await setShare(owner, created.id, 2, []);
+    expect(revoked.status).toBe(200);
+    const peer = appFor(actor("office-peer", 9461));
+    expect(
+      (
+        (await peer
+          .request("/v1/office-documents")
+          .then((response) => response.json())) as any
+      ).data,
+    ).toEqual([]);
+    expect(
+      (await peer.request(`/v1/office-documents/api/file/${created.id}/office`))
+        .status,
+    ).toBe(404);
+  });
+
+  it.each(["deleted", "membership revoked", "suite disabled"])(
+    "preserves scoped errors when sharing races with %s",
+    async (change) => {
+      const user = actor("office-owner", 9461);
+      const created = await createDoc(appFor(user));
+      const db = new Proxy(env.DB, {
+        get(target, property) {
+          if (property === "batch")
+            return async (statements: D1PreparedStatement[]) => {
+              if (change === "deleted")
+                await target
+                  .prepare("DELETE FROM office_documents WHERE id=?")
+                  .bind(created.id)
+                  .run();
+              else if (change === "membership revoked")
+                await target
+                  .prepare(
+                    "UPDATE identity_tenant_membership SET is_active=0 WHERE principal_id='office-owner' AND tenant_id=9461",
+                  )
+                  .run();
+              else
+                await target
+                  .prepare(
+                    "INSERT INTO office_settings(tenant_id,platform_allowed,tenant_enabled,updated_at) VALUES(9461,1,0,'2026-10-03')",
+                  )
+                  .run();
+              return target.batch(statements);
+            };
+          const value = Reflect.get(target, property);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      }) as D1Database;
+      const service = new OfficeDocumentsService(db, user, env.DOCUMENTS);
+      await expect(
+        service.setShares(created.id, { version: 1, shares: [] }),
+      ).rejects.toMatchObject({
+        status: change === "suite disabled" ? 403 : 404,
+      });
+    },
+  );
+
+  it("does not commit a save whose editor grant is revoked while its upload is pending", async () => {
+    const owner = appFor(actor("office-owner", 9461));
+    const created = await createDoc(owner);
+    const granted = await setShare(owner, created.id, 1, [
+      { principalId: "office-peer", role: "editor" },
+    ]);
+    expect(granted.status).toBe(200);
+
+    let started!: () => void;
+    let release!: () => void;
+    const putStarted = new Promise<void>((resolve) => (started = resolve));
+    const putGate = new Promise<void>((resolve) => (release = resolve));
+    const delayedBucket = new Proxy(env.DOCUMENTS, {
+      get(target, property, receiver) {
+        if (property === "put")
+          return async (...args: Parameters<R2Bucket["put"]>) => {
+            started();
+            await putGate;
+            return Reflect.get(target, property, receiver).apply(target, args);
+          };
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as R2Bucket;
+    const editor = appFor(actor("office-peer", 9461), delayedBucket);
+    const pendingSave = saveDoc(editor, created.id, 1);
+    await putStarted;
+    const revoked = await setShare(owner, created.id, 2, []);
+    expect(revoked.status).toBe(200);
+    release();
+    const save = await pendingSave;
+    expect(save.status).toBe(404);
+    const current = await env.DB.prepare(
+      "SELECT version FROM office_documents WHERE id=?",
+    )
+      .bind(created.id)
+      .first<{ version: number }>();
+    expect(current).toEqual({ version: 1 });
+    expect(
+      await env.DB.prepare(
+        "SELECT 1 FROM office_document_revisions WHERE document_id=? AND version=2",
+      )
+        .bind(created.id)
+        .first(),
+    ).toBeNull();
+  });
+
+  it("requires explicit tenant zero membership for tenant zero document shares", async () => {
+    const ownerActor = actor("office-owner", 0);
+    await env.DB.prepare(
+      "DELETE FROM identity_tenant_membership WHERE principal_id='office-owner'",
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at)
+       VALUES ('membership-office-owner-zero','office-owner',0,'viewer',1,'2026-09-05','2026-09-05')`,
+    ).run();
+    ownerActor.memberships = [
+      {
+        id: "membership-office-owner-zero",
+        principalId: "office-owner",
+        agencyId: 0,
+        tenantId: 0,
+        role: "viewer",
+        isActive: true,
+        createdAt: "2026-09-05T00:00:00.000Z",
+        updatedAt: "2026-09-05T00:00:00.000Z",
+      },
+    ];
+    const owner = appFor(ownerActor);
+    const created = await createDoc(owner);
+
+    expect(
+      (
+        await setShare(owner, created.id, 1, [
+          { principalId: "office-peer", role: "reader" },
+        ])
+      ).status,
+    ).toBe(400);
+    await env.DB.prepare(
+      "DELETE FROM identity_tenant_membership WHERE principal_id='office-peer'",
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at)
+       VALUES ('membership-office-peer-zero','office-peer',0,'viewer',1,'2026-09-05','2026-09-05')`,
+    ).run();
+    const granted = await setShare(owner, created.id, 1, [
+      { principalId: "office-peer", role: "reader" },
+    ]);
+    expect(granted.status).toBe(200);
+    const reader = appFor(actor("office-peer", 0));
+    expect(
+      (
+        (await reader
+          .request("/v1/office-documents")
+          .then((response) => response.json())) as any
+      ).data,
+    ).toEqual([expect.objectContaining({ id: created.id, role: "reader" })]);
+  });
 
   it("stores valid OOXML privately, preserves immutable revisions, and rejects stale writes", async () => {
     const owner = appFor(actor("office-owner", 9461));

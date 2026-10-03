@@ -31,7 +31,15 @@ function setup(
     }[];
   } = {},
 ) {
-  const files: unknown[] = options.initialLocal ? [options.initialLocal] : [];
+  const files: unknown[] = options.initialLocal
+    ? [
+        {
+          role: "owner",
+          ownerName: "Owner",
+          ...(options.initialLocal as object),
+        },
+      ]
+    : [];
   const connectedFiles: unknown[] = [];
   const connectedPosts: FormData[] = [];
   let failedConnected = false;
@@ -116,6 +124,8 @@ function setup(
         const file = (init.body as FormData).get("file") as File;
         const saved = {
           id: "doc-1",
+          role: "owner",
+          ownerName: "Owner",
           name: file.name,
           mime: file.type,
           size: file.size,
@@ -537,4 +547,42 @@ it("removes a connected reference with an explicit provider-file explanation", a
       screen.queryByRole("link", { name: "Cloud.docx" }),
     ).not.toBeInTheDocument(),
   );
+});
+
+it.each(["reader", "editor"])(
+  "shows shared %s files without owner actions",
+  async (role) => {
+    setup(false, {
+      initialLocal: { ...localDocument, role, ownerName: "Alice" },
+    });
+    await screen.findByRole("link", { name: localDocument.name });
+    expect(
+      screen.queryByRole("button", {
+        name: `Delete document: ${localDocument.name}`,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: `Share document: ${localDocument.name}`,
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Shared by Alice")).toBeInTheDocument();
+    expect(
+      screen.getByText(role === "reader" ? "Can view" : "Can edit"),
+    ).toBeInTheDocument();
+  },
+);
+it("offers sharing only on owned Savia files and clears it on tenant change", async () => {
+  setup(false, { initialLocal: localDocument });
+  await screen.findByRole("link", { name: localDocument.name });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: `Share document: ${localDocument.name}`,
+    }),
+  );
+  expect(
+    screen.getByRole("dialog", { name: "Share document" }),
+  ).toBeInTheDocument();
+  fireEvent(window, new Event("savia:active-tenant-changed"));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });

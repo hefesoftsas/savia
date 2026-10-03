@@ -325,3 +325,63 @@ describe("tenant account email settings", () => {
     );
   });
 });
+
+describe("tenant email availability bridge", () => {
+  it("requires the bridge key and reports whether a delivery path is configured", async () => {
+    const unavailableEnvironment = {
+      ...environment,
+      SAVIA_SMTP_HOST: undefined,
+      SAVIA_SMTP_FROM: undefined,
+      SAVIA_SMTP_PORT: undefined,
+    };
+    const denied = await accountEmailSettingsResponse(
+      request("GET", "/availability", undefined, "wrong"),
+      unavailableEnvironment,
+      {},
+    );
+    expect(denied?.status).toBe(403);
+
+    const unavailable = await accountEmailSettingsResponse(
+      new Request(
+        `https://auth.test/_internal/tenant-email/${tenantId + 731}/availability`,
+        {
+          method: "GET",
+          headers: { "x-savia-bridge-key": "email-bridge-secret" },
+        },
+      ),
+      unavailableEnvironment,
+      {},
+    );
+    expect(unavailable?.status).toBe(200);
+    expect(await unavailable?.json()).toEqual({ available: false });
+
+    const globallyAvailable = await accountEmailSettingsResponse(
+      request("GET", "/availability"),
+      environment,
+      {},
+    );
+    expect(globallyAvailable?.status).toBe(200);
+    expect(await globallyAvailable?.json()).toEqual({ available: true });
+  });
+
+  it("returns a retryable error when tenant email configuration cannot be read", async () => {
+    const unreadableEnvironment = {
+      ...environment,
+      AUTH_DB: {
+        exec: async () => {
+          throw new Error("private database details");
+        },
+      },
+    } as any;
+    const response = await accountEmailSettingsResponse(
+      request("GET", "/availability"),
+      unreadableEnvironment,
+      {},
+    );
+    expect(response?.status).toBe(503);
+    expect(response?.headers.get("cache-control")).toBe("no-store");
+    expect(await response?.json()).toEqual({
+      error: "Email availability is unavailable",
+    });
+  });
+});

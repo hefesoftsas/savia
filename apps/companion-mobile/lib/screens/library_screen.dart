@@ -81,7 +81,7 @@ class LibraryScreen extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 subtitle: Text(
-                  '${DateFormat.yMMMd(Localizations.localeOf(context).languageCode).add_Hm().format(recording.createdAt.toLocal())} · ${(recording.bytes / 1000000).toStringAsFixed(2)} MB',
+                  '${DateFormat.yMMMd(Localizations.localeOf(context).languageCode).add_Hm().format(recording.createdAt.toLocal())} · ${NumberFormat('0.00', l.localeName).format(recording.bytes / 1000000)} MB',
                 ),
                 subtitleTextStyle: Theme.of(context).textTheme.bodySmall
                     ?.copyWith(

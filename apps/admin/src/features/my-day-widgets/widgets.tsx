@@ -5,6 +5,7 @@ import { matchTenantApiBasePath } from "@/features/studio/studio-navigation";
 import { useEffect, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
+import { intlLocale, useAppLocale, useMessages } from "@/i18n/core";
 import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -31,20 +32,50 @@ import {
   widgetDeepLink,
 } from "./data";
 import {
-  actionBucketLabel,
   autoDetectWidgetConfig,
   bucketActionItems,
-  formatWidgetAmount,
-  formatWidgetCount,
-  recordDateLabel,
   recordStatus,
   recordTitle,
 } from "./summarize";
 import { PluginWidgetBody } from "./plugin-widget";
-import { parsePluginKind, pluginWidgetTitle } from "./plugins";
+import { parsePluginKind, pluginContributionFor } from "./plugins";
 import { AgendaWidgetBody, QuickTaskWidgetBody } from "./agenda-widget";
 import { OfficeDocumentsWidgetBody } from "./office-documents-widget";
-import type { WidgetCollectionSchema } from "./types";
+import type { WidgetCollectionSchema, WidgetRecord } from "./types";
+import { widgetMessages } from "./widget-messages";
+
+function formatCount(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale).format(value);
+}
+
+function formatAmount(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
+    value,
+  );
+}
+
+function formatRecordDate(
+  record: WidgetRecord,
+  dateField: string | undefined,
+  locale: string,
+): string | undefined {
+  const raw =
+    (dateField ? record[dateField] : undefined) ??
+    record.updated_at ??
+    record.created_at;
+  if (typeof raw !== "string" || !raw) return undefined;
+  const date = new Date(raw.length === 10 ? `${raw}T12:00:00` : raw);
+  return Number.isNaN(date.getTime())
+    ? undefined
+    : new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
+}
+
+function formatActionDay(day: string, locale: string): string {
+  const date = new Date(`${day}T12:00:00`);
+  return Number.isNaN(date.getTime())
+    ? day
+    : new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
+}
 
 function WidgetError({
   message,
@@ -53,13 +84,14 @@ function WidgetError({
   message: string;
   onRetry: () => void;
 }) {
+  const t = useMessages(widgetMessages);
   return (
     <Alert aria-label={message}>
       <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
         <span>{message}</span>
         <Button type="button" variant="outline" size="sm" onClick={onRetry}>
           <RefreshCw className="size-3.5" />
-          Reintentar
+          {t("Retry")}
         </Button>
       </AlertDescription>
     </Alert>
@@ -67,9 +99,10 @@ function WidgetError({
 }
 
 function WidgetSkeleton() {
+  const t = useMessages(widgetMessages);
   return (
-    <div role="status" aria-label="Cargando widget…" className="space-y-2">
-      <span className="sr-only">Cargando widget…</span>
+    <div role="status" aria-label={t("Loading widget…")} className="space-y-2">
+      <span className="sr-only">{t("Loading widget…")}</span>
       <Skeleton className="h-8 w-24" />
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-2/3" />
@@ -122,6 +155,8 @@ export function SummaryWidgetBody({
   apiClient: ApiClient | undefined;
   widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
+  const t = useMessages(widgetMessages);
+  const uiLocale = intlLocale(useAppLocale());
   const [total, setTotal] = useState<number | null>(null);
   const [groups, setGroups] = useState<
     { value: string; count: number; amount: number }[] | null
@@ -180,7 +215,7 @@ export function SummaryWidgetBody({
   if (failed)
     return (
       <WidgetError
-        message="No pudimos cargar este resumen."
+        message={t("Could not load this summary.")}
         onRetry={() => setNonce((value) => value + 1)}
       />
     );
@@ -190,9 +225,9 @@ export function SummaryWidgetBody({
     <div className="space-y-3">
       <div className="flex items-baseline gap-2">
         <span className="text-3xl font-semibold tabular-nums">
-          {formatWidgetCount(total)}
+          {formatCount(total, uiLocale)}
         </span>
-        <span className="text-sm text-muted-foreground">registros</span>
+        <span className="text-sm text-muted-foreground">{t("records")}</span>
       </div>
       {groups ? (
         <ul className="divide-y rounded-lg border">
@@ -206,18 +241,18 @@ export function SummaryWidgetBody({
               </span>
               {amountField ? (
                 <span className="tabular-nums text-muted-foreground">
-                  {formatWidgetAmount(group.amount)}
+                  {formatAmount(group.amount, uiLocale)}
                 </span>
               ) : null}
               <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">
-                {formatWidgetCount(group.count)}
+                {formatCount(group.count, uiLocale)}
               </span>
             </li>
           ))}
         </ul>
       ) : schema === null ? null : (
         <p className="text-sm text-muted-foreground">
-          Sin campo de estado: muestra el total de la colección.
+          {t("No status field: showing the collection total.")}
         </p>
       )}
     </div>
@@ -231,6 +266,8 @@ export function ItemsWidgetBody({
   apiClient: ApiClient | undefined;
   widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
+  const t = useMessages(widgetMessages);
+  const uiLocale = intlLocale(useAppLocale());
   const [records, setRecords] = useState<
     { id: string; title: string; status?: string; date?: string }[] | null
   >(null);
@@ -259,8 +296,7 @@ export function ItemsWidgetBody({
             title: recordTitle(record, schema ?? undefined),
             status:
               recordStatus(record, widget.config?.statusField) ?? undefined,
-            date:
-              recordDateLabel(record, widget.config?.dateField) ?? undefined,
+            date: formatRecordDate(record, widget.config?.dateField, uiLocale),
           })),
         );
       },
@@ -277,13 +313,15 @@ export function ItemsWidgetBody({
   if (missing)
     return (
       <p className="text-sm text-muted-foreground">
-        Esta colección ya no está disponible. Quítala del tablero.
+        {t(
+          "This collection is no longer available. Remove it from your dashboard.",
+        )}
       </p>
     );
   if (failed)
     return (
       <WidgetError
-        message="No pudimos cargar estos elementos."
+        message={t("Could not load these items.")}
         onRetry={() => setNonce((value) => value + 1)}
       />
     );
@@ -291,7 +329,7 @@ export function ItemsWidgetBody({
   if (records.length === 0)
     return (
       <p className="text-sm text-muted-foreground">
-        Aún no hay registros en esta colección.
+        {t("There are no records in this collection yet.")}
       </p>
     );
 
@@ -303,7 +341,9 @@ export function ItemsWidgetBody({
           <p className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
             {record.status ? <span>{record.status}</span> : null}
             {record.date ? <span>{record.date}</span> : null}
-            {!record.status && !record.date ? <span>Sin detalle</span> : null}
+            {!record.status && !record.date ? (
+              <span>{t("No details")}</span>
+            ) : null}
           </p>
         </li>
       ))}
@@ -318,6 +358,8 @@ export function ChartWidgetBody({
   apiClient: ApiClient | undefined;
   widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
+  const t = useMessages(widgetMessages);
+  const uiLocale = intlLocale(useAppLocale());
   const [groups, setGroups] = useState<
     { value: string; count: number; amount: number }[] | null
   >(null);
@@ -364,14 +406,15 @@ export function ChartWidgetBody({
   if (missing || (schema && !groupField))
     return (
       <p className="text-sm text-muted-foreground">
-        Esta colección no tiene campo de agrupación para graficar. Prueba con un
-        resumen o elementos.
+        {t(
+          "This collection has no grouping field for a chart. Try a summary or items widget.",
+        )}
       </p>
     );
   if (failed)
     return (
       <WidgetError
-        message="No pudimos cargar esta gráfica."
+        message={t("Could not load this chart.")}
         onRetry={() => setNonce((value) => value + 1)}
       />
     );
@@ -379,7 +422,7 @@ export function ChartWidgetBody({
   if (groups.length === 0)
     return (
       <p className="text-sm text-muted-foreground">
-        Sin datos para graficar todavía.
+        {t("No data to chart yet.")}
       </p>
     );
 
@@ -395,14 +438,14 @@ export function ChartWidgetBody({
               {group.value}
             </span>
             <span className="tabular-nums text-muted-foreground">
-              {amountField ? `${formatWidgetAmount(group.amount)} · ` : ""}
-              {formatWidgetCount(group.count)}
+              {amountField ? `${formatAmount(group.amount, uiLocale)} · ` : ""}
+              {formatCount(group.count, uiLocale)}
             </span>
           </div>
           <div
             className="mt-1 h-2 overflow-hidden rounded-full bg-muted"
             role="img"
-            aria-label={`${group.value}: ${group.count}`}
+            aria-label={`${group.value}: ${formatCount(group.count, uiLocale)}`}
           >
             <div
               className="h-full rounded-full bg-primary/70"
@@ -422,6 +465,9 @@ export function ActionsWidgetBody({
   apiClient: ApiClient | undefined;
   widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
+  const locale = useAppLocale();
+  const uiLocale = intlLocale(locale);
+  const t = useMessages(widgetMessages);
   const [items, setItems] = useState<
     | {
         id: string;
@@ -476,19 +522,21 @@ export function ActionsWidgetBody({
   if (missing)
     return (
       <p className="text-sm text-muted-foreground">
-        Esta colección ya no está disponible. Quítala del tablero.
+        {t(
+          "This collection is no longer available. Remove it from your dashboard.",
+        )}
       </p>
     );
   if (!dateField && schema)
     return (
       <p className="text-sm text-muted-foreground">
-        Esta colección no tiene campo de fecha para detectar vencimientos.
+        {t("This collection has no date field for due dates.")}
       </p>
     );
   if (failed)
     return (
       <WidgetError
-        message="No pudimos cargar estas acciones."
+        message={t("Could not load these actions.")}
         onRetry={() => setNonce((value) => value + 1)}
       />
     );
@@ -496,7 +544,7 @@ export function ActionsWidgetBody({
   if (items.length === 0)
     return (
       <p className="text-sm text-muted-foreground">
-        Al día: nada vence en los próximos 7 días.
+        {t("Nothing is due in the next 7 days.")}
       </p>
     );
 
@@ -506,7 +554,8 @@ export function ActionsWidgetBody({
     <div className="space-y-3">
       {overdue > 0 ? (
         <p className="text-sm font-medium text-destructive">
-          {overdue} {overdue === 1 ? "vencido" : "vencidos"}
+          {new Intl.NumberFormat(uiLocale).format(overdue)}{" "}
+          {overdue === 1 ? t("overdue_one") : t("overdue_many")}
         </p>
       ) : null}
       <ul className="divide-y rounded-lg border">
@@ -518,7 +567,7 @@ export function ActionsWidgetBody({
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{item.title}</p>
               <p className="text-xs tabular-nums text-muted-foreground">
-                {item.day}
+                {formatActionDay(item.day, uiLocale)}
               </p>
             </div>
             <Badge
@@ -531,7 +580,13 @@ export function ActionsWidgetBody({
               }
               className="shrink-0"
             >
-              {actionBucketLabel(item.bucket)}
+              {t(
+                item.bucket === "overdue"
+                  ? "Overdue"
+                  : item.bucket === "today"
+                    ? "Today"
+                    : "This week",
+              )}
             </Badge>
           </li>
         ))}
@@ -539,17 +594,6 @@ export function ActionsWidgetBody({
     </div>
   );
 }
-
-const widgetKindLabels: Record<string, string> = {
-  summary: "Resumen",
-  items: "Elementos",
-  chart: "Gráfica",
-  actions: "Acciones",
-  agenda: "Agenda",
-  quick_task: "Tarea rápida",
-  mail: "Bandeja de entrada",
-  office_documents: "Documentos de Office",
-};
 
 function isBuiltInWidget(widget: MyDayWidget): boolean {
   return (
@@ -595,11 +639,35 @@ export function WidgetCard({
   disabled: boolean;
   dragHandle?: React.ReactNode;
 }) {
+  const locale = useAppLocale();
+  const t = useMessages(widgetMessages);
   const title = widget.title ?? collectionLabel;
-  const pluginTitle =
-    typeof widget.kind === "string"
-      ? pluginWidgetTitle(widget.kind)
-      : undefined;
+  const pluginRef =
+    typeof widget.kind === "string" ? parsePluginKind(widget.kind) : null;
+  const pluginContribution = pluginRef
+    ? pluginContributionFor(pluginRef)
+    : undefined;
+  const pluginTitle = pluginContribution
+    ? (pluginContribution.title[locale] ?? pluginContribution.title.es)
+    : undefined;
+  const kindLabel =
+    widget.kind === "summary"
+      ? t("Summary")
+      : widget.kind === "items"
+        ? t("Items")
+        : widget.kind === "chart"
+          ? t("Chart")
+          : widget.kind === "actions"
+            ? t("Actions")
+            : widget.kind === "agenda"
+              ? t("Agenda")
+              : widget.kind === "quick_task"
+                ? t("Quick task")
+                : widget.kind === "mail"
+                  ? t("Inbox")
+                  : widget.kind === "office_documents"
+                    ? t("Office documents")
+                    : t("Preview");
   const isPlugin =
     typeof widget.kind === "string" && parsePluginKind(widget.kind) !== null;
   const isSystem =
@@ -624,8 +692,7 @@ export function WidgetCard({
             <p
               className={`mt-0.5 truncate text-xs text-muted-foreground ${isSystem ? "hidden sm:block" : ""}`}
             >
-              {collectionLabel} ·{" "}
-              {pluginTitle ?? widgetKindLabels[widget.kind] ?? "Vista previa"}
+              {collectionLabel} · {pluginTitle ?? kindLabel}
             </p>
           </div>
         </div>
@@ -636,7 +703,7 @@ export function WidgetCard({
               variant="ghost"
               size="sm"
               className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-              aria-label={`Opciones del widget ${title}`}
+              aria-label={t("Widget options for %{title}", { title })}
               disabled={disabled}
             >
               ⋯
@@ -645,26 +712,26 @@ export function WidgetCard({
           <DropdownMenuContent align="end">
             {isCollectionWidget(widget) ? (
               <DropdownMenuItem asChild>
-                <a href={widgetDeepLink(widget)}>Abrir colección</a>
+                <a href={widgetDeepLink(widget)}>{t("Open collection")}</a>
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuItem
               disabled={isFirst}
               onSelect={() => onMove(widget.id, -1)}
             >
-              Mover antes
+              {t("Move before")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={isLast}
               onSelect={() => onMove(widget.id, 1)}
             >
-              Mover después
+              {t("Move after")}
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => onRemove(widget.id)}
               className="text-destructive"
             >
-              Quitar widget
+              {t("Remove widget")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -672,8 +739,9 @@ export function WidgetCard({
       <CardContent className="px-4 pt-0 sm:px-6">
         {!supported ? (
           <p className="text-sm text-muted-foreground">
-            Este tipo de widget estará disponible próximamente. Mientras tanto
-            puedes abrir la colección completa.
+            {t(
+              "This widget type will be available soon. In the meantime, open the full collection.",
+            )}
           </p>
         ) : widget.kind === "mail" && mail ? (
           <MailWidgetBody mail={mail} onCompose={onCompose ?? (() => {})} />
@@ -682,7 +750,7 @@ export function WidgetCard({
             <AgendaWidgetBody agenda={agenda.agenda} />
           ) : (
             <p className="text-sm text-muted-foreground">
-              Conecta tu calendario para ver tu agenda aquí.
+              {t("Connect your calendar to see your agenda here.")}
             </p>
           )
         ) : widget.kind === "quick_task" ? (
@@ -693,7 +761,7 @@ export function WidgetCard({
             />
           ) : (
             <p className="text-sm text-muted-foreground">
-              Conecta tu calendario para crear tareas aquí.
+              {t("Connect your calendar to create tasks here.")}
             </p>
           )
         ) : widget.kind === "office_documents" ? (
@@ -710,7 +778,7 @@ export function WidgetCard({
           <ActionsWidgetBody apiClient={apiClient} widget={widget} />
         ) : (
           <p className="text-sm text-muted-foreground">
-            No pudimos mostrar este widget.
+            {t("Could not show this widget.")}
           </p>
         )}
       </CardContent>
@@ -719,9 +787,11 @@ export function WidgetCard({
           <a
             className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             href={widgetDeepLink(widget)}
-            aria-label={`Ver ${collectionLabel} completa`}
+            aria-label={t("View all %{collection}", {
+              collection: collectionLabel,
+            })}
           >
-            Ver todo <ExternalLink className="size-3.5" />
+            {t("View all")} <ExternalLink className="size-3.5" />
           </a>
         </CardFooter>
       ) : null}

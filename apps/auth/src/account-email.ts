@@ -302,6 +302,7 @@ export async function accountEmailAvailable(
   environment: AccountEmailEnvironment,
   dependencies: AccountEmailDependencies,
   tenantId?: number,
+  strict = false,
 ): Promise<boolean> {
   if (
     tenantId !== undefined &&
@@ -313,6 +314,7 @@ export async function accountEmailAvailable(
       if (await readSettings(environment, tenantId)) return true;
     } catch {
       // A corrupt or unreadable tenant configuration cannot deliver mail.
+      if (strict) throw new Error("Email availability could not be determined");
       return false;
     }
   }
@@ -323,6 +325,7 @@ export async function accountEmailAvailable(
   } catch {
     // Invalid global SMTP settings make sendAccountEmail fail before its
     // injected fallback can run, so they do not count as available.
+    if (strict) throw new Error("Email availability could not be determined");
     return false;
   }
   return !!global || !!dependencies.sendTransactionalEmail;
@@ -346,7 +349,7 @@ export async function accountEmailSettingsResponse(
 ): Promise<Response | undefined> {
   const url = new URL(request.url);
   const match = url.pathname.match(
-    /^\/_internal\/tenant-email\/(\d+)(?:\/(test|send))?$/,
+    /^\/_internal\/tenant-email\/(\d+)(?:\/(test|send|availability))?$/,
   );
   if (!match) return undefined;
   if (!bridgeAuthorized(request, environment))
@@ -356,6 +359,23 @@ export async function accountEmailSettingsResponse(
     return jsonResponse({ error: "Invalid tenant" }, 400);
   const testRoute = match[2] === "test";
   const sendRoute = match[2] === "send";
+  const availabilityRoute = match[2] === "availability";
+  if (availabilityRoute) {
+    if (request.method !== "GET")
+      return jsonResponse({ error: "Method not allowed" }, 405);
+    try {
+      return jsonResponse({
+        available: await accountEmailAvailable(
+          environment,
+          dependencies,
+          tenantId,
+          true,
+        ),
+      });
+    } catch {
+      return jsonResponse({ error: "Email availability is unavailable" }, 503);
+    }
+  }
   if (request.method === "POST" && sendRoute) {
     const contentLength = Number(request.headers.get("content-length"));
     if (Number.isFinite(contentLength) && contentLength > 20 * 1024)

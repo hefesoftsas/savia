@@ -1,3 +1,5 @@
+import { intlLocale, useAppLocale, useMessages } from "@/i18n/core";
+import { agendaMessages } from "@/features/my-day-widgets/agenda-messages";
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import type { AppServices } from "@/app-services";
 import { MyDayWidgetsSection } from "@/features/my-day-widgets/section";
@@ -17,6 +19,8 @@ export function MyDayPage({
   services: Pick<AppServices, "personalIntegrations"> &
     Partial<Pick<AppServices, "apiClient" | "userPreferences">>;
 }) {
+  const locale = useAppLocale();
+  const t = useMessages(agendaMessages);
   const [day] = useState(() => startOfLocalDay(new Date()));
   const agenda = useMyDayAgenda(services.personalIntegrations);
   useRealtimeRefresh({
@@ -25,8 +29,10 @@ export function MyDayPage({
   });
   const providersLabel =
     agenda.calendarProviders.length > 0
-      ? agenda.calendarProviders.map(calendarProviderLabel).join(" y ")
-      : "Calendarios personales";
+      ? new Intl.ListFormat(intlLocale(locale)).format(
+          agenda.calendarProviders.map(calendarProviderLabel),
+        )
+      : t("Calendarios personales");
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-10 sm:px-6">
@@ -36,9 +42,11 @@ export function MyDayPage({
             <CalendarDays className="size-4" />
             {providersLabel}
           </div>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Mi día</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            {t("Mi día")}
+          </h1>
           <p className="mt-2 text-sm capitalize text-muted-foreground">
-            {formatDay(day)}
+            {formatDay(day, locale)}
           </p>
         </div>
         <Button
@@ -51,7 +59,7 @@ export function MyDayPage({
           ) : (
             <RefreshCw />
           )}
-          Sincronizar
+          {t("Sincronizar")}
         </Button>
       </header>
 

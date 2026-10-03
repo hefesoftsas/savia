@@ -74,6 +74,7 @@ export class OfficeApi {
     meta: OfficeMetadata,
     bytes: Uint8Array,
   ): Promise<{ version: number }> {
+    if (meta.readOnly) throw new Error("Este archivo es de solo lectura.");
     if (bytes.byteLength > meta.maxSize)
       throw new Error(
         "El archivo supera el tamaño permitido para este campo. Descarga una copia de tus cambios.",

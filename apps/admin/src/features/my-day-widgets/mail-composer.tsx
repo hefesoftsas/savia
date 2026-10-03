@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
+import { intlLocale, useAppLocale, useMessages } from "@/i18n/core";
 import { ApiClientError } from "@/api/api-client";
 import {
   sendPersonalMailSchema,
@@ -24,6 +25,9 @@ import {
   type PersonalMailLike,
   type MailConnection,
 } from "./use-my-day-mail";
+import { widgetMessages } from "./widget-messages";
+
+type ComposerMessageKey = keyof typeof widgetMessages & string;
 
 export function MailComposer({
   open,
@@ -42,6 +46,9 @@ export function MailComposer({
   sessionRevision: number;
   onSent?: () => void;
 }) {
+  const locale = useAppLocale();
+  const uiLocale = intlLocale(locale);
+  const t = useMessages(widgetMessages);
   const [provider, setProvider] = useState<PersonalMailProvider>(
     connections[0]?.provider ?? "gmail",
   );
@@ -50,7 +57,7 @@ export function MailComposer({
   const [body, setBody] = useState("");
   const [context, setContext] = useState<MailContextReference[]>([]);
   const [showContext, setShowContext] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<ComposerMessageKey | null>(null);
   const [sending, setSending] = useState(false);
   const inFlight = useRef(false);
   const generation = useRef(0);
@@ -90,7 +97,7 @@ export function MailComposer({
     });
     if (!parsed.success) {
       setFeedback(
-        "Revisa destinatarios, asunto y mensaje. Máximo 20 destinatarios y 10.000 caracteres en el mensaje.",
+        "Check recipients, subject, and message. Limit: 20 recipients and 10,000 message characters.",
       );
       return;
     }
@@ -109,8 +116,8 @@ export function MailComposer({
       setFeedback(
         error instanceof ApiClientError &&
           [400, 403, 404, 503].includes(error.status)
-          ? "No se envió el correo. Revisa los datos, tus permisos y la conexión antes de reintentar."
-          : "No pudimos confirmar el envío. Revisa Enviados en tu cuenta antes de volver a intentarlo.",
+          ? "The email was not sent. Check the details, your permissions, and the connection before trying again."
+          : "We could not confirm delivery. Check Sent in your account before trying again.",
       );
     } finally {
       if (current === generation.current) {
@@ -128,10 +135,11 @@ export function MailComposer({
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Nuevo correo</DialogTitle>
+          <DialogTitle>{t("New email")}</DialogTitle>
           <DialogDescription>
-            Redacta el mensaje y revisa los datos antes de enviarlo desde tu
-            cuenta conectada.
+            {t(
+              "Write your message and check the details before sending it from your connected account.",
+            )}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -143,11 +151,11 @@ export function MailComposer({
         >
           {feedback ? (
             <p role="alert" className="text-sm text-destructive">
-              {feedback}
+              {t(feedback)}
             </p>
           ) : null}
           <div className="space-y-1.5">
-            <Label htmlFor="mail-provider">Enviar desde</Label>
+            <Label htmlFor="mail-provider">{t("Send from")}</Label>
             <select
               id="mail-provider"
               className={mailSelectClass}
@@ -160,28 +168,28 @@ export function MailComposer({
               {connections.map((connection) => (
                 <option key={connection.provider} value={connection.provider}>
                   {mailProviderLabel(connection.provider)} ·{" "}
-                  {connection.externalAccountLabel ?? "Cuenta conectada"}
+                  {connection.externalAccountLabel ?? t("Connected account")}
                 </option>
               ))}
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="mail-to">Para</Label>
+            <Label htmlFor="mail-to">{t("To")}</Label>
             <Input
               id="mail-to"
               value={to}
               disabled={sending}
               onChange={(event) => setTo(event.target.value)}
-              placeholder="persona@ejemplo.com"
+              placeholder="name@example.com"
               autoComplete="off"
               required
             />
             <p className="text-xs text-muted-foreground">
-              Separa los destinatarios con comas.
+              {t("Separate recipients with commas.")}
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="mail-subject">Asunto</Label>
+            <Label htmlFor="mail-subject">{t("Subject")}</Label>
             <Input
               id="mail-subject"
               value={subject}
@@ -192,7 +200,7 @@ export function MailComposer({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="mail-body">Mensaje</Label>
+            <Label htmlFor="mail-body">{t("Message")}</Label>
             <Textarea
               id="mail-body"
               className="min-h-40"
@@ -203,7 +211,8 @@ export function MailComposer({
               required
             />
             <p className="text-right text-xs tabular-nums text-muted-foreground">
-              {body.length} / 10.000
+              {new Intl.NumberFormat(uiLocale).format(body.length)} /{" "}
+              {new Intl.NumberFormat(uiLocale).format(10000)}
             </p>
           </div>
           {apiClient ? (
@@ -216,7 +225,7 @@ export function MailComposer({
                 aria-expanded={showContext}
                 onClick={() => setShowContext((value) => !value)}
               >
-                Agregar contexto de un registro
+                {t("Add record context")}
               </Button>
               {showContext ? (
                 <fieldset disabled={sending}>
@@ -227,7 +236,7 @@ export function MailComposer({
                       const next = body ? `${body}\n\n${text}` : text;
                       if (next.length > 10000) {
                         setFeedback(
-                          "El contexto supera el límite de 10.000 caracteres. Elige menos campos.",
+                          "The context exceeds the 10,000-character limit. Choose fewer fields.",
                         );
                         return;
                       }
@@ -239,7 +248,7 @@ export function MailComposer({
                       );
                       if (!existing && context.length >= 10) {
                         setFeedback(
-                          "Puedes incluir contexto de hasta 10 registros.",
+                          "You can include context from up to 10 records.",
                         );
                         return;
                       }
@@ -253,7 +262,7 @@ export function MailComposer({
                         : reference.fields;
                       if (merged.length > 50) {
                         setFeedback(
-                          "Puedes incluir hasta 50 campos por registro.",
+                          "You can include up to 50 fields per record.",
                         );
                         return;
                       }
@@ -278,11 +287,14 @@ export function MailComposer({
           {context.length ? (
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>
-                {context.length}{" "}
-                {context.length === 1
-                  ? "registro incluido"
-                  : "registros incluidos"}{" "}
-                · permisos verificados al enviar
+                {t(
+                  "Context includes %{count} records. Permissions are checked when sending.",
+                  {
+                    count: new Intl.NumberFormat(uiLocale).format(
+                      context.length,
+                    ),
+                  },
+                )}
               </span>
               <Button
                 type="button"
@@ -294,7 +306,7 @@ export function MailComposer({
                   setBody("");
                 }}
               >
-                Quitar contexto y limpiar mensaje
+                {t("Remove context and clear message")}
               </Button>
             </div>
           ) : null}
@@ -305,10 +317,10 @@ export function MailComposer({
               disabled={sending}
               onClick={() => onOpenChange(false)}
             >
-              Cancelar
+              {t("Cancel")}
             </Button>
             <Button type="submit" disabled={sending || !selectedProvider}>
-              {sending ? "Enviando…" : "Enviar correo"}
+              {sending ? t("Sending…") : t("Send email")}
             </Button>
           </DialogFooter>
         </form>

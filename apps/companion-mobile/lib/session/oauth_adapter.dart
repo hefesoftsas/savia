@@ -53,6 +53,7 @@ class AppAuthOAuthAdapter implements OAuthAdapter {
           config.redirectUri.toString(),
           issuer: config.issuer.toString(),
           scopes: config.scopes,
+          additionalParameters: {'resource': config.apiOrigin.toString()},
           externalUserAgent: ExternalUserAgent.asWebAuthenticationSession,
         ),
       );
@@ -75,6 +76,7 @@ class AppAuthOAuthAdapter implements OAuthAdapter {
           issuer: config.issuer.toString(),
           scopes: config.scopes,
           refreshToken: refreshToken,
+          additionalParameters: {'resource': config.apiOrigin.toString()},
         ),
       );
       return _toTokenSet(response);

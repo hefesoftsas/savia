@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import pg from "pg";
 import { describe, expect, it } from "vitest";
+import { cleanupBookingAdmissions } from "../../api/src/bookings/public-policy";
 import { migratePostgres } from "../src/postgres/migrations";
 import {
   postgresTestUrl,
@@ -21,6 +22,55 @@ if (postgresTestsRequired && !postgresTestUrl)
   });
 
 live("native PostgreSQL tenant booking integration", () => {
+  it("bounds admission receipt cleanup and keeps the retry window", async () => {
+    await withPostgresFixture(async (db, connectionString) => {
+      await migratePostgres({
+        connectionString,
+        schema: "savia_core",
+        directory: coreDirectory,
+        seed: false,
+      });
+      const now = Date.parse("2026-10-04T12:00:00Z"),
+        tenantId = 995020,
+        link = randomUUID();
+      await db
+        .prepare(
+          "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,'cleanup-test','Cleanup test',1,'now','now','commercial')",
+        )
+        .bind(tenantId)
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO tenant_booking_public_links(id,tenant_id,token,scope_kind) VALUES(?,?,?,'team')",
+        )
+        .bind(link, tenantId, randomUUID())
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO tenant_booking_request_receipts(id,link_id,tenant_id,request_key,request_hash,ip_hash,day,created_at) SELECT 'old-'||n,?,?,'key-'||n,'hash','ip','2026-09-26','2026-09-26T12:00:00.000Z' FROM generate_series(1,501) AS n",
+        )
+        .bind(link, tenantId)
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO tenant_booking_request_receipts(id,link_id,tenant_id,request_key,request_hash,ip_hash,day,created_at) VALUES('recent',?,?,'recent-key','hash','ip','2026-09-27','2026-09-27T12:00:00.000Z')",
+        )
+        .bind(link, tenantId)
+        .run();
+      const count = async () =>
+        (
+          await db
+            .prepare(
+              "SELECT count(*) AS count FROM tenant_booking_request_receipts",
+            )
+            .first<{ count: number }>()
+        )?.count;
+      await cleanupBookingAdmissions(db as unknown as D1Database, now);
+      expect(await count()).toBe(2);
+      await cleanupBookingAdmissions(db as unknown as D1Database, now);
+      expect(await count()).toBe(1);
+    });
+  });
   it("applies booking migrations and rolls back overlapping occupancy atomically", async () => {
     await withPostgresFixture(async (db, connectionString) => {
       const applied = await migratePostgres({
@@ -193,6 +243,116 @@ live("native PostgreSQL tenant booking integration", () => {
         await mutation.query("ROLLBACK").catch(() => {});
         await Promise.all([mutation.end(), worker.end(), admin.end()]);
       }
+    });
+  });
+});
+
+live("public booking admission parity", () => {
+  it("does not over-admit concurrent requests sharing the last daily budget", async () => {
+    await withPostgresFixture(async (db, connectionString) => {
+      await migratePostgres({
+        connectionString,
+        schema: "savia_core",
+        directory: coreDirectory,
+        seed: false,
+      });
+      const { admitBookingRequest } =
+        await import("../../api/src/bookings/public-policy");
+      const { defaultSettings } =
+        await import("../../api/src/bookings/contracts");
+      const tenantId = Date.now(),
+        id = randomUUID();
+      await db
+        .prepare(
+          "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,?,?,1,'now','now','commercial')",
+        )
+        .bind(tenantId, `quota-${tenantId}`, "Quota fixture")
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO tenant_booking_public_links(id,tenant_id,token,scope_kind,daily_limit) VALUES(?,?,?,'team',1)",
+        )
+        .bind(id, tenantId, id)
+        .run();
+      const link = {
+        id,
+        tenantId,
+        publicToken: id,
+        scope: { kind: "team" as const },
+        serviceId: null,
+        dailyLimit: 1,
+        settings: defaultSettings("Quota fixture"),
+        legacy: false,
+      };
+      await db.exec(
+        "CREATE FUNCTION booking_slow_admission() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(0.05); RETURN NEW; END; $$",
+      );
+      await db.exec(
+        "CREATE TRIGGER booking_slow_admission BEFORE INSERT ON tenant_booking_request_receipts FOR EACH ROW EXECUTE FUNCTION booking_slow_admission()",
+      );
+      const admit = () =>
+        admitBookingRequest(db, {
+          link,
+          requestKey: randomUUID(),
+          requestHash: "same-details",
+          ipHash: randomUUID(),
+          captchaIdentityHash: null,
+          now: Date.parse("2026-10-03T20:00:00Z"),
+        });
+      const results = await Promise.allSettled(
+        Array.from({ length: 8 }, () => admit()),
+      );
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(
+        results
+          .filter((r) => r.status === "rejected")
+          .map((r) => (r.status === "rejected" ? r.reason.status : null)),
+      ).toEqual(Array(7).fill(429));
+      expect(
+        await db
+          .prepare(
+            "SELECT count(*) AS n FROM tenant_booking_request_receipts WHERE link_id=?",
+          )
+          .bind(id)
+          .first("n"),
+      ).toBe(1);
+    });
+  });
+});
+
+live("booking professional catalog parity", () => {
+  it("returns the same professional identifier and display-name contract as SQLite", async () => {
+    await withPostgresFixture(async (db, connectionString) => {
+      await migratePostgres({
+        connectionString,
+        schema: "savia_core",
+        directory: coreDirectory,
+        seed: false,
+      });
+      const { candidates } = await import("../../api/src/bookings/repository");
+      const tenantId = Date.now(),
+        id = randomUUID();
+      await db
+        .prepare(
+          "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,?,?,1,'now','now','commercial')",
+        )
+        .bind(tenantId, `candidate-${tenantId}`, "Candidate fixture")
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?,'savia:better-auth',?,?,?,1,'now','now')",
+        )
+        .bind(id, id, `${id}@example.test`, "Professional fixture")
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at) VALUES(?,?,?,'tenant_admin',1,'now','now')",
+        )
+        .bind(randomUUID(), id, tenantId)
+        .run();
+      expect(await candidates(db, tenantId)).toEqual([
+        { principalId: id, displayName: "Professional fixture" },
+      ]);
     });
   });
 });

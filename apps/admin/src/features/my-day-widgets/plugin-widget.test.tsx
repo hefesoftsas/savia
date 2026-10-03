@@ -1,4 +1,5 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+import { render } from "../studio-engine/test/locale-test-render";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PluginWidgetBody } from "./plugin-widget";
 

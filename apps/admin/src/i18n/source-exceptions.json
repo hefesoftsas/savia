@@ -273,5 +273,50 @@
     "file": "../features/personal-integrations/virtual-employees-management.tsx",
     "text": "KB •",
     "reason": "Technical file-size unit separator shared by all supported locales."
+  },
+  {
+    "file": "../features/bookings/booking-page.tsx",
+    "text": ": Google",
+    "reason": "Provider brand name; kept unchanged in all supported languages."
+  },
+  {
+    "file": "../features/bookings/booking-page.tsx",
+    "text": ": Outlook",
+    "reason": "Provider brand name; kept unchanged in all supported languages."
+  },
+  {
+    "file": "../features/bookings/public-booking-page.tsx",
+    "text": "min",
+    "reason": "International abbreviation for minutes in supported locales."
+  },
+  {
+    "file": "../features/bookings/public-booking-page.tsx",
+    "text": "CAPTCHA",
+    "reason": "International technology acronym shared by supported locales."
+  },
+  {
+    "file": "../features/personal-integrations/companion-downloads.tsx",
+    "text": "Savia Companion",
+    "reason": "Product brand name; kept unchanged in all supported languages."
+  },
+  {
+    "file": "../features/personal-integrations/companion-downloads.tsx",
+    "text": "MB",
+    "reason": "International abbreviation for megabytes shared by supported locales."
+  },
+  {
+    "file": "../features/my-day-widgets/mail-widget.tsx",
+    "text": "Gmail",
+    "reason": "Provider brand name; kept unchanged in all supported languages."
+  },
+  {
+    "file": "../features/my-day-widgets/mail-widget.tsx",
+    "text": "Outlook",
+    "reason": "Provider brand name; kept unchanged in all supported languages."
+  },
+  {
+    "file": "../features/my-day-widgets/mail-composer.tsx",
+    "text": "name@example.com",
+    "reason": "Technical example of an email address; not translated into locale-specific data."
   }
 ]

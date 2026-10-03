@@ -1,11 +1,6 @@
 import "@testing-library/jest-dom/vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { render } from "../studio-engine/test/locale-test-render";
 import { afterEach, expect, it, vi } from "vitest";
 import { MyDayWidgetsSection } from "./section";
 afterEach(cleanup);
