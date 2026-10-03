@@ -9057,6 +9057,8 @@ export interface paths {
                 endsAt: string | null;
                 /** Format: uri */
                 webLink: string | null;
+                allDay?: boolean;
+                timeZone?: string | null;
               }[];
             };
           };
@@ -9149,6 +9151,479 @@ export interface paths {
         };
       };
     };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/personal-integrations/calendars": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List shared calendar sources */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Calendar sources */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "subscription" | "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone: string;
+                visible: boolean;
+                hostname: string | null;
+                lastSyncedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Add a shared calendar source */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          "application/json":
+            | {
+                /** @enum {string} */
+                kind: "subscription";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color?:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone?: string;
+                url: string;
+              }
+            | {
+                /** @enum {string} */
+                kind: "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color?:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone?: string;
+                content: string;
+              };
+        };
+      };
+      responses: {
+        /** @description Created calendar source */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "subscription" | "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone: string;
+                visible: boolean;
+                hostname: string | null;
+                lastSyncedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid calendar source */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Calendar content exceeds the size limit */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/personal-integrations/calendars/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a shared calendar source */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Calendar source deleted */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Calendar source not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /** Update a shared calendar source */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          "application/json": {
+            name?: string;
+            /** @enum {string} */
+            color?: "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+            timeZone?: string;
+            visible?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Updated calendar source */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "subscription" | "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone: string;
+                visible: boolean;
+                hostname: string | null;
+                lastSyncedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+              };
+            };
+          };
+        };
+        /** @description Calendar source not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    trace?: never;
+  };
+  "/v1/personal-integrations/calendars/{id}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read shared calendar events */
+    get: {
+      parameters: {
+        query: {
+          from: string;
+          to: string;
+          timeZone?: string;
+          refresh?: "true" | "false";
+        };
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Events for the requested range */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                sourceId: string;
+                title: string | null;
+                startsAt: string;
+                endsAt: string;
+                allDay: boolean;
+                webLink: string | null;
+                timeZone: string;
+              }[];
+              stale: boolean;
+              error: string | null;
+              lastSyncedAt: string | null;
+            };
+          };
+        };
+        /** @description Calendar source not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid or overlong range */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/personal-integrations/calendars/{id}/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Refresh a shared calendar subscription */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Refreshed calendar source */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "subscription" | "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone: string;
+                visible: boolean;
+                hostname: string | null;
+                lastSyncedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+              };
+            };
+          };
+        };
+        /** @description Calendar source not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Imported copies cannot be refreshed */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user-preferences/calendar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read calendar visibility preferences */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Calendar visibility preferences */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @default true */
+                google_calendar: boolean;
+                /** @default true */
+                outlook: boolean;
+              };
+            };
+          };
+        };
+      };
+    };
+    /** Save calendar visibility preferences */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          "application/json": {
+            /** @default true */
+            google_calendar?: boolean;
+            /** @default true */
+            outlook?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved calendar visibility preferences */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @default true */
+                google_calendar: boolean;
+                /** @default true */
+                outlook: boolean;
+              };
+            };
+          };
+        };
+        /** @description Invalid preferences */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;

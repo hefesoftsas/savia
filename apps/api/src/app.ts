@@ -94,6 +94,7 @@ import {
   type PersonalIntegrationRouteDependencies,
 } from "./routes/personal-integrations";
 import { registerUserPreferenceRoutes } from "./routes/user-preferences";
+import { registerPersonalCalendarRoutes } from "./personal-calendars/routes";
 import { registerNotifications } from "@savia/studio-server/notifications/routes";
 import { createNotificationPolicy } from "./notifications";
 import { actorFromContext, authenticationMiddleware } from "./auth/middleware";
@@ -254,6 +255,9 @@ export function createApp(
   registerTenantWorkspaceRoutes(app, db);
   registerTenantUserCapacityRoutes(app, db);
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
+  registerPersonalCalendarRoutes(app, db, {
+    secret: personalIntegrations?.calendarSecret,
+  });
   registerPagesSearchSettingsRoutes(app, db);
   registerPagesSearchRoutes(app, db, pagesSearch);
   registerPagesRoutes(app, db, documents);

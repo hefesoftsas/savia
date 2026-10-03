@@ -647,3 +647,45 @@ export const personalApiKeys = sqliteTable(
     index("personal_api_keys_owner").on(table.principalId, table.expiresAt),
   ],
 );
+
+export const personalCalendarSources = sqliteTable(
+  "personal_calendar_sources",
+  {
+    id: text("id").primaryKey().notNull(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["subscription", "import"] }).notNull(),
+    name: text("name").notNull(),
+    color: text("color", {
+      enum: ["blue", "emerald", "violet", "amber", "rose", "slate"],
+    }).notNull(),
+    visible: integer("visible", { mode: "boolean" }).notNull().default(true),
+    timeZone: text("time_zone").notNull(),
+    hostname: text("hostname"),
+    encryptedPayload: text("encrypted_payload").notNull(),
+    encryptedValidators: text("encrypted_validators"),
+    lastSyncedAt: text("last_synced_at"),
+    revision: integer("revision").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("personal_calendar_sources_principal_created").on(
+      table.principalId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const userCalendarPreferences = sqliteTable(
+  "user_calendar_preferences",
+  {
+    principalId: text("principal_id")
+      .primaryKey()
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "cascade" }),
+    settings: text("settings").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+);

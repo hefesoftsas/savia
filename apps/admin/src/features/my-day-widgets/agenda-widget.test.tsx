@@ -35,6 +35,93 @@ afterEach(() => {
 });
 
 describe("useMyDayAgenda", () => {
+  it("never publishes a late task from a cleared session", async () => {
+    const client = integrations({ listEvents: vi.fn(async () => []) });
+    const displayed: string[] = [];
+    const { result } = renderHook(() => {
+      const agenda = useMyDayAgenda(client);
+      displayed.push(...agenda.events.map((event) => event.title ?? ""));
+      return agenda;
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const lateUpdate = result.current.setEvents;
+    vi.mocked(client.listConnections).mockImplementation(
+      () => new Promise(() => {}),
+    );
+    act(() => {
+      window.dispatchEvent(new Event("savia:identity-changed"));
+      lateUpdate([
+        {
+          id: "private",
+          title: "Previous identity",
+          provider: "google_calendar",
+          startsAt: new Date().toISOString(),
+          endsAt: new Date(Date.now() + 60000).toISOString(),
+          webLink: null,
+        },
+      ]);
+    });
+    expect(displayed).not.toContain("Previous identity");
+  });
+  it("keeps newly created tasks outside the selected range out of its cache", async () => {
+    const client = integrations({ listEvents: vi.fn(async () => []) });
+    const { result } = renderHook(() =>
+      useMyDayAgenda(client, {
+        from: "2026-10-01T00:00:00Z",
+        to: "2026-10-02T00:00:00Z",
+      }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() =>
+      result.current.setEvents((current) => [
+        ...current,
+        { ...event("today", "New task"), provider: "google_calendar" },
+      ]),
+    );
+    expect(result.current.events).toEqual([]);
+  });
+  it("refreshes connected providers every five minutes while visible", async () => {
+    vi.useFakeTimers();
+    try {
+      const client = integrations();
+      const { unmount } = renderHook(() => useMyDayAgenda(client));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      const initialCalls = vi.mocked(client.listEvents).mock.calls.length;
+      expect(initialCalls).toBe(2);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300000);
+      });
+      expect(client.listEvents).toHaveBeenCalledTimes(initialCalls + 2);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("reads selected ranges and clears old-range rows before the next response", async () => {
+    const client = integrations();
+    const october = {
+      from: "2026-10-01T00:00:00Z",
+      to: "2026-11-01T00:00:00Z",
+    };
+    const { result, rerender } = renderHook(
+      ({ range }) => useMyDayAgenda(client, range),
+      { initialProps: { range: october } },
+    );
+    await waitFor(() => expect(result.current.events).toHaveLength(1));
+    expect(client.listEvents).toHaveBeenCalledWith({
+      provider: "google_calendar",
+      ...october,
+    });
+    vi.mocked(client.listEvents).mockImplementation(
+      () => new Promise(() => {}),
+    );
+    rerender({
+      range: { from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z" },
+    });
+    expect(result.current.events).toEqual([]);
+  });
   it("publishes one calendar as soon as it settles while another provider is pending", async () => {
     let resolveOutlook!: (events: PersonalCalendarEvent[]) => void;
     const client = integrations({
@@ -173,7 +260,12 @@ describe("useMyDayAgenda", () => {
           }),
       ),
     });
-    const { result } = renderHook(() => useMyDayAgenda(client));
+    const { result } = renderHook(() =>
+      useMyDayAgenda(client, {
+        from: "2026-09-29T00:00:00Z",
+        to: "2026-09-30T00:00:00Z",
+      }),
+    );
     await waitFor(() => expect(resolveGoogle).toBeTypeOf("function"));
 
     act(() => {

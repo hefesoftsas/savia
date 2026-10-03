@@ -84,6 +84,12 @@ function classify(
         : "connections";
     return { room: "principal", topic: "personal-integrations", collection };
   }
+  if (path === "/v1/user-preferences/calendar")
+    return {
+      room: "principal",
+      topic: "personal-integrations",
+      collection: "connections",
+    };
   if (
     path.startsWith("/v1/user-preferences/") ||
     path.startsWith("/v1/account/avatar")

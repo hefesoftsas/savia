@@ -109,6 +109,7 @@ export function personalIntegrationRoutesFromEnvironment(
 ): PersonalIntegrationRouteDependencies {
   const mcpSharedSecret = environment.SAVIA_MCP_SHARED_SECRET?.trim();
   return {
+    calendarSecret: mcpSharedSecret,
     providers: createPersonalIntegrationProviderRegistry(
       nangoConfigurationFromEnvironment(environment),
     ),

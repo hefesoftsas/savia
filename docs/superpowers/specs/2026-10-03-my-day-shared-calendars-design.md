@@ -1,6 +1,6 @@
 # My Day shared calendars and weekly/monthly views
 
-Date: 2026-10-03. Status: awaiting written-spec review.
+Date: 2026-10-03. Status: approved and implemented; integration verification complete.
 
 ## Intent and approved scope
 
