@@ -52,7 +52,7 @@ export function MyDayPage({
         <Button
           variant="outline"
           className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-          title="Sincronizar"
+          title={t("Sincronizar")}
           disabled={agenda.loading}
           onClick={() => void agenda.refresh()}
         >

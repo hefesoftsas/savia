@@ -817,7 +817,7 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
             variant="secondary"
             size="sm"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-            title="Agregar tarea"
+            title={t("Agregar tarea")}
             onClick={() =>
               document.getElementById("my-day-task")?.focus({
                 preventScroll: false,
@@ -832,7 +832,7 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
             variant="ghost"
             size="sm"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-            title="Sincronizar"
+            title={t("Sincronizar")}
             onClick={() => void refresh()}
           >
             <RefreshCw aria-hidden="true" className="size-3.5" />

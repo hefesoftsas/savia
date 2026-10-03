@@ -285,7 +285,7 @@ export function MyDayWidgetsSection({
               variant="ghost"
               size="sm"
               className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-              title="Mostrar agenda"
+              title={t("Show agenda")}
               disabled={saving || full}
               onClick={() =>
                 void add({ id: "agenda", kind: "agenda" } as MyDayWidget)
@@ -300,7 +300,7 @@ export function MyDayWidgetsSection({
             variant="outline"
             size="sm"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-            title="Actualizar"
+            title={t("Refresh")}
             disabled={loading || saving}
             onClick={() => {
               void agenda.refresh();
@@ -318,7 +318,7 @@ export function MyDayWidgetsSection({
             type="button"
             size="sm"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-            title="Agregar widget"
+            title={t("Add widget")}
             disabled={loading || saving || full}
             onClick={() => setDialogOpen(true)}
           >
