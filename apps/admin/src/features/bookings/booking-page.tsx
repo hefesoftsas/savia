@@ -9,41 +9,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { bookingMessages } from "./booking-messages";
 
-type Period = { day: number; start: string; end: string };
-type Exception = {
-  date: string;
-  periods: Array<{ start: string; end: string }>;
-};
-type Professional = {
-  id: string;
-  principalId: string;
-  enabled: boolean;
-  weekly: Period[];
-  exceptions: Exception[];
-};
-type Service = {
-  id: string;
-  name: string;
-  description: string;
-  durationMinutes: number;
-  bufferMinutes: number;
-  enabled: boolean;
-  professionalIds: string[];
-};
-type Settings = {
-  version: number;
-  enabled: boolean;
-  published: boolean;
-  title: string;
-  description: string;
-  timeZone: string;
-  leadMinutes: number;
-  horizonDays: number;
-  cancellationMinutes: number;
-  reminderMinutes: number;
-  services: Service[];
-  professionals: Professional[];
-};
+import type { Period, Exception, Settings } from "./booking-types";
+import { BookingSetupWizard, WeeklyHoursEditor } from "./booking-setup-wizard";
 type Bootstrap = {
   settings: Settings;
   candidates: Array<{ principalId: string; displayName: string }>;
@@ -69,41 +36,7 @@ type Reservation = {
 };
 type Tab = "settings" | "availability" | "reservations";
 
-const weekdays = [1, 2, 3, 4, 5, 6, 0] as const;
-const weekdayKeys = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-  "Sunday",
-] as const;
-const timeZones = [
-  "America/Bogota",
-  "America/Lima",
-  "America/Mexico_City",
-  "America/New_York",
-  "Europe/London",
-  "Europe/Lisbon",
-  "UTC",
-];
 const defaultWeekly = (): Period[] => [];
-function newId() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  const bytes = Array.from({ length: 16 }, () =>
-    Math.floor(Math.random() * 256),
-  );
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  return bytes
-    .map(
-      (value, index) =>
-        `${[4, 6, 8, 10].includes(index) ? "-" : ""}${value.toString(16).padStart(2, "0")}`,
-    )
-    .join("");
-}
-
 function isConflict(error: unknown) {
   return error instanceof ApiClientError
     ? error.status === 409 || error.code === "VERSION_CONFLICT"
@@ -226,41 +159,7 @@ export function BookingPage({
     t,
   ]);
 
-  function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
-    setSettings((current) =>
-      current ? { ...current, [key]: value } : current,
-    );
-  }
-
-  function updateService(index: number, patch: Partial<Service>) {
-    setSettings((current) =>
-      current
-        ? {
-            ...current,
-            services: current.services.map((service, i) =>
-              i === index ? { ...service, ...patch } : service,
-            ),
-          }
-        : current,
-    );
-  }
-
-  function updateProfessional(index: number, patch: Partial<Professional>) {
-    setSettings((current) =>
-      current
-        ? {
-            ...current,
-            professionals: current.professionals.map((professional, i) =>
-              i === index ? { ...professional, ...patch } : professional,
-            ),
-          }
-        : current,
-    );
-  }
-
-  async function saveSettings(event: FormEvent) {
-    event.preventDefault();
-    if (!settings) return;
+  async function saveSettings(settings: Settings) {
     if (
       settings.published &&
       (!settings.enabled ||
@@ -384,40 +283,6 @@ export function BookingPage({
     setWeekly(scheduleProfessional?.weekly ?? defaultWeekly());
     setExceptions(scheduleProfessional?.exceptions ?? []);
   }, [scheduleProfessional]);
-
-  function editPeriod(
-    day: number,
-    index: number,
-    field: "start" | "end",
-    value: string,
-  ) {
-    setWeekly((current) => {
-      const rest = current.filter((period) => period.day !== day);
-      const periods = current.filter((period) => period.day === day);
-      if (!value) periods.splice(index, 1);
-      else if (periods[index])
-        periods[index] = { ...periods[index], [field]: value };
-      else
-        periods[index] = {
-          day,
-          start: field === "start" ? value : "09:00",
-          end: field === "end" ? value : "17:00",
-        };
-      return [...rest, ...periods].sort(
-        (a, b) => a.day - b.day || a.start.localeCompare(b.start),
-      );
-    });
-  }
-
-  function addWeeklyPeriod(day: number) {
-    setWeekly((current) =>
-      current.filter((period) => period.day !== day).length >= 4
-        ? current
-        : [...current, { day, start: "09:00", end: "17:00" }].sort(
-            (a, b) => a.day - b.day || a.start.localeCompare(b.start),
-          ),
-    );
-  }
 
   function editExceptionPeriod(
     date: string,
@@ -552,13 +417,14 @@ export function BookingPage({
 
       <nav
         aria-label={t("Booking settings")}
-        className="flex flex-wrap gap-2 border-b pb-2"
+        className="grid grid-cols-3 gap-1 border-b pb-2 sm:flex sm:flex-wrap sm:gap-2"
       >
         {(["settings", "availability", "reservations"] as const).map(
           (value) => (
             <Button
               key={value}
               type="button"
+              className="min-h-11 h-auto min-w-0 whitespace-normal px-2 py-3 sm:px-4"
               variant={tab === value ? "secondary" : "ghost"}
               aria-current={tab === value ? "page" : undefined}
               onClick={() => {
@@ -591,317 +457,22 @@ export function BookingPage({
       )}
 
       {tab === "settings" && bootstrap.canManage && settings && (
-        <form className="grid gap-8" onSubmit={saveSettings}>
-          <section
-            className="grid gap-4"
-            aria-labelledby="booking-settings-heading"
-          >
-            <h2 id="booking-settings-heading" className="text-lg font-semibold">
-              {t("Booking settings")}
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-1.5 text-sm">
-                {t("Public title")}
-                <Input
-                  required
-                  value={settings.title}
-                  onChange={(event) =>
-                    updateSetting("title", event.target.value)
-                  }
-                />
-              </label>
-              <label className="grid gap-1.5 text-sm">
-                {t("IANA time zone")}
-                <Input
-                  list="booking-time-zones"
-                  value={settings.timeZone}
-                  onChange={(event) =>
-                    updateSetting("timeZone", event.target.value)
-                  }
-                />
-                <datalist id="booking-time-zones">
-                  {[...new Set([...timeZones, settings.timeZone])].map(
-                    (zone) => (
-                      <option key={zone} value={zone} />
-                    ),
-                  )}
-                </datalist>
-              </label>
-              <label className="grid gap-1.5 text-sm sm:col-span-2">
-                {t("Description")}
-                <Textarea
-                  value={settings.description}
-                  rows={3}
-                  onChange={(event) =>
-                    updateSetting("description", event.target.value)
-                  }
-                />
-              </label>
-            </div>
-            <div className="flex flex-wrap gap-x-8 gap-y-3">
-              <label className="flex items-center gap-2 text-sm">
-                <Switch
-                  checked={settings.enabled}
-                  onCheckedChange={(checked) =>
-                    updateSetting("enabled", checked)
-                  }
-                />
-                {t("Enabled")}
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <Switch
-                  checked={settings.published}
-                  onCheckedChange={(checked) =>
-                    updateSetting("published", checked)
-                  }
-                />
-                {t("Published")}
-              </label>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {t(
-                "Enable a service and an assigned professional before publishing.",
-              )}
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {(
-                [
-                  ["leadMinutes", "Lead time (minutes)"],
-                  ["horizonDays", "Booking horizon (days)"],
-                  ["cancellationMinutes", "Cancellation cutoff (minutes)"],
-                  ["reminderMinutes", "Reminder (minutes before)"],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="grid gap-1.5 text-sm">
-                  {t(label)}
-                  <Input
-                    type="number"
-                    min={0}
-                    max={key === "horizonDays" ? 180 : 43200}
-                    step={1}
-                    value={settings[key]}
-                    onChange={(event) =>
-                      updateSetting(key, Number(event.target.value))
-                    }
-                  />
-                </label>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <strong>{t("Public booking page")}</strong>
-              {publicReady && bootstrap.publicUrl ? (
-                <a
-                  className="break-all underline underline-offset-4"
-                  href={bootstrap.publicUrl}
-                >
-                  {bootstrap.publicUrl}
-                </a>
-              ) : (
-                <span className="text-muted-foreground">
-                  {t(
-                    "Save enabled and published settings to open the public page.",
-                  )}
-                </span>
-              )}
-            </div>
-          </section>
+        <BookingSetupWizard
+          key={tenantId}
+          settings={settings}
+          candidates={bootstrap.candidates ?? []}
+          onChange={setSettings}
+          onSave={saveSettings}
+          onReset={() => setSettings(bootstrap.settings)}
+          saving={saving}
+          publicUrl={publicReady ? bootstrap.publicUrl : null}
+        />
+      )}
 
-          <section className="grid gap-4" aria-labelledby="services-heading">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 id="services-heading" className="text-lg font-semibold">
-                {t("Services")}
-              </h2>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  updateSetting("services", [
-                    ...settings.services,
-                    {
-                      id: newId(),
-                      name: "",
-                      description: "",
-                      durationMinutes: 30,
-                      bufferMinutes: 0,
-                      enabled: true,
-                      professionalIds: [],
-                    },
-                  ])
-                }
-              >
-                {t("Add service")}
-              </Button>
-            </div>
-            {settings.services.map((service, index) => (
-              <fieldset
-                key={service.id}
-                className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4"
-              >
-                <legend className="px-1 text-sm font-medium">
-                  {service.name || t("Service name")}
-                </legend>
-                <label className="grid gap-1.5 text-sm">
-                  {t("Service name")}
-                  <Input
-                    required
-                    value={service.name}
-                    onChange={(event) =>
-                      updateService(index, { name: event.target.value })
-                    }
-                  />
-                </label>
-                <label className="grid gap-1.5 text-sm">
-                  {t("Duration (minutes)")}
-                  <Input
-                    type="number"
-                    min={5}
-                    max={480}
-                    step={5}
-                    value={service.durationMinutes}
-                    onChange={(event) =>
-                      updateService(index, {
-                        durationMinutes: Number(event.target.value),
-                      })
-                    }
-                  />
-                </label>
-                <label className="grid gap-1.5 text-sm">
-                  {t("Buffer (minutes)")}
-                  <Input
-                    type="number"
-                    min={0}
-                    max={120}
-                    step={5}
-                    value={service.bufferMinutes}
-                    onChange={(event) =>
-                      updateService(index, {
-                        bufferMinutes: Number(event.target.value),
-                      })
-                    }
-                  />
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  {t("Enabled")}
-                  <Switch
-                    checked={service.enabled}
-                    onCheckedChange={(checked) =>
-                      updateService(index, { enabled: checked })
-                    }
-                  />
-                </label>
-                <label className="grid gap-1.5 text-sm sm:col-span-2">
-                  {t("Service description")}
-                  <Textarea
-                    value={service.description}
-                    onChange={(event) =>
-                      updateService(index, { description: event.target.value })
-                    }
-                  />
-                </label>
-                <fieldset className="grid gap-2 sm:col-span-2">
-                  <legend className="text-sm">{t("Professionals")}</legend>
-                  {settings.professionals.map((professional) => (
-                    <label
-                      key={professional.id}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={service.professionalIds.includes(
-                          professional.id,
-                        )}
-                        onChange={(event) =>
-                          updateService(index, {
-                            professionalIds: event.target.checked
-                              ? [...service.professionalIds, professional.id]
-                              : service.professionalIds.filter(
-                                  (id) => id !== professional.id,
-                                ),
-                          })
-                        }
-                      />
-                      {bootstrap.candidates.find(
-                        (candidate) =>
-                          candidate.principalId === professional.principalId,
-                      )?.displayName ?? professional.principalId}
-                    </label>
-                  ))}
-                </fieldset>
-              </fieldset>
-            ))}
-          </section>
-
-          <section
-            className="grid gap-4"
-            aria-labelledby="professionals-heading"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 id="professionals-heading" className="text-lg font-semibold">
-                {t("Professionals")}
-              </h2>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  updateSetting("professionals", [
-                    ...settings.professionals,
-                    {
-                      id: newId(),
-                      principalId: "",
-                      enabled: true,
-                      weekly: [],
-                      exceptions: [],
-                    },
-                  ])
-                }
-              >
-                {t("Add professional")}
-              </Button>
-            </div>
-            {settings.professionals.map((professional, index) => (
-              <div
-                key={professional.id}
-                className="flex flex-wrap items-center gap-3 rounded-lg border p-3"
-              >
-                <label className="grid min-w-64 flex-1 gap-1.5 text-sm">
-                  {t("Professional")}
-                  <select
-                    required
-                    className="h-9 rounded-md border bg-background px-3"
-                    value={professional.principalId}
-                    onChange={(event) =>
-                      updateProfessional(index, {
-                        principalId: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="">{t("Select a Savia member")}</option>
-                    {bootstrap.candidates.map((candidate) => (
-                      <option
-                        key={candidate.principalId}
-                        value={candidate.principalId}
-                      >
-                        {candidate.displayName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <Switch
-                    checked={professional.enabled}
-                    onCheckedChange={(checked) =>
-                      updateProfessional(index, { enabled: checked })
-                    }
-                  />
-                  {t("Enabled")}
-                </label>
-              </div>
-            ))}
-          </section>
-          <Button type="submit" disabled={saving}>
-            {saving ? t("Loading booking settings…") : t("Save settings")}
-          </Button>
-        </form>
+      {tab === "settings" && bootstrap.canManage && !publicReady && (
+        <p className="text-sm text-muted-foreground">
+          {t("Save enabled and published settings to open the public page.")}
+        </p>
       )}
 
       {tab === "settings" && !bootstrap.canManage && (
@@ -953,102 +524,11 @@ export function BookingPage({
           )}
           {scheduleProfessional ? (
             <form className="grid gap-5" onSubmit={saveAvailability}>
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full min-w-[38rem] text-sm">
-                  <thead className="bg-muted/60 text-left">
-                    <tr>
-                      <th className="p-3">{t("Day")}</th>
-                      <th className="p-3">{t("Start")}</th>
-                      <th className="p-3">{t("End")}</th>
-                      <th className="p-3" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {weekdays.map((day, dayIndex) => {
-                      const dayName = t(weekdayKeys[dayIndex]);
-                      const periods = weekly.filter((item) => item.day === day);
-                      const shown = periods.length
-                        ? periods
-                        : [{ day, start: "", end: "" }];
-                      return shown.map((period, index) => (
-                        <tr key={`${day}-${index}`} className="border-t">
-                          <th scope="row" className="p-3 font-medium">
-                            {index === 0 ? dayName : ""}
-                            {index === 0 && (
-                              <Button
-                                className="ml-2"
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                disabled={periods.length >= 4}
-                                onClick={() => addWeeklyPeriod(day)}
-                              >
-                                {t("Add period")}
-                              </Button>
-                            )}
-                          </th>
-                          <td className="p-2">
-                            <Input
-                              aria-label={`${day === 1 ? t("Monday start") : `${dayName} ${t("Start")}`}${index ? ` ${index + 1}` : ""}`}
-                              type="time"
-                              step={300}
-                              value={period.start}
-                              onChange={(event) =>
-                                editPeriod(
-                                  day,
-                                  index,
-                                  "start",
-                                  event.target.value,
-                                )
-                              }
-                            />
-                          </td>
-                          <td className="p-2">
-                            <Input
-                              aria-label={`${day === 1 ? t("Monday end") : `${dayName} ${t("End")}`}${index ? ` ${index + 1}` : ""}`}
-                              type="time"
-                              step={300}
-                              value={period.end}
-                              onChange={(event) =>
-                                editPeriod(
-                                  day,
-                                  index,
-                                  "end",
-                                  event.target.value,
-                                )
-                              }
-                            />
-                          </td>
-                          <td className="p-2">
-                            {periods.length > 1 && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                aria-label={`${dayName} ${t("Remove period")} ${index + 1}`}
-                                onClick={() =>
-                                  setWeekly((items) =>
-                                    items.filter(
-                                      (item) =>
-                                        !(
-                                          item.day === day &&
-                                          item.start === period.start &&
-                                          item.end === period.end
-                                        ),
-                                    ),
-                                  )
-                                }
-                              >
-                                {t("Remove period")}
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      ));
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <WeeklyHoursEditor
+                value={weekly}
+                onChange={setWeekly}
+                disabled={saving}
+              />
               <fieldset className="grid gap-3">
                 <legend className="text-base font-semibold">
                   {t("Exceptions")}
