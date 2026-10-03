@@ -65,6 +65,7 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
       sections: {
         operation: [
           "my-day",
+          "bookings",
           "pages",
           "office-suite",
           "companion-recordings",

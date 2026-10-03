@@ -162,6 +162,13 @@ export const navigationDefinitions: Record<
     section: "operation",
     icon: CalendarDays,
   },
+  bookings: {
+    id: "bookings",
+    labelKey: "savia.sidebar.items.bookings",
+    route: "/bookings",
+    section: "operation",
+    icon: CalendarDays,
+  },
   "companion-recordings": {
     id: "companion-recordings",
     labelKey: "savia.sidebar.items.companion-recordings",

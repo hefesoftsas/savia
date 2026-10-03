@@ -1,5 +1,9 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it, vi } from "vitest";
+vi.mock("../src/bookings/jobs", () => ({
+  runBookingJobs: vi.fn(async () => ({ completed: 0, failed: 0, skipped: 0 })),
+}));
+import { runBookingJobs } from "../src/bookings/jobs";
 vi.mock("../src/workflows", () => ({
   runScheduledWorkflows: vi.fn(async () => undefined),
 }));
@@ -31,6 +35,7 @@ it("runs scheduled workflows without the legacy CRM synchronization worker", asy
   await expect(
     worker.scheduled({} as ScheduledController, env),
   ).resolves.toBeUndefined();
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
   expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
   expect(vi.mocked(runScheduledWorkflows).mock.calls[0][0] === env.DB).toBe(
     true,
@@ -44,6 +49,7 @@ it("ticks workflows in preview without activating external CRM synchronization",
       SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
     }),
   ).resolves.toBeUndefined();
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
   expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
 });
 
@@ -60,6 +66,7 @@ it("passes the native webhook transport to scheduled workflows", async () => {
     { workflowFetch },
   );
   await runtime.scheduled();
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
   expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
   const call = vi.mocked(runScheduledWorkflows).mock.calls[0];
   expect(call[0] === env.DB).toBe(true);
@@ -131,5 +138,21 @@ it("surfaces Jira maintenance failures while other scheduled jobs still run", as
       SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
     }),
   ).rejects.toThrow("Scheduled jobs failed");
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
   expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+});
+
+it("surfaces booking job failures while other scheduled jobs still run", async () => {
+  vi.clearAllMocks();
+  vi.mocked(runBookingJobs).mockRejectedValueOnce(
+    new Error("Booking jobs failed"),
+  );
+  await expect(
+    worker.scheduled({} as ScheduledController, {
+      ...env,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+    }),
+  ).rejects.toThrow("Scheduled jobs failed");
+  expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+  expect(runJiraPrivacyMaintenance).toHaveBeenCalledTimes(1);
 });

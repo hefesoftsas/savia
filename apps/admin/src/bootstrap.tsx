@@ -38,6 +38,16 @@ const PublicRegistration = lazy(async () => {
     await import("./features/tenant-registration/registration-page");
   return { default: RegistrationPage };
 });
+const PublicBooking = lazy(async () => {
+  const { PublicBookingPage } =
+    await import("./features/bookings/public-booking-page");
+  return { default: PublicBookingPage };
+});
+const PublicBookingManage = lazy(async () => {
+  const { PublicBookingManagePage } =
+    await import("./features/bookings/public-booking-manage-page");
+  return { default: PublicBookingManagePage };
+});
 /** Public visitors never initialize authenticated services or the admin replica. */
 export function ApplicationRoot({
   pathname = window.location.pathname,
@@ -49,7 +59,9 @@ export function ApplicationRoot({
     pathname === "/public/forms" ||
     pathname.startsWith("/public/forms/") ||
     pathname === "/public/pages" ||
-    pathname.startsWith("/public/pages/");
+    pathname.startsWith("/public/pages/") ||
+    pathname === "/public/bookings" ||
+    pathname.startsWith("/public/bookings/");
   if (publicPath) return <PublicApplication pathname={pathname} />;
   return (
     <Suspense
@@ -94,6 +106,10 @@ function PublicApplicationContent({ pathname }: { pathname: string }) {
     /^\/public\/pages\/([A-Za-z0-9_-]{20,128})(?:\/([A-Za-z0-9_-]+))?\/?$/.exec(
       pathname,
     );
+  const publicBookingManageMatch =
+    /^\/public\/bookings\/manage\/([A-Za-z0-9_-]{20,128})\/?$/.exec(pathname);
+  const publicBookingMatch =
+    /^\/public\/bookings\/([A-Za-z0-9_-]{20,128})\/?$/.exec(pathname);
   return (
     <>
       <div className="flex justify-end gap-2 px-6 py-3">
@@ -118,6 +134,10 @@ function PublicApplicationContent({ pathname }: { pathname: string }) {
       <Suspense fallback={<PwaSplash message={t("Cargando…")} />}>
         {pathname === "/register" ? (
           <PublicRegistration />
+        ) : publicBookingManageMatch ? (
+          <PublicBookingManage token={publicBookingManageMatch[1]} />
+        ) : publicBookingMatch ? (
+          <PublicBooking token={publicBookingMatch[1]} />
         ) : publicPageMatch ? (
           <PublicPageRoute
             token={publicPageMatch[1]}

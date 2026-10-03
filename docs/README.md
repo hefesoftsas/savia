@@ -56,6 +56,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Account email](guides/account-email.md) — email verification, password recovery, tenant SMTP settings and local Mailpit testing.
 - [Social sign-in](guides/social-sign-in.md) — optional Google, Microsoft and ChatGPT sign-in, provider registration and tenant controls.
 
+- [Tenant booking](guides/tenant-booking.md) — native tenant services, availability, public reservations and optional personal calendars.
+
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.
 - [cookie-consent.md](cookie-consent.md) — mandatory once-per-user cookie consent banner for the SPA and public forms.
 - [permissions.md](permissions.md) — scoped roles, record and field permissions, revocation and rollout.

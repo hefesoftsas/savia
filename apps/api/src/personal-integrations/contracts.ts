@@ -85,7 +85,7 @@ export type PersonalIntegrationNangoClient = {
   ): Promise<PersonalNangoConnectionSummary>;
   deleteConnection(connectionId: string, integrationId: string): Promise<void>;
   proxy(request: {
-    method: "GET" | "POST" | "PUT";
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     path: string;
     connection: Pick<
       ActivePersonalIntegrationConnection,
