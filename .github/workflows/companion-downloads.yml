@@ -101,7 +101,7 @@ jobs:
   macos:
     name: Build macOS Apple silicon preview
     if: github.ref == 'refs/heads/main'
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
     needs: [desktop-tests]
     env:

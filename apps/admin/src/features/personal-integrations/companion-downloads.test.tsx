@@ -57,6 +57,10 @@ describe("Companion downloads", () => {
     expect(
       await screen.findByRole("link", { name: /^Descargar Android/ }),
     ).toHaveAttribute("href", release.assets[0].browser_download_url);
+    expect(fetch).toHaveBeenCalledWith(
+      "/companion-downloads.json",
+      expect.objectContaining({ credentials: "omit" }),
+    );
     expect(
       screen.getByRole("link", { name: /^Descargar Windows/ }),
     ).toHaveAttribute("href", release.assets[1].browser_download_url);

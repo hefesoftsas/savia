@@ -1,7 +1,10 @@
 # Savia Companion downloads
 
 The Integrations page lists the latest published Companion preview from the
-public GitHub Releases API. Preview releases are created manually from the
+same-origin `/companion-downloads.json` endpoint. Savia fetches the public
+GitHub Releases catalog on the server and caches it for ten minutes, so browser
+visits do not consume users' shared GitHub API quota. Concurrent refreshes share
+one in-flight request. Preview releases are created manually from the
 repository's `main` branch by running the **Companion downloads** workflow in
 GitHub Actions. A run publishes a new immutable `companion-preview-*` prerelease
 only after Android, Windows x64 and macOS Apple silicon builds all succeed and

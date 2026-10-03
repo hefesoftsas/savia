@@ -78,14 +78,11 @@ export function CompanionDownloads() {
     let active = true;
     setState({ status: "loading" });
     const timeout = setTimeout(() => controller.abort(), 15000);
-    void fetch(
-      "https://api.github.com/repos/hefesoftsas/savia/releases?per_page=30",
-      {
-        signal: controller.signal,
-        credentials: "omit",
-        headers: { Accept: "application/vnd.github+json" },
-      },
-    )
+    void fetch("/companion-downloads.json", {
+      signal: controller.signal,
+      credentials: "omit",
+      headers: { Accept: "application/json" },
+    })
       .then(async (response) => {
         if (!response.ok) throw new Error("Release discovery failed");
         const release = selectCompanionRelease(await response.json());

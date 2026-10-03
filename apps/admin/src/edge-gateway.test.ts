@@ -45,6 +45,33 @@ describe("edge gateway", () => {
     expect(api.fetch).not.toHaveBeenCalled();
   });
 
+  it("serves the public Companion catalog before falling back to admin assets", async () => {
+    const fetchUpstream = vi.fn(async () => Response.json([]));
+    vi.stubGlobal("fetch", fetchUpstream);
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = { fetch: vi.fn(async () => new Response("admin")) };
+    const request = new Request(
+      "https://savia-catalog-routing.test/companion-downloads.json?cache=bust",
+      { headers: { Authorization: "Bearer user-token", Cookie: "session=secret" } },
+    );
+
+    const response = await gatewayFetch(request, { API: api, ASSETS: assets });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([]);
+    expect(fetchUpstream).toHaveBeenCalledOnce();
+    expect(fetchUpstream).toHaveBeenCalledWith(
+      "https://api.github.com/repos/hefesoftsas/savia/releases?per_page=30",
+      expect.not.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer user-token",
+        }),
+      }),
+    );
+    expect(assets.fetch).not.toHaveBeenCalled();
+    expect(api.fetch).not.toHaveBeenCalled();
+  });
+
   it("marks fingerprinted assets as immutable", () => {
     expect(isImmutableAsset("/assets/main-CfLYpzF0.js")).toBe(true);
     expect(isImmutableAsset("/assets/main-DbU_fhi5.css")).toBe(true);
