@@ -1,4 +1,30 @@
 export const companionMessages = {
+  "Private to your account.": [
+    "Solo tú puedes verlas.",
+    "Private to your account.",
+    "Só você pode vê-las.",
+  ],
+  "I have permission to transcribe and summarize this audio with OpenRouter.": [
+    "Tengo permiso para transcribir y resumir este audio con OpenRouter.",
+    "I have permission to transcribe and summarize this audio with OpenRouter.",
+    "Tenho permissão para transcrever e resumir este áudio com OpenRouter.",
+  ],
+  "Processing may incur charges.": [
+    "Puede generar cargos.",
+    "Processing may incur charges.",
+    "Pode gerar cobranças.",
+  ],
+  "How processing works": [
+    "Cómo se procesa",
+    "How processing works",
+    "Como é processado",
+  ],
+  "Savia sends this audio to OpenRouter for transcription and a summary. No automatic retries.":
+    [
+      "Savia envía este audio a OpenRouter para transcribirlo y resumirlo. No hay reintentos automáticos.",
+      "Savia sends this audio to OpenRouter for transcription and a summary. No automatic retries.",
+      "Savia envia este áudio ao OpenRouter para transcrição e resumo. Sem novas tentativas automáticas.",
+    ],
   "Ask about this recording": [
     "Pregunta sobre esta grabación",
     "Ask about this recording",

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
+  ChevronDown,
+  Download,
+  LockKeyhole,
   ChevronRight,
   LoaderCircle,
   RefreshCw,
@@ -57,6 +60,7 @@ export function CompanionRecordingsPage({
   const [uploadOpen, setUploadOpen] = useState(false),
     [uploading, setUploading] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
+  const [recordingPickerOpen, setRecordingPickerOpen] = useState(false);
   const mounted = useRef(true),
     inFlight = useRef(false);
   const source = (r: Recording) =>
@@ -183,15 +187,14 @@ export function CompanionRecordingsPage({
   };
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {t("Recordings")}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t(
-              "Your recordings from Companion, local disk and connected drives. Private to your account.",
-            )}
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <LockKeyhole className="size-3.5" aria-hidden="true" />
+            {t("Private to your account.")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -204,13 +207,14 @@ export function CompanionRecordingsPage({
             {t("Upload recording")}
           </Button>
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
+            aria-label={t("Refresh")}
+            title={t("Refresh")}
             disabled={loading || processing || uploading}
             onClick={() => void load()}
           >
             <RefreshCw className="size-4" aria-hidden="true" />
-            {t("Refresh")}
           </Button>
         </div>
       </header>
@@ -272,53 +276,74 @@ export function CompanionRecordingsPage({
           )}
         </section>
       ) : (
-        <div className="grid gap-8 md:grid-cols-[240px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)]">
-          <nav aria-label={t("Recordings")} className="md:border-r md:pr-6">
-            <ul className="space-y-1">
-              {recordings.map((r) => (
-                <li key={r.id}>
-                  <button
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg p-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring ${selected?.id === r.id ? "bg-muted" : ""}`}
-                    disabled={processing || uploading}
-                    aria-current={selected?.id === r.id ? "true" : undefined}
-                    onClick={() => setSelected(r)}
-                  >
-                    <span className="min-w-0">
-                      <span className="block break-words font-medium">
-                        {source(r)}
+        <div className="grid gap-5 md:grid-cols-[240px_minmax(0,1fr)] md:gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <nav
+            aria-label={t("Recordings")}
+            className={`${recordings.length === 1 && !cursor ? "hidden md:block" : ""} md:border-r md:pr-6`}
+          >
+            <Button
+              variant="outline"
+              className="w-full justify-between md:hidden"
+              aria-expanded={recordingPickerOpen}
+              aria-controls="recordings-list"
+              onClick={() => setRecordingPickerOpen((open) => !open)}
+            >
+              {t("Select a recording")}
+              <ChevronDown className="size-4" aria-hidden="true" />
+            </Button>
+            <div
+              id="recordings-list"
+              className={`${recordingPickerOpen ? "mt-2" : "hidden"} md:mt-0 md:block`}
+            >
+              <ul className="space-y-1">
+                {recordings.map((r) => (
+                  <li key={r.id}>
+                    <button
+                      className={`flex w-full items-center justify-between gap-2 rounded-lg p-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring ${selected?.id === r.id ? "bg-muted" : ""}`}
+                      disabled={processing || uploading}
+                      aria-current={selected?.id === r.id ? "true" : undefined}
+                      onClick={() => {
+                        setSelected(r);
+                        setRecordingPickerOpen(false);
+                      }}
+                    >
+                      <span className="min-w-0">
+                        <span className="block break-words font-medium">
+                          {source(r)}
+                        </span>
+                        <time
+                          className="mt-1 block text-xs text-muted-foreground"
+                          dateTime={r.createdAt}
+                        >
+                          {date(r)}
+                        </time>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {r.durationSeconds != null
+                            ? `${r.durationSeconds.toFixed(1)}s · `
+                            : ""}
+                          {Math.round(r.bytes / 1024)} KiB
+                        </span>
                       </span>
-                      <time
-                        className="mt-1 block text-xs text-muted-foreground"
-                        dateTime={r.createdAt}
-                      >
-                        {date(r)}
-                      </time>
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        {r.durationSeconds != null
-                          ? `${r.durationSeconds.toFixed(1)}s · `
-                          : ""}
-                        {Math.round(r.bytes / 1024)} KiB
-                      </span>
-                    </span>
-                    <ChevronRight
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {cursor && (
-              <Button
-                className="mt-3 w-full"
-                variant="ghost"
-                size="sm"
-                disabled={loading || processing || uploading}
-                onClick={() => void load(cursor)}
-              >
-                {t("Load more")}
-              </Button>
-            )}
+                      <ChevronRight
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {cursor && (
+                <Button
+                  className="mt-3 w-full"
+                  variant="ghost"
+                  size="sm"
+                  disabled={loading || processing || uploading}
+                  onClick={() => void load(cursor)}
+                >
+                  {t("Load more")}
+                </Button>
+              )}
+            </div>
           </nav>
           <section className="min-w-0" aria-label={t("Meeting notes")}>
             {selected && (
@@ -326,9 +351,21 @@ export function CompanionRecordingsPage({
                 <h2 className="break-words text-lg font-medium">
                   {source(selected)}
                 </h2>
-                <p className="mb-5 mt-1 text-sm text-muted-foreground">
-                  {date(selected)}
-                </p>
+                <div className="mb-4 mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <time dateTime={selected.createdAt}>{date(selected)}</time>
+                  {audio && (
+                    <a
+                      href={audio}
+                      download={
+                        selected.name ?? `${selected.id}.${selected.format}`
+                      }
+                      className="inline-flex min-h-9 items-center gap-1.5 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      <Download className="size-3.5" aria-hidden="true" />
+                      {t("Download audio")}
+                    </a>
+                  )}
+                </div>
                 {loadingDetail && (
                   <p
                     role="status"
@@ -354,28 +391,11 @@ export function CompanionRecordingsPage({
                       src={audio}
                       className="w-full"
                     />
-                    <a
-                      href={audio}
-                      download={
-                        selected.name ?? `${selected.id}.${selected.format}`
-                      }
-                      className="mt-2 inline-block text-xs text-muted-foreground underline underline-offset-4"
-                    >
-                      {t("Download audio")}
-                    </a>
                   </>
                 )}
                 {!notes?.summary && (
-                  <div className="mt-8 border-t pt-6">
-                    <h3 className="text-base font-medium">
-                      {t("Your meetings, ready to review")}
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {t(
-                        "Listen, then turn the conversation into meeting notes.",
-                      )}
-                    </p>
-                    <label className="mt-5 flex items-start gap-2 text-sm">
+                  <div className="mt-6 border-t pt-5">
+                    <label className="flex cursor-pointer items-start gap-3 text-sm leading-6">
                       <input
                         type="checkbox"
                         className="mt-1 size-4 accent-primary"
@@ -385,12 +405,12 @@ export function CompanionRecordingsPage({
                       />
                       <span>
                         {t(
-                          "I have permission to send this recording through Savia to OpenRouter for transcription and a summary.",
+                          "I have permission to transcribe and summarize this audio with OpenRouter.",
                         )}
                       </span>
                     </label>
                     <Button
-                      className="mt-4"
+                      className="mt-4 w-full sm:w-auto"
                       disabled={
                         !consent ||
                         loadingDetail ||
@@ -413,10 +433,18 @@ export function CompanionRecordingsPage({
                       )}
                     </Button>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {t(
-                        "Provider processing may incur charges. No automatic retries.",
-                      )}
+                      {t("Processing may incur charges.")}
                     </p>
+                    <details className="mt-3 text-xs text-muted-foreground">
+                      <summary className="min-h-9 cursor-pointer py-2 focus-visible:outline-2 focus-visible:outline-ring">
+                        {t("How processing works")}
+                      </summary>
+                      <p className="max-w-prose pb-2 leading-5">
+                        {t(
+                          "Savia sends this audio to OpenRouter for transcription and a summary. No automatic retries.",
+                        )}
+                      </p>
+                    </details>
                   </div>
                 )}
                 {notes?.summary && (

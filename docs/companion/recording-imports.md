@@ -12,6 +12,11 @@ file do not synchronize with the saved recording.
 4. To generate a transcript and meeting notes, grant processing consent and choose
    **Generate summary**. Uploading alone does not send audio to the AI provider.
 
+On mobile, the selected audio leads the page. When multiple recordings are available,
+use **Select a recording** to switch; desktop keeps the list beside the player.
+Consent and the possible processing charge remain visible beside **Generate summary**.
+Expand **How processing works** for provider routing and retry details.
+
 ## Access and privacy
 
 All active tenant members can use **Recordings**, regardless of role. Platform
