@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, it, expect, vi } from "vitest";
-import { cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  screen,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import { render } from "./studio-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DynamicForm from "../dynamic-form";
@@ -122,6 +128,13 @@ it("relation selector requests later pages and preserves multiple choices while 
   );
   await screen.findByRole("button", { name: "Empresa 0" });
   fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+  await screen.findByRole("button", { name: "Empresa posterior" });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  });
+  expect(
+    screen.getByRole("button", { name: "Empresa posterior" }),
+  ).toBeInTheDocument();
   fireEvent.click(
     await screen.findByRole("button", { name: "Empresa posterior" }),
   );
