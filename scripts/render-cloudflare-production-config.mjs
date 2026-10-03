@@ -51,6 +51,7 @@ function apiConfig({
   documentsBucket,
   domainD1Id,
   jiraIntegrationId,
+  githubIntegrationId,
   publicOrigin,
 }) {
   return {
@@ -104,6 +105,9 @@ function apiConfig({
       NANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID: "one-drive-personal",
       NANGO_OUTLOOK_INTEGRATION_ID: "outlook",
       NANGO_LINEAR_INTEGRATION_ID: "linear",
+      ...(githubIntegrationId
+        ? { NANGO_GITHUB_INTEGRATION_ID: githubIntegrationId }
+        : {}),
       ...(jiraIntegrationId
         ? { NANGO_JIRA_INTEGRATION_ID: jiraIntegrationId }
         : {}),
@@ -194,9 +198,12 @@ function gatewayConfig({ publicOrigin, documentsBucket }) {
       binding: "ASSETS",
       not_found_handling: "single-page-application",
       run_worker_first: [
+        "/companion-downloads.json",
         "/register",
         "/public/forms",
         "/public/forms/*",
+        "/public/bookings",
+        "/public/bookings/*",
         "/office",
         "/office/*",
         "/api/*",
@@ -225,10 +232,12 @@ async function writeConfig(outputRoot, app, config, deploymentEnvironment) {
 export async function renderProductionConfigs({
   deploymentEnvironment = "production",
   openrouterModel,
+  pagesSearchIndex,
   authD1Id,
   domainD1Id,
   documentsBucket = defaultDocumentsBucket,
   jiraIntegrationId,
+  githubIntegrationId,
   outputRoot,
   publicOrigin = defaultPublicOrigin,
 }) {
@@ -250,6 +259,14 @@ export async function renderProductionConfigs({
     domainD1Id: requiredValue(domainD1Id, "SAVIA_DOMAIN_D1_ID"),
     outputRoot: requiredValue(outputRoot, "SAVIA_DEPLOY_CONFIG_ROOT"),
     publicOrigin: originValue(publicOrigin),
+    ...(githubIntegrationId?.trim()
+      ? {
+          githubIntegrationId: requiredValue(
+            githubIntegrationId,
+            "NANGO_GITHUB_INTEGRATION_ID",
+          ),
+        }
+      : {}),
     ...(jiraIntegrationId?.trim()
       ? {
           jiraIntegrationId: requiredValue(
@@ -269,6 +286,32 @@ export async function renderProductionConfigs({
     admin: gatewayConfig(rendered),
   };
   if (openrouterModel) configs.api.vars.OPENROUTER_MODEL = openrouterModel;
+  const searchIndex =
+    pagesSearchIndex?.trim() ||
+    (deploymentEnvironment === "preview"
+      ? "savia-pages-search-preview"
+      : undefined);
+  if (searchIndex) {
+    if (
+      deploymentEnvironment === "preview" &&
+      searchIndex !== "savia-pages-search-preview"
+    )
+      throw new Error("Preview requires an isolated Pages search index");
+    if (
+      deploymentEnvironment === "production" &&
+      searchIndex === "savia-pages-search-preview"
+    )
+      throw new Error("Production cannot use the preview Pages search index");
+    configs.api.ai = { binding: "AI" };
+    configs.api.ratelimits.push({
+      name: "PAGES_SEARCH_RATE_LIMITER",
+      namespace_id: deploymentEnvironment === "preview" ? "879104" : "879103",
+      simple: { limit: 30, period: 60 },
+    });
+    configs.api.vectorize = [
+      { binding: "PAGES_VECTORIZE", index_name: searchIndex },
+    ];
+  }
   if (deploymentEnvironment === "preview") {
     for (const config of Object.values(configs)) {
       config.name += "-preview";
@@ -304,7 +347,9 @@ async function main() {
     authD1Id: process.env.SAVIA_AUTH_D1_ID,
     documentsBucket: process.env.SAVIA_DOCUMENTS_BUCKET,
     domainD1Id: process.env.SAVIA_DOMAIN_D1_ID,
+    pagesSearchIndex: process.env.SAVIA_PAGES_SEARCH_INDEX,
     jiraIntegrationId: process.env.NANGO_JIRA_INTEGRATION_ID,
+    githubIntegrationId: process.env.NANGO_GITHUB_INTEGRATION_ID,
     outputRoot: process.env.SAVIA_DEPLOY_CONFIG_ROOT ?? process.cwd(),
     publicOrigin: process.env.SAVIA_PUBLIC_ORIGIN,
   });

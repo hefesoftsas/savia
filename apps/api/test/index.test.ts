@@ -47,6 +47,7 @@ describe("personal Nango integration configuration", () => {
       NANGO_ONEDRIVE_BUSINESS_INTEGRATION_ID: "onedrive-business-production",
       NANGO_JIRA_INTEGRATION_ID: "jira-production",
       NANGO_LINEAR_INTEGRATION_ID: "linear-production",
+      NANGO_GITHUB_INTEGRATION_ID: "github-production",
     } as Record<string, string>);
 
     expect(configuration).toMatchObject({
@@ -58,6 +59,7 @@ describe("personal Nango integration configuration", () => {
       oneDriveBusinessIntegrationId: "onedrive-business-production",
       jiraIntegrationId: "jira-production",
       linearIntegrationId: "linear-production",
+      githubIntegrationId: "github-production",
     });
   });
 });

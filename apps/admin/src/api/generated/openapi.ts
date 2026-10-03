@@ -143,6 +143,7 @@ export interface paths {
             /** Format: email */
             email: string;
             password: string;
+            oauth_query?: string;
           };
         };
       };
@@ -269,6 +270,7 @@ export interface paths {
         content: {
           "application/json": {
             code: string;
+            oauth_query?: string;
           };
         };
       };
@@ -328,6 +330,7 @@ export interface paths {
         content: {
           "application/json": {
             code: string;
+            oauth_query?: string;
           };
         };
       };
@@ -358,6 +361,191 @@ export interface paths {
       };
     };
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/account/api-keys": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List your personal API key metadata */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Metadata without secrets */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              keys: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                prefix: string;
+                tenantId: number;
+                scopes: (
+                  | "recordings:read"
+                  | "recordings:upload"
+                  | "recordings:process"
+                  | "recordings:delete"
+                )[];
+                createdAt: string;
+                expiresAt: string;
+                revokedAt: string | null;
+                lastUsedAt: string | null;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Create a scoped personal key; reveal its secret once */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            name: string;
+            tenantId: number;
+            scopes: (
+              | "recordings:read"
+              | "recordings:upload"
+              | "recordings:process"
+              | "recordings:delete"
+            )[];
+            /** @default 30 */
+            lifetimeDays?: 7 | 30 | 90;
+          };
+        };
+      };
+      responses: {
+        /** @description One-time credential */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              key: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                prefix: string;
+                tenantId: number;
+                scopes: (
+                  | "recordings:read"
+                  | "recordings:upload"
+                  | "recordings:process"
+                  | "recordings:delete"
+                )[];
+                createdAt: string;
+                expiresAt: string;
+                revokedAt: string | null;
+                lastUsedAt: string | null;
+              };
+              secret: string;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/account/api-keys/tenants": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List eligible tenants for personal keys */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Eligible active memberships */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              tenants: {
+                id: number;
+                name: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/account/api-keys/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Revoke your personal key */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Revoked or already absent */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
     options?: never;
     head?: never;
     patch?: never;
@@ -434,6 +622,12 @@ export interface paths {
               maxCompressedAudioBytes: number;
               audioFormats: ("wav" | "ogg")[];
               storageAvailable: boolean;
+              grantedRecordingScopes?: (
+                | "recordings:read"
+                | "recordings:upload"
+                | "recordings:process"
+                | "recordings:delete"
+              )[];
               /** @enum {string} */
               privacyRouting: "unverified";
             };
@@ -449,6 +643,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -463,6 +660,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -477,6 +677,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -491,6 +694,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -505,6 +711,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -519,6 +728,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -533,6 +745,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -547,6 +762,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -561,6 +779,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -596,7 +817,7 @@ export interface paths {
         content: {
           "application/json": {
             /** @enum {string} */
-            source: "microphone" | "system";
+            source: "microphone" | "system" | "upload";
             audio: {
               data: string;
               /** @enum {string} */
@@ -619,9 +840,9 @@ export interface paths {
             "application/json": {
               text: string;
               /** @enum {string} */
-              source: "microphone" | "system";
+              source: "microphone" | "system" | "upload";
               model: string;
-              durationSeconds: number;
+              durationSeconds: number | null;
             };
           };
         };
@@ -635,6 +856,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -649,6 +873,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -663,6 +890,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -677,6 +907,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -691,6 +924,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -705,6 +941,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -719,6 +958,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -733,6 +975,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -747,6 +992,449 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/recordings/upload": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Upload a private audio recording up to 50 MB */
+    post: {
+      parameters: {
+        query: {
+          id: string;
+          name: string;
+          format: "wav" | "ogg" | "mp3" | "m4a";
+          consent: "true";
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/octet-stream": string;
+        };
+      };
+      responses: {
+        /** @description Saved private recording */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              tenantId?: number;
+              /** @enum {string} */
+              source: "microphone" | "system" | "upload";
+              /** @enum {string} */
+              format: "wav" | "ogg" | "mp3" | "m4a";
+              bytes: number;
+              durationSeconds: number | null;
+              /** Format: date-time */
+              createdAt: string;
+              sha256: string;
+              name?: string;
+              /** @enum {string} */
+              origin?:
+                | "local"
+                | "google_drive"
+                | "onedrive_personal"
+                | "onedrive_business";
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        504: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/recordings/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Import a selected recording from the current user's connected drive */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            provider:
+              "google_drive" | "onedrive_personal" | "onedrive_business";
+            fileId: string;
+            /** @enum {boolean} */
+            consent: true;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved private recording */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              tenantId?: number;
+              /** @enum {string} */
+              source: "microphone" | "system" | "upload";
+              /** @enum {string} */
+              format: "wav" | "ogg" | "mp3" | "m4a";
+              bytes: number;
+              durationSeconds: number | null;
+              /** Format: date-time */
+              createdAt: string;
+              sha256: string;
+              name?: string;
+              /** @enum {string} */
+              origin?:
+                | "local"
+                | "google_drive"
+                | "onedrive_personal"
+                | "onedrive_business";
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Personal connection access denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        504: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -788,15 +1476,23 @@ export interface paths {
               recordings: {
                 /** Format: uuid */
                 id: string;
+                tenantId?: number;
                 /** @enum {string} */
-                source: "microphone" | "system";
+                source: "microphone" | "system" | "upload";
                 /** @enum {string} */
-                format: "ogg";
+                format: "wav" | "ogg" | "mp3" | "m4a";
                 bytes: number;
-                durationSeconds: number;
+                durationSeconds: number | null;
                 /** Format: date-time */
                 createdAt: string;
                 sha256: string;
+                name?: string;
+                /** @enum {string} */
+                origin?:
+                  | "local"
+                  | "google_drive"
+                  | "onedrive_personal"
+                  | "onedrive_business";
               }[];
               cursor: string | null;
             };
@@ -812,6 +1508,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -826,6 +1525,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -840,6 +1542,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -854,6 +1559,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -868,6 +1576,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -882,6 +1593,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -896,6 +1610,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -910,6 +1627,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -924,6 +1644,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -945,7 +1668,7 @@ export interface paths {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            source: "microphone" | "system";
+            source: "microphone" | "system" | "upload";
             audio: {
               data: string;
               /** @enum {string} */
@@ -966,15 +1689,23 @@ export interface paths {
             "application/json": {
               /** Format: uuid */
               id: string;
+              tenantId?: number;
               /** @enum {string} */
-              source: "microphone" | "system";
+              source: "microphone" | "system" | "upload";
               /** @enum {string} */
-              format: "ogg";
+              format: "wav" | "ogg" | "mp3" | "m4a";
               bytes: number;
-              durationSeconds: number;
+              durationSeconds: number | null;
               /** Format: date-time */
               createdAt: string;
               sha256: string;
+              name?: string;
+              /** @enum {string} */
+              origin?:
+                | "local"
+                | "google_drive"
+                | "onedrive_personal"
+                | "onedrive_business";
             };
           };
         };
@@ -988,6 +1719,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1002,6 +1736,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1016,6 +1753,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1030,6 +1770,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1044,6 +1787,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1058,6 +1804,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1072,6 +1821,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1086,6 +1838,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1100,6 +1855,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1131,13 +1889,16 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Ogg/Opus audio */
+        /** @description Original recording audio */
         200: {
           headers: {
             [name: string]: unknown;
           };
           content: {
             "audio/ogg": string;
+            "audio/mpeg": string;
+            "audio/wav": string;
+            "audio/mp4": string;
           };
         };
         /** @description Request unavailable or rejected */
@@ -1150,6 +1911,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1164,6 +1928,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1178,6 +1945,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1192,6 +1962,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1206,6 +1979,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1220,6 +1996,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1234,6 +2013,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1248,6 +2030,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1262,6 +2047,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1299,6 +2087,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1313,6 +2104,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1327,6 +2121,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1341,6 +2138,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1355,6 +2155,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1369,6 +2172,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1383,6 +2189,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1397,6 +2206,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1411,6 +2223,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1451,9 +2266,9 @@ export interface paths {
               transcript: {
                 text: string;
                 /** @enum {string} */
-                source: "microphone" | "system";
+                source: "microphone" | "system" | "upload";
                 model: string;
-                durationSeconds: number;
+                durationSeconds: number | null;
               } | null;
               summary: {
                 summary: string;
@@ -1478,6 +2293,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1492,6 +2310,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1506,6 +2327,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1520,6 +2344,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1534,6 +2361,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1548,6 +2378,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1562,6 +2395,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1576,6 +2412,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1590,6 +2429,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1626,9 +2468,9 @@ export interface paths {
               transcript: {
                 text: string;
                 /** @enum {string} */
-                source: "microphone" | "system";
+                source: "microphone" | "system" | "upload";
                 model: string;
-                durationSeconds: number;
+                durationSeconds: number | null;
               } | null;
               summary: {
                 summary: string;
@@ -1653,6 +2495,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1667,6 +2512,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1681,6 +2529,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1695,6 +2546,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1709,6 +2563,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1723,6 +2580,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1737,6 +2597,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1751,6 +2614,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1765,6 +2631,211 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/recordings/{id}/questions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Answer a question using only the saved recording transcript */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            question: string;
+            /** @enum {boolean} */
+            consent: true;
+          };
+        };
+      };
+      responses: {
+        /** @description Draft answer, not persisted */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              answer: string;
+              insufficientEvidence: boolean;
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        504: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1799,7 +2870,7 @@ export interface paths {
           "application/json": {
             transcripts: {
               /** @enum {string} */
-              source: "microphone" | "system";
+              source: "microphone" | "system" | "upload";
               text: string;
             }[];
             /** @enum {boolean} */
@@ -1836,6 +2907,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1850,6 +2924,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1864,6 +2941,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1878,6 +2958,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1892,6 +2975,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1906,6 +2992,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1920,6 +3009,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1934,6 +3026,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1948,6 +3043,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2105,6 +3203,1683 @@ export interface paths {
               sent: true;
             };
           };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/booking": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                settings: {
+                  version: number;
+                  enabled: boolean;
+                  published: boolean;
+                  title: string;
+                  description: string;
+                  timeZone: string;
+                  leadMinutes: number;
+                  horizonDays: number;
+                  cancellationMinutes: number;
+                  reminderMinutes: number;
+                  services: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    description: string;
+                    durationMinutes: number;
+                    bufferMinutes: number;
+                    enabled: boolean;
+                    professionalIds: string[];
+                  }[];
+                  professionals: {
+                    /** Format: uuid */
+                    id: string;
+                    principalId: string;
+                    enabled: boolean;
+                    weekly: {
+                      day: number;
+                      start: string;
+                      end: string;
+                    }[];
+                    exceptions: {
+                      date: string;
+                      periods: {
+                        start: string;
+                        end: string;
+                      }[];
+                    }[];
+                  }[];
+                };
+                candidates: {
+                  principalId: string;
+                  displayName: string;
+                }[];
+                canManage: boolean;
+                principalId: string;
+                publicUrl: string | null;
+                calendar: {
+                  /** @enum {string|null} */
+                  provider: "google_calendar" | "outlook" | null;
+                  status: string;
+                };
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            version: number;
+            enabled: boolean;
+            published: boolean;
+            title: string;
+            description: string;
+            timeZone: string;
+            leadMinutes: number;
+            horizonDays: number;
+            cancellationMinutes: number;
+            reminderMinutes: number;
+            services: {
+              /** Format: uuid */
+              id: string;
+              name: string;
+              description: string;
+              durationMinutes: number;
+              bufferMinutes: number;
+              enabled: boolean;
+              professionalIds: string[];
+            }[];
+            professionals: {
+              /** Format: uuid */
+              id: string;
+              principalId: string;
+              enabled: boolean;
+              weekly: {
+                day: number;
+                start: string;
+                end: string;
+              }[];
+              exceptions: {
+                date: string;
+                periods: {
+                  start: string;
+                  end: string;
+                }[];
+              }[];
+            }[];
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                settings: {
+                  version: number;
+                  enabled: boolean;
+                  published: boolean;
+                  title: string;
+                  description: string;
+                  timeZone: string;
+                  leadMinutes: number;
+                  horizonDays: number;
+                  cancellationMinutes: number;
+                  reminderMinutes: number;
+                  services: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    description: string;
+                    durationMinutes: number;
+                    bufferMinutes: number;
+                    enabled: boolean;
+                    professionalIds: string[];
+                  }[];
+                  professionals: {
+                    /** Format: uuid */
+                    id: string;
+                    principalId: string;
+                    enabled: boolean;
+                    weekly: {
+                      day: number;
+                      start: string;
+                      end: string;
+                    }[];
+                    exceptions: {
+                      date: string;
+                      periods: {
+                        start: string;
+                        end: string;
+                      }[];
+                    }[];
+                  }[];
+                };
+                candidates: {
+                  principalId: string;
+                  displayName: string;
+                }[];
+                canManage: boolean;
+                principalId: string;
+                publicUrl: string | null;
+                calendar: {
+                  /** @enum {string|null} */
+                  provider: "google_calendar" | "outlook" | null;
+                  status: string;
+                };
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/booking/availability": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            version: number;
+            weekly: {
+              day: number;
+              start: string;
+              end: string;
+            }[];
+            exceptions: {
+              date: string;
+              periods: {
+                start: string;
+                end: string;
+              }[];
+            }[];
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                settings: {
+                  version: number;
+                  enabled: boolean;
+                  published: boolean;
+                  title: string;
+                  description: string;
+                  timeZone: string;
+                  leadMinutes: number;
+                  horizonDays: number;
+                  cancellationMinutes: number;
+                  reminderMinutes: number;
+                  services: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    description: string;
+                    durationMinutes: number;
+                    bufferMinutes: number;
+                    enabled: boolean;
+                    professionalIds: string[];
+                  }[];
+                  professionals: {
+                    /** Format: uuid */
+                    id: string;
+                    principalId: string;
+                    enabled: boolean;
+                    weekly: {
+                      day: number;
+                      start: string;
+                      end: string;
+                    }[];
+                    exceptions: {
+                      date: string;
+                      periods: {
+                        start: string;
+                        end: string;
+                      }[];
+                    }[];
+                  }[];
+                };
+                candidates: {
+                  principalId: string;
+                  displayName: string;
+                }[];
+                canManage: boolean;
+                principalId: string;
+                publicUrl: string | null;
+                calendar: {
+                  /** @enum {string|null} */
+                  provider: "google_calendar" | "outlook" | null;
+                  status: string;
+                };
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/booking/calendar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** @enum {string|null} */
+            provider: "google_calendar" | "outlook" | null;
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                settings: {
+                  version: number;
+                  enabled: boolean;
+                  published: boolean;
+                  title: string;
+                  description: string;
+                  timeZone: string;
+                  leadMinutes: number;
+                  horizonDays: number;
+                  cancellationMinutes: number;
+                  reminderMinutes: number;
+                  services: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    description: string;
+                    durationMinutes: number;
+                    bufferMinutes: number;
+                    enabled: boolean;
+                    professionalIds: string[];
+                  }[];
+                  professionals: {
+                    /** Format: uuid */
+                    id: string;
+                    principalId: string;
+                    enabled: boolean;
+                    weekly: {
+                      day: number;
+                      start: string;
+                      end: string;
+                    }[];
+                    exceptions: {
+                      date: string;
+                      periods: {
+                        start: string;
+                        end: string;
+                      }[];
+                    }[];
+                  }[];
+                };
+                candidates: {
+                  principalId: string;
+                  displayName: string;
+                }[];
+                canManage: boolean;
+                principalId: string;
+                publicUrl: string | null;
+                calendar: {
+                  /** @enum {string|null} */
+                  provider: "google_calendar" | "outlook" | null;
+                  status: string;
+                };
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/booking/reservations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          from: string;
+          to: string;
+        };
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                serviceId: string;
+                /** Format: uuid */
+                professionalId: string;
+                serviceName: string;
+                professionalName: string;
+                startsAt: string;
+                endsAt: string;
+                customerName: string;
+                customerEmail: string;
+                /** @enum {string} */
+                status: "confirmed" | "cancelled";
+                version: number;
+                deliveryStatus: string;
+                calendarStatus: string;
+              }[];
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/booking/reservations/{id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            version: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                serviceId: string;
+                /** Format: uuid */
+                professionalId: string;
+                serviceName: string;
+                professionalName: string;
+                startsAt: string;
+                endsAt: string;
+                customerName: string;
+                customerEmail: string;
+                /** @enum {string} */
+                status: "confirmed" | "cancelled";
+                version: number;
+                deliveryStatus: string;
+                calendarStatus: string;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/{token}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                [key: string]: unknown;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/{token}/challenge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                [key: string]: unknown;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/{token}/slots": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          serviceId: string;
+          professionalId: string;
+          date: string;
+        };
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                [key: string]: unknown;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/{token}/reservations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            serviceId: string;
+            /** Format: uuid */
+            professionalId: string;
+            /** Format: date-time */
+            startsAt: string;
+            customerName: string;
+            /** Format: email */
+            customerEmail: string;
+            /** @default  */
+            captchaToken?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                reservation: {
+                  /** Format: uuid */
+                  id: string;
+                  /** Format: uuid */
+                  serviceId: string;
+                  /** Format: uuid */
+                  professionalId: string;
+                  serviceName: string;
+                  professionalName: string;
+                  startsAt: string;
+                  endsAt: string;
+                  customerName: string;
+                  customerEmail: string;
+                  /** @enum {string} */
+                  status: "confirmed" | "cancelled";
+                  version: number;
+                  deliveryStatus: string;
+                  calendarStatus: string;
+                };
+                managementUrl: string;
+              };
+            };
+          };
+        };
+        /** @description Confirmed reservation */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                reservation: {
+                  /** Format: uuid */
+                  id: string;
+                  /** Format: uuid */
+                  serviceId: string;
+                  /** Format: uuid */
+                  professionalId: string;
+                  serviceName: string;
+                  professionalName: string;
+                  startsAt: string;
+                  endsAt: string;
+                  customerName: string;
+                  customerEmail: string;
+                  /** @enum {string} */
+                  status: "confirmed" | "cancelled";
+                  version: number;
+                  deliveryStatus: string;
+                  calendarStatus: string;
+                };
+                managementUrl: string;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/manage/{token}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                [key: string]: unknown;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/manage/{token}/slots": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          date: string;
+        };
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                [key: string]: unknown;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/manage/{token}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            version: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                serviceId: string;
+                /** Format: uuid */
+                professionalId: string;
+                serviceName: string;
+                professionalName: string;
+                startsAt: string;
+                endsAt: string;
+                customerName: string;
+                customerEmail: string;
+                /** @enum {string} */
+                status: "confirmed" | "cancelled";
+                version: number;
+                deliveryStatus: string;
+                calendarStatus: string;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/manage/{token}/reschedule": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            version: number;
+            /** Format: date-time */
+            startsAt: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                serviceId: string;
+                /** Format: uuid */
+                professionalId: string;
+                serviceName: string;
+                professionalName: string;
+                startsAt: string;
+                endsAt: string;
+                customerName: string;
+                customerEmail: string;
+                /** @enum {string} */
+                status: "confirmed" | "cancelled";
+                version: number;
+                deliveryStatus: string;
+                calendarStatus: string;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
         };
       };
     };
@@ -3994,6 +6769,60 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/companion/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get the current mobile Companion session and workspaces */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Safe identity and eligible workspace selection data */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              subject: string;
+              displayName: string;
+              workspaces: {
+                id: number;
+                name: string;
+                slug: string;
+              }[];
+              grantedRecordingScopes: (
+                "recordings:read" | "recordings:upload" | "recordings:process"
+              )[];
+            };
+          };
+        };
+        /** @description A recording-scoped OAuth session is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/identity/users": {
     parameters: {
       query?: never;
@@ -4820,6 +7649,7 @@ export interface paths {
                   "none" | "client_secret_basic" | "client_secret_post";
                 clientId: string;
                 clientName: string;
+                grantTypes: ("authorization_code" | "refresh_token")[];
                 redirectUris: string[];
                 scopes: string[];
                 trusted: boolean;
@@ -4849,9 +7679,12 @@ export interface paths {
         content: {
           "application/json": {
             /** @enum {string} */
+            applicationType?: "native" | "web";
+            /** @enum {string} */
             clientAuthentication:
               "none" | "client_secret_basic" | "client_secret_post";
             clientName: string;
+            grantTypes?: ("authorization_code" | "refresh_token")[];
             redirectUris: string[];
             scopes: string[];
             /** @default false */
@@ -4875,6 +7708,7 @@ export interface paths {
                   "none" | "client_secret_basic" | "client_secret_post";
                 clientId: string;
                 clientName: string;
+                grantTypes: ("authorization_code" | "refresh_token")[];
                 redirectUris: string[];
                 scopes: string[];
                 trusted: boolean;
@@ -4944,7 +7778,10 @@ export interface paths {
       requestBody: {
         content: {
           "application/json": {
+            /** @enum {string} */
+            applicationType?: "native" | "web";
             clientName?: string;
+            grantTypes?: ("authorization_code" | "refresh_token")[];
             redirectUris?: string[];
             scopes?: string[];
             /** @default false */
@@ -4968,6 +7805,7 @@ export interface paths {
                   "none" | "client_secret_basic" | "client_secret_post";
                 clientId: string;
                 clientName: string;
+                grantTypes: ("authorization_code" | "refresh_token")[];
                 redirectUris: string[];
                 scopes: string[];
                 trusted: boolean;
@@ -7165,7 +10003,8 @@ export interface paths {
                   | "onedrive_personal"
                   | "onedrive_business"
                   | "jira"
-                  | "linear";
+                  | "linear"
+                  | "github";
                 /** @enum {string} */
                 kind: "personal-integration-provider";
                 attributes: {
@@ -7226,7 +10065,8 @@ export interface paths {
                     | "onedrive_personal"
                     | "onedrive_business"
                     | "jira"
-                    | "linear";
+                    | "linear"
+                    | "github";
                   /** @enum {string} */
                   status:
                     | "pending"
@@ -7363,7 +10203,8 @@ export interface paths {
                     | "onedrive_personal"
                     | "onedrive_business"
                     | "jira"
-                    | "linear";
+                    | "linear"
+                    | "github";
                   /** @enum {string} */
                   status:
                     | "pending"
@@ -7605,8 +10446,8 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Preview a linked issue from a caller-owned Jira or Linear account
-     * @description Parses supported Jira Cloud and Linear issue links, then reads safe summary metadata through the caller's active personal connection.
+     * Preview a linked issue from a caller-owned integration
+     * @description Parses supported Jira Cloud, Linear, and GitHub issue or pull request links, then reads safe summary metadata through the caller's active personal connection.
      */
     post: {
       parameters: {
@@ -7632,13 +10473,16 @@ export interface paths {
             "application/json": {
               data: {
                 /** @enum {string} */
-                provider: "jira" | "linear";
+                provider: "jira" | "linear" | "github";
                 /** Format: uri */
                 url: string;
                 identifier: string;
                 title: string;
                 status: string | null;
                 assignee: string | null;
+                repository?: string;
+                /** @enum {string} */
+                kind?: "issue" | "pull_request";
               };
             };
           };
@@ -7953,6 +10797,8 @@ export interface paths {
                 endsAt: string | null;
                 /** Format: uri */
                 webLink: string | null;
+                allDay?: boolean;
+                timeZone?: string | null;
               }[];
             };
           };
@@ -8051,6 +10897,1178 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/personal-integrations/calendars": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List shared calendar sources */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Calendar sources */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "subscription" | "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone: string;
+                visible: boolean;
+                hostname: string | null;
+                lastSyncedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Add a shared calendar source */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          "application/json":
+            | {
+                /** @enum {string} */
+                kind: "subscription";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color?:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone?: string;
+                url: string;
+              }
+            | {
+                /** @enum {string} */
+                kind: "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color?:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone?: string;
+                content: string;
+              };
+        };
+      };
+      responses: {
+        /** @description Created calendar source */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "subscription" | "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone: string;
+                visible: boolean;
+                hostname: string | null;
+                lastSyncedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid calendar source */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Calendar content exceeds the size limit */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/personal-integrations/calendars/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a shared calendar source */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Calendar source deleted */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Calendar source not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /** Update a shared calendar source */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          "application/json": {
+            name?: string;
+            /** @enum {string} */
+            color?: "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+            timeZone?: string;
+            visible?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Updated calendar source */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "subscription" | "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone: string;
+                visible: boolean;
+                hostname: string | null;
+                lastSyncedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+              };
+            };
+          };
+        };
+        /** @description Calendar source not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    trace?: never;
+  };
+  "/v1/personal-integrations/calendars/{id}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read shared calendar events */
+    get: {
+      parameters: {
+        query: {
+          from: string;
+          to: string;
+          timeZone?: string;
+          refresh?: "true" | "false";
+        };
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Events for the requested range */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                sourceId: string;
+                title: string | null;
+                startsAt: string;
+                endsAt: string;
+                allDay: boolean;
+                webLink: string | null;
+                timeZone: string;
+              }[];
+              stale: boolean;
+              error: string | null;
+              lastSyncedAt: string | null;
+            };
+          };
+        };
+        /** @description Calendar source not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid or overlong range */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/personal-integrations/calendars/{id}/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Refresh a shared calendar subscription */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Refreshed calendar source */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "subscription" | "import";
+                name: string;
+                /**
+                 * @default blue
+                 * @enum {string}
+                 */
+                color:
+                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                /** @default UTC */
+                timeZone: string;
+                visible: boolean;
+                hostname: string | null;
+                lastSyncedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+              };
+            };
+          };
+        };
+        /** @description Calendar source not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Imported copies cannot be refreshed */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user-preferences/calendar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read calendar visibility preferences */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Calendar visibility preferences */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @default true */
+                google_calendar: boolean;
+                /** @default true */
+                outlook: boolean;
+              };
+            };
+          };
+        };
+      };
+    };
+    /** Save calendar visibility preferences */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          "application/json": {
+            /** @default true */
+            google_calendar?: boolean;
+            /** @default true */
+            outlook?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved calendar visibility preferences */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @default true */
+                google_calendar: boolean;
+                /** @default true */
+                outlook: boolean;
+              };
+            };
+          };
+        };
+        /** @description Invalid preferences */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/pages-search-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read tenant page-search settings */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tenant page-search settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                tenantId: number;
+                allowed: boolean;
+                enabled: boolean;
+                effectiveEnabled: boolean;
+                canGrant: boolean;
+              };
+            };
+          };
+        };
+        /** @description Invalid settings */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Tenant administration is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Active commercial tenant not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    /** Update tenant page-search settings */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            allowed?: boolean;
+            enabled?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Tenant page-search settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                tenantId: number;
+                allowed: boolean;
+                enabled: boolean;
+                effectiveEnabled: boolean;
+                canGrant: boolean;
+              };
+            };
+          };
+        };
+        /** @description Invalid settings */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Tenant administration is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Active commercial tenant not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/pages/search/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get authorized Pages indexing status */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Cloudflare Pages search */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                enabled: boolean;
+                available: boolean;
+                total: number;
+                indexed: number;
+                needed: string[];
+              };
+            };
+          };
+        };
+        /** @description Search disabled */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Page not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Page changed or indexing is already in progress */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Tenant search rate limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Search unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/pages/search/index/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Index an accessible page in Cloudflare */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Cloudflare Pages search */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                version: number;
+                reused: boolean;
+              };
+            };
+          };
+        };
+        /** @description Search disabled */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Page not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Page changed or indexing is already in progress */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Tenant search rate limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Search unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/pages/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Search accessible Pages semantically with Cloudflare */
+    get: {
+      parameters: {
+        query: {
+          q: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Cloudflare Pages search */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "page" | "folder";
+                parentId: string | null;
+                rootId: string;
+                title: string;
+                version: number;
+                updatedAt: string;
+                ownerId: string;
+                /** @enum {string} */
+                role: "owner" | "editor" | "reader";
+                isShared: boolean;
+                binding: {
+                  domain: string;
+                  collection: string;
+                  recordId: string;
+                } | null;
+                score: number;
+                excerpt?: string;
+              }[];
+            };
+          };
+        };
+        /** @description Search disabled */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Page not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Page changed or indexing is already in progress */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Tenant search rate limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Search unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/pages/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Export all pages owned by the caller with referenced attachments */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Portable Pages archive */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                format: "savia-pages";
+                /** @enum {number} */
+                version: 1;
+                exportedAt: string;
+                pages: {
+                  id: string;
+                  parentId: string | null;
+                  title: string;
+                  /** @enum {string} */
+                  kind: "page" | "folder";
+                  content: {
+                    [key: string]: unknown;
+                  }[];
+                }[];
+                files: {
+                  id: string;
+                  pageId: string;
+                  name: string;
+                  mimeType: string;
+                  size: number;
+                  data: string;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Export source changed or contains unavailable content */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Archive exceeds the size limit */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Attachment storage is unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/pages/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Import a portable Pages archive as private copies */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            format: "savia-pages";
+            /** @enum {number} */
+            version: 1;
+            exportedAt: string;
+            pages: {
+              id: string;
+              parentId: string | null;
+              title: string;
+              /** @enum {string} */
+              kind: "page" | "folder";
+              content: {
+                [key: string]: unknown;
+              }[];
+            }[];
+            files: {
+              id: string;
+              pageId: string;
+              name: string;
+              mimeType: string;
+              size: number;
+              data: string;
+            }[];
+          };
+        };
+      };
+      responses: {
+        /** @description Imported private copies */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                pages: number;
+                folders: number;
+                files: number;
+              };
+            };
+          };
+        };
+        /** @description Archive is invalid */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Archive exceeds the size limit */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Attachment storage is unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/pages": {
     parameters: {
       query?: never;
@@ -8095,6 +12113,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
               }[];
             };
           };
@@ -8193,6 +12212,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -8225,6 +12245,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -8412,6 +12433,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -8508,6 +12530,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -8838,6 +12861,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -8950,6 +12974,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -9342,6 +13367,1081 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  "/v1/office-documents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the caller's private office documents */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Private document summaries */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                mime: string;
+                size: number;
+                version: number;
+                updatedAt: string;
+              }[];
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Create a private office document */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "multipart/form-data": {
+            file?: unknown;
+          };
+        };
+      };
+      responses: {
+        /** @description Created private document */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                mime: string;
+                size: number;
+                version: number;
+                updatedAt: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid upload */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Upload exceeds size limit */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Unsupported Office document */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/office-documents/api/file/{id}/office": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Office editor metadata */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Editor metadata */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                mime: string;
+                size: number;
+                version: number;
+                updatedAt: string;
+                field: null;
+                object: null;
+                recordId: null;
+                readOnly: boolean;
+                maxSize: number;
+              };
+            };
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Document not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/office-documents/api/file/{id}/revisions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List document revisions */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Revision history */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                version: number;
+                size: number;
+                created_at: string;
+                created_by: string | null;
+              }[];
+            };
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Document not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Save a new document revision */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "multipart/form-data": {
+            file?: unknown;
+            version: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved revision */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                mime: string;
+                size: number;
+                version: number;
+                updatedAt: string;
+              };
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Document version conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Upload exceeds size limit */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Unsupported Office document */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/office-documents/api/file/{id}/revisions/{version}/download": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Download a document revision */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+          version: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Office document bytes */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/octet-stream": string;
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Revision not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/connected-office-documents/providers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List connected office providers available to the caller */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Connected office providers */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                provider:
+                  "google_drive" | "onedrive_personal" | "onedrive_business";
+                label: string;
+                accountLabel: string | null;
+              }[];
+            };
+          };
+        };
+        /** @description Office suite is disabled */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Active tenant is unavailable */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/connected-office-documents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the caller's private connected office documents */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Private connected document links */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                format: "docx" | "xlsx" | "pptx";
+                /** @enum {string} */
+                provider:
+                  "google_drive" | "onedrive_personal" | "onedrive_business";
+                /** Format: uri */
+                url: string;
+                createdAt: string;
+              }[];
+            };
+          };
+        };
+        /** @description Office suite is disabled */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Active tenant is unavailable */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Create a document in the caller's connected drive */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "multipart/form-data": {
+            provider: string;
+            format: string;
+            name: string;
+            /** Format: uuid */
+            requestId: string;
+            file?: unknown;
+          };
+        };
+      };
+      responses: {
+        /** @description Idempotent replay of a completed request */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                format: "docx" | "xlsx" | "pptx";
+                /** @enum {string} */
+                provider:
+                  "google_drive" | "onedrive_personal" | "onedrive_business";
+                /** Format: uri */
+                url: string;
+                createdAt: string;
+              };
+            };
+          };
+        };
+        /** @description Created connected document */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                format: "docx" | "xlsx" | "pptx";
+                /** @enum {string} */
+                provider:
+                  "google_drive" | "onedrive_personal" | "onedrive_business";
+                /** Format: uri */
+                url: string;
+                createdAt: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Provider not connected or office suite disabled */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Active tenant is unavailable */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Conflicting or in-progress idempotency request */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Upload exceeds 5 MB */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid Office template */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Provider request failed or had an uncertain outcome */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Provider service or private metadata storage is unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/office-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get office settings for the active tenant */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Office suite settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                tenantId: number;
+                platformAllowed: boolean;
+                tenantEnabled: boolean;
+                enabled: boolean;
+                canManagePlatform: boolean;
+                canManageTenant: boolean;
+              };
+            };
+          };
+        };
+        /** @description Invalid settings patch */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Settings change is forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Tenant is unavailable */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/office-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get office settings for a tenant */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number | null;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Office suite settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                tenantId: number;
+                platformAllowed: boolean;
+                tenantEnabled: boolean;
+                enabled: boolean;
+                canManagePlatform: boolean;
+                canManageTenant: boolean;
+              };
+            };
+          };
+        };
+        /** @description Invalid settings patch */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Settings change is forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Tenant is unavailable */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update office settings for a tenant */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number | null;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            platformAllowed?: boolean;
+            tenantEnabled?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Office suite settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                tenantId: number;
+                platformAllowed: boolean;
+                tenantEnabled: boolean;
+                enabled: boolean;
+                canManagePlatform: boolean;
+                canManageTenant: boolean;
+              };
+            };
+          };
+        };
+        /** @description Invalid settings patch */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Settings change is forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Tenant is unavailable */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
     trace?: never;
   };
   "/v1/pages/{id}/public-links": {
@@ -9950,7 +15050,9 @@ export interface paths {
                             | "dashboard"
                             | "studio"
                             | "my-day"
+                            | "bookings"
                             | "pages"
+                            | "office-suite"
                             | "companion-recordings"
                             | "integrations"
                             | "provider-credentials"
@@ -9984,7 +15086,9 @@ export interface paths {
                             | "dashboard"
                             | "studio"
                             | "my-day"
+                            | "bookings"
                             | "pages"
+                            | "office-suite"
                             | "companion-recordings"
                             | "integrations"
                             | "provider-credentials"
@@ -10014,7 +15118,9 @@ export interface paths {
                       | "dashboard"
                       | "studio"
                       | "my-day"
+                      | "bookings"
                       | "pages"
+                      | "office-suite"
                       | "companion-recordings"
                       | "integrations"
                       | "provider-credentials"
@@ -10083,7 +15189,9 @@ export interface paths {
                             | "dashboard"
                             | "studio"
                             | "my-day"
+                            | "bookings"
                             | "pages"
+                            | "office-suite"
                             | "companion-recordings"
                             | "integrations"
                             | "provider-credentials"
@@ -10117,7 +15225,9 @@ export interface paths {
                             | "dashboard"
                             | "studio"
                             | "my-day"
+                            | "bookings"
                             | "pages"
+                            | "office-suite"
                             | "companion-recordings"
                             | "integrations"
                             | "provider-credentials"
@@ -10147,7 +15257,9 @@ export interface paths {
                       | "dashboard"
                       | "studio"
                       | "my-day"
+                      | "bookings"
                       | "pages"
+                      | "office-suite"
                       | "companion-recordings"
                       | "integrations"
                       | "provider-credentials"
@@ -10373,7 +15485,8 @@ export interface paths {
                   | {
                       id: string;
                       /** @enum {string} */
-                      kind: "agenda" | "quick_task" | "mail";
+                      kind:
+                        "agenda" | "quick_task" | "mail" | "office_documents";
                       title?: string;
                       /** @enum {string} */
                       size?: "sm" | "md" | "lg";
@@ -10433,7 +15546,8 @@ export interface paths {
                   | {
                       id: string;
                       /** @enum {string} */
-                      kind: "agenda" | "quick_task" | "mail";
+                      kind:
+                        "agenda" | "quick_task" | "mail" | "office_documents";
                       title?: string;
                       /** @enum {string} */
                       size?: "sm" | "md" | "lg";
@@ -11126,6 +16240,8 @@ export interface paths {
                 coverUrl: string | null;
                 /** @default null */
                 loginAnimationUrl: string | null;
+                /** @default true */
+                loginAnimationRepeat: boolean;
                 version: number;
               };
               canManage?: boolean;
@@ -11155,6 +16271,8 @@ export interface paths {
             coverUrl: string | null;
             /** @default null */
             loginAnimationUrl?: string | null;
+            /** @default true */
+            loginAnimationRepeat?: boolean;
             version: number;
           };
         };
@@ -11177,6 +16295,8 @@ export interface paths {
                 coverUrl: string | null;
                 /** @default null */
                 loginAnimationUrl: string | null;
+                /** @default true */
+                loginAnimationRepeat: boolean;
                 version: number;
               };
               canManage?: boolean;
@@ -11274,6 +16394,8 @@ export interface paths {
                 coverUrl: string | null;
                 /** @default null */
                 loginAnimationUrl: string | null;
+                /** @default true */
+                loginAnimationRepeat: boolean;
                 version: number;
               } | null;
             };

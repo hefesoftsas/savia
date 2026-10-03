@@ -86,6 +86,9 @@ function Shell({
           <div
             className="oauth-login-animation"
             data-oauth-login-animation
+            data-repeat={
+              branding?.loginAnimationRepeat === false ? "false" : "true"
+            }
             data-oauth-login-animation-custom={
               customLoginAnimation ? "true" : undefined
             }
@@ -223,9 +226,14 @@ function Shell({
 
 function Status({ initialNotice }: { initialNotice?: string } = {}) {
   return (
-    <p id="oauth-status" role="status" aria-live="polite">
-      {initialNotice}
-    </p>
+    <>
+      <p id="oauth-status" role="status" aria-live="polite">
+        {initialNotice}
+      </p>
+      <a data-oauth-resume href="/" hidden>
+        Continuar a Savia
+      </a>
+    </>
   );
 }
 
@@ -470,6 +478,7 @@ function LoginContent({
               className="oauth-enterprise-login"
               type="button"
               data-oauth-show="sso"
+              hidden
             >
               <svg
                 width="20"

@@ -125,6 +125,20 @@ it("saves own tenant branding with optimistic concurrency and safe host projecti
     ).json(),
   ).toEqual({ data: null });
 });
+it("defaults older stored branding rows to repeat when they omit the preference", async () => {
+  const t = await tenant();
+  const instance = app(member(t.id));
+  const initial = await read(instance, t.id);
+  expect(initial.data.loginAnimationRepeat).toBe(true);
+  expect((await put(instance, t.id, initial.data)).status).toBe(200);
+
+  await env.DB.prepare(
+    "UPDATE tenant_branding SET config=json_remove(config,'$.loginAnimationRepeat') WHERE tenant_id=?",
+  )
+    .bind(t.id)
+    .run();
+  expect((await read(instance, t.id)).data.loginAnimationRepeat).toBe(true);
+});
 it("blocks cross tenant, inactive memberships, viewers writes and inactive tenants", async () => {
   const a = await tenant(),
     b = await tenant();
@@ -629,4 +643,22 @@ it("serves the same public branding through a legacy alias and stops serving ina
     `https://${alias}.savia.test/api/public/tenant-branding`,
   );
   expect((await inactive.json()) as any).toEqual({ data: null });
+});
+it("persists the replay preference and defaults older branding to repeating", async () => {
+  const t = await tenant(),
+    instance = app(member(t.id));
+  const initial = await read(instance, t.id);
+  expect(initial.data.loginAnimationRepeat).toBe(true);
+  const saved = await put(instance, t.id, {
+    ...initial.data,
+    loginAnimationRepeat: false,
+  });
+  expect(saved.status).toBe(200);
+  expect((await read(instance, t.id)).data.loginAnimationRepeat).toBe(false);
+  const publicResponse = await instance.request(
+    `https://${t.slug}.savia.test/api/public/tenant-branding`,
+  );
+  expect(((await publicResponse.json()) as any).data.loginAnimationRepeat).toBe(
+    false,
+  );
 });

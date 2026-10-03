@@ -7,7 +7,12 @@ export const myDayWidgetKinds = [
   "actions",
 ] as const;
 
-export const myDaySystemWidgetKinds = ["agenda", "quick_task", "mail"] as const;
+export const myDaySystemWidgetKinds = [
+  "agenda",
+  "quick_task",
+  "mail",
+  "office_documents",
+] as const;
 
 export type MyDayWidgetKind = (typeof myDayWidgetKinds)[number];
 export type MyDaySystemWidgetKind = (typeof myDaySystemWidgetKinds)[number];
@@ -163,7 +168,8 @@ export function isMyDaySystemWidget(
   return (
     widget.kind === "agenda" ||
     widget.kind === "quick_task" ||
-    widget.kind === "mail"
+    widget.kind === "mail" ||
+    widget.kind === "office_documents"
   );
 }
 

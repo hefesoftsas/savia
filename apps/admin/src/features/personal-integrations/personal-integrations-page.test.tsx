@@ -10,7 +10,10 @@ import {
   type PersonalNangoConnectFactory,
 } from "./personal-integrations-page";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const providers = [
   {
@@ -63,6 +66,12 @@ const providers = [
   {
     id: "linear",
     displayName: "Linear",
+    availability: "enabled",
+    capabilities: ["issues:read"],
+  },
+  {
+    id: "github",
+    displayName: "GitHub",
     availability: "enabled",
     capabilities: ["issues:read"],
   },
@@ -152,6 +161,36 @@ function createServices() {
 }
 
 describe("PersonalIntegrationsPage", () => {
+  it("opens the applications tab from its URL and keeps other integration tabs available", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [] }),
+    );
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/integrations?tab=apps"]}>
+        <PersonalIntegrationsPage services={createServices()} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("tab", { name: "Aplicaciones" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      await screen.findByText(
+        "Todavía no hay una versión de Companion publicada para descargar.",
+      ),
+    ).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "Cuentas y Conexiones" }));
+    expect(
+      await screen.findByRole("heading", { name: "Google" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "Aplicaciones" }));
+    expect(
+      await screen.findByRole("heading", { name: "Savia Companion" }),
+    ).toBeVisible();
+  });
+
   it("combines personal accounts and private CRM connections in one integrations screen", async () => {
     const services = createServices();
     const user = userEvent.setup();
@@ -218,14 +257,16 @@ describe("PersonalIntegrationsPage", () => {
     }
   });
 
-  it("shows unavailable Jira and Linear without deployment instructions", async () => {
+  it("shows unavailable issue providers without deployment instructions", async () => {
     const services = createServices();
     vi.mocked(services.personalIntegrations.listProviders).mockResolvedValue(
       providers.map((provider) => ({
         ...provider,
         capabilities: [...provider.capabilities],
         availability:
-          provider.id === "jira" || provider.id === "linear"
+          provider.id === "jira" ||
+          provider.id === "linear" ||
+          provider.id === "github"
             ? "unavailable"
             : "enabled",
       })),
@@ -247,10 +288,15 @@ describe("PersonalIntegrationsPage", () => {
         "Un administrador debe habilitar Linear en Nango. Después podrás conectar tu cuenta aquí.",
       ),
     ).toBeVisible();
-    expect(screen.getAllByText("Requiere configuración")).toHaveLength(2);
+    expect(
+      screen.getByText(
+        "Un administrador debe habilitar GitHub en Nango. Después podrás conectar tu cuenta aquí.",
+      ),
+    ).toBeVisible();
+    expect(screen.getAllByText("Requiere configuración")).toHaveLength(3);
     expect(
       screen.getAllByRole("button", { name: "No disponible" }),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(screen.queryByText("Ver configuración")).not.toBeInTheDocument();
   });
 
@@ -295,7 +341,7 @@ describe("PersonalIntegrationsPage", () => {
     expect(screen.getByRole("button", { name: "Desconectar" })).toBeVisible();
   });
 
-  it("keeps all eight integrations visible and offers retry when their status cannot load", async () => {
+  it("keeps all nine integrations visible and offers retry when their status cannot load", async () => {
     const user = userEvent.setup();
     const services = createServices();
     const missingRoute = new ApiClientError(404, "NOT_FOUND", "Not found");
@@ -322,7 +368,7 @@ describe("PersonalIntegrationsPage", () => {
     }
     expect(
       screen.getAllByRole("button", { name: "No disponible" }),
-    ).toHaveLength(8);
+    ).toHaveLength(9);
     expect(
       screen.queryByText("No hay integraciones disponibles."),
     ).not.toBeInTheDocument();

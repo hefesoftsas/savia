@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8" /><title>Pages search memory</title
+><style>
+  body {
+    font: 16px system-ui;
+    max-width: 1000px;
+    margin: 40px;
+  }
+  button {
+    padding: 12px;
+    margin: 4px;
+  }
+  pre {
+    white-space: pre-wrap;
+  }
+  progress {
+    width: 100%;
+  }
+</style>
+<h1>Pages search · memory probe</h1>
+<p>
+  Application memory including dedicated Worker. Textual indexes, no embeddings.
+</p>
+<button data-mode="flex" data-count="1000">FlexSearch 1,000</button
+><button data-mode="orama" data-count="1000">Orama 1,000</button
+><button data-mode="flex" data-count="10000">FlexSearch 10,000</button
+><button data-mode="orama" data-count="10000">Orama 10,000</button
+><button data-mode="reopen" data-count="10000">Reopen FlexSearch 10,000</button
+><progress id="progress" value="0" max="100"></progress>
+<pre id="log">Ready</pre>
+<script type="module" src="/memory.js"></script>

@@ -103,12 +103,44 @@ export function tenantHostGuard(
 ): MiddlewareHandler {
   const canonical = normalizeCanonicalHost(canonicalHost);
   return async (context, next) => {
-    const slug = tenantSlugFromApiRequest(context.req.raw, canonical);
+    const request = context.req.raw;
+    const headerSlug = normalizeTenantSlug(
+      request.headers.get(TENANT_SLUG_HEADER),
+    );
+    const hostSlug = parseTenantSlugFromHostname(
+      new URL(context.req.url).hostname,
+      canonical,
+    );
+    if (headerSlug && hostSlug && headerSlug !== hostSlug) {
+      const actor = actorFromContext(context);
+      const recordingScopedOAuth =
+        actor.credential?.kind === "oauth" &&
+        actor.credential.scopes.some((scope) =>
+          scope.startsWith("recordings:"),
+        );
+      if (recordingScopedOAuth) return mismatchResponse();
+    }
+    const slug = headerSlug ?? hostSlug;
     if (!slug) {
       await next();
       return;
     }
     const actor = actorFromContext(context);
+    if (actor.credential?.kind === "personal-api-key") {
+      const hostSlug = parseTenantSlugFromHostname(
+        new URL(context.req.url).hostname,
+        canonical,
+      );
+      for (const hint of new Set(
+        [slug, hostSlug].filter((value): value is string => Boolean(value)),
+      )) {
+        const tenant = await resolveTenantSlug(db, hint);
+        if (!tenant || tenant.id !== actor.credential.tenantId)
+          return mismatchResponse();
+      }
+      await next();
+      return;
+    }
     if (actor.globalRoles.includes("platform_admin")) {
       await next();
       return;

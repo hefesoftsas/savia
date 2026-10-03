@@ -1,18 +1,96 @@
-# Direct Office editing
+# Office documents and editing
 
-Owner: Savia platform team. Reviewed: 2026-09-19.
+Owner: Savia platform team. Reviewed: 2026-10-02.
 
 Savia opens DOCX, XLSX and PPTX attachments in a separate `/office/` tab using
 ZetaOffice (LibreOffice compiled to WebAssembly). The document engine runs in the
-browser; authenticated Savia endpoints keep file bytes in R2 and revision metadata
-in D1. No editor service, third-party document upload, or browser database is used.
+browser; authenticated Savia endpoints keep Savia-hosted file bytes in R2 and
+revision metadata in D1. Connected Google Drive and OneDrive documents are stored
+by their provider; Savia persists private document references in D1. No browser
+database is used for either workflow.
 
 ## User workflow
 
+Open **Office suite** from the sidebar to create a Document (DOCX), Spreadsheet
+(XLSX), or Presentation (PPTX). Choose a type and name inline, then select
+**Create and save**. The saved-document list opens each file in a separate editor
+tab. Use **Delete document** beside a Savia file and confirm to permanently
+remove it and all its versions. Deletion checks the displayed version so a
+concurrent edit cannot be silently discarded; reload and review before retrying. Files are private to their owner and active workspace; document bytes stay
+in R2 and metadata and immutable revision history stay in D1. Returning to the
+list refreshes its current versions. There is no browser document persistence.
+
+The editor shows a discreet ZetaOffice attribution in its loading screen and
+footer. Product navigation and creation controls use **Office suite**.
+The editor uses the native ZetaOffice interface, including its menus, toolbars,
+rulers and sidebar. Savia provides the document header, save action and revision
+history around the native editor.
+
+## Connected Google Drive and OneDrive documents
+
+In **Office suite**, choose the document type, name and where it should be
+created. **Savia** uses the native WASM editor. Google Drive, OneDrive Personal
+and OneDrive for Business appear only when the user's own integration is
+configured and connected. Connect or reconnect accounts through **My integrations**.
+
+Google Drive creates a native Google document, spreadsheet or presentation.
+OneDrive receives a valid blank DOCX, XLSX or PPTX file under the requested name.
+A filename conflict is rejected rather than overwriting an existing file.
+Creation uses the existing
+server-side Nango connection belonging to the caller. OAuth tokens and Nango
+connection identifiers are never exposed to the frontend.
+The connection is checked again immediately before creation; changing the
+connected account cancels that attempt before sending a provider request.
+OneDrive file identifiers are retained as opaque values, while editor links
+are validated separately.
+
+After the provider creates the file and Savia saves its reference, the provider's
+editor opens in a separate tab. If the browser blocks the new tab, use the saved
+link in Savia. The saved-document list identifies the provider and retains the
+link after a refresh. File contents and future edits remain with the provider;
+these entries do not have Savia R2 revisions or automatic synchronization.
+Disconnecting an integration stops new creation but preserves existing references.
+Provider permissions still govern who can open each external document.
+The saved list shows the storage provider's icon and name beside each file.
+Use the storage filters to narrow the list to Savia or connected Google Drive
+and OneDrive accounts. Cloud filters and provider icons appear only for active
+connections; disconnecting the selected provider resets the filter to all storage.
+Existing references remain visible by name after disconnection. Use **Remove
+reference** and confirm to remove a saved link from Savia. The confirmation
+explains that the file remains in Google Drive or OneDrive.
+
+Creation requests use a stable request ID for the same attempt. A retry does not
+silently repeat an uncertain external creation. Check the provider's files if a
+request reports an unresolved outcome; creating again with a new attempt can
+produce another document. Creating a reference does not publish the file or
+create an anonymous sharing permission.
+
+The implementation follows Google's [files.create API](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/create)
+and Microsoft's [driveItem content upload API](https://learn.microsoft.com/en-us/graph/api/driveitem-put-content?view=graph-rest-1.0).
+Google OAuth requires a writable Drive scope such as `drive.file`; Microsoft
+requires a delegated permission such as `Files.ReadWrite`. An existing connection
+with insufficient consent may need to be reauthorized.
+
+## Tenant availability
+
+In **Tenants → Edit**, platform administrators can allow or block the Office
+suite for an individual tenant. In **Service credentials → Office suite**, a
+tenant administrator can enable or disable it for their own workspace. Platform
+administrators can manage both settings there by selecting a tenant.
+
+Availability requires both **Allowed by platform** and **Enabled for tenant**.
+A tenant administrator cannot override a platform restriction. Both settings
+are persisted in D1 and default to enabled when no policy has been saved.
+The same availability policy applies to connected document creation and listings.
+Disabling removes creation and editing controls and rejects direct Office API
+access, including existing editor links. Stored documents and revisions are
+preserved and become accessible again after re-enabling. Ordinary attachment
+uploads and downloads continue to use their existing permissions.
+
 In a saved record's **Documents** tab, choose **Create file**, select Document
 (DOCX), Spreadsheet (XLSX), or Presentation (PPTX), and enter a name. **Create and
-attach** uploads a blank file through the existing attachment endpoint. After
-the upload succeeds, **Open in ZetaOffice** opens that attachment for editing.
+attach** uploads a blank file through the existing attachment endpoint. Creation expands inline instead of opening a modal. After
+the upload succeeds, **Open in the office suite** opens that attachment for editing.
 Edits saved in the editor create revisions of the same attachment.
 
 Attachment fields also offer **Create file** for formats allowed by their
@@ -50,6 +128,12 @@ build. Vite serves these files only from the allowlisted runtime path. The Offic
 page is a separate build entry; it does not load the admin bootstrap or register a
 service worker. `/office/` is excluded from the PWA navigation and runtime caches.
 
+For an isolated admin preview against an API on another local port, set
+`SAVIA_DEV_API_URL` when starting Vite, for example
+`SAVIA_DEV_API_URL=http://127.0.0.1:8798 pnpm --filter @savia/admin exec vite --port 5183`.
+The default proxy target remains port 8787. Start the matching authentication
+worker and configure its public origin and callback for that admin origin.
+
 During development, reload the editor tab after changing its source; the page-global
 WASM engine cannot be recreated by React hot reload.
 
@@ -60,9 +144,15 @@ These isolation headers do not apply to the normal admin UI.
 ## Deployment
 
 Apply the normal application D1 migrations, including
-`packages/db/migrations/0055_office_revisions.sql`, before deploying the API. The
+`packages/db/migrations/0055_office_revisions.sql` and
+`packages/db/migrations/0018_office_documents.sql`,
+`packages/db/migrations/0019_office_settings.sql` and
+`packages/db/migrations/0020_connected_office_documents.sql`, before deploying the API. The
 standalone Studio harness uses `packages/studio-server/migrations/0016_office_revisions.sql`.
 Deploy the API and multi-entry admin build through the existing deployment workflow.
+The preview deployment prepares and verifies the pinned runtime, packages it with
+Brotli, and uploads its five immutable objects to `savia-documents-preview` before
+deploying the gateway. The upload step rejects other buckets and environments.
 The rendered admin gateway configuration binds `OFFICE_RUNTIME` to the selected
 environment's documents bucket and routes `/office` and `/office/*` through its
 worker. Preview and production must use their own configured buckets.

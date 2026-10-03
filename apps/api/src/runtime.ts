@@ -1,3 +1,4 @@
+import type { PagesSearchBindings } from "./pages/cloudflare-search";
 import { runJiraPrivacyMaintenance } from "./personal-integrations/jira-privacy-runtime";
 import { runtimePluginRegistryForTenant } from "./studio/plugin-registry-config";
 import { createCollectionGateway } from "./studio/collection-gateway";
@@ -26,6 +27,8 @@ import {
 } from "./studio/sql-bridge";
 import type { R2SigningCredentials } from "./lib/r2-presign";
 import { createPersonalIntegrationNangoClient } from "./personal-integrations/nango";
+import { createBookingCalendarAdapter } from "./bookings/calendar";
+import { runBookingJobs } from "./bookings/jobs";
 import { createPersonalIntegrationProviderRegistry } from "./personal-integrations/providers";
 import { publicAuthUrls } from "./public-origin";
 import {
@@ -108,6 +111,7 @@ export function personalIntegrationRoutesFromEnvironment(
 ): PersonalIntegrationRouteDependencies {
   const mcpSharedSecret = environment.SAVIA_MCP_SHARED_SECRET?.trim();
   return {
+    calendarSecret: mcpSharedSecret,
     providers: createPersonalIntegrationProviderRegistry(
       nangoConfigurationFromEnvironment(environment),
     ),
@@ -266,14 +270,15 @@ export type RuntimeOverrides = {
   publicForms?: import("./public-forms/routes").PublicFormsOptions;
   signing?: R2SigningCredentials;
   collectionGatewayFactory?: typeof import("./studio/collection-gateway").createCollectionGateway;
+  pagesSearchSchedule?: PagesSearchBindings["schedule"];
 };
 export function createApiRuntime(
   environment: RuntimeEnvironment,
   overrides: RuntimeOverrides = {},
 ) {
   return {
-    fetch(request: Request) {
-      return runtime.fetch(request, environment, overrides);
+    fetch(request: Request, context?: ExecutionContext) {
+      return runtime.fetch(request, environment, overrides, context);
     },
     scheduled() {
       return runtime.scheduled(
@@ -289,6 +294,7 @@ const runtime = {
     request: Request,
     environment: RuntimeEnvironment,
     overrides: RuntimeOverrides = {},
+    context?: ExecutionContext,
   ): Promise<Response> {
     const mcp = await remoteMcpResponse(request, environment);
     if (mcp) return mcp;
@@ -297,6 +303,8 @@ const runtime = {
       environment.SAVIA_INTERNAL_BRIDGE_KEY,
       environment.SAVIA_MCP_SHARED_SECRET,
     );
+    const pagesSearchSchedule =
+      overrides.pagesSearchSchedule ?? context?.waitUntil.bind(context);
     const response = await createApp(
       environment.DB,
       environment.DOCUMENTS,
@@ -368,6 +376,16 @@ const runtime = {
         sttModel: environment.COMPANION_STT_MODEL,
         configuration: assistant.configuration,
       },
+      {
+        AI: (environment as RuntimeEnvironment & PagesSearchBindings).AI,
+        PAGES_SEARCH_RATE_LIMITER: (
+          environment as RuntimeEnvironment & PagesSearchBindings
+        ).PAGES_SEARCH_RATE_LIMITER,
+        PAGES_VECTORIZE: (
+          environment as RuntimeEnvironment & PagesSearchBindings
+        ).PAGES_VECTORIZE,
+        ...(pagesSearchSchedule ? { schedule: pagesSearchSchedule } : {}),
+      },
     ).fetch(request, environment);
     return response;
   },
@@ -377,8 +395,58 @@ const runtime = {
     overrides: RuntimeOverrides = {},
   ): Promise<void> {
     const realtime = createRealtimeHubClient(environment.REALTIME_HUB);
+    const runBookings = async () => {
+      const bridgeKey = await identityAdministrationBridgeKey(
+        environment.SAVIA_INTERNAL_BRIDGE_KEY,
+        environment.SAVIA_MCP_SHARED_SECRET,
+      );
+      const timedFetch: typeof fetch = (input, init) =>
+        fetch(input, { ...init, signal: AbortSignal.timeout(15000) });
+      return runBookingJobs(environment.DB, {
+        publicOrigin:
+          environment.SAVIA_PUBLIC_ORIGIN ?? "http://localhost:5173",
+        calendar: createBookingCalendarAdapter(
+          environment.DB,
+          createPersonalIntegrationNangoClient(
+            nangoConfigurationFromEnvironment(environment),
+            timedFetch,
+          ),
+        ),
+        ...(environment.AUTH && bridgeKey
+          ? {
+              sendMail: async (mail: {
+                tenantId: number;
+                to: string;
+                subject: string;
+                text: string;
+              }) => {
+                const response = await environment.AUTH!.fetch(
+                  new Request(
+                    `https://savia-auth.internal/_internal/tenant-email/${mail.tenantId}/send`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "x-savia-bridge-key": bridgeKey,
+                        "content-type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        to: mail.to,
+                        subject: mail.subject,
+                        text: mail.text,
+                      }),
+                      signal: AbortSignal.timeout(15000),
+                    },
+                  ),
+                );
+                if (!response.ok) throw new Error("Booking email unavailable");
+              },
+            }
+          : {}),
+      });
+    };
     if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
       const results = await Promise.allSettled([
+        runBookings(),
         runScheduledWorkflows(
           environment.DB,
           studioIntegrationKeyFromEnvironment(environment),
@@ -405,6 +473,7 @@ const runtime = {
       return;
     }
     const results = await Promise.allSettled([
+      runBookings(),
       runScheduledWorkflows(
         environment.DB,
         studioIntegrationKeyFromEnvironment(environment),

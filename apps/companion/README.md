@@ -68,7 +68,7 @@ or settings.
    For the native local stack, run `COMPANION_ENABLED=true pnpm dev` from the
    monorepo root; restart an already-running stack to apply the flag. The local
    launcher also reads these settings from `infra/secrets/assistant-api.dev.env`.
-3. Use a Savia OAuth access token for a **platform administrator**, scoped for
+3. Create a [personal API key](../../docs/guides/personal-api-keys.md) in **My account → API keys**, with recording read and upload permissions. Alternatively use a Savia OAuth access token for an **active tenant member or platform administrator**, scoped for
    `savia.api.read` and `savia.api.write`, obtained through the existing supported
    Savia OAuth flow. Paste it into the validation app's password field; it remains
    in memory. Built-in desktop OAuth/keychain integration is a later increment.
@@ -81,7 +81,7 @@ or settings.
 6. Stop capture, confirm permission, then choose Upload to Savia. Each selected
    source is uploaded separately as private compressed audio; upload itself does
    not call OpenRouter. Use Open in Savia to open the recording library.
-7. Sign in to the main Savia app with the same platform administrator account.
+7. Sign in to the main Savia app with the same user account.
    Open **Recordings** in the Work menu, or `/#/companion-recordings`. Select a
    recording to listen or download its Ogg/Opus file. If your browser cannot
    decode Ogg Opus, use the download link and a compatible player/browser.
@@ -90,8 +90,8 @@ or settings.
    notes: summary, decisions, actions and open questions. Expand Transcript to
    review the source text. No tasks, emails or business records are created.
 
-The backend fails closed by default and restricts this prototype to platform
-administrators. There is no general tenant cost/quota rollout yet. STT provider
+The backend fails closed by default and requires an active tenant membership
+or platform administrator access. There is no general tenant cost/quota rollout yet. STT provider
 routing/retention must be reviewed separately; chat routing preferences must not
 be assumed to apply to audio. A controlled Spanish sample passed real OpenRouter
 STT and summary generation; see the [live-flow report](../../docs/companion/live-flow-smoke.md).
@@ -152,7 +152,7 @@ that condition is reported as a capture error. Use a 44.1/48 kHz device for the
 full 60-second validation sample.
 
 Saving is explicit and requires the existing R2 binding and an authenticated
-platform administrator. Savia validates Ogg page checksums, mono headers, packet
+active tenant member or platform administrator. Savia validates Ogg page checksums, mono headers, packet
 duration, final granule, the 60-second limit and the 512 KiB encoded limit. R2
 stores the audio and authoritative metadata under a hashed principal prefix;
 list/download/delete endpoints enforce that same owner and the normal API scopes.

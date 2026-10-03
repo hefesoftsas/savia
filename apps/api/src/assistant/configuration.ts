@@ -492,6 +492,34 @@ export class AssistantConfigurationRepository {
     principalId: string,
   ): Promise<EffectiveAssistantConfiguration> {
     const agencyId = await this.activeAgencyFor(principalId);
+    return this.configurationForTenant(agencyId);
+  }
+
+  async effectiveConfigurationForTenant(
+    principalId: string,
+    tenantId: number,
+  ): Promise<EffectiveAssistantConfiguration> {
+    const eligible = await this.database
+      .prepare(
+        `SELECT 1 AS eligible FROM identity_principal p
+      INNER JOIN identity_tenant_membership m ON m.principal_id=p.id
+      INNER JOIN tenants t ON t.id=m.tenant_id
+      WHERE p.id=? AND p.is_active=1 AND m.is_active=1 AND t.is_active=1 AND t.id=?
+      AND (t.id<>0 OR EXISTS (SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin'))`,
+      )
+      .bind(principalId, tenantId)
+      .first();
+    if (!eligible)
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "An active tenant membership is required",
+      );
+    return this.configurationForTenant(tenantId === 0 ? undefined : tenantId);
+  }
+
+  private async configurationForTenant(
+    agencyId?: number,
+  ): Promise<EffectiveAssistantConfiguration> {
     const rows = await this.database
       .prepare(
         `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by

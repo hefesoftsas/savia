@@ -50,6 +50,10 @@ it("switches branding labels through ES/EN/PT without translating or losing unsa
     </StoreContextProvider>,
   );
   const input = await screen.findByLabelText("Display name");
+  expect(screen.getByLabelText("Repeat animation")).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "Find free animations on LottieFiles" }),
+  ).toHaveAttribute("href", "https://lottiefiles.com/free-animations/dog");
   fireEvent.change(input, { target: { value: "Unsaved business name" } });
   fireEvent.click(screen.getByText("ES"));
   await waitFor(() =>
@@ -57,12 +61,19 @@ it("switches branding labels through ES/EN/PT without translating or losing unsa
       "Unsaved business name",
     ),
   );
+  expect(screen.getByLabelText("Repetir animación")).toBeTruthy();
   fireEvent.click(screen.getByText("PT"));
   await waitFor(() =>
     expect(screen.getByLabelText("Nome de exibição")).toHaveValue(
       "Unsaved business name",
     ),
   );
+  expect(screen.getByLabelText("Repetir animação")).toBeTruthy();
+  expect(
+    screen.getByRole("link", {
+      name: "Buscar animações gratuitas no LottieFiles",
+    }),
+  ).toBeTruthy();
   expect(
     screen.getByRole("button", { name: "Salvar alterações" }),
   ).toBeTruthy();

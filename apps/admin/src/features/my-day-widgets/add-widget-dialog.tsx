@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
+  Files,
   LoaderCircle,
   PlusCircle,
   TableProperties,
 } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
+import { useMessages } from "@/i18n/core";
 import {
   createMyDayWidgetId,
   type MyDayWidget,
@@ -43,6 +45,7 @@ import type {
   WidgetCollectionSchema,
   WidgetTenant,
 } from "./types";
+import { officeDocumentsWidgetMessages } from "./office-documents-widget-messages";
 
 const AUTO = "__auto";
 
@@ -65,6 +68,7 @@ export function AddWidgetDialog({
   existingKinds?: string[];
   mailAvailable?: boolean;
 }) {
+  const t = useMessages(officeDocumentsWidgetMessages);
   const [source, setSource] = useState<Source>("collection");
   const [tenants, setTenants] = useState<WidgetTenant[]>([]);
   const [tenantApiBasePath, setTenantApiBasePath] = useState("");
@@ -85,6 +89,7 @@ export function AddWidgetDialog({
   const hasMail = existingKinds.includes("mail");
   const hasAgenda = existingKinds.includes("agenda");
   const hasQuickTask = existingKinds.includes("quick_task");
+  const hasOfficeDocuments = existingKinds.includes("office_documents");
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +97,8 @@ export function AddWidgetDialog({
     setSource(hasAgenda && hasQuickTask ? "collection" : "collection");
     if (!hasAgenda) setSystemKind("agenda");
     else if (!hasQuickTask) setSystemKind("quick_task");
-  }, [open, hasAgenda, hasQuickTask]);
+    else if (!hasOfficeDocuments) setSystemKind("office_documents");
+  }, [open, hasAgenda, hasQuickTask, hasOfficeDocuments]);
 
   useEffect(() => {
     if (!open || !apiClient || source !== "collection") return;
@@ -213,7 +219,8 @@ export function AddWidgetDialog({
       if (
         (systemKind === "agenda" && hasAgenda) ||
         (systemKind === "quick_task" && hasQuickTask) ||
-        (systemKind === "mail" && (hasMail || !mailAvailable))
+        (systemKind === "mail" && (hasMail || !mailAvailable)) ||
+        (systemKind === "office_documents" && hasOfficeDocuments)
       ) {
         setFeedback("Ese widget ya está en tu tablero.");
         return;
@@ -284,7 +291,8 @@ export function AddWidgetDialog({
   const canSaveSystem =
     (systemKind === "agenda" && !hasAgenda) ||
     (systemKind === "quick_task" && !hasQuickTask) ||
-    (systemKind === "mail" && !hasMail && mailAvailable);
+    (systemKind === "mail" && !hasMail && mailAvailable) ||
+    (systemKind === "office_documents" && !hasOfficeDocuments);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -353,14 +361,26 @@ export function AddWidgetDialog({
                       {hasQuickTask ? " (ya agregado)" : ""}
                     </span>
                   </SelectItem>
+                  <SelectItem
+                    value="office_documents"
+                    disabled={hasOfficeDocuments}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Files className="size-4" aria-hidden="true" />
+                      {t("Office documents widget")}
+                    </span>
+                    {hasOfficeDocuments ? ` (${t("Already added")})` : ""}
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-sm leading-6 text-muted-foreground">
-                {systemKind === "mail"
-                  ? "Combina los correos de Gmail y Outlook y redacta con contexto de tus colecciones."
-                  : systemKind === "agenda"
-                    ? "Muestra tus eventos de Google Calendar y Outlook para hoy, con enlaces directos."
-                    : "Formulario compacto para bloquear tiempo en tus calendarios conectados."}
+                {systemKind === "office_documents"
+                  ? t("Shows recent documents from Savia and connected drives.")
+                  : systemKind === "mail"
+                    ? "Combina los correos de Gmail y Outlook y redacta con contexto de tus colecciones."
+                    : systemKind === "agenda"
+                      ? "Muestra tus eventos de Google Calendar y Outlook para hoy, con enlaces directos."
+                      : "Formulario compacto para bloquear tiempo en tus calendarios conectados."}
               </p>
             </div>
           ) : (

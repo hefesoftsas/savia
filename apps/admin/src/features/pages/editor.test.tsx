@@ -56,6 +56,51 @@ it("pastes a connected Linear issue as a live preview without storing fetched me
   await waitFor(() => expect(changed).toHaveBeenCalled());
   expect(JSON.stringify(changed.mock.calls)).not.toContain("Live issue title");
 });
+it("pastes a connected GitHub pull request as a live preview", async () => {
+  const changed = vi.fn();
+  const previewApi = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => null },
+    fetcher: async () =>
+      Response.json({
+        data: {
+          title: "Support GitHub issues",
+          identifier: "acme/savia#42",
+          repository: "acme/savia",
+          kind: "pull_request",
+          status: "merged",
+          assignee: "Alex Rivera",
+        },
+      }),
+  });
+  render(
+    <PageEditor
+      pageId="one"
+      api={previewApi}
+      pages={new PagesClient(previewApi)}
+      readOnly={false}
+      initialValue={[{ type: "p", children: [{ text: "" }] }]}
+      issueProviders={["github"]}
+      onChange={changed}
+    />,
+  );
+  fireEvent.paste(screen.getByRole("textbox", { name: "Page content" }), {
+    clipboardData: {
+      getData: () => "https://github.com/acme/savia/pull/42",
+    },
+  });
+  expect(
+    await screen.findByRole("link", { name: "Support GitHub issues" }),
+  ).toHaveAttribute("href", "https://github.com/acme/savia/pull/42");
+  expect(screen.getByText("acme/savia")).toBeInTheDocument();
+  expect(screen.getByText("#42")).toBeInTheDocument();
+  expect(screen.getByText("merged")).toBeInTheDocument();
+  expect(screen.getByText("Alex Rivera")).toBeInTheDocument();
+  await waitFor(() => expect(changed).toHaveBeenCalled());
+  expect(JSON.stringify(changed.mock.calls)).not.toContain(
+    "Support GitHub issues",
+  );
+});
 it.each([
   [
     "https://aihefesoft.atlassian.net/browse/KAN-2",
@@ -318,6 +363,65 @@ it("anchors the first slash menu to its block when the DOM range reports zero bo
   }
 });
 
+it.each([
+  {
+    contentTop: 100,
+    selectionTop: 108,
+    selectionBottom: 128,
+    expectedTop: -36,
+  },
+  { contentTop: 10, selectionTop: 12, selectionBottom: 32, expectedTop: 30 },
+  { contentTop: 10, selectionTop: 12, selectionBottom: 1000, expectedTop: 714 },
+])(
+  "keeps formatting tools visible for selection bounds $selectionTop–$selectionBottom",
+  async ({ contentTop, selectionTop, selectionBottom, expectedTop }) => {
+    const { container } = render(
+      <PageEditor
+        pageId="one"
+        api={api}
+        pages={new PagesClient(api)}
+        readOnly={false}
+        initialValue={[{ type: "p", children: [{ text: "Select this text" }] }]}
+        onChange={() => {}}
+      />,
+    );
+    const content = container.querySelector<HTMLElement>(
+      ".page-editor-content",
+    )!;
+    vi.spyOn(content.parentElement!, "getBoundingClientRect").mockReturnValue({
+      left: 100,
+      top: contentTop,
+    } as DOMRect);
+    act(() => screen.getByRole("textbox", { name: "Page content" }).focus());
+    const text = screen.getByText("Select this text").firstChild!;
+    Object.defineProperty(text.parentElement!, "isContentEditable", {
+      value: true,
+      configurable: true,
+    });
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, 6);
+    Object.defineProperty(range, "getBoundingClientRect", {
+      value: () => ({
+        left: 100,
+        width: 60,
+        top: selectionTop,
+        bottom: selectionBottom,
+      }),
+    });
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent.mouseMove(text.parentElement!);
+    fireEvent(document, new Event("selectionchange"));
+    const toolbar = await screen.findByRole("toolbar", { name: "Formatting" });
+    expect(toolbar.style.top).toBe(`${expectedTop}px`);
+    expect(
+      screen.queryByRole("toolbar", { name: "Block actions" }),
+    ).not.toBeInTheDocument();
+  },
+);
+
 it("preserves the selected text range when applying compact formatting tools", async () => {
   const changed = vi.fn();
   const { container } = render(
@@ -361,7 +465,7 @@ it("preserves the selected text range when applying compact formatting tools", a
 
 it("filters insert commands and exposes issue commands only for connected providers", async () => {
   const user = userEvent.setup();
-  const renderEditor = (issueProviders?: Array<"jira" | "linear">) =>
+  const renderEditor = (issueProviders?: Array<"jira" | "linear" | "github">) =>
     render(
       <PageEditor
         pageId="one"
@@ -373,7 +477,7 @@ it("filters insert commands and exposes issue commands only for connected provid
         issueProviders={issueProviders}
       />,
     );
-  const { unmount } = renderEditor();
+  const firstRender = renderEditor();
   const editable = screen.getByRole("textbox", { name: "Page content" });
   await user.click(editable);
   fireEvent.keyDown(editable, { key: "/" });
@@ -391,9 +495,9 @@ it("filters insert commands and exposes issue commands only for connected provid
   expect(
     screen.queryByRole("option", { name: "Collection" }),
   ).not.toBeInTheDocument();
-  unmount();
+  firstRender.unmount();
 
-  renderEditor(["linear"]);
+  const linearRender = renderEditor(["linear"]);
   fireEvent.keyDown(screen.getByRole("textbox", { name: "Page content" }), {
     key: "/",
   });
@@ -403,6 +507,15 @@ it("filters insert commands and exposes issue commands only for connected provid
   expect(
     screen.queryByRole("option", { name: "Jira issue" }),
   ).not.toBeInTheDocument();
+  linearRender.unmount();
+
+  renderEditor(["github"]);
+  fireEvent.keyDown(screen.getByRole("textbox", { name: "Page content" }), {
+    key: "/",
+  });
+  expect(
+    await screen.findByRole("option", { name: "GitHub issue or pull request" }),
+  ).toBeInTheDocument();
 });
 
 it("supports keyboard navigation and selection in the command picker", async () => {
@@ -460,6 +573,30 @@ it("renders disconnected issue elements as original links without preview reques
   expect(screen.queryByText(/Preview unavailable/)).not.toBeInTheDocument();
 });
 
+it("keeps a disconnected GitHub issue as a public link without requesting a preview", () => {
+  render(
+    <PageEditor
+      pageId="one"
+      api={api}
+      pages={new PagesClient(api)}
+      readOnly
+      initialValue={[
+        {
+          type: "issue",
+          url: "https://github.com/acme/savia/issues/42",
+          children: [{ text: "" }],
+        },
+      ]}
+      onChange={() => {}}
+    />,
+  );
+  expect(screen.getByRole("link", { name: "acme/savia#42" })).toHaveAttribute(
+    "href",
+    "https://github.com/acme/savia/issues/42",
+  );
+  expect(screen.queryByText(/Preview unavailable/)).not.toBeInTheDocument();
+});
+
 it("keeps issue insertion scoped to the connected provider", async () => {
   const user = userEvent.setup();
   const changed = vi.fn();
@@ -488,7 +625,7 @@ it("keeps issue insertion scoped to the connected provider", async () => {
   );
   await user.click(screen.getByRole("button", { name: "Insert" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Enter a valid Jira Cloud or Linear HTTPS link.",
+    "Enter a valid Jira Cloud, Linear, or GitHub HTTPS link.",
   );
   expect(changed).not.toHaveBeenCalled();
   await user.keyboard("{Escape}");

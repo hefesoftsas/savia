@@ -1,3 +1,5 @@
+import { PersonalApiKeys } from "./personal-api-keys";
+import { authorizePersonalApiKeyRequest } from "./personal-api-key-policy";
 import {
   ensureBootstrapAdministrator,
   loadActor,
@@ -77,14 +79,17 @@ export type OAuthClientSummary = {
   clientAuthentication: OAuthClientAuthentication;
   clientId: string;
   clientName: string;
+  grantTypes: ("authorization_code" | "refresh_token")[];
   redirectUris: string[];
   scopes: string[];
   trusted: boolean;
 };
 
 export type OAuthClientCreateInput = {
+  applicationType?: "native" | "web";
   clientAuthentication: OAuthClientAuthentication;
   clientName: string;
+  grantTypes?: ("authorization_code" | "refresh_token")[];
   redirectUris: string[];
   scopes: string[];
   trusted: boolean;
@@ -93,7 +98,12 @@ export type OAuthClientCreateInput = {
 export type OAuthClientUpdateInput = Partial<
   Pick<
     OAuthClientCreateInput,
-    "clientName" | "redirectUris" | "scopes" | "trusted"
+    | "applicationType"
+    | "clientName"
+    | "grantTypes"
+    | "redirectUris"
+    | "scopes"
+    | "trusted"
   >
 >;
 
@@ -190,11 +200,22 @@ async function serviceJson<T>(
   service: AuthService,
   path: string,
   init: RequestInit = {},
+  knownConflict?: { code: string; message: string },
 ): Promise<{ response: Response; body: T }> {
   const response = await service.fetch(
     new Request(`https://savia-auth.internal${path}`, init),
   );
   if (!response.ok) {
+    if (knownConflict && response.status === 409) {
+      const body = (await response.json().catch(() => undefined)) as
+        { error?: { code?: unknown } } | undefined;
+      if (body?.error?.code === knownConflict.code) {
+        throw new AuthenticationError(
+          "IDENTITY_EMAIL_CONFLICT",
+          knownConflict.message,
+        );
+      }
+    }
     throw new AuthenticationError(
       "AUTHENTICATION_UNAVAILABLE",
       "Authentication service is unavailable",
@@ -265,10 +286,38 @@ async function actorForIdentity(
 export function betterAuthAuthenticator(
   service?: AuthService,
   oauthResource?: OAuthResourceAuthenticator,
+  personalKeys?: PersonalApiKeys,
 ): Authenticator {
-  if (!service && !oauthResource) return rejectingAuthenticator;
+  if (!service && !oauthResource && !personalKeys)
+    return rejectingAuthenticator;
   return {
+    async recordSuccessfulUse(actor) {
+      if (actor.credential?.kind === "personal-api-key")
+        await personalKeys?.touch(actor.credential.keyId);
+    },
     async authenticate(request: Request, d1: D1Database): Promise<AppActor> {
+      const authorization = request.headers.get("authorization");
+      const personalSecret = authorization?.match(
+        /^Bearer (savia_pat_\S+)$/i,
+      )?.[1];
+      if (personalSecret) {
+        if (!personalKeys)
+          throw new AuthenticationError(
+            "AUTHENTICATION_REQUIRED",
+            "A valid Savia credential is required",
+          );
+        const { actor, key } = await personalKeys.authenticate(personalSecret);
+        authorizePersonalApiKeyRequest(request, key.scopes);
+        return {
+          ...actor,
+          credential: {
+            kind: "personal-api-key",
+            keyId: key.id,
+            tenantId: key.tenantId,
+            scopes: key.scopes,
+          },
+        };
+      }
       if (bearerJwt(request)) {
         if (!oauthResource) {
           throw new AuthenticationError(
@@ -278,8 +327,19 @@ export function betterAuthAuthenticator(
         }
         const identity = await oauthResource.authenticate(request);
         requireOAuthScope(identity, request);
-        return actorForIdentity(d1, identity);
+        const actor = await actorForIdentity(d1, identity);
+        return {
+          ...actor,
+          credential: { kind: "oauth", scopes: [...identity.scopes] },
+        };
       }
+      if (authorization)
+        throw new AuthenticationError(
+          "AUTHENTICATION_REQUIRED",
+          "A valid OAuth access token or Savia API key is required",
+        );
+      if (!service && !oauthResource)
+        return rejectingAuthenticator.authenticate(request, d1);
       if (!service) {
         throw new AuthenticationError(
           "AUTHENTICATION_UNAVAILABLE",
@@ -374,6 +434,11 @@ export function betterAuthUserAdministrator(
               ? {}
               : { tenantId: input.tenantId }),
           }),
+        },
+        {
+          code: "IDENTITY_EMAIL_CONFLICT",
+          message:
+            "An account with this email already exists. Use an existing user or a different email.",
         },
       );
       return managedUser(body.user);

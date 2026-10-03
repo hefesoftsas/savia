@@ -1,7 +1,14 @@
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
+import { bodyLimit } from "hono/body-limit";
 import type { Context } from "hono";
 import { actorFromContext } from "../auth/middleware";
 import { PagesError, PagesService } from "../pages/service";
+import {
+  CloudflarePagesSearch,
+  type PagesSearchBindings,
+} from "../pages/cloudflare-search";
+import type { AppActor } from "../auth/types";
+import { exportPages, importPages } from "../pages/transfer";
 
 const errorResponse = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
@@ -30,6 +37,7 @@ const pageSummarySchema = z.object({
   role: z.enum(["owner", "editor", "reader"]),
   isShared: z.boolean(),
   binding: bindingSchema.nullable(),
+  excerpt: z.string().max(360).optional(),
 });
 const pageDocumentSchema = pageSummarySchema.extend({
   content: z.array(z.record(z.string(), z.unknown())),
@@ -58,6 +66,29 @@ const pageFileSchema = z.object({
   mimeType: z.string(),
   size: z.number().int(),
 });
+const transferPageSchema = z.object({
+  id: z.string(),
+  parentId: z.string().nullable(),
+  title: z.string(),
+  kind: z.enum(["page", "folder"]),
+  content: z.array(z.record(z.string(), z.unknown())),
+});
+const transferFileSchema = z.object({
+  id: z.string(),
+  pageId: z.string(),
+  name: z.string(),
+  mimeType: z.string(),
+  size: z.number().int(),
+  data: z.string(),
+});
+const archiveSchema = z.object({
+  format: z.literal("savia-pages"),
+  version: z.literal(1),
+  exportedAt: z.string(),
+  pages: z.array(transferPageSchema),
+  files: z.array(transferFileSchema),
+});
+const importArchiveSchema = archiveSchema.strict();
 const envelope = <T extends z.ZodType>(schema: T) => z.object({ data: schema });
 const shareSchema = z.object({
   principalId: z.string().trim().min(1).max(128),
@@ -71,6 +102,11 @@ const shareInputSchema = z
   .strict();
 const apiSecurity = [{ oauth2: ["savia.api.read"] }];
 const writeSecurity = [{ oauth2: ["savia.api.write"] }];
+// Keep import work comfortably inside Workers' post-response waitUntil window.
+const MAX_IMPORT_AUTO_INDEX_PAGES = 5;
+const INDEX_LEASE_RETRY_INTERVAL_MS = 1_000;
+const AUTO_INDEX_LEASE_WAIT_MS = 24_000;
+const MAX_INDEX_LEASE_RETRIES = 48;
 const response = <T extends z.ZodType>(schema: T, description: string) => ({
   200: {
     content: { "application/json": { schema: envelope(schema) } },
@@ -87,6 +123,73 @@ const response = <T extends z.ZodType>(schema: T, description: string) => ({
   409: {
     content: { "application/json": { schema: errorResponse } },
     description: "Version conflict",
+  },
+});
+
+const exportRoute = createRoute({
+  method: "get",
+  path: "/v1/pages/export",
+  tags: ["Pages"],
+  summary: "Export all pages owned by the caller with referenced attachments",
+  security: apiSecurity,
+  responses: {
+    200: {
+      content: { "application/json": { schema: envelope(archiveSchema) } },
+      description: "Portable Pages archive",
+    },
+    409: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Export source changed or contains unavailable content",
+    },
+    413: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Archive exceeds the size limit",
+    },
+    503: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Attachment storage is unavailable",
+    },
+  },
+});
+const importRoute = createRoute({
+  method: "post",
+  path: "/v1/pages/import",
+  tags: ["Pages"],
+  summary: "Import a portable Pages archive as private copies",
+  security: writeSecurity,
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: importArchiveSchema } },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: envelope(
+            z.object({
+              pages: z.number().int(),
+              folders: z.number().int(),
+              files: z.number().int(),
+            }),
+          ),
+        },
+      },
+      description: "Imported private copies",
+    },
+    400: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Archive is invalid",
+    },
+    413: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Archive exceeds the size limit",
+    },
+    503: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Attachment storage is unavailable",
+    },
   },
 });
 
@@ -367,13 +470,131 @@ async function withBody<T>(
   }
 }
 
+function logAutoIndexFailure(failure: unknown): void {
+  console.warn(
+    JSON.stringify({
+      event: "pages_auto_index_failed",
+      code: failure instanceof PagesError ? failure.code : "AUTO_INDEX_FAILED",
+    }),
+  );
+}
+
+function scheduleBestEffort(
+  pagesSearch: PagesSearchBindings | undefined,
+  operation: () => Promise<unknown>,
+): void {
+  if (!pagesSearch?.schedule) return;
+  let accepted = false;
+  const task = Promise.resolve()
+    .then(() => (accepted ? operation() : undefined))
+    .catch(logAutoIndexFailure);
+  try {
+    pagesSearch.schedule(task);
+    accepted = true;
+  } catch {
+    logAutoIndexFailure(new PagesError(503, "SCHEDULER_UNAVAILABLE", ""));
+  }
+}
+
+async function indexPageAfterLease(
+  search: CloudflarePagesSearch,
+  pageId: string,
+  deadlineAt = Date.now() + AUTO_INDEX_LEASE_WAIT_MS,
+) {
+  for (;;) {
+    try {
+      return await search.indexPage(pageId);
+    } catch (failure) {
+      if (
+        !(failure instanceof PagesError) ||
+        failure.code !== "INDEX_IN_PROGRESS"
+      )
+        throw failure;
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs <= 0) throw failure;
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          Math.min(INDEX_LEASE_RETRY_INTERVAL_MS, remainingMs),
+        ),
+      );
+      if (Date.now() >= deadlineAt) throw failure;
+    }
+  }
+}
+
+function schedulePageIndex(
+  db: D1Database,
+  pagesSearch: PagesSearchBindings | undefined,
+  actor: AppActor,
+  page: { id: string; kind?: "page" | "folder" },
+): void {
+  if (page.kind === "folder") return;
+  scheduleBestEffort(pagesSearch, async () => {
+    if (!pagesSearch?.AI || !pagesSearch.PAGES_VECTORIZE) return;
+    const search = new CloudflarePagesSearch(db, actor, pagesSearch);
+    try {
+      await indexPageAfterLease(search, page.id);
+    } catch (failure) {
+      if (
+        failure instanceof PagesError &&
+        (failure.code === "SEARCH_DISABLED" ||
+          failure.code === "VERSION_CONFLICT")
+      )
+        return;
+      throw failure;
+    }
+  });
+}
+
+function scheduleImportIndexing(
+  db: D1Database,
+  pagesSearch: PagesSearchBindings | undefined,
+  actor: AppActor,
+): void {
+  scheduleBestEffort(pagesSearch, async () => {
+    const search = new CloudflarePagesSearch(db, actor, pagesSearch);
+    const deadlineAt = Date.now() + AUTO_INDEX_LEASE_WAIT_MS;
+    const status = await search.status();
+    if (!status.enabled || !status.available) return;
+    for (const pageId of status.needed.slice(0, MAX_IMPORT_AUTO_INDEX_PAGES)) {
+      if (Date.now() >= deadlineAt) break;
+      try {
+        await indexPageAfterLease(search, pageId, deadlineAt);
+      } catch (failure) {
+        logAutoIndexFailure(failure);
+        if (
+          failure instanceof PagesError &&
+          (failure.status === 403 || failure.status === 503)
+        )
+          return;
+      }
+    }
+  });
+}
+
 export function registerPagesRoutes(
   app: OpenAPIHono,
   db: D1Database,
   documents?: R2Bucket,
+  pagesSearch?: PagesSearchBindings,
 ) {
   const service = (context: Context) =>
     new PagesService(db, actorFromContext(context));
+  app.use(
+    "/v1/pages/import",
+    bodyLimit({
+      maxSize: 50 * 1024 * 1024,
+      onError: () =>
+        error(
+          new PagesError(
+            413,
+            "ARCHIVE_TOO_LARGE",
+            "The Pages archive exceeds the 50 MB limit",
+          ),
+        ),
+    }),
+  );
   const noStore = async (c: Context, next: () => Promise<void>) => {
     await next();
     c.header("cache-control", "no-store");
@@ -385,6 +606,19 @@ export function registerPagesRoutes(
     route: unknown,
     handler: (context: Context) => Promise<Response>,
   ) => app.openapi(route as never, handler as never);
+  register(exportRoute, (c) =>
+    run(() => exportPages(db, actorFromContext(c), documents)),
+  );
+  register(importRoute, (c) =>
+    withBody<unknown>(c, async (input) => {
+      const actor = actorFromContext(c);
+      const response = await run(() =>
+        importPages(db, actor, documents, input),
+      );
+      if (response.ok) scheduleImportIndexing(db, pagesSearch, actor);
+      return response;
+    }),
+  );
   register(listRoute, (c) =>
     run(() => service(c).list(c.req.query("q") ?? "")),
   );
@@ -394,7 +628,13 @@ export function registerPagesRoutes(
       kind?: "page" | "folder";
       parentId?: string;
       binding?: unknown;
-    }>(c, (input) => run(() => service(c).create(input), 201)),
+    }>(c, (input) =>
+      run(async () => {
+        const page = await service(c).create(input);
+        schedulePageIndex(db, pagesSearch, actorFromContext(c), page);
+        return page;
+      }, 201),
+    ),
   );
   register(membersRoute, (c) =>
     run(() => service(c).members(c.req.query("q") ?? "")),
@@ -402,7 +642,11 @@ export function registerPagesRoutes(
   register(getRoute, (c) => run(() => service(c).get(requiredParam(c, "id"))));
   register(saveRoute, (c) =>
     withBody<{ title: string; content: unknown; version: number }>(c, (input) =>
-      run(() => service(c).save(requiredParam(c, "id"), input)),
+      run(async () => {
+        const page = await service(c).save(requiredParam(c, "id"), input);
+        schedulePageIndex(db, pagesSearch, actorFromContext(c), page);
+        return page;
+      }),
     ),
   );
   register(deleteRoute, (c) =>
@@ -439,7 +683,11 @@ export function registerPagesRoutes(
   );
   register(restoreRoute, (c) =>
     withBody<{ revision: number; version: number }>(c, (input) =>
-      run(() => service(c).restore(requiredParam(c, "id"), input)),
+      run(async () => {
+        const page = await service(c).restore(requiredParam(c, "id"), input);
+        schedulePageIndex(db, pagesSearch, actorFromContext(c), page);
+        return page;
+      }),
     ),
   );
   register(sharesRoute, (c) =>

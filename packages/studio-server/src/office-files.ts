@@ -1,5 +1,6 @@
 import type { Hono, Context } from "hono";
 import { z } from "zod";
+import { dialectFor } from "@savia/db/dialect";
 import type { Env } from "./context";
 import { fail } from "./context";
 import { getObject, getRecord, guard, transaction, audit } from "./services";
@@ -25,6 +26,32 @@ type FileRow = {
   storage_key: string;
   created_at: string;
 };
+async function officeSuiteDisabled(c: Context<Env>) {
+  const tenant = c.get("tenant");
+  const numericTenant = /^tenant:(\d+)$/.exec(tenant);
+  const settingsTenant = numericTenant ? Number(numericTenant[1]) : tenant;
+  const tableExists = dialectFor(c.env.DB).tableExists("office_settings");
+  const hasSettings = await c.env.DB.prepare(tableExists.sql)
+    .bind(...tableExists.parameters)
+    .first();
+  if (!hasSettings) return null;
+  const setting = await c.env.DB.prepare(
+    "SELECT platform_allowed,tenant_enabled FROM office_settings WHERE tenant_id=?",
+  )
+    .bind(settingsTenant)
+    .first<{ platform_allowed: number; tenant_enabled: number }>();
+  return setting && (!setting.platform_allowed || !setting.tenant_enabled)
+    ? c.json(
+        {
+          error: {
+            code: "OFFICE_SUITE_DISABLED",
+            message: "The office suite is disabled for this tenant.",
+          },
+        },
+        403,
+      )
+    : null;
+}
 async function fileContext(c: Context<Env>) {
   const tenant = c.get("tenant"),
     db = c.env.DB;
@@ -50,6 +77,8 @@ async function fileContext(c: Context<Env>) {
 }
 export function registerOfficeFiles(app: Hono<Env>) {
   app.get("/api/file/:id/office", async (c) => {
+    const disabled = await officeSuiteDisabled(c);
+    if (disabled) return disabled;
     const { row, field, policy } = await fileContext(c);
     return c.json({
       data: {
@@ -67,6 +96,8 @@ export function registerOfficeFiles(app: Hono<Env>) {
     });
   });
   app.get("/api/file/:id/revisions", async (c) => {
+    const disabled = await officeSuiteDisabled(c);
+    if (disabled) return disabled;
     const { row, db, tenant } = await fileContext(c);
     const { results } = await db
       .prepare(
@@ -88,6 +119,8 @@ export function registerOfficeFiles(app: Hono<Env>) {
     });
   });
   app.get("/api/file/:id/revisions/:version/download", async (c) => {
+    const disabled = await officeSuiteDisabled(c);
+    if (disabled) return disabled;
     const { row, db, tenant } = await fileContext(c);
     const version = z.coerce
       .number()
@@ -119,6 +152,8 @@ export function registerOfficeFiles(app: Hono<Env>) {
     });
   });
   app.post("/api/file/:id/revisions", async (c) => {
+    const disabled = await officeSuiteDisabled(c);
+    if (disabled) return disabled;
     const { row, record, field, format, policy, tenant, db } =
       await fileContext(c);
     if (field?.readOnly) return fail("Este campo es de solo lectura.", 403);

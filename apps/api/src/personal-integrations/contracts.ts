@@ -7,6 +7,7 @@ export const personalIntegrationProviderIds = [
   "onedrive_business",
   "jira",
   "linear",
+  "github",
 ] as const;
 
 export const personalIntegrationConnectionStatuses = [
@@ -84,7 +85,7 @@ export type PersonalIntegrationNangoClient = {
   ): Promise<PersonalNangoConnectionSummary>;
   deleteConnection(connectionId: string, integrationId: string): Promise<void>;
   proxy(request: {
-    method: "GET" | "POST" | "PUT";
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     path: string;
     connection: Pick<
       ActivePersonalIntegrationConnection,
@@ -94,7 +95,10 @@ export type PersonalIntegrationNangoClient = {
     body?: unknown;
     rawBody?: string | Uint8Array<ArrayBuffer>;
     contentType?: string;
-    upstreamHeaders?: Partial<Record<"if-match" | "prefer", string>>;
+    redirect?: "manual";
+    upstreamHeaders?: Partial<
+      Record<"if-match" | "prefer" | "accept" | "x-github-api-version", string>
+    >;
   }): Promise<Response>;
 };
 

@@ -15,17 +15,17 @@ export const documentDeliveryMessages = {
     "File saved in attachments.",
     "Arquivo salvo nos anexos.",
   ],
-  "Crea un archivo en blanco para editarlo con ZetaOffice.": [
-    "Crea un archivo en blanco para editarlo con ZetaOffice.",
-    "Create a blank file to edit with ZetaOffice.",
-    "Crie um arquivo em branco para editar com ZetaOffice.",
+  "Crea un archivo en blanco en la suite de ofimática.": [
+    "Crea un archivo en blanco en la suite de ofimática.",
+    "Create a blank file in the office suite.",
+    "Crie um arquivo em branco na suíte de escritório.",
   ],
   "Tipo de archivo": ["Tipo de archivo", "File type", "Tipo de arquivo"],
   "Nombre del archivo": ["Nombre del archivo", "File name", "Nome do arquivo"],
-  "Abrir en ZetaOffice": [
-    "Abrir en ZetaOffice",
-    "Open in ZetaOffice",
-    "Abrir no ZetaOffice",
+  "Abrir en la suite de ofimática": [
+    "Abrir en la suite de ofimática",
+    "Open in the office suite",
+    "Abrir na suíte de escritório",
   ],
   "Creando archivo…": [
     "Creando archivo…",

@@ -241,6 +241,7 @@ const oauthUiScript = String.raw`(() => {
   const verificationPanel = document.querySelector('[data-oauth-panel="verify"]');
   const passwordToggle = document.querySelector("[data-oauth-password-toggle]");
   const loginAnimation = document.querySelector("[data-oauth-login-animation]");
+  let ssoEnabled = false;
 
   if (loginAnimation && window.lottie) {
     const frame = loginAnimation.querySelector("[data-oauth-login-animation-frame]");
@@ -249,6 +250,7 @@ const oauthUiScript = String.raw`(() => {
     const wordmark = loginAnimation.querySelector("[data-oauth-login-wordmark]");
     const wordmarkAI = loginAnimation.querySelector("[data-oauth-login-wordmark-ai]");
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const repeatAnimation = loginAnimation.dataset.repeat !== "false";
     const animation = window.lottie.loadAnimation({
       container: frame,
       renderer: "svg",
@@ -269,6 +271,19 @@ const oauthUiScript = String.raw`(() => {
     let robotGreetingPending = false;
     let robotTriggerTimer;
     let robotHideTimer;
+    let replayTimer;
+    let pageHidden = false;
+
+    function scheduleReplay() {
+      if (!repeatAnimation || reducedMotion || !finished || document.hidden || pageHidden) return;
+      clearTimeout(replayTimer);
+      replayTimer = setTimeout(() => {
+        replayTimer = undefined;
+        if (reducedMotion || document.hidden || pageHidden || !finished) return;
+        finished = false;
+        animation.goToAndPlay(0, true);
+      }, 5000);
+    }
 
     function replayClass(element, name) {
       if (reducedMotion) return;
@@ -310,7 +325,10 @@ const oauthUiScript = String.raw`(() => {
         finished = true;
       } else if (!document.hidden) animation.play();
     });
-    animation.addEventListener("complete", () => { finished = true; });
+    animation.addEventListener("complete", () => {
+      finished = true;
+      scheduleReplay();
+    });
     robotAnimation?.addEventListener("DOMLoaded", () => {
       robotReady = true;
       if (robotGreetingPending) greetWithRobot();
@@ -339,12 +357,34 @@ const oauthUiScript = String.raw`(() => {
       if (document.hidden) {
         cancelRobotGreeting();
         clearTimeout(robotHideTimer);
+        clearTimeout(replayTimer);
+        replayTimer = undefined;
         robotAnimation?.pause();
         robot?.classList.remove("robot-visible");
       }
-      if (!ready || finished) return;
+      if (!ready) return;
       if (document.hidden) animation.pause();
-      else animation.play();
+      else if (finished) scheduleReplay();
+      else if (!reducedMotion) animation.play();
+    });
+    window.addEventListener("pagehide", () => {
+      pageHidden = true;
+      clearTimeout(replayTimer);
+      clearTimeout(robotTriggerTimer);
+      clearTimeout(robotHideTimer);
+      replayTimer = undefined;
+      robotTriggerTimer = undefined;
+      robotHideTimer = undefined;
+      robotGreetingPending = false;
+      animation.pause();
+      robotAnimation?.pause();
+    });
+    window.addEventListener("pageshow", () => {
+      pageHidden = false;
+      if (!ready) return;
+      if (document.hidden) animation.pause();
+      else if (finished) scheduleReplay();
+      else if (!reducedMotion) animation.play();
     });
   }
 
@@ -378,8 +418,9 @@ const oauthUiScript = String.raw`(() => {
 
   function requestError(payload, fallback) {
     const error = new Error(readableError(payload, fallback));
-    if (payload && typeof payload === "object" && typeof payload.error === "string") {
-      error.code = payload.error;
+    if (payload && typeof payload === "object") {
+      if (typeof payload.code === "string") error.code = payload.code;
+      else if (typeof payload.error === "string") error.code = payload.error;
     }
     return error;
   }
@@ -407,11 +448,10 @@ const oauthUiScript = String.raw`(() => {
   }
 
   function restartExpiredAuthorization(error) {
-    if (!(error instanceof Error) || error.code !== "invalid_signature") return false;
+    if (!(error instanceof Error) || !["invalid_signature", "INVALID_TWO_FACTOR_COOKIE"].includes(error.code)) return false;
     const restartUrl = document.body && document.body.dataset && document.body.dataset.oauthRestartUrl;
     if (typeof restartUrl !== "string" || !restartUrl) return false;
-    redirecting = true;
-    window.location.replace(restartUrl);
+    navigateTo(restartUrl, true);
     return true;
   }
 
@@ -425,8 +465,7 @@ const oauthUiScript = String.raw`(() => {
     ];
     const redirect = candidates.find((value) => typeof value === "string");
     if (typeof redirect !== "string") return false;
-    redirecting = true;
-    window.location.assign(redirect);
+    navigateTo(redirect);
     return true;
   }
 
@@ -436,8 +475,7 @@ const oauthUiScript = String.raw`(() => {
       if (typeof restartUrl !== "string" || !restartUrl) {
         throw new Error("Abre Savia para iniciar una nueva solicitud de acceso.");
       }
-      redirecting = true;
-      window.location.replace(restartUrl);
+      navigateTo(restartUrl, true);
       return;
     }
     const result = await request("oauth2/continue", { postLogin: true });
@@ -452,9 +490,31 @@ const oauthUiScript = String.raw`(() => {
   }
 
   let redirecting = false;
+  let navigationTimer;
+  function navigateTo(destination, replace = false) {
+    redirecting = true;
+    clearTimeout(navigationTimer);
+    navigationTimer = setTimeout(() => {
+      redirecting = false;
+      const loading = document.querySelector("[data-oauth-loading]");
+      const content = document.querySelector("[data-oauth-content]");
+      const resume = document.querySelector("[data-oauth-resume]");
+      if (loading) loading.hidden = true;
+      if (content) content.hidden = false;
+      if (resume) {
+        resume.href = destination;
+        resume.hidden = false;
+      }
+      setStatus("La redirección no se completó. Pulsa Continuar a Savia para seguir.");
+    }, 10000);
+    if (replace) window.location.replace(destination);
+    else window.location.assign(destination);
+  }
   function setSubmitting(form, submitting) {
     const loading = document.querySelector("[data-oauth-loading]");
     const content = document.querySelector("[data-oauth-content]");
+    const resume = document.querySelector("[data-oauth-resume]");
+    if (submitting && resume) resume.hidden = true;
     const showLoading = submitting || redirecting;
     if (loading) loading.hidden = !showLoading;
     if (content) content.hidden = showLoading;
@@ -501,6 +561,7 @@ const oauthUiScript = String.raw`(() => {
   }
 
   function showAccountPanel(name) {
+    if (name === "sso" && !ssoEnabled) return;
     if (loginPanel) loginPanel.hidden = name !== "login";
     const social = document.querySelector("[data-social-login]");
     if (social) social.hidden = name !== "login" || social.dataset.available !== "true";
@@ -533,10 +594,15 @@ const oauthUiScript = String.raw`(() => {
 
   const socialLogin = document.querySelector("[data-social-login]");
   if (socialLogin) {
+    const ssoTrigger = document.querySelector('[data-oauth-show="sso"]');
+    const ssoPanel = document.querySelector('[data-oauth-panel="sso"]');
     fetch("/api/auth/savia-social/providers", {credentials:"same-origin"})
-      .then(response => response.ok ? response.json() : {providers:[]})
-      .then(({providers}) => {
-        if (!Array.isArray(providers)) return;
+      .then(response => response.ok ? response.json() : {providers:[], ssoEnabled:false})
+      .then(result => {
+        const providers = Array.isArray(result?.providers) ? result.providers : [];
+        ssoEnabled = result?.ssoEnabled === true;
+        if (ssoTrigger) ssoTrigger.hidden = !ssoEnabled;
+        if (!ssoEnabled && ssoPanel) ssoPanel.hidden = true;
         for (const button of socialLogin.querySelectorAll("[data-social-provider]")) {
           button.hidden = !providers.includes(button.dataset.socialProvider);
           button.addEventListener("click", async () => {
@@ -556,10 +622,16 @@ const oauthUiScript = String.raw`(() => {
         }
         socialLogin.dataset.available = providers.length ? "true" : "false";
         socialLogin.hidden = !providers.length || !loginPanel || loginPanel.hidden;
-      }).catch(() => { socialLogin.hidden = true; });
+      }).catch(() => {
+        ssoEnabled = false;
+        socialLogin.hidden = true;
+        if (ssoTrigger) ssoTrigger.hidden = true;
+        if (ssoPanel) ssoPanel.hidden = true;
+      });
   }
 
   async function submitSSODiscovery(form) {
+    if (!ssoEnabled) throw new Error("El acceso SSO no está disponible para esta organización.");
     const email = formValue(form, "email").trim();
     const domain = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
     const response = await fetch("/api/auth/savia-sso/connections?domain=" + encodeURIComponent(domain), {credentials:"same-origin"});

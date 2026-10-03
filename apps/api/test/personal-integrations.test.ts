@@ -62,6 +62,7 @@ const configuredProviders = createPersonalIntegrationProviderRegistry({
   oneDriveBusinessIntegrationId: "onedrive-business-savia",
   jiraIntegrationId: "jira-savia",
   linearIntegrationId: "linear-savia",
+  githubIntegrationId: "github-savia",
 });
 const payloadCipher = new PersonalActionPayloadCipher("test-mcp-shared-secret");
 
@@ -146,7 +147,7 @@ describe("personal integration providers", () => {
     await seedPrincipal();
   });
 
-  it("lists all eight personal providers for an authenticated user", async () => {
+  it("lists all nine personal providers for an authenticated user", async () => {
     const app = createApp(
       env.DB,
       undefined,
@@ -179,6 +180,12 @@ describe("personal integration providers", () => {
             capabilities: ["issues:read"],
           }),
         }),
+        expect.objectContaining({
+          id: "github",
+          attributes: expect.objectContaining({
+            capabilities: ["issues:read"],
+          }),
+        }),
       ]),
     });
   });
@@ -192,6 +199,7 @@ describe("personal integration providers", () => {
     ["onedrive_business", "onedrive-business-savia"],
     ["jira", "jira-savia"],
     ["linear", "linear-savia"],
+    ["github", "github-savia"],
   ] as const)(
     "creates a scoped Nango session for %s",
     async (provider, integrationId) => {
@@ -594,6 +602,284 @@ describe("personal integration providers", () => {
     expect(nango.proxy).toHaveBeenCalledWith(
       expect.objectContaining({ method: "POST", path: "/graphql" }),
     );
+  });
+
+  it("previews a GitHub issue through the caller's connection and fixed API path", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        number: 42,
+        html_url: "https://github.com/acme/widgets/issues/42",
+        title: "Handle renewal",
+        state: "open",
+        assignee: { login: "alex" },
+        repository: { full_name: "acme/widgets" },
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-github-issue",
+        "test-agency-member",
+        "github",
+        "nango-github-connection",
+        "github-savia",
+        "connected",
+        '["repo"]',
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://github.com/acme/widgets/issues/42",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        provider: "github",
+        url: "https://github.com/acme/widgets/issues/42",
+        identifier: "acme/widgets#42",
+        title: "Handle renewal",
+        status: "open",
+        assignee: "alex",
+        repository: "acme/widgets",
+        kind: "issue",
+      },
+    });
+    expect(nango.proxy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/repos/acme/widgets/issues/42",
+        upstreamHeaders: {
+          accept: "application/vnd.github+json",
+          "x-github-api-version": "2022-11-28",
+        },
+        connection: expect.objectContaining({
+          provider: "github",
+          nangoConnectionId: "nango-github-connection",
+          nangoIntegrationId: "github-savia",
+        }),
+      }),
+    );
+  });
+
+  it("previews a GitHub pull request and reports merged state", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        number: 42,
+        html_url: "https://github.com/acme/widgets/pull/42",
+        title: "Ship renewal handling",
+        state: "closed",
+        merged_at: "2026-01-03T00:00:00Z",
+        assignee: null,
+        base: { repo: { full_name: "acme/widgets" } },
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-github-pull",
+        "test-agency-member",
+        "github",
+        "nango-github-connection",
+        "github-savia",
+        "connected",
+        '["repo"]',
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://github.com/acme/widgets/pull/42",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        provider: "github",
+        url: "https://github.com/acme/widgets/pull/42",
+        identifier: "acme/widgets#42",
+        title: "Ship renewal handling",
+        status: "merged",
+        assignee: null,
+        repository: "acme/widgets",
+        kind: "pull_request",
+      },
+    });
+    expect(nango.proxy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/repos/acme/widgets/pulls/42",
+      }),
+    );
+  });
+
+  it("rejects GitHub preview metadata that resolves to a different issue", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        number: 43,
+        html_url: "https://github.com/acme/widgets/issues/43",
+        title: "Unrelated issue",
+        state: "open",
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-github-mismatch",
+        "test-agency-member",
+        "github",
+        "nango-github-connection",
+        "github-savia",
+        "connected",
+        '["repo"]',
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://github.com/acme/widgets/issues/42",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(502);
+  });
+
+  it("rejects a GitHub pull request returned for an issue link", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        number: 42,
+        html_url: "https://github.com/acme/widgets/pull/42",
+        title: "Not the linked issue",
+        state: "open",
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-github-kind-mismatch",
+        "test-agency-member",
+        "github",
+        "nango-github-connection",
+        "github-savia",
+        "connected",
+        '["repo"]',
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://github.com/acme/widgets/issues/42",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(502);
+  });
+
+  it("returns a controlled GitHub access error for a forbidden upstream response", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(new Response(null, { status: 403 }));
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-github-forbidden",
+        "test-agency-member",
+        "github",
+        "nango-github-connection",
+        "github-savia",
+        "connected",
+        '["repo"]',
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://github.com/acme/widgets/issues/42",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(nango.proxy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not preview a GitHub link without the caller's own connection", async () => {
+    const nango = fakeNango();
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://github.com/acme/widgets/issues/42",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(nango.proxy).not.toHaveBeenCalled();
   });
 
   it("rejects a Linear issue resolved from a different workspace", async () => {
@@ -1173,6 +1459,8 @@ describe("personal integration providers", () => {
           startsAt: "2026-01-03T09:00:00-05:00",
           endsAt: "2026-01-03T09:30:00-05:00",
           webLink: null,
+          allDay: false,
+          timeZone: null,
         },
       ],
     });
@@ -1237,6 +1525,8 @@ describe("personal integration providers", () => {
           startsAt: "2026-01-03T09:00:00.0000000Z",
           endsAt: "2026-01-03T09:30:00.0000000Z",
           webLink: "https://outlook.office.com/calendar/item/outlook-event-1",
+          allDay: false,
+          timeZone: "UTC",
         },
       ],
     });

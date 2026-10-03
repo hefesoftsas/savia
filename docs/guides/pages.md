@@ -2,11 +2,13 @@
 
 Owner: Savia API and Admin. Reviewed: 2026-10-01.
 
-**Work → Pages** expands directly in the main sidebar. It contains your page and folder tree; there is no second navigation panel. Select Pages itself to search the workspace, create a root page or folder, or browse its contents. The document breadcrumb returns to a parent or the workspace. Create a page, edit its title and body, and wait for **Saved** before navigating away. Search matches accessible page titles and text. Pages are private until their owner grants member access or explicitly creates a public link. Subpages inherit the root's reader/editor permissions for member access. Administrators do not automatically receive private document access.
+**Work → Pages** expands directly in the main sidebar. It contains your page and folder tree; there is no second navigation panel. Select Pages itself to search the workspace, create a root page or folder, or browse its contents. The document breadcrumb returns to a parent or the workspace. Create a page, edit its title and body, and wait for **Saved** before navigating away. One search box offers up to nine accessible title and content matches as you type. When tenant semantic search is enabled and available, semantic matches are added after text matches, with duplicates removed. Suggestions show a short excerpt, highlight the literal search phrase, and include the last update date. Use the arrow keys and Enter to open a suggestion, or Escape to close the list. Searching does not filter the root folder listing. Pages are private until their owner grants member access or explicitly creates a public link. Subpages inherit the root's reader/editor permissions for member access. Administrators do not automatically receive private document access.
 
 ## Folders and navigation
 
 Use the **+** beside Pages or a tree item to create a page or folder inside it. Expand/collapse folders and pages with children using their chevrons. Opening a folder shows its contents, with controls to add a page or subfolder. Rename it using the title field; folders have no editable document body or record binding. A folder and all its descendants inherit the existing root sharing policy. A folder must be empty before deletion. Moving existing pages between roots is not included in this release.
+
+Owners can use the trash button that appears on a page or folder row on hover or keyboard focus. A confirmation dialog names the item before deletion. Cancel leaves it in place; deleting a page with subpages requires removing those subpages first.
 
 The **…** menu holds subpage creation, history, Markdown export and deletion. **Export as Markdown** is available to anyone who can read the page and downloads the saved title and supported document blocks as a `.md` file. Issue cards export their original link, collections export a reference, and attachments export their filename; fetched issue preview details, collection rows and private attachment identifiers are not included. Share and the current save status stay visible. A privacy icon beside Share exposes the team access label on hover or keyboard focus; it does not occupy a row above the title. The same tree is available through the main navigation drawer on mobile.
 
@@ -16,7 +18,7 @@ The Plate editor supports paragraphs, headings, quotes, bullet lists, bold and i
 
 In an empty paragraph, `#`, `##` or `###` followed by Space creates a heading; `>`, `-`, `*`, `1.` or `[]` followed by Space creates a quote, list item or task. Typing three backticks at the start of an empty paragraph immediately creates a code block through Plate’s native input rules; choose its language in the toolbar. Existing plain-text fences with a language still convert on Enter or Space; `js`, `ts`, `py` and `sh` are accepted aliases. Pasting a complete Markdown fenced code snippet into an empty paragraph creates a code block and preserves its indentation. Inside code, Enter inserts a newline, Tab inserts two spaces, and Cmd/Ctrl+Enter exits the block. Cmd/Ctrl+E and the selection toolbar toggle inline code. Use the block toolbar to insert a paragraph below a block.
 
-Jira and Linear block commands appear only when that provider is enabled on the server and the current reader has a connected account. Configure the personal account from **Integrations → Accounts & Connections → Issue management**. An unavailable, disconnected, pending, failed or expired connection is not offered in the editor. Each reader uses their own connection, so sharing a page never grants access to the author's issue tracker. Existing issue blocks render as regular clickable links when the reader has no active connection; they do not request a preview or show connection prompts inside the document. Ordinary pasted links remain clickable without an integration. See [Jira and Linear issue links](issue-links.md) for Nango setup.
+Jira, Linear, and GitHub block commands appear only when that provider is enabled on the server and the current reader has a connected account. Configure the personal account from **Integrations → Accounts & Connections → Issue management**. An unavailable, disconnected, pending, failed or expired connection is not offered in the editor. Each reader uses their own connection, so sharing a page never grants access to the author's issue tracker. Existing issue blocks render as regular clickable links when the reader has no active connection; they do not request a preview or show connection prompts inside the document. Ordinary pasted links remain clickable without an integration. See [Jira, Linear, and GitHub issue links](issue-links.md) for Nango setup.
 
 ### Rich blocks
 
@@ -34,13 +36,55 @@ Page permissions, autosave, conflict protection and revision history apply to th
 
 ## Saving, sharing and history
 
+### Transfer pages to another Savia instance
+
+Open **Work → Pages** and use **Export all my pages** to download a
+`.savia-pages.json` archive. In the destination instance, sign in, open Pages,
+choose **Import pages**, select the archive and confirm the import.
+
+The archive contains the current saved content of your own pages and folders in
+the current tenant, their parent/child structure, rich formatting and referenced
+image/file attachments. Export is independent of search and the 200-result page
+list limit. Pages shared with you by another owner are not included. Save any
+pending edits before exporting.
+
+Import creates new private copies owned by the importing user. It preserves
+the hierarchy and rewrites attachment references to newly stored files; existing
+pages are not overwritten. Importing the same archive again creates another
+copy. Historical revisions, member permissions and public links are not
+transferred. Imported pages start with a new revision history.
+
+Collection records, saved collection views and record bindings belong to the
+source instance and are not transferred. Collection blocks become explanatory
+text, and record bindings are removed, so matching identifiers in the destination
+cannot accidentally connect imported pages to unrelated records. Ordinary
+external links remain links; issue previews still depend on the reader's own
+integration access.
+
+Archives use a versioned JSON format with embedded attachment data and are
+limited to 50 MiB, including the encoded files. The existing 10 MB attachment
+limit and supported file types still apply. An export exceeding the archive
+limit fails explicitly rather than silently omitting pages or files. Keep the
+downloaded archive private: it contains the exported document and file content.
+Import validates the archive, page hierarchy, document blocks and file
+references before writing pages; a failed database import does not leave a
+partial page tree.
+
+Deployment CPU, memory, database and storage quotas also apply, so a large
+archive can fail below the file-size limit on a constrained instance. The
+database import stays atomic instead of exposing a partially imported tree;
+uploaded blobs are cleaned up on a handled failure. See the deployment's
+[D1 limits](https://developers.cloudflare.com/d1/platform/limits/) when running
+on Cloudflare. Process termination or storage-cleanup failures may leave
+unreferenced blobs for operational cleanup.
+
 Autosave waits briefly after an edit and sends sequential versioned updates. A stale version produces a conflict instead of overwriting another user's update. The editor preserves the current draft and offers **Download draft** and **Reopen**. A downloaded draft is an explicit user export; Savia introduces no localStorage or IndexedDB document cache. A failed draft must be exported before closing the browser or reopening the page.
 
 **Share → Members** assigns reader or editor access to active teammates. Changing member sharing on a subpage changes its root's sharing. Removed memberships stop granting access. An empty member list means there are no other active teammates available; a failed request offers a retry instead of presenting an unusable save action.
 
 **Share → Public link** creates a separate, read-only link for the selected page or folder and its descendants. Publishing a child does not publish its parent or siblings. Only the owner can create or revoke links. An optional expiration limits their lifetime; revoking a link immediately stops new page and file requests through it. Public links show the current saved content, so later edits are visible. Links are not created automatically when opening the sharing dialog.
 
-Anyone holding an active public URL can read its scope without signing in. The public view has no editing, member management, revision history, or bound-record properties. Collections remain private placeholders and issue cards become ordinary external links; the public view never uses the owner's Studio permissions or Jira/Linear connections. Referenced attachments are served through the same scoped link, and removing an attachment from the document removes its public download access. Public routes bypass the administrative service worker. New private-app workers activate in the background and the deployment notice offers a user-controlled reload after saving. Public HTML, API responses, and downloads use no-store and no-referrer headers; public documents request no indexing. Expired or revoked links do not expose document titles or contents.
+Anyone holding an active public URL can read its scope without signing in. The public view has no editing, member management, revision history, or bound-record properties. Collections remain private placeholders and issue cards become ordinary external links; the public view never uses the owner's Studio permissions or Jira/Linear/GitHub connections. Referenced attachments are served through the same scoped link, and removing an attachment from the document removes its public download access. Public routes bypass the administrative service worker. New private-app workers activate in the background and the deployment notice offers a user-controlled reload after saving. Public HTML, API responses, and downloads use no-store and no-referrer headers; public documents request no indexing. Expired or revoked links do not expose document titles or contents.
 
 **History** opens a side panel with saved dates and versions. Selecting a version loads
 its read-only document in the main area, with loading/error states and protection
@@ -60,11 +104,82 @@ historical copy of external provider data. This release does not merge simultane
 
 Apply migrations `0008_pages.sql`, `0009_issue_connections.sql`, `0010_pages_folders.sql`, `0011_page_public_links.sql`, `0012_page_public_short_links.sql` and `0013_pages_record_binding_uniqueness.sql` using the existing deployment migration process; PostgreSQL equivalents are registered in its migration manifest. This feature does not deploy or apply production migrations automatically. Existing document storage and authenticated API configuration are reused. The API reference is generated from the Pages OpenAPI route declarations.
 
-Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Deleting a page removes its attachment metadata and attempts to delete every stored attachment blob from the document bucket. It is not a retention mechanism: preserve any required copies before deleting the page. Failed bucket deletions may leave orphaned blobs for deployment cleanup. Revision retention is unbounded unless the owner explicitly clears prior versions.
+Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. Search excerpts are bounded to 360 plain-text characters and are returned only for authorized results; ordinary browsing does not fetch excerpts. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Deleting a page removes its attachment metadata and attempts to delete every stored attachment blob from the document bucket. It is not a retention mechanism: preserve any required copies before deleting the page. Failed bucket deletions may leave orphaned blobs for deployment cleanup. Revision retention is unbounded unless the owner explicitly clears prior versions.
+
+### Cloudflare semantic search
+
+Local FlexSearch search has been removed. Existing derived browser indexes are
+removed on a best-effort basis when Pages opens; page content remains canonical
+in the backend.
+
+Cloudflare semantic search is disabled by default for every tenant. A platform
+administrator grants the capability in the tenant administration screen. The
+tenant administrator can then activate or deactivate it in **Page search** in
+the tenant settings. Revoking the grant also turns activation off; granting it
+again does not reactivate it. Ordinary members cannot change either setting.
+Both controls are enforced by the API, including indexing and querying.
+
+When enabled and available, the Pages search box adds semantic matches backed by
+Cloudflare Workers AI (`@cf/baai/bge-m3`) and a dedicated Vectorize index. Text
+search remains available when semantic search is disabled or unavailable. Pages
+automatically catches up older saved versions when you open the workspace, with
+visible progress and controls to pause or resume. New, saved and restored pages
+are submitted for background indexing on a best-effort basis. Imports submit up
+to five pages in the background; other pending pages catch up the next time you
+open Pages. A failed catch-up batch stops until you choose **Retry indexing**; it
+does not loop through the same failure. If another request is already indexing a
+page, Pages waits and checks status again instead of submitting duplicate work.
+The catch-up uses the first 200 accessible page summaries, skips folders, and
+includes titles and saved rich-text leaves.
+Attachments, embedded collection records and external provider data are excluded.
+Vectorize submissions are asynchronous; new results may take a few seconds to
+become searchable.
+
+Semantic results include an excerpt from the matched content chunk when available,
+or a short excerpt around the query. Excerpts are derived from the current
+authorized page rather than stored vector metadata. An empty result message is
+shown only after a search completes, not while stale results are cleared. Returning
+to the window or changing a page refreshes the current semantic query, retaining
+the search text and the normal debounce and permission checks.
+
+Vectors use a tenant namespace. Search returns only pages that the caller can
+currently read in that tenant, checks the indexed version, and reads titles from
+the authorized backend document. Vector metadata contains page IDs and versions,
+not document bodies. Removing access or deleting a page prevents its appearance
+in results even while an older vector remains in Cloudflare. Turning search off
+stops new indexing and querying; it does not erase previously submitted vectors.
+A platform administrator can also activate or deactivate an already granted
+capability directly in the tenant editor. Changing activation preserves the
+existing grant; revocation still disables activation.
+
+The ordinary server title and content search remains available in all cases. Deployed
+semantic queries are limited to 30 per minute per tenant to bound repeated AI
+requests; the browser also debounces typing.
+
+Preview binds the isolated `savia-pages-search-preview` Vectorize index
+(1024 dimensions, cosine) with Workers AI. Bootstrap this index once before the
+first deployment using `node scripts/ensure-preview-pages-search.mjs` with
+`CLOUDFLARE_ACCOUNT_ID` and a `CLOUDFLARE_API_TOKEN` that has Vectorize Write
+permissions, or `wrangler vectorize create savia-pages-search-preview
+--dimensions=1024 --metric=cosine`. Routine deployments bind the existing index;
+they do not need to provision it or broaden the Worker deployment token.
+Production search remains unavailable unless
+`SAVIA_PAGES_SEARCH_INDEX` is set to a separately provisioned production index
+when rendering the Worker configuration. No search consumption is incurred by
+tenants whose capability or activation is disabled. Cloudflare usage quotas and
+charges still apply when tenants enable the feature.
 
 The new editor dependencies (`platejs`, `@platejs/basic-nodes`, `@platejs/link`) use MIT licenses. Their attribution notice ships at `/licenses/plate.txt`. Existing Nango is an external service accepted for this integration; this implementation does not claim that Nango itself is MIT/Apache licensed.
 
 ## Verification
+
+Portable transfer tests in `apps/api/test/pages-transfer.test.ts` cover export
+beyond the page-list limit, private imports into another tenant with real local
+R2 attachment bytes, nested pages/folders, new revision snapshots, repeat imports,
+collection detachment, malformed archives and rollback/cleanup on failure. UI
+tests cover downloading archives, file validation, progress, server errors,
+same-file retries and refreshing the page navigation. Native PostgreSQL transfer
+and deployed-instance transfer still require deployment-specific verification.
 
 Automated coverage checks folder creation and containment, folder renaming in the sidebar, slash-menu selection and focus recovery, page authorization, inherited sharing, revoked membership, version conflicts, history, attachments, safe document nodes, rich-block round trips and structure limits, code whitespace, task updates, table operations, URL paste, preview fallback, serial autosave and authorized record properties. Public sharing tests cover owner-only publishing, scoped anonymous reading, expiry, revocation, current attachment references, retryable member loading, and isolated public bootstrap. Native PostgreSQL coverage is in `apps/self-hosted/test/pages-postgres.test.ts` and `apps/self-hosted/test/pages-public-postgres.test.ts`; it uses disposable databases through `SAVIA_TEST_POSTGRES_URL` and checks migrations, inherited permissions, concurrent edits, revision restores, attachment metadata and the bootstrap administrator’s platform membership. Run `pnpm --filter @savia/self-hosted test:postgres` against an isolated PostgreSQL test server. Desktop/mobile visual review also uses the real Pages UI. Live Jira/Linear OAuth and production storage are not validated by mocked provider tests.
 
@@ -82,6 +197,12 @@ a code block through Plate's native `createBlockFenceInputRule` (`on: "match"`).
 No Enter or space is required. Select the language in the code toolbar afterward.
 The legacy Enter shortcut still accepts an existing plain-text fence with a
 language, and complete fenced clipboard snippets retain their language.
+
+Selecting text shows the formatting toolbar above the selection, including the
+first line of the editor. At the top of the viewport, it appears below the
+selection instead. For selections extending beyond the viewport, the toolbar
+stays within the visible bottom edge. Block actions are hidden while the formatting toolbar is
+visible to keep the selected text unobstructed.
 
 Block actions appear in a horizontal floating toolbar above the active block.
 A continuous pointer corridor connects the block to its toolbar. A 400 ms dismissal delay allows brief pointer detours; entering the

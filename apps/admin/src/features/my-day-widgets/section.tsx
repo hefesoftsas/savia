@@ -112,6 +112,7 @@ function SortableWidgetItem({
   widget,
   children,
   disabled,
+  expanded,
 }: {
   widget: MyDayWidget;
   children: (handleProps: {
@@ -119,6 +120,7 @@ function SortableWidgetItem({
     listeners: Record<string, unknown>;
   }) => React.ReactNode;
   disabled: boolean;
+  expanded?: boolean;
 }) {
   const {
     attributes,
@@ -132,7 +134,7 @@ function SortableWidgetItem({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`min-w-0 ${widgetSpanClass(widget)} ${isDragging ? "opacity-40" : ""}`}
+      className={`min-w-0 ${expanded ? "md:col-span-2 xl:col-span-3" : widgetSpanClass(widget)} ${isDragging ? "opacity-40" : ""}`}
     >
       {children({
         attributes: attributes as unknown as Record<string, unknown>,
@@ -245,6 +247,7 @@ export function MyDayWidgetsSection({
       if (widget.kind === "agenda") return "Agenda";
       if (widget.kind === "quick_task") return "Tarea rápida";
       if (widget.kind === "mail") return "Correos";
+      if (widget.kind === "office_documents") return "Documentos de Office";
       return widget.title ?? widget.kind;
     }
     return (
@@ -365,7 +368,11 @@ export function MyDayWidgetsSection({
         </div>
       ) : null}
 
-      {agenda.feedback ? (
+      {agenda.feedback &&
+      !(
+        agenda.feedback === CALENDAR_CONNECT_MESSAGE &&
+        agenda.sources.sources.length > 0
+      ) ? (
         <Alert className="mb-4" aria-label={agenda.feedback}>
           <div className="col-start-2 flex items-start gap-2">
             <AlertDescription className="flex-1">
@@ -490,6 +497,7 @@ export function MyDayWidgetsSection({
                   key={widget.id}
                   widget={widget}
                   disabled={saving}
+                  expanded={widget.kind === "agenda" && agenda.view !== "day"}
                 >
                   {({ attributes, listeners }) => (
                     <WidgetCard

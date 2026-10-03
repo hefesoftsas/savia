@@ -17,6 +17,38 @@ async function config(outputRoot, worker) {
   );
 }
 
+test("renders GitHub only when its integration ID is configured", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "savia-github-config-"));
+  try {
+    await renderProductionConfigs({
+      authD1Id: "auth-d1-id",
+      domainD1Id: "domain-d1-id",
+      githubIntegrationId: " github-read ",
+      outputRoot,
+    });
+    assert.equal(
+      (await config(outputRoot, "api")).vars.NANGO_GITHUB_INTEGRATION_ID,
+      "github-read",
+    );
+    assert.equal(
+      "NANGO_GITHUB_INTEGRATION_ID" in
+        ((await config(outputRoot, "admin")).vars ?? {}),
+      false,
+    );
+    await renderProductionConfigs({
+      authD1Id: "auth-d1-id",
+      domainD1Id: "domain-d1-id",
+      outputRoot,
+    });
+    assert.equal(
+      "NANGO_GITHUB_INTEGRATION_ID" in (await config(outputRoot, "api")).vars,
+      false,
+    );
+  } finally {
+    await rm(outputRoot, { recursive: true, force: true });
+  }
+});
+
 test("writes only the supported production workers and retains their runtime settings", async () => {
   const outputRoot = await mkdtemp(join(tmpdir(), "savia-cloudflare-config-"));
 
@@ -152,8 +184,12 @@ test("writes only the supported production workers and retains their runtime set
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
     ]);
     assert.ok(admin.assets.run_worker_first.includes("/health"));
+    assert.ok(
+      admin.assets.run_worker_first.includes("/companion-downloads.json"),
+    );
     assert.ok(admin.assets.run_worker_first.includes("/mcp"));
     assert.ok(admin.assets.run_worker_first.includes("/public/forms/*"));
+    assert.ok(admin.assets.run_worker_first.includes("/public/bookings/*"));
     assert.ok(admin.assets.run_worker_first.includes("/register"));
     assert.equal(admin.assets.not_found_handling, "single-page-application");
   } finally {
@@ -311,5 +347,37 @@ test("preview rejects every normalized production origin and unknown preview hos
       }),
       /preview/,
     );
+  }
+});
+
+test("production search bindings are opt-in and cannot share preview vectors", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "savia-search-config-"));
+  try {
+    const options = {
+      authD1Id: "auth-id",
+      domainD1Id: "domain-id",
+      outputRoot,
+    };
+    await renderProductionConfigs(options);
+    assert.equal((await config(outputRoot, "api")).vectorize, undefined);
+    await renderProductionConfigs({
+      ...options,
+      pagesSearchIndex: "savia-pages-search-production",
+    });
+    assert.deepEqual((await config(outputRoot, "api")).vectorize, [
+      {
+        binding: "PAGES_VECTORIZE",
+        index_name: "savia-pages-search-production",
+      },
+    ]);
+    await assert.rejects(
+      renderProductionConfigs({
+        ...options,
+        pagesSearchIndex: "savia-pages-search-preview",
+      }),
+      /Production cannot use/,
+    );
+  } finally {
+    await rm(outputRoot, { recursive: true, force: true });
   }
 });

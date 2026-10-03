@@ -204,3 +204,101 @@ summary:focus-visible {
     gap: 6px;
   }
 }
+
+.office-suite-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  color: #626b68;
+}
+.office-loading {
+  gap: 12px;
+  background: #f6f8f7;
+}
+.office-loading strong {
+  color: #253b32;
+  font-size: 18px;
+  font-weight: 600;
+}
+.office-loading p {
+  margin: 0;
+  max-width: 55ch;
+  font-size: 14px;
+}
+.office-loading > span {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #626b68;
+}
+.office-loading-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 8px;
+  background: #17664b;
+  color: white;
+  font-weight: 600;
+  font-size: 24px;
+  border-radius: 12px;
+}
+.office-footer-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+}
+.office-attribution {
+  font-size: 11px;
+  color: #626b68;
+}
+.office-save {
+  background: #17664b;
+  border-color: #17664b;
+}
+.office-save:hover:not(:disabled) {
+  background: #12543e;
+}
+
+.office-header {
+  padding: 12px 24px;
+  gap: 20px;
+  border-color: #e2e8e7;
+}
+.office-back {
+  color: #116c59;
+}
+.office-title h1 {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+.office-suite-label {
+  color: #64736f;
+  font-size: 11px;
+}
+.office-title p {
+  font-size: 12px;
+  color: #64736f;
+}
+.office-version {
+  margin-left: 12px;
+}
+.office-actions button {
+  border-radius: 8px;
+  font-weight: 550;
+}
+.office-footer {
+  border-color: #e2e8e7;
+  background: #fbfcfc;
+  color: #64736f;
+}
+@media (max-width: 760px) {
+  .office-header {
+    padding: 10px 12px;
+    gap: 12px;
+  }
+  .office-actions button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}

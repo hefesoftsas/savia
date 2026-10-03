@@ -127,6 +127,16 @@ it("serves SPA and Office documents, preserves public isolation, and never subst
   const pub = await get("/public/forms/abcdefghijklmnopqrst");
   expect(pub.headers["cache-control"]).toBe("no-store");
   expect(pub.headers["referrer-policy"]).toBe("no-referrer");
+  for (const path of [
+    "/public/bookings/abcdefghijklmnopqrst",
+    "/public/bookings/manage/abcdefghijklmnopqrst",
+  ]) {
+    const booking = await get(path);
+    expect(booking.body).toContain("app");
+    expect(booking.headers["cache-control"]).toBe("no-store");
+    expect(booking.headers["referrer-policy"]).toBe("no-referrer");
+    expect(booking.headers["x-robots-tag"]).toBe("noindex, nofollow");
+  }
   const publicPage = await get("/public/pages/abcdefghijklmnopqrst/child");
   expect(publicPage.body).toContain("app");
   expect(publicPage.headers["cache-control"]).toBe("no-store");

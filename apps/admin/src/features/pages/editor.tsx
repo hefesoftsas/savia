@@ -40,6 +40,7 @@ import { CollectionBlock, type CollectionReference } from "./collection-block";
 import { richBlockPlugins, richBlockTemplate } from "./rich-blocks";
 import { RichBlockNormalizationPlugin } from "./rich-block-normalization";
 import { PagesClient } from "./client";
+import type { IssueProvider } from "./use-issue-providers";
 import {
   Code,
   ArrowUpToLine,
@@ -80,7 +81,7 @@ const EditorContext = createContext<{
   api: ApiClient;
   pages: PagesClient;
   pageId: string;
-  issueProviders: Array<"jira" | "linear">;
+  issueProviders: IssueProvider[];
 } | null>(null);
 function useEditorContext() {
   const value = useContext(EditorContext);
@@ -249,7 +250,7 @@ const plugins = [
   ...richBlockPlugins,
   RichBlockNormalizationPlugin,
 ];
-const emptyIssueProviders: Array<"jira" | "linear"> = [];
+const emptyIssueProviders: Array<"jira" | "linear" | "github"> = [];
 
 export const PageEditor = memo(function PageEditor({
   pageId,
@@ -268,7 +269,7 @@ export const PageEditor = memo(function PageEditor({
   pages: PagesClient;
   onChange(value: Value): void;
   onPendingUpload?(pending: boolean): void;
-  issueProviders?: Array<"jira" | "linear">;
+  issueProviders?: Array<"jira" | "linear" | "github">;
 }) {
   const context = useMemo(
     () => ({ api, pages, pageId, issueProviders }),
@@ -296,7 +297,7 @@ export const PageEditor = memo(function PageEditor({
   const [insert, setInsert] = useState<"issue" | "collection" | null>(null),
     [url, setUrl] = useState("");
   const [issueProviderToInsert, setIssueProviderToInsert] = useState<
-    "jira" | "linear" | null
+    "jira" | "linear" | "github" | null
   >(null);
   const [slashMenu, setSlashMenu] = useState(false),
     [commandQuery, setCommandQuery] = useState("");
@@ -569,7 +570,13 @@ export const PageEditor = memo(function PageEditor({
     },
     ...issueProviders.map((provider) => ({
       id: `issue-${provider}`,
-      label: te(provider === "jira" ? "Jira issue" : "Linear issue"),
+      label: te(
+        provider === "jira"
+          ? "Jira issue"
+          : provider === "linear"
+            ? "Linear issue"
+            : "GitHub issue or pull request",
+      ),
       icon: Type,
       action: () => openSlashInsert("issue", provider),
     })),
@@ -682,7 +689,7 @@ export const PageEditor = memo(function PageEditor({
   }
   function openSlashInsert(
     kind: "issue" | "collection",
-    provider?: "jira" | "linear",
+    provider?: "jira" | "linear" | "github",
   ) {
     returnFocusToEditor.current = false;
     setSlashMenu(false);
@@ -794,7 +801,12 @@ export const PageEditor = memo(function PageEditor({
     ) {
       const bounds = editorContentRef.current.getBoundingClientRect();
       const x = Math.max(8, rect.left + rect.width / 2 - bounds.left);
-      const y = Math.max(0, rect.top - bounds.top - 44);
+      // Allow the toolbar above the first line; flip below only at the viewport edge.
+      const y =
+        (rect.top >= 52
+          ? rect.top - 44
+          : Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 44))) -
+        bounds.top;
       setSelectionTools((previous) =>
         previous?.x === x && previous.y === y ? previous : { x, y },
       );
@@ -888,7 +900,7 @@ export const PageEditor = memo(function PageEditor({
         >
           {!readOnly && (
             <>
-              {hoverBlock && !slashMenu && !insert && (
+              {hoverBlock && !selectionTools && !slashMenu && !insert && (
                 <div
                   className="page-editor-block-controls"
                   ref={blockControlsRef}
@@ -1541,7 +1553,9 @@ export const PageEditor = memo(function PageEditor({
                     ? te(
                         issueProviderToInsert === "jira"
                           ? "Jira issue"
-                          : "Linear issue",
+                          : issueProviderToInsert === "linear"
+                            ? "Linear issue"
+                            : "GitHub issue or pull request",
                       )
                     : t("Collection")}
                 </DialogTitle>
@@ -1550,7 +1564,9 @@ export const PageEditor = memo(function PageEditor({
                     ? te(
                         issueProviderToInsert === "jira"
                           ? "Jira issue hint"
-                          : "Linear issue hint",
+                          : issueProviderToInsert === "linear"
+                            ? "Linear issue hint"
+                            : "GitHub issue hint",
                       )
                     : t("Write")}
                 </DialogDescription>

@@ -36,6 +36,16 @@ vi.mock("./features/pages/public-page", () => ({
     </div>
   ),
 }));
+vi.mock("./features/bookings/public-booking-page", () => ({
+  PublicBookingPage: ({ token }: { token: string }) => (
+    <div>Public booking {token}</div>
+  ),
+}));
+vi.mock("./features/bookings/public-booking-manage-page", () => ({
+  PublicBookingManagePage: ({ token }: { token: string }) => (
+    <div>Manage booking {token}</div>
+  ),
+}));
 import { ApplicationRoot } from "./bootstrap";
 afterEach(cleanup);
 it("opens a public form without importing admin services or touching private persistence", async () => {
@@ -56,6 +66,25 @@ it("opens an anonymous public page route without importing the private applicati
     await screen.findByText("Public page 0123456789abcdefghijkl page-2"),
   ).toBeInTheDocument();
   expect(calls.admin.mock.calls.length).toBe(previous);
+});
+
+it("opens booking and booking management anonymously without importing private services or PWA setup", async () => {
+  const previous = calls.admin.mock.calls.length;
+  render(
+    <ApplicationRoot pathname="/public/bookings/0123456789abcdefghijkl" />,
+  );
+  expect(
+    await screen.findByText("Public booking 0123456789abcdefghijkl"),
+  ).toBeInTheDocument();
+  render(
+    <ApplicationRoot pathname="/public/bookings/manage/0123456789abcdefghijkl" />,
+  );
+  expect(
+    await screen.findByText("Manage booking 0123456789abcdefghijkl"),
+  ).toBeInTheDocument();
+  expect(calls.admin.mock.calls.length).toBe(previous);
+  expect(calls.appearance).not.toHaveBeenCalled();
+  expect(calls.worker).not.toHaveBeenCalled();
 });
 it("rejects malformed public paths without falling through to private login", () => {
   render(<ApplicationRoot pathname="/public/forms/invalid/nested" />);

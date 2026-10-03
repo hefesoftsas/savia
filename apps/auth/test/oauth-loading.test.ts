@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { oauthPageResponse } from "../src/oauth-pages";
 
 async function loadingHarness() {
   const loading = { hidden: true };
   const content = { hidden: false };
+  const resume = { hidden: true, href: "" };
   const secondFactor = { hidden: true };
   const status = { textContent: "" };
   const button = { disabled: false };
@@ -24,6 +25,7 @@ async function loadingHarness() {
   const targets: Record<string, unknown> = {
     "[data-oauth-loading]": loading,
     "[data-oauth-content]": content,
+    "[data-oauth-resume]": resume,
     "[data-oauth-two-factor]": secondFactor,
     "#oauth-status": status,
     '[data-oauth-form="sign-in"]': form,
@@ -47,6 +49,7 @@ async function loadingHarness() {
   return {
     loading,
     content,
+    resume,
     secondFactor,
     status,
     button,
@@ -88,5 +91,23 @@ describe("shared authentication loading", () => {
     expect(h.redirects).toEqual(["https://example.test/auth/callback"]);
     expect(h.loading.hidden).toBe(false);
     expect(h.content.hidden).toBe(true);
+  });
+  it("restores a manual continuation when browser navigation does not finish", async () => {
+    vi.useFakeTimers();
+    try {
+      const h = await loadingHarness();
+      const submitted = h.submit({ preventDefault() {} });
+      h.resolve(Response.json({ url: "https://example.test/auth/callback" }));
+      await submitted;
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(h.loading.hidden).toBe(true);
+      expect(h.content.hidden).toBe(false);
+      expect(h.resume.hidden).toBe(false);
+      expect(h.resume.href).toBe("https://example.test/auth/callback");
+      expect(h.status.textContent).toContain("Continuar");
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });

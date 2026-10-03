@@ -88,6 +88,43 @@ describe("tenantHostGuard", () => {
     expect(body.expectedHost).toBe("merkaseguros.savia.app.hefesoft.com");
   });
 
+  it("rejects conflicting host and tenant header for recording-scoped OAuth users even when they belong to both", async () => {
+    const member = agencyMemberAuthenticator();
+    const app = createTestApp({
+      auth: {
+        async authenticate(request, database) {
+          const actor = await member.authenticate(request, database);
+          return {
+            ...actor,
+            credential: { kind: "oauth" as const, scopes: ["recordings:read"] },
+            memberships: [
+              ...actor.memberships,
+              {
+                id: "second-membership",
+                principalId: actor.principal.id,
+                tenantId: 202,
+                agencyId: 202,
+                role: "viewer",
+                isActive: true,
+                createdAt: "2026-01-01",
+                updatedAt: "2026-01-01",
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    const response = await app.request(
+      "https://other-agency.savia.app.hefesoft.com/v1/identity/me",
+      { headers: { "x-savia-tenant-slug": "merkaseguros" } },
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      error: { code: "TENANT_HOST_MISMATCH" },
+    });
+  });
+
   it("allows platform administrators to access any tenant subdomain", async () => {
     const app = createTestApp({
       auth: platformAdministratorAuthenticator(),
@@ -182,4 +219,28 @@ it("allows only the owner through a legacy alias and uses the canonical URL in m
     "https://legacy-other.savia-preview.hefesoft.com/v1/identity/me",
   );
   expect(other.status).toBe(403);
+});
+
+it("rejects a key on a foreign hostname even with its own tenant header", async () => {
+  const base = platformAdministratorAuthenticator();
+  const app = createTestApp({
+    auth: {
+      async authenticate(r, d) {
+        return {
+          ...(await base.authenticate(r, d)),
+          credential: {
+            kind: "personal-api-key" as const,
+            keyId: "key",
+            tenantId: 101,
+            scopes: ["recordings:read" as const],
+          },
+        };
+      },
+    },
+  });
+  const response = await app.request(
+    "https://other-agency.savia.app.hefesoft.com/v1/identity/me",
+    { headers: { "x-savia-tenant-slug": "merkaseguros" } },
+  );
+  expect(response.status).toBe(403);
 });

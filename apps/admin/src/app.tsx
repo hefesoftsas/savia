@@ -1,3 +1,8 @@
+import {
+  OfficeAvailabilityProvider,
+  useOfficeAvailability,
+} from "@/features/office-settings/office-availability";
+import { officeSuiteMessages } from "@/features/office-suite/messages";
 import { useMessages } from "@/i18n/core";
 import { uiMessages } from "@/i18n/locales/ui";
 import {
@@ -37,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { RouteLoading } from "@/components/admin/route-loading";
 import { TenantHostMismatchError } from "@/components/admin/tenant-mismatch-error";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
+import { bookingMessages } from "@/features/bookings/booking-messages";
 
 const RolePages = lazy(async () => ({
   default: (await import("@/features/access-control/role-pages")).RolePages,
@@ -57,11 +63,57 @@ const PersonalIntegrationsPage = lazy(async () => {
     await import("@/features/personal-integrations/personal-integrations-page");
   return { default: module.PersonalIntegrationsPage };
 });
+function OfficeSuiteAccess({ children }: { children: React.ReactNode }) {
+  const policy = useOfficeAvailability();
+  const t = useMessages(officeSuiteMessages);
+  if (policy.loading) return <RouteLoading />;
+  if (!policy.enabled)
+    return (
+      <main className="mx-auto max-w-2xl py-8" role="status">
+        <h1 className="text-xl font-semibold">{t("Office suite")}</h1>
+        <p className="mt-2 text-muted-foreground">
+          {t(
+            policy.error
+              ? "Could not check office availability. Reload to retry."
+              : "Office suite is disabled for this tenant.",
+          )}
+        </p>
+      </main>
+    );
+  return children;
+}
+const OfficeSuitePage = lazy(() =>
+  import("@/features/office-suite/office-suite-page").then((module) => ({
+    default: module.OfficeSuitePage,
+  })),
+);
 const PagesPage = lazy(() =>
   import("@/features/pages/pages-page").then((module) => ({
     default: module.PagesPage,
   })),
 );
+const BookingPage = lazy(() =>
+  import("@/features/bookings/booking-page").then((module) => ({
+    default: module.BookingPage,
+  })),
+);
+
+function BookingRoute({ services }: { services: AppServices }) {
+  const tenant = useCurrentTenant();
+  const t = useMessages(bookingMessages);
+  if (tenant.isLoading) return <RouteLoading />;
+  if (tenant.id === null)
+    return (
+      <main className="p-6" role="alert">
+        {t("Appointments are available inside a tenant workspace.")}
+      </main>
+    );
+  return (
+    <Suspense fallback={<RouteLoading variant="cards" />}>
+      <BookingPage services={services} tenantId={tenant.id} />
+    </Suspense>
+  );
+}
 
 const CompanionRecordingsPage = lazy(async () => ({
   default: (await import("@/features/companion/recordings-page"))
@@ -184,7 +236,13 @@ function ServiceCredentialsRoute({ services }: { services: AppServices }) {
   );
 }
 
-function AccountRoute({ apiUrl }: { apiUrl: string }) {
+function AccountRoute({
+  apiUrl,
+  services,
+}: {
+  apiUrl: string;
+  services: AppServices;
+}) {
   const translate = useTranslate();
   return (
     <Suspense
@@ -196,7 +254,7 @@ function AccountRoute({ apiUrl }: { apiUrl: string }) {
         />
       }
     >
-      <AccountPage apiUrl={apiUrl} />
+      <AccountPage apiUrl={apiUrl} api={services.apiClient} />
     </Suspense>
   );
 }
@@ -315,114 +373,132 @@ function AppContent({ services }: { services?: AppServices } = {}) {
   return (
     <QueryClientProvider client={queryClient}>
       <AppServicesProvider services={appServices}>
-        <TenantTitleSync title={pageTitle} />
-        <OfflineBanner />
-        <Admin
-          authProvider={appServices.authProvider}
-          dataProvider={appServices.dataProvider}
-          disableTelemetry
-          error={TenantHostMismatchError}
-          // Same branded splash as the boot sequence: cold start shows a
-          // single continuous visual through the auth check.
-          loading={PwaSplash}
-          requireAuth
-          queryClient={queryClient}
-          store={adminStore}
-          title={pageTitle}
-        >
-          <Resource {...users} />
-          <Resource {...tenants} />
-          <CustomRoutes>
-            <Route
-              path="/tenant-branding"
-              element={<TenantBrandingRoute services={appServices} />}
-            />
-            <Route
-              path="/roles"
-              element={
-                <Suspense fallback={<RouteLoading />}>
-                  <RolePages services={appServices} />
-                </Suspense>
-              }
-            />
-            <Route path="/" element={<Navigate to="/my-day" replace />} />
-            <Route
-              path="/pages/:pageId?"
-              element={
-                <Suspense fallback={<RouteLoading />}>
-                  <PagesPage services={appServices} />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/studio"
-              element={<StudioRoute services={appServices} />}
-            />
-            {/* Fase 1: alias legacy — #/crm sigue funcionando, canónica es #/studio */}
-            <Route
-              path="/crm"
-              element={<StudioRoute services={appServices} />}
-            />
-            <Route
-              path="/savia-request"
-              element={<SaviaRequestRoute services={appServices} />}
-            />
-            <Route
-              path="/savia-request/docs"
-              element={<SaviaRequestRoute docs services={appServices} />}
-            />
-            <Route
-              path="/auto-light-quotes/*"
-              element={<Navigate replace to="/savia-request" />}
-            />
-            <Route
-              path="/crm-connections"
-              element={<Navigate replace to="/my-integrations" />}
-            />
-            <Route
-              path="/my-integrations"
-              element={<PersonalIntegrationsRoute services={appServices} />}
-            />
-            <Route
-              path="/my-day"
-              element={<MyDayRoute services={appServices} />}
-            />
-            <Route
-              path="/notifications"
-              element={
-                <Suspense fallback={<RouteLoading />}>
-                  <NotificationInboxPage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/provider-credentials"
-              element={<Navigate to="/savia-request" replace />}
-            />
-            <Route
-              path="/account"
-              element={
-                <AccountRoute
-                  apiUrl={
-                    import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin
-                  }
-                />
-              }
-            />
-            <Route
-              path="/service-credentials"
-              element={<ServiceCredentialsRoute services={appServices} />}
-            />
-            <Route
-              path="/assistant-configuration"
-              element={<Navigate to="/service-credentials" replace />}
-            />
-            <Route
-              path="/companion-recordings"
-              element={<CompanionRecordingsRoute services={appServices} />}
-            />
-          </CustomRoutes>
-        </Admin>
+        <OfficeAvailabilityProvider apiClient={appServices.apiClient}>
+          <TenantTitleSync title={pageTitle} />
+          <OfflineBanner />
+          <Admin
+            authProvider={appServices.authProvider}
+            dataProvider={appServices.dataProvider}
+            disableTelemetry
+            error={TenantHostMismatchError}
+            // Same branded splash as the boot sequence: cold start shows a
+            // single continuous visual through the auth check.
+            loading={PwaSplash}
+            requireAuth
+            queryClient={queryClient}
+            store={adminStore}
+            title={pageTitle}
+          >
+            <Resource {...users} />
+            <Resource {...tenants} />
+            <CustomRoutes>
+              <Route
+                path="/tenant-branding"
+                element={<TenantBrandingRoute services={appServices} />}
+              />
+              <Route
+                path="/bookings"
+                element={<BookingRoute services={appServices} />}
+              />
+              <Route
+                path="/roles"
+                element={
+                  <Suspense fallback={<RouteLoading />}>
+                    <RolePages services={appServices} />
+                  </Suspense>
+                }
+              />
+              <Route path="/" element={<Navigate to="/my-day" replace />} />
+              <Route
+                path="/office-suite"
+                element={
+                  <Suspense fallback={<RouteLoading />}>
+                    <OfficeSuiteAccess>
+                      <OfficeSuitePage services={appServices} />
+                    </OfficeSuiteAccess>
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/pages/:pageId?"
+                element={
+                  <Suspense fallback={<RouteLoading />}>
+                    <PagesPage services={appServices} />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/studio"
+                element={<StudioRoute services={appServices} />}
+              />
+              {/* Fase 1: alias legacy — #/crm sigue funcionando, canónica es #/studio */}
+              <Route
+                path="/crm"
+                element={<StudioRoute services={appServices} />}
+              />
+              <Route
+                path="/savia-request"
+                element={<SaviaRequestRoute services={appServices} />}
+              />
+              <Route
+                path="/savia-request/docs"
+                element={<SaviaRequestRoute docs services={appServices} />}
+              />
+              <Route
+                path="/auto-light-quotes/*"
+                element={<Navigate replace to="/savia-request" />}
+              />
+              <Route
+                path="/crm-connections"
+                element={<Navigate replace to="/my-integrations" />}
+              />
+              <Route
+                path="/my-integrations"
+                element={<PersonalIntegrationsRoute services={appServices} />}
+              />
+              <Route
+                path="/my-day"
+                element={<MyDayRoute services={appServices} />}
+              />
+              <Route
+                path="/notifications"
+                element={
+                  <Suspense fallback={<RouteLoading />}>
+                    <NotificationInboxPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/provider-credentials"
+                element={<Navigate to="/savia-request" replace />}
+              />
+              <Route
+                path="/account"
+                element={
+                  <AccountRoute
+                    services={appServices}
+                    apiUrl={
+                      import.meta.env.VITE_SAVIA_API_URL ??
+                      window.location.origin
+                    }
+                  />
+                }
+              />
+              <Route
+                path="/service-credentials"
+                element={<ServiceCredentialsRoute services={appServices} />}
+              />
+              <Route
+                path="/assistant-configuration"
+                element={<Navigate to="/service-credentials" replace />}
+              />
+              <Route
+                path="/companion-recordings"
+                element={<CompanionRecordingsRoute services={appServices} />}
+              />
+            </CustomRoutes>
+          </Admin>
+        </OfficeAvailabilityProvider>
       </AppServicesProvider>
     </QueryClientProvider>
   );

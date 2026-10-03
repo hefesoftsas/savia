@@ -6,6 +6,9 @@ describe("ChatGPT OAuth UI", () => {
     const html = renderOAuthSurface("login", { tenantSlug: "team" });
     expect(html).toContain('data-social-provider="chatgpt"');
     expect(html).toContain('aria-label="Continuar con ChatGPT"');
+    expect(html).toMatch(/<div class="oauth-federated"[^>]*hidden=""/);
+    expect(html).toContain('data-oauth-show="sso" hidden=""');
+    expect(html).toContain('data-oauth-panel="sso" hidden=""');
   });
 
   it("uses the ChatGPT proof endpoints on its email verification page", () => {

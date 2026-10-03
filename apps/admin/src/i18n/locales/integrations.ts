@@ -7,6 +7,7 @@ export const integrationMessages = {
 
 /** Personal integrations (connections) and virtual AI employees UI copy. Keys are the Spanish source. */
 export const personalIntegrationsMessages = {
+  Aplicaciones: ["Aplicaciones", "Apps", "Aplicativos"],
   Integraciones: ["Integraciones", "Integrations", "Integrações"],
   "Ayuda sobre %{v1}": [
     "Ayuda sobre %{v1}",
@@ -47,6 +48,12 @@ export const personalIntegrationsMessages = {
       "An administrator must enable Linear in Nango. Then you can connect your account here.",
       "Um administrador precisa habilitar o Linear no Nango. Depois você poderá conectar sua conta aqui.",
     ],
+  "Un administrador debe habilitar GitHub en Nango. Después podrás conectar tu cuenta aquí.":
+    [
+      "Un administrador debe habilitar GitHub en Nango. Después podrás conectar tu cuenta aquí.",
+      "An administrator must enable GitHub in Nango. Then you can connect your account here.",
+      "Um administrador precisa habilitar o GitHub no Nango. Depois você poderá conectar sua conta aqui.",
+    ],
   "Conecta Jira Cloud para previsualizar incidencias en Páginas.": [
     "Conecta Jira Cloud para previsualizar incidencias en Páginas.",
     "Connect Jira Cloud to preview issues in Pages.",
@@ -56,6 +63,11 @@ export const personalIntegrationsMessages = {
     "Conecta Linear para previsualizar incidencias en Páginas.",
     "Connect Linear to preview issues in Pages.",
     "Conecte o Linear para visualizar issues nas Páginas.",
+  ],
+  "Conecta GitHub para previsualizar incidencias y pull requests en Páginas.": [
+    "Conecta GitHub para previsualizar incidencias y pull requests en Páginas.",
+    "Connect GitHub to preview issues and pull requests in Pages.",
+    "Conecte o GitHub para visualizar issues e pull requests nas Páginas.",
   ],
   "Ver configuración": ["Ver configuración", "View setup", "Ver configuração"],
   "Registra cada proveedor como una integración de Nango con permisos de solo lectura. Configura estas variables en el servidor y reinicia Savia:":

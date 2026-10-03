@@ -1,4 +1,15 @@
+import { PersonalApiKeys } from "./auth/personal-api-keys";
+import { registerPagesSearchSettingsRoutes } from "./routes/pages-search-settings";
+import { registerBookingRoutes } from "./bookings/routes";
+import { registerPagesSearchRoutes } from "./routes/pages-search";
+import type { PagesSearchBindings } from "./pages/cloudflare-search";
+import { PersonalIntegrationOperations } from "./personal-integrations/operations";
+import { createPersonalIntegrationRepository } from "./personal-integrations/repository";
+import { createPersonalIntegrationProviderRegistry } from "./personal-integrations/providers";
 import { registerPagesRoutes } from "./routes/pages";
+import { registerOfficeDocumentRoutes } from "./routes/office-documents";
+import { registerConnectedOfficeDocumentRoutes } from "./routes/connected-office-documents";
+import { registerOfficeSettingsRoutes } from "./routes/office-settings";
 import { registerPublicPagesRoutes } from "./pages/public-routes";
 import {
   registerCompanionRoutes,
@@ -84,6 +95,7 @@ import {
   type PersonalIntegrationRouteDependencies,
 } from "./routes/personal-integrations";
 import { registerUserPreferenceRoutes } from "./routes/user-preferences";
+import { registerPersonalCalendarRoutes } from "./personal-calendars/routes";
 import { registerNotifications } from "@savia/studio-server/notifications/routes";
 import { createNotificationPolicy } from "./notifications";
 import { actorFromContext, authenticationMiddleware } from "./auth/middleware";
@@ -123,6 +135,7 @@ export function createApp(
   collectionGatewayFactory: typeof createCollectionGateway = createCollectionGateway,
   identityBridgeKey?: string,
   companion?: CompanionOptions,
+  pagesSearch?: PagesSearchBindings,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -137,9 +150,28 @@ export function createApp(
     identityBridgeKey,
     publicForms,
   );
-  registerCompanionRoutes(app, companion);
+  registerCompanionRoutes(
+    app,
+    companion
+      ? {
+          ...companion,
+          personalFiles:
+            companion.personalFiles ??
+            (personalIntegrations?.nango
+              ? new PersonalIntegrationOperations(
+                  createPersonalIntegrationRepository(db),
+                  personalIntegrations.nango,
+                )
+              : undefined),
+        }
+      : undefined,
+  );
   registerRealtimeMutationHints(app, realtime, db);
   registerTenantEmailRoutes(app, db, resolvedAuthService, identityBridgeKey);
+  registerBookingRoutes(app, db, {
+    captcha: publicForms,
+    nango: personalIntegrations?.nango,
+  });
   registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSocialRoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantRegistrationSettingsRoutes(
@@ -228,13 +260,31 @@ export function createApp(
   registerTenantWorkspaceRoutes(app, db);
   registerTenantUserCapacityRoutes(app, db);
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
-  registerPagesRoutes(app, db, documents);
+  registerPersonalCalendarRoutes(app, db, {
+    secret: personalIntegrations?.calendarSecret,
+  });
+  registerPagesSearchSettingsRoutes(app, db);
+  registerPagesSearchRoutes(app, db, pagesSearch);
+  registerPagesRoutes(app, db, documents, pagesSearch);
+  registerOfficeDocumentRoutes(app, db, documents);
+  registerConnectedOfficeDocumentRoutes(
+    app,
+    db,
+    personalIntegrations ?? {
+      providers: createPersonalIntegrationProviderRegistry({}),
+    },
+  );
+  registerOfficeSettingsRoutes(app, db);
   registerPublicPagesRoutes(app, db, documents, publicForms);
   registerUserPreferenceRoutes(app, db);
   const notificationAuth = authenticationMiddleware(
     db,
     authenticator ??
-      betterAuthAuthenticator(resolvedAuthService, oauthResource),
+      betterAuthAuthenticator(
+        resolvedAuthService,
+        oauthResource,
+        new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+      ),
   );
   const notificationSession = async (context: Context, next: Next) => {
     const actor = actorFromContext(context);

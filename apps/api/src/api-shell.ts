@@ -1,3 +1,5 @@
+import { registerPersonalApiKeyRoutes } from "./auth/personal-api-key-routes";
+import { PersonalApiKeys } from "./auth/personal-api-keys";
 import {
   registrationBridge,
   registrationReadiness,
@@ -51,6 +53,9 @@ const oauthScopes = {
   email: "Verified Savia email",
   "savia.api.read": "Read Savia tenant data",
   "savia.api.write": "Execute Savia commands and administrative writes",
+  "recordings:read": "Read private Companion recordings and session workspaces",
+  "recordings:upload": "Upload private Companion recordings",
+  "recordings:process": "Generate notes and answers from private recordings",
 };
 
 type ScalarOAuthClient = {
@@ -89,6 +94,7 @@ const betterAuthSignInRoute = createRoute({
           schema: z.object({
             email: z.string().email(),
             password: z.string().min(1),
+            oauth_query: z.string().optional(),
           }),
         },
       },
@@ -217,7 +223,10 @@ const betterAuthTotpVerificationRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z.object({ code: z.string().regex(/^\d{6}$/) }),
+          schema: z.object({
+            code: z.string().regex(/^\d{6}$/),
+            oauth_query: z.string().optional(),
+          }),
         },
       },
       required: true,
@@ -249,7 +258,12 @@ const betterAuthRecoveryCodeRoute = createRoute({
   request: {
     body: {
       content: {
-        "application/json": { schema: z.object({ code: z.string().min(1) }) },
+        "application/json": {
+          schema: z.object({
+            code: z.string().min(1),
+            oauth_query: z.string().optional(),
+          }),
+        },
       },
       required: true,
     },
@@ -285,6 +299,13 @@ function registerOpenApiAuthentication(
   app: OpenAPIHono,
   oauthUrls: PublicAuthUrls,
 ): void {
+  app.openAPIRegistry.registerComponent("securitySchemes", "personalApiKey", {
+    type: "http",
+    scheme: "bearer",
+    bearerFormat: "savia_pat",
+    description:
+      "Personal key restricted to its recording scopes, owner, tenant and deployment",
+  });
   app.openAPIRegistry.registerComponent("securitySchemes", "sessionAuth", {
     type: "apiKey",
     in: "cookie",
@@ -507,8 +528,10 @@ export function createApiShell(
     const headers = publicAuthHeaders(context.req.raw);
     if (
       identityBridgeKey?.trim() &&
-      context.req.method === "POST" &&
-      context.req.path === "/api/auth/sign-in/social"
+      ((context.req.method === "POST" &&
+        context.req.path === "/api/auth/sign-in/social") ||
+        (context.req.method === "GET" &&
+          context.req.path === "/api/auth/savia-social/providers"))
     ) {
       const slug = parseTenantSlugFromHostname(
         new URL(context.req.url).hostname,
@@ -626,7 +649,11 @@ export function createApiShell(
   const authenticate = authenticationMiddleware(
     db,
     authenticator ??
-      betterAuthAuthenticator(resolvedAuthService, oauthResource),
+      betterAuthAuthenticator(
+        resolvedAuthService,
+        oauthResource,
+        new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+      ),
   );
   app.use("/v1/*", (context, next) =>
     anonymousRegistration(context.req.path)
@@ -638,7 +665,11 @@ export function createApiShell(
     authenticationMiddleware(
       db,
       authenticator ??
-        betterAuthAuthenticator(resolvedAuthService, oauthResource),
+        betterAuthAuthenticator(
+          resolvedAuthService,
+          oauthResource,
+          new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+        ),
     ),
   );
   app.use(
@@ -646,7 +677,11 @@ export function createApiShell(
     authenticationMiddleware(
       db,
       authenticator ??
-        betterAuthAuthenticator(resolvedAuthService, oauthResource),
+        betterAuthAuthenticator(
+          resolvedAuthService,
+          oauthResource,
+          new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+        ),
     ),
   );
   if (canonicalHost) {
@@ -656,6 +691,11 @@ export function createApiShell(
     );
     app.use("/api/assistant/*", guard);
   }
+  registerPersonalApiKeyRoutes(
+    app,
+    new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+    new URL(oauthUrls.authorizationUrl).origin,
+  );
   registerHealthRoute(app, db);
   app.doc31("/openapi.json", document);
   app.get("/docs", async (context) => {

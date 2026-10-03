@@ -4,6 +4,8 @@
 
 Savia documentation hub. If you are new, follow the onboarding track in order.
 
+[Companion mobile preview](companion/mobile.md) covers Flutter setup, native OAuth and device validation.
+
 ## Onboarding (new developers)
 
 | #   | Doc                                                            | Time      | Outcome                                    |
@@ -56,6 +58,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Account email](guides/account-email.md) — email verification, password recovery, tenant SMTP settings and local Mailpit testing.
 - [Social sign-in](guides/social-sign-in.md) — optional Google, Microsoft and ChatGPT sign-in, provider registration and tenant controls.
 
+- [Tenant booking](guides/tenant-booking.md) — native tenant services, availability, public reservations and optional personal calendars.
+
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.
 - [cookie-consent.md](cookie-consent.md) — mandatory once-per-user cookie consent banner for the SPA and public forms.
 - [permissions.md](permissions.md) — scoped roles, record and field permissions, revocation and rollout.
@@ -89,7 +93,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 - [Documents and deliveries](guides/document-delivery.md): saved attachments, OneDrive copies and confirmed Outlook sends.
 - [Personal pages](guides/pages.md): private and shared documents, collection views, history and attachments.
-- [Jira and Linear issue links](guides/issue-links.md): read-only personal connections and safe transient previews.
+- [Jira, Linear, and GitHub issue links](guides/issue-links.md): read-only personal connections and safe transient previews.
 
 - [Initial database baseline](guides/database-initial-baseline.md) — fresh installation and pre-production reset.
 
@@ -98,3 +102,6 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Tenant email registration](guides/tenant-registration.md): independent tenant opt-in, Turnstile/ALTCHA configuration, verified Viewer provisioning and quota handling.
 
 - [Plugin development kit](guides/plugin-development.md): scaffold, SDK, generic UI, local iframe development, and testing.
+
+- [Personal API keys](guides/personal-api-keys.md) — create and revoke scoped credentials for Companion.
+- [Test coverage](guides/test-coverage.md) — run the local coverage suite and inspect merged CI reports.

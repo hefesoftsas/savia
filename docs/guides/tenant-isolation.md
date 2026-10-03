@@ -104,6 +104,20 @@ package catalog, not a tenant workspace.
 Native PostgreSQL authentication also uses PostgreSQL notice triggers, allowing
 email-verification and two-factor events to work during local startup checks.
 
+Admin refresh sessions are bound server-side to the exact origin that initiated
+the login. Canonical and tenant origins remain separate session origins, including
+for platform administrators. The OAuth callback may pass through the canonical
+origin, but returns the session to its recorded initiating origin. Trying to
+renew a session from a different host is rejected and requires an explicit login
+from that host. Existing admin sessions must log in once after this change is
+deployed; this does not imply that the external identity provider will always
+prompt for credentials again.
+
+A tab requesting renewal from another origin receives 401 and must sign in
+again. It does not revoke a valid session belonging to that other origin or
+clear shared cookies: an older tab must not sign out a newly authenticated tab.
+Missing or expired origin bindings still trigger session cleanup.
+
 ## Local checks
 
 Run `node --test scripts/tenant-only-migration.test.mjs` for populated SQLite

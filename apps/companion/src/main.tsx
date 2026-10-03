@@ -10,6 +10,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import {
   apiOrigin as validateApiOrigin,
   companionRequest,
+  canUploadRecording,
   native,
   type Capabilities,
   type CaptureStatus,
@@ -148,7 +149,7 @@ function App() {
 
   const upload = () =>
     run("Uploading to Savia", async () => {
-      if (!capabilities?.storageAvailable || !consent)
+      if (!canUploadRecording(capabilities) || !consent)
         throw new Error(
           "Connect storage and confirm permission before upload.",
         );
@@ -199,7 +200,7 @@ function App() {
     (status.state === "recording"
       ? false
       : ready
-        ? complete || !capabilities?.storageAvailable || !consent
+        ? complete || !canUploadRecording(capabilities) || !consent
         : !isTauri() || !selectedSources);
 
   const primaryAction = () => {
@@ -307,7 +308,7 @@ function App() {
                 />
               </label>
               <label>
-                Savia access token
+                Savia API key or access token
                 <input
                   type="password"
                   value={token}
@@ -315,7 +316,7 @@ function App() {
                     changeConnection(() => setToken(event.target.value))
                   }
                   autoComplete="off"
-                  placeholder="Paste a Savia token"
+                  placeholder="Paste your Savia credential"
                 />
               </label>
               <label>
@@ -501,7 +502,15 @@ function App() {
             Connect a Savia server with recording storage enabled.
           </p>
         )}
-        {ready && !complete && capabilities?.storageAvailable && !consent && (
+        {connected &&
+          capabilities?.storageAvailable &&
+          !canUploadRecording(capabilities) && (
+            <p className="action-guidance">
+              This key cannot upload recordings. Connect with recordings:upload
+              permission.
+            </p>
+          )}
+        {ready && !complete && canUploadRecording(capabilities) && !consent && (
           <p className="action-guidance">
             Confirm permission to enable upload.
           </p>

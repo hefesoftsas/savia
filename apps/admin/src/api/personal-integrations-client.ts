@@ -5,6 +5,26 @@ import type {
   SendPersonalMailInput,
 } from "@savia/studio-shared/mail-contracts";
 import type { ApiClient } from "./api-client";
+import type {
+  CalendarSource,
+  CalendarSourceEvents,
+  CalendarRange,
+  CalendarPreferences,
+  CreateCalendarSourceInput,
+  UpdateCalendarSourceInput,
+} from "@savia/studio-shared/calendar-contracts";
+
+export type CalendarSourcesClient = Pick<
+  PersonalIntegrationsClient,
+  | "listCalendarSources"
+  | "createCalendarSource"
+  | "updateCalendarSource"
+  | "deleteCalendarSource"
+  | "listCalendarSourceEvents"
+  | "refreshCalendarSource"
+  | "getCalendarPreferences"
+  | "saveCalendarPreferences"
+>;
 
 export type PersonalIntegrationProviderId =
   | "google_drive"
@@ -14,7 +34,8 @@ export type PersonalIntegrationProviderId =
   | "onedrive_personal"
   | "onedrive_business"
   | "jira"
-  | "linear";
+  | "linear"
+  | "github";
 export type PersonalIntegrationAvailability = "enabled" | "unavailable";
 export type PersonalIntegrationConnectionStatus =
   "pending" | "connected" | "reconnect_required" | "disconnected" | "failed";
@@ -50,15 +71,19 @@ export type PersonalCalendarEvent = {
   startsAt: string | null;
   endsAt: string | null;
   webLink: string | null;
+  allDay?: boolean;
+  timeZone?: string;
 };
 export type PersonalCalendarProvider = "google_calendar" | "outlook";
 export type PersonalIssuePreview = {
-  provider: "jira" | "linear";
+  provider: "jira" | "linear" | "github";
   url: string;
   identifier: string;
   title: string;
   status: string | null;
   assignee: string | null;
+  repository?: string;
+  kind?: "issue" | "pull_request";
 };
 
 type ProviderDocument = {
@@ -115,6 +140,87 @@ export class PersonalIntegrationsClient {
     this.connectionsCache = null;
     this.eventsInflight.clear();
   };
+
+  async listCalendarSources(): Promise<CalendarSource[]> {
+    return (
+      await this.api.get<{ data: CalendarSource[] }>(
+        "/v1/personal-integrations/calendars",
+      )
+    ).data;
+  }
+  async createCalendarSource(
+    input: CreateCalendarSourceInput,
+  ): Promise<CalendarSource> {
+    const source = (
+      await this.api.post<{ data: CalendarSource }>(
+        "/v1/personal-integrations/calendars",
+        input,
+      )
+    ).data;
+    announcePersonalIntegrationsChanged();
+    return source;
+  }
+  async updateCalendarSource(
+    id: string,
+    input: UpdateCalendarSourceInput,
+  ): Promise<CalendarSource> {
+    const source = (
+      await this.api.patch<{ data: CalendarSource }>(
+        `/v1/personal-integrations/calendars/${encodeURIComponent(id)}`,
+        input,
+      )
+    ).data;
+    announcePersonalIntegrationsChanged();
+    return source;
+  }
+  async deleteCalendarSource(id: string): Promise<void> {
+    await this.api.delete(
+      `/v1/personal-integrations/calendars/${encodeURIComponent(id)}`,
+    );
+    announcePersonalIntegrationsChanged();
+  }
+  async listCalendarSourceEvents(
+    id: string,
+    range: CalendarRange,
+  ): Promise<CalendarSourceEvents> {
+    const query = new URLSearchParams({
+      from: range.from,
+      to: range.to,
+      timeZone: range.timeZone,
+    });
+    if (range.refresh) query.set("refresh", "true");
+    return this.api.get<CalendarSourceEvents>(
+      `/v1/personal-integrations/calendars/${encodeURIComponent(id)}/events?${query}`,
+    );
+  }
+  async refreshCalendarSource(id: string): Promise<CalendarSource> {
+    const source = (
+      await this.api.post<{ data: CalendarSource }>(
+        `/v1/personal-integrations/calendars/${encodeURIComponent(id)}/refresh`,
+      )
+    ).data;
+    announcePersonalIntegrationsChanged();
+    return source;
+  }
+  async getCalendarPreferences(): Promise<CalendarPreferences> {
+    return (
+      await this.api.get<{ data: CalendarPreferences }>(
+        "/v1/user-preferences/calendar",
+      )
+    ).data;
+  }
+  async saveCalendarPreferences(
+    input: CalendarPreferences,
+  ): Promise<CalendarPreferences> {
+    const preferences = (
+      await this.api.put<{ data: CalendarPreferences }>(
+        "/v1/user-preferences/calendar",
+        input,
+      )
+    ).data;
+    announcePersonalIntegrationsChanged();
+    return preferences;
+  }
 
   async listProviders(): Promise<PersonalIntegrationProvider[]> {
     const response = await this.api.get<{ data: ProviderDocument[] }>(

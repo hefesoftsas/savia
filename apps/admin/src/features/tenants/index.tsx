@@ -1,3 +1,6 @@
+import "@/features/service-credentials/service-credentials.css";
+import { OfficeSettingsPanel } from "@/features/office-settings/office-settings-panel";
+import { useAppServices } from "@/features/assistant/assistant-context";
 import { TenantAccessUrl } from "@/features/tenant-branding/tenant-access-url";
 import "@/features/tenant-branding/tenant-branding.css";
 import { ResourceEditSync } from "@/realtime/resource-realtime";
@@ -10,6 +13,7 @@ import {
   useTranslate,
 } from "ra-core";
 import { TenantUserCapacity } from "@/features/users/tenant-user-capacity";
+import { TenantPagesSearchSettingsPanel } from "@/features/tenant-pages-search/tenant-pages-search-settings-panel";
 import { TenantSignInLinks } from "@/features/tenant-sso/tenant-sign-in-links";
 import { useWatch } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
@@ -32,6 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { applyRealtimeListEvent } from "@/realtime/realtime-list";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
+import type { UserRecord } from "@/api/identity-user-data-provider";
 import type { TenantRecord } from "@/api/tenant-data-provider";
 
 function TenantFields() {
@@ -135,6 +140,21 @@ function InitialTenantUserFields() {
   );
 }
 
+function tenantMemberLabel(user: UserRecord) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left whitespace-normal">
+      <span className="break-words font-medium">
+        {user.displayName || user.email}
+      </span>{" "}
+      {user.displayName && (
+        <span className="break-all text-xs text-muted-foreground">
+          {user.email}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function ExistingTenantMemberFields() {
   const translate = useTranslate();
   return (
@@ -146,6 +166,9 @@ function ExistingTenantMemberFields() {
         sort={{ field: "displayName", order: "ASC" }}
       >
         <AutocompleteInput
+          optionText={tenantMemberLabel}
+          inputText={tenantMemberLabel}
+          popoverClassName="w-(--radix-popover-trigger-width)"
           label={translate("savia.tenants.fields.existingUser", {
             _: "Usuario existente",
           })}
@@ -323,6 +346,35 @@ function TenantCapacityEditor() {
   );
 }
 
+function TenantOfficeSettings() {
+  const record = useRecordContext<TenantRecord>();
+  const services = useAppServices();
+  if (!record || record.kind !== "commercial") return null;
+  return (
+    <div className="md:col-span-2">
+      <OfficeSettingsPanel
+        key={record.id}
+        tenantId={Number(record.id)}
+        services={services}
+      />
+    </div>
+  );
+}
+
+function TenantPagesSearchEditor() {
+  const record = useRecordContext<TenantRecord>();
+  const { apiClient } = useAppServices();
+  if (record?.kind !== "commercial" || !record.isActive || !apiClient?.get)
+    return null;
+  return (
+    <TenantPagesSearchSettingsPanel
+      key={record.id}
+      services={{ apiClient }}
+      tenantId={Number(record.id)}
+    />
+  );
+}
+
 function TenantAuthenticationLinks() {
   const record = useRecordContext<TenantRecord>();
   if (record?.kind !== "commercial" || !record.isActive) return null;
@@ -344,6 +396,8 @@ function TenantEdit() {
         <SavedTenantAccessUrl />
         <TenantFields />
         <TenantCapacityEditor />
+        <TenantOfficeSettings />
+        <TenantPagesSearchEditor />
         <TenantAuthenticationLinks />
       </SimpleForm>
     </Edit>

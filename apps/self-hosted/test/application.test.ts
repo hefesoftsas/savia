@@ -103,7 +103,9 @@ async function applicationScenario(postgresUrl?: string) {
     return response.json() as Promise<any>;
   }
   try {
-    app = await createApplication(config, {});
+    app = await createApplication(config, {
+      NANGO_GITHUB_INTEGRATION_ID: "github-test",
+    });
     expect(
       (await request(base + "/objects", "GET", undefined, false)).status,
     ).toBe(401);
@@ -121,6 +123,15 @@ async function applicationScenario(postgresUrl?: string) {
     await json("/api/auth/two-factor/verify-totp", 200, "POST", {
       code: totp(enrollment.totpURI),
     });
+    const providers = await json("/v1/personal-integrations/providers");
+    expect(providers.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "github",
+          attributes: expect.objectContaining({ availability: "enabled" }),
+        }),
+      ]),
+    );
     const users = await json("/v1/identity/users");
     expect(users.data).toEqual(
       expect.arrayContaining([

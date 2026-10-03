@@ -100,3 +100,27 @@ describe("Companion connection boundary", () => {
     ).rejects.toThrow("Request failed (500)");
   });
 });
+
+it("allows legacy connections but respects an explicit personal-key upload grant", async () => {
+  const { canUploadRecording } = await import("./client");
+  expect(canUploadRecording(null)).toBe(false);
+  expect(canUploadRecording({ storageAvailable: true } as any)).toBe(true);
+  expect(
+    canUploadRecording({
+      storageAvailable: true,
+      grantedRecordingScopes: ["recordings:read"],
+    } as any),
+  ).toBe(false);
+  expect(
+    canUploadRecording({
+      storageAvailable: true,
+      grantedRecordingScopes: ["recordings:upload"],
+    } as any),
+  ).toBe(true);
+  expect(
+    canUploadRecording({
+      storageAvailable: false,
+      grantedRecordingScopes: ["recordings:upload"],
+    } as any),
+  ).toBe(false);
+});

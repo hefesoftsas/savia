@@ -44,15 +44,70 @@ export type PersonalEvent = {
   startsAt: string | null;
   endsAt: string | null;
   webLink: string | null;
+  allDay?: boolean;
+  timeZone?: string | null;
+};
+
+const calendarPageSize = 100;
+const calendarPageLimit = 20;
+const calendarEventLimit = 2000;
+const calendarRangeMaxMilliseconds = 62 * 24 * 60 * 60 * 1000;
+
+// Microsoft Graph returns Windows timezone IDs. Keep this small, explicit map
+// for common mailbox zones; unknown IDs fail closed instead of shifting dates.
+const outlookWindowsTimeZones: Record<string, string> = {
+  UTC: "UTC",
+  "Coordinated Universal Time": "UTC",
+  "Pacific Standard Time": "America/Los_Angeles",
+  "US Mountain Standard Time": "America/Phoenix",
+  "Mountain Standard Time": "America/Denver",
+  "Central Standard Time": "America/Chicago",
+  "Eastern Standard Time": "America/New_York",
+  "Alaskan Standard Time": "America/Anchorage",
+  "Hawaiian Standard Time": "Pacific/Honolulu",
+  "Atlantic Standard Time": "America/Halifax",
+  "Newfoundland Standard Time": "America/St_Johns",
+  "SA Pacific Standard Time": "America/Bogota",
+  "Venezuela Standard Time": "America/Caracas",
+  "Argentina Standard Time": "America/Argentina/Buenos_Aires",
+  "E. South America Standard Time": "America/Sao_Paulo",
+  "GMT Standard Time": "Europe/London",
+  "W. Europe Standard Time": "Europe/Berlin",
+  "Romance Standard Time": "Europe/Paris",
+  "Central Europe Standard Time": "Europe/Budapest",
+  "E. Europe Standard Time": "Europe/Chisinau",
+  "FLE Standard Time": "Europe/Kyiv",
+  "Turkey Standard Time": "Europe/Istanbul",
+  "Israel Standard Time": "Asia/Jerusalem",
+  "Jordan Standard Time": "Asia/Amman",
+  "Arabian Standard Time": "Asia/Dubai",
+  "Arab Standard Time": "Asia/Riyadh",
+  "India Standard Time": "Asia/Kolkata",
+  "Nepal Standard Time": "Asia/Kathmandu",
+  "Bangladesh Standard Time": "Asia/Dhaka",
+  "SE Asia Standard Time": "Asia/Bangkok",
+  "Singapore Standard Time": "Asia/Singapore",
+  "China Standard Time": "Asia/Shanghai",
+  "Tokyo Standard Time": "Asia/Tokyo",
+  "Korea Standard Time": "Asia/Seoul",
+  "AUS Eastern Standard Time": "Australia/Sydney",
+  "E. Australia Standard Time": "Australia/Brisbane",
+  "Cen. Australia Standard Time": "Australia/Adelaide",
+  "Tasmania Standard Time": "Australia/Hobart",
+  "New Zealand Standard Time": "Pacific/Auckland",
+  "South Africa Standard Time": "Africa/Johannesburg",
+  "Egypt Standard Time": "Africa/Cairo",
 };
 
 export type PersonalIssuePreview = {
-  provider: "jira" | "linear";
+  provider: "jira" | "linear" | "github";
   url: string;
   identifier: string;
   title: string;
   status: string | null;
   assignee: string | null;
+  repository?: string;
+  kind?: "issue" | "pull_request";
 };
 
 export type PersonalIntegrationActionResult = {
@@ -210,6 +265,55 @@ function outlookContinuation(
     return null;
   }
   return null;
+}
+
+function calendarOutlookContinuation(
+  value: unknown,
+  path: string,
+  parameters: URLSearchParams,
+): string | null {
+  if (typeof value !== "string" || value.length > 4096) return null;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      url.hostname !== "graph.microsoft.com" ||
+      url.port !== "" ||
+      url.username ||
+      url.password ||
+      url.pathname !== path ||
+      url.hash
+    )
+      return null;
+    const fixedKeys = new Set(parameters.keys());
+    for (const key of fixedKeys) {
+      if (
+        url.searchParams.getAll(key).length !== 1 ||
+        url.searchParams.get(key) !== parameters.get(key)
+      )
+        return null;
+    }
+    for (const key of url.searchParams.keys()) {
+      if (!fixedKeys.has(key) && key !== "$skip" && key !== "$skiptoken")
+        return null;
+    }
+    const skipToken = url.searchParams.getAll("$skiptoken");
+    const skip = url.searchParams.getAll("$skip");
+    if (skipToken.length === 1 && skip.length === 0 && skipToken[0]) {
+      if (skipToken[0].length > 1024) return null;
+    } else if (
+      skip.length === 1 &&
+      skipToken.length === 0 &&
+      /^(?:0|[1-9][0-9]{0,6})$/.test(skip[0] ?? "")
+    ) {
+      // Graph can use an integer offset in place of an opaque skip token.
+    } else {
+      return null;
+    }
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
 }
 
 function stringValue(value: unknown): string | null {
@@ -393,6 +497,199 @@ function documentFolderId(value: unknown): string {
   return value;
 }
 
+const recordingFileLimit = 50_000_000;
+const recordingExtensions = new Set([
+  ".aac",
+  ".flac",
+  ".m4a",
+  ".mp3",
+  ".oga",
+  ".ogg",
+  ".opus",
+  ".wav",
+  ".webm",
+]);
+const recordingMimeTypes = new Set([
+  "audio/aac",
+  "audio/flac",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/opus",
+  "audio/wav",
+  "audio/webm",
+  "audio/x-flac",
+  "audio/x-m4a",
+  "audio/x-wav",
+]);
+
+function recordingFileId(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.length > 512 ||
+    value === "." ||
+    value === ".." ||
+    /[\\/\\?#\u0000-\u001f\u007f]/.test(value)
+  )
+    return invalidAction("The recording file ID is invalid");
+  return value;
+}
+
+function recordingMetadata(
+  payload: unknown,
+  expectedId: string,
+  provider: "google_drive" | "onedrive_personal" | "onedrive_business",
+): { name: string; mimeType: string; size?: number } {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    throw new PersonalIntegrationUpstreamError();
+  const item = payload as Record<string, unknown>;
+  if (item.id !== expectedId) throw new PersonalIntegrationUpstreamError();
+  const name = documentName(item.name);
+  let mimeType: unknown;
+  if (provider === "google_drive") {
+    if (item.mimeType === "application/vnd.google-apps.folder")
+      return invalidAction("Folders cannot be imported as recordings");
+    mimeType = item.mimeType;
+  } else {
+    if (item.folder && typeof item.folder === "object")
+      return invalidAction("Folders cannot be imported as recordings");
+    const file = item.file;
+    if (!file || typeof file !== "object" || Array.isArray(file))
+      return invalidAction("The selected file is not a supported recording");
+    mimeType = (file as Record<string, unknown>).mimeType;
+  }
+  const normalizedMimeType =
+    typeof mimeType === "string"
+      ? mimeType.split(";", 1)[0]?.trim().toLowerCase()
+      : "";
+  const extension = name.includes(".")
+    ? name.slice(name.lastIndexOf(".")).toLowerCase()
+    : "";
+  if (
+    !recordingExtensions.has(extension) ||
+    (normalizedMimeType !== "application/octet-stream" &&
+      !recordingMimeTypes.has(normalizedMimeType))
+  )
+    return invalidAction("The selected file is not a supported recording");
+  let size: number | undefined;
+  if (item.size !== undefined && item.size !== null) {
+    const rawSize = item.size;
+    const parsedSize =
+      typeof rawSize === "number"
+        ? rawSize
+        : typeof rawSize === "string" && /^\d{1,16}$/.test(rawSize)
+          ? Number(rawSize)
+          : Number.NaN;
+    if (!Number.isSafeInteger(parsedSize) || parsedSize < 0)
+      throw new PersonalIntegrationUpstreamError();
+    if (parsedSize > recordingFileLimit)
+      return invalidAction("The selected recording exceeds 50 MB");
+    size = parsedSize;
+  }
+  return {
+    name,
+    mimeType:
+      normalizedMimeType === "application/octet-stream"
+        ? "application/octet-stream"
+        : normalizedMimeType,
+    ...(size === undefined ? {} : { size }),
+  };
+}
+
+function microsoftDownloadUrl(value: string, baseUrl: string): string {
+  if (value.length > 8192) throw new PersonalIntegrationUpstreamError();
+  try {
+    const url = new URL(value, baseUrl);
+    const host = url.hostname.toLowerCase();
+    const allowedHost =
+      host === "sharepoint.com" ||
+      host.endsWith(".sharepoint.com") ||
+      host === "sharepoint-df.com" ||
+      host.endsWith(".sharepoint-df.com") ||
+      host === "1drv.com" ||
+      host.endsWith(".1drv.com") ||
+      host === "onedrive.live.com";
+    if (
+      url.protocol !== "https:" ||
+      !allowedHost ||
+      url.port ||
+      url.username ||
+      url.password ||
+      url.hash
+    )
+      throw new Error("Unsafe redirect");
+    return url.toString();
+  } catch {
+    throw new PersonalIntegrationUpstreamError();
+  }
+}
+
+async function boundedRecordingBytes(
+  response: Response,
+  advertisedSize?: number,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength !== null) {
+    if (!/^\d{1,16}$/.test(contentLength))
+      throw new PersonalIntegrationUpstreamError();
+    const length = Number(contentLength);
+    if (!Number.isSafeInteger(length))
+      throw new PersonalIntegrationUpstreamError();
+    if (length > recordingFileLimit)
+      return invalidAction("The selected recording exceeds 50 MB");
+  }
+  const bodyMimeType = response.headers
+    .get("content-type")
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  if (
+    bodyMimeType &&
+    bodyMimeType !== "application/octet-stream" &&
+    !recordingMimeTypes.has(bodyMimeType)
+  )
+    return invalidAction("The selected file is not a supported recording");
+  if (!response.body) throw new PersonalIntegrationUpstreamError();
+  const reader = response.body.getReader();
+  let bytes = new Uint8Array(0);
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > recordingFileLimit) {
+        await reader.cancel().catch(() => undefined);
+        return invalidAction("The selected recording exceeds 50 MB");
+      }
+      if (total > bytes.byteLength) {
+        const capacity = Math.min(
+          recordingFileLimit,
+          Math.max(
+            total,
+            bytes.byteLength === 0 ? 65_536 : bytes.byteLength * 2,
+          ),
+        );
+        const expanded = new Uint8Array(capacity);
+        expanded.set(bytes);
+        bytes = expanded;
+      }
+      bytes.set(value, total - value.byteLength);
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    if (error instanceof PersonalIntegrationInputError) throw error;
+    throw new PersonalIntegrationUpstreamError();
+  } finally {
+    reader.releaseLock();
+  }
+  if (total === 0) return invalidAction("The selected recording is empty");
+  if (advertisedSize !== undefined && total !== advertisedSize)
+    throw new PersonalIntegrationUpstreamError();
+  return bytes.subarray(0, total);
+}
+
 function assertExpectedConnectionKey(
   connection: ActivePersonalIntegrationConnection,
   expectedConnectionKey: string | undefined,
@@ -535,6 +832,47 @@ function graphResponseDateTime(value: unknown): string | null {
     : dateTime;
 }
 
+function outlookOriginalTimeZone(value: unknown): string {
+  if (typeof value !== "string")
+    throw new PersonalIntegrationUpstreamError(
+      "The Outlook event timezone is missing",
+    );
+  const timeZone = Object.prototype.hasOwnProperty.call(
+    outlookWindowsTimeZones,
+    value,
+  )
+    ? outlookWindowsTimeZones[value]
+    : undefined;
+  if (timeZone) return timeZone;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return value;
+  } catch {
+    throw new PersonalIntegrationUpstreamError(
+      "The Outlook event timezone is unsupported",
+    );
+  }
+}
+
+function outlookAllDayDate(value: unknown, timeZone: string): string {
+  const instant = graphResponseDateTime(value);
+  const timestamp = instant ? Date.parse(instant) : Number.NaN;
+  if (!Number.isFinite(timestamp)) throw new PersonalIntegrationUpstreamError();
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(timestamp);
+  const part = (type: "year" | "month" | "day") =>
+    parts.find((entry) => entry.type === type)?.value;
+  const year = part("year");
+  const month = part("month");
+  const day = part("day");
+  if (!year || !month || !day) throw new PersonalIntegrationUpstreamError();
+  return `${year.padStart(4, "0")}-${month}-${day}`;
+}
+
 function gmailRawMessage(input: {
   to: string[];
   subject: string;
@@ -599,7 +937,10 @@ function filesFromOneDrive(payload: unknown): PersonalFile[] {
   });
 }
 
-function eventsFromGoogle(payload: unknown): PersonalEvent[] {
+function eventsFromGoogle(
+  payload: unknown,
+  includeCalendarMetadata = false,
+): PersonalEvent[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return [];
   const events = (payload as { items?: unknown }).items;
@@ -610,8 +951,10 @@ function eventsFromGoogle(payload: unknown): PersonalEvent[] {
     const id = stringValue(item.id);
     if (!id) return [];
     const start = item.start as
-      { dateTime?: unknown; date?: unknown } | undefined;
-    const end = item.end as { dateTime?: unknown; date?: unknown } | undefined;
+      { dateTime?: unknown; date?: unknown; timeZone?: unknown } | undefined;
+    const end = item.end as
+      { dateTime?: unknown; date?: unknown; timeZone?: unknown } | undefined;
+    if (item.status === "cancelled") return [];
     return [
       {
         id,
@@ -619,12 +962,22 @@ function eventsFromGoogle(payload: unknown): PersonalEvent[] {
         startsAt: stringValue(start?.dateTime) ?? stringValue(start?.date),
         endsAt: stringValue(end?.dateTime) ?? stringValue(end?.date),
         webLink: secureWebLink(item.htmlLink),
+        ...(includeCalendarMetadata
+          ? {
+              allDay: typeof start?.date === "string",
+              timeZone:
+                stringValue(start?.timeZone) ?? stringValue(end?.timeZone),
+            }
+          : {}),
       },
     ];
   });
 }
 
-function eventsFromOutlook(payload: unknown): PersonalEvent[] {
+function eventsFromOutlook(
+  payload: unknown,
+  includeCalendarMetadata = false,
+): PersonalEvent[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return [];
   const events = (payload as { value?: unknown }).value;
@@ -633,16 +986,37 @@ function eventsFromOutlook(payload: unknown): PersonalEvent[] {
     if (!event || typeof event !== "object" || Array.isArray(event)) return [];
     const item = event as Record<string, unknown>;
     const id = stringValue(item.id);
-    if (!id) return [];
+    if (!id || item.isCancelled === true || item.showAs === "cancelled")
+      return [];
     const start = item.start;
     const end = item.end;
+    const startTimeZone =
+      start && typeof start === "object" && !Array.isArray(start)
+        ? stringValue((start as Record<string, unknown>).timeZone)
+        : null;
+    const allDay = item.isAllDay === true;
+    let startsAt = graphResponseDateTime(start);
+    let endsAt = graphResponseDateTime(end);
+    let timeZone = startTimeZone;
+    if (includeCalendarMetadata && allDay) {
+      const originalStartTimeZone = outlookOriginalTimeZone(
+        item.originalStartTimeZone,
+      );
+      const originalEndTimeZone = outlookOriginalTimeZone(
+        item.originalEndTimeZone,
+      );
+      startsAt = outlookAllDayDate(start, originalStartTimeZone);
+      endsAt = outlookAllDayDate(end, originalEndTimeZone);
+      timeZone = originalStartTimeZone;
+    }
     return [
       {
         id,
         title: stringValue(item.subject),
-        startsAt: graphResponseDateTime(start),
-        endsAt: graphResponseDateTime(end),
+        startsAt,
+        endsAt,
         webLink: secureWebLink(item.webLink),
+        ...(includeCalendarMetadata ? { allDay, timeZone } : {}),
       },
     ];
   });
@@ -667,7 +1041,85 @@ export class PersonalIntegrationOperations {
     );
     if (issueLink.provider === "jira")
       return this.previewJiraIssue(connection, issueLink);
+    if (issueLink.provider === "github")
+      return this.previewGitHubIssue(connection, issueLink);
     return this.previewLinearIssue(connection, issueLink);
+  }
+
+  private async previewGitHubIssue(
+    connection: ActivePersonalIntegrationConnection,
+    issueLink: NonNullable<ReturnType<typeof parseIssueLink>> & {
+      provider: "github";
+    },
+  ): Promise<PersonalIssuePreview> {
+    const pathKind = issueLink.kind === "pull_request" ? "pulls" : "issues";
+    const response = await this.nango.proxy({
+      method: "GET",
+      path: `/repos/${encodeURIComponent(issueLink.owner)}/${encodeURIComponent(issueLink.repository)}/${pathKind}/${encodeURIComponent(issueLink.number)}`,
+      connection,
+      upstreamHeaders: {
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+      },
+    });
+    if (response.status === 401 || response.status === 403)
+      throw new PersonalIntegrationAccessError();
+    if (!response.ok) throw new PersonalIntegrationUpstreamError();
+    const payload = await response.json().catch(() => undefined);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload))
+      throw new PersonalIntegrationUpstreamError();
+    const values = payload as Record<string, unknown>;
+    const resolvedLink =
+      typeof values.html_url === "string"
+        ? parseIssueLink(values.html_url)
+        : null;
+    if (
+      typeof values.number !== "number" ||
+      values.number !== Number(issueLink.number) ||
+      resolvedLink?.provider !== "github" ||
+      resolvedLink.kind !== issueLink.kind ||
+      resolvedLink.number !== issueLink.number ||
+      resolvedLink.owner.toLowerCase() !== issueLink.owner.toLowerCase() ||
+      resolvedLink.repository.toLowerCase() !==
+        issueLink.repository.toLowerCase()
+    )
+      throw new PersonalIntegrationUpstreamError();
+
+    const state = stringValue(values.state)?.toLowerCase();
+    if (state !== "open" && state !== "closed")
+      throw new PersonalIntegrationUpstreamError();
+    const status =
+      issueLink.kind === "pull_request" &&
+      typeof values.merged_at === "string" &&
+      values.merged_at.length > 0
+        ? "merged"
+        : state;
+    const assignee = values.assignee;
+    const repositoryValue =
+      issueLink.kind === "pull_request" ? values.base : values.repository;
+    const repository = nestedIssueText(
+      repositoryValue && typeof repositoryValue === "object"
+        ? ((repositoryValue as Record<string, unknown>).repo ?? repositoryValue)
+        : repositoryValue,
+      "full_name",
+      255,
+    );
+    if (
+      repository &&
+      repository.toLowerCase() !==
+        `${issueLink.owner}/${issueLink.repository}`.toLowerCase()
+    )
+      throw new PersonalIntegrationUpstreamError();
+    return {
+      provider: "github",
+      url: issueLink.url,
+      identifier: issueLink.identifier,
+      title: requiredIssueText(values.title, 2000),
+      status,
+      assignee: nestedIssueText(assignee, "login", 255),
+      repository: `${issueLink.owner}/${issueLink.repository}`,
+      kind: issueLink.kind,
+    };
   }
 
   private async previewJiraIssue(
@@ -957,6 +1409,92 @@ export class PersonalIntegrationOperations {
       : filesFromOneDrive(payload);
   }
 
+  async downloadRecordingFile(input: {
+    principalId: string;
+    provider: "google_drive" | "onedrive_personal" | "onedrive_business";
+    fileId: string;
+  }): Promise<{
+    name: string;
+    bytes: Uint8Array<ArrayBuffer>;
+    mimeType: string;
+  }> {
+    const fileId = recordingFileId(input.fileId);
+    const connection = await this.connectedConnection(
+      input.principalId,
+      input.provider,
+    );
+    const encodedId = encodeURIComponent(fileId);
+    const metadataPath =
+      input.provider === "google_drive"
+        ? `/drive/v3/files/${encodedId}?${new URLSearchParams({
+            fields: "id,name,mimeType,size",
+          })}`
+        : `/v1.0/me/drive/items/${encodedId}?${new URLSearchParams({
+            $select: "id,name,size,file,folder",
+          })}`;
+    const metadataResponse = await this.nango.proxy({
+      method: "GET",
+      redirect: "manual",
+      path: metadataPath,
+      connection,
+    });
+    if (!metadataResponse.ok) throw new PersonalIntegrationUpstreamError();
+    const payload = await metadataResponse.json().catch(() => undefined);
+    const metadata = recordingMetadata(payload, fileId, input.provider);
+    const contentPath =
+      input.provider === "google_drive"
+        ? `/drive/v3/files/${encodedId}?alt=media`
+        : `/v1.0/me/drive/items/${encodedId}/content`;
+    let response = await this.nango.proxy({
+      method: "GET",
+      redirect: "manual",
+      path: contentPath,
+      connection,
+    });
+    if (
+      input.provider !== "google_drive" &&
+      response.status >= 300 &&
+      response.status < 400
+    ) {
+      const location = response.headers.get("location");
+      if (!location) throw new PersonalIntegrationUpstreamError();
+      const safeUrl = microsoftDownloadUrl(
+        location,
+        "https://graph.microsoft.com",
+      );
+      try {
+        // Graph content redirects to a short-lived download URL. This request
+        // carries no Nango or provider credentials and never follows a second redirect.
+        response = await fetch(safeUrl, {
+          method: "GET",
+          redirect: "manual",
+          credentials: "omit",
+        });
+      } catch {
+        throw new PersonalIntegrationUpstreamError();
+      }
+    }
+    if (!response.ok) throw new PersonalIntegrationUpstreamError();
+    const bytes = await boundedRecordingBytes(response, metadata.size);
+    const mimeType =
+      metadata.mimeType === "application/octet-stream"
+        ? ({
+            ".aac": "audio/aac",
+            ".flac": "audio/flac",
+            ".m4a": "audio/mp4",
+            ".mp3": "audio/mpeg",
+            ".oga": "audio/ogg",
+            ".ogg": "audio/ogg",
+            ".opus": "audio/opus",
+            ".wav": "audio/wav",
+            ".webm": "audio/webm",
+          }[
+            metadata.name.slice(metadata.name.lastIndexOf(".")).toLowerCase()
+          ] ?? metadata.mimeType)
+        : metadata.mimeType;
+    return { name: metadata.name, bytes, mimeType };
+  }
+
   async listMessages(input: {
     principalId: string;
     provider: "gmail" | "outlook";
@@ -1156,6 +1694,12 @@ export class PersonalIntegrationOperations {
         input.to <= input.from)
     )
       return invalidAction("The event time range is invalid");
+    if (
+      input.from &&
+      input.to &&
+      input.to.getTime() - input.from.getTime() > calendarRangeMaxMilliseconds
+    )
+      return invalidAction("The calendar range cannot exceed 62 days");
     const connection = await this.repository.findActiveConnection(
       input.principalId,
       input.provider,
@@ -1164,40 +1708,110 @@ export class PersonalIntegrationOperations {
       throw new PersonalIntegrationUnavailableError(
         "The personal integration connection is not ready",
       );
-    const path =
-      input.provider === "google_calendar"
-        ? `/calendar/v3/calendars/primary/events?${new URLSearchParams({
-            maxResults: "25",
-            singleEvents: "true",
-            orderBy: "startTime",
-            timeMin: (input.from ?? new Date()).toISOString(),
-            ...(input.to ? { timeMax: input.to.toISOString() } : {}),
-          }).toString()}`
-        : input.from && input.to
-          ? `/v1.0/me/calendarView?${new URLSearchParams({
-              startDateTime: input.from.toISOString(),
-              endDateTime: input.to.toISOString(),
-              $top: "50",
-              $orderby: "start/dateTime",
-              $select: "id,subject,start,end,webLink",
-            }).toString()}`
-          : `/v1.0/me/events?${new URLSearchParams({
-              $top: "25",
-              $select: "id,subject,start,end,webLink",
-            }).toString()}`;
-    const response = await this.nango.proxy({
-      method: "GET",
-      path,
-      connection,
-      ...(input.provider === "outlook"
-        ? { upstreamHeaders: outlookUtcPreference }
-        : {}),
+    const googlePath = "/calendar/v3/calendars/primary/events";
+    const outlookPath =
+      input.from && input.to ? "/v1.0/me/calendarView" : "/v1.0/me/events";
+    const googleParameters = new URLSearchParams({
+      maxResults: String(calendarPageSize),
+      singleEvents: "true",
+      orderBy: "startTime",
+      timeMin: (input.from ?? new Date()).toISOString(),
+      ...(input.to ? { timeMax: input.to.toISOString() } : {}),
     });
-    if (!response.ok) throw new PersonalIntegrationUpstreamError();
-    const payload = await response.json().catch(() => undefined);
-    return input.provider === "google_calendar"
-      ? eventsFromGoogle(payload)
-      : eventsFromOutlook(payload);
+    const outlookParameters =
+      input.from && input.to
+        ? new URLSearchParams({
+            startDateTime: input.from.toISOString(),
+            endDateTime: input.to.toISOString(),
+            $top: String(calendarPageSize),
+            $orderby: "start/dateTime",
+            $select:
+              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone",
+          })
+        : new URLSearchParams({
+            $top: String(calendarPageSize),
+            $select:
+              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone",
+          });
+    const events: PersonalEvent[] = [];
+    const seenGoogleTokens = new Set<string>();
+    const seenOutlookContinuations = new Set<string>();
+    let rowsRead = 0;
+    let googleToken: string | null = null;
+    let outlookNextPath: string | null = null;
+
+    for (let page = 0; page < calendarPageLimit; page += 1) {
+      let path: string;
+      if (input.provider === "google_calendar") {
+        const parameters = new URLSearchParams(googleParameters);
+        if (googleToken) parameters.set("pageToken", googleToken);
+        path = `${googlePath}?${parameters.toString()}`;
+      } else {
+        path =
+          outlookNextPath ?? `${outlookPath}?${outlookParameters.toString()}`;
+      }
+      const response = await this.nango.proxy({
+        method: "GET",
+        path,
+        connection,
+        ...(input.provider === "outlook"
+          ? { upstreamHeaders: outlookUtcPreference }
+          : {}),
+      });
+      if (!response.ok) throw new PersonalIntegrationUpstreamError();
+      const payload = await response.json().catch(() => undefined);
+      if (!payload || typeof payload !== "object" || Array.isArray(payload))
+        throw new PersonalIntegrationUpstreamError();
+      const record = payload as Record<string, unknown>;
+      const rows =
+        input.provider === "google_calendar" ? record.items : record.value;
+      if (!Array.isArray(rows)) throw new PersonalIntegrationUpstreamError();
+      rowsRead += rows.length;
+      if (rowsRead > calendarEventLimit)
+        throw new PersonalIntegrationUpstreamError(
+          "The calendar contains more events than can be returned at once",
+        );
+      const pageEvents =
+        input.provider === "google_calendar"
+          ? eventsFromGoogle(payload, true)
+          : eventsFromOutlook(payload, true);
+      events.push(...pageEvents);
+      if (events.length > calendarEventLimit)
+        throw new PersonalIntegrationUpstreamError(
+          "The calendar contains more events than can be returned at once",
+        );
+
+      if (input.provider === "google_calendar") {
+        const nextToken = record.nextPageToken;
+        if (nextToken === undefined || nextToken === null || nextToken === "")
+          return events;
+        if (
+          typeof nextToken !== "string" ||
+          nextToken.length > 1024 ||
+          seenGoogleTokens.has(nextToken)
+        )
+          throw new PersonalIntegrationUpstreamError();
+        seenGoogleTokens.add(nextToken);
+        googleToken = nextToken;
+      } else {
+        const nextLink = record["@odata.nextLink"];
+        if (nextLink === undefined || nextLink === null || nextLink === "")
+          return events;
+        const continuation = calendarOutlookContinuation(
+          nextLink,
+          outlookPath,
+          outlookParameters,
+        );
+        if (!continuation || seenOutlookContinuations.has(continuation))
+          throw new PersonalIntegrationUpstreamError();
+        seenOutlookContinuations.add(continuation);
+        outlookNextPath = continuation;
+      }
+    }
+
+    throw new PersonalIntegrationUpstreamError(
+      "The calendar contains more pages than can be read at once",
+    );
   }
 
   async createCalendarEvent(input: {

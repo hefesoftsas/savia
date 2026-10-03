@@ -3,7 +3,17 @@ import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { render } from "./locale-test-render";
+import { render as baseRender } from "./locale-test-render";
+import { OfficeAvailabilityContext } from "@/features/office-settings/office-availability";
+function render(ui: React.ReactNode) {
+  return baseRender(
+    <OfficeAvailabilityContext.Provider
+      value={{ enabled: true, loading: false, error: false }}
+    >
+      {ui}
+    </OfficeAvailabilityContext.Provider>,
+  );
+}
 import { CreateOfficeAttachment } from "../create-office-attachment";
 import { createBlankOfficeFile } from "../../office/new-office-file";
 vi.mock("../../office/new-office-file", () => ({
@@ -32,6 +42,7 @@ it("creates the selected presentation and only shows editing after attachment pe
     await screen.findByText("Archivo guardado en los adjuntos."),
   ).toBeVisible();
   expect(save).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: "Crear y adjuntar" }),
   ).not.toBeInTheDocument();
@@ -62,4 +73,17 @@ it("does not offer formats excluded by attachment policy", () => {
   fireEvent.click(screen.getByRole("button", { name: "Crear archivo" }));
   expect(screen.getAllByRole("option")).toHaveLength(1);
   expect(screen.getByRole("option")).toHaveValue("xlsx");
+});
+
+it("hides creation when the tenant office suite is disabled", () => {
+  baseRender(
+    <OfficeAvailabilityContext.Provider
+      value={{ enabled: false, loading: false, error: false }}
+    >
+      <CreateOfficeAttachment onCreate={async () => {}} />
+    </OfficeAvailabilityContext.Provider>,
+  );
+  expect(
+    screen.queryByRole("button", { name: "Crear archivo" }),
+  ).not.toBeInTheDocument();
 });

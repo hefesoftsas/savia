@@ -6,12 +6,15 @@ import { pagesMessages } from "./messages";
 import { CircleDot, ExternalLink, UserRound } from "lucide-react";
 import Jira from "@thesvg/react/jira";
 import Linear from "@thesvg/react/linear";
+import Github from "@thesvg/react/github";
 
 type Preview = {
   title: string;
   identifier: string;
   status: string | null;
   assignee: string | null;
+  repository?: string;
+  kind?: "issue" | "pull_request";
 };
 export function IssueCard({ url, api }: { url: string; api: ApiClient }) {
   const t = useMessages(pagesMessages);
@@ -44,8 +47,18 @@ export function IssueCard({ url, api }: { url: string; api: ApiClient }) {
     return () => controller.abort();
   }, [api, url]);
   if (!parsed) return <p role="alert">{t("Invalid link")}</p>;
-  const ProviderIcon = parsed.provider === "jira" ? Jira : Linear;
-  const providerName = parsed.provider === "jira" ? "Jira" : "Linear";
+  const ProviderIcon =
+    parsed.provider === "jira"
+      ? Jira
+      : parsed.provider === "linear"
+        ? Linear
+        : Github;
+  const providerName =
+    parsed.provider === "jira"
+      ? "Jira"
+      : parsed.provider === "linear"
+        ? "Linear"
+        : "GitHub";
   const initials = preview?.assignee
     ?.trim()
     .split(/\s+/u)
@@ -73,6 +86,24 @@ export function IssueCard({ url, api }: { url: string; api: ApiClient }) {
       </a>
       {preview && (
         <dl className="page-issue-metadata">
+          {parsed.provider === "github" && (
+            <div className="page-issue-field">
+              <dt>{t("Repository")}</dt>
+              <dd>
+                {preview.repository ?? `${parsed.owner}/${parsed.repository}`}
+              </dd>
+            </div>
+          )}
+          {parsed.provider === "github" && (
+            <div className="page-issue-field">
+              <dt>
+                {preview.kind === "pull_request"
+                  ? t("Pull request")
+                  : t("Issue")}
+              </dt>
+              <dd>#{parsed.number}</dd>
+            </div>
+          )}
           <div className="page-issue-field">
             <dt>{t("Issue status")}</dt>
             <dd className="page-issue-status">

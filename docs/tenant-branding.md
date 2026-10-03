@@ -64,8 +64,12 @@ OAuth transaction is present; unrelated hosts use the configured Admin origin.
 
 The default web login shows Savia's animated logo and wordmark on a navy panel. The
 Lottie player, animation JSON and wordmark font are served from the admin site's
-public assets at `/login/`, under the same origin as the login. The animation plays
-once and pauses while the tab is hidden. Visitors who prefer reduced motion see its
+public assets at `/login/`, under the same origin as the login. The animation plays to completion, waits five seconds, then restarts. This cycle
+repeats for both the default and custom login animation when **Repeat animation**
+is enabled (the default). Disable this switch to play once and keep the last
+frame. The setting is saved with the tenant branding. Playback and the replay
+timer pause while the tab is hidden; returning after completion starts a fresh
+five-second wait. Visitors who prefer reduced motion see its
 completed frame. A tenant can upload its own Lottie JSON animation (validated,
 up to 2 MiB) to replace Savia's emblem on its login; the Savia wordmark and robot
 greeting are hidden while the custom animation is active, and the custom animation
@@ -88,6 +92,16 @@ Corporate colors remain the fallback on surfaces without an active personal pale
 and server-rendered authentication pages retain their tenant identity. Foreground colors
 are computed for contrast, and tenant styles are removed when the provider changes host
 or unmounts. Branding adds no persistent browser cache.
+
+## Finding free animations
+
+The login animation section links to
+[LottieFiles free dog animations](https://lottiefiles.com/free-animations/dog).
+Open LottieFiles to choose an animation, check its license, download its Lottie
+JSON file, and upload it in the tenant branding editor. **Save changes** publishes
+the uploaded animation. The editor does not search or import from a provider API
+and needs no catalog credentials. Previously imported animations remain available
+through their existing tenant-owned assets.
 
 ## Images and public boundary
 

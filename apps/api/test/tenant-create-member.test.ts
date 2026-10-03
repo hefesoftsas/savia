@@ -2,7 +2,10 @@ import { createTestApp } from "./test-app";
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it, vi } from "vitest";
 import { platformAdministratorAuthenticator } from "./auth-fixtures";
-import type { IdentityUserAdministrator } from "../src/auth/better-auth";
+import {
+  betterAuthUserAdministrator,
+  type IdentityUserAdministrator,
+} from "../src/auth/better-auth";
 import {
   ensureBootstrapAdministrator,
   grantMembership,
@@ -70,6 +73,107 @@ it("binds a new tenant account to its email settings and sends a password setup 
     expect.any(Request),
   );
   expect(sendPasswordReset).toHaveBeenCalledWith(subject, expect.any(Request));
+});
+
+it("returns an email conflict and rolls back tenant creation when Auth rejects a duplicate", async () => {
+  const source = await tenant("Existing identity tenant");
+  const existing = await member(
+    "duplicate-email@example.test",
+    source.id,
+    "viewer",
+  );
+  const administrator = betterAuthUserAdministrator(
+    {
+      async fetch() {
+        return Response.json(
+          {
+            error: {
+              code: "IDENTITY_EMAIL_CONFLICT",
+              message:
+                "An account with this email already exists. Use an existing user or a different email.",
+            },
+          },
+          { status: 409 },
+        );
+      },
+    },
+    "trusted-key",
+  );
+  if (!administrator) throw new Error("Expected Better Auth administrator");
+
+  const response = await createTestApp({
+    auth: platformAdministratorAuthenticator(),
+    userAdministrator: administrator,
+  }).request(
+    "/v1/tenants",
+    post({
+      name: "Duplicate email tenant",
+      initialUser: {
+        email: existing.email,
+        firstName: "Duplicate",
+        lastName: "Email",
+        role: "tenant_admin",
+        temporaryPassword: "Test-Fixture-Password-123!",
+        emailVerified: true,
+      },
+    }),
+  );
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({
+    error: {
+      code: "IDENTITY_EMAIL_CONFLICT",
+      message:
+        "An account with this email already exists. Use an existing user or a different email.",
+    },
+  });
+  expect(await tenantByName("Duplicate email tenant")).toBeNull();
+  expect(await membershipOf(existing.id)).toEqual({
+    tenant_id: source.id,
+    role: "viewer",
+  });
+});
+
+it("keeps unknown Auth conflicts as service unavailable", async () => {
+  const administrator = betterAuthUserAdministrator(
+    {
+      async fetch() {
+        return Response.json(
+          { error: { code: "AUTH_CONFIGURATION_CONFLICT" } },
+          { status: 409 },
+        );
+      },
+    },
+    "trusted-key",
+  );
+  if (!administrator) throw new Error("Expected Better Auth administrator");
+
+  const response = await createTestApp({
+    auth: platformAdministratorAuthenticator(),
+    userAdministrator: administrator,
+  }).request(
+    "/v1/tenants",
+    post({
+      name: "Unknown Auth conflict tenant",
+      initialUser: {
+        email: "unknown-conflict@example.test",
+        firstName: "Unknown",
+        lastName: "Conflict",
+        role: "tenant_admin",
+        temporaryPassword: "Test-Fixture-Password-123!",
+        emailVerified: true,
+      },
+    }),
+  );
+
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({
+    error: {
+      code: "AUTHENTICATION_UNAVAILABLE",
+      message: "Authentication service is unavailable",
+    },
+  });
+  expect(await tenantByName("Unknown Auth conflict tenant")).toBeNull();
 });
 async function tenant(name = "Source agency") {
   // Wide spacing: tenant creation allocates MAX(id)+2, so sequential IDs

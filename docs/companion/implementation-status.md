@@ -1,6 +1,15 @@
 # Companion implementation status
 
-Owner: Savia platform maintainers. Reviewed: 2026-10-01.
+Owner: Savia platform maintainers. Reviewed: 2026-10-03.
+
+## Mobile increment
+
+Flutter Android/iOS Companion now lives in `apps/companion-mobile`, with native
+public OAuth/PKCE, scoped recording access, foreground microphone/import drafts,
+explicit upload and processing consent, remote library/playback, notes and
+questions. Android debug compilation and automated tests passed. Full physical
+device and authenticated preview/provider qualification are pending; an APK with
+no registered public client ID disables sign-in. See [mobile setup and evidence](mobile.md).
 
 ## Implemented increment
 
@@ -9,8 +18,9 @@ The compact desktop UI (380 × 540 px) provides manual source selection,
 capture/stop/discard, explicit upload consent and a link to the main Savia app.
 Savia's authenticated Recordings page provides owner-private audio playback and
 download, explicit consented generation, saved transcript review and structured
-meeting-note review. The backend has opt-in platform-administrator-only
-capabilities, bounded WAV/Ogg Opus transcription and summary operations. Provider
+meeting-note review. The backend has opt-in capabilities for active tenant members
+of any role and platform administrators, with owner-private recordings and notes,
+bounded WAV/Ogg Opus transcription and summary operations. Provider
 credentials stay on the backend; meeting notes never execute tools or create
 business records automatically.
 

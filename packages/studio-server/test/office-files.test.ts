@@ -23,6 +23,9 @@ beforeAll(async () => {
     ))
       await platform.env.DB.prepare(sql).run();
   await platform.env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS office_settings(tenant_id TEXT PRIMARY KEY NOT NULL,platform_allowed INTEGER NOT NULL DEFAULT 1,tenant_enabled INTEGER NOT NULL DEFAULT 1,updated_by TEXT,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  ).run();
+  await platform.env.DB.prepare(
     "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES ('agency:1','contracts','Contracts','','{\"fields\":{}}')",
   ).run();
   await platform.env.DB.prepare(
@@ -126,6 +129,31 @@ describe("Office revisions on real D1 and R2", () => {
           .first<any>()
       ).version,
     ).toBe(1);
+  });
+  it("blocks office editor routes while the tenant office suite is disabled", async () => {
+    const { id } = await seed();
+    await platform.env.DB.prepare(
+      "INSERT INTO office_settings(tenant_id,platform_allowed,tenant_enabled) VALUES('agency:1',1,0)",
+    ).run();
+    for (const path of [
+      "/file/" + id + "/office",
+      "/file/" + id + "/revisions",
+      "/file/" + id + "/revisions/1/download",
+    ]) {
+      const response = await req(path);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        error: { code: "OFFICE_SUITE_DISABLED" },
+      });
+    }
+    const response = await save(id, 1);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      error: { code: "OFFICE_SUITE_DISABLED" },
+    });
+    await platform.env.DB.prepare(
+      "DELETE FROM office_settings WHERE tenant_id='agency:1'",
+    ).run();
   });
   it("rejects saves after the parent record is deleted", async () => {
     const { id } = await seed();

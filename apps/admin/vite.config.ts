@@ -1,3 +1,4 @@
+import { companionDownloadsResponse } from "./src/companion-downloads-catalog";
 import { pluginDevelopmentReload } from "./build/plugin-development";
 import { officePlugin } from "./build/office-plugin";
 import { collectOfflineShellAssets } from "./build/offline-shell-assets";
@@ -72,8 +73,32 @@ function offlineShellPlugin(): Plugin {
   };
 }
 
+const devApiTarget = process.env.SAVIA_DEV_API_URL || "http://127.0.0.1:8787";
+// Isolated previews preserve their public origin for authentication redirects.
+const devChangeOrigin = !process.env.SAVIA_DEV_API_URL;
+
 export default defineConfig({
   plugins: [
+    {
+      name: "companion-download-catalog",
+      configureServer(server) {
+        server.middlewares.use(
+          "/companion-downloads.json",
+          async (request, response) => {
+            const result = await companionDownloadsResponse(
+              new Request("http://localhost/companion-downloads.json", {
+                method: request.method,
+              }),
+            );
+            response.statusCode = result.status;
+            result.headers.forEach((value, name) =>
+              response.setHeader(name, value),
+            );
+            response.end(await result.text());
+          },
+        );
+      },
+    },
     react(),
     pluginDevelopmentReload(),
     officePlugin(),
@@ -101,6 +126,7 @@ export default defineConfig({
           /^\/api/,
           /^\/v1/,
           /^\/public\/forms/,
+          /^\/public\/bookings(?:\/|\?|$)/,
           /^\/public\/pages(?:\/|\?|$)/,
           /^\/s\/p(?:\/|\?|$)/,
           /^\/register(?:\/|\?|$)/,
@@ -247,22 +273,22 @@ export default defineConfig({
       // (/v1/realtime/subscribe) reaches the API through the dev server
       // instead of failing and leaving LiveIndicator stuck on connecting.
       "/api": {
-        target: "http://127.0.0.1:8787",
-        changeOrigin: true,
+        target: devApiTarget,
+        changeOrigin: devChangeOrigin,
         ws: true,
       },
       "/v1": {
-        target: "http://127.0.0.1:8787",
-        changeOrigin: true,
+        target: devApiTarget,
+        changeOrigin: devChangeOrigin,
         ws: true,
       },
       "^/s/": {
-        target: "http://127.0.0.1:8787",
-        changeOrigin: true,
+        target: devApiTarget,
+        changeOrigin: devChangeOrigin,
       },
       "/.well-known": {
-        target: "http://127.0.0.1:8787",
-        changeOrigin: true,
+        target: devApiTarget,
+        changeOrigin: devChangeOrigin,
         ws: true,
       },
     },

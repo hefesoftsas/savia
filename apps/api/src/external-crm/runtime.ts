@@ -16,6 +16,7 @@ export type CrmSecrets = {
   NANGO_JIRA_INTEGRATION_ID?: string;
   NANGO_JIRA_REPORTING_CONNECTION_ID?: string;
   NANGO_LINEAR_INTEGRATION_ID?: string;
+  NANGO_GITHUB_INTEGRATION_ID?: string;
 };
 
 export function nangoConfigurationFromEnvironment(
@@ -38,6 +39,7 @@ export function nangoConfigurationFromEnvironment(
     jiraIntegrationId: environment.NANGO_JIRA_INTEGRATION_ID,
     jiraReportingConnectionId: environment.NANGO_JIRA_REPORTING_CONNECTION_ID,
     linearIntegrationId: environment.NANGO_LINEAR_INTEGRATION_ID,
+    githubIntegrationId: environment.NANGO_GITHUB_INTEGRATION_ID,
   };
 }
 

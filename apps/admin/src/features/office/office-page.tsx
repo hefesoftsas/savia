@@ -20,6 +20,10 @@ export function OfficePage({
 }: {
   search?: string;
 }) {
+  const returnTo =
+    new URLSearchParams(search).get("base") === "/v1/office-documents"
+      ? "/#/office-suite"
+      : "/";
   const canvas = useRef<HTMLCanvasElement>(null),
     engine = useRef<OfficeEngine | null>(null);
   const api = useRef<OfficeApi | null>(null),
@@ -178,7 +182,7 @@ export function OfficePage({
       <header className="office-header">
         <a
           className="office-back"
-          href="/"
+          href={returnTo}
           onClick={(e) => {
             if (
               (changed.current || busy.current) &&
@@ -190,6 +194,7 @@ export function OfficePage({
           ← Savia
         </a>
         <div className="office-title">
+          <span className="office-suite-label">Suite de ofimática</span>
           <h1>{meta?.name ?? "Editar documento"}</h1>
           <p role="status">
             {saving ? "Guardando…" : dirty ? "Cambios sin guardar" : status}
@@ -220,14 +225,19 @@ export function OfficePage({
               volver a abrir el archivo.
             </p>
           ) : (
-            <a href="/">Volver a Savia</a>
+            <a href={returnTo}>Volver a Savia</a>
           )}
         </div>
       )}
       <section className="office-workspace" aria-label="Documento">
         {!ready && !error && (
           <div className="office-loading" role="status">
-            {status}
+            <div className="office-loading-mark" aria-hidden="true">
+              S
+            </div>
+            <strong>Preparando tu espacio de trabajo</strong>
+            <p>{status}</p>
+            <span>Motor de edición: ZetaOffice · WebAssembly</span>
           </div>
         )}
         <canvas
@@ -244,7 +254,12 @@ export function OfficePage({
         />
       </section>
       <footer className="office-footer">
-        <span>Los cambios se guardan al pulsar Guardar.</span>
+        <div className="office-footer-info">
+          <span>Los cambios se guardan al pulsar Guardar.</span>
+          <span className="office-attribution">
+            Motor de edición: ZetaOffice
+          </span>
+        </div>
         <details>
           <summary>Historial de versiones</summary>
           <ul>

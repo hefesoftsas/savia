@@ -229,6 +229,7 @@ export function createPersonalIntegrationNangoClient(
           request.body !== undefined || request.rawBody !== undefined;
         return await fetcher(nangoUrl(nango.baseUrl, `/proxy${request.path}`), {
           method: request.method,
+          ...(request.redirect ? { redirect: request.redirect } : {}),
           headers: {
             ...Object.fromEntries(headers(nango.apiKey)),
             "connection-id": request.connection.nangoConnectionId,
@@ -241,7 +242,9 @@ export function createPersonalIntegrationNangoClient(
                 ? { "base-url-override": "https://api.atlassian.com" }
                 : request.connection.provider === "linear"
                   ? { "base-url-override": "https://api.linear.app" }
-                  : {}),
+                  : request.connection.provider === "github"
+                    ? { "base-url-override": "https://api.github.com" }
+                    : {}),
             ...(hasBody
               ? { "content-type": request.contentType ?? "application/json" }
               : {}),

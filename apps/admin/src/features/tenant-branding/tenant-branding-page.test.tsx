@@ -22,6 +22,7 @@ const branding = {
   logoUrl: null,
   coverUrl: null,
   loginAnimationUrl: null,
+  loginAnimationRepeat: true,
   version: 1,
 };
 const lottie = JSON.stringify({
@@ -73,6 +74,26 @@ it("previews edits locally, saves explicitly with the loaded version and resets 
   });
   fireEvent.click(screen.getByRole("button", { name: "Descartar cambios" }));
   expect(screen.getByLabelText("Nombre visible")).toHaveValue("Nueva marca");
+});
+it("saves the login animation repeat preference with tenant branding", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true });
+  const put = vi.fn().mockResolvedValue({
+    data: { ...branding, loginAnimationRepeat: false, version: 2 },
+  });
+  render(<TenantBrandingPage services={service(get, put)} />);
+  const repeat = await screen.findByLabelText("Repetir animación");
+  expect(repeat).toBeChecked();
+  fireEvent.click(repeat);
+  expect(repeat).not.toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+  await screen.findByText("Marca guardada.");
+  expect(put).toHaveBeenCalledWith(
+    "/v1/tenants/1/branding",
+    expect.objectContaining({ loginAnimationRepeat: false }),
+  );
 });
 it("retains local edits after a version conflict and offers explicit reload", async () => {
   const get = vi

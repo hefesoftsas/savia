@@ -124,6 +124,39 @@ describe("React Admin authentication provider", () => {
     );
   });
 
+  it.each([
+    "tenant_admin",
+    "agency_admin",
+    "operator",
+    "viewer",
+    "custom_role",
+  ])(
+    "allows %s tenant members to use their private recordings",
+    async (role) => {
+      const session = {
+        checkSession: vi.fn(),
+        clearSession: vi.fn(),
+        getAccessToken: vi.fn(),
+        getIdentity: vi.fn(),
+        getPermissions: vi.fn().mockResolvedValue({
+          canReadDocuments: true,
+          canExecuteCommands: false,
+          canManageIdentity: false,
+          memberships: [{ tenantId: 101, role }],
+        }),
+        handleCallback: vi.fn(),
+        login: vi.fn(),
+        logout: vi.fn(),
+        getAuthorizeUrl: vi.fn(),
+      };
+      const provider = createReactAdminAuthProvider(session);
+      for (const action of ["list", "create", "delete"])
+        await expect(
+          provider.canAccess?.({ resource: "companion-recordings", action }),
+        ).resolves.toBe(true);
+    },
+  );
+
   it("shows user administration only to platform administrators", async () => {
     const session = {
       checkSession: vi.fn(),

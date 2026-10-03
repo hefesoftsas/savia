@@ -7,12 +7,16 @@ import type {
   PageRevision,
   PageFile,
   PageBinding,
+  PagesArchive,
+  PagesImportResult,
 } from "@savia/studio-shared/pages";
 export type {
   PageSummary,
   PageShare,
   PageRevision,
   PageFile,
+  PagesArchive,
+  PagesImportResult,
 } from "@savia/studio-shared/pages";
 export type RecordBinding = PageBinding;
 export type PageDocument = PageSummary & { content: Value };
@@ -33,6 +37,18 @@ export class PagesClient {
     return (
       await this.api.get<{ data: PageSummary[] }>(
         `${this.path()}?q=${encodeURIComponent(q)}`,
+      )
+    ).data;
+  }
+  async exportAll() {
+    return (await this.api.get<{ data: PagesArchive }>(`${this.path()}/export`))
+      .data;
+  }
+  async importArchive(archive: PagesArchive) {
+    return (
+      await this.api.post<{ data: PagesImportResult }>(
+        `${this.path()}/import`,
+        archive,
       )
     ).data;
   }

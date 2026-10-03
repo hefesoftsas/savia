@@ -9,6 +9,7 @@ import MicrosoftOnedrive from "@thesvg/react/microsoft-onedrive";
 import MicrosoftOutlook from "@thesvg/react/microsoft-outlook";
 import Jira from "@thesvg/react/jira";
 import Linear from "@thesvg/react/linear";
+import Github from "@thesvg/react/github";
 import { CircleAlert } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import type {
@@ -19,6 +20,7 @@ import type {
 import { CrmConnectionsPage } from "@/features/crm/crm-connections-page";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CompanionDownloads } from "./companion-downloads";
 import { VirtualEmployeesManagement } from "./virtual-employees-management";
 import { useMessages } from "@/i18n/core";
 import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
@@ -95,6 +97,12 @@ const unavailableProviders: PersonalIntegrationProvider[] = [
     availability: "unavailable",
     capabilities: [],
   },
+  {
+    id: "github",
+    displayName: "GitHub",
+    availability: "unavailable",
+    capabilities: [],
+  },
 ];
 
 function eventType(event: unknown): string | undefined {
@@ -128,6 +136,7 @@ function providerIcon(provider: PersonalIntegrationProviderId) {
     onedrive_business: MicrosoftOnedrive,
     jira: Jira,
     linear: Linear,
+    github: Github,
   }[provider];
 }
 
@@ -148,6 +157,10 @@ function providerHint(
       return t(
         "Un administrador debe habilitar Linear en Nango. Después podrás conectar tu cuenta aquí.",
       );
+    if (provider.id === "github")
+      return t(
+        "Un administrador debe habilitar GitHub en Nango. Después podrás conectar tu cuenta aquí.",
+      );
     return "";
   }
   const issueDescription =
@@ -155,7 +168,11 @@ function providerHint(
       ? t("Conecta Jira Cloud para previsualizar incidencias en Páginas.")
       : provider.id === "linear"
         ? t("Conecta Linear para previsualizar incidencias en Páginas.")
-        : undefined;
+        : provider.id === "github"
+          ? t(
+              "Conecta GitHub para previsualizar incidencias y pull requests en Páginas.",
+            )
+          : undefined;
   if (connection?.status === "connected")
     return connection.externalAccountLabel
       ? t("Conectado como %{label}.", {
@@ -199,7 +216,9 @@ function providerStatusLabel(
   connection: PersonalIntegrationConnection | undefined,
 ): string | undefined {
   if (provider.availability === "unavailable")
-    return provider.id === "jira" || provider.id === "linear"
+    return provider.id === "jira" ||
+      provider.id === "linear" ||
+      provider.id === "github"
       ? t("Requiere configuración")
       : undefined;
   return connection ? connectionStatusLabel(t, connection) : undefined;
@@ -283,7 +302,9 @@ export function PersonalIntegrationsPage({
       ? "virtual-employees"
       : searchParams.get("tab") === "crm"
         ? "crm"
-        : "connections";
+        : searchParams.get("tab") === "apps"
+          ? "apps"
+          : "connections";
   const selectTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("tab", tab);
@@ -432,7 +453,10 @@ export function PersonalIntegrationsPage({
       id: "issue-tracker-integrations",
       title: t("Gestión de incidencias"),
       providers: providers.filter(
-        (provider) => provider.id === "jira" || provider.id === "linear",
+        (provider) =>
+          provider.id === "jira" ||
+          provider.id === "linear" ||
+          provider.id === "github",
       ),
     },
   ];
@@ -451,7 +475,7 @@ export function PersonalIntegrationsPage({
         onValueChange={selectTab}
         className="w-full space-y-6"
       >
-        <TabsList className="mb-2">
+        <TabsList className="mb-2 w-full flex-wrap justify-start gap-1 group-data-[orientation=horizontal]/tabs:h-auto [&_[data-slot=tabs-trigger]]:h-auto [&_[data-slot=tabs-trigger]]:min-h-9">
           <TabsTrigger value="connections">
             {t("Cuentas y Conexiones")}
           </TabsTrigger>
@@ -459,6 +483,7 @@ export function PersonalIntegrationsPage({
           <TabsTrigger value="virtual-employees">
             {t("Empleados Virtuales (IA)")}
           </TabsTrigger>
+          <TabsTrigger value="apps">{t("Aplicaciones")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="connections" className="space-y-6">
@@ -501,7 +526,9 @@ export function PersonalIntegrationsPage({
                     const connected = connection?.status === "connected";
                     const showStatus =
                       provider.availability === "unavailable" &&
-                      (provider.id === "jira" || provider.id === "linear")
+                      (provider.id === "jira" ||
+                        provider.id === "linear" ||
+                        provider.id === "github")
                         ? true
                         : !!connection &&
                           (connected ||
@@ -550,6 +577,10 @@ export function PersonalIntegrationsPage({
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="apps" className="space-y-6">
+          <CompanionDownloads />
         </TabsContent>
 
         <TabsContent value="crm" className="space-y-6">

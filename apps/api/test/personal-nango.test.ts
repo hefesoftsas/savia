@@ -112,6 +112,7 @@ describe("personal Nango proxy", () => {
     ["onedrive_personal", "https://graph.microsoft.com"],
     ["jira", "https://api.atlassian.com"],
     ["linear", "https://api.linear.app"],
+    ["github", "https://api.github.com"],
     ["google_drive", null],
   ] as const)(
     "pins only the configured provider API destination for %s",
@@ -149,7 +150,9 @@ describe("personal Nango proxy", () => {
             ? "https://api.atlassian.com"
             : provider === "linear"
               ? "https://api.linear.app"
-              : null,
+              : provider === "github"
+                ? "https://api.github.com"
+                : null,
       );
     },
   );
@@ -183,4 +186,29 @@ describe("personal Nango proxy", () => {
     ).rejects.toThrow();
     expect(fetcher).not.toHaveBeenCalled();
   });
+});
+it("preserves cloud content redirects for explicit validation before download", async () => {
+  let redirect: RequestRedirect | undefined;
+  const client = createPersonalIntegrationNangoClient(
+    { baseUrl: "https://nango.example.test", apiKey: "test-key" },
+    async (_url, init) => {
+      redirect = init?.redirect;
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://tenant.sharepoint.com/audio" },
+      });
+    },
+  );
+  const response = await client.proxy({
+    method: "GET",
+    path: "/v1.0/me/drive/items/file/content",
+    connection: {
+      provider: "onedrive_business",
+      nangoConnectionId: "owner",
+      nangoIntegrationId: "onedrive",
+    },
+    redirect: "manual",
+  });
+  expect(redirect).toBe("manual");
+  expect(response.status).toBe(302);
 });

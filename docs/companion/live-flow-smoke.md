@@ -79,3 +79,90 @@ available; a sanitized UI screenshot and this report retain the evidence.
 This run does not qualify Windows, microphone capture, long meetings, provider
 privacy/retention, diarization or general speech accuracy. Provider billing totals
 were not exported; the application currently does not persist returned STT usage.
+
+## Preview follow-up — 2026-10-02
+
+The deployed preview at `https://savia-preview.hefesoft.com` was exercised through
+the signed-in Chrome UI. This follow-up did not deploy code or change provider
+credentials or model settings.
+
+- The existing native app's API and application origins were set to preview for
+  its current in-memory session. It remained **Not connected** because no Savia
+  access token had been entered; native authentication is still unverified.
+- An anonymous capabilities request returned HTTP 401 with
+  `AUTHENTICATION_REQUIRED`.
+- A generated Spanish WAV named `savia-preview-validation.wav` uploaded through
+  **Recordings** successfully. The UI reported 15.3 seconds and 479 KiB. The sample
+  remained listed after navigating away and returning. No private meeting audio
+  was used. The synthetic recording was retained for further diagnosis.
+- After explicit processing consent, **Generate summary** failed. The UI showed
+  “Processing failed. Check provider usage before trying again.” No transcript or
+  summary was displayed. No processing retry was made. Provider billing and the
+  underlying response status were not available from that UI result.
+- Platform settings showed an encrypted OpenRouter key configured, a global chat
+  model of `deepseek/deepseek-v4-flash-0731`, and blank transcription and summary
+  overrides. A configured key alone does not establish provider availability.
+- Source inspection confirmed that recording question answering is not yet
+  implemented: there is no per-recording question endpoint or question UI.
+- The five dependency-free audio inspector tests passed in the current checkout.
+  Native capture, native authenticated upload, audio playback, summaries and
+  question answering were **not validated** by this follow-up. Full package and
+  monorepo suites were not run.
+
+## Scoped credentials and questions — 2026-10-03 (local verification)
+
+The personal API key implementation adds account creation/revocation with four
+recording scopes, one-time secret reveal, digest-only storage, expiry and a bound
+workspace/deployment. Companion accepts the credential in memory and checks its
+upload permission. The recordings page can ask a consented question against the
+selected saved transcript; answers are temporary drafts with an explicit
+insufficient-evidence outcome.
+
+Local verification includes real D1/R2 lifecycle, scope and tenant-isolation
+tests, provider-boundary Q&A tests, account and recording UI tests, a Companion
+frontend build, and 24 native Rust tests. A browser check rendered the production
+panels with local fixture data; its answer was simulated. It is not provider or
+preview validation. The PostgreSQL manifest checks passed, but 10 live PostgreSQL
+cases were skipped because no test database was configured.
+
+The fresh review's deployment-origin fallback, tenant hostname contradiction and
+last-use timing findings were corrected. Keys fail closed on remote deployments
+without a configured canonical public origin; both hostname and gateway tenant
+hints must agree with the bound workspace. Last use records successful requests.
+
+Preview has not yet received this increment. The earlier synthetic upload remains
+the only preview upload evidence. Its processing failure still needs a sanitized
+backend/provider diagnosis. Native connection/upload, successful preview summary
+persistence, real grounded answers and a successful CoreAudio capture remain
+unverified. Integration must follow the documented main → CI → preview workflow;
+no production deployment or provider configuration change was performed here.
+
+
+## Preview connection and upload — 2026-10-03
+
+PR #124 was merged and deployed successfully to preview (commit
+`ad4abf62313cc8608c91c6665001c5127f6816f5`). After action-time approval, the account
+UI created **Companion preview**, bound to **Plataforma Savia**, with
+`recordings:read` and `recordings:upload` and a seven-day expiry. The one-time
+secret was entered only into the native application's secure credential field;
+it was not saved to a file or printed. The account reveal was dismissed.
+The freshly compiled native application displayed **Connected** against
+`https://savia-preview.hefesoft.com`.
+
+A microphone-only attempt ended with the bounded message that microphone
+permission did not resolve within 60 seconds. Inspection located this wait in
+the macOS authorization helper, before the CPAL microphone worker starts. No
+native audio was uploaded. This does not prove an audio worker startup failure.
+
+A new synthetic Spanish WAV (13.0 seconds, 410 KiB) uploaded through the signed-in
+web recordings page and remained listed after a reload. It contains only a
+fabricated meeting about publishing a Friday test, Ana reviewing audio, Luis
+preparing a summary, and an undecided budget. This validates web upload and
+persistence on the new deployment, not native upload.
+
+The earlier processing retry returned HTTP 502 without a transcript. Successful
+preview transcription, summary and grounded question answering remain
+unverified. A diagnostic increment adds the fixed
+processing stage and upstream HTTP status without exposing provider response
+bodies, audio, prompts, headers or credentials. No provider configuration was
+changed and no additional provider request was made during this connection run.
