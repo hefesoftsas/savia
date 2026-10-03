@@ -52,7 +52,8 @@ import { SharePanel } from "./share-panel";
 import { HistoryWorkspace } from "./history-workspace";
 import { RecordProperties } from "./record-properties";
 import type { Value } from "platejs";
-import { publishPageChange, subscribePageChanges } from "./page-events";
+import { publishPageChange } from "./page-events";
+import { usePagesIndex } from "./use-pages-index";
 import { exportPageMarkdown } from "./markdown-export";
 import { useIssueProviders, type IssueProvider } from "./use-issue-providers";
 import { PagesCloudflareSearch } from "@/features/tenant-pages-search/pages-cloudflare-search";
@@ -113,14 +114,18 @@ export function PagesPage({
     { pageId } = useParams();
   const [searchParams] = useSearchParams();
   const issueProviders = useIssueProviders(services.apiClient);
-  const client = useMemo(
-    () => new PagesClient(services.apiClient),
-    [services.apiClient],
+  const {
+    client,
+    pages,
+    setPages,
+    loading,
+    error: indexError,
+    refresh,
+  } = usePagesIndex(services.apiClient);
+  const [document, setDocument] = useState<PageDocument | null>(() =>
+    pageId ? (client.cachedDocument(pageId) ?? null) : null,
   );
-  const [pages, setPages] = useState<PageSummary[]>([]),
-    [document, setDocument] = useState<PageDocument | null>(null);
-  const [loading, setLoading] = useState(true),
-    [error, setError] = useState(false),
+  const [error, setError] = useState(false),
     [busy, setBusy] = useState(false),
     [generation, setGeneration] = useState(0);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false),
@@ -135,43 +140,29 @@ export function PagesPage({
     () => new Map<string, Promise<PageSummary>>(),
     [client],
   );
-  const listRequest = useRef(0);
   useEffect(() => {
     void retireLocalPageSearchCaches();
   }, []);
-  const refresh = useCallback(async () => {
-    const request = ++listRequest.current;
-    try {
-      const result = await client.list("");
-      if (request === listRequest.current) setPages(result);
-    } catch {
-      if (request === listRequest.current) setError(true);
-    } finally {
-      if (request === listRequest.current) setLoading(false);
-    }
-  }, [client]);
-  useEffect(
-    () =>
-      subscribePageChanges((change) => {
-        if (change.api === services.apiClient) void refresh();
-      }),
-    [refresh, services.apiClient],
-  );
-  useEffect(() => {
-    const timer = setTimeout(() => void refresh(), 200);
-    return () => clearTimeout(timer);
-  }, [refresh]);
+  const documentReload = useRef(generation);
   useEffect(() => {
     let active = true;
-    setDocument(null);
+    const force = documentReload.current !== generation;
+    documentReload.current = generation;
+    setError(false);
+    setDocument(
+      !force && pageId ? (client.cachedDocument(pageId) ?? null) : null,
+    );
     if (pageId)
       void client
-        .get(pageId)
+        .get(pageId, force)
         .then((value) => {
           if (active) setDocument(value);
         })
         .catch(() => {
-          if (active) setError(true);
+          if (active) {
+            setDocument(null);
+            setError(true);
+          }
         });
     return () => {
       active = false;
@@ -233,7 +224,6 @@ export function PagesPage({
         ...(parentId ? { parentId } : {}),
       });
       navigate(`/pages/${page.id}`);
-      await refresh();
     } catch {
       setError(true);
     } finally {
@@ -261,7 +251,6 @@ export function PagesPage({
       .then((page) => {
         if (active) {
           navigate(`/pages/${page.id}`, { replace: true });
-          void refresh();
         }
       })
       .catch(() => {
@@ -348,7 +337,6 @@ export function PagesPage({
       setArchiveFile(null);
       if (archiveInput.current) archiveInput.current.value = "";
       publishPageChange({ api: services.apiClient });
-      await refresh();
     } catch (failure) {
       setArchiveError(
         failure instanceof ApiClientError &&
@@ -382,7 +370,7 @@ export function PagesPage({
   return (
     <main className="pages-workspace">
       <section className="pages-canvas">
-        {error && (
+        {(error || indexError) && (
           <div
             role="alert"
             className="m-6 flex flex-wrap items-center gap-3 text-destructive"
@@ -403,7 +391,7 @@ export function PagesPage({
           </div>
         )}
         {pageId ? (
-          document ? (
+          document?.id === pageId ? (
             <DocumentPane
               key={`${document.id}:${generation}`}
               document={document}
@@ -426,7 +414,6 @@ export function PagesPage({
               }}
               onDeleted={() => {
                 navigate("/pages");
-                void refresh();
               }}
               canLeave={canLeave}
             />
