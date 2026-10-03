@@ -101,6 +101,10 @@
     {
       "filename": "0023_personal_calendars.sql",
       "sha256": "e8c81c76fdf858115345a0c7de6dc99d919c2cf8439b598ba13238b0163c4623"
+    },
+    {
+      "filename": "0024_tenant_page_search_index_leases.sql",
+      "sha256": "56d6b5ac6b6d63cc20bf66d0b0c53bf975d967e0fb321fea7620f66dec72e958"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -10256,6 +10260,69 @@
       "uniqueKeys": [
         {
           "columns": ["page_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_page_search_index_leases",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "page_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "token",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "expires_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "table": "pages",
+          "from": "page_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id", "page_id"],
           "origin": "pk"
         }
       ],

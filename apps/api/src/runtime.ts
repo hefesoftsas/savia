@@ -270,14 +270,15 @@ export type RuntimeOverrides = {
   publicForms?: import("./public-forms/routes").PublicFormsOptions;
   signing?: R2SigningCredentials;
   collectionGatewayFactory?: typeof import("./studio/collection-gateway").createCollectionGateway;
+  pagesSearchSchedule?: PagesSearchBindings["schedule"];
 };
 export function createApiRuntime(
   environment: RuntimeEnvironment,
   overrides: RuntimeOverrides = {},
 ) {
   return {
-    fetch(request: Request) {
-      return runtime.fetch(request, environment, overrides);
+    fetch(request: Request, context?: ExecutionContext) {
+      return runtime.fetch(request, environment, overrides, context);
     },
     scheduled() {
       return runtime.scheduled(
@@ -293,6 +294,7 @@ const runtime = {
     request: Request,
     environment: RuntimeEnvironment,
     overrides: RuntimeOverrides = {},
+    context?: ExecutionContext,
   ): Promise<Response> {
     const mcp = await remoteMcpResponse(request, environment);
     if (mcp) return mcp;
@@ -301,6 +303,8 @@ const runtime = {
       environment.SAVIA_INTERNAL_BRIDGE_KEY,
       environment.SAVIA_MCP_SHARED_SECRET,
     );
+    const pagesSearchSchedule =
+      overrides.pagesSearchSchedule ?? context?.waitUntil.bind(context);
     const response = await createApp(
       environment.DB,
       environment.DOCUMENTS,
@@ -380,6 +384,7 @@ const runtime = {
         PAGES_VECTORIZE: (
           environment as RuntimeEnvironment & PagesSearchBindings
         ).PAGES_VECTORIZE,
+        ...(pagesSearchSchedule ? { schedule: pagesSearchSchedule } : {}),
       },
     ).fetch(request, environment);
     return response;

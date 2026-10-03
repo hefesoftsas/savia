@@ -23,7 +23,7 @@ const responses = <T extends z.ZodType>(schema: T) => ({
     content: { "application/json": { schema: errorSchema } },
   },
   409: {
-    description: "Page changed",
+    description: "Page changed or indexing is already in progress",
     content: { "application/json": { schema: errorSchema } },
   },
   429: {

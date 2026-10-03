@@ -33,7 +33,6 @@ import {
   FilePlus2,
   FileText,
   Plus,
-  Search,
   LockKeyhole,
   Users,
   ChevronRight,
@@ -58,7 +57,6 @@ import { exportPageMarkdown } from "./markdown-export";
 import { useIssueProviders, type IssueProvider } from "./use-issue-providers";
 import { PagesCloudflareSearch } from "@/features/tenant-pages-search/pages-cloudflare-search";
 import { retireLocalPageSearchCaches } from "@/features/tenant-pages-search/retire-local-search-cache";
-import { PageSearchResults } from "./page-search-results";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -121,8 +119,7 @@ export function PagesPage({
   );
   const [pages, setPages] = useState<PageSummary[]>([]),
     [document, setDocument] = useState<PageDocument | null>(null);
-  const [query, setQuery] = useState(""),
-    [loading, setLoading] = useState(true),
+  const [loading, setLoading] = useState(true),
     [error, setError] = useState(false),
     [busy, setBusy] = useState(false),
     [generation, setGeneration] = useState(0);
@@ -145,14 +142,14 @@ export function PagesPage({
   const refresh = useCallback(async () => {
     const request = ++listRequest.current;
     try {
-      const result = await client.list(query);
+      const result = await client.list("");
       if (request === listRequest.current) setPages(result);
     } catch {
       if (request === listRequest.current) setError(true);
     } finally {
       if (request === listRequest.current) setLoading(false);
     }
-  }, [client, query]);
+  }, [client]);
   useEffect(
     () =>
       subscribePageChanges((change) => {
@@ -235,7 +232,6 @@ export function PagesPage({
         kind,
         ...(parentId ? { parentId } : {}),
       });
-      setQuery("");
       navigate(`/pages/${page.id}`);
       await refresh();
     } catch {
@@ -341,7 +337,6 @@ export function PagesPage({
         return;
       }
       const result = await client.importArchive(parsed);
-      setQuery("");
       setArchiveNotice(
         t("Pages imported", {
           pages: result.pages,
@@ -527,30 +522,16 @@ export function PagesPage({
               </div>
             )}
             <PagesCloudflareSearch client={client} />
-            <div className="pages-search">
-              <Search size={16} aria-hidden />
-              <Input
-                aria-label={t("Search pages")}
-                placeholder={t("Search hint")}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </div>
             {loading || busy ? (
               <div className="pages-loading" role="status">
                 {t("Loading")}
               </div>
             ) : (
               <PageListing
-                pages={
-                  query
-                    ? pages
-                    : pages.filter(
-                        (page) => !page.parentId || !byId.has(page.parentId),
-                      )
-                }
-                empty={query ? t("No results") : t("Empty")}
-                query={query}
+                pages={pages.filter(
+                  (page) => !page.parentId || !byId.has(page.parentId),
+                )}
+                empty={t("Empty")}
               />
             )}
             <Dialog
@@ -1113,22 +1094,11 @@ function DocumentPane({
 function PageListing({
   pages,
   empty,
-  query = "",
 }: {
   pages: PageSummary[];
   empty: string;
-  query?: string;
 }) {
   const t = useMessages(pagesMessages);
-  if (query.trim())
-    return (
-      <PageSearchResults
-        pages={pages}
-        query={query}
-        empty={empty}
-        sortByTitle
-      />
-    );
   const sorted = [...pages].sort(
     (a, b) =>
       Number(b.kind === "folder") - Number(a.kind === "folder") ||
