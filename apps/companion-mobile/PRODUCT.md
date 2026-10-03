@@ -13,7 +13,7 @@ review transcripts, summaries, and answers grounded in those recordings.
 
 ## Capabilities and constraints
 
-The approved preview supports foreground microphone capture up to 60 seconds,
+The approved preview supports foreground microphone capture up to one hour,
 imports up to 50 MB, and explicit upload and processing consent. Backend storage
 is authoritative. Only refresh credentials and transient app-owned audio reside
 on the device. No other-app call capture or background recording is included.

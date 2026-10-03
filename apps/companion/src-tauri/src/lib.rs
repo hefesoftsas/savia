@@ -2,6 +2,7 @@ pub mod backend;
 pub mod capture;
 
 use std::{
+    path::PathBuf,
     sync::{Arc, Mutex},
     thread,
     time::Instant,
@@ -9,9 +10,9 @@ use std::{
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use capture::{
-    audio::{MicrophoneCapture, RawAudio},
-    codec::{encode_ogg_opus, EncodedAudio},
+    audio::MicrophoneCapture,
     lifecycle::{Lifecycle, Source, Sources, State, TrackInfo, MAX_CAPTURE_DURATION},
+    spool::{CaptureSpool, ChunkInfo, DraftState},
     SystemCapture,
 };
 use serde::{Deserialize, Serialize};
@@ -103,7 +104,7 @@ fn finish_exit_cleanup(app: AppHandle, capture: SharedCapture, cleanup: ExitClea
         capture
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .discard();
+            .stop();
         match cleanup.finish() {
             CleanupCompletion::Exit(code) => app.exit(code),
             CleanupCompletion::CloseWindow => {
@@ -123,9 +124,11 @@ struct CaptureSession {
     lifecycle: Lifecycle,
     microphone: Option<MicrophoneCapture>,
     system: Option<SystemCapture>,
-    microphone_audio: Option<EncodedAudio>,
-    system_audio: Option<EncodedAudio>,
     temp_dir: Option<TempDir>,
+    spool: Option<Arc<Mutex<CaptureSpool>>>,
+    spool_root: Option<PathBuf>,
+    recovered: bool,
+    storage_error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -142,6 +145,10 @@ pub struct CaptureStatus {
     elapsed_seconds: f64,
     tracks: Vec<TrackInfo>,
     error: Option<String>,
+    session_id: Option<String>,
+    chunks: Vec<ChunkInfo>,
+    recovered: bool,
+    interrupted: bool,
 }
 
 impl CaptureSession {
@@ -152,12 +159,44 @@ impl CaptureSession {
             State::Ready => "ready",
             State::Error => "error",
         };
+        let spool = self.spool.as_ref().map(|spool| {
+            spool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
+        let interrupted = spool
+            .as_ref()
+            .is_some_and(|spool| spool.state() == DraftState::Interrupted);
+        let mut tracks = self.lifecycle.tracks.clone();
+        tracks.clear();
+        if let Some(spool) = spool.as_ref() {
+            for source in [Source::Microphone, Source::System] {
+                let chunks = spool.chunks_for(source);
+                if let Some(first) = chunks.first() {
+                    tracks.push(TrackInfo {
+                        source,
+                        duration_seconds: chunks.iter().map(|chunk| chunk.duration_seconds).sum(),
+                        sample_rate: first.sample_rate,
+                        bytes: chunks.iter().map(|chunk| chunk.bytes).sum(),
+                    });
+                }
+            }
+        }
         let elapsed = self.lifecycle.elapsed_at(Instant::now());
         CaptureStatus {
-            state,
+            state: if interrupted { "interrupted" } else { state },
             elapsed_seconds: elapsed.as_secs_f64(),
-            tracks: self.lifecycle.tracks.clone(),
-            error: self.lifecycle.error.clone(),
+            tracks,
+            error: self
+                .storage_error
+                .clone()
+                .or_else(|| self.lifecycle.error.clone()),
+            session_id: spool.as_ref().map(|spool| spool.session_id().to_string()),
+            chunks: spool
+                .map(|spool| spool.chunks().to_vec())
+                .unwrap_or_default(),
+            recovered: self.recovered,
+            interrupted,
         }
     }
 
@@ -165,94 +204,111 @@ impl CaptureSession {
         if self.lifecycle.state != State::Recording {
             return;
         }
-        let now = Instant::now();
-        let microphone = self.microphone.take().map(MicrophoneCapture::stop);
-        let system = self.system.take().map(SystemCapture::stop);
-        let microphone = match microphone {
-            Some(audio) if audio.error.is_some() => {
-                self.fail_stop(audio.error.unwrap());
-                return;
-            }
-            Some(audio) if !has_audio_signal(&audio) => {
-                self.fail_stop("The microphone returned no audible samples. Check microphone permission and the selected input device.".into());
-                return;
-            }
-            Some(audio) => Some(audio),
-            None => None,
-        };
-        let system = match system {
-            Some(Ok(audio)) if !has_audio_signal(&audio) => {
-                self.fail_stop("System audio returned no audible samples. Check system audio permission and that sound was playing during capture.".into());
-                return;
-            }
-            Some(Ok(audio)) => Some(audio),
-            Some(Err(error)) => {
-                self.fail_stop(error);
-                return;
-            }
-            None => None,
-        };
-        let encoded_microphone = match microphone.map(encode_ogg_opus).transpose() {
-            Ok(audio) => audio,
-            Err(error) => {
-                self.fail_stop(error);
-                return;
-            }
-        };
-        let encoded_system = match system.map(encode_ogg_opus).transpose() {
-            Ok(audio) => audio,
-            Err(error) => {
-                self.fail_stop(error);
-                return;
-            }
-        };
-        self.microphone_audio = encoded_microphone;
-        self.system_audio = encoded_system;
-        // Ogg bytes now own the ready tracks; remove the host-owned raw PCM
-        // temp files immediately after encoding.
-        self.temp_dir.take();
-        self.lifecycle.stop(now);
-        self.lifecycle.tracks.clear();
-        if let Some(audio) = &self.microphone_audio {
-            self.lifecycle
-                .tracks
-                .push(track_info(Source::Microphone, audio));
+        if let Some(microphone) = self.microphone.as_ref() {
+            microphone.request_stop();
         }
-        if let Some(audio) = &self.system_audio {
-            self.lifecycle
-                .tracks
-                .push(track_info(Source::System, audio));
+        #[cfg(target_os = "macos")]
+        let system_stop_error = self
+            .system
+            .as_mut()
+            .and_then(|system| system.request_stop().err());
+        #[cfg(target_os = "windows")]
+        let system_stop_error = {
+            if let Some(system) = self.system.as_ref() {
+                system.request_stop();
+            }
+            None
+        };
+        let now = Instant::now();
+        let microphone = self
+            .microphone
+            .take()
+            .map(MicrophoneCapture::stop)
+            .transpose();
+        let system = self.system.take().map(SystemCapture::stop).transpose();
+        self.temp_dir.take();
+        if let Some(error) = system_stop_error {
+            self.fail_stop(error);
+            return;
+        }
+        if let Err(error) = microphone.and(system).map(|_| ()) {
+            self.fail_stop(error);
+            return;
+        }
+        self.lifecycle.stop(now);
+        if let Some(spool) = self.spool.as_mut() {
+            let mut spool = spool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if spool.chunks().is_empty() {
+                drop(spool);
+                self.fail_stop(
+                    "No audio segments were captured. Check the selected input and try again."
+                        .into(),
+                );
+                return;
+            }
+            let last_chunk_end = spool
+                .chunks()
+                .iter()
+                .map(|chunk| chunk.start_seconds + chunk.duration_seconds)
+                .fold(0.0f64, f64::max);
+            let elapsed = self
+                .lifecycle
+                .elapsed
+                .as_secs_f64()
+                .max(last_chunk_end)
+                .min(3_600.0);
+            self.lifecycle.elapsed = std::time::Duration::from_secs_f64(elapsed);
+            let result = spool.stop(elapsed, false);
+            drop(spool);
+            if let Err(error) = result {
+                self.fail_stop(error);
+                return;
+            }
         }
     }
 
     fn fail_stop(&mut self, error: String) {
-        self.microphone_audio.take();
-        self.system_audio.take();
+        let elapsed = self.lifecycle.elapsed_at(Instant::now()).as_secs_f64();
+        if let Some(spool) = self.spool.as_mut() {
+            let _ = spool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .stop(elapsed, true);
+        }
         self.temp_dir.take();
         self.lifecycle.fail(error);
     }
 
-    fn discard(&mut self) {
+    fn discard(&mut self) -> Result<(), String> {
+        if self.lifecycle.state == State::Recording {
+            self.stop();
+        }
         self.microphone.take();
         self.system.take();
-        self.microphone_audio.take();
-        self.system_audio.take();
         self.temp_dir.take();
+        let delete_result = if let Some(spool) = self.spool.as_ref() {
+            spool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .discard()
+        } else if let Some(root) = self.spool_root.as_ref() {
+            capture::spool::discard_root(root)
+        } else {
+            Ok(())
+        };
+        if let Err(error) = delete_result {
+            self.storage_error = Some(error.clone());
+            self.lifecycle.fail(error.clone());
+            return Err(error);
+        }
+        self.spool = None;
+        self.recovered = false;
+        self.storage_error = None;
         self.lifecycle.discard();
+        Ok(())
     }
-}
-
-fn track_info(source: Source, audio: &EncodedAudio) -> TrackInfo {
-    TrackInfo {
-        source,
-        duration_seconds: audio.duration_seconds,
-        sample_rate: audio.sample_rate,
-        bytes: audio.ogg.len(),
-    }
-}
-
-fn has_audio_signal(audio: &RawAudio) -> bool {
-    audio.sample_rate > 0 && !audio.pcm.is_empty() && audio.pcm.iter().any(|byte| *byte != 0)
 }
 
 #[tauri::command]
@@ -275,7 +331,9 @@ async fn capture_status(capture: TauriState<'_, SharedCapture>) -> Result<Captur
 
 #[tauri::command]
 async fn start_capture(
+    app: AppHandle,
     capture: TauriState<'_, SharedCapture>,
+    session_id: String,
     sources: StartSources,
 ) -> Result<CaptureStatus, String> {
     let sources = Sources {
@@ -283,28 +341,67 @@ async fn start_capture(
         system: sources.system,
     };
     let capture = capture.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || start_capture_blocking(capture, sources))
-        .await
-        .map_err(|_| "Could not start audio capture.".to_string())
+    tauri::async_runtime::spawn_blocking(move || {
+        start_capture_blocking(capture, sources, session_id, app)
+    })
+    .await
+    .map_err(|_| "Could not start audio capture.".to_string())
 }
 
-fn start_capture_blocking(capture: SharedCapture, sources: Sources) -> CaptureStatus {
+fn start_capture_blocking(
+    capture: SharedCapture,
+    sources: Sources,
+    session_id: String,
+    app: AppHandle,
+) -> CaptureStatus {
     let mut session = capture
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if session.spool.is_some() {
+        session.lifecycle.fail(
+            "A saved capture draft must be discarded before starting another recording.".into(),
+        );
+        return session.status();
+    }
+    if let Some(error) = session.storage_error.clone() {
+        session.lifecycle.fail(error);
+        return session.status();
+    }
     if let Err(error) = session.lifecycle.start(sources, Instant::now()) {
         if !sources.any() {
             session.lifecycle.fail(error);
         }
         return session.status();
     }
-    if session.temp_dir.is_some() {
-        session.discard();
-        if let Err(error) = session.lifecycle.start(sources, Instant::now()) {
+    let root = match session.spool_root.clone().or_else(|| {
+        app.path()
+            .app_data_dir()
+            .ok()
+            .map(|path| path.join("capture-spool"))
+    }) {
+        Some(root) => root,
+        None => {
+            session
+                .lifecycle
+                .fail("Could not prepare private capture storage.".into());
+            return session.status();
+        }
+    };
+    let source_list = [Source::Microphone, Source::System]
+        .into_iter()
+        .filter(|source| sources.includes(*source))
+        .collect();
+    let spool = match CaptureSpool::create(root.clone(), session_id, source_list) {
+        Ok(spool) => Arc::new(Mutex::new(spool)),
+        Err(error) => {
             session.lifecycle.fail(error);
             return session.status();
         }
-    }
+    };
+    session.spool_root = Some(root);
+    session.spool = Some(spool);
+    session.recovered = false;
+    session.temp_dir.take();
 
     let temp_dir = match tempfile::Builder::new()
         .prefix("savia-companion-")
@@ -312,6 +409,7 @@ fn start_capture_blocking(capture: SharedCapture, sources: Sources) -> CaptureSt
     {
         Ok(temp_dir) => temp_dir,
         Err(_) => {
+            let _ = session.discard();
             session
                 .lifecycle
                 .fail("Could not prepare temporary audio storage.".into());
@@ -320,47 +418,63 @@ fn start_capture_blocking(capture: SharedCapture, sources: Sources) -> CaptureSt
     };
     if sources.microphone {
         if let Err(error) = capture::authorize_microphone(temp_dir.path()) {
+            let _ = session.discard();
             session.lifecycle.fail(error);
             return session.status();
         }
     }
+    let generation = Instant::now();
+    session.lifecycle.reanchor_start(generation);
     session.temp_dir = Some(temp_dir);
     if sources.system {
         let started = match session.temp_dir.as_ref() {
-            Some(temp_dir) => SystemCapture::start(temp_dir.path()),
+            Some(temp_dir) => SystemCapture::start(
+                temp_dir.path(),
+                Arc::clone(session.spool.as_ref().unwrap()),
+                generation,
+            ),
             None => Err("Could not prepare temporary audio storage.".into()),
         };
         match started {
             Ok(system) => session.system = Some(system),
             Err(error) => {
-                session.discard();
+                let _ = session.discard();
                 session.lifecycle.fail(error);
                 return session.status();
             }
         }
     }
     if sources.microphone {
-        match MicrophoneCapture::start() {
+        match MicrophoneCapture::start(Arc::clone(session.spool.as_ref().unwrap()), generation) {
             Ok(microphone) => session.microphone = Some(microphone),
             Err(error) => {
-                session.discard();
+                let _ = session.discard();
                 session.lifecycle.fail(error);
                 return session.status();
             }
         }
     }
-    let generation = Instant::now();
-    session.lifecycle.reanchor_start(generation);
     drop(session);
 
     let stop_capture = capture.clone();
-    thread::spawn(move || {
-        thread::sleep(MAX_CAPTURE_DURATION);
+    thread::spawn(move || loop {
+        thread::sleep(std::time::Duration::from_secs(1));
         let mut session = stop_capture
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if session.lifecycle.is_recording_generation(generation) {
+        if !session.lifecycle.is_recording_generation(generation) {
+            return;
+        }
+        let elapsed = session.lifecycle.elapsed_at(Instant::now());
+        if let Some(spool) = session.spool.as_ref() {
+            let _ = spool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .update_elapsed(elapsed.as_secs_f64());
+        }
+        if elapsed >= MAX_CAPTURE_DURATION {
             session.stop();
+            return;
         }
     });
     capture
@@ -390,11 +504,11 @@ async fn discard_capture(capture: TauriState<'_, SharedCapture>) -> Result<Captu
         let mut capture = capture
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        capture.discard();
-        capture.status()
+        capture.discard()?;
+        Ok(capture.status())
     })
     .await
-    .map_err(|_| "Could not discard audio capture.".to_string())
+    .map_err(|_| "Could not discard audio capture.".to_string())?
 }
 
 #[derive(Serialize)]
@@ -415,22 +529,76 @@ async fn read_capture(
         let capture = capture
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !capture.lifecycle.can_read(source) {
+        let spool = capture
+            .spool
+            .as_ref()
+            .ok_or_else(|| "No saved capture is available.".to_string())?;
+        let spool = spool
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if capture.lifecycle.state == State::Recording {
             return Err("Captured audio is available only after recording has stopped.".into());
         }
-        let audio = match source {
-            Source::Microphone => capture.microphone_audio.as_ref(),
-            Source::System => capture.system_audio.as_ref(),
+        let chunks = spool.chunks_for(source);
+        if chunks.is_empty() {
+            return Err("No captured audio is available for that source.".into());
         }
-        .ok_or_else(|| "No captured audio is available for that source.".to_string())?;
+        if chunks.len() != 1 {
+            return Err(
+                "This recording contains multiple segments; read each segment individually.".into(),
+            );
+        }
+        let audio = spool.read_chunk(source, chunks[0].sequence)?;
         Ok(ReadCapture {
-            base64: STANDARD.encode(&audio.ogg),
+            base64: STANDARD.encode(audio),
             format: "ogg",
-            duration_seconds: audio.duration_seconds,
+            duration_seconds: chunks[0].duration_seconds,
         })
     })
     .await
     .map_err(|_| "Could not read captured audio.".to_string())?
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadCaptureChunk {
+    base64: String,
+    format: &'static str,
+    duration_seconds: f64,
+}
+
+#[tauri::command]
+async fn read_capture_chunk(
+    capture: TauriState<'_, SharedCapture>,
+    source: Source,
+    sequence: u16,
+) -> Result<ReadCaptureChunk, String> {
+    let capture = capture.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let capture = capture
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let spool = capture
+            .spool
+            .as_ref()
+            .ok_or_else(|| "No saved capture is available.".to_string())?;
+        let spool = spool
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let info = spool
+            .chunks()
+            .iter()
+            .find(|chunk| chunk.source == source && chunk.sequence == sequence)
+            .ok_or_else(|| "Captured segment is unavailable.".to_string())?;
+        let bytes = spool.read_chunk(source, sequence)?;
+        Ok(ReadCaptureChunk {
+            base64: STANDARD.encode(bytes),
+            format: "ogg",
+            duration_seconds: info.duration_seconds,
+        })
+    })
+    .await
+    .map_err(|_| "Could not read captured segment.".to_string())?
 }
 
 #[derive(Serialize)]
@@ -459,12 +627,37 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(Mutex::new(CaptureSession::default())))
         .manage(ExitCleanup::default())
+        .setup(|app| {
+            let root = app.path().app_data_dir()?.join("capture-spool");
+            std::fs::create_dir_all(&root)?;
+            let capture = app.state::<SharedCapture>();
+            let mut capture = capture
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            capture.spool_root = Some(root);
+            match CaptureSpool::load(capture.spool_root.as_ref().unwrap()) {
+                Ok(Some(spool)) => {
+                    capture.lifecycle.state = State::Ready;
+                    capture.lifecycle.elapsed =
+                        std::time::Duration::from_secs_f64(spool.elapsed_seconds());
+                    capture.recovered = spool.recovered();
+                    capture.spool = Some(Arc::new(Mutex::new(spool)));
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    capture.storage_error = Some(error.clone());
+                    capture.lifecycle.fail(error);
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             capture_status,
             start_capture,
             stop_capture,
             discard_capture,
             read_capture,
+            read_capture_chunk,
             open_savia,
             companion_request,
         ])
@@ -499,13 +692,7 @@ pub fn run() {
                     }
                 }
             }
-            RunEvent::Exit => {
-                let capture = app.state::<SharedCapture>().inner().clone();
-                capture
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .discard();
-            }
+            RunEvent::Exit => {}
             _ => {}
         });
 }

@@ -8,7 +8,7 @@
   "capture": "Nueva grabación",
   "record": "Grabar audio",
   "importAudio": "Importar audio",
-  "limit": "Micrófono: hasta 60 segundos con la app abierta. Importaciones: MP3, WAV, M4A u Ogg, hasta 50 MB.",
+  "limit": "Micrófono: hasta 1 hora con la app abierta. Importaciones: MP3, WAV, M4A u Ogg, hasta 50 MB.",
   "stop": "Detener grabación",
   "upload": "Subir a Savia",
   "discard": "Descartar borrador",

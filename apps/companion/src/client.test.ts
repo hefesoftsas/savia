@@ -124,3 +124,36 @@ it("allows legacy connections but respects an explicit personal-key upload grant
     } as any),
   ).toBe(false);
 });
+
+it("sends session segments only to fixed UUID routes and strips the routing envelope", async () => {
+  const requests: Request[] = [];
+  const send: typeof fetch = async (url, init) => {
+    requests.push(new Request(url, init));
+    return Response.json({});
+  };
+  const id = "03ab1d80-c9ed-48bf-8cf6-3148372200f0";
+  await companionRequest(
+    "https://savia.example",
+    "savia-token",
+    "sessionchunk",
+    { sessionId: id, payload: { source: "microphone", sequence: 0 } },
+    send,
+  );
+  expect(requests[0].url).toBe(
+    `https://savia.example/v1/companion/sessions/${id}/chunks`,
+  );
+  expect(await requests[0].json()).toEqual({
+    source: "microphone",
+    sequence: 0,
+  });
+  await expect(
+    companionRequest(
+      "https://savia.example",
+      "savia-token",
+      "sessionchunk",
+      { sessionId: "../other", payload: {} },
+      send,
+    ),
+  ).rejects.toThrow("Invalid recording session");
+  expect(requests).toHaveLength(1);
+});

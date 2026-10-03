@@ -3,14 +3,14 @@
 ## Platform
 
 Desktop application for macOS and Windows with a React WebView and native capture.
-The initial validation build supports short manual sessions; real-device support
+The preview supports manually started sessions up to one hour; real-device support
 claims require the platform validation protocol.
 
 ## Purpose and users
 
 Savia users record their own permitted meetings, inspect source tracks and request
-remote transcription and a reviewable summary. Saved meetings remain a future
-backend capability; this prototype keeps results in memory.
+remote transcription and a reviewable summary. Audio, transcripts, processing progress and notes persist privately in Savia.
+A bounded native draft spool preserves completed segments after interruption.
 
 ## Constraints
 
