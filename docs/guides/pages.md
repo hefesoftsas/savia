@@ -133,6 +133,10 @@ the authorized backend document. Vector metadata contains page IDs and versions,
 not document bodies. Removing access or deleting a page prevents its appearance
 in results even while an older vector remains in Cloudflare. Turning search off
 stops new indexing and querying; it does not erase previously submitted vectors.
+A platform administrator can also activate or deactivate an already granted
+capability directly in the tenant editor. Changing activation preserves the
+existing grant; revocation still disables activation.
+
 The ordinary server text/title search remains available in all cases. Deployed
 semantic queries are limited to 30 per minute per tenant to bound repeated AI
 requests; the browser also debounces typing.

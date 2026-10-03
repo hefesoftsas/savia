@@ -141,7 +141,7 @@ export function registerPagesSearchSettingsRoutes(
           await db
             .prepare(
               `INSERT INTO tenant_pages_search_settings(tenant_id,allowed,enabled,updated_at)
-               VALUES(?,?,?,?)
+               VALUES(?,COALESCE(?,(SELECT allowed FROM tenant_pages_search_settings WHERE tenant_id=?),0),?,?)
                ON CONFLICT(tenant_id) DO UPDATE SET
                  allowed=CASE WHEN ? IS NULL THEN tenant_pages_search_settings.allowed ELSE excluded.allowed END,
                  enabled=CASE
@@ -153,7 +153,8 @@ export function registerPagesSearchSettingsRoutes(
             )
             .bind(
               tenantId,
-              input.allowed === true ? 1 : 0,
+              input.allowed === undefined ? null : input.allowed ? 1 : 0,
+              tenantId,
               input.enabled === true ? 1 : 0,
               now,
               input.allowed === undefined ? null : 1,
