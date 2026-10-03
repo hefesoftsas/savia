@@ -50,6 +50,13 @@
   background: color-mix(in oklab, var(--muted) 55%, transparent);
   outline: none;
 }
+@media (max-width: 639px) {
+  .screens-page .studio-help-tooltip-trigger {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+}
 .screens-page .studio-help-tooltip-content {
   max-width: 280px;
   text-align: left;

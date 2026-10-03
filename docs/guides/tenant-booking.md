@@ -28,6 +28,17 @@ Public booking admission also limits each hashed client IP to 20 submissions and
 
 Administrators see the tenant's reservations; other tenant members see only reservations assigned to themselves. Concurrent native bookings claim the professional's occupied intervals atomically, including the trailing buffer. Conflicting requests return a recoverable conflict and create no partial reservation. Request keys prevent duplicate reservations when a customer retries a submission.
 
+Confirmed appointments also appear in the assigned professional's **My Day**
+agenda, in day, week and month views, even without Google Calendar or Outlook.
+My Day shows only the signed-in user's assignments across their current commercial
+workspace memberships; administrators use **Bookings → Reservations** for team
+history. Appointment details link to authenticated workspace reservations where
+tenant hostnames are supported, opening the appointment date directly.
+**Show upcoming reservations** clears that date. Details never expose the customer's private
+management token. Rescheduling and cancellation are reflected when My Day
+refreshes, including **Synchronize**, focus/connectivity recovery and visible
+five-minute polling. See [My Day widgets](../my-day-widgets.md).
+
 The confirmation contains a private management link. Anyone possessing this link can view, cancel or reschedule that single reservation, so treat it as private. Customers can change a confirmed reservation before the tenant's cutoff. Cancelled reservations release their intervals. Rescheduling replaces the old occupancy atomically and keeps the old time if the new time conflicts. Changing a service's duration or buffer requires contacting the business before rescheduling an existing reservation. Administrators and assigned professionals can cancel through their authenticated agenda without the customer cutoff.
 
 Choose **Reschedule** from the private management page to use the same inline calendar, time buttons and display time zone as a new booking. The service and professional remain fixed to the reservation. Choose a different time, review the existing and proposed appointment, then confirm the change; navigating back or leaving the editor does not change the appointment. Successful changes refresh the reservation's revision and retain its private management link. A stale slot returns to refreshed availability; an identical retry after a lost success response checks the current appointment before claiming success.

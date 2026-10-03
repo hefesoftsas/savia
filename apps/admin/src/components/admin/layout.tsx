@@ -91,7 +91,7 @@ function GlobalHistoryNav() {
         type="button"
         variant="ghost"
         size="icon"
-        className="size-8"
+        className="size-11 sm:size-8"
         aria-label={translate("savia.layout.back")}
         title={
           canGoBack
@@ -107,7 +107,7 @@ function GlobalHistoryNav() {
         type="button"
         variant="ghost"
         size="icon"
-        className="size-8"
+        className="size-11 sm:size-8"
         aria-label={translate("savia.layout.forward")}
         title={
           canGoForward
@@ -137,7 +137,7 @@ function LayoutSidebarTrigger() {
   return (
     <SidebarTrigger
       aria-label={label}
-      className="size-8 scale-125 sm:scale-100"
+      className="size-11 sm:size-8"
       title={label}
     />
   );
@@ -169,7 +169,7 @@ export const Layout = (props: CoreLayoutProps) => {
             <LayoutSidebarTrigger />
             <GlobalHistoryNav />
             <div
-              className="min-w-0 flex flex-1 items-center pr-2"
+              className="min-w-0 flex flex-1 items-center overflow-hidden pr-2"
               id="breadcrumb"
             />
             <div

@@ -4714,6 +4714,120 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/personal-integrations/bookings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          from: string;
+          to: string;
+          timeZone: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** Format: uuid */
+                id: string;
+                tenantId: number;
+                tenantSlug: string;
+                tenantName: string;
+                serviceName: string;
+                professionalName: string;
+                customerName: string;
+                /** Format: email */
+                customerEmail: string;
+                /** Format: date-time */
+                startsAt: string;
+                /** Format: date-time */
+                endsAt: string;
+                timeZone: string;
+                /** @enum {string} */
+                status: "confirmed";
+                version: number;
+                externalEvent: {
+                  /** @enum {string} */
+                  provider: "google_calendar" | "outlook";
+                  id: string;
+                } | null;
+              }[];
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/tenants/{tenantId}/booking": {
     parameters: {
       query?: never;

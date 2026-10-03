@@ -6,12 +6,23 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type ComponentProps,
   type CSSProperties,
   type FormEvent,
 } from "react";
 import { parseTenantSlugFromHostname } from "@savia/tenant-host";
 import { TenantAccessUrl } from "./tenant-access-url";
-import { Building2, Plus } from "lucide-react";
+import {
+  Building2,
+  LoaderCircle,
+  LogIn,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   brandingForeground,
@@ -21,6 +32,7 @@ import {
 import type { AppServices } from "@/app-services";
 import { ApiClientError } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useTenantBranding } from "./tenant-branding-provider";
@@ -36,6 +48,36 @@ type Tenant = {
   isActive?: boolean | number;
 };
 type Asset = "logo" | "cover" | "login-animation";
+
+function BrandingActionButton({
+  children,
+  icon: Icon,
+  spinning = false,
+  className,
+  ...props
+}: Omit<ComponentProps<typeof Button>, "children" | "asChild"> & {
+  children: string;
+  icon: LucideIcon;
+  spinning?: boolean;
+}) {
+  return (
+    <Button
+      title={children}
+      className={cn(
+        "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
+        className,
+      )}
+      {...props}
+    >
+      <Icon
+        aria-hidden="true"
+        className={spinning ? "motion-safe:animate-spin" : undefined}
+      />
+      <span className="sr-only sm:not-sr-only">{children}</span>
+    </Button>
+  );
+}
+
 function isLoginAnimationData(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const animation = value as Record<string, unknown>;
@@ -169,21 +211,23 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
           </p>
           <div className="tenant-branding-actions">
             {errorStatus === 401 ? (
-              <Button
+              <BrandingActionButton
+                icon={LogIn}
                 type="button"
                 variant="secondary"
                 onClick={() => void services.authSession.login()}
               >
                 {t("Iniciar sesión de nuevo")}
-              </Button>
+              </BrandingActionButton>
             ) : null}
-            <Button
+            <BrandingActionButton
+              icon={RefreshCw}
               type="button"
               variant="secondary"
               onClick={() => setAttempt((value) => value + 1)}
             >
               {t("Volver a cargar")}
-            </Button>
+            </BrandingActionButton>
           </div>
         </div>
       ) : tenants.length ? (
@@ -248,10 +292,15 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
                   )}
             </p>
             {canCreateOrganization && (
-              <Button asChild className="tenant-branding-empty-action">
-                <Link to="/tenants/create">
+              <Button
+                asChild
+                className="tenant-branding-empty-action max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+              >
+                <Link to="/tenants/create" title={t("Crear organización")}>
                   <Plus aria-hidden="true" />
-                  {t("Crear organización")}
+                  <span className="sr-only sm:not-sr-only">
+                    {t("Crear organización")}
+                  </span>
                 </Link>
               </Button>
             )}
@@ -505,12 +554,13 @@ function BrandingEditor({
             ? t(error as keyof typeof settingsMessages)
             : error}
         </p>
-        <Button
+        <BrandingActionButton
+          icon={RefreshCw}
           variant="outline"
           onClick={() => setReload((value) => value + 1)}
         >
           {t("Volver a cargar")}
-        </Button>
+        </BrandingActionButton>
       </div>
     );
   const disabled = !canManage || !!pending;
@@ -649,13 +699,14 @@ function BrandingEditor({
               </p>
             )}
             {draft.loginAnimationUrl && (
-              <Button
+              <BrandingActionButton
+                icon={RotateCcw}
                 variant="ghost"
                 type="button"
                 onClick={() => removeImage("login-animation")}
               >
                 {t("Restaurar animación por defecto")}
-              </Button>
+              </BrandingActionButton>
             )}
           </div>
         </fieldset>
@@ -679,13 +730,14 @@ function BrandingEditor({
               />
               {pending === kind && <p role="status">{t("Subiendo imagen…")}</p>}
               {draft[`${kind}Url`] && (
-                <Button
+                <BrandingActionButton
+                  icon={Trash2}
                   variant="ghost"
                   type="button"
                   onClick={() => removeImage(kind)}
                 >
                   {kind === "logo" ? t("Quitar logo") : t("Quitar portada")}
-                </Button>
+                </BrandingActionButton>
               )}
             </div>
           ))}
@@ -698,13 +750,14 @@ function BrandingEditor({
                 : error}
             </p>
             {conflict && (
-              <Button
+              <BrandingActionButton
+                icon={RefreshCw}
                 type="button"
                 variant="outline"
                 onClick={() => setReload((value) => value + 1)}
               >
                 {t("Cargar versión guardada")}
-              </Button>
+              </BrandingActionButton>
             )}
           </div>
         )}
@@ -716,10 +769,16 @@ function BrandingEditor({
           </p>
         )}
         <div className="tenant-branding-actions">
-          <Button type="submit" disabled={disabled || !dirty || conflict}>
+          <BrandingActionButton
+            icon={pending === "save" ? LoaderCircle : Save}
+            spinning={pending === "save"}
+            type="submit"
+            disabled={disabled || !dirty || conflict}
+          >
             {pending === "save" ? t("Guardando…") : t("Guardar cambios")}
-          </Button>
-          <Button
+          </BrandingActionButton>
+          <BrandingActionButton
+            icon={RotateCcw}
             variant="outline"
             type="button"
             disabled={disabled || !dirty}
@@ -731,7 +790,7 @@ function BrandingEditor({
             }}
           >
             {t("Descartar cambios")}
-          </Button>
+          </BrandingActionButton>
         </div>
         {dirty && (
           <p className="tenant-branding-help">

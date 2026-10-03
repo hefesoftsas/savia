@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, ShieldCheck } from "lucide-react";
+import { Plus, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { createAccessControlClient } from "@/api/access-control-client";
 import type { AppServices } from "@/app-services";
 import { RoleEditor } from "./role-editor";
@@ -96,13 +96,17 @@ export function RolePages({ services }: { services: AppServices }) {
           <p>{error.message}</p>
           <Button
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             onClick={() => {
               void scopes.refetch();
               void roles.refetch();
               void catalog.refetch();
             }}
           >
-            {t("Reload permissions")}
+            <RotateCcw aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">
+              {t("Reload permissions")}
+            </span>
           </Button>
         </div>
       )}
@@ -118,7 +122,7 @@ export function RolePages({ services }: { services: AppServices }) {
       )}
       {roles.data && catalog.data && !error && (
         <Tabs defaultValue="roles" key={scope}>
-          <TabsList>
+          <TabsList className="[&>[role=tab]]:max-sm:min-h-11">
             <TabsTrigger value="roles">{t("Roles")}</TabsTrigger>
             <TabsTrigger value="members">{t("Members")}</TabsTrigger>
             <TabsTrigger value="audit">{t("Audit")}</TabsTrigger>
@@ -140,6 +144,7 @@ export function RolePages({ services }: { services: AppServices }) {
                     type={selected === "new" ? "submit" : "button"}
                     form={selected === "new" ? "access-role-editor" : undefined}
                     size="sm"
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                     onClick={() => {
                       if (selected === "new") return;
                       setSelected("new");
@@ -147,7 +152,10 @@ export function RolePages({ services }: { services: AppServices }) {
                     }}
                   >
                     {selected !== "new" && <Plus aria-hidden="true" />}
-                    {selected === "new" ? t("Save role") : t("Create role")}
+                    {selected === "new" && <Save aria-hidden="true" />}
+                    <span className="sr-only sm:not-sr-only">
+                      {selected === "new" ? t("Save role") : t("Create role")}
+                    </span>
                   </Button>
                 </div>
                 {roles.data.roles.length > 0 ? (
@@ -157,7 +165,7 @@ export function RolePages({ services }: { services: AppServices }) {
                         <button
                           type="button"
                           aria-current={selected === r.id ? "true" : undefined}
-                          className="block w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=true]:bg-background aria-[current=true]:font-medium aria-[current=true]:shadow-xs"
+                          className="block min-h-11 w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=true]:bg-background aria-[current=true]:font-medium aria-[current=true]:shadow-xs"
                           onClick={() => {
                             setSelected(r.id);
                             setMessage("");

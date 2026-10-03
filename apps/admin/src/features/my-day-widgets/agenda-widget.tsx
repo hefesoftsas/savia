@@ -20,6 +20,7 @@ import {
   CalendarDays,
   ExternalLink,
   LoaderCircle,
+  Plus,
   RefreshCw,
 } from "lucide-react";
 import type { PersonalCalendarEvent } from "@/api/personal-integrations-client";
@@ -34,6 +35,10 @@ import {
   useCalendarSources,
 } from "./use-calendar-sources";
 import { CalendarView } from "./calendar-view";
+import {
+  useMyDayBookings,
+  type BookingAgendaClient,
+} from "./use-my-day-bookings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,7 +97,7 @@ export type PersonalIntegrationsLike = {
     startsAt: string;
     endsAt: string;
   }) => Promise<PersonalCalendarEvent>;
-};
+} & BookingAgendaClient;
 
 const calendarProviderOrder: CalendarProvider[] = [
   "google_calendar",
@@ -394,6 +399,11 @@ export function useMyDayAgenda(
   const to = options?.to ?? bounds.to;
   const dayKey = `${from}/${to}`;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const bookings = useMyDayBookings(personalIntegrations, {
+    from,
+    to,
+    timeZone,
+  });
   const sources = useCalendarSources(
     isCalendarSourcesClient(personalIntegrations)
       ? personalIntegrations
@@ -722,7 +732,8 @@ export function useMyDayAgenda(
     setEvents,
     eventGroups,
     calendarProviders,
-    loading,
+    loading: loading || bookings.loading,
+    bookings,
     feedback,
     syncError: localizeFeedback(snapshot.syncError),
     isCalendarConnectNotice:
@@ -731,7 +742,7 @@ export function useMyDayAgenda(
     setFeedback,
     dismissConnectNotice,
     refresh: async () => {
-      await Promise.all([refresh(), sources.refresh()]);
+      await Promise.all([refresh(), sources.refresh(), bookings.refresh()]);
     },
   };
 }
@@ -815,22 +826,27 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
             type="button"
             variant="secondary"
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            title={t("Agregar tarea")}
             onClick={() =>
               document.getElementById("my-day-task")?.focus({
                 preventScroll: false,
               })
             }
           >
-            {t("Agregar tarea")}
+            <Plus aria-hidden="true" className="size-4 sm:hidden" />
+            <span className="sr-only sm:not-sr-only">{t("Agregar tarea")}</span>
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            title={t("Sincronizar")}
             onClick={() => void refresh()}
           >
             <RefreshCw aria-hidden="true" className="size-3.5" />
-            {t("Sincronizar")}
+            <span className="sr-only sm:not-sr-only">{t("Sincronizar")}</span>
           </Button>
         </div>
       </div>

@@ -581,7 +581,7 @@ export function OfficeSuitePage({
                   setSaved(false);
                 }}
                 disabled={creating}
-                className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-10"
               >
                 <option value="savia">{t("Savia (default)")}</option>
                 {connectedProviders.map((provider) => (
@@ -645,7 +645,11 @@ export function OfficeSuitePage({
                 autoComplete="off"
               />
             </div>
-            <Button type="submit" disabled={creating || !name.trim()}>
+            <Button
+              type="submit"
+              className="max-sm:h-11"
+              disabled={creating || !name.trim()}
+            >
               <Plus className="size-4" aria-hidden="true" />
               {t(creating ? "Creating…" : "Create and save")}
             </Button>
@@ -687,7 +691,7 @@ export function OfficeSuitePage({
               placeholder={t("Search documents")}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="pl-9"
+              className="h-11 pl-9 sm:h-9"
             />
           </div>
         </div>
@@ -723,7 +727,7 @@ export function OfficeSuitePage({
               type="button"
               aria-pressed={storageFilter === filter.id}
               onClick={() => setStorageFilter(filter.id)}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${storageFilter === filter.id ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9 ${storageFilter === filter.id ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
             >
               {filter.provider ? (
                 <StorageProviderIcon provider={filter.provider} />

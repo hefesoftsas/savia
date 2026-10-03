@@ -575,6 +575,7 @@ export function StudioTenantCredentialsSection({
         <div className="credentials-entry-actions">
           <Button
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             onClick={() =>
               navigate(
                 studioHref({
@@ -586,7 +587,9 @@ export function StudioTenantCredentialsSection({
               )
             }
           >
-            {t("Administrar integraciones")}
+            <span className="sr-only sm:not-sr-only">
+              {t("Administrar integraciones")}
+            </span>
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </div>
@@ -611,6 +614,7 @@ export function StudioTenantCredentialsSection({
         <div className="credentials-entry-actions">
           <Button
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             onClick={() =>
               navigate(
                 studioHref({
@@ -621,7 +625,9 @@ export function StudioTenantCredentialsSection({
               )
             }
           >
-            {t("Administrar fuentes de datos")}
+            <span className="sr-only sm:not-sr-only">
+              {t("Administrar fuentes de datos")}
+            </span>
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </div>

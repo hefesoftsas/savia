@@ -3,6 +3,7 @@ import { useMessages } from "@/i18n/core";
 import { accessMessages } from "@/i18n/locales/access";
 import { accessPredicateSchema } from "@savia/studio-shared/access-control";
 import { useState } from "react";
+import { Save, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -195,7 +196,15 @@ export function RoleEditor({
           ))}
         </div>
         {!role?.protected && (
-          <Button type="submit">{busy ? t("Saving…") : t("Save role")}</Button>
+          <Button
+            type="submit"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+          >
+            <Save aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">
+              {busy ? t("Saving…") : t("Save role")}
+            </span>
+          </Button>
         )}
       </fieldset>
       {role && !role.protected && onDelete && (
@@ -210,6 +219,7 @@ export function RoleEditor({
           <Button
             type="button"
             variant="destructive"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={busy || !online}
             onClick={async () => {
               if (!confirmDelete) {
@@ -228,15 +238,22 @@ export function RoleEditor({
               }
             }}
           >
-            {confirmDelete ? t("Confirm delete role") : t("Delete role")}
+            <Trash2 aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">
+              {confirmDelete ? t("Confirm delete role") : t("Delete role")}
+            </span>
           </Button>
           {confirmDelete && (
             <Button
               type="button"
               variant="ghost"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => setConfirmDelete(false)}
             >
-              {t("Cancel deletion")}
+              <X aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">
+                {t("Cancel deletion")}
+              </span>
             </Button>
           )}
         </div>

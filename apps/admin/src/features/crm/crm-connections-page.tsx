@@ -6,7 +6,7 @@ import Hubspot from "@thesvg/react/hubspot";
 import Pipedrive from "@thesvg/react/pipedrive";
 import Salesforce from "@thesvg/react/salesforce";
 import Zoho from "@thesvg/react/zoho";
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, RotateCcw } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import type {
   CrmConnection,
@@ -166,10 +166,12 @@ function CrmIntegrationRows({
             <Button
               size="sm"
               variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               disabled={busy || !enabled}
               onClick={() => onReconnect(provider, connection)}
             >
-              Reconectar
+              <RotateCcw aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">Reconectar</span>
             </Button>
           ) : undefined
         }

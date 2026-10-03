@@ -702,7 +702,7 @@ export function WidgetCard({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground max-sm:size-11"
               aria-label={t("Widget options for %{title}", { title })}
               disabled={disabled}
             >
