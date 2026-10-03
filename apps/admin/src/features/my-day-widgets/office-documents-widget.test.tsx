@@ -112,6 +112,89 @@ it("does not request documents while the office suite is disabled", async () => 
   expect(apiClient.get).toHaveBeenCalledTimes(1);
 });
 
+it("keeps Savia documents visible when connected-drive loading fails", async () => {
+  const apiClient = {
+    get: vi.fn(async (path: string) => {
+      if (path === "/v1/office-settings") return { data: { enabled: true } };
+      if (path === "/v1/office-documents")
+        return {
+          data: [
+            {
+              id: "saved-1",
+              name: "Available Savia document",
+              updatedAt: "2026-10-03T12:00:00Z",
+            },
+          ],
+        };
+      if (path === "/v1/connected-office-documents")
+        throw new Error("connected drive unavailable");
+      throw new Error(`Unexpected API path: ${path}`);
+    }),
+  };
+
+  render(<OfficeDocumentsWidgetBody apiClient={apiClient as never} />);
+
+  expect(
+    await screen.findByRole("link", { name: /Available Savia document/ }),
+  ).toBeVisible();
+  expect(
+    screen.getByText(
+      "One document source could not be loaded. Showing available documents.",
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+  expect(
+    screen.queryByText("No recent documents yet."),
+  ).not.toBeInTheDocument();
+});
+
+it("does not claim an empty complete list if the other source fails", async () => {
+  const apiClient = {
+    get: vi.fn(async (path: string) => {
+      if (path === "/v1/office-settings") return { data: { enabled: true } };
+      if (path === "/v1/office-documents") return { data: [] };
+      if (path === "/v1/connected-office-documents")
+        throw new Error("connected drive unavailable");
+      throw new Error(`Unexpected API path: ${path}`);
+    }),
+  };
+
+  render(<OfficeDocumentsWidgetBody apiClient={apiClient as never} />);
+
+  expect(
+    await screen.findByText(
+      "One document source could not be loaded. The list may be incomplete.",
+    ),
+  ).toBeVisible();
+  expect(
+    screen.queryByText("No recent documents yet."),
+  ).not.toBeInTheDocument();
+});
+
+it("reports total failure instead of rendering an empty success state", async () => {
+  const apiClient = {
+    get: vi.fn(async (path: string) => {
+      if (path === "/v1/office-settings") return { data: { enabled: true } };
+      if (
+        path === "/v1/office-documents" ||
+        path === "/v1/connected-office-documents"
+      )
+        throw new Error("document source unavailable");
+      throw new Error(`Unexpected API path: ${path}`);
+    }),
+  };
+
+  render(<OfficeDocumentsWidgetBody apiClient={apiClient as never} />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Could not load recent documents.",
+  );
+  expect(
+    screen.queryByText("No recent documents yet."),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+});
+
 it("ignores an office settings response from the previous identity", async () => {
   let resolvePrevious!: (value: { data: { enabled: boolean } }) => void;
   const previousSettings = new Promise<{ data: { enabled: boolean } }>(
@@ -171,9 +254,7 @@ it("lets the user add the office documents system widget", async () => {
   await user.click(
     screen.getByRole("combobox", { name: "Widget del sistema" }),
   );
-  await user.click(
-    screen.getByRole("option", { name: /Office documents/ }),
-  );
+  await user.click(screen.getByRole("option", { name: /Office documents/ }));
   await user.click(screen.getByRole("button", { name: "Agregar widget" }));
 
   expect(onAdd).toHaveBeenCalledWith({

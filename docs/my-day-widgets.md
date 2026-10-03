@@ -31,6 +31,8 @@ The widget merges private Savia files and connected-drive links by their update
 or creation time, opens each document in a new tab, and links to the Office
 suite to create a document. It reads no document lists while Office suite is
 disabled for the active tenant, and stores no document data in browser storage.
+If one document source fails, documents from the available source remain
+visible with a notice that the list is incomplete and a retry action.
 
 Plugin widgets are offered only when their collection matches and their
 extension is enabled. If an extension becomes unavailable, its card explains

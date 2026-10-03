@@ -17,6 +17,21 @@ export const officeDocumentsWidgetMessages = {
     "Could not load recent documents.",
     "Não foi possível carregar os documentos recentes.",
   ],
+  "One document source could not be loaded. Showing available documents.": [
+    "No se pudo cargar una fuente de documentos. Se muestran los documentos disponibles.",
+    "One document source could not be loaded. Showing available documents.",
+    "Não foi possível carregar uma fonte de documentos. Exibindo os documentos disponíveis.",
+  ],
+  "One document source could not be loaded. The list may be incomplete.": [
+    "No se pudo cargar una fuente de documentos. La lista puede estar incompleta.",
+    "One document source could not be loaded. The list may be incomplete.",
+    "Não foi possível carregar uma fonte de documentos. A lista pode estar incompleta.",
+  ],
+  "No documents found in the available source; the list may be incomplete.": [
+    "No se encontraron documentos en la fuente disponible; la lista puede estar incompleta.",
+    "No documents found in the available source; the list may be incomplete.",
+    "Nenhum documento encontrado na fonte disponível; a lista pode estar incompleta.",
+  ],
   "No recent documents yet.": [
     "Todavía no tienes documentos recientes.",
     "No recent documents yet.",

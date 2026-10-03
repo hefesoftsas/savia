@@ -25,6 +25,7 @@ type WidgetState =
   | { status: "loading"; documents: RecentDocument[]; hasMore: boolean }
   | { status: "disabled"; documents: RecentDocument[]; hasMore: boolean }
   | { status: "ready"; documents: RecentDocument[]; hasMore: boolean }
+  | { status: "partial"; documents: RecentDocument[]; hasMore: boolean }
   | { status: "error"; documents: RecentDocument[]; hasMore: boolean };
 
 const emptyState: WidgetState = {
@@ -127,7 +128,7 @@ export function OfficeDocumentsWidgetBody({
         setState({ status: "disabled", documents: [], hasMore: false });
         return;
       }
-      const [saved, connected] = await Promise.all([
+      const [savedResult, connectedResult] = await Promise.allSettled([
         apiClient.get<{ data: unknown[] }>("/v1/office-documents", {
           signal: AbortSignal.timeout(15_000),
         }),
@@ -136,9 +137,26 @@ export function OfficeDocumentsWidgetBody({
         }),
       ]);
       if (request !== generation.current) return;
+      const saved =
+        savedResult.status === "fulfilled" ? savedResult.value.data : [];
+      const connected =
+        connectedResult.status === "fulfilled"
+          ? connectedResult.value.data
+          : [];
+      if (
+        savedResult.status === "rejected" &&
+        connectedResult.status === "rejected"
+      ) {
+        setState({ status: "error", documents: [], hasMore: false });
+        return;
+      }
       setState({
-        status: "ready",
-        ...toRecentDocuments(saved.data, connected.data),
+        status:
+          savedResult.status === "fulfilled" &&
+          connectedResult.status === "fulfilled"
+            ? "ready"
+            : "partial",
+        ...toRecentDocuments(saved, connected),
       });
     } catch {
       if (request === generation.current)
@@ -213,54 +231,86 @@ export function OfficeDocumentsWidgetBody({
             {t("Retry")}
           </Button>
         </div>
-      ) : state.documents.length > 0 ? (
-        <ul className="divide-y">
-          {state.documents.map((document) => (
-            <li key={document.id}>
-              <a
-                href={document.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-w-0 items-center gap-2 rounded-sm py-2 text-sm hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <StorageProviderIcon
-                  provider={document.provider}
-                  className="size-4 shrink-0"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">
-                    {document.name}
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {t(
-                      providerName(
-                        document.provider,
-                      ) as keyof typeof officeDocumentsWidgetMessages,
-                    )}
-                  </span>
-                </span>
-              </a>
-            </li>
-          ))}
-        </ul>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          {t("No recent documents yet.")}
-        </p>
+        <>
+          {state.status === "partial" ? (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-2"
+            >
+              <p className="text-sm text-destructive">
+                {state.documents.length > 0
+                  ? t(
+                      "One document source could not be loaded. Showing available documents.",
+                    )
+                  : t(
+                      "One document source could not be loaded. The list may be incomplete.",
+                    )}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void load()}
+              >
+                {t("Retry")}
+              </Button>
+            </div>
+          ) : null}
+          {state.documents.length > 0 ? (
+            <ul className="divide-y">
+              {state.documents.map((document) => (
+                <li key={document.id}>
+                  <a
+                    href={document.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-w-0 items-center gap-2 rounded-sm py-2 text-sm hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <StorageProviderIcon
+                      provider={document.provider}
+                      className="size-4 shrink-0"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">
+                        {document.name}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {t(
+                          providerName(
+                            document.provider,
+                          ) as keyof typeof officeDocumentsWidgetMessages,
+                        )}
+                      </span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {state.status === "partial"
+                ? t(
+                    "No documents found in the available source; the list may be incomplete.",
+                  )
+                : t("No recent documents yet.")}
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <Button asChild variant="outline" size="sm">
+              <a href="/#/office-suite">{t("New document")}</a>
+            </Button>
+            {state.hasMore ? (
+              <a
+                href="/#/office-suite"
+                className="rounded-sm text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t("View all documents")}
+              </a>
+            ) : null}
+          </div>
+        </>
       )}
-      <div className="flex items-center justify-between gap-3">
-        <Button asChild variant="outline" size="sm">
-          <a href="/#/office-suite">{t("New document")}</a>
-        </Button>
-        {state.hasMore ? (
-          <a
-            href="/#/office-suite"
-            className="rounded-sm text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {t("View all documents")}
-          </a>
-        ) : null}
-      </div>
     </div>
   );
 }
