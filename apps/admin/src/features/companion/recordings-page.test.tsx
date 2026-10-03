@@ -185,3 +185,16 @@ it("waits for the initial list before enabling uploads", async () => {
     ).toBeEnabled(),
   );
 });
+
+it("continues an empty filtered page to find visible recordings", async () => {
+  const client = mockClient();
+  client.list.mockResolvedValueOnce({
+    recordings: [],
+    cursor: "next-page",
+  } as any);
+  show(client);
+  expect(
+    await screen.findByRole("region", { name: "Meeting notes" }),
+  ).toBeVisible();
+  expect(client.list).toHaveBeenCalledWith("next-page");
+});

@@ -30,6 +30,14 @@ export type TenantMembership = AgencyMembership & { tenantId: number };
 export type TenantRole = AgencyRole;
 
 export type AppActor = {
+  credential?:
+    | {
+        kind: "personal-api-key";
+        keyId: string;
+        tenantId: number;
+        scopes: import("./personal-api-keys").RecordingScope[];
+      }
+    | { kind: "interactive" };
   principal: IdentityPrincipal;
   globalRoles: GlobalRole[];
   memberships: AgencyMembership[];
@@ -58,5 +66,6 @@ export class AuthenticationError extends Error {
 }
 
 export type Authenticator = {
+  recordSuccessfulUse?(actor: AppActor): Promise<void>;
   authenticate(request: Request, d1: D1Database): Promise<AppActor>;
 };

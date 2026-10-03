@@ -31,6 +31,7 @@ export const saveRecordingSchema = z
   .strict();
 export const recordingSchema = z.object({
   id: recordingIdSchema,
+  tenantId: z.number().int().nonnegative().optional(),
   source: sourceSchema,
   format: importedAudioFormatSchema,
   bytes: z.number().int().positive().max(MAX_RECORDING_BYTES),
@@ -94,6 +95,18 @@ const digest = async (bytes: Uint8Array) => {
 };
 const missing = () =>
   new CompanionError("RECORDING_NOT_FOUND", "Recording not found.", 404);
+export type RecordingAccess = {
+  ownerId: string;
+  tenantId?: number;
+  requireTenant: boolean;
+};
+type RecordingOwner = string | RecordingAccess;
+const tenantFor = (owner: RecordingOwner) =>
+  typeof owner === "string" ? undefined : owner.tenantId;
+const canRead = (owner: RecordingOwner, recording: Recording) =>
+  typeof owner === "string" ||
+  !owner.requireTenant ||
+  (owner.tenantId !== undefined && recording.tenantId === owner.tenantId);
 export class CompanionRecordings {
   private readonly processing: Map<string, Promise<void>>;
   constructor(private bucket?: R2Bucket) {
@@ -117,10 +130,16 @@ export class CompanionRecordings {
       );
     return this.bucket;
   }
-  private async prefix(owner: string) {
-    return `companion/samples/${await digest(new TextEncoder().encode(owner))}/`;
+  private async prefix(owner: RecordingOwner) {
+    if (
+      typeof owner !== "string" &&
+      owner.requireTenant &&
+      (!Number.isSafeInteger(owner.tenantId) || owner.tenantId! < 0)
+    )
+      throw missing();
+    return `companion/samples/${await digest(new TextEncoder().encode(typeof owner === "string" ? owner : owner.ownerId))}/`;
   }
-  private async key(owner: string, id: string) {
+  private async key(owner: RecordingOwner, id: string) {
     if (!recordingIdSchema.safeParse(id).success)
       throw new CompanionError(
         "INVALID_REQUEST",
@@ -128,7 +147,7 @@ export class CompanionRecordings {
       );
     return `${await this.prefix(owner)}${id}.ogg`;
   }
-  private async notesKey(owner: string, id: string) {
+  private async notesKey(owner: RecordingOwner, id: string) {
     await this.key(owner, id);
     return `${await this.prefix(owner)}${id}.notes.json`;
   }
@@ -139,7 +158,7 @@ export class CompanionRecordings {
    * not an exactly-once guarantee across Workers.
    */
   async withNotesLock<T>(
-    owner: string,
+    owner: RecordingOwner,
     id: string,
     action: () => Promise<T>,
   ): Promise<T> {
@@ -162,6 +181,9 @@ export class CompanionRecordings {
     const metadata = object.customMetadata ?? {};
     const parsed = recordingSchema.safeParse({
       id: metadata.id,
+      ...(metadata.tenantId !== undefined
+        ? { tenantId: Number(metadata.tenantId) }
+        : {}),
       source: metadata.source ?? "microphone",
       format: metadata.format ?? "ogg",
       bytes: object.size,
@@ -182,7 +204,7 @@ export class CompanionRecordings {
     return parsed.data;
   }
   async save(
-    owner: string,
+    owner: RecordingOwner,
     input: z.input<typeof saveRecordingSchema>,
   ): Promise<Recording> {
     const bucket = this.storage(),
@@ -214,6 +236,9 @@ export class CompanionRecordings {
         },
         customMetadata: {
           id: parsed.data.id,
+          ...(tenantFor(owner) !== undefined
+            ? { tenantId: String(tenantFor(owner)) }
+            : {}),
           source: parsed.data.source,
           format: "ogg",
           durationSeconds: String(durationSeconds),
@@ -236,7 +261,11 @@ export class CompanionRecordings {
         503,
       );
     const result = this.metadata(object);
-    if (result.sha256 !== sha256 || result.source !== parsed.data.source)
+    if (
+      result.tenantId !== tenantFor(owner) ||
+      result.sha256 !== sha256 ||
+      result.source !== parsed.data.source
+    )
       throw new CompanionError(
         "RECORDING_CONFLICT",
         "This identifier belongs to a different sample.",
@@ -245,7 +274,7 @@ export class CompanionRecordings {
     return result;
   }
   async saveImported(
-    owner: string,
+    owner: RecordingOwner,
     input: z.input<typeof saveImportedRecordingSchema>,
   ): Promise<Recording> {
     if (
@@ -298,6 +327,9 @@ export class CompanionRecordings {
         },
         customMetadata: {
           id: parsed.data.id,
+          ...(tenantFor(owner) !== undefined
+            ? { tenantId: String(tenantFor(owner)) }
+            : {}),
           source: "upload",
           format: parsed.data.format,
           durationSeconds:
@@ -324,6 +356,7 @@ export class CompanionRecordings {
       );
     const result = this.metadata(object);
     if (
+      result.tenantId !== tenantFor(owner) ||
       result.sha256 !== sha256 ||
       result.source !== "upload" ||
       result.format !== parsed.data.format ||
@@ -337,7 +370,7 @@ export class CompanionRecordings {
       );
     return result;
   }
-  async list(owner: string, cursor?: string) {
+  async list(owner: RecordingOwner, cursor?: string) {
     const result = await this.storage().list({
       prefix: await this.prefix(owner),
       limit: 50,
@@ -347,17 +380,21 @@ export class CompanionRecordings {
     return {
       recordings: result.objects
         .filter((object) => object.key.endsWith(".ogg"))
-        .map((object) => this.metadata(object)),
+        .map((object) => this.metadata(object))
+        .filter((recording) => canRead(owner, recording)),
       cursor: result.truncated ? result.cursor : null,
     };
   }
-  async get(owner: string, id: string): Promise<R2ObjectBody> {
+  async get(owner: RecordingOwner, id: string): Promise<R2ObjectBody> {
     const object = await this.storage().get(await this.key(owner, id));
     if (!object) throw missing();
-    this.metadata(object);
+    if (!canRead(owner, this.metadata(object))) {
+      await object.body.cancel();
+      throw missing();
+    }
     return object;
   }
-  async getAudio(owner: string, id: string): Promise<RecordingAudio> {
+  async getAudio(owner: RecordingOwner, id: string): Promise<RecordingAudio> {
     const object = await this.get(owner, id);
     const metadata = this.metadata(object);
     return {
@@ -368,7 +405,7 @@ export class CompanionRecordings {
       bytes: new Uint8Array(await object.arrayBuffer()),
     };
   }
-  async getNotes(owner: string, id: string): Promise<RecordingNotes> {
+  async getNotes(owner: RecordingOwner, id: string): Promise<RecordingNotes> {
     await this.get(owner, id);
     const object = await this.storage().get(await this.notesKey(owner, id));
     if (!object) return { transcript: null, summary: null };
@@ -398,7 +435,7 @@ export class CompanionRecordings {
     return parsed.data;
   }
   async storeNotes(
-    owner: string,
+    owner: RecordingOwner,
     id: string,
     input: RecordingNotes,
   ): Promise<void> {
@@ -440,11 +477,12 @@ export class CompanionRecordings {
       throw missing();
     }
   }
-  async remove(owner: string, id: string) {
+  async remove(owner: RecordingOwner, id: string) {
     await this.withNotesLock(owner, id, async () => {
       const bucket = this.storage();
       const key = await this.key(owner, id);
-      if (!(await bucket.head(key))) throw missing();
+      const object = await bucket.head(key);
+      if (!object || !canRead(owner, this.metadata(object))) throw missing();
       await bucket.delete([key, await this.notesKey(owner, id)]);
     });
   }

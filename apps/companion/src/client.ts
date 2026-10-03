@@ -37,6 +37,7 @@ export type SavedRecording = {
   sha256: string;
 };
 export type Capabilities = {
+  grantedRecordingScopes?: string[];
   storageAvailable: boolean;
   maxCompressedAudioBytes: number;
   audioFormats: ("wav" | "ogg")[];
@@ -115,4 +116,12 @@ export async function native<T>(
       "Open the desktop app to capture audio. This browser view only previews the interface.",
     );
   return invoke<T>(command, args);
+}
+
+export function canUploadRecording(capabilities: Capabilities | null): boolean {
+  return Boolean(
+    capabilities?.storageAvailable &&
+    (capabilities.grantedRecordingScopes === undefined ||
+      capabilities.grantedRecordingScopes.includes("recordings:upload")),
+  );
 }

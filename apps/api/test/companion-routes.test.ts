@@ -10,6 +10,7 @@ import {
 } from "../src/auth/middleware";
 import { AuthenticationError } from "../src/auth/types";
 import type { Authenticator } from "../src/auth/types";
+import { CompanionRecordings } from "../src/companion/recordings";
 import { CompanionService } from "../src/companion/service";
 import {
   platformAdministratorAuthenticator,
@@ -436,4 +437,85 @@ describe("Companion API boundaries", () => {
       document.paths["/v1/companion/recordings/{id}/notes"],
     ).toHaveProperty("post");
   });
+});
+
+it("answers from saved notes only, requires consent/transcript and hides foreign recordings", async () => {
+  const id = crypto.randomUUID();
+  const owner = "question-owner";
+  let calls = 0;
+  const service = new CompanionService({
+    fetch: async () => {
+      calls++;
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                answer: "No budget was agreed.",
+                insufficientEvidence: true,
+              }),
+            },
+          },
+        ],
+      });
+    },
+  });
+  const instance = app(
+    true,
+    true,
+    true,
+    {},
+    memberAuthenticator(owner, "viewer"),
+    service,
+  );
+  const repository = new CompanionRecordings(env.DOCUMENTS);
+  await repository.save(owner, {
+    id,
+    source: "system",
+    audio: { data: opusFixtureBase64, format: "ogg" },
+    consent: true,
+  });
+  const request = (body: unknown, target = instance) =>
+    target.request(`/v1/companion/recordings/${id}/questions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  try {
+    expect((await request({ question: "Budget?" })).status).toBe(400);
+    expect((await request({ question: "Budget?", consent: true })).status).toBe(
+      409,
+    );
+    await repository.storeNotes(owner, id, {
+      transcript: {
+        text: "Budget undecided.",
+        source: "system",
+        model: "test/stt",
+        durationSeconds: 1,
+      },
+      summary: null,
+    });
+    const stranger = app(
+      true,
+      true,
+      true,
+      {},
+      memberAuthenticator("question-stranger", "viewer"),
+      service,
+    );
+    expect(
+      (await request({ question: "Budget?", consent: true }, stranger)).status,
+    ).toBe(404);
+    expect(calls).toBe(0);
+    const answer = await request({ question: "Budget?", consent: true });
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toEqual({
+      answer: "No budget was agreed.",
+      insufficientEvidence: true,
+    });
+    expect(calls).toBe(1);
+    expect((await repository.getNotes(owner, id)).summary).toBeNull();
+  } finally {
+    await repository.remove(owner, id);
+  }
 });

@@ -16,6 +16,7 @@ import {
   type RecordingNotes,
 } from "./client";
 
+import { RecordingQuestions } from "./recording-questions";
 import { RecordingUpload } from "./recording-upload";
 
 // Operate: an owner-private audio inbox, using Savia's neutral surfaces and
@@ -67,7 +68,14 @@ export function CompanionRecordingsPage({
     setLoading(true);
     setError("");
     try {
-      const result = await client.list(next);
+      let result = await client.list(next);
+      const visited = new Set<string>();
+      while (!result.recordings.length && result.cursor && visited.size < 20) {
+        if (visited.has(result.cursor))
+          throw new Error("Recording pagination did not advance");
+        visited.add(result.cursor);
+        result = await client.list(result.cursor);
+      }
       if (!mounted.current) return;
       setRecordings((previous) =>
         next
@@ -81,6 +89,8 @@ export function CompanionRecordingsPage({
       );
       setCursor(result.cursor);
       if (!next) setDetailRevision((value) => value + 1);
+      if (next)
+        setSelected((current) => current ?? result.recordings[0] ?? null);
       if (!next)
         setSelected(
           (current) =>
@@ -238,6 +248,15 @@ export function CompanionRecordingsPage({
           <p className="mt-2 text-sm text-muted-foreground">
             {t("Upload an audio file or record in Companion to get started.")}
           </p>
+          {cursor && (
+            <Button
+              variant="outline"
+              disabled={loading}
+              onClick={() => void load(cursor)}
+            >
+              {t("Load more")}
+            </Button>
+          )}
         </section>
       ) : (
         <div className="grid gap-8 md:grid-cols-[240px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -444,6 +463,13 @@ export function CompanionRecordingsPage({
                       </>
                     )}
                   </article>
+                )}
+                {notes?.transcript?.text.trim() && (
+                  <RecordingQuestions
+                    key={selected.id}
+                    id={selected.id}
+                    client={client}
+                  />
                 )}
                 {notes?.transcript && (
                   <details className="mt-8 border-t pt-5">

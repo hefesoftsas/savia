@@ -109,6 +109,21 @@ export function tenantHostGuard(
       return;
     }
     const actor = actorFromContext(context);
+    if (actor.credential?.kind === "personal-api-key") {
+      const hostSlug = parseTenantSlugFromHostname(
+        new URL(context.req.url).hostname,
+        canonical,
+      );
+      for (const hint of new Set(
+        [slug, hostSlug].filter((value): value is string => Boolean(value)),
+      )) {
+        const tenant = await resolveTenantSlug(db, hint);
+        if (!tenant || tenant.id !== actor.credential.tenantId)
+          return mismatchResponse();
+      }
+      await next();
+      return;
+    }
     if (actor.globalRoles.includes("platform_admin")) {
       await next();
       return;

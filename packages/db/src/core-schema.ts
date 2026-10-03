@@ -622,3 +622,28 @@ export const registrationCaptchaConsumption = sqliteTable(
     index("registration_captcha_consumption_expiry_index").on(table.expiresAt),
   ],
 );
+
+export const personalApiKeys = sqliteTable(
+  "personal_api_keys",
+  {
+    id: text("id").primaryKey().notNull(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "cascade" }),
+    tenantId: bigint("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    deploymentId: text("deployment_id").notNull(),
+    name: text("name").notNull(),
+    prefix: text("prefix").notNull(),
+    secretDigest: text("secret_digest").notNull().unique(),
+    scopes: text("scopes").notNull(),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    lastUsedAt: text("last_used_at"),
+  },
+  (table) => [
+    index("personal_api_keys_owner").on(table.principalId, table.expiresAt),
+  ],
+);

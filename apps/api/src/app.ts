@@ -1,3 +1,4 @@
+import { PersonalApiKeys } from "./auth/personal-api-keys";
 import { registerPagesSearchSettingsRoutes } from "./routes/pages-search-settings";
 import { registerPagesSearchRoutes } from "./routes/pages-search";
 import type { PagesSearchBindings } from "./pages/cloudflare-search";
@@ -270,7 +271,11 @@ export function createApp(
   const notificationAuth = authenticationMiddleware(
     db,
     authenticator ??
-      betterAuthAuthenticator(resolvedAuthService, oauthResource),
+      betterAuthAuthenticator(
+        resolvedAuthService,
+        oauthResource,
+        new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+      ),
   );
   const notificationSession = async (context: Context, next: Next) => {
     const actor = actorFromContext(context);

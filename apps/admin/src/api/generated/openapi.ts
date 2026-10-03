@@ -366,6 +366,191 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/account/api-keys": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List your personal API key metadata */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Metadata without secrets */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              keys: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                prefix: string;
+                tenantId: number;
+                scopes: (
+                  | "recordings:read"
+                  | "recordings:upload"
+                  | "recordings:process"
+                  | "recordings:delete"
+                )[];
+                createdAt: string;
+                expiresAt: string;
+                revokedAt: string | null;
+                lastUsedAt: string | null;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Create a scoped personal key; reveal its secret once */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            name: string;
+            tenantId: number;
+            scopes: (
+              | "recordings:read"
+              | "recordings:upload"
+              | "recordings:process"
+              | "recordings:delete"
+            )[];
+            /** @default 30 */
+            lifetimeDays?: 7 | 30 | 90;
+          };
+        };
+      };
+      responses: {
+        /** @description One-time credential */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              key: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                prefix: string;
+                tenantId: number;
+                scopes: (
+                  | "recordings:read"
+                  | "recordings:upload"
+                  | "recordings:process"
+                  | "recordings:delete"
+                )[];
+                createdAt: string;
+                expiresAt: string;
+                revokedAt: string | null;
+                lastUsedAt: string | null;
+              };
+              secret: string;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/account/api-keys/tenants": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List eligible tenants for personal keys */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Eligible active memberships */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              tenants: {
+                id: number;
+                name: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/account/api-keys/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Revoke your personal key */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Revoked or already absent */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -437,6 +622,12 @@ export interface paths {
               maxCompressedAudioBytes: number;
               audioFormats: ("wav" | "ogg")[];
               storageAvailable: boolean;
+              grantedRecordingScopes?: (
+                | "recordings:read"
+                | "recordings:upload"
+                | "recordings:process"
+                | "recordings:delete"
+              )[];
               /** @enum {string} */
               privacyRouting: "unverified";
             };
@@ -799,6 +990,7 @@ export interface paths {
             "application/json": {
               /** Format: uuid */
               id: string;
+              tenantId?: number;
               /** @enum {string} */
               source: "microphone" | "system" | "upload";
               /** @enum {string} */
@@ -993,6 +1185,7 @@ export interface paths {
             "application/json": {
               /** Format: uuid */
               id: string;
+              tenantId?: number;
               /** @enum {string} */
               source: "microphone" | "system" | "upload";
               /** @enum {string} */
@@ -1175,6 +1368,7 @@ export interface paths {
               recordings: {
                 /** Format: uuid */
                 id: string;
+                tenantId?: number;
                 /** @enum {string} */
                 source: "microphone" | "system" | "upload";
                 /** @enum {string} */
@@ -1360,6 +1554,7 @@ export interface paths {
             "application/json": {
               /** Format: uuid */
               id: string;
+              tenantId?: number;
               /** @enum {string} */
               source: "microphone" | "system" | "upload";
               /** @enum {string} */
@@ -2044,6 +2239,181 @@ export interface paths {
                 }[];
                 openQuestions: string[];
               } | null;
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        504: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/recordings/{id}/questions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Answer a question using only the saved recording transcript */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            question: string;
+            /** @enum {boolean} */
+            consent: true;
+          };
+        };
+      };
+      responses: {
+        /** @description Draft answer, not persisted */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              answer: string;
+              insufficientEvidence: boolean;
             };
           };
         };

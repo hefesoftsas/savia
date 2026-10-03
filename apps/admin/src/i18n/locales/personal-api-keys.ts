@@ -1,0 +1,67 @@
+export const personalApiKeyMessages = {
+  "API keys": ["Claves API", "API keys", "Chaves API"],
+  "Connect your apps with limited access.": [
+    "Conecta tus aplicaciones con permisos limitados.",
+    "Connect your apps with limited access.",
+    "Conecte seus aplicativos com acesso limitado.",
+  ],
+  "Key name": ["Nombre de la clave", "Key name", "Nome da chave"],
+  Tenant: ["Espacio de trabajo", "Workspace", "Espaço de trabalho"],
+  Expiry: ["Caducidad", "Expiry", "Validade"],
+  days: ["días", "days", "dias"],
+  Permissions: ["Permisos", "Permissions", "Permissões"],
+  Read: [
+    "Consultar audio y notas",
+    "Read audio and notes",
+    "Consultar áudio e notas",
+  ],
+  Upload: ["Subir grabaciones", "Upload recordings", "Enviar gravações"],
+  Process: [
+    "Transcribir y procesar con IA (puede generar cargos)",
+    "Transcribe and process with AI (may incur charges)",
+    "Transcrever e processar com IA (pode gerar custos)",
+  ],
+  Delete: ["Eliminar grabaciones", "Delete recordings", "Excluir gravações"],
+  "Create key": ["Crear clave", "Create key", "Criar chave"],
+  "New key": ["Nueva clave", "New key", "Nova chave"],
+  Copy: ["Copiar", "Copy", "Copiar"],
+  Copied: ["Copiada", "Copied", "Copiada"],
+  "I saved the key": [
+    "Ya guardé la clave",
+    "I saved the key",
+    "Já salvei a chave",
+  ],
+  "Copy it into Companion. It will not be shown again.": [
+    "Cópiala en Companion. No volverá a mostrarse.",
+    "Copy it into Companion. It will not be shown again.",
+    "Copie para o Companion. Ela não será exibida novamente.",
+  ],
+  "No keys yet.": [
+    "Aún no hay claves.",
+    "No keys yet.",
+    "Ainda não há chaves.",
+  ],
+  "No eligible workspace.": [
+    "No tienes un espacio de trabajo elegible.",
+    "No eligible workspace.",
+    "Nenhum espaço de trabalho elegível.",
+  ],
+  Revoke: ["Revocar", "Revoke", "Revogar"],
+  Revoked: ["Revocada", "Revoked", "Revogada"],
+  Expired: ["Caducada", "Expired", "Expirada"],
+  "Last used": ["Último uso", "Last used", "Último uso"],
+  Never: ["Nunca", "Never", "Nunca"],
+  Loading: ["Cargando…", "Loading…", "Carregando…"],
+  Retry: ["Reintentar", "Retry", "Tentar novamente"],
+  "Could not complete the operation.": [
+    "No se pudo completar la operación. Revisa la conexión e inténtalo de nuevo.",
+    "Could not complete the operation. Check your connection and try again.",
+    "Não foi possível concluir a operação. Verifique a conexão e tente novamente.",
+  ],
+  "Keys only access your recordings in the selected workspace. Legacy recordings remain available on the web.":
+    [
+      "Las claves solo acceden a tus grabaciones del espacio elegido. Las grabaciones antiguas siguen disponibles en la web.",
+      "Keys only access your recordings in the selected workspace. Legacy recordings remain available on the web.",
+      "As chaves só acessam suas gravações no espaço escolhido. As gravações antigas continuam disponíveis na web.",
+    ],
+} as const;

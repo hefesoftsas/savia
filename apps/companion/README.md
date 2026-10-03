@@ -68,7 +68,7 @@ or settings.
    For the native local stack, run `COMPANION_ENABLED=true pnpm dev` from the
    monorepo root; restart an already-running stack to apply the flag. The local
    launcher also reads these settings from `infra/secrets/assistant-api.dev.env`.
-3. Use a Savia OAuth access token for an **active tenant member or platform administrator**, scoped for
+3. Create a [personal API key](../../docs/guides/personal-api-keys.md) in **My account → API keys**, with recording read and upload permissions. Alternatively use a Savia OAuth access token for an **active tenant member or platform administrator**, scoped for
    `savia.api.read` and `savia.api.write`, obtained through the existing supported
    Savia OAuth flow. Paste it into the validation app's password field; it remains
    in memory. Built-in desktop OAuth/keychain integration is a later increment.
@@ -90,8 +90,8 @@ or settings.
    notes: summary, decisions, actions and open questions. Expand Transcript to
    review the source text. No tasks, emails or business records are created.
 
-The backend fails closed by default and restricts this prototype to platform
-administrators. There is no general tenant cost/quota rollout yet. STT provider
+The backend fails closed by default and requires an active tenant membership
+or platform administrator access. There is no general tenant cost/quota rollout yet. STT provider
 routing/retention must be reviewed separately; chat routing preferences must not
 be assumed to apply to audio. A controlled Spanish sample passed real OpenRouter
 STT and summary generation; see the [live-flow report](../../docs/companion/live-flow-smoke.md).
