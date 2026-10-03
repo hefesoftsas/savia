@@ -325,6 +325,66 @@ describe("Pages API", () => {
     expect(bindings.PAGES_VECTORIZE!.upsert).toHaveBeenCalledTimes(5);
   });
 
+  it("retries a newer save after an older version releases its indexing lease", async () => {
+    await env.DB.prepare(
+      `INSERT INTO tenant_pages_search_settings(tenant_id,allowed,enabled,updated_at)
+       VALUES(9201,1,1,'2026-10-03')
+       ON CONFLICT(tenant_id) DO UPDATE SET allowed=1,enabled=1`,
+    ).run();
+    const scheduled: Promise<unknown>[] = [];
+    const bindings = searchBindings((task) => scheduled.push(task));
+    let embeddingStarted!: () => void;
+    const embeddingStart = new Promise<void>((resolve) => {
+      embeddingStarted = resolve;
+    });
+    let releaseEmbedding!: () => void;
+    const embeddingGate = new Promise<void>((resolve) => {
+      releaseEmbedding = resolve;
+    });
+    bindings.AI!.run.mockImplementationOnce(async (_model, input) => {
+      embeddingStarted();
+      await embeddingGate;
+      return { data: input.text.map(() => Array(1024).fill(0.25)) };
+    });
+    const app = appFor(actor("page-owner", 9201), undefined, bindings);
+    const created = await app.request("/v1/pages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "First version" }),
+    });
+    const page = ((await created.json()) as any).data;
+    const olderIndexJob = scheduled.shift()!;
+    await embeddingStart;
+
+    const saved = await app.request(`/v1/pages/${page.id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Latest version",
+        content: [{ type: "p", children: [{ text: "latest durable text" }] }],
+        version: 1,
+      }),
+    });
+    expect(saved.status).toBe(200);
+    const newerIndexJob = scheduled.shift()!;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    releaseEmbedding();
+    await Promise.all([olderIndexJob, newerIndexJob]);
+
+    expect(bindings.AI!.run).toHaveBeenCalledTimes(2);
+    expect(bindings.PAGES_VECTORIZE!.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: { pageId: page.id, version: 2 },
+        }),
+      ]),
+    );
+    expect(
+      ((await app.request(`/v1/pages/${page.id}`).then((r) => r.json())) as any)
+        .data.content,
+    ).toEqual([{ type: "p", children: [{ text: "latest durable text" }] }]);
+  });
+
   it("keeps page saves successful on indexing failures and avoids AI when disabled", async () => {
     await env.DB.prepare(
       `INSERT INTO tenant_pages_search_settings(tenant_id,allowed,enabled,updated_at)

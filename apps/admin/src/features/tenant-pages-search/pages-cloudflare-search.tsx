@@ -519,6 +519,11 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
         ) : null}
       </div>
 
+      {statusError && !status ? (
+        <div className="pages-search-index-status">
+          <p role="status">{t("Search status unavailable")}</p>
+        </div>
+      ) : null}
       {status?.enabled ? (
         <div className="pages-search-index-status">
           {statusError ? (

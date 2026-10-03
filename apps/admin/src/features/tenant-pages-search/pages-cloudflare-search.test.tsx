@@ -119,6 +119,32 @@ it("keeps lexical title and content search available when semantic search is dis
   expect(screen.getByRole("combobox")).toHaveAttribute("aria-expanded", "true");
 });
 
+it("shows initial status failure while keeping lexical search available", async () => {
+  const api = apiFor({ lexical: [summary("text", "Text match")] });
+  api.get.mockImplementation(async (path: string) => {
+    if (path === "/v1/pages/search/status")
+      throw new Error("Network unavailable");
+    if (path.startsWith("/v1/pages/search?")) return { data: [] };
+    return { data: [summary("text", "Text match")] };
+  });
+  renderSearch(api);
+
+  expect(
+    await screen.findByText(
+      "Index status could not be loaded; text search is still available.",
+    ),
+  ).toBeVisible();
+  await enterQuery();
+  expect(
+    await screen.findByRole("option", { name: /Text match/ }),
+  ).toBeVisible();
+  expect(api.get).not.toHaveBeenCalledWith(
+    expect.stringContaining("/v1/pages/search?"),
+    expect.anything(),
+  );
+  expect(api.post).not.toHaveBeenCalled();
+});
+
 it("merges lexical matches first, appends semantic matches, and deduplicates by page id", async () => {
   const api = apiFor({
     settings: status(true),

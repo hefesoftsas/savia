@@ -104,6 +104,9 @@ const apiSecurity = [{ oauth2: ["savia.api.read"] }];
 const writeSecurity = [{ oauth2: ["savia.api.write"] }];
 // Keep import work comfortably inside Workers' post-response waitUntil window.
 const MAX_IMPORT_AUTO_INDEX_PAGES = 5;
+const INDEX_LEASE_RETRY_INTERVAL_MS = 1_000;
+const AUTO_INDEX_LEASE_WAIT_MS = 24_000;
+const MAX_INDEX_LEASE_RETRIES = 48;
 const response = <T extends z.ZodType>(schema: T, description: string) => ({
   200: {
     content: { "application/json": { schema: envelope(schema) } },
@@ -493,6 +496,33 @@ function scheduleBestEffort(
   }
 }
 
+async function indexPageAfterLease(
+  search: CloudflarePagesSearch,
+  pageId: string,
+  deadlineAt = Date.now() + AUTO_INDEX_LEASE_WAIT_MS,
+) {
+  for (;;) {
+    try {
+      return await search.indexPage(pageId);
+    } catch (failure) {
+      if (
+        !(failure instanceof PagesError) ||
+        failure.code !== "INDEX_IN_PROGRESS"
+      )
+        throw failure;
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs <= 0) throw failure;
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          Math.min(INDEX_LEASE_RETRY_INTERVAL_MS, remainingMs),
+        ),
+      );
+      if (Date.now() >= deadlineAt) throw failure;
+    }
+  }
+}
+
 function schedulePageIndex(
   db: D1Database,
   pagesSearch: PagesSearchBindings | undefined,
@@ -502,15 +532,14 @@ function schedulePageIndex(
   if (page.kind === "folder") return;
   scheduleBestEffort(pagesSearch, async () => {
     if (!pagesSearch?.AI || !pagesSearch.PAGES_VECTORIZE) return;
+    const search = new CloudflarePagesSearch(db, actor, pagesSearch);
     try {
-      await new CloudflarePagesSearch(db, actor, pagesSearch).indexPage(
-        page.id,
-      );
+      await indexPageAfterLease(search, page.id);
     } catch (failure) {
       if (
         failure instanceof PagesError &&
         (failure.code === "SEARCH_DISABLED" ||
-          failure.code === "INDEX_IN_PROGRESS")
+          failure.code === "VERSION_CONFLICT")
       )
         return;
       throw failure;
@@ -525,17 +554,14 @@ function scheduleImportIndexing(
 ): void {
   scheduleBestEffort(pagesSearch, async () => {
     const search = new CloudflarePagesSearch(db, actor, pagesSearch);
+    const deadlineAt = Date.now() + AUTO_INDEX_LEASE_WAIT_MS;
     const status = await search.status();
     if (!status.enabled || !status.available) return;
     for (const pageId of status.needed.slice(0, MAX_IMPORT_AUTO_INDEX_PAGES)) {
+      if (Date.now() >= deadlineAt) break;
       try {
-        await search.indexPage(pageId);
+        await indexPageAfterLease(search, pageId, deadlineAt);
       } catch (failure) {
-        if (
-          failure instanceof PagesError &&
-          failure.code === "INDEX_IN_PROGRESS"
-        )
-          continue;
         logAutoIndexFailure(failure);
         if (
           failure instanceof PagesError &&
