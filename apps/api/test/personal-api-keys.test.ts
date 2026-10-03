@@ -227,3 +227,21 @@ it("records last use only after a successful authorized response", async () => {
       ?.lastUsedAt,
   ).not.toBeNull();
 });
+
+it("allows replacement keys after moving a copied database to a new deployment", async () => {
+  const actor = await fixture();
+  const previous = new PersonalApiKeys(env.DB, "previous-origin");
+  for (let n = 0; n < 20; n++)
+    await previous.create(actor, { ...input, scopes: [...input.scopes] });
+  const current = new PersonalApiKeys(env.DB, "current-origin");
+  expect(await current.list(actor.principal.id)).toEqual([]);
+  const replacement = await current.create(actor, {
+    ...input,
+    scopes: [...input.scopes],
+  });
+  expect((await current.authenticate(replacement.secret)).key.id).toBe(
+    replacement.key.id,
+  );
+  expect(await current.list(actor.principal.id)).toHaveLength(1);
+  expect(await previous.list(actor.principal.id)).toHaveLength(20);
+});

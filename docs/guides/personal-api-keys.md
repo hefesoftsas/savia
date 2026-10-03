@@ -22,7 +22,7 @@ A key is personal, bound to one workspace and one deployment. Preview keys do no
 work in production. It cannot administer accounts or keys, call unrelated APIs,
 import audio from connected drives, or access another user's audio. There are no
 wildcard permissions or service accounts in this version. A user can hold up to
-20 active keys.
+20 active keys per deployment.
 
 Older recordings without workspace metadata remain available to their owner in
 the web app. Keys cannot access them; Savia does not guess their workspace.

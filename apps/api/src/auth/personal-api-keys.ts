@@ -152,7 +152,7 @@ export class PersonalApiKeys {
       this.db
         .prepare(
           `INSERT INTO personal_api_keys(id,principal_id,tenant_id,deployment_id,name,prefix,secret_digest,scopes,created_at,expires_at)
- SELECT ?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM personal_api_keys WHERE principal_id=? AND revoked_at IS NULL AND expires_at>?)<20`,
+ SELECT ?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM personal_api_keys WHERE principal_id=? AND deployment_id=? AND revoked_at IS NULL AND expires_at>?)<20`,
         )
         .bind(
           id,
@@ -166,6 +166,7 @@ export class PersonalApiKeys {
           now,
           expires,
           actor.principal.id,
+          this.deploymentId,
           now,
         ),
       this.db
