@@ -1,5 +1,7 @@
 # Savia
 
+[![Coverage](https://github.com/hefesoftsas/savia/actions/workflows/coverage.yml/badge.svg?branch=main&event=push)](https://github.com/hefesoftsas/savia/actions/workflows/coverage.yml?query=branch%3Amain+event%3Apush)
+
 ## License
 
 Savia — Developed by Hefesoft SAS, Colombia.
