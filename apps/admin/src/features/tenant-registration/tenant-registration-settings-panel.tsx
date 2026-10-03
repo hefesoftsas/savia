@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { RotateCcw, Save, Trash2, Undo2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ApiClientError, type ApiClient } from "@/api/api-client";
 import { useMessages } from "@/i18n/core";
@@ -200,9 +201,11 @@ export function TenantRegistrationSettingsPanel({
             <Button
               type="button"
               variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => setAttempt((value) => value + 1)}
             >
-              {t("Retry")}
+              <RotateCcw aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t("Retry")}</span>
             </Button>
           </div>
         ) : settings ? (
@@ -361,15 +364,26 @@ export function TenantRegistrationSettingsPanel({
                         type="button"
                         variant="outline"
                         disabled={busy}
-                        className="w-fit"
+                        className="w-fit max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                         onClick={() => {
                           setRemoveSecret((value) => !value);
                           setSecretKey("");
                         }}
                       >
-                        {removeSecret
-                          ? t("Keep saved secret")
-                          : t("Remove saved secret")}
+                        {removeSecret ? (
+                          <Undo2 aria-hidden="true" />
+                        ) : (
+                          <Trash2 aria-hidden="true" />
+                        )}
+                        {removeSecret ? (
+                          <span className="sr-only sm:not-sr-only">
+                            {t("Keep saved secret")}
+                          </span>
+                        ) : (
+                          <span className="sr-only sm:not-sr-only">
+                            {t("Remove saved secret")}
+                          </span>
+                        )}
                       </Button>
                     ) : null}
                   </>
@@ -388,8 +402,15 @@ export function TenantRegistrationSettingsPanel({
               </p>
             ) : null}
             <form className="mt-4" onSubmit={save}>
-              <Button type="submit" disabled={busy}>
-                {busy ? t("Saving…") : t("Save registration settings")}
+              <Button
+                type="submit"
+                disabled={busy}
+                className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+              >
+                <Save aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">
+                  {busy ? t("Saving…") : t("Save registration settings")}
+                </span>
               </Button>
             </form>
           </>

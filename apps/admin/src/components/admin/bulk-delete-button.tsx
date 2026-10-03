@@ -66,10 +66,17 @@ export const BulkDeleteButton = <
       onClick={handleDelete}
       disabled={isPending}
       aria-label={typeof label === "string" ? label : undefined}
-      className={cn("h-9", className)}
+      title={typeof label === "string" ? label : undefined}
+      className={cn(
+        "h-9",
+        icon && "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
+        className,
+      )}
     >
       {icon}
-      {label}
+      <span className={icon ? "sr-only sm:not-sr-only" : undefined}>
+        {label}
+      </span>
     </Button>
   );
 };

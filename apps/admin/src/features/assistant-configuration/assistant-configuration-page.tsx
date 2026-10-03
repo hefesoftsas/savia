@@ -16,6 +16,12 @@ import {
   KeyRound,
   LoaderCircle,
   Bot,
+  Pencil,
+  RotateCcw,
+  Save,
+  Trash2,
+  Undo2,
+  X,
 } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import { ApiClientError } from "@/api/api-client";
@@ -451,14 +457,14 @@ export function AssistantConfigurationPanel({
             </span>
           ) : null}
         </div>
-        <div className="relative">
+        <div className="relative min-w-0">
           <Input
             id="assistant-global-key"
             type={showGlobalKey ? "text" : "password"}
             autoComplete="new-password"
             value={globalKey}
             onChange={(event) => setGlobalKey(event.target.value)}
-            className="pr-10"
+            className="h-11 pr-12"
             placeholder={
               isCustomGlobalKeyConfigured
                 ? t("•••••••••••••••• (dejar en blanco para conservar)")
@@ -468,7 +474,7 @@ export function AssistantConfigurationPanel({
           <button
             type="button"
             onClick={() => setShowGlobalKey(!showGlobalKey)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="absolute right-0 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={showGlobalKey ? t("Ocultar clave") : t("Mostrar clave")}
           >
             {showGlobalKey ? (
@@ -543,18 +549,27 @@ export function AssistantConfigurationPanel({
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={savingGlobal || savingMeetingModels}>
+        <Button
+          type="submit"
+          disabled={savingGlobal || savingMeetingModels}
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+        >
           {savingGlobal ? <LoaderCircle className="animate-spin" /> : null}
-          {t("Guardar")}
+          {!savingGlobal ? <Save aria-hidden="true" /> : null}
+          <span className="sr-only sm:not-sr-only">{t("Guardar")}</span>
         </Button>
         {isCustomGlobalKeyConfigured ? (
           <Button
             type="button"
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={savingGlobal || savingMeetingModels}
             onClick={() => setConfirmGlobalKeyClear(true)}
           >
-            {t("Eliminar clave")}
+            <Trash2 aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">
+              {t("Eliminar clave")}
+            </span>
           </Button>
         ) : null}
       </div>
@@ -643,11 +658,13 @@ export function AssistantConfigurationPanel({
         <Button
           type="submit"
           disabled={savingMeetingModels || savingGlobal || summary === null}
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
         >
           {savingMeetingModels ? (
             <LoaderCircle className="animate-spin" />
           ) : null}
-          {t("Save models")}
+          {!savingMeetingModels ? <Save aria-hidden="true" /> : null}
+          <span className="sr-only sm:not-sr-only">{t("Save models")}</span>
         </Button>
       </div>
     </form>
@@ -699,7 +716,7 @@ export function AssistantConfigurationPanel({
           onValueChange={(value) => setActiveTab(value as ConfigurationTab)}
           value={activeTab}
         >
-          <TabsList>
+          <TabsList className="[&>[role=tab]]:min-h-11">
             <TabsTrigger value="global">{t("Global")}</TabsTrigger>
             {showTenantConfiguration ? (
               <TabsTrigger value="tenant">
@@ -715,7 +732,7 @@ export function AssistantConfigurationPanel({
 
           <TabsContent value="global">
             <Card>
-              <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
+              <CardHeader className="flex-col items-start gap-3 space-y-0 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-6">
                 <div>
                   <CardTitle>{t("Global")}</CardTitle>
                   {isCustomGlobalKeyConfigured && summary?.global?.updatedAt ? (
@@ -737,7 +754,9 @@ export function AssistantConfigurationPanel({
                   {t(keyState(globalKeyState))}
                 </Badge>
               </CardHeader>
-              <CardContent className="space-y-4">{globalForm}</CardContent>
+              <CardContent className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
+                {globalForm}
+              </CardContent>
             </Card>
             <section
               className="mt-6 space-y-4"
@@ -753,8 +772,8 @@ export function AssistantConfigurationPanel({
           {showTenantConfiguration ? (
             <TabsContent value="tenant">
               {summary?.tenants.length ? (
-                <div className="overflow-hidden rounded-xl border bg-card">
-                  <Table>
+                <div className="overflow-x-auto rounded-xl border bg-card">
+                  <Table className="min-w-[36rem]">
                     <TableHeader className="bg-muted/40">
                       <TableRow>
                         <TableHead>{t("Organización")}</TableHead>
@@ -797,20 +816,28 @@ export function AssistantConfigurationPanel({
                                   type="button"
                                   size="sm"
                                   variant="outline"
+                                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                                   onClick={() => selectTenant(tenantId)}
                                 >
-                                  {t("Editar")}
+                                  <Pencil aria-hidden="true" />
+                                  <span className="sr-only sm:not-sr-only">
+                                    {t("Editar")}
+                                  </span>
                                 </Button>
                                 <Button
                                   type="button"
                                   size="sm"
                                   variant="ghost"
+                                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                                   onClick={() => {
                                     setActiveTab("tenant");
                                     setPendingDeletion(tenantId);
                                   }}
                                 >
-                                  {t("Volver a heredar")}
+                                  <RotateCcw aria-hidden="true" />
+                                  <span className="sr-only sm:not-sr-only">
+                                    {t("Volver a heredar")}
+                                  </span>
                                 </Button>
                               </div>
                             </TableCell>
@@ -936,11 +963,15 @@ export function AssistantConfigurationPanel({
                   <Button
                     type="submit"
                     disabled={selectedTenantId === undefined || savingTenant}
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                   >
                     {savingTenant ? (
                       <LoaderCircle className="animate-spin" />
                     ) : null}
-                    {t("Guardar")}
+                    {!savingTenant ? <Save aria-hidden="true" /> : null}
+                    <span className="sr-only sm:not-sr-only">
+                      {t("Guardar")}
+                    </span>
                   </Button>
                 </div>
               </form>
@@ -968,19 +999,23 @@ export function AssistantConfigurationPanel({
             <Button
               type="button"
               variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => setPendingDeletion(null)}
               disabled={deleting}
             >
-              {t("Cancelar")}
+              <X aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t("Cancelar")}</span>
             </Button>
             <Button
               type="button"
               variant="destructive"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => void clearOverride()}
               disabled={deleting}
             >
               {deleting ? <LoaderCircle className="animate-spin" /> : null}
-              {t("Confirmar")}
+              {!deleting ? <RotateCcw aria-hidden="true" /> : null}
+              <span className="sr-only sm:not-sr-only">{t("Confirmar")}</span>
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1003,19 +1038,25 @@ export function AssistantConfigurationPanel({
             <Button
               type="button"
               variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => setConfirmGlobalKeyClear(false)}
               disabled={savingGlobal}
             >
-              {t("Cancelar")}
+              <X aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t("Cancelar")}</span>
             </Button>
             <Button
               type="button"
               variant="destructive"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => void clearGlobalKey()}
               disabled={savingGlobal}
             >
               {savingGlobal ? <LoaderCircle className="animate-spin" /> : null}
-              {t("Confirmar eliminación")}
+              {!savingGlobal ? <Trash2 aria-hidden="true" /> : null}
+              <span className="sr-only sm:not-sr-only">
+                {t("Confirmar eliminación")}
+              </span>
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1171,7 +1212,7 @@ export function ModelInput({
                   aria-selected={selected?.id === model.id}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => choose(model)}
-                  className={`flex w-full items-start gap-2 rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent ${
+                  className={`flex min-h-11 w-full items-start gap-2 rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent ${
                     activeOptionIndex === index ? "bg-accent" : ""
                   }`}
                 >
@@ -1246,7 +1287,9 @@ export function ModelInput({
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px]">{effectiveModelId}</span>
+              <span className="break-all font-mono text-[11px]">
+                {effectiveModelId}
+              </span>
               <ModelCapabilityBadges model={selected} size="xs" />
             </div>
             {selected ? (
@@ -1273,18 +1316,21 @@ export function ModelInput({
               )}
             </p>
           ) : isCustom && fallbackModel ? (
-            <div className="mt-1 flex items-center justify-between border-t border-border/40 pt-1">
-              <span className="text-[11px] text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-1">
+              <span className="min-w-0 break-words text-[11px] text-muted-foreground">
                 {t("Sobreescribe el modelo predeterminado (%{model})", {
                   model: fallbackModel,
                 })}
               </span>
               <button
                 type="button"
-                className="text-[11px] font-medium text-primary hover:underline"
+                className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0 text-[11px] font-medium text-primary hover:underline"
                 onClick={() => onChange("")}
               >
-                {t("Volver al predeterminado")}
+                <Undo2 aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">
+                  {t("Volver al predeterminado")}
+                </span>
               </button>
             </div>
           ) : null}

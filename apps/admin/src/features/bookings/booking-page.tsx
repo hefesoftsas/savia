@@ -2,6 +2,8 @@ import { RouteLoading } from "@/components/admin/route-loading";
 import type { AppServices } from "@/app-services";
 import { ApiClientError } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
+import { ResponsiveActionButton } from "@/components/ui/responsive-action-button";
+import { Plus, RefreshCw, Save, Trash2, Unplug, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -415,13 +417,14 @@ export function BookingPage({
           <RouteLoading label={t("Loading booking settings…")} />
         )}
         {error && (
-          <Button
+          <ResponsiveActionButton
+            icon={RefreshCw}
             type="button"
             variant="outline"
             onClick={() => setAttempt((value) => value + 1)}
           >
             {t("Retry")}
-          </Button>
+          </ResponsiveActionButton>
         )}
       </main>
     );
@@ -562,7 +565,7 @@ export function BookingPage({
             <label className="grid max-w-md gap-1.5 text-sm">
               {t("Professional")}
               <select
-                className="h-9 rounded-md border bg-background px-3"
+                className="h-9 min-w-0 max-w-full rounded-md border bg-background px-3 max-sm:h-11"
                 value={selectedProfessional}
                 onChange={(event) =>
                   setSelectedProfessional(event.target.value)
@@ -599,7 +602,8 @@ export function BookingPage({
                       onChange={(event) => setExceptionDate(event.target.value)}
                     />
                   </label>
-                  <Button
+                  <ResponsiveActionButton
+                    icon={Plus}
                     type="button"
                     variant="outline"
                     disabled={
@@ -616,7 +620,7 @@ export function BookingPage({
                     }}
                   >
                     {t("Add exception")}
-                  </Button>
+                  </ResponsiveActionButton>
                 </div>
                 {exceptions.map((exception) => (
                   <div
@@ -626,7 +630,8 @@ export function BookingPage({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <strong>{exception.date}</strong>
                       <div className="flex gap-2">
-                        <Button
+                        <ResponsiveActionButton
+                          icon={Plus}
                           type="button"
                           size="sm"
                           variant="outline"
@@ -634,8 +639,9 @@ export function BookingPage({
                           onClick={() => addExceptionPeriod(exception.date)}
                         >
                           {t("Add period")}
-                        </Button>
-                        <Button
+                        </ResponsiveActionButton>
+                        <ResponsiveActionButton
+                          icon={Trash2}
                           type="button"
                           size="sm"
                           variant="ghost"
@@ -648,7 +654,7 @@ export function BookingPage({
                           }
                         >
                           {t("Remove exception")}
-                        </Button>
+                        </ResponsiveActionButton>
                       </div>
                     </div>
                     {(exception.periods.length
@@ -694,7 +700,8 @@ export function BookingPage({
                           />
                         </label>
                         {exception.periods.length > 1 && (
-                          <Button
+                          <ResponsiveActionButton
+                            icon={Trash2}
                             type="button"
                             size="sm"
                             variant="ghost"
@@ -715,18 +722,22 @@ export function BookingPage({
                             }
                           >
                             {t("Remove period")}
-                          </Button>
+                          </ResponsiveActionButton>
                         )}
                       </div>
                     ))}
                   </div>
                 ))}
               </fieldset>
-              <Button type="submit" disabled={saving}>
+              <ResponsiveActionButton
+                icon={Save}
+                type="submit"
+                disabled={saving}
+              >
                 {saving
                   ? t("Loading booking settings…")
                   : t("Save availability")}
-              </Button>
+              </ResponsiveActionButton>
             </form>
           ) : (
             <p className="rounded-lg border p-4 text-sm text-muted-foreground">
@@ -769,6 +780,7 @@ export function BookingPage({
                   variant="outline"
                   disabled={saving}
                   onClick={() => void changeCalendar("google_calendar")}
+                  className="max-sm:min-h-11"
                 >
                   {t("Choose calendar")}: Google
                 </Button>
@@ -777,18 +789,20 @@ export function BookingPage({
                   variant="outline"
                   disabled={saving}
                   onClick={() => void changeCalendar("outlook")}
+                  className="max-sm:min-h-11"
                 >
                   {t("Choose calendar")}: Outlook
                 </Button>
                 {bootstrap.calendar.provider && (
-                  <Button
+                  <ResponsiveActionButton
+                    icon={Unplug}
                     type="button"
                     variant="ghost"
                     disabled={saving}
                     onClick={() => void changeCalendar(null)}
                   >
                     {t("Calendar not connected")}
-                  </Button>
+                  </ResponsiveActionButton>
                 )}
                 <Link
                   className="self-center text-sm underline underline-offset-4"
@@ -806,13 +820,14 @@ export function BookingPage({
         <section className="grid gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold">{t("Reservations")}</h2>
-            <Button
+            <ResponsiveActionButton
+              icon={RefreshCw}
               type="button"
               variant="outline"
               onClick={() => setReservationsAttempt((value) => value + 1)}
             >
               {t("Retry")}
-            </Button>
+            </ResponsiveActionButton>
           </div>
           {appointmentDate && (
             <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -920,7 +935,8 @@ export function BookingPage({
                       </td>
                       <td className="p-3">
                         {reservation.status === "confirmed" && (
-                          <Button
+                          <ResponsiveActionButton
+                            icon={XCircle}
                             type="button"
                             size="sm"
                             variant="outline"
@@ -930,7 +946,7 @@ export function BookingPage({
                             {cancellingId === reservation.id
                               ? t("Loading booking settings…")
                               : t("Cancel reservation")}
-                          </Button>
+                          </ResponsiveActionButton>
                         )}
                       </td>
                     </tr>

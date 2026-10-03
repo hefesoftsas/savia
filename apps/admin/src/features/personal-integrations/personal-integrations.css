@@ -72,7 +72,7 @@
   margin-bottom: 1rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   .integrations-row__identity {
     flex-basis: 100%;
   }
@@ -80,5 +80,8 @@
     width: 100%;
     margin-left: 0;
     justify-content: flex-end;
+  }
+  .integrations-row__action {
+    min-width: 44px;
   }
 }

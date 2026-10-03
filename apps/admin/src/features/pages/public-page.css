@@ -221,6 +221,9 @@
   color: var(--muted-foreground);
 }
 @media (max-width: 600px) {
+  .public-page-attachment button {
+    min-height: 44px;
+  }
   .public-page-document {
     width: calc(100% - 36px);
   }

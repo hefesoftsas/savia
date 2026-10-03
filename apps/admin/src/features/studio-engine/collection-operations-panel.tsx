@@ -2,7 +2,8 @@ import { useMessages } from "@/i18n/core";
 import { studioMessages } from "@/i18n/locales/studio";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
+import { ResponsiveActionButton } from "@/components/ui/responsive-action-button";
+import { ScanSearch, Save } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -186,7 +187,8 @@ function OperationForm({
           onChange={(e) => setDocument(e.target.value)}
           rows={6}
         />
-        <Button
+        <ResponsiveActionButton
+          icon={ScanSearch}
           type="button"
           variant="outline"
           disabled={busy || !document.trim()}
@@ -216,7 +218,7 @@ function OperationForm({
           }}
         >
           {t("Detectar endpoints")}
-        </Button>
+        </ResponsiveActionButton>
       </details>
       {notice && <p role="status">{notice}</p>}
       {settings.kind === "domain" && (
@@ -393,9 +395,9 @@ function OperationForm({
         </ul>
       </details>
       {error && <p role="alert">{error}</p>}
-      <Button disabled={busy}>
+      <ResponsiveActionButton icon={Save} disabled={busy}>
         {busy ? t("Guardando…") : t("Guardar operaciones")}
-      </Button>
+      </ResponsiveActionButton>
     </form>
   );
 }

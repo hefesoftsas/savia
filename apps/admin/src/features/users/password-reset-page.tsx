@@ -101,7 +101,7 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
   return (
     <main className="flex min-h-svh items-center justify-center bg-background p-6 text-foreground">
       <section
-        className="w-full max-w-md rounded-xl border bg-card p-7"
+        className="w-full max-w-md rounded-xl border bg-card p-5 sm:p-7"
         aria-live="polite"
       >
         <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
@@ -131,7 +131,7 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
         </p>
         {complete ? (
           <Button
-            className="mt-6 w-full"
+            className="mt-6 min-h-11 w-full"
             onClick={() => window.location.replace(window.location.origin)}
           >
             <Building2 className="size-4" />
@@ -144,7 +144,7 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
                 _: "El enlace expiró o no fue posible actualizar la contraseña.",
               })}
             </p>
-            <Button asChild>
+            <Button asChild className="min-h-11">
               <a href={recoveryUrl}>{t("Request another link")}</a>
             </Button>
           </div>
@@ -204,7 +204,11 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
                 </a>
               </div>
             ) : null}
-            <Button type="submit" disabled={submitting || !token}>
+            <Button
+              type="submit"
+              disabled={submitting || !token}
+              className="min-h-11"
+            >
               {submitting
                 ? translate("savia.passwordReset.submitting", {
                     _: "Actualizando…",
