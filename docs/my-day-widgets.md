@@ -57,7 +57,11 @@ the full weeks touching their boundary. Previous/Next moves by the selected unit
 and **Today** returns to today without changing the view. The display timezone
 comes from the browser. Week/month use the full dashboard width. On mobile,
 weeks stack vertically and month cells show event counts; select a date/count
-to open its complete day list. Desktop month cells show three events and a
+to open its complete day list. Narrow cards keep the view selector and calendar
+settings in one row; settings retain their accessible name while showing only
+the icon. Mobile cards use compact spacing, a short date and touch-sized
+navigation. A failed day read offers a retry directly in the agenda. Desktop
+month cells show three events and a
 **more** action for additional events. Multi-day events appear on every
 overlapping date, with exclusive ends handled internally.
 

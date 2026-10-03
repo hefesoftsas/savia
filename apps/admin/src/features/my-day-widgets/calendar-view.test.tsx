@@ -225,6 +225,25 @@ describe("My Day calendar views", () => {
     expect(screen.queryByText(/Tu agenda está libre/)).not.toBeInTheDocument();
     expect(screen.getByText(/No pudimos comprobar todos/)).toBeVisible();
   });
+  it("retries failed provider reads from the agenda notice", async () => {
+    const user = userEvent.setup(),
+      client = service(0);
+    vi.mocked(client.listCalendarSources).mockResolvedValue([]);
+    vi.mocked(client.listConnections).mockResolvedValue([
+      { status: "connected", provider: "google_calendar" },
+    ]);
+    vi.mocked(client.listEvents).mockRejectedValue(new Error("Unavailable"));
+    render(<Harness client={client} />);
+    await screen.findByText(/No pudimos comprobar todos/);
+    vi.mocked(client.listEvents).mockResolvedValue([]);
+    await user.click(
+      screen.getByRole("button", { name: "Sincronizar calendarios" }),
+    );
+    expect(await screen.findByText("Sin eventos para hoy")).toBeVisible();
+    expect(
+      screen.queryByText(/No pudimos comprobar todos/),
+    ).not.toBeInTheDocument();
+  });
   it("opens internal details for provider events without a native link", async () => {
     const client = service(0);
     vi.mocked(client.listConnections).mockResolvedValue([

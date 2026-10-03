@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  CircleAlert,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -146,6 +147,15 @@ export function CalendarView({
             month: "long",
             year: "numeric",
           });
+  const compactLabel =
+    view === "day"
+      ? selectedDay.toLocaleDateString("es", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+      : label;
   function sourceName(id: string) {
     return id === "google_calendar"
       ? "Google Calendar"
@@ -200,10 +210,10 @@ export function CalendarView({
     Object.keys(sources.errors).length || agenda.syncError,
   );
   return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="@container/calendar min-w-0 space-y-3 sm:space-y-4">
+      <div className="flex items-center justify-between gap-2">
         <div
-          className="flex rounded-lg bg-muted p-1"
+          className="flex min-w-0 flex-1 rounded-lg bg-muted p-1 @min-[28rem]/calendar:flex-none"
           aria-label="Vista del calendario"
         >
           {(["day", "week", "month"] as const).map((mode) => (
@@ -212,6 +222,7 @@ export function CalendarView({
               type="button"
               variant={view === mode ? "secondary" : "ghost"}
               size="sm"
+              className="h-11 min-w-0 flex-1 px-2 @min-[28rem]/calendar:h-8 @min-[28rem]/calendar:px-3"
               aria-pressed={view === mode}
               onClick={() => setView(mode)}
             >
@@ -223,26 +234,35 @@ export function CalendarView({
           type="button"
           variant="outline"
           size="sm"
+          className="size-11 @min-[28rem]/calendar:h-8 @min-[28rem]/calendar:w-auto"
+          aria-label="Gestionar calendarios"
+          title="Gestionar calendarios"
           onClick={() => setManagerOpen(true)}
         >
           <Settings2 className="size-4" />
-          Gestionar calendarios
+          <span className="sr-only @min-[28rem]/calendar:not-sr-only">
+            Gestionar calendarios
+          </span>
         </Button>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold capitalize" aria-live="polite">
-            {label}
-          </h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {timeZone.replaceAll("_", " ")}
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1">
+        <h3
+          className="col-span-2 text-sm font-semibold first-letter:uppercase @min-[28rem]/calendar:col-span-1 @min-[28rem]/calendar:text-base"
+          aria-live="polite"
+          aria-label={label}
+        >
+          <span className="@min-[28rem]/calendar:hidden">{compactLabel}</span>
+          <span className="hidden @min-[28rem]/calendar:inline">{label}</span>
+        </h3>
+        <p className="col-start-1 row-start-2 min-w-0 break-words text-xs text-muted-foreground">
+          {timeZone.replaceAll("_", " ")}
+        </p>
+        <div className="col-start-2 row-start-2 flex items-center gap-0.5 @min-[28rem]/calendar:row-span-2 @min-[28rem]/calendar:row-start-1">
           <Button
             type="button"
             variant="ghost"
             size="icon"
+            className="size-11 @min-[28rem]/calendar:size-9"
             aria-label="Periodo anterior"
             onClick={() =>
               setSelectedDay(moveCalendarDate(selectedDay, view, -1))
@@ -254,6 +274,7 @@ export function CalendarView({
             type="button"
             variant="outline"
             size="sm"
+            className="h-11 @min-[28rem]/calendar:h-8"
             onClick={() => setSelectedDay(new Date())}
           >
             Hoy
@@ -262,6 +283,7 @@ export function CalendarView({
             type="button"
             variant="ghost"
             size="icon"
+            className="size-11 @min-[28rem]/calendar:size-9"
             aria-label="Periodo siguiente"
             onClick={() =>
               setSelectedDay(moveCalendarDate(selectedDay, view, 1))
@@ -301,12 +323,28 @@ export function CalendarView({
         !currentEvents.length &&
         !sources.loading &&
         !agenda.loading ? (
-          <p
+          <div
             role="status"
-            className="py-8 text-center text-sm text-muted-foreground"
+            className="flex flex-wrap items-center gap-2 rounded-md bg-muted/60 p-3 text-sm text-muted-foreground"
           >
-            No pudimos comprobar todos tus calendarios. Vuelve a sincronizar.
-          </p>
+            <CircleAlert
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0 self-start"
+            />
+            <p className="min-w-0 flex-1">
+              No pudimos comprobar todos tus calendarios.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-11"
+              aria-label="Sincronizar calendarios"
+              onClick={() => void agenda.refresh()}
+            >
+              Reintentar
+            </Button>
+          </div>
         ) : useEventDetails ? (
           <div className="space-y-2">
             {currentEvents.length ? (
@@ -328,22 +366,22 @@ export function CalendarView({
               <section
                 key={dateKey(day)}
                 data-testid="calendar-week-day"
-                className="min-w-0 bg-card p-2 md:min-h-64"
+                className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-2 bg-card p-2 md:block md:min-h-64"
               >
                 <button
                   type="button"
                   onClick={() => showDay(day)}
-                  className={`mb-3 w-full rounded-md py-1.5 text-left text-sm font-medium capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${dateKey(day) === today ? "bg-primary/10 text-primary" : ""}`}
+                  className={`min-h-11 w-full rounded-md py-1.5 text-left text-sm font-medium capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:mb-3 md:min-h-0 ${dateKey(day) === today ? "bg-primary/10 text-primary" : ""}`}
                 >
                   {day.toLocaleDateString("es", { weekday: "long" })}
-                  <span className="ml-2 tabular-nums md:ml-0 md:block">
+                  <span className="block tabular-nums">
                     {day.toLocaleDateString("es", {
                       day: "numeric",
                       month: "short",
                     })}
                   </span>
                 </button>
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   {dayEvents.some((event) => event.allDay) ? (
                     <div className="space-y-1.5 border-b pb-2">
                       <p className="text-xs font-medium text-muted-foreground">
@@ -385,7 +423,7 @@ export function CalendarView({
               return (
                 <div
                   key={dateKey(day)}
-                  className={`min-h-20 min-w-0 bg-card p-1 sm:min-h-36 sm:p-2 ${day.getMonth() !== selectedDay.getMonth() ? "bg-muted/70" : ""}`}
+                  className={`min-h-16 min-w-0 bg-card p-1 sm:min-h-36 sm:p-2 ${day.getMonth() !== selectedDay.getMonth() ? "bg-muted/70" : ""}`}
                 >
                   <button
                     type="button"
@@ -396,7 +434,7 @@ export function CalendarView({
                     })}
                     aria-current={dateKey(day) === today ? "date" : undefined}
                     onClick={() => showDay(day)}
-                    className={`mb-1 flex size-7 items-center justify-center rounded-full text-xs tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${dateKey(day) === today ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                    className={`mb-1 flex min-h-11 w-full items-center justify-center rounded-md text-xs tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-7 sm:min-h-0 sm:rounded-full ${dateKey(day) === today ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                   >
                     {day.getDate()}
                   </button>
