@@ -230,7 +230,7 @@ fn set_worker_error(buffer: &Arc<Mutex<CaptureBuffer>>, error: String) {
 }
 
 fn append_float_stereo(buffer: &Arc<Mutex<CaptureBuffer>>, input: &[u8]) {
-    let Ok(mut buffer) = buffer.lock() else {
+    let Ok(buffer) = buffer.lock() else {
         return;
     };
     if buffer.started.elapsed() >= MAX_CAPTURE_DURATION {

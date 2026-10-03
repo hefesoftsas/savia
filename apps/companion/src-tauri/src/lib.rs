@@ -207,10 +207,18 @@ impl CaptureSession {
         if let Some(microphone) = self.microphone.as_ref() {
             microphone.request_stop();
         }
+        #[cfg(target_os = "macos")]
         let system_stop_error = self
             .system
             .as_mut()
             .and_then(|system| system.request_stop().err());
+        #[cfg(target_os = "windows")]
+        let system_stop_error = {
+            if let Some(system) = self.system.as_ref() {
+                system.request_stop();
+            }
+            None
+        };
         let now = Instant::now();
         let microphone = self
             .microphone
