@@ -1,6 +1,6 @@
 # Public booking availability and scoped links
 
-Status: proposed design and implementation scope; not implemented.
+Status: approved by the user and implemented; local verification complete, PR/preview rollout in progress.
 
 ## Problem and evidence
 
@@ -84,10 +84,20 @@ Verify tenant-specific sending and the global fallback, recipient isolation, ful
 
 ## Acceptance and delivery
 
-Deliver in two increments: scoped links/security/sharing first, then the availability API, public interface, and appointment email verification together. Both increments need focused tests and behavior-guide updates. Preserve the existing tenant-owned scheduling model and optional calendar integration; do not replace the scheduling engine or redesign the entire admin wizard.
+Deliver the scoped links/security/sharing and availability/email increments in one coordinated PR so the new API/UI contract rolls out together. Both increments have focused tests and behavior-guide updates. Preserve the existing tenant-owned scheduling model and optional calendar integration; do not replace the scheduling engine or redesign the entire admin wizard.
 
 Before implementation, create a representative public-page prototype using illustrative data and review it with Impeccable's UX guidance. Before merging the interface, exercise the actual React page on mobile and desktop, in both themes, with keyboard navigation and Spanish/English/Portuguese copy. Save screenshots and record task outcomes, not only a visual verdict.
 
 The release is acceptable when a customer following a personal link can choose a visible available day and click a visible time without selecting a professional, opening a date popup, or using a time select. With one service, availability is the first meaningful screen. Also verify an unavailable month, a stale slot, a revoked link, a slow response, and a long service/professional name.
 
 In preview, test a real configured tenant's personal link anonymously and create one authorized test reservation, including CAPTCHA, the private management link, and receipt of the appointment email when mail is configured. Verify expiry/revocation on disposable links and document evidence. Deployment health and fixture screenshots alone do not prove that customer journey.
+
+## Implementation evidence (2026-10-03)
+
+- Scoped resolver and admission regression tests cover lifecycle, authorization, tampering, CAPTCHA replay, quotas and exact retries. SQLite/D1 admission writes and PostgreSQL serializable admission writes preserve concurrent limits.
+- PostgreSQL booking/migration lane passed 17 tests after integrating current main and renumbering the forward migration to `0026_booking_public_links.sql`. It includes concurrent admission and bounded seven-day receipt cleanup parity.
+- Focused API booking suites passed 60 tests before the cleanup regression; the cleanup job suite then passed all eight tests. The full API suite passed 1,207 tests before the final review fixes.
+- Admin booking suites passed 31 tests. Actual React browser tasks passed for the personal one-service journey, explicit time selection, Spanish submission, multi-service/empty-month/long-name states, 360px/390px/1440px layouts and both themes without horizontal overflow. English and Portuguese keyboard selection, step-heading focus and localized details also passed. Screens used clearly illustrative fixture data.
+- Actual local PostgreSQL and SMTP capture passed reservation, identical replay without a duplicate reservation, Spanish full-summary delivery and normal cancellation. Auth mail tests passed 10 tests. This is local end-to-end evidence, separate from mocked transport tests.
+- Fresh-context final review found no remaining Critical/Important blockers after adding bounded indexed receipt cleanup and accurate stale-slot guidance.
+- This managed environment denies direct preview access and has no authenticated tenant credentials or bound sending identity. A real preview tenant reservation/CAPTCHA/customer inbox check remains unperformed; deployment health alone will not be presented as that customer task.

@@ -178,11 +178,12 @@ export const bookingMessages = {
     "Any eligible service",
     "Qualquer serviço disponível",
   ],
-  "New links allow up to 25 booking submissions per day.": [
-    "Los enlaces nuevos permiten hasta 25 solicitudes de reserva al día.",
-    "New links allow up to 25 booking submissions per day.",
-    "Novos links permitem até 25 solicitações de agendamento por dia.",
-  ],
+  "New links default to 25 bookings per day. Set a link-specific limit below.":
+    [
+      "Los enlaces nuevos permiten hasta 25 reservas al día de forma predeterminada. Configura el límite del enlace abajo.",
+      "New links default to 25 bookings per day. Set a link-specific limit below.",
+      "Novos links permitem até 25 agendamentos por dia por padrão. Defina o limite do link abaixo.",
+    ],
   "Daily booking limit": [
     "Límite diario de reservas",
     "Daily booking limit",
@@ -489,6 +490,11 @@ export const bookingMessages = {
     "No se pudo confirmar la reserva. Inténtalo de nuevo con la misma solicitud.",
     "Your booking could not be confirmed. Retry with the same request.",
     "Não foi possível confirmar o agendamento. Tente novamente com a mesma solicitação.",
+  ],
+  "That time is no longer available. Choose another available time.": [
+    "Ese horario ya no está disponible. Elige otro horario disponible.",
+    "That time is no longer available. Choose another available time.",
+    "Esse horário não está mais disponível. Escolha outro horário disponível.",
   ],
   "Available times could not be loaded. Choose another date and retry.": [
     "No se pudieron cargar los horarios. Elige otra fecha e inténtalo de nuevo.",

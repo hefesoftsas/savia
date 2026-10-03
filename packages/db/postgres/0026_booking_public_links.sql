@@ -6,3 +6,5 @@ CREATE INDEX tenant_booking_receipts_link_day ON savia_core.tenant_booking_reque
 CREATE INDEX tenant_booking_receipts_tenant_day ON savia_core.tenant_booking_request_receipts(tenant_id,day);
 CREATE INDEX tenant_booking_receipts_ip_day ON savia_core.tenant_booking_request_receipts(ip_hash,day);
 ALTER TABLE savia_core.tenant_bookings ADD COLUMN customer_locale TEXT NOT NULL DEFAULT 'en' CHECK(customer_locale IN ('en','es','pt'));
+
+CREATE INDEX tenant_booking_receipts_created_at ON tenant_booking_request_receipts(created_at,id);

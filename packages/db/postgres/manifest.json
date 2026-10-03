@@ -112,7 +112,7 @@
     },
     {
       "filename": "0026_booking_public_links.sql",
-      "sha256": "0d3314051183fe7d6cbe5ca64fe8ff458d54131b79a72ff4db030a7f983a46e3"
+      "sha256": "6ffa216872a2caae9e5dc9530886de1208f633d5057ca0bdc0967f77355d67fa"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1551,6 +1551,11 @@
     {
       "type": "index",
       "name": "tenant_booking_receipts_tenant_day",
+      "table": "tenant_booking_request_receipts"
+    },
+    {
+      "type": "index",
+      "name": "tenant_booking_receipts_created_at",
       "table": "tenant_booking_request_receipts"
     }
   ],

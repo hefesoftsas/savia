@@ -268,7 +268,7 @@ it("preserves contact details and reloads availability after a slot conflict", a
   );
   fireEvent.click(screen.getByRole("button", { name: "Book appointment" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Retry with the same request",
+    "That time is no longer available. Choose another available time.",
   );
   await waitFor(() => expect(rangeRequests).toBeGreaterThan(1));
   expect(window.turnstile.remove).toHaveBeenCalledWith("widget-1");

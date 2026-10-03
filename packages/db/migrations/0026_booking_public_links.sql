@@ -13,3 +13,6 @@ CREATE INDEX tenant_booking_receipts_tenant_day ON tenant_booking_request_receip
 CREATE INDEX tenant_booking_receipts_ip_day ON tenant_booking_request_receipts(ip_hash,day);
 --> statement-breakpoint
 ALTER TABLE tenant_bookings ADD COLUMN customer_locale TEXT NOT NULL DEFAULT 'en' CHECK(customer_locale IN ('en','es','pt'));
+
+--> statement-breakpoint
+CREATE INDEX tenant_booking_receipts_created_at ON tenant_booking_request_receipts(created_at,id);

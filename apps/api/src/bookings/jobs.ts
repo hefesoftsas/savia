@@ -1,6 +1,7 @@
 import type { createBookingCalendarAdapter } from "./calendar";
 import { readBooking, readSettings, readGrant } from "./repository";
 import { formatBookingEmail } from "./email";
+import { cleanupBookingAdmissions } from "./public-policy";
 export type BookingJobsOptions = {
   now?: () => number;
   publicOrigin: string;
@@ -33,6 +34,7 @@ export async function runBookingJobs(
     .prepare("DELETE FROM tenant_booking_rate_limits WHERE expires_at<?")
     .bind(started)
     .run();
+  await cleanupBookingAdmissions(db, started);
   const pending = await db
     .prepare(
       "SELECT j.* FROM tenant_booking_jobs j JOIN tenants t ON t.id=j.tenant_id WHERE t.is_active=1 AND j.attempts<5 AND ((j.status IN ('pending','failed') AND j.due_at<=?) OR (j.status='processing' AND j.lease_until<=?)) ORDER BY j.due_at,j.id LIMIT 20",

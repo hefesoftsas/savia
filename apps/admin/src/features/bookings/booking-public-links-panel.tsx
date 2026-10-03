@@ -216,7 +216,9 @@ export function BookingPublicLinksPanel({
           />
         </label>
         <p className="text-sm text-muted-foreground">
-          {t("New links allow up to 25 booking submissions per day.")}
+          {t(
+            "New links default to 25 bookings per day. Set a link-specific limit below.",
+          )}
         </p>
         <div className="flex flex-wrap gap-2">
           <Button

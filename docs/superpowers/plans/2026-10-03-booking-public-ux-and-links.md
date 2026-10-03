@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Hono/OpenAPI, D1/SQLite and PostgreSQL, React 19, Savia UI/theme tokens, Vitest, existing CAPTCHA and Nango adapters. Use React DayPicker 9 as the keyboard-accessible inline calendar primitive, styled within Savia; it must not introduce a popup/date-input interaction.
 
-**Spec:** `docs/superpowers/specs/2026-10-03-booking-public-ux-and-links-design.md` (proposed design; implementation has not started).
+**Spec:** `docs/superpowers/specs/2026-10-03-booking-public-ux-and-links-design.md` (approved design; implemented with local verification evidence).
 
 ## Global Constraints
 
@@ -19,7 +19,7 @@
 - New links: 32 random bytes of token entropy, default expiry 30 days, default daily budget 25; daily hashed-IP budget 20 and tenant budget 1,000, resetting in UTC.
 - Public body cap 32 KiB. Availability range at most 31 display-zone dates. Default display zone is the tenant's IANA zone.
 - Shared public-link policy applies on catalog, challenge, availability, and reservation routes. Anonymous responses remain no-store/noindex/no-referrer and requests omit credentials.
-- Begin execution from current `origin/main` in an isolated worktree; do not build on the already merged wizard branch. Recheck migration numbering: `0024` is now used on main, so `0025` is proposed here.
+- Begin execution from current `origin/main` in an isolated worktree; do not build on the already merged wizard branch. Recheck migration numbering: `0024` is now used on main, so `0026` is used here after integrating the new `0025_office_document_shares.sql` migration.
 - Deliver scoped links/security/sharing first; deliver bounded availability, public UI, and email verification second. Each increment updates `docs/guides/tenant-booking.md` and is independently reviewable.
 
 ## Review Focus
@@ -136,10 +136,16 @@ Add public contracts in `apps/api/src/bookings/contracts.ts` and matching UI sha
 - [ ] Inspect actual React screens at 360px, 390px, and 1440px, light/dark, with long labels and Spanish/English/Portuguese copy. Check keyboard-only selection, focus after step changes, loading announcements, touch areas, and horizontal overflow.
 - [ ] Complete personal one-service and multi-service tasks; verify no provider choice, no date popup, and no hour dropdown. Exercise empty month, stale slot, slow/reordered responses, expired/revoked link, and CAPTCHA/network retry. Record observed behavior and fix failures in their owning task.
 - [ ] Run focused API/admin suites, required PostgreSQL parity, changed-file Prettier checks, type checks, and the admin production build. Confirm anonymous HTML/API headers, gateway routing, safe catalog projection, and trusted-IP quota behavior; report unperformed checks explicitly.
-- [ ] Create reviewable PRs for the two delivery increments. Descriptions identify customer behavior, security scope, compatibility, validation, and material limitations. Merge only after required checks and code review pass.
+- [ ] Create one coordinated, reviewable PR for the two delivery increments. Descriptions identify customer behavior, security scope, compatibility, validation, and material limitations. Merge only after required checks and code review pass.
 - [ ] Confirm preview deploys the merged commit. Using a real configured tenant and an authorized test customer, anonymously follow a newly created personal link, complete CAPTCHA, book an available slot, and open its private management link, and verify the appointment email arrives when tenant/global mail is configured. Verify disposable-link revocation/expiry and clean up the authorized test booking through normal cancellation.
 - [ ] Record the preview evidence, remove illustrative-data ambiguity, and report the concrete sharing location and working test path to the user. Do not substitute a health check for the public booking journey.
 
 ## Self-review
 
 The five review conditions map to explicit tests and customer tasks. Scoped-link types are shared consistently; availability dates are in the declared display zone and slot identities stay UTC. New public policy supplements existing booking protections rather than replacing CAPTCHA or scheduling. The older wizard design's always-required professional and native date/hour controls are superseded for the public flow only. Execution requires current-main migration numbering and a real preview tenant; neither source research nor this plan claims those runtime checks have already passed.
+
+## Execution record
+
+Tasks 0–5 are implemented. API/UI delivery is coordinated in one PR, preserving independently reviewable link/security, availability and email code. Migration numbering changed to `0026` after rebasing the intended schema order onto current main; both database engines and the manifest agree.
+
+Local acceptance evidence is recorded in the spec. Final review corrections add indexed, 500-row scheduled receipt cleanup after seven days and direct stale-slot conflict guidance. The final local regression lanes pass; comprehensive CI and the preview deployment remain the integration gate. A real authenticated preview tenant/customer SMTP journey is blocked by this environment's preview network policy and absence of tenant credentials, and is explicitly not marked completed.

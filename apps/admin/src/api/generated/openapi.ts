@@ -13808,6 +13808,9 @@ export interface paths {
                 size: number;
                 version: number;
                 updatedAt: string;
+                /** @enum {string} */
+                role: "owner" | "reader" | "editor";
+                ownerName: string;
               }[];
             };
           };
@@ -13859,6 +13862,9 @@ export interface paths {
                 size: number;
                 version: number;
                 updatedAt: string;
+                /** @enum {string} */
+                role: "owner" | "reader" | "editor";
+                ownerName: string;
               };
             };
           };
@@ -13927,6 +13933,255 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/office-documents/members": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Find active members in the current tenant */
+    get: {
+      parameters: {
+        query?: {
+          q?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tenant members */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                principalId: string;
+                displayName: string;
+                email: string;
+              }[];
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/office-documents/{id}/shares": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List document access grants */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Document shares */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                version: number;
+                shares: {
+                  principalId: string;
+                  /** @enum {string} */
+                  role: "reader" | "editor";
+                  displayName: string;
+                  email: string;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Document not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    /** Replace document access grants */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            version: number;
+            shares: {
+              principalId: string;
+              /** @enum {string} */
+              role: "reader" | "editor";
+            }[];
+          };
+        };
+      };
+      responses: {
+        /** @description Updated document shares */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                version: number;
+                shares: {
+                  principalId: string;
+                  /** @enum {string} */
+                  role: "reader" | "editor";
+                  displayName: string;
+                  email: string;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Document not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Shares changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/office-documents/api/file/{id}/office": {
     parameters: {
       query?: never;
@@ -13960,6 +14215,9 @@ export interface paths {
                 size: number;
                 version: number;
                 updatedAt: string;
+                /** @enum {string} */
+                role: "owner" | "reader" | "editor";
+                ownerName: string;
                 field: null;
                 object: null;
                 recordId: null;
@@ -14134,6 +14392,9 @@ export interface paths {
                 size: number;
                 version: number;
                 updatedAt: string;
+                /** @enum {string} */
+                role: "owner" | "reader" | "editor";
+                ownerName: string;
               };
             };
           };

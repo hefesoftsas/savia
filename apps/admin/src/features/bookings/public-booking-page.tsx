@@ -295,7 +295,13 @@ export function PublicBookingPage({ token }: { token: string }) {
         }
       }
       setError(
-        t("Your booking could not be confirmed. Retry with the same request."),
+        status === 409
+          ? t(
+              "That time is no longer available. Choose another available time.",
+            )
+          : t(
+              "Your booking could not be confirmed. Retry with the same request.",
+            ),
       );
     } finally {
       setBusy(false);

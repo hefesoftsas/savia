@@ -260,3 +260,51 @@ it("retries transient mail readiness failures", async () => {
     error_code: "BOOKING_EMAIL_UNAVAILABLE",
   });
 });
+
+it("expires admission hashes in bounded batches while retaining the seven-day retry window", async () => {
+  const f = await seed();
+  const linkId = crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO tenant_booking_public_links(id,tenant_id,token,scope_kind) VALUES(?,?,?,'team')",
+  )
+    .bind(linkId, f.tenantId, crypto.randomUUID())
+    .run();
+  const old = new Date(f.now - 8 * 86400000).toISOString();
+  const cutoff = new Date(f.now - 7 * 86400000).toISOString();
+  await env.DB.prepare(
+    `INSERT INTO tenant_booking_request_receipts(id,link_id,tenant_id,request_key,request_hash,ip_hash,day,created_at)
+    WITH RECURSIVE sequence(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM sequence WHERE n<501)
+    SELECT ?||'-'||n,?,?,?||'-'||n,'hash','ip','2026-09-26',? FROM sequence`,
+  )
+    .bind(linkId, linkId, f.tenantId, linkId, old)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO tenant_booking_request_receipts(id,link_id,tenant_id,request_key,request_hash,ip_hash,day,created_at) VALUES(?,?,?,?,'recent-hash','ip','2026-09-27',?)",
+  )
+    .bind("recent-" + linkId, linkId, f.tenantId, "recent-" + linkId, cutoff)
+    .run();
+  const run = () =>
+    runBookingJobs(env.DB, {
+      now: () => f.now,
+      publicOrigin: "https://preview.example.test",
+    });
+  await run();
+  const count = async () =>
+    (
+      await env.DB.prepare(
+        "SELECT count(*) AS count FROM tenant_booking_request_receipts WHERE link_id=?",
+      )
+        .bind(linkId)
+        .first<{ count: number }>()
+    )?.count;
+  expect(await count()).toBe(2);
+  await run();
+  expect(await count()).toBe(1);
+  expect(
+    await env.DB.prepare(
+      "SELECT request_hash FROM tenant_booking_request_receipts WHERE id=?",
+    )
+      .bind("recent-" + linkId)
+      .first(),
+  ).toEqual({ request_hash: "recent-hash" });
+});

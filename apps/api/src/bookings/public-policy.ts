@@ -116,3 +116,14 @@ export async function admitBookingRequest(
     message: "The daily booking limit was reached. Try again tomorrow.",
   });
 }
+
+/** Keep admission retries for seven days; bound each scheduled cleanup pass. */
+export async function cleanupBookingAdmissions(db: D1Database, now: number) {
+  const cutoff = new Date(now - 7 * 86400000).toISOString();
+  await db
+    .prepare(
+      "DELETE FROM tenant_booking_request_receipts WHERE id IN (SELECT id FROM tenant_booking_request_receipts WHERE created_at<? ORDER BY created_at,id LIMIT 500)",
+    )
+    .bind(cutoff)
+    .run();
+}
