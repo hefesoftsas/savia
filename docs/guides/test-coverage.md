@@ -9,9 +9,10 @@ suite. A workspace without tests receives zero coverage. Test files, type
 declarations, and generated code are excluded. Native Rust code, contract
 scripts, and the legacy `store-ports/` tree are outside this coverage run.
 
-Coverage uses Vitest's Istanbul provider. Istanbul instruments the source during
-the test run, which supports Cloudflare Workers test environments without
-depending on V8 inspector coverage.
+Coverage uses Vitest's native V8 provider for Node environments, preserving
+functions that are serialized into isolated runtimes. Workspaces using the
+Cloudflare Vitest plugin use Istanbul, which supports Workers without V8
+inspector access. Keep both providers aligned with the Vitest version.
 
 ## Run coverage locally
 
@@ -61,7 +62,7 @@ thresholds; the reports establish visibility before the team sets targets.
 ## Continuous integration
 
 The separate **Coverage** workflow runs on pushes to `main`, pull requests, and
-manual dispatch. Its 13 matrix lanes execute six Admin shards, three API
+manual dispatch. Its 13 parallel lanes execute six Admin shards, three API
 shards, the remaining core workspaces, insurance packages, and two Studio
 shards. Each lane uploads its raw reports even when tests fail. A final job
 downloads those reports, merges them, adds `summary.md` to the workflow run, and

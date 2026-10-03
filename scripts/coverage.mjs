@@ -46,6 +46,9 @@ export function discoverProjects() {
           return {
             path,
             group,
+            provider: pkg.devDependencies?.["@cloudflare/vitest-plugin"]
+              ? "istanbul"
+              : "v8",
             hasTests: Boolean(pkg.scripts?.test?.includes("vitest")),
           };
         }),
@@ -218,7 +221,7 @@ function run(values) {
       "run",
       "--maxWorkers=1",
       "--coverage.enabled",
-      "--coverage.provider=istanbul",
+      `--coverage.provider=${project.provider}`,
       "--coverage.include=src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
       "--coverage.exclude=**/*.d.ts",
       "--coverage.exclude=**/*.{test,spec}.*",
