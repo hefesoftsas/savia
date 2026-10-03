@@ -47,6 +47,11 @@ such as `["priority", "renewal"]`; normal CSV quoting applies.
 This type uses static options. Relationship selectors, dependent choices,
 uniqueness and external option sources retain their existing dedicated controls.
 
+Relationship selectors preserve the current results page until the search text
+changes. A changed search returns to page 1 after the 250 ms debounce; opening
+the selector alone does not reset pagination. Selected records remain selected
+when paging or searching.
+
 ## Rich text
 
 `RichText` stores Markdown as a string, with a default maximum of 100,000

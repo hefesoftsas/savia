@@ -21,6 +21,7 @@ export type BookingRow = {
   buffer_minutes: number;
   customer_name: string;
   customer_email: string;
+  customer_locale?: "en" | "es" | "pt";
   manage_token: string;
   request_key: string;
   request_hash: string;
@@ -80,7 +81,7 @@ export async function readSettings(
 export async function candidates(db: D1Database, tenantId: number) {
   const r = await db
     .prepare(
-      "SELECT p.id AS principalId,p.display_name AS displayName FROM identity_principal p JOIN identity_tenant_membership m ON m.principal_id=p.id WHERE m.tenant_id=? AND m.is_active=1 AND p.is_active=1 AND p.issuer='savia:better-auth' AND NOT EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin') ORDER BY p.display_name LIMIT 500",
+      "SELECT p.id AS \"principalId\",p.display_name AS \"displayName\" FROM identity_principal p JOIN identity_tenant_membership m ON m.principal_id=p.id WHERE m.tenant_id=? AND m.is_active=1 AND p.is_active=1 AND p.issuer='savia:better-auth' AND NOT EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin') ORDER BY p.display_name LIMIT 500",
     )
     .bind(tenantId)
     .all<{ principalId: string; displayName: string }>();
@@ -297,7 +298,16 @@ export async function createReservation(
   db: D1Database,
   row: BookingRow,
   settings: BookingSettings,
+  publicLinkId?: string,
+  now = Date.now(),
 ) {
+  const link = publicLinkId
+    ? guard(
+        db,
+        "SELECT EXISTS(SELECT 1 FROM tenant_booking_public_links WHERE id=? AND tenant_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?) )",
+        [publicLinkId, row.tenant_id, new Date(now).toISOString()],
+      )
+    : undefined;
   const membership = memberGuard(db, row.tenant_id, row.principal_id),
     revision = guard(
       db,
@@ -305,11 +315,12 @@ export async function createReservation(
       [row.tenant_id, settings.version],
     );
   await atomic(db, [
+    ...(link ? [link.start] : []),
     membership.start,
     revision.start,
     db
       .prepare(
-        "INSERT INTO tenant_bookings(id,tenant_id,professional_id,principal_id,service_id,service_name,professional_name,starts_at,ends_at,buffer_minutes,customer_name,customer_email,manage_token,request_key,request_hash,status,version,calendar_provider,calendar_connection_id,external_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO tenant_bookings(id,tenant_id,professional_id,principal_id,service_id,service_name,professional_name,starts_at,ends_at,buffer_minutes,customer_name,customer_email,manage_token,request_key,request_hash,status,version,calendar_provider,calendar_connection_id,external_id,created_at,customer_locale) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       )
       .bind(
         row.id,
@@ -333,11 +344,13 @@ export async function createReservation(
         row.calendar_connection_id,
         row.external_id,
         row.created_at,
+        row.customer_locale ?? "en",
       ),
     ...occupancyStatements(db, row),
     ...jobStatements(db, row, "confirmation", settings),
     revision.end,
     membership.end,
+    ...(link ? [link.end] : []),
   ]);
 }
 export async function changeReservation(

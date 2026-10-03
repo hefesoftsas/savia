@@ -6,6 +6,9 @@ import { loadCaptcha } from "../public-forms/public-form-submission";
 import { mountAltcha } from "../public-forms/altcha-widget";
 import { bookingMessages } from "./booking-messages";
 import { publicBookingWizardMessages } from "./public-booking-wizard-messages";
+import { PublicBookingAvailability } from "./public-booking-availability";
+import { PublicBookingSummary } from "./public-booking-summary";
+import type { BookingLinkScope, BookingSelection } from "./booking-types";
 
 type PublicCatalog = {
   id: string;
@@ -13,6 +16,11 @@ type PublicCatalog = {
   description: string;
   timeZone: string;
   cancellationMinutes: number;
+  horizonDays: number;
+  leadMinutes: number;
+  linkScope: BookingLinkScope;
+  fixedProfessionalId: string | null;
+  fixedServiceId: string | null;
   services: Array<{
     id: string;
     name: string;
@@ -26,38 +34,7 @@ type PublicCatalog = {
     siteKey?: string;
   };
 };
-type Slot = { startsAt: string; endsAt: string };
 type Envelope<T> = { data: T };
-
-function dateInZone(zone: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: zone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const part = (type: string) =>
-    parts.find((item) => item.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
-}
-
-function slotLabel(startsAt: string, zone: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: zone,
-  }).format(new Date(startsAt));
-}
-
-function dateLabel(date: string, locale: string) {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month - 1, day, 12)));
-}
 
 async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -95,10 +72,9 @@ export function PublicBookingPage({ token }: { token: string }) {
   const [catalogError, setCatalogError] = useState(false);
   const [serviceId, setServiceId] = useState("");
   const [professionalId, setProfessionalId] = useState("");
-  const [date, setDate] = useState("");
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [startsAt, setStartsAt] = useState("");
+  const [displayTimeZone, setDisplayTimeZone] = useState("");
+  const [selection, setSelection] = useState<BookingSelection>();
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
@@ -130,8 +106,29 @@ export function PublicBookingPage({ token }: { token: string }) {
     )
       .then((data) => {
         if (!active) return;
+        data.linkScope ??= { kind: "team" };
+        data.fixedProfessionalId ??= null;
+        data.fixedServiceId ??= null;
+        data.horizonDays ??= 30;
+        data.leadMinutes ??= 0;
         setCatalog(data);
-        setDate(dateInZone(data.timeZone));
+        setDisplayTimeZone(data.timeZone);
+        const nextServiceId =
+          data.fixedServiceId ??
+          (data.services.length === 1 ? data.services[0].id : "");
+        const nextEligible =
+          data.services.find((service) => service.id === nextServiceId)
+            ?.professionalIds ?? [];
+        const nextProfessionalId =
+          data.fixedProfessionalId ??
+          (nextEligible.length === 1 ? nextEligible[0] : "");
+        setServiceId(nextServiceId);
+        setProfessionalId(nextProfessionalId);
+        setSelection(undefined);
+        const chooseService = !data.fixedServiceId && data.services.length > 1;
+        const chooseProfessional =
+          data.linkScope.kind === "team" && nextEligible.length > 1;
+        setStep(chooseService || chooseProfessional ? 1 : 2);
         if (data.captcha.captchaProvider === "disabled")
           setCaptchaToken("local-bypass");
       })
@@ -224,59 +221,6 @@ export function PublicBookingPage({ token }: { token: string }) {
     [catalog, selectedService],
   );
 
-  useEffect(() => {
-    if (
-      !catalog ||
-      step !== 2 ||
-      !serviceId ||
-      !professionalId ||
-      !date ||
-      reservation
-    )
-      return;
-    let active = true;
-    setSlotsLoading(true);
-    setSlots([]);
-    void publicRequest<{ slots: Slot[]; timeZone: string }>(
-      `/api/public/bookings/${encodeURIComponent(token)}/slots?serviceId=${encodeURIComponent(serviceId)}&professionalId=${encodeURIComponent(professionalId)}&date=${encodeURIComponent(date)}`,
-    )
-      .then((data) => {
-        if (!active) return;
-        setSlots(data.slots);
-        if (
-          startsAt &&
-          !data.slots.some((slot) => slot.startsAt === startsAt)
-        ) {
-          setStartsAt("");
-          idempotency.current = undefined;
-        }
-      })
-      .catch(() => {
-        if (active)
-          setError(
-            t(
-              "Available times could not be loaded. Choose another date and retry.",
-            ),
-          );
-      })
-      .finally(() => {
-        if (active) setSlotsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [
-    catalog,
-    token,
-    serviceId,
-    professionalId,
-    date,
-    step,
-    reservation,
-    slotsAttempt,
-    t,
-  ]);
-
   function changed() {
     idempotency.current = undefined;
     setError("");
@@ -289,24 +233,26 @@ export function PublicBookingPage({ token }: { token: string }) {
       step !== 3 ||
       !serviceId ||
       !professionalId ||
-      !startsAt ||
-      !slots.some((slot) => slot.startsAt === startsAt) ||
+      !selection ||
+      selection.serviceId !== serviceId ||
+      selection.professionalId !== professionalId ||
       !captchaToken ||
       busy
     )
       return;
     const body = {
-      serviceId,
-      professionalId,
-      startsAt,
+      serviceId: selection.serviceId,
+      professionalId: selection.professionalId,
+      startsAt: selection.slot.startsAt,
       customerName: customerName.trim(),
       customerEmail: customerEmail.trim(),
       captchaToken,
+      customerLocale: locale,
     };
     const signature = JSON.stringify({
       serviceId,
       professionalId,
-      startsAt,
+      startsAt: selection.slot.startsAt,
       customerName: body.customerName,
       customerEmail: body.customerEmail,
     });
@@ -343,13 +289,19 @@ export function PublicBookingPage({ token }: { token: string }) {
           setCaptchaAttempt((attempt) => attempt + 1);
         }
         if (status === 409) {
-          setStartsAt("");
+          setSelection(undefined);
           setSlotsAttempt((attempt) => attempt + 1);
           setStep(2);
         }
       }
       setError(
-        t("Your booking could not be confirmed. Retry with the same request."),
+        status === 409
+          ? t(
+              "That time is no longer available. Choose another available time.",
+            )
+          : t(
+              "Your booking could not be confirmed. Retry with the same request.",
+            ),
       );
     } finally {
       setBusy(false);
@@ -376,10 +328,7 @@ export function PublicBookingPage({ token }: { token: string }) {
     return (
       <main className="mx-auto grid max-w-2xl gap-5 px-4 py-10">
         <h1 className="text-2xl font-semibold">{t("Appointment confirmed")}</h1>
-        <p>
-          {slotLabel(reservation.startsAt, catalog.timeZone, locale)} ·{" "}
-          {catalog.timeZone}
-        </p>
+        <PublicBookingSummary catalog={catalog} selection={selection} />
         <a
           className="underline underline-offset-4"
           href={reservation.managementUrl}
@@ -393,20 +342,40 @@ export function PublicBookingPage({ token }: { token: string }) {
     );
 
   const disabledCaptcha = catalog.captcha.captchaProvider === "disabled";
-  const hasAvailableSelection = slots.some(
-    (slot) => slot.startsAt === startsAt,
+  const selectedProfessional = (
+    catalog.fixedProfessionalId ? catalog.professionals : eligibleProfessionals
+  ).find(
+    (person) => person.id === (catalog.fixedProfessionalId ?? professionalId),
   );
-  const selectedProfessional = eligibleProfessionals.find(
-    (person) => person.id === professionalId,
+  const serviceSelectionNeeded =
+    !catalog.fixedServiceId && catalog.services.length > 1;
+  const professionalSelectionNeeded =
+    catalog.linkScope.kind === "team" &&
+    (serviceSelectionNeeded
+      ? catalog.services.some((service) => service.professionalIds.length > 1)
+      : eligibleProfessionals.length > 1);
+  const selectionStep = serviceSelectionNeeded || professionalSelectionNeeded;
+  const stepNames = selectionStep
+    ? [
+        serviceSelectionNeeded && professionalSelectionNeeded
+          ? wt("Service and professional")
+          : serviceSelectionNeeded
+            ? wt("Service")
+            : wt("Professional"),
+        wt("Availability"),
+        wt("Your details"),
+      ]
+    : [wt("Availability"), wt("Your details")];
+  const visibleStep =
+    step === 1 ? 1 : step === 2 ? (selectionStep ? 2 : 1) : stepNames.length;
+  const canContinue = Boolean(
+    selection &&
+    selection.serviceId === serviceId &&
+    selection.professionalId === professionalId &&
+    !availabilityLoading,
   );
-  const selectedSlot = slots.find((slot) => slot.startsAt === startsAt);
-  const stepNames = [
-    wt("Service and professional"),
-    wt("Date and time"),
-    wt("Your details"),
-  ];
   return (
-    <main className="mx-auto grid max-w-xl gap-7 px-4 py-8 md:py-12">
+    <main className="mx-auto grid max-w-3xl gap-5 px-4 py-6 md:gap-7 md:py-12">
       <header className="grid gap-3">
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
           {catalog.title}
@@ -414,17 +383,28 @@ export function PublicBookingPage({ token }: { token: string }) {
         <p className="max-w-prose whitespace-pre-wrap text-muted-foreground">
           {catalog.description}
         </p>
-        <p className="text-sm text-muted-foreground">{catalog.timeZone}</p>
+        {selectedProfessional && (
+          <p className="font-medium">
+            {t("Booking with %{professional}", {
+              professional: selectedProfessional.name,
+            })}
+          </p>
+        )}
+        {selectedService && (
+          <p className="text-sm text-muted-foreground">
+            {selectedService.name} · {selectedService.durationMinutes} min
+          </p>
+        )}
       </header>
       <nav aria-label={wt("Booking progress")}>
         <ol
-          className="grid grid-cols-3 border-b"
+          className={`grid ${stepNames.length === 3 ? "grid-cols-3" : "grid-cols-2"} border-b`}
           aria-label={wt("Booking progress")}
         >
           {stepNames.map((name, index) => {
             const number = index + 1;
-            const current = step === number;
-            const complete = step > number;
+            const current = visibleStep === number;
+            const complete = visibleStep > number;
             return (
               <li
                 key={name}
@@ -438,7 +418,7 @@ export function PublicBookingPage({ token }: { token: string }) {
                 }`}
               >
                 <span className="mb-1 block text-xs tabular-nums">
-                  {number} / 3
+                  {number} / {stepNames.length}
                 </span>
                 {name}
               </li>
@@ -453,7 +433,7 @@ export function PublicBookingPage({ token }: { token: string }) {
           </p>
         )}
         <fieldset disabled={busy} className="grid min-w-0 gap-6 border-0 p-0">
-          {step === 1 && (
+          {step === 1 && selectionStep && (
             <section
               aria-labelledby="booking-step-heading"
               className="grid gap-5"
@@ -466,55 +446,71 @@ export function PublicBookingPage({ token }: { token: string }) {
               >
                 {wt("Choose your appointment")}
               </h2>
-              <label className="grid gap-2 text-sm font-medium">
-                {t("Service")}
-                <select
-                  className="h-11 min-w-0 rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
-                  required
-                  value={serviceId}
-                  onChange={(event) => {
-                    changed();
-                    setServiceId(event.target.value);
-                    setProfessionalId("");
-                    setSlots([]);
-                    setStartsAt("");
-                  }}
-                >
-                  <option value="">{t("Choose a service")}</option>
+              {!catalog.fixedServiceId && catalog.services.length > 1 && (
+                <fieldset className="grid gap-2">
+                  <legend className="mb-1 text-sm font-medium">
+                    {t("Service")}
+                  </legend>
                   {catalog.services.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} · {service.durationMinutes} min
-                    </option>
+                    <label
+                      key={service.id}
+                      className={`flex min-h-16 cursor-pointer gap-3 rounded-md border p-3 ${service.id === serviceId ? "border-primary bg-accent/40" : "bg-background"}`}
+                    >
+                      <input
+                        type="radio"
+                        name="booking-service"
+                        value={service.id}
+                        checked={service.id === serviceId}
+                        className="mt-1 size-4 accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onChange={() => {
+                          changed();
+                          const eligible = service.professionalIds;
+                          setServiceId(service.id);
+                          setProfessionalId(
+                            catalog.fixedProfessionalId ??
+                              (eligible.length === 1 ? eligible[0] : ""),
+                          );
+                          setSelection(undefined);
+                        }}
+                      />
+                      <span className="grid gap-1">
+                        <span className="font-medium">
+                          {service.name} · {service.durationMinutes} min
+                        </span>
+                        {service.description && (
+                          <span className="text-sm text-muted-foreground">
+                            {service.description}
+                          </span>
+                        )}
+                      </span>
+                    </label>
                   ))}
-                </select>
-              </label>
-              {selectedService && (
-                <p className="-mt-2 text-sm text-muted-foreground">
-                  {selectedService.description}
-                </p>
+                </fieldset>
               )}
-              <label className="grid gap-2 text-sm font-medium">
-                {t("Professional")}
-                <select
-                  className="h-11 min-w-0 rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
-                  required
-                  disabled={!selectedService}
-                  value={professionalId}
-                  onChange={(event) => {
-                    changed();
-                    setProfessionalId(event.target.value);
-                    setSlots([]);
-                    setStartsAt("");
-                  }}
-                >
-                  <option value="">{t("Choose a professional")}</option>
-                  {eligibleProfessionals.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {catalog.linkScope.kind === "team" &&
+                eligibleProfessionals.length > 1 && (
+                  <label className="grid gap-2 text-sm font-medium">
+                    {t("Professional")}
+                    <select
+                      className="h-11 min-w-0 rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                      required
+                      disabled={!selectedService}
+                      value={professionalId}
+                      onChange={(event) => {
+                        changed();
+                        setProfessionalId(event.target.value);
+                        setSelection(undefined);
+                      }}
+                    >
+                      <option value="">{t("Choose a professional")}</option>
+                      {eligibleProfessionals.map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               <div className="flex justify-end border-t pt-5">
                 <Button
                   type="button"
@@ -538,68 +534,49 @@ export function PublicBookingPage({ token }: { token: string }) {
                 tabIndex={-1}
                 className="text-lg font-semibold focus:outline-none"
               >
-                {wt("Date and time")}
+                {wt("Choose a day and time")}
               </h2>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <label className="grid gap-2 text-sm font-medium">
-                  {t("Date")}
-                  <Input
-                    className="h-11"
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(event) => {
-                      changed();
-                      setDate(event.target.value);
-                      setStartsAt("");
-                    }}
-                  />
-                </label>
-                <label className="grid gap-2 text-sm font-medium">
-                  {t("Available time")}
-                  <select
-                    className="h-11 min-w-0 rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
-                    required
-                    disabled={slotsLoading || slots.length === 0}
-                    value={startsAt}
-                    onChange={(event) => {
-                      changed();
-                      setStartsAt(event.target.value);
-                    }}
-                  >
-                    <option value="">
-                      {slotsLoading
-                        ? t("Loading available times…")
-                        : slots.length
-                          ? t("Choose a time")
-                          : t("No available times")}
-                    </option>
-                    {slots.map((slot) => (
-                      <option key={slot.startsAt} value={slot.startsAt}>
-                        {slotLabel(slot.startsAt, catalog.timeZone, locale)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {slotsLoading && (
-                <p className="text-sm text-muted-foreground" role="status">
-                  {t("Loading available times…")}
+              {!serviceId || !professionalId ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {t("Choose a service and professional to see availability.")}
                 </p>
+              ) : (
+                <PublicBookingAvailability
+                  token={token}
+                  catalog={catalog}
+                  serviceId={serviceId}
+                  professionalId={professionalId}
+                  displayTimeZone={displayTimeZone || catalog.timeZone}
+                  onTimeZoneChange={(zone) => {
+                    setError("");
+                    setDisplayTimeZone(zone);
+                  }}
+                  value={selection}
+                  onChange={(next) => {
+                    if (selection?.slot.startsAt !== next?.slot.startsAt)
+                      changed();
+                    setSelection(next);
+                  }}
+                  onLoadingChange={setAvailabilityLoading}
+                  hideHeading
+                  refreshKey={slotsAttempt}
+                />
               )}
               <div className="flex items-center justify-between border-t pt-5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 min-w-24"
-                  onClick={() => setStep(1)}
-                >
-                  {wt("Back")}
-                </Button>
+                {selectionStep && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 min-w-24"
+                    onClick={() => setStep(1)}
+                  >
+                    {wt("Back")}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   className="h-11 min-w-32"
-                  disabled={!date || !hasAvailableSelection || slotsLoading}
+                  disabled={!canContinue}
                   onClick={() => setStep(3)}
                 >
                   {wt("Continue")}
@@ -625,31 +602,7 @@ export function PublicBookingPage({ token }: { token: string }) {
                   {wt("Review your appointment and add your contact details.")}
                 </p>
               </div>
-              <dl className="grid gap-3 border-y py-4 text-sm sm:grid-cols-3">
-                <div className="grid gap-1">
-                  <dt className="text-muted-foreground">
-                    {wt("Selected service")}
-                  </dt>
-                  <dd className="font-medium">{selectedService?.name}</dd>
-                </div>
-                <div className="grid gap-1">
-                  <dt className="text-muted-foreground">
-                    {wt("Selected professional")}
-                  </dt>
-                  <dd className="font-medium">{selectedProfessional?.name}</dd>
-                </div>
-                <div className="grid gap-1">
-                  <dt className="text-muted-foreground">
-                    {wt("Selected date and time")}
-                  </dt>
-                  <dd className="font-medium">
-                    {dateLabel(date, locale)} ·{" "}
-                    {selectedSlot
-                      ? slotLabel(startsAt, catalog.timeZone, locale)
-                      : ""}
-                  </dd>
-                </div>
-              </dl>
+              <PublicBookingSummary catalog={catalog} selection={selection} />
               <div className="grid gap-5 sm:grid-cols-2">
                 <label className="grid gap-2 text-sm font-medium sm:col-span-2">
                   {t("Your name")}
@@ -707,7 +660,9 @@ export function PublicBookingPage({ token }: { token: string }) {
                 <Button
                   type="submit"
                   className="h-11 min-w-40"
-                  disabled={busy || slotsLoading || !captchaToken}
+                  disabled={
+                    busy || availabilityLoading || !captchaToken || !selection
+                  }
                 >
                   {busy
                     ? t("Loading booking settings…")

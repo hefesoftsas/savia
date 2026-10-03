@@ -519,12 +519,13 @@ export function RelationField(p: IFieldProps) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   useEffect(() => {
+    if (query === search) return;
     const timer = setTimeout(() => {
       setSearch(query);
       setPage(1);
     }, 250);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, search]);
   const selected = (
     multiple
       ? Array.isArray(p.value)

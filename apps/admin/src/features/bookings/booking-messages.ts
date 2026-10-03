@@ -139,6 +139,147 @@ export const bookingMessages = {
   ],
   Professionals: ["Profesionales", "Professionals", "Profissionais"],
   Professional: ["Profesional", "Professional", "Profissional"],
+  "Booking with %{professional}": [
+    "Reserva con %{professional}",
+    "Booking with %{professional}",
+    "Agendamento com %{professional}",
+  ],
+  "Choose a service and professional to see availability.": [
+    "Elige un servicio y un profesional para ver la disponibilidad.",
+    "Choose a service and professional to see availability.",
+    "Escolha um serviço e um profissional para ver a disponibilidade.",
+  ],
+  "Booking links": [
+    "Enlaces de reserva",
+    "Booking links",
+    "Links de agendamento",
+  ],
+  "Create and manage links customers can use to book appointments.": [
+    "Crea y administra enlaces para que tus clientes reserven citas.",
+    "Create and manage links customers can use to book appointments.",
+    "Crie e gerencie links para que clientes agendem horários.",
+  ],
+  "Link expiry": ["Vencimiento del enlace", "Link expiry", "Validade do link"],
+  "24 hours": ["24 horas", "24 hours", "24 horas"],
+  "7 days": ["7 días", "7 days", "7 dias"],
+  "30 days (default)": [
+    "30 días (predeterminado)",
+    "30 days (default)",
+    "30 dias (padrão)",
+  ],
+  "No expiry": ["Sin vencimiento", "No expiry", "Sem validade"],
+  "Service (optional)": [
+    "Servicio (opcional)",
+    "Service (optional)",
+    "Serviço (opcional)",
+  ],
+  "Any eligible service": [
+    "Cualquier servicio disponible",
+    "Any eligible service",
+    "Qualquer serviço disponível",
+  ],
+  "New links default to 25 bookings per day. Set a link-specific limit below.":
+    [
+      "Los enlaces nuevos permiten hasta 25 reservas al día de forma predeterminada. Configura el límite del enlace abajo.",
+      "New links default to 25 bookings per day. Set a link-specific limit below.",
+      "Novos links permitem até 25 agendamentos por dia por padrão. Defina o limite do link abaixo.",
+    ],
+  "Daily booking limit": [
+    "Límite diario de reservas",
+    "Daily booking limit",
+    "Limite diário de agendamentos",
+  ],
+  "Personal link for %{name}": [
+    "Enlace personal de %{name}",
+    "Personal link for %{name}",
+    "Link pessoal de %{name}",
+  ],
+  "Create my booking link": [
+    "Crear mi enlace de reserva",
+    "Create my booking link",
+    "Criar meu link de agendamento",
+  ],
+  "Create team agenda link": [
+    "Crear enlace de agenda del equipo",
+    "Create team agenda link",
+    "Criar link da agenda da equipe",
+  ],
+  "Your booking profile is not set up yet. Ask an administrator to add you as an active professional before creating a personal link.":
+    [
+      "Tu perfil de reservas aún no está configurado. Pide a un administrador que te agregue como profesional activo antes de crear un enlace personal.",
+      "Your booking profile is not set up yet. Ask an administrator to add you as an active professional before creating a personal link.",
+      "Seu perfil de agendamento ainda não está configurado. Peça a um administrador para adicionar você como profissional ativo antes de criar um link pessoal.",
+    ],
+  "Team booking links are available to booking administrators.": [
+    "Los enlaces de agenda del equipo están disponibles para administradores de reservas.",
+    "Team booking links are available to booking administrators.",
+    "Os links da agenda da equipe estão disponíveis para administradores de agendamento.",
+  ],
+  "Booking link created.": [
+    "Se creó el enlace de reserva.",
+    "Booking link created.",
+    "O link de agendamento foi criado.",
+  ],
+  "Booking link revoked.": [
+    "Se revocó el enlace de reserva.",
+    "Booking link revoked.",
+    "O link de agendamento foi revogado.",
+  ],
+  "Booking links could not be updated. Check your connection and retry.": [
+    "No se pudieron actualizar los enlaces. Revisa tu conexión e inténtalo de nuevo.",
+    "Booking links could not be updated. Check your connection and retry.",
+    "Não foi possível atualizar os links. Verifique sua conexão e tente novamente.",
+  ],
+  "Loading booking links…": [
+    "Cargando enlaces de reserva…",
+    "Loading booking links…",
+    "Carregando links de agendamento…",
+  ],
+  "No booking links yet. Create a personal link to get started.": [
+    "Aún no hay enlaces de reserva. Crea un enlace personal para comenzar.",
+    "No booking links yet. Create a personal link to get started.",
+    "Ainda não há links de agendamento. Crie um link pessoal para começar.",
+  ],
+  "My booking link": [
+    "Mi enlace de reserva",
+    "My booking link",
+    "Meu link de agendamento",
+  ],
+  "Team agenda": ["Agenda del equipo", "Team agenda", "Agenda da equipe"],
+  "Expires %{date}": [
+    "Vence el %{date}",
+    "Expires %{date}",
+    "Expira em %{date}",
+  ],
+  "%{count} bookings per day": [
+    "%{count} reservas al día",
+    "%{count} bookings per day",
+    "%{count} agendamentos por dia",
+  ],
+  Revoked: ["Revocado", "Revoked", "Revogado"],
+  Expired: ["Vencido", "Expired", "Expirado"],
+  "Copy link": ["Copiar enlace", "Copy link", "Copiar link"],
+  Share: ["Compartir", "Share", "Compartilhar"],
+  "Revoke link": ["Revocar enlace", "Revoke link", "Revogar link"],
+  "Revoking…": ["Revocando…", "Revoking…", "Revogando…"],
+  "QR code": ["Código QR", "QR code", "Código QR"],
+  "QR code for %{name}": [
+    "Código QR de %{name}",
+    "QR code for %{name}",
+    "Código QR de %{name}",
+  ],
+  "Revoking a booking link does not affect confirmed appointments or their private management links.":
+    [
+      "Revocar un enlace de reserva no afecta las citas confirmadas ni sus enlaces privados de administración.",
+      "Revoking a booking link does not affect confirmed appointments or their private management links.",
+      "Revogar um link de agendamento não afeta os agendamentos confirmados nem seus links privados de gerenciamento.",
+    ],
+  "Link copied.": ["Se copió el enlace.", "Link copied.", "Link copiado."],
+  "Booking link shared.": [
+    "Se compartió el enlace de reserva.",
+    "Booking link shared.",
+    "O link de agendamento foi compartilhado.",
+  ],
   "Add professional": [
     "Añadir profesional",
     "Add professional",
@@ -154,10 +295,10 @@ export const bookingMessages = {
     "Public booking page",
     "Página pública de agendamento",
   ],
-  "Open public booking page": [
-    "Abrir página pública de citas",
-    "Open public booking page",
-    "Abrir página pública de agendamento",
+  "Open team booking page": [
+    "Abrir página de reservas del equipo",
+    "Open team booking page",
+    "Abrir página de agendamento da equipe",
   ],
   "Your availability": [
     "Tu disponibilidad",
@@ -283,6 +424,39 @@ export const bookingMessages = {
   ],
   Date: ["Fecha", "Date", "Data"],
   "Available time": ["Hora disponible", "Available time", "Horário disponível"],
+  "Booking time zone": [
+    "Zona horaria de la cita",
+    "Booking time zone",
+    "Fuso horário do agendamento",
+  ],
+  "Time zone": ["Zona horaria", "Time zone", "Fuso horário"],
+  "Previous month": ["Mes anterior", "Previous month", "Mês anterior"],
+  "Next month": ["Mes siguiente", "Next month", "Próximo mês"],
+  "Days with availability are enabled.": [
+    "Los días disponibles están habilitados.",
+    "Days with availability are enabled.",
+    "Os dias com disponibilidade estão ativos.",
+  ],
+  "Choose an available day": [
+    "Elige un día disponible",
+    "Choose an available day",
+    "Escolha um dia disponível",
+  ],
+  "No availability in this month.": [
+    "No hay disponibilidad este mes.",
+    "No availability in this month.",
+    "Não há disponibilidade neste mês.",
+  ],
+  "No more dates are available in this booking window.": [
+    "No hay más fechas disponibles dentro de este plazo.",
+    "No more dates are available in this booking window.",
+    "Não há mais datas disponíveis neste período de agendamento.",
+  ],
+  "Available times for %{date}": [
+    "Horarios disponibles para %{date}",
+    "Available times for %{date}",
+    "Horários disponíveis para %{date}",
+  ],
   "Loading available times…": [
     "Cargando horarios disponibles…",
     "Loading available times…",
@@ -316,6 +490,11 @@ export const bookingMessages = {
     "No se pudo confirmar la reserva. Inténtalo de nuevo con la misma solicitud.",
     "Your booking could not be confirmed. Retry with the same request.",
     "Não foi possível confirmar o agendamento. Tente novamente com a mesma solicitação.",
+  ],
+  "That time is no longer available. Choose another available time.": [
+    "Ese horario ya no está disponible. Elige otro horario disponible.",
+    "That time is no longer available. Choose another available time.",
+    "Esse horário não está mais disponível. Escolha outro horário disponível.",
   ],
   "Available times could not be loaded. Choose another date and retry.": [
     "No se pudieron cargar los horarios. Elige otra fecha e inténtalo de nuevo.",
