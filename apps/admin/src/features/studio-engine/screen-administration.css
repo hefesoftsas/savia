@@ -414,6 +414,9 @@
 .screen-admin-row-actions {
   gap: 10px;
 }
+.screen-admin-row-mobile-actions {
+  display: none;
+}
 .screen-admin-row-group {
   display: grid;
   gap: 8px;
@@ -663,8 +666,21 @@
   padding-left: 28px;
 }
 
-/* Give screen names their own row when the available content area is narrow. */
+/* Keep narrow screen rows compact, with secondary actions in a menu. */
 @container screen-administration (max-width: 640px) {
+  .screen-admin-overview {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 16px;
+  }
+  .screen-admin header h1 {
+    font-size: 24px;
+  }
+  .screen-admin-actions > button {
+    width: 44px;
+    height: 44px;
+  }
   .screen-admin-tabs-nav [role="tablist"] {
     height: auto;
     max-width: 100%;
@@ -675,9 +691,18 @@
     min-height: 44px;
   }
   .screen-admin-row {
-    grid-template-columns: 44px minmax(0, 1fr);
-    align-items: start;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    align-items: center;
     gap: 8px;
+  }
+  .screen-admin-list.savia-surface-card .screen-admin-row {
+    padding: 12px;
+  }
+  .screen-admin-row.is-inactive {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .screen-admin-row-drag-spacer {
+    display: none;
   }
   .screen-admin-row-drag,
   .screen-admin-row-drag-spacer {
@@ -686,16 +711,23 @@
   }
   .screen-admin-row-open {
     min-height: 44px;
-    align-items: start;
-  }
-  .screen-admin-row-actions {
-    grid-column: 2;
-    flex-wrap: wrap;
-    min-width: 0;
+    align-items: center;
     gap: 8px;
   }
+  .screen-admin-row-actions {
+    grid-column: auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    gap: 4px;
+  }
   .screen-admin-row.is-inactive .screen-admin-row-actions {
-    grid-column: 1 / -1;
+    grid-column: auto;
+  }
+  .screen-admin-row-actions > button:not(.screen-admin-row-mobile-actions) {
+    display: none;
+  }
+  .screen-admin-row-mobile-actions {
+    display: inline-flex;
   }
   .screen-admin-row-actions > button {
     width: 44px;
@@ -703,7 +735,11 @@
   }
   .screen-admin-row-visibility {
     min-height: 44px;
-    margin-inline-end: auto;
+    justify-content: center;
+    width: 44px;
+  }
+  .screen-admin-row-visibility > span {
+    display: none;
   }
   .screen-admin-row-visibility [role="switch"] {
     position: relative;
@@ -714,6 +750,6 @@
     inset: -10px 0;
   }
   .screen-admin-menu-section .screen-admin-row {
-    padding-left: 16px;
+    padding-left: 12px;
   }
 }

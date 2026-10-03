@@ -254,20 +254,24 @@ function AudioFilesPage({
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={loading || processing || uploading}
             onClick={() => setUploadOpen(true)}
           >
             <Upload className="size-4" aria-hidden="true" />
-            {t("Upload recording")}
+            <span className="sr-only sm:not-sr-only">
+              {t("Upload recording")}
+            </span>
           </Button>
           <Button
             variant="outline"
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={loading || processing || uploading}
             onClick={() => void load()}
           >
             <RefreshCw className="size-4" aria-hidden="true" />
-            {t("Refresh")}
+            <span className="sr-only sm:not-sr-only">{t("Refresh")}</span>
           </Button>
         </div>
       </header>
@@ -367,9 +371,10 @@ function AudioFilesPage({
             </ul>
             {cursor && (
               <Button
-                className="mt-3 w-full"
+                className="mt-3 w-full max-sm:h-11"
                 variant="ghost"
                 size="sm"
+                aria-label={t("Load more")}
                 disabled={loading || processing || uploading}
                 onClick={() => void load(cursor)}
               >
@@ -416,7 +421,7 @@ function AudioFilesPage({
                       download={
                         selected.name ?? `${selected.id}.${selected.format}`
                       }
-                      className="mt-2 inline-block text-xs text-muted-foreground underline underline-offset-4"
+                      className="mt-2 inline-flex items-center text-xs text-muted-foreground underline underline-offset-4 max-sm:min-h-11"
                     >
                       {t("Download audio")}
                     </a>

@@ -69,8 +69,8 @@ export const Breadcrumb = ({ children, ref }: BreadcrumbProps) => {
         orientation="vertical"
         className="data-[orientation=vertical]:h-4 mr-4"
       />
-      <BaseBreadcrumb ref={ref}>
-        <BreadcrumbList>
+      <BaseBreadcrumb ref={ref} className="min-w-0 max-w-full">
+        <BreadcrumbList className="max-sm:flex-nowrap max-sm:[&>[aria-current=page]]:truncate">
           {isMobile && React.Children.count(children) > 2 ? (
             <React.Fragment>
               <BreadcrumbItem>

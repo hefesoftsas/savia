@@ -265,7 +265,7 @@ export function RegistrationPage() {
                   )}
                   <Button
                     type="submit"
-                    className="w-full"
+                    className="w-full max-sm:min-h-11"
                     disabled={pending || (!captcha && !uncertain)}
                   >
                     {t(pending ? "Creating account…" : "Create account")}

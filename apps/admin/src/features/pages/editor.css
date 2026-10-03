@@ -146,6 +146,22 @@
   .page-editor-gutter-trigger {
     left: -0.15rem;
     opacity: 0.7;
+    width: 44px;
+    height: 44px;
+  }
+
+  .page-editor-selection-tools button,
+  .page-editor-block-controls button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .page-editor-command-search input {
+    height: 44px;
+  }
+
+  .page-editor-command-list > button {
+    min-height: 44px;
   }
 
   .page-editor-content {

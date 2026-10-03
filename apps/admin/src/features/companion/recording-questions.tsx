@@ -85,7 +85,11 @@ export function RecordingQuestions({
             )}
           </span>
         </label>
-        <Button disabled={!question.trim() || !consent || busy} type="submit">
+        <Button
+          className="max-sm:h-11"
+          disabled={!question.trim() || !consent || busy}
+          type="submit"
+        >
           {t(busy ? "Preparing answer…" : "Ask about recording")}
         </Button>
       </form>

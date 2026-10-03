@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMessages } from "@/i18n/core";
 import { companionMessages } from "@/i18n/locales/companion";
@@ -112,8 +112,16 @@ export function RecordingUpload({
     <section aria-label={t("Upload recording")} className="mb-6 border-b pb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-medium">{t("Upload recording")}</h2>
-        <Button variant="ghost" size="sm" disabled={busy} onClick={onClose}>
-          {t("Close")}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+          aria-label={t("Close")}
+          disabled={busy}
+          onClick={onClose}
+        >
+          <X className="size-4 sm:hidden" aria-hidden="true" />
+          <span className="sr-only sm:not-sr-only">{t("Close")}</span>
         </Button>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
@@ -123,7 +131,7 @@ export function RecordingUpload({
         <label className="flex flex-col gap-2 text-sm font-medium">
           {t("Source")}
           <select
-            className="h-9 max-w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring sm:max-w-80"
+            className="h-11 max-w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:max-w-80"
             value={source}
             disabled={busy}
             onChange={(e) => {
@@ -178,7 +186,7 @@ export function RecordingUpload({
             <label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-medium">
               {t("Search audio files")}
               <input
-                className="h-9 rounded-md border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+                className="h-11 rounded-md border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring sm:h-9"
                 maxLength={100}
                 value={query}
                 disabled={busy || searching}
@@ -188,6 +196,7 @@ export function RecordingUpload({
             <Button
               type="submit"
               variant="outline"
+              className="max-sm:h-11"
               disabled={busy || searching || !query.trim()}
             >
               {t(searching ? "Searching…" : "Search")}
@@ -234,6 +243,7 @@ export function RecordingUpload({
               <Button
                 size="sm"
                 variant="outline"
+                className="max-sm:h-11"
                 disabled={busy || searching}
                 aria-label={`${t("Import")} ${file.name}`}
                 onClick={() => {

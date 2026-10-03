@@ -22,7 +22,7 @@ save automatically to the backend and support drag, keyboard, and menu ordering.
 
 New layouts include agenda, quick task, and mail. Mail is visible only when a
 personal Gmail or Outlook connection is connected. Existing saved layouts are
-preserved; use **Show mail** or **Add widget → Personal → Mail inbox** to restore
+preserved; use **Add widget → Personal → Mail inbox** to restore
 mail when connected. Removing or disconnecting a provider does not rewrite the
 saved layout. Hidden mail still counts toward the twelve-widget limit.
 
@@ -129,6 +129,11 @@ the key unavailable, private feed storage fails closed. Permit the configured
 public feed destinations and `cloudflare-dns.com` under the runtime's outbound
 network policy for subscriptions. Local verification uses controlled feeds and
 does not establish live connectivity to arbitrary calendar hosts.
+
+On phones (below 640 px), the page synchronization button, dashboard toolbar,
+and empty-agenda actions show only icons with accessible names and 44 px touch
+targets. Their text labels remain visible on larger screens. There is no
+separate **Show mail** action; add the inbox through the Personal tab.
 
 ## Personal inbox
 

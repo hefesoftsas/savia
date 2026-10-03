@@ -475,12 +475,17 @@ export function PersonalIntegrationsPage({
         onValueChange={selectTab}
         className="w-full space-y-6"
       >
-        <TabsList className="mb-2 w-full flex-wrap justify-start gap-1 group-data-[orientation=horizontal]/tabs:h-auto [&_[data-slot=tabs-trigger]]:h-auto [&_[data-slot=tabs-trigger]]:min-h-9">
+        <TabsList className="mb-2 w-full flex-wrap justify-start gap-1 group-data-[orientation=horizontal]/tabs:h-auto [&_[data-slot=tabs-trigger]]:h-auto [&_[data-slot=tabs-trigger]]:min-h-11 sm:[&_[data-slot=tabs-trigger]]:min-h-9">
           <TabsTrigger value="connections">
             {t("Cuentas y Conexiones")}
           </TabsTrigger>
-          <TabsTrigger value="crm">{t("CRM")}</TabsTrigger>
-          <TabsTrigger value="virtual-employees">
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="crm">
+            {t("CRM")}
+          </TabsTrigger>
+          <TabsTrigger
+            className="min-h-11 sm:min-h-0"
+            value="virtual-employees"
+          >
             {t("Empleados Virtuales (IA)")}
           </TabsTrigger>
           <TabsTrigger value="apps">{t("Aplicaciones")}</TabsTrigger>
@@ -498,6 +503,7 @@ export function PersonalIntegrationsPage({
               {providerLoadFailed ? (
                 <Button
                   size="sm"
+                  className="max-sm:h-11"
                   variant="outline"
                   disabled={loading}
                   onClick={() => void refresh()}

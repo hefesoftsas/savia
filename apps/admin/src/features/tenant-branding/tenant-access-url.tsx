@@ -81,29 +81,46 @@ export function TenantAccessUrl({ slug }: { slug?: string | null }) {
           onFocus={(event) => event.currentTarget.select()}
         />
         <div className="tenant-branding-actions">
-          <Button asChild variant="outline">
-            <a href={url} target="_blank" rel="noopener noreferrer">
+          <Button
+            asChild
+            variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+          >
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={t("Open in new window")}
+            >
               <ExternalLink aria-hidden="true" />
-              {t("Open in new window")}
+              <span className="sr-only sm:not-sr-only">
+                {t("Open in new window")}
+              </span>
             </a>
           </Button>
           <Button
             type="button"
             variant="secondary"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            title={t("Copiar enlace")}
             disabled={pending}
             onClick={() => void act(false)}
           >
             <Copy aria-hidden="true" />
-            {t("Copiar enlace")}
+            <span className="sr-only sm:not-sr-only">{t("Copiar enlace")}</span>
           </Button>
           <Button
             type="button"
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            title={t("Compartir enlace")}
             disabled={pending}
             onClick={() => void act(true)}
           >
             <Share2 aria-hidden="true" />
-            {t("Compartir enlace")}
+            <span className="sr-only sm:not-sr-only">
+              {t("Compartir enlace")}
+            </span>
           </Button>
         </div>
       </div>

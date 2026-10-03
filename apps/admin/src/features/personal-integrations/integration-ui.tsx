@@ -1,5 +1,5 @@
 import type { ElementType, ReactNode } from "react";
-import { CheckCircle2, Info, LoaderCircle } from "lucide-react";
+import { CheckCircle2, Info, LoaderCircle, Plug } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,7 +59,7 @@ export function IntegrationHelpTooltip({
       <TooltipTrigger asChild>
         <button
           type="button"
-          className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-sm:size-11"
           aria-label={label}
         >
           <Info className="size-3.5" aria-hidden="true" />
@@ -199,14 +199,19 @@ export function IntegrationProviderRow({
         ) : null}
         {secondaryAction}
         <Button
-          className="integrations-row__action shrink-0"
+          className="integrations-row__action shrink-0 max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+          title={actionLabel}
           size="sm"
           variant={actionVariant}
           disabled={busy || disabled}
           onClick={onAction}
         >
-          {busy ? <LoaderCircle className="animate-spin" /> : null}
-          {actionLabel}
+          {busy ? (
+            <LoaderCircle className="animate-spin" aria-hidden="true" />
+          ) : (
+            <Plug className="size-4 sm:hidden" aria-hidden="true" />
+          )}
+          <span className="sr-only sm:not-sr-only">{actionLabel}</span>
         </Button>
       </div>
     </li>
