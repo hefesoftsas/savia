@@ -13,6 +13,7 @@ import type {
   CalendarOccurrence,
   CalendarSource,
 } from "@savia/studio-shared/calendar-contracts";
+import { tenantBookingsLink } from "./calendar-view";
 
 const source: CalendarSource = {
   id: "team",
@@ -80,6 +81,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("My Day calendar views", () => {
+  it("links to a confirmed canonical tenant booking route and omits unknown hosts", () => {
+    expect(
+      tenantBookingsLink(
+        "centro-medico",
+        "2026-10-03T14:00:00.000Z",
+        "savia.app.hefesoft.com",
+      ),
+    ).toBe(
+      "https://centro-medico.savia.app.hefesoft.com/#/bookings?tab=reservations&date=2026-10-03",
+    );
+    expect(
+      tenantBookingsLink(
+        "centro-medico",
+        "2026-10-03T14:00:00.000Z",
+        "localhost",
+      ),
+    ).toBeNull();
+  });
+
   it("adds a WebCal subscription with its name and source time zone", async () => {
     const user = userEvent.setup(),
       client = service();

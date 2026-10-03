@@ -34,6 +34,10 @@ import {
   useCalendarSources,
 } from "./use-calendar-sources";
 import { CalendarView } from "./calendar-view";
+import {
+  useMyDayBookings,
+  type BookingAgendaClient,
+} from "./use-my-day-bookings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,7 +96,7 @@ export type PersonalIntegrationsLike = {
     startsAt: string;
     endsAt: string;
   }) => Promise<PersonalCalendarEvent>;
-};
+} & BookingAgendaClient;
 
 const calendarProviderOrder: CalendarProvider[] = [
   "google_calendar",
@@ -394,6 +398,11 @@ export function useMyDayAgenda(
   const to = options?.to ?? bounds.to;
   const dayKey = `${from}/${to}`;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const bookings = useMyDayBookings(personalIntegrations, {
+    from,
+    to,
+    timeZone,
+  });
   const sources = useCalendarSources(
     isCalendarSourcesClient(personalIntegrations)
       ? personalIntegrations
@@ -722,7 +731,8 @@ export function useMyDayAgenda(
     setEvents,
     eventGroups,
     calendarProviders,
-    loading,
+    loading: loading || bookings.loading,
+    bookings,
     feedback,
     syncError: localizeFeedback(snapshot.syncError),
     isCalendarConnectNotice:
@@ -731,7 +741,7 @@ export function useMyDayAgenda(
     setFeedback,
     dismissConnectNotice,
     refresh: async () => {
-      await Promise.all([refresh(), sources.refresh()]);
+      await Promise.all([refresh(), sources.refresh(), bookings.refresh()]);
     },
   };
 }
