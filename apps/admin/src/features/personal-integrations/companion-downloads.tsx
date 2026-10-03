@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { Download, Monitor, Smartphone } from "lucide-react";
+import { Download } from "lucide-react";
+import Android from "@thesvg/react/android";
+import Windows from "@thesvg/react/windows";
+import Apple from "@thesvg/react/apple";
 import { Button } from "@/components/ui/button";
 import { useMessages } from "@/i18n/core";
 import { companionDownloadMessages } from "./companion-downloads-messages";
@@ -105,21 +108,21 @@ export function CompanionDownloads() {
       name: "Android",
       requirements: t("Android 7 o posterior · APK"),
       action: t("Descargar Android"),
-      Icon: Smartphone,
+      Icon: Android,
     },
     {
       id: "windows" as const,
       name: "Windows",
       requirements: t("Windows 11 · 64 bits"),
       action: t("Descargar Windows"),
-      Icon: Monitor,
+      Icon: Windows,
     },
     {
       id: "macos" as const,
       name: "macOS",
       requirements: t("macOS 14.2 o posterior · Apple Silicon"),
       action: t("Descargar macOS"),
-      Icon: Monitor,
+      Icon: Apple,
     },
   ];
   return (
@@ -175,7 +178,7 @@ export function CompanionDownloads() {
           <li key={id} className="integrations-row integrations-row--static">
             <div className="flex min-w-0 items-center gap-3">
               <Icon
-                className="size-5 shrink-0 text-muted-foreground"
+                className="size-6 shrink-0 text-foreground"
                 aria-hidden="true"
               />
               <div className="min-w-0">
