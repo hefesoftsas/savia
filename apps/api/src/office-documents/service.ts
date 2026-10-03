@@ -288,6 +288,108 @@ export class OfficeDocumentsService {
     });
   }
 
+  async remove(id: string, version: number): Promise<void> {
+    const row = await this.load(id);
+    if (version !== row.version)
+      throw new OfficeDocumentsError(
+        409,
+        "VERSION_CONFLICT",
+        "A newer version exists; reload the document before deleting",
+      );
+    const revisions = await this.db
+      .prepare(
+        `SELECT r.storage_key FROM office_document_revisions r
+        JOIN office_documents d ON d.id=r.document_id
+        WHERE d.id=? AND d.tenant_id=? AND d.owner_id=? AND d.version=? AND ${this.scope("d")} AND ${this.enabledScope("d.tenant_id")}`,
+      )
+      .bind(
+        id,
+        row.tenant_id,
+        this.actor.principal.id,
+        version,
+        this.actor.principal.id,
+        this.actor.principal.id,
+        this.actor.principal.id,
+        this.actor.principal.id,
+      )
+      .all<{ storage_key: string }>();
+    const guardId = randomId();
+    let results: D1Result[];
+    try {
+      results = await this.db.batch([
+        this.db
+          .prepare(
+            `INSERT INTO studio_write_guards(id,valid)
+            SELECT ?,CASE WHEN EXISTS(
+              SELECT 1 FROM office_documents d
+              WHERE d.id=? AND d.tenant_id=? AND d.owner_id=? AND d.version=?
+                AND ${this.scope("d")} AND ${this.enabledScope("d.tenant_id")}
+            ) THEN 1 ELSE 0 END`,
+          )
+          .bind(
+            guardId,
+            id,
+            row.tenant_id,
+            this.actor.principal.id,
+            version,
+            this.actor.principal.id,
+            this.actor.principal.id,
+            this.actor.principal.id,
+            this.actor.principal.id,
+          ),
+        this.db
+          .prepare(
+            `DELETE FROM office_documents
+            WHERE id=? AND tenant_id=? AND owner_id=? AND version=?
+              AND ${this.scope("office_documents")} AND ${this.enabledScope("office_documents.tenant_id")}`,
+          )
+          .bind(
+            id,
+            row.tenant_id,
+            this.actor.principal.id,
+            version,
+            this.actor.principal.id,
+            this.actor.principal.id,
+            this.actor.principal.id,
+            this.actor.principal.id,
+          ),
+        this.db
+          .prepare("DELETE FROM studio_write_guards WHERE id=?")
+          .bind(guardId),
+      ]);
+    } catch (error) {
+      const current = await this.load(id);
+      if (current.version !== version)
+        throw new OfficeDocumentsError(
+          409,
+          "VERSION_CONFLICT",
+          "A newer version exists; reload the document before deleting",
+        );
+      throw error;
+    }
+    if (!results[1]?.meta.changes) {
+      const current = await this.load(id);
+      if (current.version !== version)
+        throw new OfficeDocumentsError(
+          409,
+          "VERSION_CONFLICT",
+          "A newer version exists; reload the document before deleting",
+        );
+      throw notFound();
+    }
+    try {
+      await this.bucket.delete(
+        revisions.results.map((revision) => revision.storage_key),
+      );
+    } catch (error) {
+      // The D1 row is gone, so preserve delete success and leave only inaccessible R2 orphans.
+      console.error(
+        "Unable to delete removed office document revisions",
+        error,
+      );
+    }
+  }
+
   async revise(
     id: string,
     version: number,

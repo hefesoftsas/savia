@@ -88,6 +88,25 @@ const listRoute = createRoute({
     },
   },
 });
+const deleteRoute = createRoute({
+  method: "delete",
+  path: "/v1/connected-office-documents/{id}",
+  tags: ["Connected office documents"],
+  summary: "Remove a saved connected office document reference",
+  security: [{ oauth2: ["savia.api.write"] }],
+  request: { params: z.object({ id: z.string().trim().min(1).max(128) }) },
+  responses: {
+    204: { description: "Saved reference removed" },
+    403: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Office suite is disabled",
+    },
+    404: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Connected document not found",
+    },
+  },
+});
 const createRouteDefinition = createRoute({
   method: "post",
   path: "/v1/connected-office-documents",
@@ -222,6 +241,22 @@ export function registerConnectedOfficeDocumentRoutes(
   ) => app.openapi(route as never, handler as never);
   register(providerListRoute, (c) => run(() => service(c).listProviders()));
   register(listRoute, (c) => run(() => service(c).list()));
+  register(deleteRoute, async (c) => {
+    try {
+      await service(c).remove(c.req.param("id")!);
+      return new Response(null, {
+        status: 204,
+        headers: { "cache-control": "no-store" },
+      });
+    } catch (failure) {
+      if (failure instanceof ConnectedOfficeDocumentsError)
+        return Response.json(
+          { error: { code: failure.code, message: failure.message } },
+          { status: failure.status, headers: { "cache-control": "no-store" } },
+        );
+      throw failure;
+    }
+  });
   register(createRouteDefinition, async (c) => {
     try {
       const form = await c.req.formData();
