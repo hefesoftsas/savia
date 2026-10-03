@@ -46,6 +46,51 @@ export const bookingMessages = {
     "Não foi possível salvar as configurações. Verifique sua conexão e tente novamente.",
   ],
   "Public title": ["Título público", "Public title", "Título público"],
+  "Booking settings could not be saved (HTTP %{status}): %{message}": [
+    "No se pudo guardar la configuración (HTTP %{status}): %{message}",
+    "Booking settings could not be saved (HTTP %{status}): %{message}",
+    "Não foi possível salvar a configuração (HTTP %{status}): %{message}",
+  ],
+  "Enable a service and an assigned professional before publishing.": [
+    "Antes de publicar, habilita las citas y un servicio con un profesional habilitado asignado.",
+    "Enable a service and an assigned professional before publishing.",
+    "Antes de publicar, habilite os agendamentos e um serviço com um profissional habilitado atribuído.",
+  ],
+  "Save enabled and published settings to open the public page.": [
+    "Activa Habilitado y Publicado y guarda la configuración para abrir la página pública.",
+    "Save enabled and published settings to open the public page.",
+    "Ative Habilitado e Publicado e salve a configuração para abrir a página pública.",
+  ],
+  "Use an IANA time zone.": [
+    "Usa una zona horaria IANA válida, por ejemplo America/Bogota.",
+    "Use an IANA time zone.",
+    "Use um fuso horário IANA válido, por exemplo America/Bogota.",
+  ],
+  "Professionals must be active Savia users of this tenant.": [
+    "Los profesionales deben ser usuarios activos de Savia en esta organización.",
+    "Professionals must be active Savia users of this tenant.",
+    "Os profissionais devem ser usuários ativos do Savia nesta organização.",
+  ],
+  "Services and professionals must be unique.": [
+    "No repitas servicios ni profesionales.",
+    "Services and professionals must be unique.",
+    "Não repita serviços nem profissionais.",
+  ],
+  "Select configured professionals.": [
+    "Asigna al servicio profesionales que hayas agregado en esta configuración.",
+    "Select configured professionals.",
+    "Atribua ao serviço profissionais adicionados nesta configuração.",
+  ],
+  "Use one exception per date.": [
+    "Configura una sola excepción por fecha.",
+    "Use one exception per date.",
+    "Configure apenas uma exceção por data.",
+  ],
+  "Availability periods cannot overlap.": [
+    "Los horarios de disponibilidad no pueden superponerse.",
+    "Availability periods cannot overlap.",
+    "Os horários de disponibilidade não podem se sobrepor.",
+  ],
   Description: ["Descripción", "Description", "Descrição"],
   "IANA time zone": [
     "Zona horaria IANA",
