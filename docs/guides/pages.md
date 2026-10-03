@@ -137,9 +137,14 @@ The ordinary server text/title search remains available in all cases. Deployed
 semantic queries are limited to 30 per minute per tenant to bound repeated AI
 requests; the browser also debounces typing.
 
-Preview provisions the isolated `savia-pages-search-preview` Vectorize index
-(1024 dimensions, cosine) and binds it with Workers AI. The deployment token must
-have Vectorize edit permissions. Production search remains unavailable unless
+Preview binds the isolated `savia-pages-search-preview` Vectorize index
+(1024 dimensions, cosine) with Workers AI. Bootstrap this index once before the
+first deployment using `node scripts/ensure-preview-pages-search.mjs` with
+`CLOUDFLARE_ACCOUNT_ID` and a `CLOUDFLARE_API_TOKEN` that has Vectorize Write
+permissions, or `wrangler vectorize create savia-pages-search-preview
+--dimensions=1024 --metric=cosine`. Routine deployments bind the existing index;
+they do not need to provision it or broaden the Worker deployment token.
+Production search remains unavailable unless
 `SAVIA_PAGES_SEARCH_INDEX` is set to a separately provisioned production index
 when rendering the Worker configuration. No search consumption is incurred by
 tenants whose capability or activation is disabled. Cloudflare usage quotas and
