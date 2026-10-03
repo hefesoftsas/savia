@@ -1,6 +1,8 @@
 # Personal API keys for Savia Companion
 
-Status: proposed written design for review; implementation has not started.
+Status: written design approved by the user on 2026-10-03; implementation has not started.
+
+Implementation plan: [personal API keys](../plans/2026-10-03-companion-personal-api-keys.md).
 
 ## Outcome and approved scope
 
