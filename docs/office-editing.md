@@ -37,6 +37,10 @@ A filename conflict is rejected rather than overwriting an existing file.
 Creation uses the existing
 server-side Nango connection belonging to the caller. OAuth tokens and Nango
 connection identifiers are never exposed to the frontend.
+The connection is checked again immediately before creation; changing the
+connected account cancels that attempt before sending a provider request.
+OneDrive file identifiers are retained as opaque values, while editor links
+are validated separately.
 
 After the provider creates the file and Savia saves its reference, the provider's
 editor opens in a separate tab. If the browser blocks the new tab, use the saved

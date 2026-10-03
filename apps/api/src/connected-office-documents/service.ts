@@ -354,7 +354,7 @@ export class ConnectedOfficeDocumentsService {
     const name = safeName(input.name, format, provider !== "google_drive");
     const bytes = await this.validateFile(provider, format, input.file);
     const requestHash = await fingerprint(provider, format, name, bytes);
-    const connection = await this.connected(provider);
+    let connection = await this.connected(provider);
 
     // Recheck live membership and tenant policy at the write boundary; actor claims alone are not authoritative.
     if ((await this.tenant()) !== tenantId)
@@ -441,13 +441,15 @@ export class ConnectedOfficeDocumentsService {
           !liveConnection ||
           liveConnection.status !== "connected" ||
           liveConnection.id !== connection.id ||
-          liveConnection.nangoIntegrationId !== connection.nangoIntegrationId
+          liveConnection.nangoIntegrationId !== connection.nangoIntegrationId ||
+          liveConnection.nangoConnectionId !== connection.nangoConnectionId
         )
           throw new ConnectedOfficeDocumentsError(
             403,
             "PROVIDER_NOT_CONNECTED",
             "The connected drive or active tenant changed before document creation",
           );
+        connection = liveConnection;
       } catch (error) {
         // No provider request has been sent yet, so removing the reservation is safe.
         await this.db
@@ -527,7 +529,12 @@ export class ConnectedOfficeDocumentsService {
       }
       const data = payload as Record<string, unknown>;
       const providerFileId =
-        typeof data.id === "string" && /^[A-Za-z0-9._-]{1,255}$/.test(data.id)
+        typeof data.id === "string" &&
+        (provider === "google_drive"
+          ? /^[A-Za-z0-9_-]{1,200}$/.test(data.id)
+          : data.id.length > 0 &&
+            data.id.length <= 2048 &&
+            !/[\u0000-\u001f\u007f]/.test(data.id))
           ? data.id
           : undefined;
       if (!providerFileId) {

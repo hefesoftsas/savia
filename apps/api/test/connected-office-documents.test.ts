@@ -1,11 +1,13 @@
 import { env } from "cloudflare:workers";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppActor, Authenticator } from "../src/auth/types";
 import { authenticationMiddleware } from "../src/auth/middleware";
 import { registerConnectedOfficeDocumentRoutes } from "../src/routes/connected-office-documents";
 import { createPersonalIntegrationProviderRegistry } from "../src/personal-integrations/providers";
 import type { PersonalIntegrationNangoClient } from "../src/personal-integrations/contracts";
+import { createPersonalIntegrationRepository } from "../src/personal-integrations/repository";
+import { ConnectedOfficeDocumentsService } from "../src/connected-office-documents/service";
 
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
@@ -398,7 +400,7 @@ describe("connected office documents", () => {
     const bytes = officeZip("xlsx");
     const { nango, requests } = mockNango((request) =>
       Response.json({
-        id: "onedrive-sheet-1",
+        id: "Opaque OneDrive item id !%/=+",
         name: "Budget.xlsx",
         webUrl: "https://onedrive.live.com/edit?id=onedrive-sheet-1",
         parentReference: { driveId: "drive-private-1" },
@@ -421,6 +423,13 @@ describe("connected office documents", () => {
       body: form,
     });
     expect(response.status).toBe(201);
+    expect(
+      await env.DB.prepare(
+        "SELECT provider_file_id FROM connected_office_document_operations WHERE request_id=?",
+      )
+        .bind("e9a7dfca-c35a-4bf8-b39f-265fa6ab1c70")
+        .first(),
+    ).toMatchObject({ provider_file_id: "Opaque OneDrive item id !%/=+" });
     const summary = (await json(response)).data;
     expect(summary).toMatchObject({
       name: "Budget.xlsx",
@@ -458,6 +467,45 @@ describe("connected office documents", () => {
     expect(
       (await json(await owner.request("/v1/connected-office-documents"))).data,
     ).toEqual([summary]);
+  });
+
+  it("rejects a changed Nango account before issuing a provider write", async () => {
+    const { nango, requests } = mockNango();
+    const repository = createPersonalIntegrationRepository(env.DB);
+    const lookup = repository.findActiveConnection.bind(repository);
+    let lookups = 0;
+    vi.spyOn(repository, "findActiveConnection").mockImplementation(
+      async (principalId, provider) => {
+        if (++lookups === 2)
+          await env.DB.prepare(
+            "UPDATE personal_integration_connections SET nango_connection_id='replacement-account' WHERE id='drive-owner'",
+          ).run();
+        return lookup(principalId, provider);
+      },
+    );
+    const service = new ConnectedOfficeDocumentsService(
+      env.DB,
+      actor("connected-office-owner", 9481),
+      createPersonalIntegrationProviderRegistry(providerConfiguration),
+      repository,
+      nango,
+    );
+    await expect(
+      service.create({
+        provider: "google_drive",
+        format: "docx",
+        name: "Plan",
+        requestId: "c716ce70-2bf6-4d61-a260-24ded37281df",
+      }),
+    ).rejects.toMatchObject({ code: "PROVIDER_NOT_CONNECTED" });
+    expect(requests).toHaveLength(0);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM connected_office_document_operations WHERE request_id=?",
+      )
+        .bind("c716ce70-2bf6-4d61-a260-24ded37281df")
+        .first(),
+    ).toEqual({ count: 0 });
   });
 
   it("keeps uncertain upstream outcomes reserved so the same request cannot issue duplicate provider writes", async () => {
