@@ -240,7 +240,7 @@ export function useMyDayWidgets(
   );
 
   const hasSystemWidget = useCallback(
-    (kind: "agenda" | "quick_task" | "mail") =>
+    (kind: "agenda" | "quick_task" | "mail" | "office_documents") =>
       (layout?.widgets ?? []).some((widget) => widget.kind === kind),
     [layout],
   );

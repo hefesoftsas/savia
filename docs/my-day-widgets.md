@@ -8,22 +8,31 @@ save automatically to the backend and support drag, keyboard, and menu ordering.
 
 ## Widget types
 
-| Kind                      | Content                                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------------------------ |
-| `agenda`                  | Today's Google Calendar and Outlook events with native links.                                    |
-| `quick_task`              | Create a time block in a connected calendar.                                                     |
-| `mail`                    | Recent inbox messages from connected Gmail and Outlook accounts, with an editable mail composer. |
-| `summary`                 | Record total, counts by status, and optional amount sum.                                         |
-| `items`                   | Recent records with title, status, and date.                                                     |
-| `chart`                   | Counts and optional sums grouped by status.                                                      |
-| `actions`                 | Overdue records and records due today or in the next seven days.                                 |
-| `plugin:<extension>:<id>` | An enabled extension's collection widget.                                                        |
+| Kind                      | Content                                                                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `agenda`                  | Today's Google Calendar and Outlook events with native links.                                            |
+| `quick_task`              | Create a time block in a connected calendar.                                                             |
+| `mail`                    | Recent inbox messages from connected Gmail and Outlook accounts, with an editable mail composer.         |
+| `office_documents`        | Up to five recent private Savia and connected-drive documents, shown only while Office suite is enabled. |
+| `summary`                 | Record total, counts by status, and optional amount sum.                                                 |
+| `items`                   | Recent records with title, status, and date.                                                             |
+| `chart`                   | Counts and optional sums grouped by status.                                                              |
+| `actions`                 | Overdue records and records due today or in the next seven days.                                         |
+| `plugin:<extension>:<id>` | An enabled extension's collection widget.                                                                |
 
 New layouts include agenda, quick task, and mail. Mail is visible only when a
 personal Gmail or Outlook connection is connected. Existing saved layouts are
 preserved; use **Show mail** or **Add widget → Personal → Mail inbox** to restore
 mail when connected. Removing or disconnecting a provider does not rewrite the
 saved layout. Hidden mail still counts toward the twelve-widget limit.
+
+Office documents can be added from **Add widget → Personal → Office documents**.
+The widget merges private Savia files and connected-drive links by their update
+or creation time, opens each document in a new tab, and links to the Office
+suite to create a document. It reads no document lists while Office suite is
+disabled for the active tenant, and stores no document data in browser storage.
+If one document source fails, documents from the available source remain
+visible with a notice that the list is incomplete and a retry action.
 
 Plugin widgets are offered only when their collection matches and their
 extension is enabled. If an extension becomes unavailable, its card explains

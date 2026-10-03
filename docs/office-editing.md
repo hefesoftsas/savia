@@ -49,6 +49,9 @@ link after a refresh. File contents and future edits remain with the provider;
 these entries do not have Savia R2 revisions or automatic synchronization.
 Disconnecting an integration stops new creation but preserves existing references.
 Provider permissions still govern who can open each external document.
+The saved list shows the storage provider's icon and name beside each file.
+Use the storage filters to narrow the list to Savia, Google Drive, or either
+OneDrive account type without changing the saved references.
 
 Creation requests use a stable request ID for the same attempt. A retry does not
 silently repeat an uncertain external creation. Check the provider's files if a
