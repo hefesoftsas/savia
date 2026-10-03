@@ -111,6 +111,125 @@ describe("tenant account email settings", () => {
     expect(encrypted?.ciphertext).not.toContain(settings.password);
   });
 
+  it("sends only bounded, strict bridge messages through the trusted tenant transport", async () => {
+    const delivered = vi.fn(async () => undefined);
+    await accountEmailSettingsResponse(
+      request("PUT", "", settings),
+      environment,
+      {},
+    );
+    const sent = await accountEmailSettingsResponse(
+      request("POST", "/send", {
+        to: "booking@example.test",
+        subject: "Booking confirmed",
+        text: "Your appointment is confirmed.",
+      }),
+      environment,
+      { deliverEmail: delivered },
+    );
+    expect(sent?.status).toBe(200);
+    expect(await sent?.json()).toEqual({ sent: true });
+    expect(delivered).toHaveBeenCalledWith(
+      expect.objectContaining({ host: settings.host }),
+      {
+        to: "booking@example.test",
+        subject: "Booking confirmed",
+        text: "Your appointment is confirmed.",
+      },
+    );
+
+    const denied = await accountEmailSettingsResponse(
+      request(
+        "POST",
+        "/send",
+        { to: "booking@example.test", subject: "Hi", text: "Hello" },
+        "wrong",
+      ),
+      environment,
+      { deliverEmail: delivered },
+    );
+    expect(denied?.status).toBe(403);
+    expect(delivered).toHaveBeenCalledOnce();
+  });
+
+  it("rejects invalid bridge payloads and bodies larger than 20 KiB", async () => {
+    const send = (rawBody: string, headers: Record<string, string> = {}) =>
+      accountEmailSettingsResponse(
+        new Request(
+          `https://auth.test/_internal/tenant-email/${tenantId}/send`,
+          {
+            method: "POST",
+            headers: {
+              "x-savia-bridge-key": "email-bridge-secret",
+              "content-type": "application/json",
+              ...headers,
+            },
+            body: rawBody,
+          },
+        ),
+        environment,
+        { deliverEmail: vi.fn(async () => undefined) },
+      );
+    for (const payload of [
+      "{",
+      JSON.stringify([]),
+      JSON.stringify({
+        to: "booking@example.test",
+        subject: "Hi\r\nBcc:x@example.test",
+        text: "Hello",
+      }),
+      JSON.stringify({
+        to: "booking@example.test",
+        subject: "Hi",
+        text: "Hello",
+        extra: true,
+      }),
+      JSON.stringify({
+        to: "booking@example.test",
+        subject: "Hi",
+        text: "a\u0000b",
+      }),
+    ]) {
+      const response = await send(payload);
+      expect(response?.status).toBe(400);
+    }
+    const tooLarge = await send(
+      JSON.stringify({
+        to: "booking@example.test",
+        subject: "Hi",
+        text: "x".repeat(20 * 1024),
+      }),
+    );
+    expect(tooLarge?.status).toBe(413);
+    const unavailable = await accountEmailSettingsResponse(
+      new Request(
+        `https://auth.test/_internal/tenant-email/${tenantId + 29}/send`,
+        {
+          method: "POST",
+          headers: {
+            "x-savia-bridge-key": "email-bridge-secret",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            to: "booking@example.test",
+            subject: "Hi",
+            text: "Hello",
+          }),
+        },
+      ),
+      {
+        ...environment,
+        SAVIA_SMTP_HOST: undefined,
+        SAVIA_SMTP_FROM: undefined,
+      },
+      {},
+    );
+    expect(unavailable?.status).toBe(503);
+    expect(await unavailable?.json()).toEqual({
+      error: "Email delivery is unavailable",
+    });
+  });
+
   it("retains an omitted password, supports explicit clearing, and encrypts per tenant", async () => {
     await accountEmailSettingsResponse(
       request("PUT", "", { ...settings, password: "" }),

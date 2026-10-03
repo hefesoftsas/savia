@@ -336,9 +336,7 @@ export function trustedAccountEmailTenantId(
   const raw = request.headers.get("x-savia-tenant-email-id");
   if (!raw || !/^\d+$/.test(raw)) return undefined;
   const tenantId = Number(raw);
-  return Number.isSafeInteger(tenantId) && tenantId > 0
-    ? tenantId
-    : undefined;
+  return Number.isSafeInteger(tenantId) && tenantId > 0 ? tenantId : undefined;
 }
 
 export async function accountEmailSettingsResponse(
@@ -348,7 +346,7 @@ export async function accountEmailSettingsResponse(
 ): Promise<Response | undefined> {
   const url = new URL(request.url);
   const match = url.pathname.match(
-    /^\/_internal\/tenant-email\/(\d+)(?:\/(test))?$/,
+    /^\/_internal\/tenant-email\/(\d+)(?:\/(test|send))?$/,
   );
   if (!match) return undefined;
   if (!bridgeAuthorized(request, environment))
@@ -357,6 +355,58 @@ export async function accountEmailSettingsResponse(
   if (!Number.isSafeInteger(tenantId) || tenantId < 1)
     return jsonResponse({ error: "Invalid tenant" }, 400);
   const testRoute = match[2] === "test";
+  const sendRoute = match[2] === "send";
+  if (request.method === "POST" && sendRoute) {
+    const contentLength = Number(request.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > 20 * 1024)
+      return jsonResponse({ error: "Email request is too large" }, 413);
+    let raw: string;
+    try {
+      raw = await request.text();
+    } catch {
+      return jsonResponse({ error: "Invalid email request" }, 400);
+    }
+    if (new TextEncoder().encode(raw).byteLength > 20 * 1024)
+      return jsonResponse({ error: "Email request is too large" }, 413);
+    let payload: unknown;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return jsonResponse({ error: "Invalid email request" }, 400);
+    }
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      Object.keys(payload).sort().join(",") !== "subject,text,to"
+    )
+      return jsonResponse({ error: "Invalid email request" }, 400);
+    const email = payload as Record<string, unknown>;
+    if (
+      typeof email.to !== "string" ||
+      !validAddress(email.to) ||
+      typeof email.subject !== "string" ||
+      email.subject.length < 1 ||
+      email.subject.length > 200 ||
+      /[\r\n]/.test(email.subject) ||
+      typeof email.text !== "string" ||
+      email.text.length < 1 ||
+      email.text.length > 16000 ||
+      email.text.includes("\0")
+    )
+      return jsonResponse({ error: "Invalid email request" }, 400);
+    try {
+      await sendAccountEmail(
+        environment,
+        dependencies,
+        { to: email.to, subject: email.subject, text: email.text },
+        tenantId,
+      );
+      return jsonResponse({ sent: true });
+    } catch {
+      return jsonResponse({ error: "Email delivery is unavailable" }, 503);
+    }
+  }
   try {
     await environment.AUTH_DB.exec(CREATE_TABLE);
     if (request.method === "GET" && !testRoute)
