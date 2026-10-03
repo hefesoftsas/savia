@@ -63,6 +63,7 @@
     "dexie": "^4.4.6",
     "diacritic": "^0.0.2",
     "fast-xml-parser": "^5.2.5",
+    "flexsearch": "0.8.212",
     "inflection": "^3.0.2",
     "leaflet": "^1.9.4",
     "lodash": "^4.18.1",

@@ -106,6 +106,32 @@ Apply migrations `0008_pages.sql`, `0009_issue_connections.sql`, `0010_pages_fol
 
 Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Deleting a page removes its attachment metadata and attempts to delete every stored attachment blob from the document bucket. It is not a retention mechanism: preserve any required copies before deleting the page. Failed bucket deletions may leave orphaned blobs for deployment cleanup. Revision retention is unbounded unless the owner explicitly clears prior versions.
 
+### Browser text search
+
+The Pages home can build a local full-text index for the first 200 accessible
+page summaries returned by the server. Folders are skipped. A Web Worker uses
+FlexSearch and IndexedDB to retain the search postings and a small page/version
+manifest, scoped to the signed-in user and API. The server remains the canonical
+source for page content; document bodies, titles and snippets are not stored in
+the manifest. Search reads saved titles and rich-text leaves only. It does not
+fetch attachment bytes, collection records or external provider data.
+
+The progress panel shows the cache check, pages reused, page reads and indexing.
+Only missing or changed page versions are fetched. Search terms stay in the
+browser and are not sent to the Pages API. Each displayed result is fetched
+again and checked for current access, page kind and indexed version; title and
+snippet come from that authorized response. A failed cache operation explains
+that IndexedDB must be available and offers a retry or full rebuild.
+
+Page changes and returning focus to the tab invalidate the current results.
+Choose **Update index** to reconcile the existing cache against the current
+page versions, or **Rebuild index** to replace the cache. Cancel stops the
+current indexing operation. Closing the component terminates its worker; the
+scoped IndexedDB index remains available for the next visit. Logging out clears
+the local Pages search cache. Browser text search supplements the existing
+server title/list search, which remains available when the local index is not
+used or the browser cannot build it.
+
 The new editor dependencies (`platejs`, `@platejs/basic-nodes`, `@platejs/link`) use MIT licenses. Their attribution notice ships at `/licenses/plate.txt`. Existing Nango is an external service accepted for this integration; this implementation does not claim that Nango itself is MIT/Apache licensed.
 
 ## Verification
@@ -186,3 +212,6 @@ destination. Local or unavailable-provider fallback links use `/s/p/{code}` on
 the current Savia host and are stored on the backend. A localhost link remains
 local to that machine; public sharing outside the machine requires a deployed
 public origin. Shortening failure leaves the original full link usable.
+
+The persistent search Worker requires IndexedDB and Web Locks. Browsers without
+Web Locks fail closed instead of allowing concurrent tabs to corrupt the cache.
