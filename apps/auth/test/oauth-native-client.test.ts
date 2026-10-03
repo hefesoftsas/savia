@@ -113,6 +113,7 @@ describe("managed native OAuth clients", () => {
     "data:/oauth/callback",
     "com.example.app:oauth/callback",
     "com.example.app://oauth/callback",
+    "http://client.example/callback",
   ])("rejects unsafe native scheme/path %s", async (redirectUri) => {
     const response = await create({
       ...nativeClient,
@@ -172,6 +173,57 @@ describe("managed native OAuth clients", () => {
     );
     expect(response?.status).toBe(400);
     expect(updatedClientBody).toBeUndefined();
+  });
+
+  it("preserves name-only updates for a legacy native loopback client", async () => {
+    updatedClientBody = undefined;
+    const loopbackClientDatabase = {
+      prepare() {
+        return {
+          bind() {
+            return this;
+          },
+          async first() {
+            return {
+              clientId: "loopback-native",
+              name: "Legacy Loopback Client",
+              redirectUris: JSON.stringify([
+                "http://localhost:5173/auth/callback",
+              ]),
+              grantTypes: JSON.stringify(["authorization_code"]),
+              scopes: JSON.stringify(["openid", "savia.api.read"]),
+              tokenEndpointAuthMethod: "none",
+              applicationType: "native",
+              skipConsent: 0,
+            };
+          },
+          async all() {
+            return { results: [] };
+          },
+        };
+      },
+    } as unknown as D1Database;
+    const response = await oauthManagementResponse(
+      admin,
+      loopbackClientDatabase,
+      new Request(
+        "https://savia-auth.internal/_internal/oauth/clients/loopback-native",
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ clientName: "Renamed Loopback Client" }),
+        },
+      ),
+    );
+    expect(response?.status).toBe(200);
+    expect(updatedClientBody).toMatchObject({
+      body: {
+        update: {
+          application_type: "native",
+          redirect_uris: ["http://localhost:5173/auth/callback"],
+        },
+      },
+    });
   });
 
   it("rejects mixed registered redirects for a native client", async () => {

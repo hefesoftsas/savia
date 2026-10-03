@@ -110,16 +110,22 @@ Local evidence on 2026-10-03:
 | Android debug APK               | Built with task-local Temurin 17, Android SDK 36 and Flutter 3.47.6; no public client ID configured   |
 | Root `pnpm run typecheck`       | Passed                                                                                                |
 | API regressions                 | 138 passed across eight auth/identity/Companion suites                                                |
-| Real Better Auth native fixture | 17 passed, including the client-update invariant regression                                           |
+| Real Better Auth native fixture | 19 native tests; the current full auth suite passed 199 tests across 23 files                         |
 | Visual review                   | Synthetic library/detail rendered at 390 × 844; ES/EN/PT failure rendering and 200% text tests passed |
 
 Full Xcode is absent on this Mac, so local iOS compilation was not performed.
 No Android physical device appeared in `adb devices`; no iOS physical-device
-qualification was performed. The dedicated CI workflow also builds an unsigned
-iOS simulator target; its actual result must be checked on the PR.
+qualification was performed. The dedicated mobile CI run [37129079279](https://github.com/hefesoftsas/savia/actions/runs/37129079279)
+successfully built both Android and an unsigned iOS simulator app for commit
+`67705861`. This establishes compilation, not physical-device qualification.
 
 The existing preview browser session is at sign-in. Public native client
 registration and the authenticated synthetic smoke remain blocked on account
 access and reviewed backend deployment. No live mobile upload, real microphone,
 audible playback, paid notes/answers, signing or store release is claimed.
 The debug APK without a client ID intentionally shows the setup screen.
+
+Follow-up regressions preserve the administrative client's original scope list
+and legacy public loopback callbacks. Mobile processing resolves AI configuration
+from the same membership-validated selected workspace as recording access; tests
+reject missing/inactive workspaces before any provider call.

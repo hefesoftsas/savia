@@ -32,10 +32,12 @@ const recordingScopes = [
   "recordings:process",
 ] as const;
 const providerScopes: Scope[] = [...SAVIA_OAUTH_SCOPES];
-const scalarClientScopes = SAVIA_OAUTH_SCOPES.filter(
+const adminClientScopes = SAVIA_OAUTH_SCOPES.filter(
   (scope) =>
-    scope !== "offline_access" &&
     !recordingScopes.includes(scope as (typeof recordingScopes)[number]),
+);
+const scalarClientScopes = adminClientScopes.filter(
+  (scope) => scope !== "offline_access",
 );
 
 type OAuthEnvironment = {
@@ -181,20 +183,22 @@ function normalizedNativeRedirectUri(value: string): URL {
   } catch {
     throw new Error("Native redirect URI must be a valid absolute URI");
   }
+  const loopbackHttpRedirect =
+    (url.protocol === "http:" || url.protocol === "https:") &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  const reverseDomainRedirect =
+    /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+:\/(?!\/)/i.test(value) && !url.hostname;
   if (
     value.includes("*") ||
     value.includes("?") ||
     value.includes("#") ||
-    !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+:\/(?!\/)/i.test(value) ||
-    url.protocol === "http:" ||
-    url.protocol === "https:" ||
     url.username ||
     url.password ||
-    url.hostname ||
-    !url.pathname.startsWith("/")
+    !url.pathname.startsWith("/") ||
+    (!reverseDomainRedirect && !loopbackHttpRedirect)
   ) {
     throw new Error(
-      "Native redirect URI must use an exact reverse-domain scheme and absolute path",
+      "Native redirect URI must use an exact reverse-domain scheme or loopback HTTP(S) callback",
     );
   }
   return url;
@@ -770,10 +774,17 @@ export async function ensureAdminOAuthClient(
   const clientId =
     existing?.client_id ??
     (await createAdminOAuthClient(auth, environment, runtime));
-  if (existing && !parseArray(existing.scopes).includes("offline_access")) {
+  const currentScopes = parseArray(existing?.scopes);
+  if (
+    existing &&
+    (adminClientScopes.some((scope) => !currentScopes.includes(scope)) ||
+      currentScopes.some(
+        (scope) => !(adminClientScopes as readonly string[]).includes(scope),
+      ))
+  ) {
     await database
       .prepare('UPDATE "oauthClient" SET scopes = ? WHERE "clientId" = ?')
-      .bind(JSON.stringify([...runtime.scopes]), clientId)
+      .bind(JSON.stringify(adminClientScopes), clientId)
       .run();
   }
   if (existing) {
@@ -789,7 +800,7 @@ export async function ensureAdminOAuthClient(
     clientId,
     redirectUri: runtime.adminRedirectUri,
     resource: runtime.apiResource,
-    scopes: [...runtime.scopes],
+    scopes: [...adminClientScopes],
   };
 }
 
@@ -906,14 +917,7 @@ async function createAdminOAuthClient(
       redirect_uris: [runtime.adminRedirectUri],
       require_pkce: true,
       response_types: ["code"],
-      scope: runtime.scopes
-        .filter(
-          (scope) =>
-            !recordingScopes.includes(
-              scope as (typeof recordingScopes)[number],
-            ),
-        )
-        .join(" "),
+      scope: adminClientScopes.join(" "),
       skip_consent: true,
       token_endpoint_auth_method: "none",
     },

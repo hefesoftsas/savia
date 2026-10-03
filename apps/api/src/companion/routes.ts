@@ -327,7 +327,10 @@ export function registerCompanionRoutes(
       throw error;
     }
   });
-  const configuration = (actor: AppActor) => {
+  const configuration = (
+    actor: AppActor,
+    accessContext?: { tenantId?: number; requireTenant: boolean },
+  ) => {
     const repo = options!.configuration!;
     if (actor.credential?.kind === "personal-api-key") {
       if (!repo.effectiveConfigurationForTenant)
@@ -339,6 +342,18 @@ export function registerCompanionRoutes(
       return repo.effectiveConfigurationForTenant(
         actor.principal.id,
         actor.credential.tenantId,
+      );
+    }
+    if (actor.credential?.kind === "oauth" && accessContext?.requireTenant) {
+      if (!repo.effectiveConfigurationForTenant || !accessContext.tenantId)
+        throw new CompanionError(
+          "COMPANION_UNAVAILABLE",
+          "Tenant processing configuration is unavailable",
+          503,
+        );
+      return repo.effectiveConfigurationForTenant(
+        actor.principal.id,
+        accessContext.tenantId,
       );
     }
     return repo.effectiveConfigurationFor(actor.principal.id);
@@ -400,7 +415,9 @@ export function registerCompanionRoutes(
     };
   };
   app.openapi(capabilities, async (c) => {
-    const config = await configuration(actorFromContext(c));
+    const actor = actorFromContext(c);
+    const owner = await access(c);
+    const config = await configuration(actor, owner);
     return c.json(
       {
         sttModel: config.transcriptionModel ?? service.sttModel,
@@ -687,7 +704,7 @@ export function registerCompanionRoutes(
         let notes = await recordings.getNotes(owner, id);
         if (notes.summary) return c.json(notes, 200);
 
-        const config = await configuration(actorFromContext(c));
+        const config = await configuration(actorFromContext(c), owner);
         if (!notes.transcript) {
           const audio = await recordings.getAudio(owner, id);
           let binary = "";
@@ -753,10 +770,8 @@ export function registerCompanionRoutes(
       },
     }),
     async (c) => {
-      const notes = await recordings.getNotes(
-        await access(c),
-        c.req.valid("param").id,
-      );
+      const owner = await access(c);
+      const notes = await recordings.getNotes(owner, c.req.valid("param").id);
       if (!notes.transcript?.text.trim())
         throw new CompanionError(
           "TRANSCRIPT_REQUIRED",
@@ -765,7 +780,7 @@ export function registerCompanionRoutes(
         );
       return c.json(
         await service.answer(
-          await configuration(actorFromContext(c)),
+          await configuration(actorFromContext(c), owner),
           notes.transcript.text,
           c.req.valid("json"),
         ),
