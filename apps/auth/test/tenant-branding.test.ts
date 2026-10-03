@@ -18,6 +18,7 @@ const branding: TenantBranding = {
   coverUrl:
     "/api/public/tenant-branding/assets/1/12345678-1234-4234-8234-123456789013",
   loginAnimationUrl: null,
+  loginAnimationRepeat: true,
   version: 1,
 };
 const animationUrl =
@@ -54,7 +55,7 @@ function fakeAnimation() {
   };
 }
 
-async function startOAuthAnimation(reducedMotion = false) {
+async function startOAuthAnimation(reducedMotion = false, repeat = true) {
   const animation = fakeAnimation();
   const robotAnimation = fakeAnimation();
   const frame = { dataset: { src: "/login/savia-logo.json" } };
@@ -70,6 +71,7 @@ async function startOAuthAnimation(reducedMotion = false) {
     "[data-oauth-login-wordmark-ai]": wordmarkAI,
   };
   const panel = {
+    dataset: { repeat: repeat ? "true" : "false" },
     querySelector: (selector: string) => elements[selector] ?? null,
   };
   const script = await oauthPageResponse(request("oauth-ui.js"))!.text();
@@ -200,6 +202,22 @@ describe("tenant identity on OAuth surfaces", () => {
     animation.emit("complete");
     vi.advanceTimersByTime(5000);
     expect(animation.playedFrames).toEqual([0, 0]);
+  });
+
+  it("keeps the final frame when custom animation replay is disabled", async () => {
+    vi.useFakeTimers();
+    const { animation, hide, show, pagehide, pageshow } =
+      await startOAuthAnimation(false, false);
+    animation.emit("DOMLoaded");
+    animation.emit("complete");
+
+    vi.advanceTimersByTime(10000);
+    hide();
+    show();
+    pagehide();
+    pageshow();
+    vi.advanceTimersByTime(10000);
+    expect(animation.playedFrames).toEqual([]);
   });
 
   it("waits a fresh five seconds after a completed logo returns from a hidden tab", async () => {
@@ -413,10 +431,15 @@ describe("tenant identity on OAuth surfaces", () => {
   );
   it("renders a tenant login animation instead of the Savia emblem, robot and cover", async () => {
     const response = oauthPageResponse(request("login"), {
-      branding: { ...branding, loginAnimationUrl: animationUrl },
+      branding: {
+        ...branding,
+        loginAnimationUrl: animationUrl,
+        loginAnimationRepeat: false,
+      },
     })!;
     const html = await response.text();
     expect(html).toContain(`data-src="${animationUrl}"`);
+    expect(html).toContain('data-repeat="false"');
     expect(html).not.toContain('data-src="/login/savia-logo.json"');
     expect(html).not.toContain("data-oauth-login-robot");
     expect(html).not.toContain("oauth-login-animation-wordmark");

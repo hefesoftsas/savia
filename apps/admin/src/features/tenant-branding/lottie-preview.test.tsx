@@ -62,3 +62,45 @@ it("pauses previews in hidden tabs, honors reduced motion and destroys the playe
     expect.any(Function),
   );
 });
+it("does not restart a finished preview when repetition is disabled", async () => {
+  const events: Record<string, () => void> = {};
+  vi.spyOn(window, "matchMedia").mockReturnValue({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  } as unknown as MediaQueryList);
+  const player = {
+    totalFrames: 60,
+    addEventListener: (name: string, callback: () => void) => {
+      events[name] = callback;
+    },
+    goToAndStop: vi.fn(),
+    play: vi.fn(),
+    pause: vi.fn(),
+    destroy: vi.fn(),
+  };
+  const loadAnimation = vi.fn(() => player);
+  (window as Window & { lottie?: unknown }).lottie = { loadAnimation };
+  render(
+    <I18nContextProvider
+      value={{
+        translate: (key: string) => key,
+        changeLocale: async () => {},
+        getLocale: () => "es",
+      }}
+    >
+      <LottiePreview data={data} name="Star" repeat={false} />
+    </I18nContextProvider>,
+  );
+  await act(async () => {});
+  expect(loadAnimation).toHaveBeenCalledWith(
+    expect.objectContaining({ loop: false }),
+  );
+  act(() => events.DOMLoaded());
+  act(() => events.complete());
+  vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+  act(() => document.dispatchEvent(new Event("visibilitychange")));
+  vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+  act(() => document.dispatchEvent(new Event("visibilitychange")));
+  expect(player.play).toHaveBeenCalledTimes(1);
+});

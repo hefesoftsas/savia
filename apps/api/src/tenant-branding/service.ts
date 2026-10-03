@@ -33,6 +33,8 @@ export const brandingSchema = z
     coverUrl: assetUrl,
     // Records saved before the login animation existed omit the field.
     loginAnimationUrl: assetUrl.default(null),
+    // Records saved before the repeat preference existed keep the default loop.
+    loginAnimationRepeat: z.boolean().default(true),
     version: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   })
   .strict();

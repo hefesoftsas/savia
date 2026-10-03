@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMessages } from "@/i18n/core";
-import { animationCatalogMessages } from "./animation-catalog-messages";
+import { loginAnimationMessages } from "./login-animation-messages";
 type Animation = {
   totalFrames: number;
   addEventListener(name: string, listener: () => void): void;
@@ -45,20 +45,29 @@ function loadPlayer(): Promise<Player> {
     });
   return loading;
 }
-export function LottiePreview({ data, name }: { data: unknown; name: string }) {
-  const t = useMessages(animationCatalogMessages);
+export function LottiePreview({
+  data,
+  name,
+  repeat = true,
+}: {
+  data: unknown;
+  name: string;
+  repeat?: boolean;
+}) {
+  const t = useMessages(loginAnimationMessages);
   const container = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
     let disposed = false;
     let animation: Animation | undefined;
+    let finished = false;
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const sync = () => {
       if (!animation) return;
       if (preference.matches)
         animation.goToAndStop(animation.totalFrames - 1, true);
       else if (document.hidden) animation.pause();
-      else animation.play();
+      else if (repeat || !finished) animation.play();
     };
     setState("loading");
     void loadPlayer()
@@ -67,7 +76,7 @@ export function LottiePreview({ data, name }: { data: unknown; name: string }) {
         animation = player.loadAnimation({
           container: container.current,
           renderer: "svg",
-          loop: true,
+          loop: repeat,
           autoplay: false,
           animationData: structuredClone(data),
         });
@@ -76,6 +85,9 @@ export function LottiePreview({ data, name }: { data: unknown; name: string }) {
             setState("ready");
             sync();
           }
+        });
+        animation.addEventListener("complete", () => {
+          finished = true;
         });
         animation.addEventListener("data_failed", () => {
           if (!disposed) setState("error");
@@ -92,7 +104,7 @@ export function LottiePreview({ data, name }: { data: unknown; name: string }) {
       document.removeEventListener("visibilitychange", sync);
       preference.removeEventListener("change", sync);
     };
-  }, [data]);
+  }, [data, repeat]);
   return (
     <div
       className="tenant-animation-preview"
