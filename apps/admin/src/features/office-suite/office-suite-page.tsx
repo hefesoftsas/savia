@@ -8,9 +8,18 @@ import {
   Plus,
   RefreshCw,
   Check,
+  Trash2,
 } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMessages, useAppLocale } from "@/i18n/core";
@@ -129,6 +138,13 @@ export function OfficeSuitePage({
   const [saved, setSaved] = useState(false);
   const [connectedSaved, setConnectedSaved] =
     useState<ConnectedOfficeDocument>();
+  const [deleteTarget, setDeleteTarget] = useState<
+    | { kind: "local"; document: DocumentSummary }
+    | { kind: "connected"; document: ConnectedOfficeDocument }
+  >();
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const deletingRef = useRef(false);
   const creatingRef = useRef(false);
   const mounted = useRef(true);
   const loadGeneration = useRef(0);
@@ -145,8 +161,19 @@ export function OfficeSuitePage({
       const response = await services.apiClient.get<{
         data: DocumentSummary[];
       }>(base);
-      if (mounted.current && generation === loadGeneration.current)
+      if (mounted.current && generation === loadGeneration.current) {
         setDocuments(response.data);
+        setDeleteTarget((current) =>
+          current?.kind === "local"
+            ? (() => {
+                const document = response.data.find(
+                  (item) => item.id === current.document.id,
+                );
+                return document ? { kind: "local", document } : undefined;
+              })()
+            : current,
+        );
+      }
     } catch (error) {
       if (mounted.current && generation === loadGeneration.current)
         setLoadError(
@@ -185,12 +212,22 @@ export function OfficeSuitePage({
       );
       setConnectedProviders(nextProviders);
       const available = new Set(nextProviders.map((entry) => entry.provider));
+      setStorageFilter((current) =>
+        (current === "google_drive" && !available.has("google_drive")) ||
+        (current === "onedrive" &&
+          !nextProviders.some((entry) =>
+            entry.provider.startsWith("onedrive_"),
+          ))
+          ? "all"
+          : current,
+      );
       setStorage((current) =>
         current === "savia" || available.has(current) ? current : "savia",
       );
     } else {
       setConnectedProviders([]);
       setStorage("savia");
+      setStorageFilter("all");
       setProviderError(t("Could not load connected storage providers."));
     }
     if (documentsResult.status === "fulfilled") {
@@ -212,7 +249,7 @@ export function OfficeSuitePage({
   }, [load]);
   useEffect(() => {
     const refresh = () => {
-      if (!creatingRef.current) {
+      if (!creatingRef.current && !deletingRef.current) {
         void load();
         void loadConnected();
       }
@@ -243,6 +280,9 @@ export function OfficeSuitePage({
       setConnectedDocuments([]);
       setConnectedProviders([]);
       setStorage("savia");
+      setStorageFilter("all");
+      setDeleteTarget(undefined);
+      setDeleteError("");
       setSaved(false);
       setConnectedSaved(undefined);
       setCreateError("");
@@ -261,6 +301,64 @@ export function OfficeSuitePage({
         window.removeEventListener(event, contextChanged);
     };
   }, [load, loadConnected]);
+  const hasGoogleDrive = connectedProviders.some(
+    (entry) => entry.provider === "google_drive",
+  );
+  const hasOneDrive = connectedProviders.some((entry) =>
+    entry.provider.startsWith("onedrive_"),
+  );
+  async function removeDocument() {
+    if (!deleteTarget || deletingRef.current) return;
+    const target = deleteTarget;
+    const context = contextGeneration.current;
+    deletingRef.current = true;
+    setDeleting(true);
+    setDeleteError("");
+    // Invalidate list requests started before deletion so they cannot restore it.
+    ++loadGeneration.current;
+    ++connectedLoadGeneration.current;
+    try {
+      await services.apiClient.delete(
+        `${target.kind === "local" ? base : connectedBase}/${encodeURIComponent(target.document.id)}`,
+        target.kind === "local"
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ version: target.document.version }),
+            }
+          : undefined,
+      );
+      if (!mounted.current || context !== contextGeneration.current) return;
+      if (target.kind === "local") {
+        setDocuments((current) =>
+          current.filter((item) => item.id !== target.document.id),
+        );
+        setSaved(false);
+      } else {
+        setConnectedDocuments((current) =>
+          current.filter((item) => item.id !== target.document.id),
+        );
+        setConnectedSaved(undefined);
+      }
+      setDeleteTarget(undefined);
+    } catch (error) {
+      if (mounted.current && context === contextGeneration.current) {
+        setDeleteError(
+          error instanceof Error
+            ? error.message
+            : t("Could not delete the document. Try again."),
+        );
+        // A version conflict needs the current summary before retrying.
+        await Promise.all([load(), loadConnected()]);
+      }
+    } finally {
+      deletingRef.current = false;
+      if (mounted.current) setDeleting(false);
+      if (mounted.current && context === contextGeneration.current) {
+        setLoading(false);
+        setConnectedLoading(false);
+      }
+    }
+  }
   async function create(event: React.FormEvent) {
     event.preventDefault();
     if (creatingRef.current || !name.trim()) return;
@@ -592,16 +690,24 @@ export function OfficeSuitePage({
           {[
             { id: "all", label: t("All storage") },
             { id: "savia", label: "Savia", provider: "savia" as const },
-            {
-              id: "google_drive",
-              label: t("Google Drive"),
-              provider: "google_drive" as const,
-            },
-            {
-              id: "onedrive",
-              label: "OneDrive",
-              provider: "onedrive_personal" as const,
-            },
+            ...(hasGoogleDrive
+              ? [
+                  {
+                    id: "google_drive",
+                    label: t("Google Drive"),
+                    provider: "google_drive" as const,
+                  },
+                ]
+              : []),
+            ...(hasOneDrive
+              ? [
+                  {
+                    id: "onedrive",
+                    label: "OneDrive",
+                    provider: "onedrive_personal" as const,
+                  },
+                ]
+              : []),
           ].map((filter) => (
             <button
               key={filter.id}
@@ -724,6 +830,19 @@ export function OfficeSuitePage({
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {Math.max(1, Math.ceil(document.size / 1024))} KB
                   </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={deleting}
+                    aria-label={`${t("Delete document")}: ${document.name}`}
+                    onClick={() => {
+                      setDeleteError("");
+                      setDeleteTarget({ kind: "local", document });
+                    }}
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </Button>
                 </li>
               );
             })}
@@ -757,10 +876,14 @@ export function OfficeSuitePage({
                     </a>
                     <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5">
-                        <StorageProviderIcon
-                          provider={document.provider}
-                          className="size-3.5"
-                        />
+                        {connectedProviders.some(
+                          (entry) => entry.provider === document.provider,
+                        ) ? (
+                          <StorageProviderIcon
+                            provider={document.provider}
+                            className="size-3.5"
+                          />
+                        ) : null}
                         {cloudProviderLabel(document.provider)}
                       </span>
                       {Number.isFinite(Date.parse(document.createdAt)) ? (
@@ -772,6 +895,19 @@ export function OfficeSuitePage({
                       ) : null}
                     </p>
                   </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={deleting}
+                    aria-label={`${t("Remove reference")}: ${document.name}`}
+                    onClick={() => {
+                      setDeleteError("");
+                      setDeleteTarget({ kind: "connected", document });
+                    }}
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </Button>
                 </li>
               );
             })}
@@ -783,6 +919,78 @@ export function OfficeSuitePage({
           )}
         </p>
       </section>
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) {
+            setDeleteTarget(undefined);
+            setDeleteError("");
+          }
+        }}
+      >
+        <DialogContent
+          aria-busy={deleting}
+          onEscapeKeyDown={(event) => {
+            if (deleting) event.preventDefault();
+          }}
+          onPointerDownOutside={(event) => {
+            if (deleting) event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {t(
+                deleteTarget?.kind === "connected"
+                  ? "Remove reference"
+                  : "Delete document",
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              <span className="block break-words font-medium">
+                {deleteTarget?.document.name}
+              </span>
+              {t(
+                deleteTarget?.kind === "connected"
+                  ? "The file will remain in Google Drive or OneDrive. Only its saved link in Savia will be removed."
+                  : "This will permanently delete the document and all its versions. This action cannot be undone.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError ? (
+            <p
+              role="alert"
+              className="text-sm text-destructive [overflow-wrap:anywhere]"
+            >
+              {deleteError}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={deleting}
+              onClick={() => {
+                setDeleteTarget(undefined);
+                setDeleteError("");
+              }}
+            >
+              {t("Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting || loading}
+              onClick={() => void removeDocument()}
+            >
+              {t(
+                deleting
+                  ? "Deleting…"
+                  : deleteTarget?.kind === "connected"
+                    ? "Remove reference"
+                    : "Delete document",
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

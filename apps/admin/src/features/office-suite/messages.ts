@@ -1,6 +1,35 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const officeSuiteMessages = {
+  "Delete document": [
+    "Eliminar documento",
+    "Delete document",
+    "Excluir documento",
+  ],
+  "Remove reference": [
+    "Quitar vínculo",
+    "Remove reference",
+    "Remover referência",
+  ],
+  Cancel: ["Cancelar", "Cancel", "Cancelar"],
+  "Deleting…": ["Eliminando…", "Deleting…", "Excluindo…"],
+  "Could not delete the document. Try again.": [
+    "No se pudo eliminar el documento. Inténtalo de nuevo.",
+    "Could not delete the document. Try again.",
+    "Não foi possível excluir o documento. Tente novamente.",
+  ],
+  "This will permanently delete the document and all its versions. This action cannot be undone.":
+    [
+      "Se eliminarán permanentemente el documento y todas sus versiones. Esta acción no se puede deshacer.",
+      "This will permanently delete the document and all its versions. This action cannot be undone.",
+      "O documento e todas as suas versões serão excluídos permanentemente. Esta ação não pode ser desfeita.",
+    ],
+  "The file will remain in Google Drive or OneDrive. Only its saved link in Savia will be removed.":
+    [
+      "El archivo permanecerá en Google Drive o OneDrive. Solo se quitará su vínculo guardado en Savia.",
+      "The file will remain in Google Drive or OneDrive. Only its saved link in Savia will be removed.",
+      "O arquivo permanecerá no Google Drive ou OneDrive. Apenas o link salvo no Savia será removido.",
+    ],
   "Filter by storage": [
     "Filtrar por almacenamiento",
     "Filter by storage",

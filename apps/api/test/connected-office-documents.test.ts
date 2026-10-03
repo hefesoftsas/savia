@@ -132,10 +132,10 @@ async function seed() {
     "DELETE FROM connected_office_document_operations WHERE tenant_id IN (9481,9482)",
   ).run();
   await env.DB.prepare(
-    "DELETE FROM personal_integration_audit_events WHERE connection_id IN ('drive-owner','drive-peer','onedrive-owner','business-owner','drive-other')",
+    "DELETE FROM personal_integration_audit_events WHERE connection_id IN ('drive-owner','drive-peer','onedrive-owner','business-owner','drive-other','drive-zero')",
   ).run();
   await env.DB.prepare(
-    "DELETE FROM personal_integration_connections WHERE principal_id IN ('connected-office-owner','connected-office-peer','connected-office-other')",
+    "DELETE FROM personal_integration_connections WHERE principal_id IN ('connected-office-owner','connected-office-peer','connected-office-other','connected-office-zero')",
   ).run();
   await env.DB.prepare(
     "DELETE FROM office_settings WHERE tenant_id IN (9481,9482)",
@@ -144,7 +144,10 @@ async function seed() {
     "DELETE FROM identity_tenant_membership WHERE tenant_id IN (9481,9482)",
   ).run();
   await env.DB.prepare(
-    "DELETE FROM identity_principal WHERE id IN ('connected-office-owner','connected-office-peer','connected-office-other')",
+    "DELETE FROM identity_global_role WHERE principal_id='connected-office-zero'",
+  ).run();
+  await env.DB.prepare(
+    "DELETE FROM identity_principal WHERE id IN ('connected-office-owner','connected-office-peer','connected-office-other','connected-office-zero')",
   ).run();
   await env.DB.prepare(
     `INSERT OR IGNORE INTO tenants(id,id_slug,name,is_active,created_at,updated_at) VALUES
@@ -154,6 +157,7 @@ async function seed() {
     "connected-office-owner",
     "connected-office-peer",
     "connected-office-other",
+    "connected-office-zero",
   ])
     await env.DB.prepare(
       `INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES (?,'savia:test',?,?,?,1,'2026-09-05','2026-09-05')`,
@@ -171,12 +175,16 @@ async function seed() {
       .bind(`membership-${id}`, id, tenant)
       .run();
   await env.DB.prepare(
+    "INSERT INTO identity_global_role(principal_id,role,created_at) VALUES ('connected-office-zero','platform_admin','2026-09-05')",
+  ).run();
+  await env.DB.prepare(
     `INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,external_account_label,scopes,created_at,updated_at)
     VALUES ('drive-owner','connected-office-owner','google_drive','secret-drive-connection','google-drive-test','connected','owner@example.test','[]','2026-09-05','2026-09-05'),
     ('drive-peer','connected-office-peer','google_drive','peer-drive-connection','google-drive-test','connected','peer@example.test','[]','2026-09-05','2026-09-05'),
     ('onedrive-owner','connected-office-owner','onedrive_personal','secret-onedrive-connection','onedrive-personal-test','connected','owner@outlook.test','[]','2026-09-05','2026-09-05'),
     ('business-owner','connected-office-owner','onedrive_business','business-connection','onedrive-business-test','reconnect_required','business@example.test','[]','2026-09-05','2026-09-05'),
-    ('drive-other','connected-office-other','google_drive','other-drive-connection','google-drive-test','connected','other@example.test','[]','2026-09-05','2026-09-05')`,
+    ('drive-other','connected-office-other','google_drive','other-drive-connection','google-drive-test','connected','other@example.test','[]','2026-09-05','2026-09-05'),
+    ('drive-zero','connected-office-zero','google_drive','zero-drive-connection','google-drive-test','connected','zero@example.test','[]','2026-09-05','2026-09-05')`,
   ).run();
 }
 
@@ -328,6 +336,98 @@ describe("connected office documents", () => {
         )
       ).data,
     ).toEqual([]);
+  });
+
+  it("removes only the caller's saved connected document reference", async () => {
+    const { nango, requests } = mockNango();
+    const owner = appFor(actor("connected-office-owner", 9481), nango);
+    const form = new FormData();
+    form.set("provider", "google_drive");
+    form.set("format", "docx");
+    form.set("name", "Quarterly Plan");
+    form.set("requestId", crypto.randomUUID());
+    const created = await owner.request("/v1/connected-office-documents", {
+      method: "POST",
+      body: form,
+    });
+    expect(created.status).toBe(201);
+    const id = (await json(created)).data.id as string;
+
+    const peer = await appFor(
+      actor("connected-office-peer", 9481),
+      nango,
+    ).request(`/v1/connected-office-documents/${id}`, { method: "DELETE" });
+    expect(peer.status).toBe(404);
+
+    const deleted = await owner.request(
+      `/v1/connected-office-documents/${id}`,
+      { method: "DELETE" },
+    );
+    expect(deleted.status).toBe(204);
+    expect(
+      (await json(await owner.request("/v1/connected-office-documents"))).data,
+    ).toEqual([]);
+    expect(
+      await env.DB.prepare(
+        "SELECT 1 FROM connected_office_document_operations WHERE id=?",
+      )
+        .bind(id)
+        .first(),
+    ).toBeNull();
+    expect(requests).toHaveLength(1);
+    expect(requests[0].method).toBe("POST");
+  });
+
+  it("allows reference deletion in the platform personal workspace with no tenant membership", async () => {
+    const { nango } = mockNango();
+    const zero = actor("connected-office-zero", 0);
+    zero.memberships = [];
+    zero.globalRoles = ["platform_admin"];
+    const owner = appFor(zero, nango);
+    const form = new FormData();
+    form.set("provider", "google_drive");
+    form.set("format", "docx");
+    form.set("name", "Personal Plan");
+    form.set("requestId", crypto.randomUUID());
+    const created = await owner.request("/v1/connected-office-documents", {
+      method: "POST",
+      body: form,
+    });
+    expect(created.status).toBe(201);
+    const id = (await json(created)).data.id as string;
+
+    const deleted = await owner.request(
+      `/v1/connected-office-documents/${id}`,
+      { method: "DELETE" },
+    );
+    expect(deleted.status).toBe(204);
+    expect(
+      (await json(await owner.request("/v1/connected-office-documents"))).data,
+    ).toEqual([]);
+
+    await env.DB.prepare(
+      `INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at)
+      VALUES ('membership-connected-office-zero','connected-office-zero',0,'viewer',1,'2026-09-05','2026-09-05')`,
+    ).run();
+    const zeroMember = appFor(actor("connected-office-zero", 0), nango);
+    const memberForm = new FormData();
+    memberForm.set("provider", "google_drive");
+    memberForm.set("format", "docx");
+    memberForm.set("name", "Platform Member Plan");
+    memberForm.set("requestId", crypto.randomUUID());
+    const memberCreated = await zeroMember.request(
+      "/v1/connected-office-documents",
+      { method: "POST", body: memberForm },
+    );
+    expect(memberCreated.status).toBe(201);
+    const memberId = (await json(memberCreated)).data.id as string;
+    expect(
+      (
+        await zeroMember.request(`/v1/connected-office-documents/${memberId}`, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(204);
   });
 
   it("rejects provider writes when the office suite is disabled before any upstream write", async () => {

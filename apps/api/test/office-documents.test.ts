@@ -382,6 +382,146 @@ describe("private office document API", () => {
     expect(revisions.results.map((revision) => revision.version)).toEqual([1]);
   });
 
+  it("deletes an owned document only at the current version and removes its stored revisions", async () => {
+    const owner = appFor(actor("office-owner", 9461));
+    const form = new FormData();
+    const bytes = officeZip("docx");
+    form.set(
+      "file",
+      new File([bytes], "Plan.docx", {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    );
+    const created = await owner.request("/v1/office-documents", {
+      method: "POST",
+      body: form,
+    });
+    const id = ((await created.json()) as any).data.id as string;
+    const revisionForm = new FormData();
+    revisionForm.set("version", "1");
+    revisionForm.set(
+      "file",
+      new File([bytes], "Plan.docx", {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    );
+    expect(
+      (
+        await owner.request(`/v1/office-documents/api/file/${id}/revisions`, {
+          method: "POST",
+          body: revisionForm,
+        })
+      ).status,
+    ).toBe(201);
+    const stored = await env.DB.prepare(
+      "SELECT storage_key FROM office_document_revisions WHERE document_id=?",
+    )
+      .bind(id)
+      .all<{ storage_key: string }>();
+
+    const stale = await owner.request(`/v1/office-documents/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: 1 }),
+    });
+    expect(stale.status).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT 1 FROM office_documents WHERE id=?")
+        .bind(id)
+        .first(),
+    ).not.toBeNull();
+
+    const peer = await appFor(actor("office-peer", 9461)).request(
+      `/v1/office-documents/${id}`,
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: 2 }),
+      },
+    );
+    expect(peer.status).toBe(404);
+
+    const deleted = await owner.request(`/v1/office-documents/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: 2 }),
+    });
+    expect(deleted.status).toBe(204);
+    expect(
+      await env.DB.prepare("SELECT 1 FROM office_documents WHERE id=?")
+        .bind(id)
+        .first(),
+    ).toBeNull();
+    expect(
+      await env.DB.prepare(
+        "SELECT 1 FROM office_document_revisions WHERE document_id=?",
+      )
+        .bind(id)
+        .first(),
+    ).toBeNull();
+    for (const revision of stored.results)
+      expect(await env.DOCUMENTS.get(revision.storage_key)).toBeNull();
+  });
+
+  it("keeps a deleted document inaccessible when revision storage cleanup fails", async () => {
+    const owner = appFor(actor("office-owner", 9461));
+    const form = new FormData();
+    const bytes = officeZip("docx");
+    form.set(
+      "file",
+      new File([bytes], "Plan.docx", {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    );
+    const created = await owner.request("/v1/office-documents", {
+      method: "POST",
+      body: form,
+    });
+    const id = ((await created.json()) as any).data.id as string;
+    const revision = await env.DB.prepare(
+      "SELECT storage_key FROM office_document_revisions WHERE document_id=?",
+    )
+      .bind(id)
+      .first<{ storage_key: string }>();
+    expect(revision).not.toBeNull();
+
+    const unavailableCleanup = new Proxy(env.DOCUMENTS, {
+      get(target, property, receiver) {
+        if (property === "delete")
+          return async () => {
+            throw new Error("simulated R2 outage");
+          };
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as R2Bucket;
+    const deletingOwner = appFor(
+      actor("office-owner", 9461),
+      unavailableCleanup,
+    );
+    const deleted = await deletingOwner.request(`/v1/office-documents/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: 1 }),
+    });
+    expect(deleted.status).toBe(204);
+    expect(
+      (
+        await owner.request(
+          `/v1/office-documents/api/file/${id}/revisions/1/download`,
+        )
+      ).status,
+    ).toBe(404);
+    expect(
+      await env.DB.prepare(
+        "SELECT 1 FROM office_document_revisions WHERE document_id=?",
+      )
+        .bind(id)
+        .first(),
+    ).toBeNull();
+    expect(await env.DOCUMENTS.get(revision!.storage_key)).not.toBeNull();
+  });
+
   it("blocks editing while disabled and preserves stored documents for re-enabling", async () => {
     const owner = appFor(actor("office-owner", 9461));
     const form = new FormData();
