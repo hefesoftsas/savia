@@ -3,6 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppActor, Authenticator } from "../src/auth/types";
 import { authenticationMiddleware } from "../src/auth/middleware";
+import { OfficeDocumentsService } from "../src/office-documents/service";
 import { registerOfficeDocumentRoutes } from "../src/routes/office-documents";
 
 const migrations = Object.entries(
@@ -423,6 +424,47 @@ describe("private office document API", () => {
         .status,
     ).toBe(404);
   });
+
+  it.each(["deleted", "membership revoked", "suite disabled"])(
+    "preserves scoped errors when sharing races with %s",
+    async (change) => {
+      const user = actor("office-owner", 9461);
+      const created = await createDoc(appFor(user));
+      const db = new Proxy(env.DB, {
+        get(target, property) {
+          if (property === "batch")
+            return async (statements: D1PreparedStatement[]) => {
+              if (change === "deleted")
+                await target
+                  .prepare("DELETE FROM office_documents WHERE id=?")
+                  .bind(created.id)
+                  .run();
+              else if (change === "membership revoked")
+                await target
+                  .prepare(
+                    "UPDATE identity_tenant_membership SET is_active=0 WHERE principal_id='office-owner' AND tenant_id=9461",
+                  )
+                  .run();
+              else
+                await target
+                  .prepare(
+                    "INSERT INTO office_settings(tenant_id,platform_allowed,tenant_enabled,updated_at) VALUES(9461,1,0,'2026-10-03')",
+                  )
+                  .run();
+              return target.batch(statements);
+            };
+          const value = Reflect.get(target, property);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      }) as D1Database;
+      const service = new OfficeDocumentsService(db, user, env.DOCUMENTS);
+      await expect(
+        service.setShares(created.id, { version: 1, shares: [] }),
+      ).rejects.toMatchObject({
+        status: change === "suite disabled" ? 403 : 404,
+      });
+    },
+  );
 
   it("does not commit a save whose editor grant is revoked while its upload is pending", async () => {
     const owner = appFor(actor("office-owner", 9461));

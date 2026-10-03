@@ -167,7 +167,7 @@ export class OfficeDocumentsService {
     const pattern = `%${query.trim().replace(/[\\%_]/g, "\\$&")}%`;
     const result = await this.db
       .prepare(
-        `SELECT p.id AS principalId,COALESCE(NULLIF(trim(p.display_name),''),p.email) AS displayName,p.email
+        `SELECT p.id AS "principalId",COALESCE(NULLIF(trim(p.display_name),''),p.email) AS "displayName",p.email
         FROM identity_principal p
         JOIN identity_tenant_membership m ON m.principal_id=p.id AND m.is_active=1
         JOIN tenants t ON t.id=m.tenant_id AND t.is_active=1
@@ -185,7 +185,7 @@ export class OfficeDocumentsService {
     if (row.owner_id !== this.actor.principal.id) throw notFound();
     const result = await this.db
       .prepare(
-        `SELECT s.principal_id AS principalId,s.role,COALESCE(NULLIF(trim(p.display_name),''),p.email) AS displayName,p.email
+        `SELECT s.principal_id AS "principalId",s.role,COALESCE(NULLIF(trim(p.display_name),''),p.email) AS "displayName",p.email
         FROM office_document_shares s
         JOIN identity_principal p ON p.id=s.principal_id
         WHERE s.document_id=? AND s.tenant_id=? ORDER BY s.principal_id`,
@@ -314,13 +314,9 @@ export class OfficeDocumentsService {
     try {
       await this.db.batch(statements);
     } catch (error) {
-      const current = await this.db
-        .prepare(
-          "SELECT share_version FROM office_documents WHERE id=? AND tenant_id=? AND owner_id=?",
-        )
-        .bind(id, row.tenant_id, this.actor.principal.id)
-        .first<{ share_version: number }>();
-      if (current && current.share_version !== input.version)
+      const current = await this.load(id);
+      if (current.owner_id !== this.actor.principal.id) throw notFound();
+      if (current.share_version !== input.version)
         throw new OfficeDocumentsError(
           409,
           "VERSION_CONFLICT",
