@@ -2,11 +2,11 @@ import "@testing-library/jest-dom/vitest";
 import {
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   act,
 } from "@testing-library/react";
+import { render } from "../studio-engine/test/locale-test-render";
 import { afterEach, expect, it, vi } from "vitest";
 import { MailComposer } from "./mail-composer";
 import type { PersonalMailLike } from "./use-my-day-mail";

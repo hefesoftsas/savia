@@ -7,6 +7,8 @@ import type {
 } from "@savia/studio-shared/mail-contracts";
 import { ApiClientError } from "@/api/api-client";
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
+import { translateMessage, useAppLocale } from "@/i18n/core";
+import { myDayStateMessages } from "./my-day-state-messages";
 
 export type MailConnection = {
   provider: PersonalMailProvider;
@@ -49,6 +51,16 @@ export type MailState = {
   dismissNewMessages?(): void;
   refresh(): Promise<void>;
 };
+type MailError =
+  | string
+  | {
+      key: keyof typeof myDayStateMessages;
+      params?: Readonly<Record<string, string | number>>;
+    };
+const mailError = (
+  key: keyof typeof myDayStateMessages,
+  params?: Readonly<Record<string, string | number>>,
+): MailError => ({ key, params });
 export function mailProviderLabel(provider: PersonalMailProvider): string {
   return provider === "gmail" ? "Gmail" : "Outlook";
 }
@@ -67,7 +79,7 @@ const empty = {
   loading: false,
   loadingMore: false,
   hasMore: {} as Partial<Record<PersonalMailProvider, boolean>>,
-  errors: [] as string[],
+  errors: [] as MailError[],
   newMessageCount: 0,
 };
 const REFRESH_INTERVAL_MS = 60_000;
@@ -92,6 +104,7 @@ function canRefreshMail() {
   return document.visibilityState === "visible" && navigator.onLine;
 }
 export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
+  const locale = useAppLocale();
   const [snapshot, setSnapshot] = useState({ ...empty, owner: client });
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
@@ -221,7 +234,12 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
         const errors = results.flatMap((result, index) =>
           result.status === "rejected"
             ? [
-                `No pudimos cargar ${mailProviderLabel(connections[index]!.provider)}. Actualiza o revisa la conexión.`,
+                mailError(
+                  "No pudimos cargar %{provider}. Actualiza o revisa la conexión.",
+                  {
+                    provider: mailProviderLabel(connections[index]!.provider),
+                  },
+                ),
               ]
             : [],
         );
@@ -262,7 +280,7 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
             loading: false,
             owner: client,
             errors: [
-              "No pudimos comprobar tus conexiones de correo. Reintenta.",
+              mailError("Could not check your mail connections. Try again."),
             ],
           }));
         }
@@ -300,7 +318,7 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
         );
         if (request !== revision.current) return;
         let rows = [...previous.messages];
-        const errors: string[] = [];
+        const errors: MailError[] = [];
         for (const [index, result] of results.entries()) {
           const connection = targets[index]!;
           const key = accountKey(connection);
@@ -315,7 +333,12 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
               knownMessages.current.delete(key);
             }
             errors.push(
-              `No pudimos cargar más correos de ${mailProviderLabel(connection.provider)}. Reintenta.`,
+              mailError(
+                "Could not load more mail from %{provider}. Try again.",
+                {
+                  provider: mailProviderLabel(connection.provider),
+                },
+              ),
             );
             continue;
           }
@@ -427,7 +450,7 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
   const dismissNewMessages = useCallback(() => {
     setSnapshot((current) => ({ ...current, newMessageCount: 0 }));
   }, []);
-  return {
+  const state = {
     ...(snapshot.owner === client
       ? snapshot
       : { ...empty, loading: Boolean(client) }),
@@ -435,5 +458,13 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
     refresh,
     loadMore,
     dismissNewMessages,
+  };
+  return {
+    ...state,
+    errors: state.errors.map((error) =>
+      typeof error === "string"
+        ? error
+        : translateMessage(myDayStateMessages, error.key, locale, error.params),
+    ),
   };
 }

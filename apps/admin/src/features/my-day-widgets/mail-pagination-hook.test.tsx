@@ -1,7 +1,27 @@
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  renderHook as renderHookBase,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { memoryStore } from "ra-core";
 import { ApiClientError } from "@/api/api-client";
 import { useMyDayMail, type PersonalMailLike } from "./use-my-day-mail";
+import {
+  AppLocaleTestWrapper,
+  appLocaleWrapperFor,
+} from "./app-locale-test-wrapper";
+
+function renderHook<Props, Result>(
+  callback: (props: Props) => Result,
+  options?: { initialProps?: Props },
+) {
+  return renderHookBase(callback, {
+    ...options,
+    wrapper: AppLocaleTestWrapper,
+  });
+}
 
 afterEach(() => {
   cleanup();
@@ -107,4 +127,19 @@ it("coalesces pagination and ignores a previous identity's pending response", as
   expect(result.current.messages.map((row) => row.id)).not.toContain(
     "old-identity",
   );
+});
+
+it("translates cached provider errors when the mounted locale changes", async () => {
+  const client = service();
+  vi.mocked(client.listMessagePage).mockRejectedValue(new Error("offline"));
+  const store = memoryStore({ locale: "es" });
+  const wrapper = appLocaleWrapperFor(store);
+  const { result } = renderHookBase(() => useMyDayMail(client), { wrapper });
+  await waitFor(() => expect(result.current.errors).toHaveLength(1));
+  expect(result.current.errors[0]).toContain("No pudimos cargar Gmail.");
+  act(() => store.setItem("locale", "en"));
+  await waitFor(() =>
+    expect(result.current.errors[0]).toContain("Could not load Gmail."),
+  );
+  expect(client.listMessagePage).toHaveBeenCalledTimes(1);
 });

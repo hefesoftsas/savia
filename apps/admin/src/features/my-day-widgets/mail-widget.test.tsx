@@ -2,12 +2,12 @@ import "@testing-library/jest-dom/vitest";
 import {
   cleanup,
   fireEvent,
-  render,
   screen,
   within,
   waitFor,
   act,
 } from "@testing-library/react";
+import { render } from "../studio-engine/test/locale-test-render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { useMyDayMail, type PersonalMailLike } from "./use-my-day-mail";
