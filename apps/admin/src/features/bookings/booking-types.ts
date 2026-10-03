@@ -34,3 +34,25 @@ export type Settings = {
   professionals: Professional[];
 };
 export type Candidate = { principalId: string; displayName: string };
+
+export type BookingLinkScope =
+  { kind: "team" } | { kind: "professional"; professionalId: string };
+
+export type BookingPublicLink = {
+  id: string;
+  scope: BookingLinkScope;
+  serviceId: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  dailyLimit: number;
+  version: number;
+  publicUrl: string;
+};
+
+export type PublicBookingSlot = { startsAt: string; endsAt: string };
+export type BookingSelection = {
+  professionalId: string;
+  serviceId: string;
+  slot: PublicBookingSlot;
+  displayTimeZone: string;
+};

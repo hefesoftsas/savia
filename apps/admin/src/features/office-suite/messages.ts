@@ -1,6 +1,77 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const officeSuiteMessages = {
+  "Share document": [
+    "Compartir documento",
+    "Share document",
+    "Compartilhar documento",
+  ],
+  "Shared by": ["Compartido por", "Shared by", "Compartilhado por"],
+  "Can view": ["Puede ver", "Can view", "Pode visualizar"],
+  "Can edit": ["Puede editar", "Can edit", "Pode editar"],
+  "No access": ["Sin acceso", "No access", "Sem acesso"],
+  "Permission for": ["Permiso para", "Permission for", "Permissão para"],
+  "Search workspace members": [
+    "Buscar miembros del espacio",
+    "Search workspace members",
+    "Buscar membros do espaço",
+  ],
+  "Only active members of this workspace can receive access.": [
+    "Solo los miembros activos de este espacio pueden recibir acceso.",
+    "Only active members of this workspace can receive access.",
+    "Somente membros ativos deste espaço podem receber acesso.",
+  ],
+  "Loading permissions…": [
+    "Cargando permisos…",
+    "Loading permissions…",
+    "Carregando permissões…",
+  ],
+  "Save permissions": [
+    "Guardar permisos",
+    "Save permissions",
+    "Salvar permissões",
+  ],
+  "Saving permissions…": [
+    "Guardando permisos…",
+    "Saving permissions…",
+    "Salvando permissões…",
+  ],
+  "Permissions saved.": [
+    "Permisos guardados.",
+    "Permissions saved.",
+    "Permissões salvas.",
+  ],
+  "Could not load sharing. Try again.": [
+    "No se pudieron cargar los permisos. Inténtalo de nuevo.",
+    "Could not load sharing. Try again.",
+    "Não foi possível carregar as permissões. Tente novamente.",
+  ],
+  "Could not save permissions. Try again.": [
+    "No se pudieron guardar los permisos. Inténtalo de nuevo.",
+    "Could not save permissions. Try again.",
+    "Não foi possível salvar as permissões. Tente novamente.",
+  ],
+  "Permissions changed. Reload them before saving again.": [
+    "Los permisos cambiaron. Recárgalos antes de guardar de nuevo.",
+    "Permissions changed. Reload them before saving again.",
+    "As permissões mudaram. Recarregue-as antes de salvar novamente.",
+  ],
+  "Reload permissions": [
+    "Recargar permisos",
+    "Reload permissions",
+    "Recarregar permissões",
+  ],
+  "No matching workspace members.": [
+    "No hay miembros que coincidan.",
+    "No matching workspace members.",
+    "Nenhum membro correspondente.",
+  ],
+  "Savia documents can be shared with members of this workspace. Connected-drive permissions are managed by their provider.":
+    [
+      "Los documentos de Savia se pueden compartir con miembros de este espacio. Los permisos de unidades conectadas los gestiona su proveedor.",
+      "Savia documents can be shared with members of this workspace. Connected-drive permissions are managed by their provider.",
+      "Os documentos do Savia podem ser compartilhados com membros deste espaço. As permissões das unidades conectadas são gerenciadas pelo provedor.",
+    ],
   "Delete document": [
     "Eliminar documento",
     "Delete document",
