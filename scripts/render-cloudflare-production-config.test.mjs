@@ -345,3 +345,35 @@ test("preview rejects every normalized production origin and unknown preview hos
     );
   }
 });
+
+test("production search bindings are opt-in and cannot share preview vectors", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "savia-search-config-"));
+  try {
+    const options = {
+      authD1Id: "auth-id",
+      domainD1Id: "domain-id",
+      outputRoot,
+    };
+    await renderProductionConfigs(options);
+    assert.equal((await config(outputRoot, "api")).vectorize, undefined);
+    await renderProductionConfigs({
+      ...options,
+      pagesSearchIndex: "savia-pages-search-production",
+    });
+    assert.deepEqual((await config(outputRoot, "api")).vectorize, [
+      {
+        binding: "PAGES_VECTORIZE",
+        index_name: "savia-pages-search-production",
+      },
+    ]);
+    await assert.rejects(
+      renderProductionConfigs({
+        ...options,
+        pagesSearchIndex: "savia-pages-search-preview",
+      }),
+      /Production cannot use/,
+    );
+  } finally {
+    await rm(outputRoot, { recursive: true, force: true });
+  }
+});

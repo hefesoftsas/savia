@@ -106,6 +106,50 @@ Apply migrations `0008_pages.sql`, `0009_issue_connections.sql`, `0010_pages_fol
 
 Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Deleting a page removes its attachment metadata and attempts to delete every stored attachment blob from the document bucket. It is not a retention mechanism: preserve any required copies before deleting the page. Failed bucket deletions may leave orphaned blobs for deployment cleanup. Revision retention is unbounded unless the owner explicitly clears prior versions.
 
+### Cloudflare semantic search
+
+Local FlexSearch search has been removed. Existing derived browser indexes are
+removed on a best-effort basis when Pages opens; page content remains canonical
+in the backend.
+
+Cloudflare semantic search is disabled by default for every tenant. A platform
+administrator grants the capability in the tenant administration screen. The
+tenant administrator can then activate or deactivate it in **Page search** in
+the tenant settings. Revoking the grant also turns activation off; granting it
+again does not reactivate it. Ordinary members cannot change either setting.
+Both controls are enforced by the API, including indexing and querying.
+
+When enabled, Pages offers semantic search backed by Cloudflare Workers AI
+(`@cf/baai/bge-m3`) and a dedicated Vectorize index. **Update index** sends missing
+or changed saved page versions to Cloudflare, with visible progress and cancel.
+It works on the first 200 accessible page summaries, skips folders, and indexes
+titles and saved rich-text leaves in batches. Attachments, embedded collection
+records and external provider data are excluded. Vectorize submissions are
+asynchronous; new results may take a few seconds to become searchable.
+
+Vectors use a tenant namespace. Search returns only pages that the caller can
+currently read in that tenant, checks the indexed version, and reads titles from
+the authorized backend document. Vector metadata contains page IDs and versions,
+not document bodies. Removing access or deleting a page prevents its appearance
+in results even while an older vector remains in Cloudflare. Turning search off
+stops new indexing and querying; it does not erase previously submitted vectors.
+The ordinary server text/title search remains available in all cases. Deployed
+semantic queries are limited to 30 per minute per tenant to bound repeated AI
+requests; the browser also debounces typing.
+
+Preview binds the isolated `savia-pages-search-preview` Vectorize index
+(1024 dimensions, cosine) with Workers AI. Bootstrap this index once before the
+first deployment using `node scripts/ensure-preview-pages-search.mjs` with
+`CLOUDFLARE_ACCOUNT_ID` and a `CLOUDFLARE_API_TOKEN` that has Vectorize Write
+permissions, or `wrangler vectorize create savia-pages-search-preview
+--dimensions=1024 --metric=cosine`. Routine deployments bind the existing index;
+they do not need to provision it or broaden the Worker deployment token.
+Production search remains unavailable unless
+`SAVIA_PAGES_SEARCH_INDEX` is set to a separately provisioned production index
+when rendering the Worker configuration. No search consumption is incurred by
+tenants whose capability or activation is disabled. Cloudflare usage quotas and
+charges still apply when tenants enable the feature.
+
 The new editor dependencies (`platejs`, `@platejs/basic-nodes`, `@platejs/link`) use MIT licenses. Their attribution notice ships at `/licenses/plate.txt`. Existing Nango is an external service accepted for this integration; this implementation does not claim that Nango itself is MIT/Apache licensed.
 
 ## Verification

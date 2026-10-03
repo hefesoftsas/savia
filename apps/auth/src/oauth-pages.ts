@@ -241,6 +241,7 @@ const oauthUiScript = String.raw`(() => {
   const verificationPanel = document.querySelector('[data-oauth-panel="verify"]');
   const passwordToggle = document.querySelector("[data-oauth-password-toggle]");
   const loginAnimation = document.querySelector("[data-oauth-login-animation]");
+  let ssoEnabled = false;
 
   if (loginAnimation && window.lottie) {
     const frame = loginAnimation.querySelector("[data-oauth-login-animation-frame]");
@@ -560,6 +561,7 @@ const oauthUiScript = String.raw`(() => {
   }
 
   function showAccountPanel(name) {
+    if (name === "sso" && !ssoEnabled) return;
     if (loginPanel) loginPanel.hidden = name !== "login";
     const social = document.querySelector("[data-social-login]");
     if (social) social.hidden = name !== "login" || social.dataset.available !== "true";
@@ -592,10 +594,15 @@ const oauthUiScript = String.raw`(() => {
 
   const socialLogin = document.querySelector("[data-social-login]");
   if (socialLogin) {
+    const ssoTrigger = document.querySelector('[data-oauth-show="sso"]');
+    const ssoPanel = document.querySelector('[data-oauth-panel="sso"]');
     fetch("/api/auth/savia-social/providers", {credentials:"same-origin"})
-      .then(response => response.ok ? response.json() : {providers:[]})
-      .then(({providers}) => {
-        if (!Array.isArray(providers)) return;
+      .then(response => response.ok ? response.json() : {providers:[], ssoEnabled:false})
+      .then(result => {
+        const providers = Array.isArray(result?.providers) ? result.providers : [];
+        ssoEnabled = result?.ssoEnabled === true;
+        if (ssoTrigger) ssoTrigger.hidden = !ssoEnabled;
+        if (!ssoEnabled && ssoPanel) ssoPanel.hidden = true;
         for (const button of socialLogin.querySelectorAll("[data-social-provider]")) {
           button.hidden = !providers.includes(button.dataset.socialProvider);
           button.addEventListener("click", async () => {
@@ -615,10 +622,16 @@ const oauthUiScript = String.raw`(() => {
         }
         socialLogin.dataset.available = providers.length ? "true" : "false";
         socialLogin.hidden = !providers.length || !loginPanel || loginPanel.hidden;
-      }).catch(() => { socialLogin.hidden = true; });
+      }).catch(() => {
+        ssoEnabled = false;
+        socialLogin.hidden = true;
+        if (ssoTrigger) ssoTrigger.hidden = true;
+        if (ssoPanel) ssoPanel.hidden = true;
+      });
   }
 
   async function submitSSODiscovery(form) {
+    if (!ssoEnabled) throw new Error("El acceso SSO no está disponible para esta organización.");
     const email = formValue(form, "email").trim();
     const domain = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
     const response = await fetch("/api/auth/savia-sso/connections?domain=" + encodeURIComponent(domain), {credentials:"same-origin"});

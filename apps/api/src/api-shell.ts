@@ -516,8 +516,10 @@ export function createApiShell(
     const headers = publicAuthHeaders(context.req.raw);
     if (
       identityBridgeKey?.trim() &&
-      context.req.method === "POST" &&
-      context.req.path === "/api/auth/sign-in/social"
+      ((context.req.method === "POST" &&
+        context.req.path === "/api/auth/sign-in/social") ||
+        (context.req.method === "GET" &&
+          context.req.path === "/api/auth/savia-social/providers"))
     ) {
       const slug = parseTenantSlugFromHostname(
         new URL(context.req.url).hostname,

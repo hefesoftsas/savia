@@ -68,6 +68,8 @@ jobs:
           SAVIA_DOMAIN_D1_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
           SAVIA_DOCUMENTS_BUCKET: ${{ vars.SAVIA_DOCUMENTS_BUCKET }}
 
+      # Vectorize is bootstrapped separately with Vectorize Write access.
+      # Deployments bind the existing isolated index using the Worker token.
       - name: Render Worker configuration
         run: node scripts/render-cloudflare-production-config.mjs
         env:

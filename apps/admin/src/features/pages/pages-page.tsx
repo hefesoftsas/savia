@@ -56,6 +56,8 @@ import type { Value } from "platejs";
 import { publishPageChange, subscribePageChanges } from "./page-events";
 import { exportPageMarkdown } from "./markdown-export";
 import { useIssueProviders, type IssueProvider } from "./use-issue-providers";
+import { PagesCloudflareSearch } from "@/features/tenant-pages-search/pages-cloudflare-search";
+import { retireLocalPageSearchCaches } from "@/features/tenant-pages-search/retire-local-search-cache";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -136,6 +138,9 @@ export function PagesPage({
     [client],
   );
   const listRequest = useRef(0);
+  useEffect(() => {
+    void retireLocalPageSearchCaches();
+  }, []);
   const refresh = useCallback(async () => {
     const request = ++listRequest.current;
     try {
@@ -520,6 +525,7 @@ export function PagesPage({
                 </Button>
               </div>
             )}
+            <PagesCloudflareSearch client={client} />
             <div className="pages-search">
               <Search size={16} aria-hidden />
               <Input

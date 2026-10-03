@@ -478,6 +478,7 @@ function LoginContent({
               className="oauth-enterprise-login"
               type="button"
               data-oauth-show="sso"
+              hidden
             >
               <svg
                 width="20"
