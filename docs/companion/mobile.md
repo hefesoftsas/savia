@@ -1,7 +1,7 @@
 # Companion mobile preview
 
 The Flutter app in `apps/companion-mobile` targets Android and iOS. It reuses the
-Companion API and leaves the Tauri desktop app unchanged. The mobile flavor is
+Companion API and recording-session contracts with the Tauri desktop app. The mobile flavor is
 fixed to `https://savia-preview.hefesoft.com`; production is not configured.
 
 ## User flow
@@ -10,7 +10,7 @@ fixed to `https://savia-preview.hefesoft.com`; production is not configured.
 2. Record microphone audio while the app is in the foreground, up to one hour,
    or import MP3, WAV, M4A or Ogg/Opus audio of up to 50,000,000 bytes.
 3. Review the temporary draft, grant upload consent, and upload explicitly.
-4. Read the backend library and play a private downloaded recording.
+4. Read the backend library and play authenticated audio-file or session segments.
 5. Grant provider-processing consent to generate a transcript and structured
    notes. Ask questions after a transcript exists; unsupported answers show an
    insufficient-evidence message. These operations do not create business tasks.
@@ -163,11 +163,35 @@ their existing behavior. This change does not enable locked-screen capture.
 
 Automated timer tests can establish the stop boundary without waiting an hour.
 A continuous physical-device recording, audible playback and live one-hour
-transcription remain separate qualification checks. The synchronous transcription
-path is not a durable long-recording job. Desktop capture retains its existing
-short-sample limits until its capture and upload architecture is replaced.
+transcription remain separate qualification checks. Captured microphone audio now uses the durable session path described below.
+Imported audio files retain the existing file-processing path.
 
 A synthetic 3,600-second FFmpeg AAC file at the new target bitrate was 14,820,156
 bytes and passed the existing API M4A validator. Its media-header duration was
 3,600.043 seconds (AAC padding); ffprobe reported 3,600 seconds of presentation.
 This is file-format evidence, not a physical-device capture or live STT result.
+
+## Phase 2 recording sessions
+
+Foreground microphone capture produces one private M4A draft. After upload consent,
+Android MediaExtractor/MediaMuxer or iOS AVAssetExportSession splits it into up to
+120 independently playable 30-second AAC segments. Native code copies compressed
+audio without loading an hour of PCM into Dart memory. Each segment is limited to
+512 KiB; imports retain their separate 50 MB limit.
+
+The draft UUID identifies an idempotent backend session. Temporary segment files
+and their manifest preserve exact bytes across an explicit upload retry. Saved
+backend chunk identities are checked before uploading missing segments. Finalization
+requires the complete timeline; incomplete uploads cannot start processing.
+Successful upload, explicit discard and existing draft cleanup remove temporary
+artifacts. This does not introduce a persistent offline upload queue.
+
+The library exposes audio files and recording sessions. Session details fetch saved
+results separately from metadata listings and poll while processing is active.
+Provider consent queues durable transcription and summary work; saved transcript
+segments support questions with source/time evidence before the full job finishes.
+Cancelled or ambiguous processing requires a separate retry acknowledgment because
+an earlier provider request may already have incurred a charge.
+
+See [recording sessions](long-recording-next-phase.md) for ownership, limits,
+processing leases, desktop recovery and the remaining physical-device qualification.

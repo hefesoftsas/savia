@@ -65,7 +65,11 @@ const api = new ApiClient({
           },
         ],
       });
-    return Response.json({ sessions: [session], cursor: null });
+    return Response.json(
+      path.endsWith("/synthetic-session")
+        ? session
+        : { sessions: [session], cursor: null },
+    );
   },
 });
 createRoot(document.getElementById("root")!).render(

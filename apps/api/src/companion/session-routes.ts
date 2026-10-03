@@ -80,7 +80,8 @@ export function registerCompanionSessionRoutes(
       path: "/v1/companion/sessions",
       tags: ["Companion"],
       security: security("recordings:read"),
-      summary: "List owned recording sessions in the selected workspace",
+      summary:
+        "List owned session metadata; read an individual session for transcripts and notes",
       request: { query: z.object({ cursor: z.string().max(2048).optional() }) },
       responses: {
         200: {

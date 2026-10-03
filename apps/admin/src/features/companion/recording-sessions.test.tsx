@@ -39,6 +39,8 @@ it("requires fresh retry consent, submits once, and clears a partial answer when
     fetcher: async (input, init) => {
       const request = new Request(input, init);
       const path = new URL(request.url).pathname;
+      if (request.method === "GET" && path !== "/v1/companion/sessions")
+        return Response.json(session(path.endsWith("/two") ? "two" : "one"));
       if (request.method === "GET")
         return Response.json({
           sessions: [session("one"), session("two")],
@@ -117,4 +119,27 @@ it("requires fresh retry consent, submits once, and clears a partial answer when
     screen.queryByText("The budget remains pending."),
   ).not.toBeInTheDocument();
   expect(screen.getByLabelText("Your question")).toHaveValue("");
+});
+
+it("opens the desktop review link directly on recording sessions", async () => {
+  const { MemoryRouter } = await import("react-router-dom");
+  const { CompanionRecordingsPage } = await import("./recordings-page");
+  const paths: string[] = [];
+  const apiClient = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      paths.push(new URL(String(input)).pathname);
+      return Response.json({ sessions: [], cursor: null });
+    },
+  });
+  render(
+    <MemoryRouter initialEntries={["/companion-recordings?tab=sessions"]}>
+      <StoreContextProvider value={memoryStore({ locale: "en" })}>
+        <CompanionRecordingsPage services={{ apiClient }} />
+      </StoreContextProvider>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText("No recording sessions yet")).toBeVisible();
+  expect(paths).toEqual(["/v1/companion/sessions"]);
 });

@@ -598,7 +598,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List owned recording sessions in the selected workspace */
+    /** List owned session metadata; read an individual session for transcripts and notes */
     get: {
       parameters: {
         query?: {

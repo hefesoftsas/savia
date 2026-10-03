@@ -357,18 +357,22 @@ export class CompanionSessions {
           sessionIdSchema.safeParse(key.slice(prefix.length, -1)).success,
       )
       .sort();
-    const sessions = await Promise.all(
-      sessionPrefixes.map(async (key) => {
-        const id = key.slice(prefix.length).replace(/\/$/, "");
-        try {
-          return await this.get(access, id);
-        } catch (error) {
-          if (error instanceof CompanionError && error.status === 404)
-            return null;
+    // A library page carries metadata only. Load large transcripts one session at
+    // a time through GET rather than retaining 50 complete transcripts in a Worker.
+    const sessions: Session[] = [];
+    for (const key of sessionPrefixes) {
+      const id = key.slice(prefix.length).replace(/\/$/, "");
+      try {
+        const session = await this.get(access, id);
+        sessions.push({
+          ...session,
+          job: { ...session.job, transcripts: {}, summary: null },
+        });
+      } catch (error) {
+        if (!(error instanceof CompanionError && error.status === 404))
           throw error;
-        }
-      }),
-    );
+      }
+    }
     return {
       sessions: sessions.filter(
         (session): session is Session => session !== null,
@@ -398,6 +402,7 @@ export class CompanionSessions {
         "INVALID_REQUEST",
         "Source is not part of this session.",
       );
+    // Both formats share the compressed segment budget; inspection below is format-specific.
     const bytes = decodeAudio(parsed.data.audio.data, "ogg");
     let durationSeconds: number;
     try {

@@ -62,6 +62,9 @@ remove a later retry.
 
 ## Review and questions
 
+Library listing returns metadata; individual session reads retrieve saved transcripts
+and notes, keeping long recordings from expanding every list response.
+
 Recordings → Recording sessions shows one session with source-aware playback,
 processing state, partial transcripts, summary and questions. Audio plays by
 segment in sequence within the selected source; visible offsets preserve gaps.

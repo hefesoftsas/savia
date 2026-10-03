@@ -22,9 +22,9 @@
 
 ## Tasks and ownership
 
-- [ ] Native capture worker: apps/companion/src-tauri source capture/lifecycle/spool modules, Swift helper, native commands and native tests. Continuous bounded segment capture, atomic recoverable manifest, one-hour stop, explicit discard and startup recovery. Expose bounded chunk read commands for sequential upload.
-- [ ] Backend worker: new apps/api/src/companion/sessions.ts and session-jobs.ts with focused tests. Private manifests/chunks, immutable retry identity, finalization validation, durable leases, partial transcripts, summaries and reconciliation/cancellation.
-- [ ] Root: session OpenAPI routes, scope allowlists, scheduled runtime integration and configuration validation. Regenerate API reference and add route/scheduling regression tests.
+- [x] Native capture worker: apps/companion/src-tauri source capture/lifecycle/spool modules, Swift helper, native commands and native tests. Continuous bounded segment capture, atomic recoverable manifest, one-hour stop, explicit discard and startup recovery. Expose bounded chunk read commands for sequential upload.
+- [x] Backend worker: new apps/api/src/companion/sessions.ts and session-jobs.ts with focused tests. Private manifests/chunks, immutable retry identity, finalization validation, durable leases, partial transcripts, summaries and reconciliation/cancellation.
+- [x] Root: session OpenAPI routes, scope allowlists, scheduled runtime integration and configuration validation. Regenerate API reference and add route/scheduling regression tests.
 - [ ] Root: desktop session upload/recovery UI, web recording session library/player/job progress/Q&A; mobile long-audio integration where compatible. Keep permissions and consent visible.
 - [ ] Combined verification: synthetic one-hour bounded-memory and restart tests, backend job replay/lease/tenant tests, frontend rendering and protocol tests, Flutter checks, Windows/macOS and Android builds.
 - [ ] Update PR #150 around final scope, merge after required checks, deploy preview, publish replacement installers and verify public catalog/download hashes. Report physical-device/provider qualification separately when unavailable.

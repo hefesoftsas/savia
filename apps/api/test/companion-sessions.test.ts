@@ -231,6 +231,17 @@ describe("private Companion sessions", () => {
           summary: { summary: "A session began." },
         },
       });
+      const library = await repo.list(access);
+      expect(library.sessions).toHaveLength(1);
+      expect(library.sessions[0].job).toMatchObject({
+        status: "complete",
+        completedChunks: 1,
+        transcripts: {},
+        summary: null,
+      });
+      expect(
+        Object.keys((await repo.get(access, id)).job.transcripts),
+      ).toHaveLength(1);
     } finally {
       await clean(owner, 88);
     }

@@ -177,8 +177,18 @@ function SessionDetail({
     };
   }, []);
   useEffect(() => {
+    const abort = new AbortController();
     setSession(initial);
-  }, [initial]);
+    void client
+      .get(initial.id, abort.signal)
+      .then((next) => {
+        if (!abort.signal.aborted) setSession(next);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setError(true);
+      });
+    return () => abort.abort();
+  }, [initial, client]);
   const running = active(session);
   useEffect(() => {
     if (!running) return;
@@ -213,14 +223,16 @@ function SessionDetail({
         : await client.process(session.id, retry);
       if (mounted.current) {
         setSession(next);
-        setConsent(false);
-        setRetry(false);
       }
     } catch {
       if (mounted.current) setError(true);
     } finally {
       inFlight.current = false;
-      if (mounted.current) setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+        setConsent(false);
+        setRetry(false);
+      }
     }
   }
   const attention =
