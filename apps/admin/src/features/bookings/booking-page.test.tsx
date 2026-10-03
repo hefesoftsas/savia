@@ -10,8 +10,124 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { BookingPage } from "./booking-page";
+import { ApiClientError } from "@/api/api-client";
 
 afterEach(cleanup);
+
+it.each([
+  [422, "Use an IANA time zone."],
+  [403, "Organization access denied."],
+  [500, "Internal server error"],
+])("reports the server's rejection with HTTP %s", async (status, message) => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      data: {
+        settings,
+        candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+        canManage: true,
+        principalId: "principal-1",
+        publicUrl: null,
+        calendar: { provider: null, status: "not_connected" },
+      },
+    }),
+    put: vi
+      .fn()
+      .mockRejectedValue(new ApiClientError(status, "CRM_SYNC_ERROR", message)),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent(message);
+  expect(alert).toHaveTextContent(`HTTP ${status}`);
+});
+
+it("explains missing publication requirements before submitting settings", async () => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      data: {
+        settings: { ...settings, services: [], professionals: [] },
+        candidates: [],
+        canManage: true,
+        principalId: "principal-1",
+        publicUrl: "https://savia.test/public/bookings/page-token",
+        calendar: { provider: null, status: "not_connected" },
+      },
+    }),
+    put: vi
+      .fn()
+      .mockRejectedValue(
+        new ApiClientError(422, "CRM_SYNC_ERROR", "Invalid publication"),
+      ),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByLabelText("Published"));
+  fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Enable a service and an assigned professional before publishing.",
+  );
+  expect(apiClient.put).not.toHaveBeenCalled();
+});
+
+it("does not offer an unpublished public page even when its token exists", async () => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      data: {
+        settings,
+        candidates: [],
+        canManage: true,
+        principalId: "principal-1",
+        publicUrl: "https://savia.test/public/bookings/page-token",
+        calendar: { provider: null, status: "not_connected" },
+      },
+    }),
+    put: vi.fn(),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  expect(
+    screen.queryByRole("link", { name: "Open public booking page" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("link", { name: /page-token/ }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Save enabled and published settings to open the public page.",
+    ),
+  ).toBeInTheDocument();
+});
+
+it("offers the public page after published settings are saved", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: "https://savia.test/public/bookings/page-token",
+    calendar: { provider: null, status: "not_connected" },
+  };
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({ data: bootstrap }),
+    put: vi.fn().mockResolvedValue({
+      data: {
+        ...bootstrap,
+        settings: { ...settings, version: 4, published: true },
+      },
+    }),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByLabelText("Published"));
+  expect(
+    screen.queryByRole("link", { name: "Open public booking page" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  expect(
+    await screen.findByRole("link", { name: "Open public booking page" }),
+  ).toHaveAttribute("href", bootstrap.publicUrl);
+});
 
 const settings = {
   version: 3,
