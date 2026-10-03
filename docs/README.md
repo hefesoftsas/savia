@@ -102,3 +102,4 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Plugin development kit](guides/plugin-development.md): scaffold, SDK, generic UI, local iframe development, and testing.
 
 - [Personal API keys](guides/personal-api-keys.md) — create and revoke scoped credentials for Companion.
+- [Test coverage](guides/test-coverage.md) — run the local coverage suite and inspect merged CI reports.
