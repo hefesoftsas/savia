@@ -13,6 +13,7 @@ import type {
 import { dialectFor } from "@savia/db/dialect";
 import { parseIssueLink } from "@savia/studio-shared/issue-links";
 import type { AppActor } from "../auth/types";
+import { makePageExcerpt } from "./excerpt";
 
 type PageRow = {
   id: string;
@@ -563,11 +564,13 @@ export class PagesService {
     const rows = await this.db
       .prepare(
         `SELECT p.id,p.parent_id,p.root_id,p.title,p.kind,p.version,p.updated_at,p.owner_id,p.binding_json,
+      CASE WHEN ?='' THEN '' ELSE p.search_text END AS search_text,
       CASE WHEN p.owner_id=? THEN 'owner' ELSE COALESCE((SELECT s.role FROM page_shares s JOIN identity_tenant_membership m ON m.principal_id=s.principal_id AND m.tenant_id=s.tenant_id AND m.is_active=1 JOIN identity_principal i ON i.id=s.principal_id AND i.is_active=1 WHERE s.root_id=p.root_id AND s.principal_id=? AND s.tenant_id=p.tenant_id),'reader') END AS actor_role, EXISTS(SELECT 1 FROM page_shares shared WHERE shared.root_id=p.root_id) AS is_shared FROM pages p WHERE p.tenant_id=? AND
       (p.owner_id=? OR EXISTS (SELECT 1 FROM page_shares s JOIN identity_tenant_membership m ON m.principal_id=s.principal_id AND m.tenant_id=s.tenant_id AND m.is_active=1 JOIN identity_principal i ON i.id=s.principal_id AND i.is_active=1 JOIN tenants t ON t.id=s.tenant_id AND t.is_active=1 WHERE s.root_id=p.root_id AND s.principal_id=? AND s.tenant_id=p.tenant_id)) AND
       (?='' OR p.title LIKE ? ESCAPE '\\' OR p.search_text LIKE ? ESCAPE '\\') ORDER BY p.updated_at DESC LIMIT 200`,
       )
       .bind(
+        query.trim(),
         this.actor.principal.id,
         this.actor.principal.id,
         tenantId,
@@ -589,23 +592,30 @@ export class PagesService {
           | "updated_at"
           | "owner_id"
           | "binding_json"
+          | "search_text"
         > & { actor_role: PageRole; is_shared: number }
       >();
-    return (rows.results ?? []).map((row) => ({
-      id: row.id,
-      parentId: row.parent_id,
-      rootId: row.root_id,
-      title: row.title,
-      kind: row.kind,
-      version: row.version,
-      updatedAt: row.updated_at,
-      ownerId: row.owner_id,
-      role: row.actor_role,
-      isShared: Boolean(row.is_shared),
-      binding: row.binding_json
-        ? (JSON.parse(row.binding_json) as PageBinding)
-        : null,
-    }));
+    return (rows.results ?? []).map((row) => {
+      const summary = {
+        id: row.id,
+        parentId: row.parent_id,
+        rootId: row.root_id,
+        title: row.title,
+        kind: row.kind,
+        version: row.version,
+        updatedAt: row.updated_at,
+        ownerId: row.owner_id,
+        role: row.actor_role,
+        isShared: Boolean(row.is_shared),
+        binding: row.binding_json
+          ? (JSON.parse(row.binding_json) as PageBinding)
+          : null,
+      };
+      const excerpt = query.trim()
+        ? makePageExcerpt(row.search_text, query, { requireMatch: false })
+        : undefined;
+      return excerpt ? { ...summary, excerpt } : summary;
+    });
   }
 
   async create(input: {

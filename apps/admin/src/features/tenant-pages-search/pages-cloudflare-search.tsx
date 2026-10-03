@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import type { PagesClient, PageSummary } from "@/features/pages/client";
+import type { PagesClient } from "@/features/pages/client";
 import { subscribePageChanges } from "@/features/pages/page-events";
+import {
+  PageSearchResults,
+  type PageSearchResult,
+} from "@/features/pages/page-search-results";
+import { pagesMessages } from "@/features/pages/messages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMessages } from "@/i18n/core";
@@ -14,14 +18,16 @@ type Status = {
   indexed: number;
   needed: string[];
 };
-type Result = PageSummary & { score: number };
+type Result = PageSearchResult & { score: number };
 
 export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
   const t = useMessages(tenantPagesSearchMessages);
+  const pagesT = useMessages(pagesMessages);
   const [status, setStatus] = useState<Status>();
   const [statusError, setStatusError] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[]>([]);
+  const [searchComplete, setSearchComplete] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [searching, setSearching] = useState(false);
   const [indexing, setIndexing] = useState(false);
@@ -85,6 +91,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
     const request = ++searchRef.current;
     searchAbortRef.current?.abort();
     setResults([]);
+    setSearchComplete(false);
     setSearchError(false);
     setSearching(false);
     if (!status?.enabled || !status.available || !query.trim()) return;
@@ -98,7 +105,10 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
           signal: controller.signal,
         })
         .then(({ data }) => {
-          if (request === searchRef.current) setResults(data);
+          if (request === searchRef.current) {
+            setResults(data);
+            setSearchComplete(true);
+          }
         })
         .catch(() => {
           if (!controller.signal.aborted && request === searchRef.current)
@@ -219,22 +229,12 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
           {searchError ? (
             <p role="alert">{t("Semantic page search failed")}</p>
           ) : null}
-          {results.length ? (
-            <ul
-              className="grid gap-2"
-              aria-label={t("Semantic search results")}
-            >
-              {results.map((result) => (
-                <li key={result.id} className="rounded-md border p-3">
-                  <Link
-                    className="font-medium text-primary underline-offset-4 hover:underline"
-                    to={`/pages/${encodeURIComponent(result.id)}`}
-                  >
-                    {result.title}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          {searchComplete && !searchError && query.trim() ? (
+            <PageSearchResults
+              pages={results}
+              query={query}
+              empty={pagesT("No results")}
+            />
           ) : null}
         </>
       ) : null}

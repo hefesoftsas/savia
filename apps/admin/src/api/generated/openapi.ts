@@ -11705,6 +11705,7 @@ export interface paths {
                   recordId: string;
                 } | null;
                 score: number;
+                excerpt?: string;
               }[];
             };
           };
@@ -12049,6 +12050,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
               }[];
             };
           };
@@ -12147,6 +12149,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -12179,6 +12182,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -12366,6 +12370,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -12462,6 +12467,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -12792,6 +12798,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];
@@ -12904,6 +12911,7 @@ export interface paths {
                   collection: string;
                   recordId: string;
                 } | null;
+                excerpt?: string;
                 content: {
                   [key: string]: unknown;
                 }[];

@@ -73,6 +73,17 @@ export const pagesMessages = {
     "Search pages and content",
     "Buscar páginas e conteúdo",
   ],
+  "One page search result": ["1 resultado", "1 result", "1 resultado"],
+  "Multiple page search results": [
+    "%{count} resultados",
+    "%{count} results",
+    "%{count} resultados",
+  ],
+  "Page updated date": [
+    "Actualizada: %{date}",
+    "Updated: %{date}",
+    "Atualizada: %{date}",
+  ],
   Private: ["Privada", "Private", "Privada"],
   Shared: ["Compartida", "Shared", "Compartilhada"],
   "Team private": ["Equipo: privado", "Team: private", "Equipe: privada"],
