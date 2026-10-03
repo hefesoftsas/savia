@@ -58,6 +58,7 @@ import { exportPageMarkdown } from "./markdown-export";
 import { useIssueProviders, type IssueProvider } from "./use-issue-providers";
 import { PagesCloudflareSearch } from "@/features/tenant-pages-search/pages-cloudflare-search";
 import { retireLocalPageSearchCaches } from "@/features/tenant-pages-search/retire-local-search-cache";
+import { PageSearchResults } from "./page-search-results";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -549,6 +550,7 @@ export function PagesPage({
                       )
                 }
                 empty={query ? t("No results") : t("Empty")}
+                query={query}
               />
             )}
             <Dialog
@@ -1111,11 +1113,22 @@ function DocumentPane({
 function PageListing({
   pages,
   empty,
+  query = "",
 }: {
   pages: PageSummary[];
   empty: string;
+  query?: string;
 }) {
   const t = useMessages(pagesMessages);
+  if (query.trim())
+    return (
+      <PageSearchResults
+        pages={pages}
+        query={query}
+        empty={empty}
+        sortByTitle
+      />
+    );
   const sorted = [...pages].sort(
     (a, b) =>
       Number(b.kind === "folder") - Number(a.kind === "folder") ||

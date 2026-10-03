@@ -21,6 +21,7 @@ export type PageSummary = {
   role: PageRole;
   isShared: boolean;
   binding?: PageBinding | null;
+  excerpt?: string;
 };
 
 export type PlateNode = {

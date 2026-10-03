@@ -2,6 +2,7 @@ import type { AppActor } from "../auth/types";
 import { chunkText, CLOUDFLARE_EMBEDDING_MODEL } from "../assistant/rag";
 import { activeTenant, PagesError, PagesService } from "./service";
 import { readPagesSearchSettings } from "./search-settings";
+import { makePageExcerpt } from "./excerpt";
 
 export type PagesSearchBindings = {
   PAGES_SEARCH_RATE_LIMITER?: {
@@ -37,6 +38,32 @@ export type PagesSearchBindings = {
 };
 const unavailable = () =>
   new PagesError(503, "SEARCH_UNAVAILABLE", "Cloudflare search is unavailable");
+
+function pageTextLeaves(nodes: unknown): string {
+  if (Array.isArray(nodes)) return nodes.map(pageTextLeaves).join(" ");
+  if (!nodes || typeof nodes !== "object") return "";
+  const node = nodes as { text?: unknown; children?: unknown };
+  return typeof node.text === "string"
+    ? node.text
+    : pageTextLeaves(node.children);
+}
+
+async function pageVectorPrefix(
+  tenantId: number,
+  pageId: string,
+  version: number,
+): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`${tenantId}:${pageId}:${version}`),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  )
+    .join("")
+    .slice(0, 48);
+}
+
 export class CloudflarePagesSearch {
   private pages: PagesService;
   constructor(
@@ -112,15 +139,9 @@ export class CloudflarePagesSearch {
       .first<{ version: number; vector_ids: string }>();
     if (previous?.version === page.version)
       return { id: page.id, version: page.version, reused: true };
-    const leaves = (nodes: unknown): string =>
-      Array.isArray(nodes)
-        ? nodes.map(leaves).join(" ")
-        : nodes && typeof nodes === "object"
-          ? typeof (nodes as { text?: unknown }).text === "string"
-            ? (nodes as { text: string }).text
-            : leaves((nodes as { children?: unknown }).children)
-          : "";
-    const chunks = chunkText(`${page.title}\n\n${leaves(page.content)}`);
+    const chunks = chunkText(
+      `${page.title}\n\n${pageTextLeaves(page.content)}`,
+    );
     const response: { data: number[][] } = { data: [] };
     for (let offset = 0; offset < chunks.length; offset += 32) {
       await this.authorized();
@@ -150,15 +171,7 @@ export class CloudflarePagesSearch {
         "VERSION_CONFLICT",
         "Page changed during indexing",
       );
-    const digest = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(`${tenantId}:${page.id}:${page.version}`),
-    );
-    const prefix = Array.from(new Uint8Array(digest), (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    )
-      .join("")
-      .slice(0, 48);
+    const prefix = await pageVectorPrefix(tenantId, page.id, page.version);
     const vectors = response.data.map((values, i) => ({
       id: `${prefix}:${i}`,
       values,
@@ -229,8 +242,36 @@ export class CloudflarePagesSearch {
         if (page.kind !== "page" || page.version !== hit.metadata?.version)
           continue;
         seen.add(pageId);
+        const pageText = pageTextLeaves(page.content);
+        const chunks = chunkText(`${page.title}\n\n${pageText}`);
+        const vectorId =
+          typeof hit.id === "string"
+            ? /^([a-f0-9]{48}):(0|[1-9][0-9]*)$/.exec(hit.id)
+            : null;
+        let excerptSource: string | undefined;
+        if (vectorId) {
+          const chunkIndex = Number(vectorId[2]);
+          if (
+            Number.isSafeInteger(chunkIndex) &&
+            vectorId[1] ===
+              (await pageVectorPrefix(tenantId, page.id, page.version)) &&
+            chunkIndex < chunks.length
+          ) {
+            excerptSource = chunks[chunkIndex];
+            const titlePrefix = `${page.title}\n\n`;
+            if (chunkIndex === 0 && excerptSource.startsWith(titlePrefix))
+              excerptSource = excerptSource.slice(titlePrefix.length);
+          }
+        }
+        const excerpt = makePageExcerpt(excerptSource || pageText, query, {
+          requireMatch: false,
+        });
         const { content, ...summary } = page;
-        hits.push({ ...summary, score: hit.score });
+        hits.push({
+          ...summary,
+          ...(excerpt ? { excerpt } : {}),
+          score: hit.score,
+        });
         if (hits.length >= 20) break;
       } catch (error) {
         if (!(error instanceof PagesError && error.status === 404)) throw error;

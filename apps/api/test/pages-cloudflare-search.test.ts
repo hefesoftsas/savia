@@ -165,6 +165,76 @@ it("scopes retrieval to tenant and drops unauthorized, deleted, stale and duplic
     },
   );
 });
+it("returns semantic excerpts from the authorized matched content chunk only", async () => {
+  const f = await fixture();
+  await enable(f.tenantId);
+  const firstParagraph = "early body ".repeat(40);
+  const secondParagraph = `matched semantic needle context ${"later body ".repeat(40)}`;
+  await f.pages.save(f.page.id, {
+    title: "Semantic excerpt page",
+    content: [
+      { type: "p", children: [{ text: firstParagraph }] },
+      { type: "p", children: [{ text: secondParagraph }] },
+    ],
+    version: 1,
+  });
+  const vectors: Array<{
+    id: string;
+    values: number[];
+    namespace: string;
+    metadata: { pageId: string; version: number };
+  }> = [];
+  f.bindings.PAGES_VECTORIZE.upsert.mockImplementation(async (items) => {
+    vectors.push(...items);
+    return {};
+  });
+  await f.search.indexPage(f.page.id);
+  const matched = vectors.find((vector) => vector.id.endsWith(":1"));
+  expect(matched).toBeDefined();
+  f.bindings.PAGES_VECTORIZE.query.mockResolvedValue({
+    matches: [
+      {
+        id: matched!.id,
+        score: 0.9,
+        metadata: {
+          pageId: f.page.id,
+          version: 2,
+          text: "untrusted provider text",
+          excerpt: "untrusted provider excerpt",
+        },
+      },
+    ],
+  });
+
+  const [result] = await f.search.search("needle");
+  expect(result).toMatchObject({ title: "Semantic excerpt page" });
+  expect(result.excerpt).toContain("matched semantic needle context");
+  expect(result.excerpt.length).toBeLessThanOrEqual(360);
+  expect(JSON.stringify(result)).not.toContain("untrusted provider");
+  expect(result).not.toHaveProperty("content");
+});
+it("drops a semantic match when page authorization is revoked after vector retrieval", async () => {
+  const f = await fixture();
+  await enable(f.tenantId);
+  const other = await fixture();
+  await f.search.indexPage(f.page.id);
+  f.bindings.PAGES_VECTORIZE.query.mockImplementationOnce(async () => {
+    await env.DB.prepare("UPDATE pages SET owner_id=? WHERE id=?")
+      .bind(other.actor.principal.id, f.page.id)
+      .run();
+    return {
+      matches: [
+        {
+          id: "a".repeat(48) + ":0",
+          score: 0.9,
+          metadata: { pageId: f.page.id, version: 1 },
+        },
+      ],
+    };
+  });
+
+  expect(await f.search.search("knowledge")).toEqual([]);
+});
 it("rejects permission revocation while embedding and never submits vectors", async () => {
   const f = await fixture();
   await enable(f.tenantId);
