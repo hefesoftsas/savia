@@ -81,7 +81,7 @@ class MainActivity : FlutterActivity() {
             probe.release()
         }
         val maxDurationUs = 3_600_000_000L
-        require(durationUs > 0 && durationUs <= maxDurationUs + 100_000L)
+        require(durationUs > 0)
         val acceptedDurationUs = minOf(durationUs, maxDurationUs)
         val segmentUs = segmentSeconds * 1_000_000L
         val count = ((acceptedDurationUs + segmentUs - 1) / segmentUs).toInt()
@@ -113,8 +113,7 @@ class MainActivity : FlutterActivity() {
                         val sampleTrack = extractor.sampleTrackIndex
                         val sampleTime = extractor.sampleTime
                         if (sampleTrack < 0 || sampleTime < 0) break
-                        val finalPadding = if (sequence == count - 1) 100_000L else 0L
-                        if (sampleTime >= endUs + finalPadding) break
+                        if (sampleTime >= endUs) break
                         if (sampleTrack == audioTrack) {
                             buffer.clear()
                             val size = extractor.readSampleData(buffer, 0)
@@ -131,7 +130,9 @@ class MainActivity : FlutterActivity() {
                     }
                     muxer.stop()
                     require(firstUs >= 0 && lastUs >= firstUs && file.length() > 0)
-                    val duration = ((lastUs - firstUs + frameDurationUs).coerceAtMost(segmentUs + 100_000L).toDouble() / 1_000_000.0)
+                    val duration = ((lastUs - firstUs + frameDurationUs)
+                        .coerceAtMost(endUs - startUs)
+                        .toDouble() / 1_000_000.0)
                     require(duration > 0 && duration <= segmentSeconds + 0.1)
                     completed.add(
                         mapOf(

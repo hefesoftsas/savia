@@ -196,8 +196,10 @@ an earlier provider request may already have incurred a charge.
 See [recording sessions](long-recording-next-phase.md) for ownership, limits,
 processing leases, desktop recovery and the remaining physical-device qualification.
 
-Phase 2 local verification: Flutter analyzer passed, all 64 tests passed, and the
+Phase 2 local verification: Flutter analyzer passed, all 71 tests passed, and the
 Android debug APK compiled with the configured preview public OAuth client.
 Regression coverage includes segment retry identity, separate ambiguous-job retry
-consent, desktop Ogg/mobile M4A metadata, and playback switching/close races.
+consent, desktop Ogg/mobile M4A metadata, playback/background races, and stale
+processing polls. Native segmentation trims timer or encoder overshoot to the
+first hour; the finalized session remains capped at 3,600 seconds.
 iOS compilation remains a CI check; no physical-device qualification is implied.

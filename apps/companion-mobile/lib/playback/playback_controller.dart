@@ -25,6 +25,7 @@ class PlaybackController extends ChangeNotifier {
   Future<void>? _opening;
   Future<void>? _toggleInFlight;
   int _generation = 0;
+  int _pauseGeneration = 0;
   bool _disposed = false;
   bool _closingStarted = false;
   Future<void>? _closing;
@@ -39,7 +40,26 @@ class PlaybackController extends ChangeNotifier {
   );
 
   Future<void> pause() async {
-    if (!playing || loading || _disposed) return;
+    if (_disposed || _closingStarted) return;
+    if (loading) {
+      // A background transition must invalidate an open that has not started
+      // playback yet. The request may already have reached the server, but the
+      // downloaded file and decoder are still local and can be safely stopped.
+      _pauseGeneration++;
+      _generation++;
+      _cancel?.cancel();
+      await _toggleInFlight;
+      await player.stop();
+      if (_path != null) await files.remove(_path!);
+      _path = null;
+      _cacheKey = null;
+      _cancel = null;
+      playing = false;
+      loading = false;
+      _notify();
+      return;
+    }
+    if (!playing) return;
     loading = true;
     _notify();
     try {
@@ -95,9 +115,12 @@ class PlaybackController extends ChangeNotifier {
     loading = true;
     _notify();
     var generation = _generation;
+    final pauseGeneration = _pauseGeneration;
     try {
       if (_cacheKey != cacheKey) await _discardCurrent();
-      if (_disposed || _closingStarted) return;
+      if (_disposed || _closingStarted || pauseGeneration != _pauseGeneration) {
+        return;
+      }
       generation = _generation;
       final opening = _open(cacheKey, extension, download, generation);
       _opening = opening;

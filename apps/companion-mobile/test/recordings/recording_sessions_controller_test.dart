@@ -6,6 +6,130 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'a poll started before processing cannot replace the mutation response',
+    () async {
+      final stalePoll = Completer<RecordingSession>();
+      final timer = FakePollTimerFactory();
+      var reads = 0;
+      final controller = RecordingSessionsController(
+        list: ({cursor}) async =>
+            RecordingSessionPage(sessions: [], cursor: null),
+        get: (id) async {
+          reads++;
+          if (reads == 1) return _session(SessionJobStatus.queued);
+          return stalePoll.future;
+        },
+        process: (id, {required consent, required retryAmbiguous}) async =>
+            _session(SessionJobStatus.complete),
+        cancel: (id) async => _session(SessionJobStatus.cancelled),
+        answer: (id, question, {required consent}) async => const SessionAnswer(
+          answer: '',
+          insufficientEvidence: true,
+          partial: false,
+          evidence: [],
+        ),
+        timerFactory: timer.create,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.select(_session(SessionJobStatus.queued).id);
+      timer.tick();
+      await Future<void>.delayed(Duration.zero);
+      expect(reads, 2);
+
+      await controller.process(consent: true);
+      expect(controller.selectedSession?.job.status, SessionJobStatus.complete);
+      stalePoll.complete(_session(SessionJobStatus.transcribing));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.selectedSession?.job.status, SessionJobStatus.complete);
+    },
+  );
+
+  test('overlapping poll ticks coalesce into one session read', () async {
+    final timer = FakePollTimerFactory();
+    final pendingPoll = Completer<RecordingSession>();
+    var reads = 0;
+    final controller = RecordingSessionsController(
+      list: ({cursor}) async =>
+          RecordingSessionPage(sessions: [], cursor: null),
+      get: (id) async {
+        reads++;
+        if (reads == 1) return _session(SessionJobStatus.queued);
+        return pendingPoll.future;
+      },
+      process: (id, {required consent, required retryAmbiguous}) async =>
+          _session(SessionJobStatus.queued),
+      cancel: (id) async => _session(SessionJobStatus.cancelled),
+      answer: (id, question, {required consent}) async => const SessionAnswer(
+        answer: '',
+        insufficientEvidence: true,
+        partial: false,
+        evidence: [],
+      ),
+      timerFactory: timer.create,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.select(_session(SessionJobStatus.queued).id);
+    timer.tick();
+    timer.tick();
+    await Future<void>.delayed(Duration.zero);
+    expect(reads, 2);
+
+    pendingPoll.complete(_session(SessionJobStatus.complete));
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.selectedSession?.job.status, SessionJobStatus.complete);
+  });
+
+  test(
+    'a poll started before cancellation cannot replace the cancelled response',
+    () async {
+      final stalePoll = Completer<RecordingSession>();
+      final timer = FakePollTimerFactory();
+      var reads = 0;
+      final controller = RecordingSessionsController(
+        list: ({cursor}) async =>
+            RecordingSessionPage(sessions: [], cursor: null),
+        get: (id) async {
+          reads++;
+          if (reads == 1) return _session(SessionJobStatus.transcribing);
+          return stalePoll.future;
+        },
+        process: (id, {required consent, required retryAmbiguous}) async =>
+            _session(SessionJobStatus.queued),
+        cancel: (id) async => _session(SessionJobStatus.cancelled),
+        answer: (id, question, {required consent}) async => const SessionAnswer(
+          answer: '',
+          insufficientEvidence: true,
+          partial: false,
+          evidence: [],
+        ),
+        timerFactory: timer.create,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.select(_session(SessionJobStatus.transcribing).id);
+      timer.tick();
+      await Future<void>.delayed(Duration.zero);
+      expect(reads, 2);
+
+      await controller.cancelProcessing();
+      expect(
+        controller.selectedSession?.job.status,
+        SessionJobStatus.cancelled,
+      );
+      stalePoll.complete(_session(SessionJobStatus.transcribing));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        controller.selectedSession?.job.status,
+        SessionJobStatus.cancelled,
+      );
+    },
+  );
+
+  test(
     'polls queued background work until a complete session arrives',
     () async {
       var reads = 0;

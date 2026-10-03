@@ -54,7 +54,8 @@ class CapturedSessionUploader {
         draft.bytes < 1 ||
         draft.bytes > 50000000 ||
         (draft.durationSeconds != null &&
-            (draft.durationSeconds! <= 0 || draft.durationSeconds! > 3600))) {
+            (!draft.durationSeconds!.isFinite ||
+                draft.durationSeconds! <= 0))) {
       throw ArgumentError('Invalid long recording draft.');
     }
     final source = File(draft.path);

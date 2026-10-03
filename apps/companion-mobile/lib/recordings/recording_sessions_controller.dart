@@ -57,7 +57,11 @@ class RecordingSessionsController extends ChangeNotifier {
   bool _disposed = false;
   int _generation = 0;
   int _selection = 0;
+  int _sessionRevision = 0;
   Timer? _pollTimer;
+  Future<void>? _refreshInFlight;
+  String? _refreshId;
+  int? _refreshSelection;
 
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -86,6 +90,7 @@ class RecordingSessionsController extends ChangeNotifier {
 
   Future<void> select(String id) async {
     final selection = ++_selection;
+    _sessionRevision++;
     final generation = _generation;
     _stopPolling();
     selectedId = id;
@@ -114,25 +119,51 @@ class RecordingSessionsController extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshSelected() async {
+  Future<void> refreshSelected({bool force = false}) async {
     final id = selectedId;
     final generation = _generation;
     final selection = _selection;
     if (id == null || detailLoading) return;
-    try {
-      final session = await get(id);
-      if (generation == _generation && selection == _selection) {
-        selectedSession = session;
-        _syncPolling();
-        _notify();
+    final pending = _refreshInFlight;
+    if (pending != null && _refreshId == id && _refreshSelection == selection) {
+      await pending;
+      if (force && generation == _generation && selection == _selection) {
+        return refreshSelected(force: true);
       }
-    } catch (error) {
-      if (generation == _generation && selection == _selection) {
-        failure = _safe(error);
-        _stopPolling();
-        _notify();
-      }
+      return;
     }
+    final revision = _sessionRevision;
+    late final Future<void> request;
+    request = Future<void>.microtask(() async {
+      try {
+        final session = await get(id);
+        if (generation == _generation &&
+            selection == _selection &&
+            revision == _sessionRevision) {
+          selectedSession = session;
+          _syncPolling();
+          _notify();
+        }
+      } catch (error) {
+        if (generation == _generation &&
+            selection == _selection &&
+            revision == _sessionRevision) {
+          failure = _safe(error);
+          _stopPolling();
+          _notify();
+        }
+      } finally {
+        if (identical(_refreshInFlight, request)) {
+          _refreshInFlight = null;
+          _refreshId = null;
+          _refreshSelection = null;
+        }
+      }
+    });
+    _refreshInFlight = request;
+    _refreshId = id;
+    _refreshSelection = selection;
+    await request;
   }
 
   Future<void> process({
@@ -143,6 +174,7 @@ class RecordingSessionsController extends ChangeNotifier {
     if (!consent || processing || session == null) return;
     final generation = _generation;
     final selection = _selection;
+    _sessionRevision++;
     processing = true;
     failure = null;
     _notify();
@@ -153,13 +185,15 @@ class RecordingSessionsController extends ChangeNotifier {
         retryAmbiguous: retryAmbiguous,
       );
       if (generation == _generation && selection == _selection) {
+        _sessionRevision++;
         selectedSession = updated;
         _syncPolling();
       }
     } catch (error) {
       if (generation == _generation && selection == _selection) {
+        _sessionRevision++;
         failure = _safe(error);
-        await refreshSelected();
+        await refreshSelected(force: true);
       }
     } finally {
       if (generation == _generation && selection == _selection) {
@@ -174,18 +208,22 @@ class RecordingSessionsController extends ChangeNotifier {
     if (session == null || processing) return;
     final generation = _generation;
     final selection = _selection;
+    _sessionRevision++;
     processing = true;
     failure = null;
     _notify();
     try {
       final updated = await cancel(session.id);
       if (generation == _generation && selection == _selection) {
+        _sessionRevision++;
         selectedSession = updated;
         _syncPolling();
       }
     } catch (error) {
       if (generation == _generation && selection == _selection) {
+        _sessionRevision++;
         failure = _safe(error);
+        await refreshSelected(force: true);
       }
     } finally {
       if (generation == _generation && selection == _selection) {
@@ -231,6 +269,7 @@ class RecordingSessionsController extends ChangeNotifier {
 
   void closeDetail() {
     _selection++;
+    _sessionRevision++;
     _stopPolling();
     selectedId = null;
     selectedSession = null;
@@ -245,6 +284,7 @@ class RecordingSessionsController extends ChangeNotifier {
   void clear() {
     _generation++;
     _selection++;
+    _sessionRevision++;
     _stopPolling();
     sessions = [];
     cursor = null;

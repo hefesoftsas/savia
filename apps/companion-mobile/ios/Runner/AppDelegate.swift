@@ -84,7 +84,7 @@ import UIKit
       throw NSError(domain: "SaviaAudioSegments", code: 2)
     }
     let rawDuration = asset.duration.seconds
-    guard rawDuration.isFinite && rawDuration > 0 && rawDuration <= 3600.1 else {
+    guard rawDuration.isFinite && rawDuration > 0 else {
       throw NSError(domain: "SaviaAudioSegments", code: 3)
     }
     let duration = min(rawDuration, 3600.0)
@@ -129,13 +129,16 @@ import UIKit
         let outputDuration = outputAsset.duration.seconds
         let outputAttributes = try FileManager.default.attributesOfItem(atPath: destination.path)
         let bytes = (outputAttributes[.size] as? NSNumber)?.intValue ?? 0
-        guard outputDuration > 0 && outputDuration <= Double(segmentSeconds) + 0.1 && bytes > 0 else {
+        guard
+          outputDuration.isFinite && outputDuration > 0
+            && outputDuration <= segmentDuration + 0.1 && bytes > 0
+        else {
           throw NSError(domain: "SaviaAudioSegments", code: 8)
         }
         completed.append([
           "path": destination.path,
           "startSeconds": startSeconds,
-          "durationSeconds": outputDuration,
+          "durationSeconds": min(outputDuration, segmentDuration),
           "bytes": bytes,
         ])
       }

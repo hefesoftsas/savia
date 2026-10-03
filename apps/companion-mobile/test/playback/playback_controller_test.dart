@@ -10,6 +10,7 @@ import 'package:companion_mobile/recordings/models.dart';
 class Player implements AudioPlayerAdapter {
   String? path;
   bool disposed = false;
+  int playCalls = 0;
   final done = Completer<void>();
   @override
   Future<void> openFile(String path) async {
@@ -17,7 +18,11 @@ class Player implements AudioPlayerAdapter {
   }
 
   @override
-  Future<void> play() => done.future;
+  Future<void> play() {
+    playCalls++;
+    return done.future;
+  }
+
   @override
   Future<void> pause() async {}
   @override
@@ -33,6 +38,49 @@ class Player implements AudioPlayerAdapter {
 }
 
 void main() {
+  test('background pause cancels a pending download and permits a later explicit play', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'playback-background-pause-',
+    );
+    final player = Player();
+    final playback = PlaybackController(
+      player: player,
+      files: TempFiles(directory),
+      download: (_, _, _) async {},
+    );
+    final downloadStarted = Completer<void>();
+    final finishDownload = Completer<void>();
+    final first = playback.toggleAudio(
+      cacheKey: 'session:pending',
+      extension: 'm4a',
+      download: (path, cancellation) async {
+        downloadStarted.complete();
+        await cancellation.whenCancel;
+        await finishDownload.future;
+        await File(path).writeAsBytes([1, 2, 3]);
+      },
+    );
+    await downloadStarted.future;
+
+    final pausing = playback.pause();
+    finishDownload.complete();
+    await Future.wait([pausing, first]);
+
+    expect(player.playCalls, 0);
+    expect(playback.cacheKey, isNull);
+    expect(playback.loading, false);
+    expect(await directory.list().toList(), isEmpty);
+
+    await playback.toggleAudio(
+      cacheKey: 'session:pending',
+      extension: 'm4a',
+      download: (path, _) async => File(path).writeAsBytes([4, 5, 6]),
+    );
+    expect(player.playCalls, 1);
+    await playback.close();
+    await directory.delete(recursive: true);
+  });
+
   test(
     'ignores a second segment tap while the first switch is pending',
     () async {

@@ -19,6 +19,94 @@ void main() {
 
   tearDown(() async => temp.delete(recursive: true));
 
+  for (final overshoot in [3600.25, 3601.0]) {
+    test(
+      'trims a captured duration of $overshoot seconds to one hour',
+      () async {
+        final sourcePath = '${temp.path}/capture.m4a';
+        await File(sourcePath).writeAsBytes([9, 8, 7]);
+        final parts = List.generate(
+          120,
+          (sequence) => (
+            start: sequence * 30.0,
+            duration: 30.0,
+            data: <int>[sequence % 255],
+          ),
+        );
+        final segmenter = FakeSegmenter(files, parts);
+        final api = FakeSessionUploadApi()
+          ..created = recordingSession(
+            chunks: [
+              for (var sequence = 0; sequence < 120; sequence++)
+                sessionChunk(
+                  sequence: sequence,
+                  start: sequence * 30.0,
+                  duration: 30,
+                  bytes: 1,
+                ),
+            ],
+          );
+        final uploader = CapturedSessionUploader(
+          api: api,
+          segmenter: segmenter,
+          files: files,
+        );
+
+        await uploader.upload(
+          RecordingDraft(
+            id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
+            path: sourcePath,
+            name: 'Recording.m4a',
+            format: 'm4a',
+            bytes: 3,
+            durationSeconds: overshoot,
+            isCapture: true,
+          ),
+          cancellation: CancelToken(),
+        );
+
+        expect(api.finalizeCall, (count: 120, duration: 3600.0));
+      },
+    );
+  }
+
+  test(
+    'rejects nonfinite captured durations before creating a session',
+    () async {
+      final sourcePath = '${temp.path}/capture.m4a';
+      await File(sourcePath).writeAsBytes([9, 8, 7]);
+      final api = FakeSessionUploadApi();
+      final uploader = CapturedSessionUploader(
+        api: api,
+        segmenter: FakeSegmenter(files, []),
+        files: files,
+      );
+
+      for (final duration in [
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+      ]) {
+        await expectLater(
+          uploader.upload(
+            RecordingDraft(
+              id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
+              path: sourcePath,
+              name: 'Recording.m4a',
+              format: 'm4a',
+              bytes: 3,
+              durationSeconds: duration,
+              isCapture: true,
+            ),
+            cancellation: CancelToken(),
+          ),
+          throwsArgumentError,
+        );
+      }
+      expect(api.createIds, isEmpty);
+    },
+  );
+
   test(
     'resumes from server chunks and finalizes without uploading duplicates',
     () async {
