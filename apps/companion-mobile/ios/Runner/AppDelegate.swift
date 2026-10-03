@@ -13,7 +13,9 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SaviaAudioSegments")
+    guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SaviaAudioSegments") else {
+      return
+    }
     let channel = FlutterMethodChannel(
       name: "savia.companion/audio_segments",
       binaryMessenger: registrar.messenger()

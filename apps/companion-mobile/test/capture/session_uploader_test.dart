@@ -38,6 +38,7 @@ void main() {
         files: files,
       );
 
+      final progress = <(int, int)>[];
       final result = await uploader.upload(
         RecordingDraft(
           id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
@@ -49,8 +50,12 @@ void main() {
           isCapture: true,
         ),
         cancellation: CancelToken(),
+        onProgress: (sent, total) => progress.add((sent, total)),
       );
 
+      expect(progress, contains((4, 5)));
+      expect(progress.last, (5, 5));
+      expect(progress.every((item) => item.$1 <= item.$2), isTrue);
       expect(api.createIds, ['8b87d175-a584-4e3d-95cb-e96c84248e15']);
       expect(api.uploads.map((upload) => upload.sequence), [1]);
       expect(api.finalizeCall, (count: 2, duration: 42.0));
@@ -241,6 +246,8 @@ class FakeSessionUploadApi implements RecordingSessionUploadApi {
     void Function(int, int)? onProgress,
   }) async {
     if (failUpload) throw StateError('upload failed');
+    onProgress?.call(500, 1000);
+    onProgress?.call(1000, 1000);
     uploads.add((sequence: sequence, start: startSeconds));
     final previous = created.chunks;
     created = recordingSession(

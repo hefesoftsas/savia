@@ -146,8 +146,16 @@ class CapturedSessionUploader {
           path: segment.path,
           expectedBytes: segment.bytes,
           cancellation: cancellation,
-          onProgress: (sent, _) =>
-              onProgress?.call(completedBytes + sent, totalBytes),
+          onProgress: (sent, requestBytes) {
+            // Dio reports JSON/base64 transport bytes, not raw segment bytes.
+            final fraction = requestBytes > 0
+                ? (sent / requestBytes).clamp(0.0, 1.0)
+                : 0.0;
+            onProgress?.call(
+              completedBytes + (segment.bytes * fraction).floor(),
+              totalBytes,
+            );
+          },
         );
         completedBytes += segment.bytes;
         onProgress?.call(completedBytes, totalBytes);
