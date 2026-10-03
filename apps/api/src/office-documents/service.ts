@@ -1,5 +1,5 @@
 import type { AppActor } from "../auth/types";
-import { activeTenant, PagesError } from "../pages/service";
+import { activeTenant, activeTenantScope, PagesError } from "../pages/service";
 import {
   assertOfficeSuiteEnabled,
   OfficeSettingsError,
@@ -19,9 +19,13 @@ type DocumentRow = {
   mime: string;
   size: number;
   version: number;
+  share_version: number;
   storage_key: string;
   created_at: string;
   updated_at: string;
+  owner_display_name: string | null;
+  owner_email: string;
+  share_role: "reader" | "editor" | null;
 };
 
 export class OfficeDocumentsError extends Error {
@@ -45,6 +49,15 @@ export type OfficeDocumentSummary = {
   size: number;
   version: number;
   updatedAt: string;
+  role: "owner" | "reader" | "editor";
+  ownerName: string;
+};
+
+export type OfficeDocumentShare = {
+  principalId: string;
+  role: "reader" | "editor";
+  displayName: string;
+  email: string;
 };
 
 export class OfficeDocumentsService {
@@ -78,6 +91,42 @@ export class OfficeDocumentsService {
         OR (${tenantColumn}<>0 AND EXISTS(SELECT 1 FROM identity_tenant_membership m JOIN tenants t ON t.id=m.tenant_id AND t.is_active=1 WHERE m.principal_id=? AND m.tenant_id=${tenantColumn} AND m.is_active=1)))`;
   }
 
+  private accessScope(
+    alias: string,
+    access: "read" | "edit" | "owner" = "read",
+  ) {
+    const shared =
+      access === "read" ? "s.role IN ('reader','editor')" : "s.role='editor'";
+    return `EXISTS(
+      SELECT 1 FROM identity_principal actor
+      JOIN identity_principal owner ON owner.id=${alias}.owner_id AND owner.is_active=1
+      WHERE actor.id=? AND actor.is_active=1
+        AND ${activeTenantScope("actor.id", `${alias}.tenant_id`)}
+        AND (${alias}.owner_id=actor.id OR (${
+          access === "owner"
+            ? "0"
+            : `EXISTS(
+          SELECT 1 FROM office_document_shares s
+          JOIN identity_principal member ON member.id=s.principal_id AND member.is_active=1
+          JOIN identity_tenant_membership m ON m.principal_id=member.id AND m.tenant_id=${alias}.tenant_id AND m.is_active=1
+          JOIN tenants t ON t.id=m.tenant_id AND t.is_active=1
+          WHERE s.document_id=${alias}.id AND s.tenant_id=${alias}.tenant_id
+            AND s.principal_id=actor.id AND ${shared}
+        )`
+        }))
+    )`;
+  }
+
+  private shareJoin(alias: string) {
+    return `LEFT JOIN office_document_shares actor_share
+      ON actor_share.document_id=${alias}.id AND actor_share.tenant_id=${alias}.tenant_id
+        AND actor_share.principal_id=?
+        AND EXISTS(SELECT 1 FROM identity_principal member
+          JOIN identity_tenant_membership m ON m.principal_id=member.id AND m.tenant_id=${alias}.tenant_id AND m.is_active=1
+          JOIN tenants t ON t.id=m.tenant_id AND t.is_active=1
+          WHERE member.id=actor_share.principal_id AND member.is_active=1)`;
+  }
+
   private summary(row: DocumentRow): OfficeDocumentSummary {
     return {
       id: row.id,
@@ -86,6 +135,13 @@ export class OfficeDocumentsService {
       size: row.size,
       version: row.version,
       updatedAt: row.updated_at,
+      role:
+        row.owner_id === this.actor.principal.id
+          ? "owner"
+          : row.share_role === "editor"
+            ? "editor"
+            : "reader",
+      ownerName: row.owner_display_name?.trim() || row.owner_email,
     };
   }
 
@@ -93,20 +149,203 @@ export class OfficeDocumentsService {
     const tenantId = await this.tenant();
     const { results } = await this.db
       .prepare(
-        `SELECT d.id,d.tenant_id,d.owner_id,d.name,d.mime,d.size,d.version,d.storage_key,d.created_at,d.updated_at
-        FROM office_documents d WHERE d.tenant_id=? AND d.owner_id=? AND ${this.scope()}
+        `SELECT d.*,owner.display_name AS owner_display_name,owner.email AS owner_email,
+          actor_share.role AS share_role
+        FROM office_documents d
+        JOIN identity_principal owner ON owner.id=d.owner_id AND owner.is_active=1
+        ${this.shareJoin("d")}
+        WHERE d.tenant_id=? AND ${this.accessScope("d")} AND ${this.enabledScope("d.tenant_id")}
         ORDER BY d.updated_at DESC,d.id`,
       )
-      .bind(
-        tenantId,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-      )
+      .bind(this.actor.principal.id, tenantId, this.actor.principal.id)
       .all<DocumentRow>();
     return results.map((row) => this.summary(row));
+  }
+
+  async members(query: string) {
+    const tenantId = await this.tenant();
+    const pattern = `%${query.trim().replace(/[\\%_]/g, "\\$&")}%`;
+    const result = await this.db
+      .prepare(
+        `SELECT p.id AS principalId,COALESCE(NULLIF(trim(p.display_name),''),p.email) AS displayName,p.email
+        FROM identity_principal p
+        JOIN identity_tenant_membership m ON m.principal_id=p.id AND m.is_active=1
+        JOIN tenants t ON t.id=m.tenant_id AND t.is_active=1
+        WHERE p.is_active=1 AND p.id<>? AND m.tenant_id=?
+          AND (p.display_name LIKE ? ESCAPE '\\' OR p.email LIKE ? ESCAPE '\\')
+        ORDER BY p.display_name LIMIT 50`,
+      )
+      .bind(this.actor.principal.id, tenantId, pattern, pattern)
+      .all<{ principalId: string; displayName: string; email: string }>();
+    return result.results ?? [];
+  }
+
+  async shares(id: string) {
+    const row = await this.load(id);
+    if (row.owner_id !== this.actor.principal.id) throw notFound();
+    const result = await this.db
+      .prepare(
+        `SELECT s.principal_id AS principalId,s.role,COALESCE(NULLIF(trim(p.display_name),''),p.email) AS displayName,p.email
+        FROM office_document_shares s
+        JOIN identity_principal p ON p.id=s.principal_id
+        WHERE s.document_id=? AND s.tenant_id=? ORDER BY s.principal_id`,
+      )
+      .bind(id, row.tenant_id)
+      .all<OfficeDocumentShare>();
+    return { version: row.share_version, shares: result.results ?? [] };
+  }
+
+  async setShares(
+    id: string,
+    input: {
+      version: number;
+      shares: Array<{ principalId: string; role: "reader" | "editor" }>;
+    },
+  ) {
+    const row = await this.load(id);
+    if (row.owner_id !== this.actor.principal.id) throw notFound();
+    if (input.version !== row.share_version)
+      throw new OfficeDocumentsError(
+        409,
+        "VERSION_CONFLICT",
+        "Shares changed since they were loaded",
+      );
+    if (!Array.isArray(input.shares) || input.shares.length > 200)
+      throw new OfficeDocumentsError(
+        400,
+        "INVALID_SHARES",
+        "Share list is invalid",
+      );
+    const dedup = new Set<string>();
+    for (const share of input.shares) {
+      if (
+        !share ||
+        typeof share.principalId !== "string" ||
+        !["reader", "editor"].includes(share.role) ||
+        dedup.has(share.principalId) ||
+        share.principalId === this.actor.principal.id
+      )
+        throw new OfficeDocumentsError(
+          400,
+          "INVALID_SHARES",
+          "Share list is invalid",
+        );
+      dedup.add(share.principalId);
+      const member = await this.db
+        .prepare(
+          `SELECT 1 FROM identity_principal p
+          JOIN identity_tenant_membership m ON m.principal_id=p.id AND m.is_active=1
+          JOIN tenants t ON t.id=m.tenant_id AND t.is_active=1
+          WHERE p.id=? AND p.is_active=1 AND m.tenant_id=? LIMIT 1`,
+        )
+        .bind(share.principalId, row.tenant_id)
+        .first();
+      if (!member)
+        throw new OfficeDocumentsError(
+          400,
+          "INVALID_SHARE_MEMBER",
+          "Shares are limited to active members of this tenant",
+        );
+    }
+
+    const nextVersion = row.share_version + 1;
+    const guardId = randomId();
+    const recipientScope = input.shares
+      .map(
+        () => `AND EXISTS(SELECT 1 FROM identity_principal invitee
+      JOIN identity_tenant_membership membership ON membership.principal_id=invitee.id AND membership.is_active=1
+      JOIN tenants active_tenant ON active_tenant.id=membership.tenant_id AND active_tenant.is_active=1
+      WHERE invitee.id=? AND invitee.is_active=1 AND membership.tenant_id=d.tenant_id)`,
+      )
+      .join(" ");
+    const authorization = `EXISTS(SELECT 1 FROM office_documents d
+      JOIN identity_principal actor ON actor.id=? AND actor.is_active=1
+      WHERE d.id=? AND d.tenant_id=? AND d.owner_id=actor.id AND d.share_version=?
+        AND ${activeTenantScope("actor.id", "d.tenant_id")}
+        AND ${this.enabledScope("d.tenant_id")} ${recipientScope})`;
+    const statements = [
+      this.db
+        .prepare(
+          `INSERT INTO studio_write_guards(id,valid) SELECT ?,CASE WHEN ${authorization} THEN 1 ELSE 0 END`,
+        )
+        .bind(
+          guardId,
+          this.actor.principal.id,
+          id,
+          row.tenant_id,
+          input.version,
+          ...input.shares.map((share) => share.principalId),
+        ),
+      this.db
+        .prepare(
+          `UPDATE office_documents SET share_version=?
+          WHERE id=? AND tenant_id=? AND owner_id=? AND share_version=?
+            AND ${activeTenantScope("office_documents.owner_id", "office_documents.tenant_id")} AND ${this.enabledScope("office_documents.tenant_id")}`,
+        )
+        .bind(
+          nextVersion,
+          id,
+          row.tenant_id,
+          this.actor.principal.id,
+          input.version,
+        ),
+      this.db
+        .prepare(
+          "DELETE FROM office_document_shares WHERE document_id=? AND tenant_id=?",
+        )
+        .bind(id, row.tenant_id),
+      ...input.shares.map((share) =>
+        this.db
+          .prepare(
+            "INSERT INTO office_document_shares(document_id,tenant_id,principal_id,role,created_at) VALUES(?,?,?,?,?)",
+          )
+          .bind(
+            id,
+            row.tenant_id,
+            share.principalId,
+            share.role,
+            new Date().toISOString(),
+          ),
+      ),
+      this.db
+        .prepare("DELETE FROM studio_write_guards WHERE id=?")
+        .bind(guardId),
+    ];
+    try {
+      await this.db.batch(statements);
+    } catch (error) {
+      const current = await this.db
+        .prepare(
+          "SELECT share_version FROM office_documents WHERE id=? AND tenant_id=? AND owner_id=?",
+        )
+        .bind(id, row.tenant_id, this.actor.principal.id)
+        .first<{ share_version: number }>();
+      if (current && current.share_version !== input.version)
+        throw new OfficeDocumentsError(
+          409,
+          "VERSION_CONFLICT",
+          "Shares changed since they were loaded",
+        );
+      for (const share of input.shares) {
+        const activeMember = await this.db
+          .prepare(
+            `SELECT 1 FROM identity_principal p
+          JOIN identity_tenant_membership m ON m.principal_id=p.id AND m.is_active=1
+          JOIN tenants t ON t.id=m.tenant_id AND t.is_active=1
+          WHERE p.id=? AND p.is_active=1 AND m.tenant_id=? LIMIT 1`,
+          )
+          .bind(share.principalId, row.tenant_id)
+          .first();
+        if (!activeMember)
+          throw new OfficeDocumentsError(
+            400,
+            "INVALID_SHARE_MEMBER",
+            "Shares are limited to active members of this tenant",
+          );
+      }
+      throw error;
+    }
+    return this.shares(id);
   }
 
   private async validate(file: File) {
@@ -202,18 +441,14 @@ export class OfficeDocumentsService {
     const tenantId = await this.tenant();
     const row = await this.db
       .prepare(
-        `SELECT d.* FROM office_documents d
-      WHERE d.id=? AND d.tenant_id=? AND d.owner_id=? AND ${this.scope()}`,
+        `SELECT d.*,owner.display_name AS owner_display_name,owner.email AS owner_email,
+          actor_share.role AS share_role
+        FROM office_documents d
+        JOIN identity_principal owner ON owner.id=d.owner_id AND owner.is_active=1
+        ${this.shareJoin("d")}
+        WHERE d.id=? AND d.tenant_id=? AND ${this.accessScope("d")} AND ${this.enabledScope("d.tenant_id")}`,
       )
-      .bind(
-        id,
-        tenantId,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-      )
+      .bind(this.actor.principal.id, id, tenantId, this.actor.principal.id)
       .first<DocumentRow>();
     if (!row) throw notFound();
     return row;
@@ -227,10 +462,14 @@ export class OfficeDocumentsService {
       mime: row.mime,
       size: row.size,
       version: row.version,
+      updatedAt: row.updated_at,
       field: null,
       object: null,
       recordId: null,
-      readOnly: false,
+      readOnly:
+        row.owner_id !== this.actor.principal.id && row.share_role !== "editor",
+      role: this.summary(row).role,
+      ownerName: this.summary(row).ownerName,
       maxSize: OFFICE_MAX_SIZE,
     };
   }
@@ -241,17 +480,9 @@ export class OfficeDocumentsService {
       .prepare(
         `SELECT r.version,r.size,r.created_at,r.created_by
       FROM office_document_revisions r JOIN office_documents d ON d.id=r.document_id
-      WHERE d.id=? AND d.tenant_id=? AND d.owner_id=? AND ${this.scope("d")} ORDER BY r.version DESC`,
+      WHERE d.id=? AND d.tenant_id=? AND ${this.accessScope("d")} ORDER BY r.version DESC`,
       )
-      .bind(
-        id,
-        row.tenant_id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-      )
+      .bind(id, row.tenant_id, this.actor.principal.id)
       .all();
     return results;
   }
@@ -261,18 +492,9 @@ export class OfficeDocumentsService {
     const revision = await this.db
       .prepare(
         `SELECT r.storage_key FROM office_document_revisions r
-      JOIN office_documents d ON d.id=r.document_id WHERE d.id=? AND d.tenant_id=? AND d.owner_id=? AND r.version=? AND ${this.scope("d")}`,
+      JOIN office_documents d ON d.id=r.document_id WHERE d.id=? AND d.tenant_id=? AND r.version=? AND ${this.accessScope("d")}`,
       )
-      .bind(
-        id,
-        row.tenant_id,
-        this.actor.principal.id,
-        version,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-        this.actor.principal.id,
-      )
+      .bind(id, row.tenant_id, version, this.actor.principal.id)
       .first<{ storage_key: string }>();
     if (!revision) throw notFound();
     const object = await this.bucket.get(revision.storage_key);
@@ -290,6 +512,7 @@ export class OfficeDocumentsService {
 
   async remove(id: string, version: number): Promise<void> {
     const row = await this.load(id);
+    if (row.owner_id !== this.actor.principal.id) throw notFound();
     if (version !== row.version)
       throw new OfficeDocumentsError(
         409,
@@ -396,6 +619,12 @@ export class OfficeDocumentsService {
     file: File,
   ): Promise<OfficeDocumentSummary> {
     const row = await this.load(id);
+    if (row.owner_id !== this.actor.principal.id && row.share_role !== "editor")
+      throw new OfficeDocumentsError(
+        403,
+        "DOCUMENT_READ_ONLY",
+        "Only document editors can save revisions",
+      );
     if (version !== row.version)
       throw new OfficeDocumentsError(
         409,
@@ -422,44 +651,40 @@ export class OfficeDocumentsService {
         this.db
           .prepare(
             `INSERT INTO office_document_revisions(document_id,version,storage_key,size,created_at,created_by)
-          SELECT id,version,storage_key,size,created_at,owner_id FROM office_documents d
-          WHERE id=? AND tenant_id=? AND owner_id=? AND version=? AND ${this.scope("d")} AND ${this.enabledScope("d.tenant_id")}
+          SELECT id,version,storage_key,size,created_at,? FROM office_documents d
+          WHERE id=? AND tenant_id=? AND version=? AND share_version=? AND ${this.accessScope("d", "edit")} AND ${this.enabledScope("d.tenant_id")}
           ON CONFLICT(document_id,version) DO NOTHING`,
           )
           .bind(
+            this.actor.principal.id,
             id,
             row.tenant_id,
-            this.actor.principal.id,
             version,
-            this.actor.principal.id,
-            this.actor.principal.id,
-            this.actor.principal.id,
+            row.share_version,
             this.actor.principal.id,
           ),
         this.db
           .prepare(
             `INSERT INTO office_document_revisions(document_id,version,storage_key,size,created_at,created_by)
-          SELECT id,?, ?,?,?,owner_id FROM office_documents d
-          WHERE id=? AND tenant_id=? AND owner_id=? AND version=? AND ${this.scope("d")} AND ${this.enabledScope("d.tenant_id")}`,
+          SELECT id,?, ?,?,?,? FROM office_documents d
+          WHERE id=? AND tenant_id=? AND version=? AND share_version=? AND ${this.accessScope("d", "edit")} AND ${this.enabledScope("d.tenant_id")}`,
           )
           .bind(
             nextVersion,
             storageKey,
             bytes.byteLength,
             updatedAt,
+            this.actor.principal.id,
             id,
             row.tenant_id,
-            this.actor.principal.id,
             version,
-            this.actor.principal.id,
-            this.actor.principal.id,
-            this.actor.principal.id,
+            row.share_version,
             this.actor.principal.id,
           ),
         this.db
           .prepare(
             `UPDATE office_documents SET size=?,version=?,storage_key=?,updated_at=?
-          WHERE id=? AND tenant_id=? AND owner_id=? AND version=? AND ${this.scope("office_documents")} AND ${this.enabledScope("office_documents.tenant_id")}`,
+          WHERE id=? AND tenant_id=? AND version=? AND share_version=? AND ${this.accessScope("office_documents", "edit")} AND ${this.enabledScope("office_documents.tenant_id")}`,
           )
           .bind(
             bytes.byteLength,
@@ -468,11 +693,8 @@ export class OfficeDocumentsService {
             updatedAt,
             id,
             row.tenant_id,
-            this.actor.principal.id,
             version,
-            this.actor.principal.id,
-            this.actor.principal.id,
-            this.actor.principal.id,
+            row.share_version,
             this.actor.principal.id,
           ),
       ]);
