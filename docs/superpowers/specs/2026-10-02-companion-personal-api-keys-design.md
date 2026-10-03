@@ -170,7 +170,7 @@ not completion of the requested recording/summary/question flow.
 - Repository and authenticator tests: one-time secret retrieval, hash-only
   persistence, expiry, revocation, owner isolation, inactive identities/tenants,
   removed membership, environment separation and atomic creation limits.
-- Route matrix tests: every scope/operation combination, unknown endpoints,
+- Route permission-table tests: every scope/operation combination, unknown endpoints,
   key-management denial, cloud-import denial, and no cookie fallback on a bad key.
 - Tenant tests: cross-tenant read/process/delete denied before accessing payloads
   or calling providers, filtered pagination, legacy-record denial for keys,
