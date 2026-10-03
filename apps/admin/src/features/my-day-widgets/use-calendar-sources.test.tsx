@@ -1,3 +1,6 @@
+import { StoreContextProvider, memoryStore } from "ra-core";
+import { AppLocaleProvider } from "@/i18n/app-locale-provider";
+import type { ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CalendarSourcesClient } from "@/api/personal-integrations-client";
@@ -208,5 +211,38 @@ describe("shared calendar lifecycle", () => {
     act(() => window.dispatchEvent(new Event("savia:identity-changed")));
     expect(result.current.sources).toEqual([]);
     expect(result.current.events).toEqual([]);
+  });
+});
+
+describe("calendar source localization", () => {
+  it.each([
+    ["en", "Showing the latest available copy. Sync again."],
+    ["pt", "Mostramos a última cópia disponível. Sincronize novamente."],
+  ])("localizes cached stale-copy warnings in %s", async (locale, text) => {
+    const api = client();
+    api.listCalendarSourceEvents = vi.fn(async () => ({
+      data: [event],
+      stale: true,
+      error: null,
+      lastSyncedAt: null,
+    }));
+    const store = memoryStore({ locale });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <StoreContextProvider value={store}>
+        <AppLocaleProvider>{children}</AppLocaleProvider>
+      </StoreContextProvider>
+    );
+    const { result } = renderHook(() => useCalendarSources(api, range), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.errors.team).toBe(text));
+    act(() => {
+      store.setItem("locale", "es");
+    });
+    await waitFor(() =>
+      expect(result.current.errors.team).toBe(
+        "Mostramos la última copia disponible. Vuelve a sincronizar.",
+      ),
+    );
   });
 });

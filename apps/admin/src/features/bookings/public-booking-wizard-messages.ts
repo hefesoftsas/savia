@@ -14,7 +14,15 @@ export const publicBookingWizardMessages = {
     "Service and professional",
     "Serviço e profissional",
   ],
+  Service: ["Servicio", "Service", "Serviço"],
+  Professional: ["Profesional", "Professional", "Profissional"],
   "Date and time": ["Fecha y hora", "Date and time", "Data e horário"],
+  Availability: ["Disponibilidad", "Availability", "Disponibilidade"],
+  "Choose a day and time": [
+    "Elige un día y una hora",
+    "Choose a day and time",
+    "Escolha um dia e horário",
+  ],
   "Your details": ["Tus datos", "Your details", "Seus dados"],
   Continue: ["Continuar", "Continue", "Continuar"],
   Back: ["Atrás", "Back", "Voltar"],
@@ -22,6 +30,11 @@ export const publicBookingWizardMessages = {
     "Detalles de la cita",
     "Appointment details",
     "Detalhes do agendamento",
+  ],
+  " · %{minutes} min": [
+    " · %{minutes} min",
+    " · %{minutes} min",
+    " · %{minutes} min",
   ],
   "Selected service": [
     "Servicio elegido",

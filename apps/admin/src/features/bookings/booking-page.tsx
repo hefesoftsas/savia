@@ -11,6 +11,7 @@ import { bookingMessages } from "./booking-messages";
 
 import type { Period, Exception, Settings } from "./booking-types";
 import { BookingSetupWizard, WeeklyHoursEditor } from "./booking-setup-wizard";
+import { BookingPublicLinksPanel } from "./booking-public-links-panel";
 type Bootstrap = {
   settings: Settings;
   candidates: Array<{ principalId: string; displayName: string }>;
@@ -34,7 +35,7 @@ type Reservation = {
   deliveryStatus: string;
   calendarStatus: string;
 };
-type Tab = "settings" | "availability" | "reservations";
+type Tab = "settings" | "availability" | "reservations" | "sharing";
 
 const defaultWeekly = (): Period[] => [];
 function isConflict(error: unknown) {
@@ -90,6 +91,24 @@ export function BookingPage({
     () =>
       bootstrap?.settings.professionals.find(
         (item) => item.principalId === bootstrap.principalId,
+      ),
+    [bootstrap],
+  );
+  const linkProfessional = useMemo(
+    () =>
+      bootstrap?.settings.professionals.find(
+        (item) =>
+          item.principalId === bootstrap.principalId &&
+          item.enabled &&
+          bootstrap.settings.enabled &&
+          bootstrap.settings.published &&
+          bootstrap.candidates.some(
+            (candidate) => candidate.principalId === item.principalId,
+          ) &&
+          bootstrap.settings.services.some(
+            (service) =>
+              service.enabled && service.professionalIds.includes(item.id),
+          ),
       ),
     [bootstrap],
   );
@@ -403,23 +422,23 @@ export function BookingPage({
             {t("Manage appointments and your availability.")}
           </p>
         </div>
-        {publicReady && bootstrap.publicUrl && (
+        {publicReady && bootstrap.publicUrl && bootstrap.canManage && (
           <a
             className="text-sm font-medium underline underline-offset-4"
             href={bootstrap.publicUrl}
             target="_blank"
             rel="noreferrer"
           >
-            {t("Open public booking page")}
+            {t("Open team booking page")}
           </a>
         )}
       </header>
 
       <nav
         aria-label={t("Booking settings")}
-        className="grid grid-cols-3 gap-1 border-b pb-2 sm:flex sm:flex-wrap sm:gap-2"
+        className="grid grid-cols-2 gap-1 border-b pb-2 sm:flex sm:flex-wrap sm:gap-2"
       >
-        {(["settings", "availability", "reservations"] as const).map(
+        {(["settings", "availability", "reservations", "sharing"] as const).map(
           (value) => (
             <Button
               key={value}
@@ -438,7 +457,9 @@ export function BookingPage({
                   ? "Booking settings"
                   : value === "availability"
                     ? "Availability"
-                    : "Reservations",
+                    : value === "reservations"
+                      ? "Reservations"
+                      : "Booking links",
               )}
             </Button>
           ),
@@ -488,6 +509,24 @@ export function BookingPage({
             {t("Availability")}
           </Button>
         </section>
+      )}
+
+      {tab === "sharing" && settings && (
+        <BookingPublicLinksPanel
+          tenantId={String(tenantId)}
+          currentProfessionalId={linkProfessional?.id ?? null}
+          currentProfessionalName={
+            bootstrap.candidates.find(
+              (candidate) =>
+                candidate.principalId === linkProfessional?.principalId,
+            )?.displayName
+          }
+          canManageTeamLinks={bootstrap.canManage}
+          apiClient={services.apiClient}
+          services={settings.services
+            .filter((service) => service.enabled)
+            .map(({ id, name }) => ({ id, name }))}
+        />
       )}
 
       {tab === "availability" && (

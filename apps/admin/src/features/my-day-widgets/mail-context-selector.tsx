@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
+import { intlLocale, useAppLocale, useMessages } from "@/i18n/core";
 import type { MailContextReference } from "@savia/studio-shared/mail-contracts";
 import type { TenantWorkspace } from "@/api/tenant-workspaces-client";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import {
 } from "./data";
 import { recordTitle } from "./summarize";
 import type { WidgetRecord } from "./types";
+import { widgetMessages } from "./widget-messages";
 
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
@@ -50,6 +52,8 @@ export function MailContextSelector({
   apiClient: ApiClient;
   onInsert: (value: { reference: MailContextReference; text: string }) => void;
 }) {
+  const t = useMessages(widgetMessages);
+  const uiLocale = intlLocale(useAppLocale());
   const [workspace, setWorkspace] = useState("");
   const [collection, setCollection] = useState("");
   const [recordId, setRecordId] = useState("");
@@ -107,18 +111,20 @@ export function MailContextSelector({
   return (
     <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
       <p className="text-sm text-muted-foreground">
-        Elige los campos que quieres compartir. Los datos se insertan al
-        confirmar.
+        {t(
+          "Choose which fields to share. The data will be inserted when you confirm.",
+        )}
       </p>
       {failed ? (
         <p role="alert" className="text-sm text-destructive">
-          No pudimos leer este contexto. Revisa tus permisos o elige otro
-          registro.
+          {t(
+            "Could not read this context. Check your permissions or choose another record.",
+          )}
         </p>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="mail-workspace">Espacio de datos</Label>
+          <Label htmlFor="mail-workspace">{t("Data workspace")}</Label>
           <select
             id="mail-workspace"
             className={selectClass}
@@ -131,7 +137,7 @@ export function MailContextSelector({
               setPage(1);
             }}
           >
-            <option value="">Elige un espacio</option>
+            <option value="">{t("Choose a workspace")}</option>
             {tenants.data?.data.map((entry) => (
               <option key={entry.apiBasePath} value={entry.apiBasePath}>
                 {entry.label}
@@ -140,7 +146,7 @@ export function MailContextSelector({
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="mail-collection">Colección de contexto</Label>
+          <Label htmlFor="mail-collection">{t("Context collection")}</Label>
           <select
             id="mail-collection"
             className={selectClass}
@@ -153,7 +159,7 @@ export function MailContextSelector({
               setPage(1);
             }}
           >
-            <option value="">Elige una colección</option>
+            <option value="">{t("Choose a collection")}</option>
             {collections.map((entry) => (
               <option key={entry.name} value={entry.name}>
                 {entry.label}
@@ -163,7 +169,7 @@ export function MailContextSelector({
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="mail-record">Registro de contexto</Label>
+        <Label htmlFor="mail-record">{t("Context record")}</Label>
         <select
           id="mail-record"
           className={selectClass}
@@ -174,7 +180,7 @@ export function MailContextSelector({
             setFields([]);
           }}
         >
-          <option value="">Elige un registro</option>
+          <option value="">{t("Choose a record")}</option>
           {records.data?.data.map((entry) => (
             <option key={String(entry.id)} value={String(entry.id)}>
               {recordTitle(entry, schema)}
@@ -189,16 +195,20 @@ export function MailContextSelector({
             variant="ghost"
             size="sm"
             disabled={page <= 1 || !records.data}
-            aria-label="Página anterior"
+            aria-label={t("Previous page")}
             onClick={() => {
               setPage((value) => value - 1);
               setRecordId("");
               setFields([]);
             }}
           >
-            Anterior
+            {t("Previous")}
           </Button>
-          <span className="text-xs text-muted-foreground">Página {page}</span>
+          <span className="text-xs text-muted-foreground">
+            {t("Page %{page}", {
+              page: new Intl.NumberFormat(uiLocale).format(page),
+            })}
+          </span>
           <Button
             type="button"
             variant="ghost"
@@ -209,26 +219,26 @@ export function MailContextSelector({
                 ? records.data.data.length < 25
                 : page * 25 >= records.data.total)
             }
-            aria-label="Página siguiente"
+            aria-label={t("Next page")}
             onClick={() => {
               setPage((value) => value + 1);
               setRecordId("");
               setFields([]);
             }}
           >
-            Siguiente
+            {t("Next")}
           </Button>
         </div>
       ) : null}
       {recordId && !record.data && !record.error ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Cargando registro…
+          {t("Loading record…")}
         </p>
       ) : null}
       {readable.length ? (
         <fieldset className="space-y-2">
           <legend className="mb-2 text-sm font-medium">
-            Campos para compartir
+            {t("Fields to share")}
           </legend>
           <div className="grid gap-2 sm:grid-cols-2">
             {readable.map((field) => (
@@ -256,7 +266,7 @@ export function MailContextSelector({
       {chosen.length ? (
         <pre
           className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-background p-3 font-sans text-sm"
-          aria-label="Vista previa del contexto"
+          aria-label={t("Context preview")}
         >
           {preview}
         </pre>
@@ -277,7 +287,7 @@ export function MailContextSelector({
           })
         }
       >
-        Insertar contexto
+        {t("Insert context")}
       </Button>
     </div>
   );

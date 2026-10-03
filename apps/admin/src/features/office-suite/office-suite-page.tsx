@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Check,
   Trash2,
+  Share2,
 } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMessages, useAppLocale } from "@/i18n/core";
+import { OfficeSharePanel } from "./office-share-panel";
 import { officeSuiteMessages } from "./messages";
 import { StorageProviderIcon } from "./storage-provider-icon";
 import { createBlankOfficeFile } from "../office/new-office-file";
@@ -30,6 +32,8 @@ import { officeEditorUrl } from "../office/office-api";
 import { officeFormat, type OfficeFormat } from "@savia/studio-shared/office";
 
 type DocumentSummary = {
+  role: "owner" | "reader" | "editor";
+  ownerName: string;
   id: string;
   name: string;
   mime: string;
@@ -138,6 +142,9 @@ export function OfficeSuitePage({
   const [saved, setSaved] = useState(false);
   const [connectedSaved, setConnectedSaved] =
     useState<ConnectedOfficeDocument>();
+  const [shareTarget, setShareTarget] = useState<DocumentSummary>();
+  const [shareNotice, setShareNotice] = useState(false);
+  const shareContext = useRef(0);
   const [deleteTarget, setDeleteTarget] = useState<
     | { kind: "local"; document: DocumentSummary }
     | { kind: "connected"; document: ConnectedOfficeDocument }
@@ -283,6 +290,8 @@ export function OfficeSuitePage({
       setStorageFilter("all");
       setDeleteTarget(undefined);
       setDeleteError("");
+      setShareTarget(undefined);
+      setShareNotice(false);
       setSaved(false);
       setConnectedSaved(undefined);
       setCreateError("");
@@ -818,6 +827,21 @@ export function OfficeSuitePage({
                         />
                         Savia
                       </span>
+                      {document.role === "reader" ||
+                      document.role === "editor" ? (
+                        <>
+                          <span>
+                            {t("Shared by")} {document.ownerName}
+                          </span>
+                          <span>
+                            {t(
+                              document.role === "reader"
+                                ? "Can view"
+                                : "Can edit",
+                            )}
+                          </span>
+                        </>
+                      ) : null}
                       <span>
                         {t("Version")} {document.version} ·{" "}
                         {new Intl.DateTimeFormat(locale, {
@@ -830,19 +854,37 @@ export function OfficeSuitePage({
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {Math.max(1, Math.ceil(document.size / 1024))} KB
                   </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    disabled={deleting}
-                    aria-label={`${t("Delete document")}: ${document.name}`}
-                    onClick={() => {
-                      setDeleteError("");
-                      setDeleteTarget({ kind: "local", document });
-                    }}
-                  >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                  </Button>
+                  {document.role === "owner" ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={deleting}
+                        aria-label={`${t("Share document")}: ${document.name}`}
+                        onClick={() => {
+                          setShareNotice(false);
+                          shareContext.current = contextGeneration.current;
+                          setShareTarget(document);
+                        }}
+                      >
+                        <Share2 className="size-4" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={deleting}
+                        aria-label={`${t("Delete document")}: ${document.name}`}
+                        onClick={() => {
+                          setDeleteError("");
+                          setDeleteTarget({ kind: "local", document });
+                        }}
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </Button>{" "}
+                    </>
+                  ) : null}
                 </li>
               );
             })}
@@ -913,12 +955,49 @@ export function OfficeSuitePage({
             })}
           </ul>
         ) : null}
+        {shareNotice ? (
+          <p role="status" className="text-sm">
+            {t("Permissions saved.")}
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           {t(
-            "Savia documents are private in this workspace. Edits create new versions; connected-drive documents are stored by their provider.",
+            "Savia documents can be shared with members of this workspace. Connected-drive permissions are managed by their provider.",
           )}
         </p>
       </section>
+      <Dialog
+        open={Boolean(shareTarget)}
+        onOpenChange={(open) => {
+          if (!open) setShareTarget(undefined);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("Share document")}</DialogTitle>
+            <DialogDescription className="break-words">
+              {shareTarget?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {shareTarget ? (
+            <OfficeSharePanel
+              key={shareTarget.id}
+              apiClient={services.apiClient}
+              documentId={shareTarget.id}
+              onDone={() => {
+                if (
+                  !mounted.current ||
+                  shareContext.current !== contextGeneration.current
+                )
+                  return;
+                setShareTarget(undefined);
+                setShareNotice(true);
+                void load();
+              }}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => {

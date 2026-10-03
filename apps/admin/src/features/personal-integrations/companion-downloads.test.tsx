@@ -1,3 +1,6 @@
+import { render as baseRender } from "@testing-library/react";
+import { StoreContextProvider, memoryStore } from "ra-core";
+import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import userEvent from "@testing-library/user-event";
 import { cleanup, screen } from "@testing-library/react";
 import { render } from "../studio-engine/test/locale-test-render";
@@ -68,6 +71,29 @@ describe("Companion downloads", () => {
       screen.getByRole("link", { name: /^Descargar macOS/ }),
     ).toHaveAttribute("href", release.assets[2].browser_download_url);
   });
+  it.each([
+    ["es", "Descargar Android", "12,3 MB"],
+    ["en", "Download Android", "12.3 MB"],
+    ["pt", "Baixar Android", "12,3 MB"],
+  ])(
+    "localizes download actions and sizes in %s",
+    async (locale, action, size) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({ ok: true, json: async () => [release] }),
+      );
+      baseRender(
+        <StoreContextProvider value={memoryStore({ locale })}>
+          <AppLocaleProvider>
+            <CompanionDownloads />
+          </AppLocaleProvider>
+        </StoreContextProvider>,
+      );
+      expect(
+        await screen.findByRole("link", { name: new RegExp(`^${action}`) }),
+      ).toHaveTextContent(size);
+    },
+  );
   it("does not fabricate download links before a release exists", async () => {
     vi.stubGlobal(
       "fetch",

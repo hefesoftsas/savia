@@ -101,6 +101,34 @@ it("leases jobs once across concurrent schedulers and sends a scoped management 
     )?.status,
   ).toBe("completed");
 });
+
+it("sends the full appointment summary in the booking's saved locale", async () => {
+  const f = await seed();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET customer_locale='es' WHERE id=?",
+  )
+    .bind(f.id)
+    .run();
+  const messages: Array<{ subject: string; text: string }> = [];
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://preview.example.test",
+    sendMail: async ({ subject, text }) => {
+      messages.push({ subject, text });
+    },
+  });
+  expect(messages).toHaveLength(1);
+  expect(messages[0].text).toContain("Tu cita está confirmada.");
+  expect(messages[0].text).toContain("Customer");
+  expect(messages[0].text).toContain("Consultation");
+  expect(messages[0].text).toContain("Professional");
+  expect(messages[0].text).toContain("Inicio:");
+  expect(messages[0].text).toContain("Fin:");
+  expect(messages[0].text).toContain("Duración: 30 minutos");
+  expect(messages[0].text).toContain("Zona horaria:");
+  expect(messages[0].text).toContain(`/public/bookings/manage/${f.token}`);
+});
+
 it("persists safe retry state and retries only after its due time", async () => {
   const f = await seed();
   let time = f.now,
@@ -162,4 +190,121 @@ it("skips cancelled reminders and obsolete booking revisions", async () => {
         .first<any>()
     )?.status,
   ).toBe("skipped");
+});
+
+it("keeps the booking confirmed and skips mail when no transport is configured", async () => {
+  const f = await seed();
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://preview.example.test",
+    mailAvailability: async () => false,
+    sendMail: async () => {
+      throw new Error("must not attempt an unavailable transport");
+    },
+  });
+  const job = await env.DB.prepare(
+    "SELECT status,error_code FROM tenant_booking_jobs WHERE booking_id=?",
+  )
+    .bind(f.id)
+    .first<{ status: string; error_code: string | null }>();
+  expect(job).toEqual({
+    status: "skipped",
+    error_code: "BOOKING_EMAIL_NOT_CONFIGURED",
+  });
+  expect(
+    (
+      await env.DB.prepare("SELECT status FROM tenant_bookings WHERE id=?")
+        .bind(f.id)
+        .first<{ status: string }>()
+    )?.status,
+  ).toBe("confirmed");
+});
+
+it("records an explicit skip when the auth mail bridge is unavailable", async () => {
+  const f = await seed();
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://preview.example.test",
+  });
+  const job = await env.DB.prepare(
+    "SELECT status,error_code FROM tenant_booking_jobs WHERE booking_id=?",
+  )
+    .bind(f.id)
+    .first<{ status: string; error_code: string | null }>();
+  expect(job).toEqual({
+    status: "skipped",
+    error_code: "BOOKING_EMAIL_NOT_CONFIGURED",
+  });
+});
+
+it("retries transient mail readiness failures", async () => {
+  const f = await seed();
+  let calls = 0;
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://preview.example.test",
+    mailAvailability: async () => {
+      calls++;
+      throw new Error("bridge unavailable");
+    },
+    sendMail: async () => undefined,
+  });
+  const job = await env.DB.prepare(
+    "SELECT status,error_code FROM tenant_booking_jobs WHERE booking_id=?",
+  )
+    .bind(f.id)
+    .first<{ status: string; error_code: string | null }>();
+  expect(calls).toBe(1);
+  expect(job).toEqual({
+    status: "failed",
+    error_code: "BOOKING_EMAIL_UNAVAILABLE",
+  });
+});
+
+it("expires admission hashes in bounded batches while retaining the seven-day retry window", async () => {
+  const f = await seed();
+  const linkId = crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO tenant_booking_public_links(id,tenant_id,token,scope_kind) VALUES(?,?,?,'team')",
+  )
+    .bind(linkId, f.tenantId, crypto.randomUUID())
+    .run();
+  const old = new Date(f.now - 8 * 86400000).toISOString();
+  const cutoff = new Date(f.now - 7 * 86400000).toISOString();
+  await env.DB.prepare(
+    `INSERT INTO tenant_booking_request_receipts(id,link_id,tenant_id,request_key,request_hash,ip_hash,day,created_at)
+    WITH RECURSIVE sequence(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM sequence WHERE n<501)
+    SELECT ?||'-'||n,?,?,?||'-'||n,'hash','ip','2026-09-26',? FROM sequence`,
+  )
+    .bind(linkId, linkId, f.tenantId, linkId, old)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO tenant_booking_request_receipts(id,link_id,tenant_id,request_key,request_hash,ip_hash,day,created_at) VALUES(?,?,?,?,'recent-hash','ip','2026-09-27',?)",
+  )
+    .bind("recent-" + linkId, linkId, f.tenantId, "recent-" + linkId, cutoff)
+    .run();
+  const run = () =>
+    runBookingJobs(env.DB, {
+      now: () => f.now,
+      publicOrigin: "https://preview.example.test",
+    });
+  await run();
+  const count = async () =>
+    (
+      await env.DB.prepare(
+        "SELECT count(*) AS count FROM tenant_booking_request_receipts WHERE link_id=?",
+      )
+        .bind(linkId)
+        .first<{ count: number }>()
+    )?.count;
+  expect(await count()).toBe(2);
+  await run();
+  expect(await count()).toBe(1);
+  expect(
+    await env.DB.prepare(
+      "SELECT request_hash FROM tenant_booking_request_receipts WHERE id=?",
+    )
+      .bind("recent-" + linkId)
+      .first(),
+  ).toEqual({ request_hash: "recent-hash" });
 });

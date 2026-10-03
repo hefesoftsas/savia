@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { decodeJwt } from "jose";
 import { oauthManagementResponse, oauthProviderOptions } from "../src/oauth";
 import { env } from "cloudflare:workers";
 import worker, { createBetterAuth } from "../src/index";
@@ -304,7 +305,7 @@ describe("managed native OAuth clients", () => {
   });
 });
 
-it("rotates, rejects replay of, and revokes a real native refresh grant", async () => {
+it("preserves the API audience through native code exchange, rotation, and revocation", async () => {
   const runtime = oauthRuntime(env);
   const auth = createBetterAuth(env);
   const email = `native-flow-${crypto.randomUUID()}@example.test`;
@@ -418,11 +419,18 @@ it("rotates, rejects replay of, and revokes a real native refresh grant", async 
       code,
       redirect_uri: callbackUri,
       code_verifier: verifier,
-      resource: runtime.apiResource,
+      // AppAuth carries the authorized resource in the code; its combined
+      // exchange does not repeat custom authorization parameters.
     }),
   );
   expect(issued.status).toBe(200);
-  const credentials = (await issued.json()) as { refresh_token: string };
+  const credentials = (await issued.json()) as {
+    refresh_token: string;
+    access_token: string;
+  };
+  expect([decodeJwt(credentials.access_token).aud].flat()).toContain(
+    runtime.apiResource,
+  );
   expect(credentials.refresh_token).toBeTruthy();
   const firstRefresh = await tokenRequest(
     new URLSearchParams({
@@ -433,7 +441,13 @@ it("rotates, rejects replay of, and revokes a real native refresh grant", async 
     }),
   );
   expect(firstRefresh.status).toBe(200);
-  const rotated = (await firstRefresh.json()) as { refresh_token: string };
+  const rotated = (await firstRefresh.json()) as {
+    refresh_token: string;
+    access_token: string;
+  };
+  expect([decodeJwt(rotated.access_token).aud].flat()).toContain(
+    runtime.apiResource,
+  );
   expect(rotated.refresh_token).not.toBe(credentials.refresh_token);
   const revoke = await worker.fetch(
     new Request(`${runtime.issuer}/oauth2/revoke`, {

@@ -1,4 +1,12 @@
 import {
+  intlLocale,
+  useAppLocale,
+  useMessages,
+  translateMessage,
+} from "@/i18n/core";
+import type { AppLocale } from "@/i18n/app-locale";
+import { agendaMessages } from "./agenda-messages";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -99,12 +107,25 @@ export function calendarProviderLabel(provider: CalendarProvider): string {
   return provider === "google_calendar" ? "Google Calendar" : "Outlook";
 }
 
+type AgendaParams = Readonly<
+  Record<string, string | number | readonly string[]>
+>;
+type AgendaMessage = {
+  key: keyof typeof agendaMessages;
+  params?: AgendaParams;
+};
+type AgendaFeedback = string | AgendaMessage | null;
+const message = (
+  key: keyof typeof agendaMessages,
+  params?: AgendaParams,
+): AgendaMessage => ({ key, params });
+
 type AgendaSnapshot = {
   events: CalendarEvent[];
   calendarProviders: CalendarProvider[];
   loading: boolean;
-  feedback: string | null;
-  syncError: string | null;
+  feedback: AgendaFeedback;
+  syncError: AgendaFeedback;
 };
 type AgendaCacheRecord = {
   snapshot: AgendaSnapshot;
@@ -213,19 +234,19 @@ function eventStart(day: Date, time: string): Date | undefined {
   );
 }
 
-export function formatDay(value: Date): string {
-  return new Intl.DateTimeFormat("es-CO", {
+export function formatDay(value: Date, locale: AppLocale = "es"): string {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
     weekday: "long",
     day: "numeric",
     month: "long",
   }).format(value);
 }
 
-function formatTime(value: string | null): string {
-  if (!value) return "Sin hora";
+function formatTime(value: string | null, locale: AppLocale): string {
+  if (!value) return translateMessage(agendaMessages, "Sin hora", locale);
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("es-CO", {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
@@ -309,13 +330,14 @@ function calendarProviderIcon(provider: CalendarProvider) {
 }
 
 function CalendarProviderIcon({ provider }: { provider: CalendarProvider }) {
+  const t = useMessages(agendaMessages);
   const Icon = calendarProviderIcon(provider);
   const displayName = calendarProviderLabel(provider);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          aria-label={`Logo de ${displayName}`}
+          aria-label={t("Logo de %{name}", { name: displayName })}
           className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-foreground"
           role="img"
         >
@@ -329,16 +351,14 @@ function CalendarProviderIcon({ provider }: { provider: CalendarProvider }) {
   );
 }
 
-function feedbackFrom(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "No pudimos sincronizar tus agendas.";
+function feedbackFrom(_error: unknown): AgendaMessage {
+  return message("No pudimos sincronizar tus agendas.");
 }
 
-function calendarSyncFeedback(providers: CalendarProvider[]): string {
-  return `No se pudo sincronizar ${providers
-    .map(calendarProviderLabel)
-    .join(" y ")}.`;
+function calendarSyncFeedback(providers: CalendarProvider[]): AgendaMessage {
+  return message("No se pudo sincronizar %{providers}.", {
+    providers: providers.map(calendarProviderLabel),
+  });
 }
 
 export function useMyDayAgenda(
@@ -346,6 +366,23 @@ export function useMyDayAgenda(
     Partial<CalendarSourcesClient>,
   options?: { from: string; to: string },
 ) {
+  const locale = useAppLocale();
+  const localizeFeedback = (value: AgendaFeedback) =>
+    typeof value === "object" && value
+      ? translateMessage(
+          agendaMessages,
+          value.key,
+          locale,
+          Object.fromEntries(
+            Object.entries(value.params ?? {}).map(([key, param]) => [
+              key,
+              Array.isArray(param)
+                ? new Intl.ListFormat(intlLocale(locale)).format(param)
+                : param,
+            ]),
+          ) as Record<string, string | number>,
+        )
+      : value;
   const [day] = useState(() => startOfLocalDay(new Date()));
   const [selectedDay, setSelectedDay] = useState(day);
   const [view, setView] = useState<CalendarViewMode>("day");
@@ -384,7 +421,9 @@ export function useMyDayAgenda(
       // storage unavailable: dismiss for this session only
     }
     setFeedback((current) =>
-      current === CALENDAR_CONNECT_MESSAGE ? null : current,
+      typeof current === "object" && current?.key === CALENDAR_CONNECT_MESSAGE
+        ? null
+        : current,
     );
   }, []);
 
@@ -398,7 +437,7 @@ export function useMyDayAgenda(
   const events = record ? snapshot.events : localEvents;
   const calendarProviders = record ? snapshot.calendarProviders : [];
   const loading = record ? snapshot.loading : false;
-  const feedback = snapshot.feedback;
+  const feedback = localizeFeedback(snapshot.feedback);
   const eventGroups = useMemo(() => groupCalendarEvents(events), [events]);
 
   const refresh = useCallback(
@@ -454,7 +493,7 @@ export function useMyDayAgenda(
             syncError: null,
             feedback: isCalendarConnectNoticeDismissed()
               ? null
-              : CALENDAR_CONNECT_MESSAGE,
+              : message(CALENDAR_CONNECT_MESSAGE),
           });
           return;
         }
@@ -655,7 +694,7 @@ export function useMyDayAgenda(
   );
 
   const setFeedback = useCallback<
-    React.Dispatch<React.SetStateAction<string | null>>
+    React.Dispatch<React.SetStateAction<AgendaFeedback>>
   >(
     (update) => {
       if (snapshotSession !== agendaSessionGeneration) return;
@@ -685,7 +724,10 @@ export function useMyDayAgenda(
     calendarProviders,
     loading,
     feedback,
-    syncError: snapshot.syncError,
+    syncError: localizeFeedback(snapshot.syncError),
+    isCalendarConnectNotice:
+      typeof snapshot.feedback === "object" &&
+      snapshot.feedback?.key === CALENDAR_CONNECT_MESSAGE,
     setFeedback,
     dismissConnectNotice,
     refresh: async () => {
@@ -717,6 +759,8 @@ export function AgendaWidgetBody({ agenda }: { agenda: AgendaState }) {
 }
 
 function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
+  const t = useMessages(agendaMessages);
+  const locale = useAppLocale();
   const { eventGroups, loading, refresh } = agenda;
 
   if (loading) {
@@ -724,10 +768,10 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
       <div
         role="status"
         aria-live="polite"
-        aria-label="Cargando agenda…"
+        aria-label={t("Cargando agenda…")}
         className="space-y-3"
       >
-        <span className="sr-only">Cargando agenda…</span>
+        <span className="sr-only">{t("Cargando agenda…")}</span>
         <div className="divide-y rounded-xl border border-border/60 bg-card">
           {Array.from({ length: 3 }, (_, index) => (
             <div
@@ -758,12 +802,13 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
         </div>
         <h3 className="mt-4 text-base font-semibold text-foreground">
           {agenda.selectedDay.toDateString() === agenda.day.toDateString()
-            ? "Sin eventos para hoy"
-            : "Sin eventos para este día"}
+            ? t("Sin eventos para hoy")
+            : t("Sin eventos para este día")}
         </h3>
         <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground">
-          Tu agenda está libre. Crea una tarea para bloquear tiempo en tu
-          calendario.
+          {t(
+            "Tu agenda está libre. Crea una tarea para bloquear tiempo en tu calendario.",
+          )}
         </p>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           <Button
@@ -776,7 +821,7 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
               })
             }
           >
-            Agregar tarea
+            {t("Agregar tarea")}
           </Button>
           <Button
             type="button"
@@ -785,7 +830,7 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
             onClick={() => void refresh()}
           >
             <RefreshCw aria-hidden="true" className="size-3.5" />
-            Sincronizar
+            {t("Sincronizar")}
           </Button>
         </div>
       </div>
@@ -805,14 +850,20 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
           >
             <span className="min-w-20 text-sm font-semibold tabular-nums text-muted-foreground">
               {group.events[0]?.allDay
-                ? "Todo el día"
-                : formatTime(group.startsAt)}
+                ? t("Todo el día")
+                : formatTime(group.startsAt, locale)}
             </span>
             <div className="min-w-44 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="font-medium leading-5">{group.title}</p>
+                <p className="font-medium leading-5">
+                  {group.events[0]?.title?.trim() || t("Evento sin título")}
+                </p>
                 <div
-                  aria-label={`Agendada en ${providers.map(calendarProviderLabel).join(" y ")}`}
+                  aria-label={t("Agendada en %{providers}", {
+                    providers: new Intl.ListFormat(intlLocale(locale)).format(
+                      providers.map(calendarProviderLabel),
+                    ),
+                  })}
                   className="flex items-center gap-1"
                 >
                   {providers.map((provider) => (
@@ -822,8 +873,10 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
               </div>
               <p className="text-sm tabular-nums text-muted-foreground">
                 {group.events[0]?.allDay
-                  ? "Todo el día"
-                  : `Hasta ${formatTime(group.endsAt)}`}
+                  ? t("Todo el día")
+                  : t("Hasta %{time}", {
+                      time: formatTime(group.endsAt, locale),
+                    })}
               </p>
             </div>
             {linkedCalendars.length > 1 ? (
@@ -834,9 +887,10 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
                     variant="link"
                     size="sm"
                     className="h-auto gap-1 px-0 py-0"
-                    aria-label="Ver en calendario"
+                    aria-label={t("Ver en calendario")}
                   >
-                    Ver <ExternalLink className="size-3.5" />
+                    {t("Ver")}
+                    <ExternalLink className="size-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -845,7 +899,9 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
                     return (
                       <DropdownMenuItem asChild key={provider}>
                         <a
-                          aria-label={`Abrir en ${calendarProviderLabel(provider)}`}
+                          aria-label={t("Abrir en %{provider}", {
+                            provider: calendarProviderLabel(provider),
+                          })}
                           href={webLink}
                           target="_blank"
                           rel="noreferrer"
@@ -861,17 +917,20 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
               </DropdownMenu>
             ) : linkedCalendar ? (
               <a
-                aria-label={`Ver en ${calendarProviderLabel(linkedCalendar.provider)}`}
+                aria-label={t("Ver en %{provider}", {
+                  provider: calendarProviderLabel(linkedCalendar.provider),
+                })}
                 className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                 href={linkedCalendar.webLink}
                 target="_blank"
                 rel="noreferrer"
               >
-                Ver <ExternalLink className="size-3.5" />
+                {t("Ver")}
+                <ExternalLink className="size-3.5" />
               </a>
             ) : (
               <span className="text-sm text-muted-foreground">
-                Enlace no disponible
+                {t("Enlace no disponible")}
               </span>
             )}
           </li>
@@ -888,6 +947,12 @@ export function QuickTaskWidgetBody({
   agenda: AgendaState;
   personalIntegrations?: PersonalIntegrationsLike;
 }) {
+  const t = useMessages(agendaMessages);
+  const locale = useAppLocale();
+  const list = (providers: CalendarProvider[]) =>
+    new Intl.ListFormat(intlLocale(locale), { type: "conjunction" }).format(
+      providers.map(calendarProviderLabel),
+    );
   const [title, setTitle] = useState("");
   const [time, setTime] = useState(nextHalfHour);
   const [duration, setDuration] = useState("30");
@@ -923,12 +988,14 @@ export function QuickTaskWidgetBody({
       minutes < 5
     ) {
       setFeedback(
-        "Indica una tarea, una hora válida y una duración de al menos 5 minutos.",
+        message(
+          "Indica una tarea, una hora válida y una duración de al menos 5 minutos.",
+        ),
       );
       return;
     }
     if (calendarProviders.length === 0) {
-      setFeedback(CALENDAR_CONNECT_MESSAGE);
+      setFeedback(message(CALENDAR_CONNECT_MESSAGE));
       return;
     }
     const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
@@ -969,7 +1036,9 @@ export function QuickTaskWidgetBody({
         result.event ? [] : [result.provider],
       );
       if (created.length === 0) {
-        setFeedback("No pudimos crear la tarea en tus calendarios conectados.");
+        setFeedback(
+          message("No pudimos crear la tarea en tus calendarios conectados."),
+        );
         return;
       }
       setEvents((current) =>
@@ -978,13 +1047,21 @@ export function QuickTaskWidgetBody({
         ),
       );
       setTitle("");
-      const successfulNames = created
-        .map(({ provider }) => calendarProviderLabel(provider))
-        .join(" y ");
+      const successfulNames = created.map(({ provider }) =>
+        calendarProviderLabel(provider),
+      );
       setFeedback(
         failedProviders.length > 0
-          ? `La tarea quedó creada en ${successfulNames}. No se pudo crear en ${failedProviders.map(calendarProviderLabel).join(" y ")}.`
-          : `La tarea quedó creada en ${successfulNames}.`,
+          ? message(
+              "La tarea quedó creada en %{providers}. No se pudo crear en %{failed}.",
+              {
+                providers: successfulNames,
+                failed: failedProviders.map(calendarProviderLabel),
+              },
+            )
+          : message("La tarea quedó creada en %{providers}.", {
+              providers: successfulNames,
+            }),
       );
     } finally {
       setCreating(false);
@@ -996,22 +1073,22 @@ export function QuickTaskWidgetBody({
     <>
       <form className="space-y-4" onSubmit={prepareEvent}>
         <p className="text-xs text-muted-foreground">
-          Crear para hoy: {formatDay(day)}
+          {t("Crear para hoy:")} {formatDay(day, locale)}
         </p>
         <div className="space-y-2">
-          <Label htmlFor="my-day-task">Tarea</Label>
+          <Label htmlFor="my-day-task">{t("Tarea")}</Label>
           <Input
             id="my-day-task"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Ej. Preparar propuesta"
+            placeholder={t("Ej. Preparar propuesta")}
             maxLength={2000}
             required
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="my-day-time">Hora</Label>
+            <Label htmlFor="my-day-time">{t("Hora")}</Label>
             <Input
               id="my-day-time"
               type="time"
@@ -1021,7 +1098,7 @@ export function QuickTaskWidgetBody({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="my-day-duration">Duración (min)</Label>
+            <Label htmlFor="my-day-duration">{t("Duración (min)")}</Label>
             <Input
               id="my-day-duration"
               type="number"
@@ -1039,11 +1116,11 @@ export function QuickTaskWidgetBody({
           disabled={creating || calendarProviders.length === 0}
         >
           {creating ? <LoaderCircle className="animate-spin" /> : null}
-          Crear tarea
+          {t("Crear tarea")}
         </Button>
         {calendarProviders.length === 0 ? (
           <p className="text-xs leading-5 text-muted-foreground">
-            Conecta un calendario para habilitar la creación de tareas.
+            {t("Conecta un calendario para habilitar la creación de tareas.")}
           </p>
         ) : null}
       </form>
@@ -1055,13 +1132,18 @@ export function QuickTaskWidgetBody({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmar tarea</DialogTitle>
+            <DialogTitle>{t("Confirmar tarea")}</DialogTitle>
             <DialogDescription>
-              Crearás “{pendingTask?.title}” de{" "}
-              {formatTime(pendingTask?.startsAt ?? null)} a{" "}
-              {formatTime(pendingTask?.endsAt ?? null)} durante{" "}
-              {pendingTask?.minutes ?? 0} minutos en{" "}
-              {calendarProviders.map(calendarProviderLabel).join(" y ")}.
+              {t(
+                "Crearás “%{title}” de %{start} a %{end} durante %{minutes} minutos en %{providers}.",
+                {
+                  title: pendingTask?.title ?? "",
+                  start: formatTime(pendingTask?.startsAt ?? null, locale),
+                  end: formatTime(pendingTask?.endsAt ?? null, locale),
+                  minutes: pendingTask?.minutes ?? 0,
+                  providers: list(calendarProviders),
+                },
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1071,7 +1153,7 @@ export function QuickTaskWidgetBody({
               onClick={() => setPendingTask(null)}
               disabled={creating}
             >
-              Cancelar
+              {t("Cancelar")}
             </Button>
             <Button
               type="button"
@@ -1079,7 +1161,7 @@ export function QuickTaskWidgetBody({
               disabled={creating}
             >
               {creating ? <LoaderCircle className="animate-spin" /> : null}
-              Confirmar creación
+              {t("Confirmar creación")}
             </Button>
           </DialogFooter>
         </DialogContent>

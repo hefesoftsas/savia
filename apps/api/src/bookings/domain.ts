@@ -4,17 +4,29 @@ import type {
   BookingService,
   BusyInterval,
 } from "./contracts";
+// Month availability reuses formatters; bound the cache because display zones are public input.
+const wallFormatters = new Map<string, Intl.DateTimeFormat>();
+function wallFormatter(zone: string) {
+  let formatter = wallFormatters.get(zone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: zone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+    if (wallFormatters.size >= 16)
+      wallFormatters.delete(wallFormatters.keys().next().value!);
+    wallFormatters.set(zone, formatter);
+  }
+  return formatter;
+}
 const parts = (instant: number, zone: string) => {
-  const p = new Intl.DateTimeFormat("en-CA", {
-    timeZone: zone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(instant);
+  const p = wallFormatter(zone).formatToParts(instant);
   const get = (key: string) => p.find((v) => v.type === key)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`;
 };

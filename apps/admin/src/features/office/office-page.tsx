@@ -31,6 +31,8 @@ export function OfficePage({
     changed = useRef(false),
     saveAction = useRef(() => {});
   const changes = useRef(0);
+  const readOnly = useRef(false);
+  const originalBytes = useRef<Uint8Array | null>(null);
   const [meta, setMeta] = useState<OfficeMetadata | null>(null);
   const [revisions, setRevisions] = useState<OfficeRevision[]>([]);
   const [status, setStatus] = useState("Abriendo documento…"),
@@ -39,12 +41,15 @@ export function OfficePage({
     [dirty, setDirty] = useState(false),
     [saving, setSaving] = useState(false);
   function markDirty() {
+    if (readOnly.current) return;
     changes.current++;
     changed.current = true;
     setDirty(true);
   }
   useEffect(() => {
     let cancelled = false;
+    readOnly.current = false;
+    originalBytes.current = null;
     const beforeUnload = (e: BeforeUnloadEvent) => {
       if (changed.current || busy.current) {
         e.preventDefault();
@@ -71,8 +76,8 @@ export function OfficePage({
         const info = await client.metadata();
         if (cancelled) return;
         setMeta(info);
+        readOnly.current = info.readOnly;
         document.title = info.name + " · Savia";
-        if (info.readOnly) throw new Error("Este archivo es de solo lectura.");
         if (info.size > info.maxSize)
           throw new Error(
             "El archivo supera el tamaño admitido por el editor.",
@@ -80,6 +85,7 @@ export function OfficePage({
         setStatus("Cargando editor… La primera apertura puede tardar.");
         const bytes = await client.download(info.version);
         if (cancelled) return;
+        originalBytes.current = bytes.slice();
         const runtime = await loadOfficeEngine(canvas.current!, {
           onDirty: markDirty,
           onError: (e) => {
@@ -88,17 +94,19 @@ export function OfficePage({
               setReady(false);
             }
           },
-          onSave: () => saveAction.current(),
+          onSave: () => {
+            if (!readOnly.current) saveAction.current();
+          },
         });
         if (cancelled) {
           runtime.dispose();
           return;
         }
         engine.current = runtime;
-        await runtime.open(bytes, info.name);
+        await runtime.open(bytes, info.name, { readOnly: info.readOnly });
         if (cancelled) return;
         setReady(true);
-        setStatus("Guardado en Savia");
+        setStatus(info.readOnly ? "Modo de solo lectura" : "Guardado en Savia");
         try {
           setRevisions(await client.revisions());
         } catch {
@@ -122,7 +130,14 @@ export function OfficePage({
     };
   }, [search]);
   async function save() {
-    if (!ready || !meta || !engine.current || busy.current || !changed.current)
+    if (
+      !ready ||
+      !meta ||
+      meta.readOnly ||
+      !engine.current ||
+      busy.current ||
+      !changed.current
+    )
       return;
     busy.current = true;
     setSaving(true);
@@ -153,11 +168,16 @@ export function OfficePage({
   }
   saveAction.current = () => void save();
   async function recovery() {
-    if (!meta || !engine.current || busy.current) return;
+    if (!meta || (!meta.readOnly && !engine.current) || busy.current) return;
     busy.current = true;
     setSaving(true);
     try {
-      download(await engine.current.save(), meta.name, meta.mime);
+      const bytes = meta.readOnly
+        ? originalBytes.current
+        : await engine.current!.save();
+      if (!bytes)
+        throw new Error("No se pudo descargar el documento original.");
+      download(bytes, meta.name, meta.mime);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -207,13 +227,15 @@ export function OfficePage({
           <button onClick={() => void recovery()} disabled={!ready || saving}>
             Descargar copia
           </button>
-          <button
-            className="office-save"
-            onClick={() => void save()}
-            disabled={!ready || !dirty || saving}
-          >
-            Guardar
-          </button>
+          {!meta?.readOnly ? (
+            <button
+              className="office-save"
+              onClick={() => void save()}
+              disabled={!ready || !dirty || saving}
+            >
+              Guardar
+            </button>
+          ) : null}
         </div>
       </header>
       {error && (
@@ -243,8 +265,9 @@ export function OfficePage({
         <canvas
           ref={canvas}
           id="qtcanvas"
-          contentEditable
+          contentEditable={!meta?.readOnly}
           suppressContentEditableWarning
+          aria-readonly={meta?.readOnly || undefined}
           tabIndex={0}
           aria-label="Contenido del documento"
           style={{ visibility: ready ? "visible" : "hidden" }}
@@ -255,7 +278,11 @@ export function OfficePage({
       </section>
       <footer className="office-footer">
         <div className="office-footer-info">
-          <span>Los cambios se guardan al pulsar Guardar.</span>
+          <span>
+            {meta?.readOnly
+              ? "Documento abierto en modo de solo lectura."
+              : "Los cambios se guardan al pulsar Guardar."}
+          </span>
           <span className="office-attribution">
             Motor de edición: ZetaOffice
           </span>

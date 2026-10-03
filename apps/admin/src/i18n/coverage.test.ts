@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { untranslatedCopy } from "./source-audit";
 import exceptions from "./source-exceptions.json";
 import type { MessageCatalog } from "./core";
-const catalogs = import.meta.glob("./locales/*.ts", { eager: true });
+const mobileCatalogs = import.meta.glob(
+  "../../../companion-mobile/lib/l10n/*.arb",
+  { eager: true, query: "?raw", import: "default" },
+);
+const catalogs = import.meta.glob(
+  ["./locales/*.ts", "../features/**/*messages.ts"],
+  { eager: true },
+);
 const sourceFiles = import.meta.glob(
   [
     "../components/admin/*.tsx",
@@ -16,13 +23,46 @@ const sourceFiles = import.meta.glob(
     "../features/tenants/*.tsx",
     "../features/tenant-branding/*.tsx",
     "../features/service-credentials/*.tsx",
+    "../features/bookings/*.tsx",
+    "../features/my-day-widgets/*.tsx",
+    "../features/pages/page-search-results.tsx",
+    "../features/personal-integrations/companion-downloads.tsx",
+    "../features/personal-integrations/my-day-page.tsx",
     "!**/*.test.tsx",
+    "!../features/my-day-widgets/app-locale-test-wrapper.tsx",
   ],
   { eager: true, query: "?raw", import: "default" },
 );
 const tokens = (text: string) =>
   [...new Set(text.match(/%\{[^}]+\}/g) ?? [])].sort();
 describe("localization coverage contract", () => {
+  it("keeps Companion mobile ARB messages and placeholders complete in ES/EN/PT", () => {
+    const bundles = ["es", "en", "pt"].map(
+      (locale) =>
+        JSON.parse(
+          String(
+            mobileCatalogs[
+              `../../../companion-mobile/lib/l10n/app_${locale}.arb`
+            ],
+          ),
+        ) as Record<string, unknown>,
+    );
+    const keys = (bundle: Record<string, unknown>) =>
+      Object.keys(bundle)
+        .filter((key) => !key.startsWith("@"))
+        .sort();
+    for (const bundle of bundles) {
+      expect(keys(bundle)).toEqual(keys(bundles[0]));
+      for (const key of keys(bundle)) {
+        expect(typeof bundle[key], key).toBe("string");
+        expect(String(bundle[key]).trim(), key).not.toBe("");
+        expect(String(bundle[key]).match(/\{[^}]+\}/g) ?? [], key).toEqual(
+          String(bundles[0][key]).match(/\{[^}]+\}/g) ?? [],
+        );
+      }
+    }
+  });
+
   it("detects visible, accessible and conditional untranslated copy without flagging machine or user values", () => {
     const result = untranslatedCopy(
       "example.tsx",

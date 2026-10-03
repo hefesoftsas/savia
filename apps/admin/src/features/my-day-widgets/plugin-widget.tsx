@@ -2,6 +2,7 @@ import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { matchTenantApiBasePath } from "@/features/studio/studio-navigation";
 import { Component, useEffect, useMemo, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
+import { useAppLocale, useMessages } from "@/i18n/core";
 import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,11 +17,13 @@ import {
   type ExtensionInstallation,
 } from "./plugins";
 import { CustomPluginFrame } from "../studio-engine/custom-plugin-frame";
+import { widgetMessages } from "./widget-messages";
 
 function PluginWidgetSkeleton() {
+  const t = useMessages(widgetMessages);
   return (
-    <div role="status" aria-label="Cargando widget…" className="space-y-2">
-      <span className="sr-only">Cargando widget…</span>
+    <div role="status" aria-label={t("Loading widget…")} className="space-y-2">
+      <span className="sr-only">{t("Loading widget…")}</span>
       <Skeleton className="h-8 w-24" />
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-2/3" />
@@ -29,7 +32,11 @@ function PluginWidgetSkeleton() {
 }
 
 class WidgetErrorBoundary extends Component<
-  { children: React.ReactNode; title: string },
+  {
+    children: React.ReactNode;
+    title: string;
+    translate: ReturnType<typeof useMessages<typeof widgetMessages>>;
+  },
   { failed: boolean }
 > {
   state = { failed: false };
@@ -43,16 +50,18 @@ class WidgetErrorBoundary extends Component<
       return (
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            Este widget no se pudo mostrar.
+            {this.props.translate("This widget could not be displayed.")}
           </p>
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => this.setState({ failed: false })}
-            aria-label={`Reintentar widget ${this.props.title}`}
+            aria-label={this.props.translate("Retry widget %{title}", {
+              title: this.props.title,
+            })}
           >
-            Reintentar
+            {this.props.translate("Retry")}
           </Button>
         </div>
       );
@@ -68,6 +77,8 @@ export function PluginWidgetBody({
   apiClient: ApiClient | undefined;
   widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
+  const locale = useAppLocale();
+  const t = useMessages(widgetMessages);
   const [extensions, setExtensions] = useState<
     ExtensionInstallation[] | undefined
   >(undefined);
@@ -118,8 +129,7 @@ export function PluginWidgetBody({
   if (failed) {
     return (
       <p className="text-sm text-muted-foreground">
-        No pudimos verificar la extensión de este widget. Reintenta desde
-        Actualizar.
+        {t("Could not verify this widget extension. Try refreshing.")}
       </p>
     );
   }
@@ -127,8 +137,12 @@ export function PluginWidgetBody({
     return (
       <CustomPluginFrame
         pluginId={storeWidget.extensionId}
-        installationVersion={extensions?.find(entry => entry.manifest.id === storeWidget.extensionId)?.installed?.version}
-        title={storeWidget.title.es}
+        installationVersion={
+          extensions?.find(
+            (entry) => entry.manifest.id === storeWidget.extensionId,
+          )?.installed?.version
+        }
+        title={storeWidget.title[locale] ?? storeWidget.title.es}
         src={`${widget.apiBasePath}/api/plugin-store/${encodeURIComponent(storeWidget.extensionId)}/widget?widget=${encodeURIComponent(storeWidget.id)}&collection=${encodeURIComponent(storeWidget.collection)}`}
         heightClassName="h-[320px]"
       />
@@ -137,7 +151,9 @@ export function PluginWidgetBody({
   if (storeDeclared) {
     return (
       <p className="text-sm text-muted-foreground">
-        Activa la extensión {storeDeclared.title.es} para ver este widget.
+        {t("Enable the %{extension} extension to see this widget.", {
+          extension: storeDeclared.title[locale] ?? storeDeclared.title.es,
+        })}
       </p>
     );
   }
@@ -145,8 +161,9 @@ export function PluginWidgetBody({
     if (extensions === undefined) return <PluginWidgetSkeleton />;
     return (
       <p className="text-sm text-muted-foreground">
-        Este tipo de widget estará disponible próximamente. Mientras tanto
-        puedes abrir la colección completa.
+        {t(
+          "This widget type will be available soon. In the meantime, open the full collection.",
+        )}
       </p>
     );
   }
@@ -155,14 +172,19 @@ export function PluginWidgetBody({
   if (!enabled) {
     return (
       <p className="text-sm text-muted-foreground">
-        Activa la extensión {contribution.title.es} para ver este widget.
+        {t("Enable the %{extension} extension to see this widget.", {
+          extension: contribution.title[locale] ?? contribution.title.es,
+        })}
       </p>
     );
   }
 
   const Widget = contribution.Widget;
   return (
-    <WidgetErrorBoundary title={contribution.title.es}>
+    <WidgetErrorBoundary
+      title={contribution.title[locale] ?? contribution.title.es}
+      translate={t}
+    >
       <Widget savia={savia} widget={widget} />
     </WidgetErrorBoundary>
   );

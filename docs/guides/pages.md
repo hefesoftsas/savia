@@ -106,6 +106,23 @@ Apply migrations `0008_pages.sql`, `0009_issue_connections.sql`, `0010_pages_fol
 
 Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. Search excerpts are bounded to 360 plain-text characters and are returned only for authorized results; ordinary browsing does not fetch excerpts. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Deleting a page removes its attachment metadata and attempts to delete every stored attachment blob from the document bucket. It is not a retention mechanism: preserve any required copies before deleting the page. Failed bucket deletions may leave orphaned blobs for deployment cleanup. Revision retention is unbounded unless the owner explicitly clears prior versions.
 
+### Loading and connection loss
+
+The sidebar and workspace share a bounded, in-memory read cache per API client
+and session (up to 64 index/search/document entries). Concurrent reads share one
+request; online snapshots are reused for 60 seconds. Browsing has no search
+debounce, and successful saves update the index and retained document directly
+instead of downloading the index again. Explicit reload bypasses cached values.
+
+Previously read snapshots remain available while the browser reports offline,
+including after navigating away and returning during the same session. This is
+session-only reuse, not a persistent offline replica: refreshing the browser
+clears these snapshots, and saving, uncached documents, attachments, history and
+uncached search still require a connection. Logout or identity changes clear the
+cache. Authorization failures evict cached reads. Page reads time out after 15
+seconds (including authentication lookup), allowing the existing Reload action
+to recover instead of displaying loading indefinitely.
+
 ### Cloudflare semantic search
 
 Local FlexSearch search has been removed. Existing derived browser indexes are
@@ -123,7 +140,9 @@ When enabled and available, the Pages search box adds semantic matches backed by
 Cloudflare Workers AI (`@cf/baai/bge-m3`) and a dedicated Vectorize index. Text
 search remains available when semantic search is disabled or unavailable. Pages
 automatically catches up older saved versions when you open the workspace, with
-visible progress and controls to pause or resume. New, saved and restored pages
+visible progress and controls to pause or resume. The information icon beside the
+search field opens a tooltip with indexing totals and the automatic indexing
+explanation; these details stay hidden during normal browsing. New, saved and restored pages
 are submitted for background indexing on a best-effort basis. Imports submit up
 to five pages in the background; other pending pages catch up the next time you
 open Pages. A failed catch-up batch stops until you choose **Retry indexing**; it

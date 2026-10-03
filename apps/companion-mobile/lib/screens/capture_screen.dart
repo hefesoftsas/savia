@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../capture/capture_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -103,7 +104,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
                       _DraftMetadata(
                         name: c.draft!.name,
                         size:
-                            '${(c.draft!.bytes / 1000000).toStringAsFixed(2)} MB',
+                            '${NumberFormat('0.00', l.localeName).format(c.draft!.bytes / 1000000)} MB',
                         duration: c.draft!.durationSeconds == null
                             ? null
                             : l.duration(c.draft!.durationSeconds!.round()),

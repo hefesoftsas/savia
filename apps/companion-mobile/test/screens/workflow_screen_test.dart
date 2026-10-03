@@ -186,6 +186,26 @@ Future<void> main() async {
               .writeAsBytes(data!.buffer.asUint8List());
         });
       }
+      for (final locale in ['en', 'es', 'pt']) {
+        await tester.pumpWidget(
+          CompanionApp(
+            config: config,
+            locale: Locale(locale),
+            home: Scaffold(
+              body: LibraryScreen(
+                controller: controller,
+                onSelect: (_) {},
+                onRefresh: controller.reload,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining(locale == 'en' ? '0.41 MB' : '0,41 MB'),
+          findsOneWidget,
+        );
+      }
       await tester.pumpWidget(const SizedBox());
     },
   );

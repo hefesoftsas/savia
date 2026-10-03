@@ -16,15 +16,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { CalendarSourcesState } from "./use-calendar-sources";
+import { useAppLocale, useMessages, intlLocale } from "@/i18n/core";
+import { calendarMessages } from "./calendar-messages";
 
-const colorLabels = {
-  blue: "Azul",
-  emerald: "Verde",
-  violet: "Violeta",
-  amber: "Ámbar",
-  rose: "Rosa",
-  slate: "Gris",
-};
+const webcalPlaceholder = "webcal://…";
+
+const colorMessageKeys = {
+  blue: "Blue",
+  emerald: "Green",
+  violet: "Violet",
+  amber: "Amber",
+  rose: "Rose",
+  slate: "Gray",
+} as const;
 function ColorSelect({
   value,
   onChange,
@@ -34,6 +38,7 @@ function ColorSelect({
   onChange: (value: CalendarSource["color"]) => void;
   id: string;
 }) {
+  const t = useMessages(calendarMessages);
   return (
     <select
       id={id}
@@ -45,7 +50,7 @@ function ColorSelect({
     >
       {calendarColors.map((color) => (
         <option key={color} value={color}>
-          {colorLabels[color]}
+          {t(colorMessageKeys[color])}
         </option>
       ))}
     </select>
@@ -62,6 +67,8 @@ function SourceRow({
   run: (action: () => Promise<unknown>) => Promise<boolean>;
   busy: boolean;
 }) {
+  const t = useMessages(calendarMessages);
+  const locale = intlLocale(useAppLocale());
   const [editing, setEditing] = useState(false),
     [name, setName] = useState(source.name),
     [color, setColor] = useState(source.color);
@@ -70,7 +77,7 @@ function SourceRow({
       <div className="flex flex-wrap items-start gap-3">
         <input
           type="checkbox"
-          aria-label={`Mostrar ${source.name}`}
+          aria-label={t("Show %{name}", { name: source.name })}
           checked={source.visible}
           disabled={busy}
           onChange={(event) =>
@@ -83,12 +90,14 @@ function SourceRow({
         <div className="min-w-0 flex-1">
           <p className="break-words text-sm font-medium">{source.name}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {source.kind === "import" ? "Copia importada" : "Suscripción"}
+            {source.kind === "import" ? t("Imported copy") : t("Subscription")}
             {source.hostname ? ` · ${source.hostname}` : ""}
           </p>
           {source.lastSyncedAt ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              Actualizado: {new Date(source.lastSyncedAt).toLocaleString("es")}
+              {t("Updated: %{date}", {
+                date: new Date(source.lastSyncedAt).toLocaleString(locale),
+              })}
             </p>
           ) : null}
         </div>
@@ -98,7 +107,7 @@ function SourceRow({
               variant="ghost"
               size="icon"
               disabled={busy}
-              aria-label={`Actualizar ${source.name}`}
+              aria-label={t("Refresh %{name}", { name: source.name })}
               onClick={() => void run(() => state.refreshSource(source.id))}
             >
               <RefreshCw className="size-4" />
@@ -108,7 +117,7 @@ function SourceRow({
             variant="ghost"
             size="icon"
             disabled={busy}
-            aria-label={`Editar ${source.name}`}
+            aria-label={t("Edit %{name}", { name: source.name })}
             onClick={() => {
               setName(source.name);
               setColor(source.color);
@@ -121,7 +130,7 @@ function SourceRow({
             variant="ghost"
             size="icon"
             disabled={busy}
-            aria-label={`Eliminar ${source.name}`}
+            aria-label={t("Delete %{name}", { name: source.name })}
             onClick={() => void run(() => state.removeSource(source.id))}
           >
             <Trash2 className="size-4" />
@@ -138,7 +147,7 @@ function SourceRow({
           }}
         >
           <div className="min-w-40 flex-1 space-y-1">
-            <Label htmlFor={`name-${source.id}`}>Nombre</Label>
+            <Label htmlFor={`name-${source.id}`}>{t("Name")}</Label>
             <Input
               id={`name-${source.id}`}
               value={name}
@@ -148,7 +157,7 @@ function SourceRow({
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor={`color-${source.id}`}>Color</Label>
+            <Label htmlFor={`color-${source.id}`}>{t("Color")}</Label>
             <ColorSelect
               id={`color-${source.id}`}
               value={color}
@@ -156,7 +165,7 @@ function SourceRow({
             />
           </div>
           <Button size="sm" disabled={busy}>
-            Guardar
+            {t("Save")}
           </Button>
           <Button
             type="button"
@@ -164,7 +173,7 @@ function SourceRow({
             variant="ghost"
             onClick={() => setEditing(false)}
           >
-            Cancelar
+            {t("Cancel")}
           </Button>
         </form>
       ) : null}
@@ -176,7 +185,7 @@ async function fileText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("No pudimos leer el archivo."));
+    reader.onerror = () => reject(new Error("Could not read file"));
     reader.readAsText(file, "UTF-8");
   });
 }
@@ -191,6 +200,7 @@ export function CalendarSourceManager({
   timeZone: string;
   onClose: () => void;
 }) {
+  const t = useMessages(calendarMessages);
   const [kind, setKind] = useState<"subscription" | "import">("subscription");
   const [name, setName] = useState(""),
     [url, setUrl] = useState(""),
@@ -198,8 +208,10 @@ export function CalendarSourceManager({
     [color, setColor] = useState<CalendarSource["color"]>("blue"),
     [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState<string | null>(null),
-    [success, setSuccess] = useState<string | null>(null),
+    [error, setError] = useState<keyof typeof calendarMessages | null>(null),
+    [success, setSuccess] = useState<keyof typeof calendarMessages | null>(
+      null,
+    ),
     [fileKey, setFileKey] = useState(0);
   async function run(action: () => Promise<unknown>): Promise<boolean> {
     if (busy) return false;
@@ -210,9 +222,7 @@ export function CalendarSourceManager({
       await action();
       return true;
     } catch {
-      setError(
-        "No pudimos guardar el cambio. Revisa los datos y vuelve a intentarlo.",
-      );
+      setError("Could not save changes");
       return false;
     } finally {
       setBusy(false);
@@ -221,13 +231,11 @@ export function CalendarSourceManager({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!calendarTimeZoneSchema.safeParse(zone).success) {
-      setError(
-        "Indica una zona horaria válida, como Europe/Madrid o America/Bogota.",
-      );
+      setError("Enter a valid time zone");
       return;
     }
     if (kind === "import" && (!file || file.size > 1048576)) {
-      setError("Selecciona un archivo .ics de hasta 1 MiB.");
+      setError("Choose an ICS file up to 1 MiB");
       return;
     }
     const saved = await run(async () => {
@@ -248,7 +256,7 @@ export function CalendarSourceManager({
       setUrl("");
       setFile(null);
       setFileKey((value) => value + 1);
-      setSuccess("Calendario añadido.");
+      setSuccess("Calendar added");
     }
   }
   return (
@@ -260,20 +268,19 @@ export function CalendarSourceManager({
     >
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Gestionar calendarios</DialogTitle>
+          <DialogTitle>{t("Manage calendars")}</DialogTitle>
           <DialogDescription>
-            Añade enlaces de suscripción o importa una copia .ics para consultar
-            tus eventos.
+            {t("Subscription copy or import instructions")}
           </DialogDescription>
         </DialogHeader>
         {error ? (
           <p role="alert" className="text-sm text-destructive">
-            {error}
+            {t(error)}
           </p>
         ) : null}
         {success ? (
           <p role="status" className="text-sm">
-            {success}
+            {t(success)}
           </p>
         ) : null}
         {providers.length ? (
@@ -298,7 +305,7 @@ export function CalendarSourceManager({
                     )
                   }
                 />
-                {provider === "outlook" ? "Outlook" : "Google Calendar"}
+                {provider === "outlook" ? t("Outlook") : t("Google Calendar")}
               </label>
             ))}
           </div>
@@ -317,12 +324,12 @@ export function CalendarSourceManager({
           </ul>
         ) : (
           <p className="py-2 text-sm text-muted-foreground">
-            Todavía no has añadido calendarios compartidos.
+            {t("No shared calendars yet")}
           </p>
         )}
         {state.available ? (
           <form onSubmit={submit} className="space-y-4 border-t pt-4">
-            <h3 className="text-sm font-semibold">Añadir calendario</h3>
+            <h3 className="text-sm font-semibold">{t("Add calendar")}</h3>
             <div className="flex gap-2">
               {(["subscription", "import"] as const).map((value) => (
                 <Button
@@ -337,28 +344,26 @@ export function CalendarSourceManager({
                   }}
                 >
                   {value === "subscription"
-                    ? "Enlace de suscripción"
-                    : "Archivo .ics"}
+                    ? t("Subscription link")
+                    : t("ICS file")}
                 </Button>
               ))}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="calendar-source-name">
-                Nombre del calendario
-              </Label>
+              <Label htmlFor="calendar-source-name">{t("Calendar name")}</Label>
               <Input
                 id="calendar-source-name"
                 required
                 maxLength={100}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Equipo, vacaciones…"
+                placeholder={t("Team, holidays…")}
               />
             </div>
             {kind === "subscription" ? (
               <div className="space-y-1.5">
                 <Label htmlFor="calendar-source-url">
-                  Enlace HTTPS o WebCal
+                  {t("HTTPS or WebCal link")}
                 </Label>
                 <Input
                   id="calendar-source-url"
@@ -366,17 +371,16 @@ export function CalendarSourceManager({
                   maxLength={4096}
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
-                  placeholder="webcal://…"
+                  placeholder={webcalPlaceholder}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Usa el enlace de suscripción que comparte tu calendario. Se
-                  actualizará mientras Mi día esté abierto.
+                  {t("Subscription help")}
                 </p>
               </div>
             ) : (
               <div className="space-y-1.5">
                 <Label htmlFor="calendar-source-file">
-                  Archivo de calendario
+                  {t("Calendar file")}
                 </Label>
                 <Input
                   key={fileKey}
@@ -387,15 +391,14 @@ export function CalendarSourceManager({
                   onChange={(event) => setFile(event.target.files?.[0] ?? null)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Hasta 1 MiB. La copia conserva los eventos del archivo y no
-                  recibe cambios posteriores.
+                  {t("ICS file help")}
                 </p>
               </div>
             )}
             <div className="flex flex-wrap gap-3">
               <div className="min-w-48 flex-1 space-y-1.5">
                 <Label htmlFor="calendar-source-zone">
-                  Zona horaria de origen
+                  {t("Source time zone")}
                 </Label>
                 <Input
                   id="calendar-source-zone"
@@ -406,7 +409,7 @@ export function CalendarSourceManager({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="calendar-source-color">Color</Label>
+                <Label htmlFor="calendar-source-color">{t("Color")}</Label>
                 <ColorSelect
                   id="calendar-source-color"
                   value={color}
@@ -415,17 +418,16 @@ export function CalendarSourceManager({
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              La zona de origen se aplica cuando el archivo no define una zona
-              horaria.
+              {t("Source time zone help")}
             </p>
             <Button type="submit" disabled={busy || state.sources.length >= 20}>
               {busy ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              Añadir calendario
+              {t("Add calendar")}
             </Button>
           </form>
         ) : (
           <p role="status" className="text-sm text-muted-foreground">
-            Las fuentes compartidas no están disponibles en esta sesión.
+            {t("Shared sources unavailable")}
           </p>
         )}
       </DialogContent>
