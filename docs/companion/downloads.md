@@ -11,6 +11,10 @@ GitHub Actions. A run publishes a new immutable `companion-preview-*` prerelease
 only after Android, Windows x64 and macOS Apple silicon builds all succeed and
 all three installers are present. A failed or incomplete run is not published.
 
+Native desktop bundles include platform icon assets generated from
+`apps/admin/public/savia-icon-512-v3.png` with `tauri icon`: ICO for Windows,
+ICNS for macOS, and PNG sizes for the application bundle.
+
 The workflow requires the repository Actions variable
 `SAVIA_MOBILE_CLIENT_ID`. Set it to the OAuth client ID used by the mobile app;
 the workflow stops before compiling Android if the variable is missing. It is
