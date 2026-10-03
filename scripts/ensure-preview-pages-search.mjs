@@ -16,7 +16,16 @@ export async function ensurePreviewPagesSearch({
   };
   let response = await fetcher(`${base}/${name}`, { headers });
   let body = await response.json();
-  if (response.status === 404) {
+  // Vectorize also reports missing indexes as error 3000 rather than HTTP 404.
+  const errors = body.errors ?? [];
+  const missingIndex =
+    errors.length > 0 &&
+    errors.every(
+      (error) =>
+        error.code === 3000 &&
+        error.message?.startsWith("vectorize.index.not_found"),
+    );
+  if ((response.status === 404 && errors.length === 0) || missingIndex) {
     response = await fetcher(base, {
       method: "POST",
       headers,
@@ -30,7 +39,7 @@ export async function ensurePreviewPagesSearch({
   }
   if (!response.ok || !body.success)
     throw new Error(
-      "Cannot provision isolated Pages search index; Cloudflare token needs Vectorize edit access",
+      `Cannot provision isolated Pages search index (HTTP ${response.status}; Cloudflare codes: ${(body.errors ?? []).map((error) => error.code).join(", ") || "none"})`,
     );
   if (
     body.result?.config?.dimensions !== 1024 ||
