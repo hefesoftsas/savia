@@ -47,6 +47,7 @@ export type BookingPublicLink = {
   dailyLimit: number;
   version: number;
   publicUrl: string;
+  shortUrl?: string | null;
 };
 
 export type PublicBookingSlot = { startsAt: string; endsAt: string };

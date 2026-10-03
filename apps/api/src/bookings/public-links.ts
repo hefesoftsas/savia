@@ -15,6 +15,9 @@ export type BookingLinkRow = {
   daily_limit: number;
   version: number;
   legacy: number;
+  deleted_at?: string | null;
+  short_code?: string | null;
+  short_url?: string | null;
 };
 const unavailable = () =>
   new HTTPException(404, { message: "Booking page unavailable." });
@@ -29,7 +32,7 @@ export async function ensureLegacyBookingLink(
 ) {
   await db
     .prepare(
-      "INSERT INTO tenant_booking_public_links(id,tenant_id,token,scope_kind,legacy) SELECT public_token,tenant_id,public_token,'team',1 FROM tenant_booking_settings WHERE tenant_id=? ON CONFLICT(token) DO NOTHING",
+      "INSERT INTO tenant_booking_public_links(id,tenant_id,token,scope_kind,legacy) SELECT public_token,tenant_id,public_token,'team',1 FROM tenant_booking_settings WHERE tenant_id=? AND NOT EXISTS (SELECT 1 FROM tenant_booking_public_links WHERE token=tenant_booking_settings.public_token) ON CONFLICT(token) DO NOTHING",
     )
     .bind(tenantId)
     .run();
@@ -53,6 +56,7 @@ export async function resolveBookingLink(
   }
   if (
     !row ||
+    row.deleted_at ||
     row.revoked_at ||
     (row.expires_at && Date.parse(row.expires_at) <= now)
   )
@@ -133,7 +137,20 @@ export function bookingLinkView(row: BookingLinkRow, publicOrigin: string) {
       `/public/bookings/${row.token}`,
       publicOrigin,
     ).toString(),
+    ...(row.short_url
+      ? { shortUrl: row.short_url }
+      : row.short_code
+        ? {
+            shortUrl: new URL(
+              `/s/b/${row.short_code}`,
+              publicOrigin,
+            ).toString(),
+          }
+        : {}),
   };
+}
+export function bookingShortCode() {
+  return crypto.randomUUID().replaceAll("-", "").slice(0, 16);
 }
 export function bookingLinkToken() {
   return [...crypto.getRandomValues(new Uint8Array(32))]

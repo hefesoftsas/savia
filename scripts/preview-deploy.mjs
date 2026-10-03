@@ -130,6 +130,7 @@ export function workerConfig(
         "/public/bookings/*",
         "/api/*",
         "/v1/*",
+        "/s/*",
         "/.well-known/*",
         "/health",
         "/docs",

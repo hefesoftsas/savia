@@ -171,6 +171,7 @@ export function createApp(
   registerBookingRoutes(app, db, {
     captcha: publicForms,
     nango: personalIntegrations?.nango,
+    shortener: publicForms?.shortener,
   });
   registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSocialRoutes(app, db, resolvedAuthService, identityBridgeKey);
