@@ -4,6 +4,8 @@
 
 Savia documentation hub. If you are new, follow the onboarding track in order.
 
+[Companion mobile preview](companion/mobile.md) covers Flutter setup, native OAuth and device validation.
+
 ## Onboarding (new developers)
 
 | #   | Doc                                                            | Time      | Outcome                                    |

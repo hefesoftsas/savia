@@ -149,7 +149,11 @@ run, with disjoint files; shared schema/generated-file changes are serialized.
 
 Preserve the prior execution preference: implement inline in this task, delegate
 bounded work when it improves isolation, and perform an independent final review.
-This plan is ready for the user's review; no implementation has begun.
+The user approved execution on 2026-10-03. Tasks 1–6 are implemented; Task 7 has
+build automation, a local Android APK and an opt-in programmatic preview smoke.
+See [mobile evidence](../../companion/mobile.md) for exact verification and the
+remaining external gates. Physical-device qualification and live authenticated
+preview processing are not established by the automated suite.
 
 Package references checked while planning: [AppAuth](https://pub.dev/packages/flutter_appauth),
 [secure storage](https://pub.dev/packages/flutter_secure_storage),

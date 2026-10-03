@@ -1,8 +1,16 @@
 import type { Context } from "hono";
+import {
+  DEFAULT_CANONICAL_HOST,
+  parseTenantSlugFromHostname,
+} from "@savia/tenant-host/tenant-host";
 import { recordingScopeSchema } from "../auth/personal-api-keys";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { actorFromContext } from "../auth/middleware";
 import { AuthenticationError, type AppActor } from "../auth/types";
+import {
+  requiredOAuthScope,
+  requiredRecordingScope,
+} from "../auth/oauth-resource";
 import type { AssistantConfigurationRepository } from "../assistant/configuration";
 import {
   CompanionError,
@@ -154,7 +162,15 @@ const capabilitiesSchema = z.object({
   privacyRouting: z.literal("unverified"),
 });
 const recordingReadSecurity: Record<string, string[]>[] = [
-  { oauth2: ["savia.api.read"] },
+  { oauth2: ["recordings:read"] },
+  { personalApiKey: [] },
+];
+const recordingUploadSecurity: Record<string, string[]>[] = [
+  { oauth2: ["recordings:upload"] },
+  { personalApiKey: [] },
+];
+const recordingProcessSecurity: Record<string, string[]>[] = [
+  { oauth2: ["recordings:process"] },
   { personalApiKey: [] },
 ];
 const capabilities = createRoute({
@@ -333,12 +349,54 @@ export function registerCompanionRoutes(
       actor.credential?.kind === "personal-api-key"
         ? actor.credential
         : undefined;
+    const recordingScopedOAuth =
+      actor.credential?.kind === "oauth" &&
+      requiredRecordingScope(c.req.raw) !== null &&
+      actor.credential.scopes.some((scope) =>
+        ["recordings:read", "recordings:upload", "recordings:process"].includes(
+          scope,
+        ),
+      ) &&
+      !actor.credential.scopes.includes(requiredOAuthScope(c.req.raw));
+    let selectedTenantId: number | undefined;
+    if (recordingScopedOAuth) {
+      const header = c.req.header("x-savia-tenant-id");
+      selectedTenantId =
+        header && /^\d+$/.test(header) ? Number(header) : undefined;
+      const membership = actor.memberships.find(
+        (entry) =>
+          entry.isActive &&
+          (entry.tenantId ?? entry.agencyId) === selectedTenantId &&
+          selectedTenantId !== undefined &&
+          selectedTenantId > 0 &&
+          entry.tenantSlug,
+      );
+      const tenantHostSlug = parseTenantSlugFromHostname(
+        new URL(c.req.url).hostname,
+        DEFAULT_CANONICAL_HOST,
+      );
+      const headerSlug = c.req.header("x-savia-tenant-slug")?.toLowerCase();
+      if (
+        !membership ||
+        (headerSlug && headerSlug !== membership.tenantSlug?.toLowerCase()) ||
+        (tenantHostSlug &&
+          tenantHostSlug !== membership.tenantSlug?.toLowerCase()) ||
+        (headerSlug && tenantHostSlug && headerSlug !== tenantHostSlug)
+      ) {
+        throw new AuthenticationError(
+          "AUTHORIZATION_FORBIDDEN",
+          "Select an active workspace that matches this Savia workspace URL.",
+        );
+      }
+    }
     return {
       ownerId: actor.principal.id,
       tenantId: keyed
         ? keyed.tenantId
-        : await options?.configuration?.activeTenantFor?.(actor.principal.id),
-      requireTenant: Boolean(keyed),
+        : recordingScopedOAuth
+          ? selectedTenantId
+          : await options?.configuration?.activeTenantFor?.(actor.principal.id),
+      requireTenant: Boolean(keyed || recordingScopedOAuth),
     };
   };
   app.openapi(capabilities, async (c) => {
@@ -383,6 +441,7 @@ export function registerCompanionRoutes(
   app.openapi(
     createRoute({
       ...base,
+      security: recordingUploadSecurity,
       method: "post",
       path: "/v1/companion/recordings/upload",
       summary: "Upload a private audio recording up to 50 MB",
@@ -492,6 +551,7 @@ export function registerCompanionRoutes(
   app.openapi(
     createRoute({
       ...base,
+      security: recordingUploadSecurity,
       method: "post",
       path: "/v1/companion/recordings",
       summary: "Save one private consented Opus sample",
@@ -600,6 +660,7 @@ export function registerCompanionRoutes(
   app.openapi(
     createRoute({
       ...base,
+      security: recordingProcessSecurity,
       method: "post",
       path: "/v1/companion/recordings/{id}/notes",
       summary:
@@ -672,6 +733,7 @@ export function registerCompanionRoutes(
   app.openapi(
     createRoute({
       ...base,
+      security: recordingProcessSecurity,
       method: "post",
       path: "/v1/companion/recordings/{id}/questions",
       summary: "Answer a question using only the saved recording transcript",

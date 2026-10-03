@@ -7,9 +7,13 @@ import {
   type JSONWebKeySet,
 } from "jose";
 import { AuthenticationError } from "./types";
+import { requiredRecordingScope } from "./recording-scope-policy";
 
 export const SAVIA_READ_SCOPE = "savia.api.read";
 export const SAVIA_WRITE_SCOPE = "savia.api.write";
+export const RECORDING_READ_SCOPE = "recordings:read";
+export const RECORDING_UPLOAD_SCOPE = "recordings:upload";
+export const RECORDING_PROCESS_SCOPE = "recordings:process";
 
 const roleClaim = "https://savia.hefesoft.com/roles";
 const emailClaim = "https://savia.hefesoft.com/email";
@@ -339,6 +343,30 @@ export function requireOAuthScope(
   identity: OAuthAuthenticatedIdentity,
   request: Request,
 ): void {
+  const recordingScope = requiredRecordingScope(request);
+  if (recordingScope) {
+    const path = new URL(request.url).pathname;
+    // Workspace discovery is intentionally available only to native, narrowly
+    // scoped clients. Broad API scopes retain their existing route behavior
+    // everywhere else, including the pre-existing Companion recording routes.
+    if (path === "/v1/companion/session") {
+      if (identity.scopes.has(RECORDING_READ_SCOPE)) return;
+      throw new AuthenticationError(
+        "INSUFFICIENT_SCOPE",
+        `The access token does not grant ${RECORDING_READ_SCOPE}`,
+      );
+    }
+    if (
+      identity.scopes.has(recordingScope) ||
+      identity.scopes.has(requiredOAuthScope(request))
+    ) {
+      return;
+    }
+    throw new AuthenticationError(
+      "INSUFFICIENT_SCOPE",
+      `The access token does not grant ${recordingScope}`,
+    );
+  }
   const scope = requiredOAuthScope(request);
   if (identity.scopes.has(scope)) return;
   throw new AuthenticationError(
@@ -346,6 +374,8 @@ export function requireOAuthScope(
     `The access token does not grant ${scope}`,
   );
 }
+
+export { requiredRecordingScope } from "./recording-scope-policy";
 
 export function createOAuthResourceAuthenticator(
   input: OAuthResourceConfiguration,
@@ -376,8 +406,22 @@ export async function protectedResourceMetadata(
     {
       authorization_servers: [configuration.issuer],
       resource: configuration.resource,
-      scopes_supported: [SAVIA_READ_SCOPE, SAVIA_WRITE_SCOPE],
+      scopes_supported: [
+        SAVIA_READ_SCOPE,
+        SAVIA_WRITE_SCOPE,
+        RECORDING_READ_SCOPE,
+        RECORDING_UPLOAD_SCOPE,
+        RECORDING_PROCESS_SCOPE,
+      ],
     },
-    { externalScopes: [SAVIA_READ_SCOPE, SAVIA_WRITE_SCOPE] },
+    {
+      externalScopes: [
+        SAVIA_READ_SCOPE,
+        SAVIA_WRITE_SCOPE,
+        RECORDING_READ_SCOPE,
+        RECORDING_UPLOAD_SCOPE,
+        RECORDING_PROCESS_SCOPE,
+      ],
+    },
   );
 }

@@ -6,6 +6,9 @@ export const SAVIA_OAUTH_SCOPES = [
   "email",
   "savia.api.read",
   "savia.api.write",
+  "recordings:read",
+  "recordings:upload",
+  "recordings:process",
   "offline_access",
 ] as const;
 
@@ -23,9 +26,16 @@ const apiScopes = [
   "savia.api.write",
   "offline_access",
 ] as const;
+const recordingScopes = [
+  "recordings:read",
+  "recordings:upload",
+  "recordings:process",
+] as const;
 const providerScopes: Scope[] = [...SAVIA_OAUTH_SCOPES];
 const scalarClientScopes = SAVIA_OAUTH_SCOPES.filter(
-  (scope) => scope !== "offline_access",
+  (scope) =>
+    scope !== "offline_access" &&
+    !recordingScopes.includes(scope as (typeof recordingScopes)[number]),
 );
 
 type OAuthEnvironment = {
@@ -48,7 +58,7 @@ type OAuthClientCreator = {
         client_name: string;
         client_secret_expires_at: number;
         enable_end_session: boolean;
-        grant_types: ["authorization_code"];
+        grant_types: ("authorization_code" | "refresh_token")[];
         redirect_uris: [string];
         require_pkce: true;
         response_types: ["code"];
@@ -94,8 +104,10 @@ type OAuthClientAuthentication =
   "none" | "client_secret_basic" | "client_secret_post";
 
 type OAuthClientInput = {
+  applicationType?: "native" | "web";
   clientAuthentication: OAuthClientAuthentication;
   clientName: string;
+  grantTypes?: ("authorization_code" | "refresh_token")[];
   redirectUris: string[];
   scopes: string[];
   trusted: boolean;
@@ -107,6 +119,7 @@ type OAuthClientUpdateInput = Partial<
 
 type OAuthClientSummary = OAuthClientInput & {
   applicationType: "native" | "web";
+  grantTypes: ("authorization_code" | "refresh_token")[];
   clientId: string;
 };
 
@@ -157,6 +170,32 @@ function normalizedUrl(value: string, name: string): URL {
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(name + " must use HTTP(S)");
+  }
+  return url;
+}
+
+function normalizedNativeRedirectUri(value: string): URL {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("Native redirect URI must be a valid absolute URI");
+  }
+  if (
+    value.includes("*") ||
+    value.includes("?") ||
+    value.includes("#") ||
+    !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+:\/(?!\/)/i.test(value) ||
+    url.protocol === "http:" ||
+    url.protocol === "https:" ||
+    url.username ||
+    url.password ||
+    url.hostname ||
+    !url.pathname.startsWith("/")
+  ) {
+    throw new Error(
+      "Native redirect URI must use an exact reverse-domain scheme and absolute path",
+    );
   }
   return url;
 }
@@ -220,9 +259,13 @@ function managementInput(
     for (const redirectUri of input.redirectUris) {
       if (typeof redirectUri !== "string")
         throw new Error("Invalid redirect URI");
-      const url = normalizedUrl(redirectUri, "redirect URI");
-      if (url.hostname.includes("*"))
-        throw new Error("Wildcard redirect URIs are not allowed");
+      if (input.applicationType === "native") {
+        normalizedNativeRedirectUri(redirectUri);
+      } else {
+        if (redirectUri.includes("*"))
+          throw new Error("Wildcard redirect URIs are not allowed");
+        normalizedUrl(redirectUri, "redirect URI");
+      }
     }
   }
   if (!partial || supplied("scopes")) {
@@ -240,6 +283,24 @@ function managementInput(
     if (typeof input.trusted !== "boolean")
       throw new Error("trusted must be boolean");
   }
+  if (
+    supplied("applicationType") &&
+    input.applicationType !== "native" &&
+    input.applicationType !== "web"
+  )
+    throw new Error("applicationType must be native or web");
+  if (
+    supplied("grantTypes") &&
+    (!Array.isArray(input.grantTypes) ||
+      input.grantTypes.length === 0 ||
+      input.grantTypes.some(
+        (grant) => grant !== "authorization_code" && grant !== "refresh_token",
+      ) ||
+      !input.grantTypes.includes("authorization_code"))
+  )
+    throw new Error(
+      "OAuth grant types must include authorization_code and may include refresh_token",
+    );
   if (partial) {
     if (!Object.keys(input).length)
       throw new Error("At least one field is required");
@@ -252,6 +313,16 @@ function managementInput(
         : {}),
       ...(supplied("scopes") ? { scopes: input.scopes as string[] } : {}),
       ...(supplied("trusted") ? { trusted: input.trusted as boolean } : {}),
+      ...(supplied("applicationType")
+        ? { applicationType: input.applicationType as "native" | "web" }
+        : {}),
+      ...(supplied("grantTypes")
+        ? {
+            grantTypes: input.grantTypes as (
+              "authorization_code" | "refresh_token"
+            )[],
+          }
+        : {}),
     };
   }
   if (
@@ -261,16 +332,60 @@ function managementInput(
   ) {
     throw new Error("An explicit client authentication method is required");
   }
+  if (
+    input.applicationType !== undefined &&
+    input.applicationType !== "native" &&
+    input.applicationType !== "web"
+  )
+    throw new Error("applicationType must be native or web");
+  if (
+    input.grantTypes !== undefined &&
+    (!Array.isArray(input.grantTypes) ||
+      input.grantTypes.length === 0 ||
+      input.grantTypes.some(
+        (grant) => grant !== "authorization_code" && grant !== "refresh_token",
+      ) ||
+      !input.grantTypes.includes("authorization_code"))
+  )
+    throw new Error(
+      "OAuth grant types must include authorization_code and may include refresh_token",
+    );
+  if (
+    input.applicationType === "native" &&
+    input.clientAuthentication !== "none"
+  )
+    throw new Error("Native OAuth clients must be public");
   return {
+    ...(input.applicationType
+      ? { applicationType: input.applicationType as "native" | "web" }
+      : {}),
     clientAuthentication: input.clientAuthentication,
     clientName: input.clientName as string,
+    ...(input.grantTypes
+      ? {
+          grantTypes: input.grantTypes as (
+            "authorization_code" | "refresh_token"
+          )[],
+        }
+      : {}),
     redirectUris: input.redirectUris as string[],
     scopes: input.scopes as string[],
     trusted: input.trusted as boolean,
   };
 }
 
-function applicationType(redirectUris: string[]): "native" | "web" {
+function applicationType(
+  redirectUris: string[],
+  declared?: "native" | "web",
+): "native" | "web" {
+  if (declared === "native") {
+    redirectUris.forEach(normalizedNativeRedirectUri);
+    return "native";
+  }
+  if (declared === "web") {
+    redirectUris.forEach((uri) => normalizedUrl(uri, "redirect URI"));
+    return "web";
+  }
   const types = new Set(redirectUris.map(scalarApplicationType));
   if (types.size !== 1)
     throw new Error("Redirect URIs must use one application type");
@@ -299,6 +414,9 @@ function summaryFromRow(row: Record<string, unknown>): OAuthClientSummary {
     clientId: row.clientId,
     clientName: row.name,
     redirectUris: parseArray(row.redirectUris),
+    grantTypes: (parseArray(row.grantTypes).length
+      ? parseArray(row.grantTypes)
+      : ["authorization_code"]) as ("authorization_code" | "refresh_token")[],
     scopes: parseArray(row.scopes),
     trusted: row.skipConsent === true || row.skipConsent === 1,
   };
@@ -320,7 +438,7 @@ async function findOAuthClient(
 ): Promise<OAuthClientSummary | undefined> {
   const row = await database
     .prepare(
-      'SELECT "clientId", name, "redirectUris", scopes, "tokenEndpointAuthMethod", "applicationType", "skipConsent" FROM "oauthClient" WHERE "clientId" = ? LIMIT 1',
+      'SELECT "clientId", name, "redirectUris", "grantTypes", scopes, "tokenEndpointAuthMethod", "applicationType", "skipConsent" FROM "oauthClient" WHERE "clientId" = ? LIMIT 1',
     )
     .bind(clientId)
     .first<Record<string, unknown>>();
@@ -363,7 +481,7 @@ export async function oauthManagementResponse(
     ) {
       const rows = await database
         .prepare(
-          'SELECT "clientId", name, "redirectUris", scopes, "tokenEndpointAuthMethod", "applicationType", "skipConsent" FROM "oauthClient" ORDER BY name',
+          'SELECT "clientId", name, "redirectUris", "grantTypes", scopes, "tokenEndpointAuthMethod", "applicationType", "skipConsent" FROM "oauthClient" ORDER BY name',
         )
         .all<Record<string, unknown>>();
       return Response.json({ data: rows.results.map(summaryFromRow) });
@@ -373,7 +491,8 @@ export async function oauthManagementResponse(
       url.pathname === "/_internal/oauth/clients"
     ) {
       const input = managementInput(await request.json()) as OAuthClientInput;
-      const type = applicationType(input.redirectUris);
+      const type = applicationType(input.redirectUris, input.applicationType);
+      const grants = input.grantTypes ?? ["authorization_code"];
       const created = await auth.api.adminCreateOAuthClient({
         headers: request.headers,
         body: {
@@ -381,7 +500,7 @@ export async function oauthManagementResponse(
           client_name: input.clientName,
           client_secret_expires_at: 0,
           enable_end_session: true,
-          grant_types: ["authorization_code"],
+          grant_types: grants,
           redirect_uris: input.redirectUris,
           require_pkce: true,
           response_types: ["code"],
@@ -396,6 +515,7 @@ export async function oauthManagementResponse(
       const data: OAuthClientCreated = {
         applicationType: type,
         ...input,
+        grantTypes: grants,
         clientId,
         ...(input.clientAuthentication === "none" ||
         typeof created.client_secret !== "string"
@@ -415,8 +535,15 @@ export async function oauthManagementResponse(
         await request.json(),
         true,
       ) as OAuthClientUpdateInput;
-      const combined: OAuthClientInput = { ...client, ...update };
-      const type = applicationType(combined.redirectUris);
+      const combined = managementInput({
+        ...client,
+        ...update,
+      }) as OAuthClientInput;
+      const type = applicationType(
+        combined.redirectUris,
+        combined.applicationType,
+      );
+      const grants = combined.grantTypes ?? client.grantTypes;
       const updated = await auth.api.adminUpdateOAuthClient({
         headers: request.headers,
         body: {
@@ -425,6 +552,7 @@ export async function oauthManagementResponse(
             application_type: type,
             client_name: combined.clientName,
             redirect_uris: combined.redirectUris,
+            grant_types: grants,
             scope: combined.scopes.join(" "),
             skip_consent: combined.trusted,
           },
@@ -432,7 +560,12 @@ export async function oauthManagementResponse(
       });
       void updated;
       return Response.json({
-        data: { ...combined, applicationType: type, clientId },
+        data: {
+          ...combined,
+          applicationType: type,
+          grantTypes: grants,
+          clientId,
+        },
       });
     }
     if (request.method === "DELETE" && !match[2]) {
@@ -538,7 +671,7 @@ export function oauthProviderOptions(
       {
         identifier: runtime.apiResource,
         name: "Savia Domain API",
-        allowedScopes: [...apiScopes],
+        allowedScopes: [...apiScopes, ...recordingScopes],
         accessTokenTtl: 300,
       },
     ],
@@ -546,7 +679,13 @@ export function oauthProviderOptions(
     allowDynamicClientRegistration: true,
     allowUnauthenticatedClientRegistration: true,
     clientRegistrationRequirePKCE: true,
-    clientRegistrationDefaultScopes: [...providerScopes],
+    clientRegistrationAllowedScopes: [...providerScopes],
+    clientRegistrationDefaultScopes: [
+      "openid",
+      "profile",
+      "email",
+      ...apiScopes,
+    ],
     clientRegistrationDefaultResources: [
       runtime.apiResource,
       `${runtime.apiResource}/mcp`,
@@ -767,7 +906,14 @@ async function createAdminOAuthClient(
       redirect_uris: [runtime.adminRedirectUri],
       require_pkce: true,
       response_types: ["code"],
-      scope: [...runtime.scopes].join(" "),
+      scope: runtime.scopes
+        .filter(
+          (scope) =>
+            !recordingScopes.includes(
+              scope as (typeof recordingScopes)[number],
+            ),
+        )
+        .join(" "),
       skip_consent: true,
       token_endpoint_auth_method: "none",
     },

@@ -1,0 +1,75 @@
+name: Companion mobile
+
+on:
+  pull_request:
+    paths:
+      - "apps/companion-mobile/**"
+      - ".github/workflows/companion-mobile.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/companion-mobile/**"
+      - ".github/workflows/companion-mobile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: companion-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/companion-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - run: dart format --output=none --set-exit-if-changed lib test integration_test
+      - run: flutter analyze
+      - run: flutter test
+      - name: Compile Android preview
+        env:
+          SAVIA_MOBILE_CLIENT_ID: ${{ vars.SAVIA_MOBILE_CLIENT_ID }}
+        run: flutter build apk --debug --dart-define=SAVIA_MOBILE_CLIENT_ID="$SAVIA_MOBILE_CLIENT_ID"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion-android-preview-debug
+          path: apps/companion-mobile/build/app/outputs/flutter-apk/app-debug.apk
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/companion-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - name: Compile iOS simulator preview without signing
+        env:
+          SAVIA_MOBILE_CLIENT_ID: ${{ vars.SAVIA_MOBILE_CLIENT_ID }}
+        run: flutter build ios --simulator --no-codesign --dart-define=SAVIA_MOBILE_CLIENT_ID="$SAVIA_MOBILE_CLIENT_ID"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion-ios-preview-simulator
+          path: apps/companion-mobile/build/ios/iphonesimulator/*.app

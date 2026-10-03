@@ -1,6 +1,6 @@
 # Savia Companion mobile
 
-Status: approved by the user on 2026-10-03; implementation plan under review.
+Status: approved by the user on 2026-10-03; implementation and automated checks delivered, device and live-preview qualification pending.
 Date: 2026-10-03.
 
 ## Intent and scope
