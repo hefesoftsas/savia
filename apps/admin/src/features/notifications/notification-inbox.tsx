@@ -101,6 +101,7 @@ export function NotificationInbox({
           type="button"
           variant="outline"
           size="sm"
+          className="max-sm:h-11 max-sm:min-w-11 max-sm:has-[>svg]:px-0"
           disabled={busy !== null}
           onClick={() => void run("read-all", () => client.readAll())}
         >
@@ -109,7 +110,7 @@ export function NotificationInbox({
           ) : (
             <CheckCheck aria-hidden="true" />
           )}
-          {t("markAllRead")}
+          <span className="sr-only sm:not-sr-only">{t("markAllRead")}</span>
         </Button>
       </header>
 
@@ -128,7 +129,7 @@ export function NotificationInbox({
               aria-selected={active}
               onClick={() => setFilter(id)}
               className={cn(
-                "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+                "min-h-11 rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
                 active
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
@@ -271,6 +272,7 @@ export function NotificationInbox({
                             type="button"
                             variant="ghost"
                             size="sm"
+                            className="max-sm:h-11 max-sm:min-w-11 max-sm:has-[>svg]:px-0"
                             disabled={busyItem}
                             onClick={() =>
                               void run(item.id, () =>
@@ -286,7 +288,9 @@ export function NotificationInbox({
                             ) : (
                               <Check aria-hidden="true" />
                             )}
-                            {t("markRead")}
+                            <span className="sr-only sm:not-sr-only">
+                              {t("markRead")}
+                            </span>
                           </Button>
                         )}
                         {item.actionState === "pending" && (
@@ -294,6 +298,7 @@ export function NotificationInbox({
                             type="button"
                             variant="ghost"
                             size="sm"
+                            className="max-sm:h-11 max-sm:min-w-11 max-sm:has-[>svg]:px-0"
                             disabled={busyItem}
                             onClick={() =>
                               void run(item.id, () => client.resolve(item.id))
@@ -307,7 +312,9 @@ export function NotificationInbox({
                             ) : (
                               <CircleCheck aria-hidden="true" />
                             )}
-                            {t("resolve")}
+                            <span className="sr-only sm:not-sr-only">
+                              {t("resolve")}
+                            </span>
                           </Button>
                         )}
                         {item.archivedAt === null && (
@@ -315,6 +322,7 @@ export function NotificationInbox({
                             type="button"
                             variant="ghost"
                             size="sm"
+                            className="max-sm:h-11 max-sm:min-w-11 max-sm:has-[>svg]:px-0"
                             disabled={busyItem}
                             onClick={() =>
                               void run(item.id, () => client.archive(item.id))
@@ -328,7 +336,9 @@ export function NotificationInbox({
                             ) : (
                               <Archive aria-hidden="true" />
                             )}
-                            {t("archive")}
+                            <span className="sr-only sm:not-sr-only">
+                              {t("archive")}
+                            </span>
                           </Button>
                         )}
                       </div>

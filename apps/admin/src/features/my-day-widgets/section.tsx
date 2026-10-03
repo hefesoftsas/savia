@@ -284,32 +284,23 @@ export function MyDayWidgetsSection({
               type="button"
               variant="ghost"
               size="sm"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+              title={t("Show agenda")}
               disabled={saving || full}
               onClick={() =>
                 void add({ id: "agenda", kind: "agenda" } as MyDayWidget)
               }
             >
               <CalendarDays aria-hidden="true" />
-              {t("Show agenda")}
-            </Button>
-          ) : null}
-          {!hasSystemWidget("mail") &&
-          mail.connections.length > 0 &&
-          !loading ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={saving || full}
-              onClick={() => void add({ id: "mail", kind: "mail" })}
-            >
-              {t("Show mail")}
+              <span className="sr-only sm:not-sr-only">{t("Show agenda")}</span>
             </Button>
           ) : null}
           <Button
             type="button"
             variant="outline"
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            title={t("Refresh")}
             disabled={loading || saving}
             onClick={() => {
               void agenda.refresh();
@@ -321,16 +312,18 @@ export function MyDayWidgetsSection({
               className={loading ? "animate-spin" : undefined}
               aria-hidden="true"
             />
-            {t("Refresh")}
+            <span className="sr-only sm:not-sr-only">{t("Refresh")}</span>
           </Button>
           <Button
             type="button"
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            title={t("Add widget")}
             disabled={loading || saving || full}
             onClick={() => setDialogOpen(true)}
           >
             <Plus aria-hidden="true" />
-            {t("Add widget")}
+            <span className="sr-only sm:not-sr-only">{t("Add widget")}</span>
           </Button>
         </div>
       </div>
@@ -362,13 +355,17 @@ export function MyDayWidgetsSection({
             </a>
             {mail.errors.length ? (
               <Button
+                className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                 type="button"
                 variant="ghost"
                 size="sm"
                 disabled={mail.loading}
                 onClick={() => void mail.refresh()}
               >
-                {t("Retry mail")}
+                <RefreshCw aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">
+                  {t("Retry mail")}
+                </span>
               </Button>
             ) : null}
           </div>
@@ -389,7 +386,7 @@ export function MyDayWidgetsSection({
               type="button"
               variant="ghost"
               size="icon"
-              className="size-7 shrink-0"
+              className="size-7 shrink-0 max-sm:size-11"
               onClick={() => {
                 if (agenda.isCalendarConnectNotice) {
                   agenda.dismissConnectNotice();
@@ -415,7 +412,7 @@ export function MyDayWidgetsSection({
               type="button"
               variant="ghost"
               size="icon"
-              className="size-7 shrink-0"
+              className="size-7 shrink-0 max-sm:size-11"
               onClick={() => setFeedback(null)}
               aria-label={t("Close notice")}
               title={t("Close notice")}
@@ -468,15 +465,19 @@ export function MyDayWidgetsSection({
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
             <Button
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               type="button"
               variant="secondary"
               size="sm"
               onClick={() => setDialogOpen(true)}
             >
               <Plus aria-hidden="true" />
-              {t("Add your first widget")}
+              <span className="sr-only sm:not-sr-only">
+                {t("Add your first widget")}
+              </span>
             </Button>
             <Button
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               type="button"
               variant="outline"
               size="sm"
@@ -485,7 +486,7 @@ export function MyDayWidgetsSection({
               }
             >
               <CalendarDays aria-hidden="true" />
-              {t("Show agenda")}
+              <span className="sr-only sm:not-sr-only">{t("Show agenda")}</span>
             </Button>
           </div>
         </div>
@@ -537,7 +538,7 @@ export function MyDayWidgetsSection({
                           aria-label={t("Drag widget %{title}", {
                             title: collectionLabelFor(widget),
                           })}
-                          className="flex h-8 w-8 cursor-grab items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                          className="flex h-8 w-8 cursor-grab items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing max-sm:size-11"
                           {...attributes}
                           {...listeners}
                         >
@@ -570,6 +571,7 @@ export function MyDayWidgetsSection({
       !hasSystemWidget("quick_task") ? (
         <div className="mt-4 flex justify-center">
           <Button
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             type="button"
             variant="ghost"
             size="sm"
@@ -579,7 +581,9 @@ export function MyDayWidgetsSection({
             }
           >
             <PlusCircle aria-hidden="true" />
-            {t("Add quick task creation")}
+            <span className="sr-only sm:not-sr-only">
+              {t("Add quick task creation")}
+            </span>
           </Button>
         </div>
       ) : null}

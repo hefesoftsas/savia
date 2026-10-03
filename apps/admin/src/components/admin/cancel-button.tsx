@@ -2,6 +2,7 @@ import { CircleX } from "lucide-react";
 import { Translate, useNavigate } from "ra-core";
 
 import { Button } from "../ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * A button that navigates back to the previous page.
@@ -28,18 +29,26 @@ import { Button } from "../ui/button";
  *   </Edit>
  * );
  */
-export function CancelButton(props: React.ComponentProps<"button">) {
+export function CancelButton({
+  className,
+  ...props
+}: React.ComponentProps<"button">) {
   const navigate = useNavigate();
   return (
     <Button
       type="button"
       variant="ghost"
       onClick={() => navigate(-1)}
-      className="cursor-pointer"
+      className={cn(
+        "cursor-pointer max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
+        className,
+      )}
       {...props}
     >
-      <CircleX />
-      <Translate i18nKey="ra.action.cancel">Cancel</Translate>
+      <CircleX aria-hidden="true" />
+      <span className="sr-only sm:not-sr-only">
+        <Translate i18nKey="ra.action.cancel">Cancel</Translate>
+      </span>
     </Button>
   );
 }

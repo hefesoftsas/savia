@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { RotateCcw, Save, Send, Trash2 } from "lucide-react";
 import { useMessages } from "@/i18n/core";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
@@ -177,9 +178,11 @@ export function TenantEmailSettingsPanel({
             <Button
               type="button"
               variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => setAttempt((value) => value + 1)}
             >
-              {t("Retry")}
+              <RotateCcw aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t("Retry")}</span>
             </Button>
           </div>
         ) : (
@@ -266,24 +269,39 @@ export function TenantEmailSettingsPanel({
                 </p>
               ) : null}
               <div className="flex flex-wrap gap-2 sm:col-span-2">
-                <Button type="submit" disabled={busy || settings === undefined}>
-                  {t("Save email settings")}
+                <Button
+                  type="submit"
+                  disabled={busy || settings === undefined}
+                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+                >
+                  <Save aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">
+                    {t("Save email settings")}
+                  </span>
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   disabled={busy || !settings?.configured}
+                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                   onClick={() => void runAction("test")}
                 >
-                  {t("Send test email")}
+                  <Send aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">
+                    {t("Send test email")}
+                  </span>
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
                   disabled={busy || !settings?.configured}
+                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                   onClick={() => void runAction("delete")}
                 >
-                  {t("Remove email settings")}
+                  <Trash2 aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">
+                    {t("Remove email settings")}
+                  </span>
                 </Button>
               </div>
             </form>

@@ -51,15 +51,17 @@ export function MyDayPage({
         </div>
         <Button
           variant="outline"
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+          title={t("Sincronizar")}
           disabled={agenda.loading}
           onClick={() => void agenda.refresh()}
         >
           {agenda.loading ? (
-            <LoaderCircle className="animate-spin" />
+            <LoaderCircle className="animate-spin" aria-hidden="true" />
           ) : (
-            <RefreshCw />
+            <RefreshCw aria-hidden="true" />
           )}
-          {t("Sincronizar")}
+          <span className="sr-only sm:not-sr-only">{t("Sincronizar")}</span>
         </Button>
       </header>
 

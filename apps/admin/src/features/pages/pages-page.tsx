@@ -434,21 +434,33 @@ export function PagesPage({
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
+                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                   disabled={busy}
                   onClick={() => void create(undefined, "folder")}
+                  aria-label={t("New folder")}
                 >
                   <FolderPlus size={16} />
-                  {t("New folder")}
+                  <span className="sr-only sm:not-sr-only">
+                    {t("New folder")}
+                  </span>
                 </Button>
-                <Button disabled={busy} onClick={() => void create()}>
+                <Button
+                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+                  disabled={busy}
+                  onClick={() => void create()}
+                  aria-label={t("New page")}
+                >
                   <Plus size={16} />
-                  {t("New page")}
+                  <span className="sr-only sm:not-sr-only">
+                    {t("New page")}
+                  </span>
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
                       size="icon"
+                      className="max-sm:size-11"
                       aria-label={t("Pages options")}
                       disabled={busy || archiveBusy}
                     >
@@ -840,9 +852,11 @@ function DocumentPane({
               variant="ghost"
               disabled={uploading || status !== "saved"}
               onClick={() => setPanel("share")}
+              aria-label={t("Share")}
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             >
               <Users size={14} aria-hidden />
-              {t("Share")}
+              <span className="sr-only sm:not-sr-only">{t("Share")}</span>
             </Button>
           )}
           <DropdownMenu>
@@ -850,6 +864,7 @@ function DocumentPane({
               <Button
                 size="icon"
                 variant="ghost"
+                className="max-sm:size-11"
                 aria-label={t("Page actions")}
                 disabled={uploading || status !== "saved"}
               >

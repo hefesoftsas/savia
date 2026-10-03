@@ -2,6 +2,15 @@ import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { accessMessages } from "@/i18n/locales/access";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  RefreshCw,
+  RotateCcw,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type {
@@ -221,8 +230,14 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
             )}
           </p>
         </div>
-        <Button variant="outline" onClick={refresh} disabled={query.isFetching}>
-          {t("Refresh history")}
+        <Button
+          variant="outline"
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+          onClick={refresh}
+          disabled={query.isFetching}
+        >
+          <RefreshCw aria-hidden="true" />
+          <span className="sr-only sm:not-sr-only">{t("Refresh history")}</span>
         </Button>
       </div>
       <form
@@ -267,10 +282,17 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
           </label>
         ))}
         <div className="flex flex-wrap gap-2">
-          <Button type="submit">{t("Apply filters")}</Button>
+          <Button
+            type="submit"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+          >
+            <SlidersHorizontal aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">{t("Apply filters")}</span>
+          </Button>
           <Button
             type="button"
             variant="ghost"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             onClick={() => {
               setDraft(initialFilters);
               setFilters({ limit: 25 });
@@ -279,7 +301,8 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
               setValidation("");
             }}
           >
-            {t("Clear filters")}
+            <X aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">{t("Clear filters")}</span>
           </Button>
         </div>
       </form>
@@ -293,8 +316,13 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
       {historyError ? (
         <div role="alert" className="space-y-2">
           <p className="text-sm text-destructive">{historyError.message}</p>
-          <Button variant="outline" onClick={refresh}>
-            {t("Retry history")}
+          <Button
+            variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            onClick={refresh}
+          >
+            <RotateCcw aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">{t("Retry history")}</span>
           </Button>
         </div>
       ) : query.isPending || query.isFetching || !query.data ? (
@@ -369,12 +397,16 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                             target: entry.targetId,
                           })}
                           aria-expanded={selected === entry.id}
+                          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                           onClick={(event) => {
                             sourceButton.current = event.currentTarget;
                             setSelected(entry.id);
                           }}
                         >
-                          {t("View changes")}
+                          <Eye aria-hidden="true" />
+                          <span className="sr-only sm:not-sr-only">
+                            {t("View changes")}
+                          </span>
                         </Button>
                       </td>
                     </tr>
@@ -396,23 +428,29 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
             <div className="flex gap-2">
               <Button
                 variant="outline"
+                className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                 disabled={pages.length === 1 || query.isFetching}
                 onClick={() => {
                   setSelected(undefined);
                   setPages(pages.slice(0, -1));
                 }}
               >
-                {t("Previous page")}
+                <ChevronLeft aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">
+                  {t("Previous page")}
+                </span>
               </Button>
               <Button
                 variant="outline"
+                className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                 disabled={!query.data.nextCursor || query.isFetching}
                 onClick={() => {
                   setSelected(undefined);
                   setPages([...pages, query.data.nextCursor!]);
                 }}
               >
-                {t("Next page")}
+                <ChevronRight aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">{t("Next page")}</span>
               </Button>
             </div>
           </nav>
@@ -429,8 +467,15 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                 >
                   {t("Change details")}
                 </h3>
-                <Button variant="ghost" onClick={closeDetail}>
-                  {t("Close details")}
+                <Button
+                  variant="ghost"
+                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+                  onClick={closeDetail}
+                >
+                  <X aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">
+                    {t("Close details")}
+                  </span>
                 </Button>
               </div>
               {detail.isError ? (
@@ -440,9 +485,13 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                   </p>
                   <Button
                     variant="outline"
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                     onClick={() => void detail.refetch()}
                   >
-                    {t("Retry details")}
+                    <RotateCcw aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">
+                      {t("Retry details")}
+                    </span>
                   </Button>
                 </div>
               ) : detail.isPending || detail.isFetching ? (

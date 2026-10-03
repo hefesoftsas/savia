@@ -1,5 +1,11 @@
 # Administración por pantalla
 
+In narrow content areas (640 px or less), screen rows keep the name, visibility
+switch, and an icon-only actions menu on one line. The menu offers configuration,
+restoration or removal from the menu, and permanent deletion for inactive
+screens. Connected sources still block permanent deletion. Inactive rows do not
+reserve space for a drag handle. Larger content areas retain direct action buttons.
+
 Administration lists the domain screens using `studio.screen.hidden`. “Pantallas disponibles” are eligible for navigation; their actual presence in a member’s sidebar also depends on permissions and personal menu preferences. “Pantallas fuera del menú” remain accessible through authorized direct links. Hiding a screen does not change access permissions.
 
 Tenant administrators can create and manage screens only within their authorized

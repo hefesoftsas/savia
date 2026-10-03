@@ -364,14 +364,14 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
         onValueChange={(value) => setActiveTab(value as AccountTab)}
         value={activeTab}
       >
-        <TabsList>
-          <TabsTrigger value="profile">
+        <TabsList className="h-auto w-full flex-wrap justify-start sm:w-fit sm:flex-nowrap sm:h-9">
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="profile">
             {translate("savia.account.tabs.profile", { _: "Perfil" })}
           </TabsTrigger>
-          <TabsTrigger value="security">
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="security">
             {translate("savia.account.tabs.security", { _: "Seguridad" })}
           </TabsTrigger>
-          <TabsTrigger value="mfa">
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="mfa">
             {translate("savia.account.tabs.mfa", { _: "MFA" })}
             {account?.twoFactorEnabled ? (
               <Badge className="ml-1.5" variant="outline">
@@ -380,7 +380,9 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
             ) : null}
           </TabsTrigger>
           {api && (
-            <TabsTrigger value="keys">{keyMessages("API keys")}</TabsTrigger>
+            <TabsTrigger className="min-h-11 sm:min-h-0" value="keys">
+              {keyMessages("API keys")}
+            </TabsTrigger>
           )}
         </TabsList>
 
@@ -418,6 +420,7 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="max-sm:h-11"
                     onClick={() => void loadAccount()}
                   >
                     {translate("ra.action.retry", { _: "Reintentar" })}
@@ -456,36 +459,42 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
                         <Button
                           type="button"
                           size="sm"
+                          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                           disabled={uploadingAvatar || removingAvatar}
                           onClick={() => avatarInputRef.current?.click()}
                         >
                           <Camera className="size-4" aria-hidden="true" />
-                          {translate("savia.account.profile.changeAvatar", {
-                            _: "Cambiar avatar",
-                          })}
+                          <span className="sr-only sm:not-sr-only">
+                            {translate("savia.account.profile.changeAvatar", {
+                              _: "Cambiar avatar",
+                            })}
+                          </span>
                         </Button>
                         {account.image || avatarPreview ? (
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
+                            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                             disabled={uploadingAvatar || removingAvatar}
                             onClick={() => void removeAvatar()}
                           >
                             <Trash2 className="size-4" aria-hidden="true" />
-                            {removingAvatar
-                              ? translate(
-                                  "savia.account.profile.removingAvatar",
-                                  {
-                                    _: "Quitando…",
-                                  },
-                                )
-                              : translate(
-                                  "savia.account.profile.removeAvatar",
-                                  {
-                                    _: "Quitar avatar",
-                                  },
-                                )}
+                            <span className="sr-only sm:not-sr-only">
+                              {removingAvatar
+                                ? translate(
+                                    "savia.account.profile.removingAvatar",
+                                    {
+                                      _: "Quitando…",
+                                    },
+                                  )
+                                : translate(
+                                    "savia.account.profile.removeAvatar",
+                                    {
+                                      _: "Quitar avatar",
+                                    },
+                                  )}
+                            </span>
                           </Button>
                         ) : null}
                       </div>
@@ -636,15 +645,21 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
                   </p>
                 ) : null}
                 <div>
-                  <Button type="submit" disabled={changingPassword}>
+                  <Button
+                    type="submit"
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+                    disabled={changingPassword}
+                  >
                     <KeyRound className="size-4" />
-                    {changingPassword
-                      ? translate("savia.account.security.submitting", {
-                          _: "Actualizando…",
-                        })
-                      : translate("savia.account.security.submit", {
-                          _: "Actualizar contraseña",
-                        })}
+                    <span className="sr-only sm:not-sr-only">
+                      {changingPassword
+                        ? translate("savia.account.security.submitting", {
+                            _: "Actualizando…",
+                          })
+                        : translate("savia.account.security.submit", {
+                            _: "Actualizar contraseña",
+                          })}
+                    </span>
                   </Button>
                 </div>
               </form>
@@ -718,16 +733,19 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
                     <Button
                       type="submit"
                       variant="outline"
+                      className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                       disabled={disablingMfa}
                     >
                       <ShieldOff className="size-4" />
-                      {disablingMfa
-                        ? translate("savia.account.mfa.disabling", {
-                            _: "Desactivando…",
-                          })
-                        : translate("savia.account.mfa.disableAction", {
-                            _: "Desactivar MFA",
-                          })}
+                      <span className="sr-only sm:not-sr-only">
+                        {disablingMfa
+                          ? translate("savia.account.mfa.disabling", {
+                              _: "Desactivando…",
+                            })
+                          : translate("savia.account.mfa.disableAction", {
+                              _: "Desactivar MFA",
+                            })}
+                      </span>
                     </Button>
                   </form>
                   {mfaError ? (

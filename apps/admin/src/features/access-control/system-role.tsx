@@ -1,6 +1,7 @@
 import { useMessages } from "@/i18n/core";
 import { accessMessages } from "@/i18n/locales/access";
 import { useState } from "react";
+import { ChevronsDown, ChevronsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AccessCatalog, AccessRole } from "@/api/access-control-client";
 
@@ -96,17 +97,25 @@ export function SystemRoleDetails({
                 type="button"
                 variant="outline"
                 size="sm"
+                className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                 onClick={() => setExpanded(new Set(resources))}
               >
-                {t("Expand all")}
+                <ChevronsDown aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">
+                  {t("Expand all")}
+                </span>
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                 onClick={() => setExpanded(new Set())}
               >
-                {t("Collapse all")}
+                <ChevronsUp aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">
+                  {t("Collapse all")}
+                </span>
               </Button>
             </div>
             <div className="divide-y border-y">

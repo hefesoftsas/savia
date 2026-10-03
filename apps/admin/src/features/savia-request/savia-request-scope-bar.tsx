@@ -20,7 +20,7 @@ export function SaviaRequestScopeBar() {
       role="status"
     >
       <Building2 className="size-4 text-primary" aria-hidden="true" />
-      <span>
+      <span className="min-w-0 break-words">
         <strong>Ámbito:</strong> {scopeLabel}
       </span>
       {scope ? (
@@ -33,11 +33,11 @@ export function SaviaRequestScopeBar() {
         </span>
       )}
       {canOverrideScope && !isPlatformAdmin ? (
-        <label className="ml-auto flex items-center gap-2">
+        <label className="ml-auto flex min-w-0 max-w-full items-center gap-2">
           <span className="sr-only">Tenant administrado</span>
           <select
             aria-label="Tenant administrado"
-            className="h-8 rounded-md border bg-background px-2 text-sm"
+            className="h-8 min-w-0 max-w-full rounded-md border bg-background px-2 text-sm max-sm:h-11"
             disabled={busy}
             onChange={(event) => applyScopeOverride(event.target.value || null)}
             value={scope ?? ""}
@@ -52,11 +52,11 @@ export function SaviaRequestScopeBar() {
         </label>
       ) : null}
       {canOverrideScope && isPlatformAdmin ? (
-        <label className="ml-auto flex items-center gap-2">
+        <label className="ml-auto flex min-w-0 max-w-full items-center gap-2">
           <span className="sr-only">Inspeccionar tenant</span>
           <select
             aria-label="Inspeccionar tenant"
-            className="h-8 rounded-md border bg-background px-2 text-sm"
+            className="h-8 min-w-0 max-w-full rounded-md border bg-background px-2 text-sm max-sm:h-11"
             disabled={busy || tenants.status === "loading"}
             onChange={(event) => applyScopeOverride(event.target.value || null)}
             value={scope ?? ""}

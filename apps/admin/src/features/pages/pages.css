@@ -581,6 +581,12 @@
   }
 }
 @media (max-width: 760px) {
+  .pages-workspace button {
+    min-height: 44px;
+  }
+  .pages-workspace button[aria-label] {
+    min-width: 44px;
+  }
   .page-document-header {
     padding: 8px 16px;
     flex-wrap: wrap;
@@ -595,6 +601,15 @@
   }
   .page-document-actions {
     gap: 4px;
+  }
+  .page-document-actions button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .page-privacy-indicator {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
   }
   .page-save-status {
     max-width: 76px;
@@ -612,7 +627,32 @@
     display: none;
   }
   .pages-tree-action {
-    min-height: 32px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .pages-tree-spacer {
+    width: 44px;
+  }
+  .pages-tree-row {
+    min-height: 44px;
+  }
+  .pages-search-index-actions button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .page-history-heading button,
+  .page-history-drawer footer button,
+  .page-history-preview [role="alert"] button,
+  .page-history-drawer [role="alert"] button {
+    min-height: 44px;
+  }
+  .page-collection > footer {
+    flex-wrap: wrap;
+  }
+  .page-collection > footer button {
+    min-height: 44px;
   }
 }
 .page-editor-content .page-bullet {
