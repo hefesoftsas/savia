@@ -636,13 +636,56 @@ export async function tenantSocialResponse(
   if (
     url.pathname === "/api/auth/savia-social/providers" &&
     request.method === "GET"
-  )
+  ) {
+    // Only the API's host resolver may select a tenant for public discovery.
+    const tenantId = Number(request.headers.get("x-savia-social-tenant-id"));
+    const unavailable = { providers: [], ssoEnabled: false };
+    if (
+      !authNoticeBridgeAuthorized(
+        environment.SAVIA_INTERNAL_BRIDGE_KEY,
+        request,
+      ) ||
+      !Number.isSafeInteger(tenantId) ||
+      tenantId <= 0
+    )
+      return json(unavailable);
+    const [settings, state, sso] = await Promise.all([
+      byTenant(adapter, tenantId),
+      adapter.findOne<{ active: boolean }>({
+        model: "tenantAuthState",
+        where: [{ field: "tenantId", value: tenantId }],
+      }),
+      adapter.findOne<{
+        saviaEnabled: boolean;
+        saviaTenantActive: boolean;
+        saviaSSOOnly: boolean;
+        samlConfig?: string | null;
+      }>({
+        model: "ssoProvider",
+        where: [{ field: "saviaTenantId", value: tenantId }],
+      }),
+    ]);
+    if (state?.active === false) return json(unavailable);
     return json({
-      providers: [
-        ...Object.keys(providers),
-        ...(chatgptAvailable ? ["chatgpt"] : []),
-      ],
+      providers:
+        settings?.active && !sso?.saviaSSOOnly
+          ? [
+              ...(providers.google && settings.googleEnabled ? ["google"] : []),
+              ...(providers.microsoft && settings.microsoftEnabled
+                ? ["microsoft"]
+                : []),
+              ...(chatgptAvailable && settings.chatgptEnabled
+                ? ["chatgpt"]
+                : []),
+            ]
+          : [],
+      ssoEnabled: !!(
+        sso?.saviaEnabled &&
+        sso.saviaTenantActive &&
+        sso.samlConfig
+      ),
     });
+  }
   const match = url.pathname.match(
     /^\/_internal\/tenant-social\/(\d+)(\/activity)?$/,
   );
