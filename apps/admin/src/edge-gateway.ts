@@ -117,6 +117,8 @@ export async function gatewayFetch(
     const response = await env.ASSETS.fetch(request);
     if (
       pathname === "/register" ||
+      pathname === "/public/bookings" ||
+      pathname.startsWith("/public/bookings/") ||
       pathname === "/public/forms" ||
       pathname.startsWith("/public/forms/") ||
       pathname === "/public/pages" ||

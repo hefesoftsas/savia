@@ -216,6 +216,8 @@ describe("edge gateway", () => {
 
 it.each([
   "/public/forms/fixture",
+  "/public/bookings/fixture",
+  "/public/bookings/manage/fixture",
   "/public/pages/fixture",
   "/public/pages/fixture/child",
   "/register",
