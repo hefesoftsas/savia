@@ -90,6 +90,42 @@ const currentIdentityRoute = createRoute({
   },
 });
 
+const companionSessionRoute = createRoute({
+  method: "get",
+  path: "/v1/companion/session",
+  tags: ["Companion"],
+  summary: "Get the current mobile Companion session and workspaces",
+  security: [{ oauth2: ["recordings:read"] }],
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            subject: z.string(),
+            displayName: z.string(),
+            workspaces: z.array(
+              z.object({
+                id: z.number().int().positive(),
+                name: z.string(),
+                slug: z.string(),
+              }),
+            ),
+            grantedRecordingScopes: z.array(
+              z.enum([
+                "recordings:read",
+                "recordings:upload",
+                "recordings:process",
+              ]),
+            ),
+          }),
+        },
+      },
+      description: "Safe identity and eligible workspace selection data",
+    },
+    403: { description: "A recording-scoped OAuth session is required" },
+  },
+});
+
 const identityUsersRoute = createRoute({
   method: "get",
   path: "/v1/identity/users",
@@ -384,7 +420,8 @@ const oauthClientSummarySchema = z.object({
   clientAuthentication: oauthClientAuthenticationSchema,
   clientId: z.string().min(1),
   clientName: z.string().min(1),
-  redirectUris: z.array(z.string().url()).min(1),
+  grantTypes: z.array(z.enum(["authorization_code", "refresh_token"])).min(1),
+  redirectUris: z.array(z.string().min(1)).min(1),
   scopes: z.array(z.string().min(1)),
   trusted: z.boolean(),
 });
@@ -392,9 +429,14 @@ const oauthClientCreatedSchema = oauthClientSummarySchema.extend({
   clientSecret: z.string().min(1).optional(),
 });
 const oauthClientCreateSchema = z.object({
+  applicationType: z.enum(["native", "web"]).optional(),
   clientAuthentication: oauthClientAuthenticationSchema,
   clientName: z.string().min(1).max(120),
-  redirectUris: z.array(z.string().url()).min(1),
+  grantTypes: z
+    .array(z.enum(["authorization_code", "refresh_token"]))
+    .min(1)
+    .optional(),
+  redirectUris: z.array(z.string().min(1)).min(1),
   scopes: z.array(z.string().min(1)).min(1),
   trusted: z.boolean().default(false),
 });
@@ -689,6 +731,60 @@ export function registerIdentityRoutes(
   app.openapi(currentIdentityRoute, (context) =>
     context.json({ data: actorDocument(actorFromContext(context)) }, 200),
   );
+  app.openapi(companionSessionRoute, (context) => {
+    const actor = actorFromContext(context);
+    if (actor.credential?.kind !== "oauth") {
+      return context.json(
+        {
+          error: {
+            code: "AUTHORIZATION_FORBIDDEN",
+            message: "A mobile OAuth session is required.",
+          },
+        },
+        403,
+      );
+    }
+    if (!actor.credential.scopes.includes("recordings:read")) {
+      return context.json(
+        {
+          error: {
+            code: "INSUFFICIENT_SCOPE",
+            message: "The access token does not grant recordings:read.",
+          },
+        },
+        403,
+      );
+    }
+    return context.json(
+      {
+        subject: actor.principal.subject,
+        displayName: actor.principal.displayName,
+        workspaces: actor.memberships
+          .filter(
+            (membership) =>
+              membership.isActive &&
+              (membership.tenantId ?? membership.agencyId) > 0 &&
+              membership.tenantName &&
+              membership.tenantSlug,
+          )
+          .map((membership) => ({
+            id: membership.tenantId ?? membership.agencyId,
+            name: membership.tenantName!,
+            slug: membership.tenantSlug!,
+          })),
+        grantedRecordingScopes: actor.credential.scopes.filter(
+          (
+            scope,
+          ): scope is
+            "recordings:read" | "recordings:upload" | "recordings:process" =>
+            scope === "recordings:read" ||
+            scope === "recordings:upload" ||
+            scope === "recordings:process",
+        ),
+      },
+      200,
+    );
+  });
   app.openapi(identityUsersRoute, async (context) => {
     const tenantId = requireIdentityAdministrator(actorFromContext(context));
     if (!userAdministrator) unavailableUserAdministration();

@@ -7,6 +7,7 @@ export const integrationMessages = {
 
 /** Personal integrations (connections) and virtual AI employees UI copy. Keys are the Spanish source. */
 export const personalIntegrationsMessages = {
+  Aplicaciones: ["Aplicaciones", "Apps", "Aplicativos"],
   Integraciones: ["Integraciones", "Integrations", "Integrações"],
   "Ayuda sobre %{v1}": [
     "Ayuda sobre %{v1}",

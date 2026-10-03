@@ -20,6 +20,7 @@ import type {
 import { CrmConnectionsPage } from "@/features/crm/crm-connections-page";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CompanionDownloads } from "./companion-downloads";
 import { VirtualEmployeesManagement } from "./virtual-employees-management";
 import { useMessages } from "@/i18n/core";
 import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
@@ -301,7 +302,9 @@ export function PersonalIntegrationsPage({
       ? "virtual-employees"
       : searchParams.get("tab") === "crm"
         ? "crm"
-        : "connections";
+        : searchParams.get("tab") === "apps"
+          ? "apps"
+          : "connections";
   const selectTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("tab", tab);
@@ -472,7 +475,7 @@ export function PersonalIntegrationsPage({
         onValueChange={selectTab}
         className="w-full space-y-6"
       >
-        <TabsList className="mb-2">
+        <TabsList className="mb-2 w-full flex-wrap justify-start gap-1 group-data-[orientation=horizontal]/tabs:h-auto [&_[data-slot=tabs-trigger]]:h-auto [&_[data-slot=tabs-trigger]]:min-h-9">
           <TabsTrigger value="connections">
             {t("Cuentas y Conexiones")}
           </TabsTrigger>
@@ -480,6 +483,7 @@ export function PersonalIntegrationsPage({
           <TabsTrigger value="virtual-employees">
             {t("Empleados Virtuales (IA)")}
           </TabsTrigger>
+          <TabsTrigger value="apps">{t("Aplicaciones")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="connections" className="space-y-6">
@@ -573,6 +577,10 @@ export function PersonalIntegrationsPage({
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="apps" className="space-y-6">
+          <CompanionDownloads />
         </TabsContent>
 
         <TabsContent value="crm" className="space-y-6">

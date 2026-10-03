@@ -125,6 +125,7 @@ export function workerConfig(
       binding: "ASSETS",
       not_found_handling: "single-page-application",
       run_worker_first: [
+        "/companion-downloads.json",
         "/public/bookings",
         "/public/bookings/*",
         "/api/*",

@@ -1,6 +1,15 @@
 # Companion implementation status
 
-Owner: Savia platform maintainers. Reviewed: 2026-10-01.
+Owner: Savia platform maintainers. Reviewed: 2026-10-03.
+
+## Mobile increment
+
+Flutter Android/iOS Companion now lives in `apps/companion-mobile`, with native
+public OAuth/PKCE, scoped recording access, foreground microphone/import drafts,
+explicit upload and processing consent, remote library/playback, notes and
+questions. Android debug compilation and automated tests passed. Full physical
+device and authenticated preview/provider qualification are pending; an APK with
+no registered public client ID disables sign-in. See [mobile setup and evidence](mobile.md).
 
 ## Implemented increment
 
