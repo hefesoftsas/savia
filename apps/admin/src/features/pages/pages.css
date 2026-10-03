@@ -139,7 +139,12 @@
   color: var(--muted-foreground);
 }
 .pages-search-combobox input {
+  min-width: 0;
   background: transparent;
+}
+.pages-search-combobox > svg,
+.pages-search-combobox > button {
+  flex-shrink: 0;
 }
 .pages-search-popover {
   position: absolute;
@@ -210,10 +215,6 @@
 }
 .pages-search-index-status p {
   margin: 0;
-}
-.pages-search-index-help {
-  flex-basis: 100%;
-  font-size: 11px;
 }
 .pages-search-index-actions {
   display: flex;

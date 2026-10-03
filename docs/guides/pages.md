@@ -140,7 +140,9 @@ When enabled and available, the Pages search box adds semantic matches backed by
 Cloudflare Workers AI (`@cf/baai/bge-m3`) and a dedicated Vectorize index. Text
 search remains available when semantic search is disabled or unavailable. Pages
 automatically catches up older saved versions when you open the workspace, with
-visible progress and controls to pause or resume. New, saved and restored pages
+visible progress and controls to pause or resume. The information icon beside the
+search field opens a tooltip with indexing totals and the automatic indexing
+explanation; these details stay hidden during normal browsing. New, saved and restored pages
 are submitted for background indexing on a best-effort basis. Imports submit up
 to five pages in the background; other pending pages catch up the next time you
 open Pages. A failed catch-up batch stops until you choose **Retry indexing**; it

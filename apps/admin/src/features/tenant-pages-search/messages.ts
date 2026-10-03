@@ -1,6 +1,11 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const tenantPagesSearchMessages = {
+  "Page indexing information": [
+    "Información de indexación de páginas",
+    "Page indexing information",
+    "Informações de indexação de páginas",
+  ],
   "Page search": ["Búsqueda de páginas", "Page search", "Busca de páginas"],
   "Search suggestions": [
     "Sugerencias de búsqueda",
