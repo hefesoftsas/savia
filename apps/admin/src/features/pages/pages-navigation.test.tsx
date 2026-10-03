@@ -47,6 +47,7 @@ function setup(route = "/pages/project") {
       kind: "page",
     },
   ];
+  const reads: string[] = [];
   const creates: unknown[] = [];
   const deletes: string[] = [];
   const api = new ApiClient({
@@ -54,6 +55,7 @@ function setup(route = "/pages/project") {
     tokenSource: { getAccessToken: async () => null },
     fetcher: async (input, init) => {
       const url = new URL(String(input));
+      if (init?.method === "GET") reads.push(url.pathname);
       if (init?.method === "POST") {
         const body = JSON.parse(String(init.body));
         creates.push(body);
@@ -109,7 +111,7 @@ function setup(route = "/pages/project") {
       <RouterProvider router={router} />
     </StrictMode>,
   );
-  return { router, creates, deletes, api };
+  return { router, creates, deletes, api, reads };
 }
 it("uses the latest saved version when deleting from an open sidebar dialog", async () => {
   const { api, deletes } = setup("/pages/notes");
@@ -194,4 +196,18 @@ it("creates one persisted folder from the sidebar and updates its title in navig
   expect(
     screen.queryByRole("textbox", { name: "Document body" }),
   ).not.toBeInTheDocument();
+});
+
+it("loads one shared index and keeps it local after an autosave", async () => {
+  const { api, reads } = setup("/pages/notes");
+  await screen.findByRole("textbox", { name: "Document body" });
+  await screen.findByRole("link", { name: "Launch notes" });
+  expect(reads.filter((path) => path === "/v1/pages")).toHaveLength(1);
+  await new PagesClient(api).save("notes", {
+    title: "Updated notes",
+    content: [],
+    version: 1,
+  });
+  await screen.findByRole("link", { name: "Updated notes" });
+  expect(reads.filter((path) => path === "/v1/pages")).toHaveLength(1);
 });
