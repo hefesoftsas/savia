@@ -99,3 +99,9 @@
 - Independent review found two navigation/optimistic-update races; both were reproduced, fixed and reviewed again. A late task callback after identity clearing was also reproduced and guarded.
 - Dependencies missing from the initial local install were restored using the existing frozen lockfile; the only new dependency is `ical.js`.
 - Changes remain on the local task branch; no deployment or external calendar publication.
+
+## PR Integration Verification
+
+- Rebased the feature onto the current main branch while preserving Office and Companion changes. Renumbered the SQLite calendar migration to `0022`.
+- Updated source routes and My Day checks pass against that base: 1,111 API tests, 143 Admin widget/client tests, and nine SQLite baseline/migration checks. API, Admin and database type checks and the production Admin build pass.
+- GitHub CI exposed the missing PostgreSQL source-manifest entry. Added the matching native PostgreSQL migration, source checksum and table/index inventories; the previously failing checksum test passes. Live PostgreSQL checks require a configured test database and were not run locally.

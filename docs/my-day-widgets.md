@@ -99,8 +99,9 @@ background scheduler runs after My Day closes. Quick tasks continue to create
 today's event in connected OAuth calendars, and show that date explicitly even
 when the agenda is displaying another period.
 
-Deployment requires D1 migration `0022_personal_calendars.sql` and the existing
-`SAVIA_MCP_SHARED_SECRET` for calendar-specific AES-GCM payload encryption. With
+Deployment requires D1 migration `0022_personal_calendars.sql`; self-hosted
+PostgreSQL uses its matching native migration and source manifest. Both use the
+existing `SAVIA_MCP_SHARED_SECRET` for calendar-specific AES-GCM payload encryption. With
 the key unavailable, private feed storage fails closed. Permit the configured
 public feed destinations and `cloudflare-dns.com` under the runtime's outbound
 network policy for subscriptions. Local verification uses controlled feeds and
