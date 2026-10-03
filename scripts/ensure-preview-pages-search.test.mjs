@@ -97,3 +97,30 @@ test("unrelated error 3000 does not trigger creation", async () => {
   );
   assert.equal(calls, 1);
 });
+
+test("mixed missing-index and unrelated errors do not trigger creation", async () => {
+  for (const status of [400, 404]) {
+    let calls = 0;
+    await assert.rejects(
+      ensurePreviewPagesSearch({
+        accountId: "account",
+        apiToken: "token",
+        fetcher: async () => {
+          calls++;
+          return Response.json(
+            {
+              success: false,
+              errors: [
+                { code: 3000, message: "vectorize.index.not_found" },
+                { code: 10000, message: "Authentication error" },
+              ],
+            },
+            { status },
+          );
+        },
+      }),
+      /Cloudflare codes: 3000, 10000/,
+    );
+    assert.equal(calls, 1);
+  }
+});

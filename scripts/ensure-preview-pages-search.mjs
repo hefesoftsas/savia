@@ -17,12 +17,15 @@ export async function ensurePreviewPagesSearch({
   let response = await fetcher(`${base}/${name}`, { headers });
   let body = await response.json();
   // Vectorize also reports missing indexes as error 3000 rather than HTTP 404.
-  const missingIndex = body.errors?.some(
-    (error) =>
-      error.code === 3000 &&
-      error.message?.startsWith("vectorize.index.not_found"),
-  );
-  if (response.status === 404 || missingIndex) {
+  const errors = body.errors ?? [];
+  const missingIndex =
+    errors.length > 0 &&
+    errors.every(
+      (error) =>
+        error.code === 3000 &&
+        error.message?.startsWith("vectorize.index.not_found"),
+    );
+  if ((response.status === 404 && errors.length === 0) || missingIndex) {
     response = await fetcher(base, {
       method: "POST",
       headers,
