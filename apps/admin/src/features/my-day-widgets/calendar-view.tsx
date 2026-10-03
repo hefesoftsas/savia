@@ -28,6 +28,8 @@ import {
   moveCalendarDate,
 } from "./calendar-dates";
 import { CalendarSourceManager } from "./calendar-source-manager";
+import { useAppLocale, useMessages, intlLocale } from "@/i18n/core";
+import { calendarMessages } from "./calendar-messages";
 
 const sourceColors: Record<CalendarColor, string> = {
   blue: "bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100",
@@ -50,15 +52,19 @@ function safeLink(value: string | null) {
     return null;
   }
 }
-function eventTime(event: CalendarOccurrence): string {
+function eventTime(
+  event: CalendarOccurrence,
+  locale: string,
+  allDayLabel: string,
+): string {
   return event.allDay
-    ? "Todo el día"
-    : new Date(event.startsAt).toLocaleTimeString("es", {
+    ? allDayLabel
+    : new Date(event.startsAt).toLocaleTimeString(locale, {
         hour: "2-digit",
         minute: "2-digit",
       });
 }
-function allDayPeriod(event: CalendarOccurrence): string {
+function allDayPeriod(event: CalendarOccurrence, locale: string): string {
   const parseDate = (value: string) => {
     const [year, month, day] = value.split("-").map(Number);
     return new Date(year, month - 1, day);
@@ -66,7 +72,7 @@ function allDayPeriod(event: CalendarOccurrence): string {
   const first = parseDate(event.startsAt),
     last = addDays(parseDate(event.endsAt), -1);
   const format = (date: Date) =>
-    date.toLocaleDateString("es", {
+    date.toLocaleDateString(locale, {
       day: "numeric",
       month: "long",
       year: "numeric",
@@ -82,6 +88,8 @@ export function CalendarView({
   agenda: AgendaState;
   legacyDay: ReactNode;
 }) {
+  const t = useMessages(calendarMessages);
+  const locale = intlLocale(useAppLocale());
   const [managerOpen, setManagerOpen] = useState(false),
     [detail, setDetail] = useState<CalendarOccurrence | null>(null);
   const {
@@ -138,10 +146,13 @@ export function CalendarView({
   const today = dateKey(new Date());
   const label =
     view === "month"
-      ? selectedDay.toLocaleDateString("es", { month: "long", year: "numeric" })
+      ? selectedDay.toLocaleDateString(locale, {
+          month: "long",
+          year: "numeric",
+        })
       : view === "week"
-        ? `${bounds.start.toLocaleDateString("es", { day: "numeric", month: "short" })} – ${days[6].toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" })}`
-        : selectedDay.toLocaleDateString("es", {
+        ? `${bounds.start.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${days[6].toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" })}`
+        : selectedDay.toLocaleDateString(locale, {
             weekday: "long",
             day: "numeric",
             month: "long",
@@ -149,7 +160,7 @@ export function CalendarView({
           });
   const compactLabel =
     view === "day"
-      ? selectedDay.toLocaleDateString("es", {
+      ? selectedDay.toLocaleDateString(locale, {
           weekday: "short",
           day: "numeric",
           month: "short",
@@ -158,11 +169,11 @@ export function CalendarView({
       : label;
   function sourceName(id: string) {
     return id === "google_calendar"
-      ? "Google Calendar"
+      ? t("Google Calendar")
       : id === "outlook"
-        ? "Outlook"
+        ? t("Outlook")
         : (sources.sources.find((source) => source.id === id)?.name ??
-          "Calendario");
+          t("Calendars"));
   }
   function sourceColor(id: string): CalendarColor {
     return id === "google_calendar"
@@ -179,7 +190,7 @@ export function CalendarView({
         key={`${event.sourceId}:${event.id}`}
         onClick={() => setDetail(event)}
         className={`w-full min-w-0 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${sourceColors[sourceColor(event.sourceId)]}`}
-        aria-label={`${event.title || "Evento sin título"}, ${eventTime(event)}, ${sourceName(event.sourceId)}`}
+        aria-label={`${event.title || t("Untitled event")}, ${eventTime(event, locale, t("All day"))}, ${sourceName(event.sourceId)}`}
       >
         <span
           className={
@@ -188,11 +199,11 @@ export function CalendarView({
               : "block break-words text-sm font-medium"
           }
         >
-          {event.allDay ? "" : `${eventTime(event)} · `}
-          {event.title || "Evento sin título"}
+          {event.allDay ? "" : `${eventTime(event, locale, t("All day"))} · `}
+          {event.title || t("Untitled event")}
         </span>
         <span className="mt-0.5 block truncate text-[11px]">
-          {event.allDay ? "Todo el día · " : ""}
+          {event.allDay ? `${t("All day")} · ` : ""}
           {sourceName(event.sourceId)}
         </span>
       </button>
@@ -214,7 +225,7 @@ export function CalendarView({
       <div className="flex items-center justify-between gap-2">
         <div
           className="flex min-w-0 flex-1 rounded-lg bg-muted p-1 @min-[28rem]/calendar:flex-none"
-          aria-label="Vista del calendario"
+          aria-label={t("Calendar view")}
         >
           {(["day", "week", "month"] as const).map((mode) => (
             <Button
@@ -226,7 +237,7 @@ export function CalendarView({
               aria-pressed={view === mode}
               onClick={() => setView(mode)}
             >
-              {mode === "day" ? "Día" : mode === "week" ? "Semana" : "Mes"}
+              {t(mode === "day" ? "Day" : mode === "week" ? "Week" : "Month")}
             </Button>
           ))}
         </div>
@@ -235,13 +246,13 @@ export function CalendarView({
           variant="outline"
           size="sm"
           className="size-11 @min-[28rem]/calendar:h-8 @min-[28rem]/calendar:w-auto"
-          aria-label="Gestionar calendarios"
-          title="Gestionar calendarios"
+          aria-label={t("Manage calendars")}
+          title={t("Manage calendars")}
           onClick={() => setManagerOpen(true)}
         >
           <Settings2 className="size-4" />
           <span className="sr-only @min-[28rem]/calendar:not-sr-only">
-            Gestionar calendarios
+            {t("Manage calendars")}
           </span>
         </Button>
       </div>
@@ -263,7 +274,7 @@ export function CalendarView({
             variant="ghost"
             size="icon"
             className="size-11 @min-[28rem]/calendar:size-9"
-            aria-label="Periodo anterior"
+            aria-label={t("Previous period")}
             onClick={() =>
               setSelectedDay(moveCalendarDate(selectedDay, view, -1))
             }
@@ -277,14 +288,14 @@ export function CalendarView({
             className="h-11 @min-[28rem]/calendar:h-8"
             onClick={() => setSelectedDay(new Date())}
           >
-            Hoy
+            {t("Today")}
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="size-11 @min-[28rem]/calendar:size-9"
-            aria-label="Periodo siguiente"
+            aria-label={t("Next period")}
             onClick={() =>
               setSelectedDay(moveCalendarDate(selectedDay, view, 1))
             }
@@ -299,13 +310,13 @@ export function CalendarView({
           role="alert"
           className="rounded-md bg-muted px-3 py-2 text-sm"
         >
-          {id.startsWith("_") ? "Calendarios" : sourceName(id)}: {error}{" "}
+          {id.startsWith("_") ? t("Calendars") : sourceName(id)}: {error}{" "}
           <button
             className="font-medium underline underline-offset-4"
             type="button"
             onClick={() => void sources.refresh()}
           >
-            Reintentar
+            {t("Retry")}
           </button>
         </p>
       ))}
@@ -315,7 +326,7 @@ export function CalendarView({
           className="flex items-center gap-2 text-sm text-muted-foreground"
         >
           <LoaderCircle className="size-4 animate-spin" />
-          Cargando calendario…
+          {t("Loading calendar…")}
         </div>
       ) : null}
       {view === "day" ? (
@@ -332,17 +343,17 @@ export function CalendarView({
               className="mt-0.5 size-4 shrink-0 self-start"
             />
             <p className="min-w-0 flex-1">
-              No pudimos comprobar todos tus calendarios.
+              {t("Could not check all your calendars.")}
             </p>
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="h-11"
-              aria-label="Sincronizar calendarios"
+              aria-label={t("Sync calendars")}
               onClick={() => void agenda.refresh()}
             >
-              Reintentar
+              {t("Retry")}
             </Button>
           </div>
         ) : useEventDetails ? (
@@ -351,7 +362,7 @@ export function CalendarView({
               currentEvents.map((event) => eventRow(event))
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                Sin eventos para este día.
+                {t("No events for this day.")}
               </p>
             )}
           </div>
@@ -373,9 +384,9 @@ export function CalendarView({
                   onClick={() => showDay(day)}
                   className={`min-h-11 w-full rounded-md py-1.5 text-left text-sm font-medium capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:mb-3 md:min-h-0 ${dateKey(day) === today ? "bg-primary/10 text-primary" : ""}`}
                 >
-                  {day.toLocaleDateString("es", { weekday: "long" })}
+                  {day.toLocaleDateString(locale, { weekday: "long" })}
                   <span className="block tabular-nums">
-                    {day.toLocaleDateString("es", {
+                    {day.toLocaleDateString(locale, {
                       day: "numeric",
                       month: "short",
                     })}
@@ -385,7 +396,7 @@ export function CalendarView({
                   {dayEvents.some((event) => event.allDay) ? (
                     <div className="space-y-1.5 border-b pb-2">
                       <p className="text-xs font-medium text-muted-foreground">
-                        Todo el día
+                        {t("All day")}
                       </p>
                       {dayEvents
                         .filter((event) => event.allDay)
@@ -397,7 +408,7 @@ export function CalendarView({
                     .map((event) => eventRow(event))}
                   {!dayEvents.length ? (
                     <p className="py-2 text-xs text-muted-foreground">
-                      Sin eventos
+                      {t("No events")}
                     </p>
                   ) : null}
                 </div>
@@ -408,7 +419,11 @@ export function CalendarView({
       ) : (
         <div className="overflow-hidden rounded-lg border">
           <div className="grid grid-cols-7 bg-muted/60">
-            {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((day) => (
+            {Array.from({ length: 7 }, (_, index) =>
+              new Date(2026, 9, 5 + index).toLocaleDateString(locale, {
+                weekday: "short",
+              }),
+            ).map((day) => (
               <div
                 key={day}
                 className="py-2 text-center text-xs font-medium text-muted-foreground"
@@ -427,7 +442,7 @@ export function CalendarView({
                 >
                   <button
                     type="button"
-                    aria-label={day.toLocaleDateString("es", {
+                    aria-label={day.toLocaleDateString(locale, {
                       weekday: "long",
                       day: "numeric",
                       month: "long",
@@ -441,7 +456,10 @@ export function CalendarView({
                   {dayEvents.length ? (
                     <button
                       type="button"
-                      aria-label={`Ver ${dayEvents.length} eventos del ${day.toLocaleDateString("es")}`}
+                      aria-label={t("View %{count} events for %{date}", {
+                        count: dayEvents.length,
+                        date: day.toLocaleDateString(locale),
+                      })}
                       onClick={() => showDay(day)}
                       className="flex min-h-8 w-full flex-col items-center justify-center gap-1 rounded text-xs font-medium tabular-nums hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:hidden"
                     >
@@ -466,10 +484,13 @@ export function CalendarView({
                       <button
                         type="button"
                         className="w-full rounded px-1 py-1 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={`Ver ${dayEvents.length - 3} eventos más del ${day.toLocaleDateString("es")}`}
+                        aria-label={t("View %{count} more events for %{date}", {
+                          count: dayEvents.length - 3,
+                          date: day.toLocaleDateString(locale),
+                        })}
                         onClick={() => showDay(day)}
                       >
-                        +{dayEvents.length - 3} más
+                        {t("+%{count} more", { count: dayEvents.length - 3 })}
                       </button>
                     ) : null}
                   </div>
@@ -495,25 +516,27 @@ export function CalendarView({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{detail?.title || "Evento sin título"}</DialogTitle>
+            <DialogTitle>{detail?.title || t("Untitled event")}</DialogTitle>
             <DialogDescription>
-              {detail ? sourceName(detail.sourceId) : "Detalles del evento"}
+              {detail ? sourceName(detail.sourceId) : t("Event details")}
             </DialogDescription>
           </DialogHeader>
           {detail ? (
             <div className="space-y-3 text-sm">
               <p>
                 {detail.allDay
-                  ? "Todo el día"
-                  : new Date(detail.startsAt).toLocaleString("es")}
+                  ? t("All day")
+                  : new Date(detail.startsAt).toLocaleString(locale)}
               </p>
               <p>
                 {detail.allDay
-                  ? allDayPeriod(detail)
-                  : `Hasta ${new Date(detail.endsAt).toLocaleString("es")}`}
+                  ? allDayPeriod(detail, locale)
+                  : t("Until %{date}", {
+                      date: new Date(detail.endsAt).toLocaleString(locale),
+                    })}
               </p>
               <p className="text-muted-foreground">
-                Zona de origen: {detail.timeZone}
+                {t("Source time zone: %{zone}", { zone: detail.timeZone })}
               </p>
               {safeLink(detail.webLink) ? (
                 <Button asChild variant="outline">
@@ -522,7 +545,7 @@ export function CalendarView({
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Abrir en calendario <ExternalLink className="size-4" />
+                    {t("Open in calendar")} <ExternalLink className="size-4" />
                   </a>
                 </Button>
               ) : null}

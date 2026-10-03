@@ -40,13 +40,13 @@ import {
 } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import type { UserPreferencesClient } from "@/api/user-preferences-client";
+import { intlLocale, useAppLocale, useMessages } from "@/i18n/core";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddWidgetDialog } from "./add-widget-dialog";
 import {
   AgendaWidgetBody,
-  CALENDAR_CONNECT_MESSAGE,
   QuickTaskWidgetBody,
   useMyDayAgenda,
   type AgendaState,
@@ -57,6 +57,7 @@ import { useMyDayWidgets } from "./use-my-day-widgets";
 import { WidgetCard } from "./widgets";
 import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import { useEffect } from "react";
+import { widgetMessages } from "./widget-messages";
 
 const MAX_WIDGETS = 12;
 
@@ -155,6 +156,9 @@ export function MyDayWidgetsSection({
   personalIntegrations?: PersonalIntegrationsLike & Partial<PersonalMailLike>;
   agenda?: AgendaState;
 }) {
+  const locale = useAppLocale();
+  const uiLocale = intlLocale(locale);
+  const t = useMessages(widgetMessages);
   const [dialogOpen, setDialogOpen] = useState(false);
   const {
     widgets,
@@ -244,10 +248,10 @@ export function MyDayWidgetsSection({
 
   function collectionLabelFor(widget: MyDayWidget): string {
     if (!("apiBasePath" in widget) || !("collection" in widget)) {
-      if (widget.kind === "agenda") return "Agenda";
-      if (widget.kind === "quick_task") return "Tarea rápida";
-      if (widget.kind === "mail") return "Correos";
-      if (widget.kind === "office_documents") return "Documentos de Office";
+      if (widget.kind === "agenda") return t("Agenda");
+      if (widget.kind === "quick_task") return t("Quick task");
+      if (widget.kind === "mail") return t("Mail inbox");
+      if (widget.kind === "office_documents") return t("Office documents");
       return widget.title ?? widget.kind;
     }
     return (
@@ -258,17 +262,19 @@ export function MyDayWidgetsSection({
   }
 
   return (
-    <section aria-label="Mis widgets" className="mt-8">
+    <section aria-label={t("My widgets")} className="mt-8">
       <RemoteChangesNotice {...remoteLayout} />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20">
             <LayoutGrid className="size-4 text-primary" aria-hidden="true" />
           </span>
-          <h2 className="text-xl font-semibold tracking-tight">Mi tablero</h2>
+          <h2 className="text-xl font-semibold tracking-tight">
+            {t("My dashboard")}
+          </h2>
           {!loading && visibleWidgets.length > 0 ? (
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
-              {visibleWidgets.length}
+              {new Intl.NumberFormat(uiLocale).format(visibleWidgets.length)}
             </span>
           ) : null}
         </div>
@@ -284,7 +290,7 @@ export function MyDayWidgetsSection({
               }
             >
               <CalendarDays aria-hidden="true" />
-              Mostrar agenda
+              {t("Show agenda")}
             </Button>
           ) : null}
           {!hasSystemWidget("mail") &&
@@ -297,7 +303,7 @@ export function MyDayWidgetsSection({
               disabled={saving || full}
               onClick={() => void add({ id: "mail", kind: "mail" })}
             >
-              Mostrar correos
+              {t("Show mail")}
             </Button>
           ) : null}
           <Button
@@ -315,7 +321,7 @@ export function MyDayWidgetsSection({
               className={loading ? "animate-spin" : undefined}
               aria-hidden="true"
             />
-            Actualizar
+            {t("Refresh")}
           </Button>
           <Button
             type="button"
@@ -324,7 +330,7 @@ export function MyDayWidgetsSection({
             onClick={() => setDialogOpen(true)}
           >
             <Plus aria-hidden="true" />
-            Agregar widget
+            {t("Add widget")}
           </Button>
         </div>
       </div>
@@ -335,8 +341,9 @@ export function MyDayWidgetsSection({
         <div className="mb-4 space-y-2" role="alert">
           {mail.reconnectRequired.map((provider) => (
             <p key={provider} className="text-sm">
-              Vuelve a conectar {mailProviderLabel(provider)} para ver tus
-              correos.
+              {t("Reconnect %{provider} to see your mail.", {
+                provider: mailProviderLabel(provider),
+              })}
             </p>
           ))}
           {!mail.connections.length
@@ -351,7 +358,7 @@ export function MyDayWidgetsSection({
               href="/my-integrations"
               className="text-sm font-medium text-primary hover:underline"
             >
-              Revisar conexiones
+              {t("Review connections")}
             </a>
             {mail.errors.length ? (
               <Button
@@ -361,7 +368,7 @@ export function MyDayWidgetsSection({
                 disabled={mail.loading}
                 onClick={() => void mail.refresh()}
               >
-                Reintentar correos
+                {t("Retry mail")}
               </Button>
             ) : null}
           </div>
@@ -369,10 +376,7 @@ export function MyDayWidgetsSection({
       ) : null}
 
       {agenda.feedback &&
-      !(
-        agenda.feedback === CALENDAR_CONNECT_MESSAGE &&
-        agenda.sources.sources.length > 0
-      ) ? (
+      !(agenda.isCalendarConnectNotice && agenda.sources.sources.length > 0) ? (
         <Alert className="mb-4" aria-label={agenda.feedback}>
           <div className="col-start-2 flex items-start gap-2">
             <AlertDescription className="flex-1">
@@ -384,14 +388,14 @@ export function MyDayWidgetsSection({
               size="icon"
               className="size-7 shrink-0"
               onClick={() => {
-                if (agenda.feedback === CALENDAR_CONNECT_MESSAGE) {
+                if (agenda.isCalendarConnectNotice) {
                   agenda.dismissConnectNotice();
                 } else {
                   agenda.setFeedback(null);
                 }
               }}
-              aria-label="Cerrar aviso"
-              title="Cerrar aviso"
+              aria-label={t("Close notice")}
+              title={t("Close notice")}
             >
               <X className="size-4" aria-hidden="true" />
             </Button>
@@ -410,8 +414,8 @@ export function MyDayWidgetsSection({
               size="icon"
               className="size-7 shrink-0"
               onClick={() => setFeedback(null)}
-              aria-label="Cerrar aviso"
-              title="Cerrar aviso"
+              aria-label={t("Close notice")}
+              title={t("Close notice")}
             >
               <X className="size-4" aria-hidden="true" />
             </Button>
@@ -423,9 +427,9 @@ export function MyDayWidgetsSection({
         <div
           className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3"
           role="status"
-          aria-label="Cargando widgets…"
+          aria-label={t("Loading widgets…")}
         >
-          <span className="sr-only">Cargando widgets…</span>
+          <span className="sr-only">{t("Loading widgets…")}</span>
           {/* Misma retícula y alturas que el contenido final (la agenda ocupa
               2 columnas y min-h-44): evita el salto del grid a los ~7s. */}
           {[0, 1, 2].map((index) => (
@@ -452,12 +456,12 @@ export function MyDayWidgetsSection({
             <Boxes aria-hidden="true" className="size-7 text-primary" />
           </div>
           <h3 className="mt-5 text-lg font-semibold text-foreground">
-            Arma tu día
+            {t("Build your day")}
           </h3>
           <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-            Agrega tu agenda y widgets de tus colecciones para ver resúmenes,
-            vencimientos y elementos recientes sin abrir cada pantalla. Arrastra
-            para ordenar, quita y vuelve a agregar cuando quieras.
+            {t(
+              "Add your agenda and collection widgets to see summaries, due dates, and recent items without opening each screen. Drag to reorder, remove, and add them again whenever you want.",
+            )}
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
             <Button
@@ -467,7 +471,7 @@ export function MyDayWidgetsSection({
               onClick={() => setDialogOpen(true)}
             >
               <Plus aria-hidden="true" />
-              Agregar tu primer widget
+              {t("Add your first widget")}
             </Button>
             <Button
               type="button"
@@ -478,7 +482,7 @@ export function MyDayWidgetsSection({
               }
             >
               <CalendarDays aria-hidden="true" />
-              Mostrar agenda
+              {t("Show agenda")}
             </Button>
           </div>
         </div>
@@ -527,7 +531,9 @@ export function MyDayWidgetsSection({
                       dragHandle={
                         <button
                           type="button"
-                          aria-label={`Arrastrar widget ${collectionLabelFor(widget)}`}
+                          aria-label={t("Drag widget %{title}", {
+                            title: collectionLabelFor(widget),
+                          })}
                           className="flex h-8 w-8 cursor-grab items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing"
                           {...attributes}
                           {...listeners}
@@ -548,7 +554,7 @@ export function MyDayWidgetsSection({
                   {collectionLabelFor(activeWidget)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Suelta para reordenar
+                  {t("Drop to reorder")}
                 </p>
               </div>
             ) : null}
@@ -570,7 +576,7 @@ export function MyDayWidgetsSection({
             }
           >
             <PlusCircle aria-hidden="true" />
-            Agregar creación rápida de tareas
+            {t("Add quick task creation")}
           </Button>
         </div>
       ) : null}
@@ -579,7 +585,7 @@ export function MyDayWidgetsSection({
         <MailComposer
           key={mail.sessionRevision}
           open={composeOpen}
-          onSent={() => setFeedback("Correo enviado.")}
+          onSent={() => setFeedback({ key: "Email sent." })}
           onOpenChange={(open) => {
             setComposeOpen(open);
             if (!open && composeOpen) void mail.refresh();

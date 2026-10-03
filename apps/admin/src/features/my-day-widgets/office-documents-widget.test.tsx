@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
+import { render as renderLocalized } from "../studio-engine/test/locale-test-render";
+const render: typeof renderLocalized = (ui, options) =>
+  renderLocalized(ui, { ...options, locale: "en" });
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { OfficeDocumentsWidgetBody } from "./office-documents-widget";
@@ -240,7 +243,7 @@ it("lets the user add the office documents system widget", async () => {
   });
   const user = userEvent.setup();
   const onAdd = vi.fn(async () => true);
-  render(
+  renderLocalized(
     <AddWidgetDialog
       open
       onOpenChange={vi.fn()}
@@ -254,7 +257,9 @@ it("lets the user add the office documents system widget", async () => {
   await user.click(
     screen.getByRole("combobox", { name: "Widget del sistema" }),
   );
-  await user.click(screen.getByRole("option", { name: /Office documents/ }));
+  await user.click(
+    screen.getByRole("option", { name: /Documentos de Office/ }),
+  );
   await user.click(screen.getByRole("button", { name: "Agregar widget" }));
 
   expect(onAdd).toHaveBeenCalledWith({

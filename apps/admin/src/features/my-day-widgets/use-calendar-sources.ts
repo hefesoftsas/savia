@@ -1,3 +1,6 @@
+import { useMessages } from "@/i18n/core";
+import { calendarSourceMessages } from "./calendar-source-messages";
+type SourceError = string | { key: keyof typeof calendarSourceMessages };
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CalendarSourcesClient } from "@/api/personal-integrations-client";
 import type {
@@ -14,7 +17,7 @@ type Snapshot = {
   sources: CalendarSource[];
   events: CalendarOccurrence[];
   preferences: CalendarPreferences;
-  errors: Record<string, string>;
+  errors: Record<string, SourceError>;
   loading: boolean;
 };
 const empty = (loading = false): Snapshot => ({
@@ -51,10 +54,10 @@ export function isCalendarSourcesClient(
     (key) => typeof (value as Record<string, unknown>)[key] === "function",
   );
 }
-const errorMessage = (error: unknown) =>
+const errorMessage = (error: unknown): SourceError =>
   error instanceof Error
     ? error.message
-    : "No pudimos leer este calendario. Vuelve a sincronizar.";
+    : { key: "No pudimos leer este calendario. Vuelve a sincronizar." };
 const accessDenied = (error: unknown) =>
   Boolean(
     error &&
@@ -67,6 +70,7 @@ export function useCalendarSources(
   client: CalendarSourcesClient | undefined,
   range: CalendarRange,
 ) {
+  const t = useMessages(calendarSourceMessages);
   const key = `${range.from}/${range.to}/${range.timeZone}`;
   const active = useRef({ client, key, generation });
   active.current = { client, key, generation };
@@ -159,8 +163,9 @@ export function useCalendarSources(
             errors:
               preferencesResult.status === "rejected"
                 ? {
-                    _preferences:
-                      "No pudimos cargar la visibilidad de tus calendarios.",
+                    _preferences: {
+                      key: "No pudimos cargar la visibilidad de tus calendarios.",
+                    },
                   }
                 : {},
             loading: ids.size > 0 && current.current.events.length === 0,
@@ -177,9 +182,9 @@ export function useCalendarSources(
                   if (!isCurrent()) return;
                   const errors = { ...current.current.errors };
                   if (page.stale || page.error)
-                    errors[source.id] =
-                      page.error ||
-                      "Mostramos la última copia disponible. Vuelve a sincronizar.";
+                    errors[source.id] = page.error || {
+                      key: "Mostramos la última copia disponible. Vuelve a sincronizar.",
+                    };
                   else delete errors[source.id];
                   publish({
                     ...current.current,
@@ -302,14 +307,16 @@ export function useCalendarSources(
 
   const requireClient = () => {
     if (!client)
-      throw new Error("Los calendarios compartidos no están disponibles.");
+      throw new Error(t("Los calendarios compartidos no están disponibles."));
     return client;
   };
   const mutate = async <T>(action: () => Promise<T>): Promise<T> => {
     const session = generation;
     const result = await action();
     if (session !== generation)
-      throw new Error("La sesión ha cambiado. Vuelve a abrir tus calendarios.");
+      throw new Error(
+        t("La sesión ha cambiado. Vuelve a abrir tus calendarios."),
+      );
     if (active.current.client !== client) return result;
     if (client) cache.delete(client);
     revision.current++;
@@ -351,6 +358,12 @@ export function useCalendarSources(
   };
   return {
     ...snapshot,
+    errors: Object.fromEntries(
+      Object.entries(snapshot.errors).map(([id, error]) => [
+        id,
+        typeof error === "string" ? error : t(error.key),
+      ]),
+    ),
     refresh,
     addSource,
     updateSource,

@@ -7,6 +7,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { intlLocale, useAppLocale, useMessages } from "@/i18n/core";
 import {
   Pagination,
   PaginationContent,
@@ -20,6 +21,7 @@ import {
   type MailRow,
   type MailState,
 } from "./use-my-day-mail";
+import { widgetMessages } from "./widget-messages";
 
 const PAGE_SIZE = 10;
 type MailFilter = PersonalMailProvider | "all";
@@ -47,14 +49,36 @@ function safeLink(value: string | null): string | undefined {
     return undefined;
   }
 }
-function dateLabel(value: string | null) {
-  if (!value || !Number.isFinite(Date.parse(value))) return "Sin fecha";
-  return new Intl.DateTimeFormat("es", {
+function dateLabel(value: string | null, locale: string) {
+  if (!value || !Number.isFinite(Date.parse(value))) return undefined;
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function mailErrorLabel(
+  error: string,
+  t: ReturnType<typeof useMessages<typeof widgetMessages>>,
+) {
+  const more = error.match(
+    /^No pudimos cargar más correos de (.+)\. Reintenta\.$/,
+  );
+  if (more)
+    return t("Could not load more mail from %{provider}. Try again.", {
+      provider: more[1],
+    });
+  const connection = error.match(
+    /^No pudimos cargar (.+)\. Actualiza o revisa la conexión\.$/,
+  );
+  if (connection)
+    return t(
+      "Could not load mail from %{provider}. Refresh or check the connection.",
+      { provider: connection[1] },
+    );
+  return error;
 }
 
 export function MailWidgetBody({
@@ -64,6 +88,9 @@ export function MailWidgetBody({
   mail: MailState;
   onCompose: () => void;
 }) {
+  const locale = useAppLocale();
+  const uiLocale = intlLocale(locale);
+  const t = useMessages(widgetMessages);
   const [filter, setFilter] = useState<MailFilter>("all");
   const [page, setPage] = useState(0);
   const [readerOrder, setReaderOrder] = useState<string[] | null>(null);
@@ -311,21 +338,21 @@ export function MailWidgetBody({
             onValueChange={changeFilter}
             className="gap-0"
           >
-            <TabsList aria-label="Filtrar cuenta de correo" className="h-8">
+            <TabsList aria-label={t("Filter mail account")} className="h-8">
               <TabsTrigger value="all" className="px-2 text-xs">
-                Todos
+                {t("All")}
               </TabsTrigger>
               <TabsTrigger value="gmail" className="px-2 text-xs">
-                Gmail
+                {t("Gmail")}
               </TabsTrigger>
               <TabsTrigger value="outlook" className="px-2 text-xs">
-                Outlook
+                {t("Outlook")}
               </TabsTrigger>
             </TabsList>
           </Tabs>
         ) : (
           <p className="truncate text-xs text-muted-foreground">
-            {mail.connections[0]?.externalAccountLabel ?? "Correo personal"}
+            {mail.connections[0]?.externalAccountLabel ?? t("Personal email")}
           </p>
         )}
         <div className="flex gap-1">
@@ -333,7 +360,7 @@ export function MailWidgetBody({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label="Actualizar correos"
+            aria-label={t("Refresh mail")}
             disabled={mail.loading}
             onClick={() => void mail.refresh()}
           >
@@ -349,7 +376,7 @@ export function MailWidgetBody({
             onClick={onCompose}
           >
             <MailPlus className="size-4" aria-hidden="true" />
-            Nuevo correo
+            {t("New email")}
           </Button>
         </div>
       </div>
@@ -358,42 +385,42 @@ export function MailWidgetBody({
           role="status"
           className="flex flex-wrap items-center justify-between gap-2 text-sm"
         >
-          <p>Hay nuevos correos en la bandeja.</p>
+          <p>{t("There are new messages in your inbox.")}</p>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            aria-label="Descartar aviso de correos nuevos"
+            aria-label={t("Dismiss new mail notice")}
             onClick={mail.dismissNewMessages}
           >
-            Entendido
+            {t("Got it")}
           </Button>
         </div>
       ) : null}
       {mail.errors.map((error) => (
         <p key={error} role="alert" className="text-sm text-destructive">
-          {error}
+          {mailErrorLabel(error, t)}
         </p>
       ))}
       {paginationNotice ? (
         <p className="text-sm text-muted-foreground">
-          No pudimos completar esta página. Intenta de nuevo.
+          {t("Could not load this email page. Try again.")}
         </p>
       ) : null}
       {mail.loading && !pageRows.length ? (
-        <div role="status" aria-label="Cargando correos" className="space-y-3">
+        <div role="status" aria-label={t("Loading mail")} className="space-y-3">
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
         </div>
       ) : pageRows.length ? (
-        <ul aria-label="Correos" className="divide-y">
+        <ul aria-label={t("Mail messages")} className="divide-y">
           {pageRows.map((row) => {
             const link = safeLink(row.webLink);
             const content = (
               <>
                 <div className="flex items-start justify-between gap-2">
                   <span className="min-w-0 truncate text-sm font-medium text-foreground">
-                    {row.subject ?? "Sin asunto"}
+                    {row.subject ?? t("No subject")}
                     {link ? (
                       <ExternalLink
                         className="ml-1 inline size-3"
@@ -405,15 +432,15 @@ export function MailWidgetBody({
                     className="shrink-0 text-xs text-muted-foreground"
                     dateTime={row.receivedAt ?? undefined}
                   >
-                    {dateLabel(row.receivedAt)}
+                    {dateLabel(row.receivedAt, uiLocale) ?? t("No date")}
                   </time>
                 </div>
                 <p className="truncate text-xs text-muted-foreground">
-                  {row.sender ?? "Remitente desconocido"}
+                  {row.sender ?? t("Unknown sender")}
                 </p>
                 <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                   {mailProviderLabel(row.provider)} · {row.accountLabel}
-                  {!link ? " · Enlace no disponible" : ""}
+                  {!link ? ` · ${t("Link unavailable")}` : ""}
                 </p>
               </>
             );
@@ -425,7 +452,9 @@ export function MailWidgetBody({
                     href={link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label={`Abrir correo: ${row.subject ?? "Sin asunto"}`}
+                    aria-label={t("Open email: %{subject}", {
+                      subject: row.subject ?? t("No subject"),
+                    })}
                   >
                     {content}
                   </a>
@@ -439,8 +468,8 @@ export function MailWidgetBody({
       ) : !mail.errors.length ? (
         <p className="py-4 text-sm text-muted-foreground">
           {mail.connections.length
-            ? "No hay correos en esta bandeja."
-            : "Conecta Gmail u Outlook para ver tus correos."}
+            ? t("No mail in this inbox.")
+            : t("Connect Gmail or Outlook to see your mail.")}
         </p>
       ) : null}
       {(filteredRows.length > PAGE_SIZE ||
@@ -453,12 +482,12 @@ export function MailWidgetBody({
                 type="button"
                 variant="outline"
                 size="sm"
-                aria-label="Anterior"
+                aria-label={t("Previous")}
                 disabled={page === 0 || paging}
                 onClick={goPrevious}
               >
                 <ChevronLeft className="size-4" aria-hidden="true" />
-                <span>Anterior</span>
+                <span>{t("Previous")}</span>
               </Button>
             </PaginationItem>
             <PaginationItem>
@@ -466,7 +495,9 @@ export function MailWidgetBody({
                 className="px-2 text-sm text-muted-foreground"
                 aria-live="off"
               >
-                Página {page + 1}
+                {t("Page %{page}", {
+                  page: new Intl.NumberFormat(uiLocale).format(page + 1),
+                })}
               </span>
             </PaginationItem>
             <PaginationItem>
@@ -474,11 +505,11 @@ export function MailWidgetBody({
                 type="button"
                 variant="outline"
                 size="sm"
-                aria-label="Siguiente"
+                aria-label={t("Next")}
                 disabled={!canGoNext || paging}
                 onClick={goNext}
               >
-                <span>Siguiente</span>
+                <span>{t("Next")}</span>
                 <ChevronRight className="size-4" aria-hidden="true" />
               </Button>
             </PaginationItem>

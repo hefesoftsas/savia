@@ -1,6 +1,6 @@
 # Localization
 
-Owner: Core UI team. Reviewed: 2026-09-20.
+Owner: Core UI team. Reviewed: 2026-10-03.
 
 Savia supports Spanish (`es`, default), English (`en`) and Portuguese (`pt`) in
 its built-in administration, low-code UI and shipped insurance extensions. The selected locale controls system
@@ -15,14 +15,17 @@ Public forms persist independently with the same key.
 Module catalogs cover permissions, roles, accounts, users, tenants, branding,
 credentials, assistant settings, public forms, collection and field designers,
 record lists and details, relationships, imports, workflows, integration
-configuration, personal connections and virtual AI employees. Solution package catalogs, previews and manifests resolve
+configuration, personal connections and virtual AI employees. Appointment booking,
+public reservation wizards, page search, Companion downloads and My Day
+calendars, mail, tasks and dashboard widgets also use ES/EN/PT catalogs. Solution package catalogs, previews and manifests resolve
 package, object and field labels through the same ES/EN/PT fallback while
 stored names, option values and records remain unchanged. Shared navigation,
 dialogs, pagination and basic form controls also use the selected language. Public forms have an independent language
 selector and do not initialize the authenticated administration application.
 
 The existing react-admin catalogs remain the source for standard admin actions.
-New module catalogs live in `apps/admin/src/i18n/locales/`. Each message contains
+Module catalogs live in `apps/admin/src/i18n/locales/` or alongside their
+feature in `apps/admin/src/features/` as `*messages.ts`. Each message contains
 Spanish, English and Portuguese entries in that order. `useMessages(catalog)`
 provides typed lookup and `%{name}` interpolation. React renders the result as
 text; interpolation does not interpret HTML or recursively replace values.
@@ -59,7 +62,7 @@ user-entered text or record values. Components consuming translations must
 include their translator or locale in affected memo/effect dependencies.
 
 The existing admin test lane runs `i18n/coverage.test.ts`. It checks that every
-module message has three nonempty translations with matching interpolation
+core and feature module message has three nonempty translations with matching interpolation
 tokens. Its TypeScript AST scan rejects literal visible JSX text, accessibility
 and presentation attributes, and direct conditional/template copy in the
 explicit core directories listed in that test. Reviewed technical examples,
@@ -91,3 +94,8 @@ Tests also verify locale switching without remounting the real admin context,
 field/option labels, validation, interpolation, currency parsing and preservation
 of focused drafts. Browser verification should exercise all three languages,
 small screens and saving an unchanged numeric value after a language switch.
+
+Companion mobile ships matching ES/EN/PT ARB catalogs and follows the device
+language. Recording and draft file sizes use the active locale's decimal
+separator. Flutter widget tests require the Flutter SDK; the admin lane does
+not execute mobile tests.
