@@ -178,7 +178,8 @@ async function fetchCatalog(): Promise<string> {
         "User-Agent": "Savia-Companion-Downloads",
       },
       credentials: "omit",
-      redirect: "error",
+      // Workers supports manual/follow only; the response.ok check rejects 3xx.
+      redirect: "manual",
       signal: controller.signal,
     });
     if (!response.ok) throw new Error("Release catalog unavailable");
