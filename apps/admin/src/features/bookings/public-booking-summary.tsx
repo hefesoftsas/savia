@@ -46,7 +46,9 @@ export function PublicBookingSummary({
         <dt className="text-muted-foreground">{t("Selected service")}</dt>
         <dd className="font-medium">
           {service?.name}
-          {service ? ` · ${service.durationMinutes} min` : ""}
+          {service
+            ? t(" · %{minutes} min", { minutes: service.durationMinutes })
+            : ""}
         </dd>
       </div>
       <div className="grid gap-1">

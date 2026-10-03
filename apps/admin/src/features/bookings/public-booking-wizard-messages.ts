@@ -31,6 +31,11 @@ export const publicBookingWizardMessages = {
     "Appointment details",
     "Detalhes do agendamento",
   ],
+  " · %{minutes} min": [
+    " · %{minutes} min",
+    " · %{minutes} min",
+    " · %{minutes} min",
+  ],
   "Selected service": [
     "Servicio elegido",
     "Selected service",
