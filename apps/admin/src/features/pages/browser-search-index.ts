@@ -23,8 +23,8 @@ function loadEngine() {
 }
 async function locked<T>(name: string, task: () => Promise<T>): Promise<T> {
   if (
-    typeof WorkerGlobalScope !== "undefined" &&
-    self instanceof WorkerGlobalScope &&
+    typeof document === "undefined" &&
+    typeof self !== "undefined" &&
     !navigator.locks
   )
     throw new Error("Web Locks are required for the persistent search cache");
