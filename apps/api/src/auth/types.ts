@@ -37,6 +37,7 @@ export type AppActor = {
         tenantId: number;
         scopes: import("./personal-api-keys").RecordingScope[];
       }
+    | { kind: "oauth"; scopes: string[] }
     | { kind: "interactive" };
   principal: IdentityPrincipal;
   globalRoles: GlobalRole[];

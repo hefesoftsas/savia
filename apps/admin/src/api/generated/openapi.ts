@@ -6769,6 +6769,60 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/companion/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get the current mobile Companion session and workspaces */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Safe identity and eligible workspace selection data */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              subject: string;
+              displayName: string;
+              workspaces: {
+                id: number;
+                name: string;
+                slug: string;
+              }[];
+              grantedRecordingScopes: (
+                "recordings:read" | "recordings:upload" | "recordings:process"
+              )[];
+            };
+          };
+        };
+        /** @description A recording-scoped OAuth session is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/identity/users": {
     parameters: {
       query?: never;
@@ -7595,6 +7649,7 @@ export interface paths {
                   "none" | "client_secret_basic" | "client_secret_post";
                 clientId: string;
                 clientName: string;
+                grantTypes: ("authorization_code" | "refresh_token")[];
                 redirectUris: string[];
                 scopes: string[];
                 trusted: boolean;
@@ -7624,9 +7679,12 @@ export interface paths {
         content: {
           "application/json": {
             /** @enum {string} */
+            applicationType?: "native" | "web";
+            /** @enum {string} */
             clientAuthentication:
               "none" | "client_secret_basic" | "client_secret_post";
             clientName: string;
+            grantTypes?: ("authorization_code" | "refresh_token")[];
             redirectUris: string[];
             scopes: string[];
             /** @default false */
@@ -7650,6 +7708,7 @@ export interface paths {
                   "none" | "client_secret_basic" | "client_secret_post";
                 clientId: string;
                 clientName: string;
+                grantTypes: ("authorization_code" | "refresh_token")[];
                 redirectUris: string[];
                 scopes: string[];
                 trusted: boolean;
@@ -7719,7 +7778,10 @@ export interface paths {
       requestBody: {
         content: {
           "application/json": {
+            /** @enum {string} */
+            applicationType?: "native" | "web";
             clientName?: string;
+            grantTypes?: ("authorization_code" | "refresh_token")[];
             redirectUris?: string[];
             scopes?: string[];
             /** @default false */
@@ -7743,6 +7805,7 @@ export interface paths {
                   "none" | "client_secret_basic" | "client_secret_post";
                 clientId: string;
                 clientName: string;
+                grantTypes: ("authorization_code" | "refresh_token")[];
                 redirectUris: string[];
                 scopes: string[];
                 trusted: boolean;

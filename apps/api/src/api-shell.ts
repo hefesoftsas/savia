@@ -53,6 +53,9 @@ const oauthScopes = {
   email: "Verified Savia email",
   "savia.api.read": "Read Savia tenant data",
   "savia.api.write": "Execute Savia commands and administrative writes",
+  "recordings:read": "Read private Companion recordings and session workspaces",
+  "recordings:upload": "Upload private Companion recordings",
+  "recordings:process": "Generate notes and answers from private recordings",
 };
 
 type ScalarOAuthClient = {

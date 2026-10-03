@@ -153,6 +153,7 @@ const oauthClientAdministrator = {
         clientAuthentication: "none",
         clientId: "existing-public-client",
         clientName: "Existing public client",
+        grantTypes: ["authorization_code"],
         redirectUris: ["https://existing.savia.test/callback"],
         scopes: ["openid", "savia.api.read"],
         trusted: false,
@@ -171,6 +172,7 @@ const oauthClientAdministrator = {
       clientAuthentication: input.clientAuthentication,
       clientId: "created-client",
       clientName: input.clientName,
+      grantTypes: input.grantTypes ?? ["authorization_code"],
       redirectUris: input.redirectUris,
       scopes: input.scopes,
       trusted: input.trusted,
@@ -188,6 +190,7 @@ const oauthClientAdministrator = {
       clientAuthentication: "none",
       clientId,
       clientName: input.clientName ?? "Updated client",
+      grantTypes: input.grantTypes ?? ["authorization_code"],
       redirectUris: input.redirectUris ?? [
         "https://updated.savia.test/callback",
       ],
@@ -317,6 +320,102 @@ describe("Identity and access", () => {
       "DELETE FROM access_revisions WHERE scope LIKE 'tenant:%'",
     );
     await env.DB.exec("DELETE FROM tenants");
+  });
+
+  it("returns only safe identity and active workspaces to recording-scoped OAuth sessions", async () => {
+    const actor = {
+      principal: {
+        id: "mobile-session-principal",
+        issuer: "savia:better-auth",
+        subject: "mobile-session-subject",
+        email: "private@savia.test",
+        displayName: "Mobile User",
+        isActive: true,
+        createdAt: "2026-01-01",
+        updatedAt: "2026-01-01",
+      },
+      credential: {
+        kind: "oauth" as const,
+        scopes: ["recordings:read", "recordings:upload"],
+      },
+      globalRoles: [],
+      memberships: [
+        {
+          id: "active-mobile-membership",
+          principalId: "mobile-session-principal",
+          tenantId: 101,
+          agencyId: 101,
+          tenantName: "Acme",
+          tenantSlug: "acme",
+          role: "viewer",
+          isActive: true,
+          createdAt: "2026-01-01",
+          updatedAt: "2026-01-01",
+        },
+        {
+          id: "inactive-mobile-membership",
+          principalId: "mobile-session-principal",
+          tenantId: 102,
+          agencyId: 102,
+          tenantName: "Disabled",
+          tenantSlug: "disabled",
+          role: "viewer",
+          isActive: false,
+          createdAt: "2026-01-01",
+          updatedAt: "2026-01-01",
+        },
+      ],
+    };
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      {
+        async authenticate() {
+          return actor;
+        },
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        enabled: true,
+        configuration: {
+          effectiveConfigurationFor: async () => ({
+            apiKey: "unused",
+            model: "unused",
+          }),
+        },
+      },
+    );
+    const response = await app.request("/v1/companion/session");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      subject: "mobile-session-subject",
+      displayName: "Mobile User",
+      workspaces: [{ id: 101, name: "Acme", slug: "acme" }],
+      grantedRecordingScopes: ["recordings:read", "recordings:upload"],
+    });
+    actor.credential.scopes = ["savia.api.read"];
+    expect((await app.request("/v1/companion/session")).status).toBe(403);
   });
 
   it("rejects an API request that has no active Better Auth session", async () => {
@@ -1137,7 +1236,13 @@ describe("Identity and access", () => {
     expect(await response.json()).toMatchObject({
       resource: oauthResource,
       authorization_servers: [oauthIssuer],
-      scopes_supported: ["savia.api.read", "savia.api.write"],
+      scopes_supported: [
+        "savia.api.read",
+        "savia.api.write",
+        "recordings:read",
+        "recordings:upload",
+        "recordings:process",
+      ],
     });
   });
 

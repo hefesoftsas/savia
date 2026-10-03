@@ -76,3 +76,9 @@ are recorded in the implementation status. The [live-flow smoke test](live-flow-
 evidence and the remaining native capture failure.
 
 See [Import recordings](recording-imports.md) for local disk, Google Drive, and OneDrive uploads up to 50 MB.
+
+## Application downloads
+
+Integrations → Apps lists published Android, Windows and macOS preview downloads.
+See [download publication](downloads.md) for release prerequisites, asset naming
+and the distinction between unpublished builds and available downloads.

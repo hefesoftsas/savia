@@ -79,14 +79,17 @@ export type OAuthClientSummary = {
   clientAuthentication: OAuthClientAuthentication;
   clientId: string;
   clientName: string;
+  grantTypes: ("authorization_code" | "refresh_token")[];
   redirectUris: string[];
   scopes: string[];
   trusted: boolean;
 };
 
 export type OAuthClientCreateInput = {
+  applicationType?: "native" | "web";
   clientAuthentication: OAuthClientAuthentication;
   clientName: string;
+  grantTypes?: ("authorization_code" | "refresh_token")[];
   redirectUris: string[];
   scopes: string[];
   trusted: boolean;
@@ -95,7 +98,12 @@ export type OAuthClientCreateInput = {
 export type OAuthClientUpdateInput = Partial<
   Pick<
     OAuthClientCreateInput,
-    "clientName" | "redirectUris" | "scopes" | "trusted"
+    | "applicationType"
+    | "clientName"
+    | "grantTypes"
+    | "redirectUris"
+    | "scopes"
+    | "trusted"
   >
 >;
 
@@ -319,7 +327,11 @@ export function betterAuthAuthenticator(
         }
         const identity = await oauthResource.authenticate(request);
         requireOAuthScope(identity, request);
-        return actorForIdentity(d1, identity);
+        const actor = await actorForIdentity(d1, identity);
+        return {
+          ...actor,
+          credential: { kind: "oauth", scopes: [...identity.scopes] },
+        };
       }
       if (authorization)
         throw new AuthenticationError(

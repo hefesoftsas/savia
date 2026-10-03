@@ -1,6 +1,12 @@
 import "@testing-library/jest-dom/vitest";
+import { configure } from "@testing-library/react";
 import { afterEach } from "vitest";
 import { invalidateTenantWorkspaces } from "@/api/tenant-workspaces-client";
+
+// Coverage slows lazy imports and rendering; keep normal runs on the default.
+if (process.env.SAVIA_COVERAGE === "1") {
+  configure({ asyncUtilTimeout: 5000 });
+}
 
 class ResizeObserverStub {
   observe() {}
