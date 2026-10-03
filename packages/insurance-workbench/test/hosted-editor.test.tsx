@@ -83,7 +83,9 @@ it("renders only the editor and saves with the loaded record version", async () 
   expect(input).toHaveValue("Invoice");
   expect(a.collection.list).not.toHaveBeenCalled();
   fireEvent.change(input, { target: { value: "Updated" } });
-  const save = screen.getByRole("button", { name: /Guardar cambios|Save changes/ });
+  const save = screen.getByRole("button", {
+    name: /Guardar cambios|Save changes/,
+  });
   await waitFor(() => expect(save).toBeEnabled());
   fireEvent.click(save);
   await waitFor(() =>
@@ -138,7 +140,11 @@ it.each(["saved", "cancelled"])(
     await waitFor(() => expect(create).toBeEnabled());
     fireEvent.click(create);
     await waitFor(() => expect(create).toBeEnabled());
-    expect(a.collection.list).toHaveBeenCalledTimes(status === "saved" ? 2 : 1);
+    await waitFor(() =>
+      expect(a.collection.list).toHaveBeenCalledTimes(
+        status === "saved" ? 2 : 1,
+      ),
+    );
   },
 );
 it("focuses the first field and treats a date-only payment change as dirty", async () => {
@@ -315,13 +321,11 @@ it("uses a durable local receipt for details and reports pending without a netwo
   const a = api(true);
   const local = {
     ...a.collection,
-    update: vi
-      .fn()
-      .mockResolvedValue({
-        data: { id: "r1" },
-        persistence: "local",
-        mutationId: "m1",
-      }),
+    update: vi.fn().mockResolvedValue({
+      data: { id: "r1" },
+      persistence: "local",
+      mutationId: "m1",
+    }),
   };
   a.savia.localRecords = { collection: () => local } as never;
   render(<Workbench savia={a.savia} config={config} />);
