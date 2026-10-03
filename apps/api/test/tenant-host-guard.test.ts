@@ -183,3 +183,27 @@ it("allows only the owner through a legacy alias and uses the canonical URL in m
   );
   expect(other.status).toBe(403);
 });
+
+it("rejects a key on a foreign hostname even with its own tenant header", async () => {
+  const base = platformAdministratorAuthenticator();
+  const app = createTestApp({
+    auth: {
+      async authenticate(r, d) {
+        return {
+          ...(await base.authenticate(r, d)),
+          credential: {
+            kind: "personal-api-key" as const,
+            keyId: "key",
+            tenantId: 101,
+            scopes: ["recordings:read" as const],
+          },
+        };
+      },
+    },
+  });
+  const response = await app.request(
+    "https://other-agency.savia.app.hefesoft.com/v1/identity/me",
+    { headers: { "x-savia-tenant-slug": "merkaseguros" } },
+  );
+  expect(response.status).toBe(403);
+});

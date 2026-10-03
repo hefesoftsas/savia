@@ -134,6 +134,34 @@ describe("assistant OpenRouter configuration", () => {
     await env.DB.exec("DELETE FROM assistant_openrouter_settings");
   });
 
+  it("pins API key processing to its tenant independently of browser selection", async () => {
+    await seedAgencyAndMember(101);
+    const settings = repository();
+    await settings.saveAgencyOverride(101, {
+      apiKey: "tenant-key",
+      model: "test/tenant",
+      actorId: "test-agency-member",
+    });
+    expect(
+      await settings.effectiveConfigurationForTenant("test-agency-member", 101),
+    ).toMatchObject({
+      apiKey: "tenant-key",
+      model: "test/tenant",
+      tenantId: 101,
+    });
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 102),
+    ).rejects.toThrow();
+    await env.DB.prepare(
+      "UPDATE identity_tenant_membership SET is_active=0 WHERE principal_id=?",
+    )
+      .bind("test-agency-member")
+      .run();
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 101),
+    ).rejects.toThrow();
+  });
+
   it("uses a new IV and omits a saved key from summaries", async () => {
     const settings = repository();
     await settings.saveGlobal({

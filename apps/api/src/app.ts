@@ -1,3 +1,4 @@
+import { PersonalApiKeys } from "./auth/personal-api-keys";
 import { PersonalIntegrationOperations } from "./personal-integrations/operations";
 import { createPersonalIntegrationRepository } from "./personal-integrations/repository";
 import { registerPagesRoutes } from "./routes/pages";
@@ -251,7 +252,11 @@ export function createApp(
   const notificationAuth = authenticationMiddleware(
     db,
     authenticator ??
-      betterAuthAuthenticator(resolvedAuthService, oauthResource),
+      betterAuthAuthenticator(
+        resolvedAuthService,
+        oauthResource,
+        new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+      ),
   );
   const notificationSession = async (context: Context, next: Next) => {
     const actor = actorFromContext(context);

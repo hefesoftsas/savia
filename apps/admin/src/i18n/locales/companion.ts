@@ -1,4 +1,37 @@
 export const companionMessages = {
+  "Ask about this recording": [
+    "Pregunta sobre esta grabación",
+    "Ask about this recording",
+    "Pergunte sobre esta gravação",
+  ],
+  "Answers use only this transcript. Verify them against the audio.": [
+    "Las respuestas usan solo esta transcripción. Verifícalas con el audio.",
+    "Answers use only this transcript. Verify them against the audio.",
+    "As respostas usam apenas esta transcrição. Confira com o áudio.",
+  ],
+  "Your question": ["Tu pregunta", "Your question", "Sua pergunta"],
+  "I agree to send this transcript and question to OpenRouter. Processing may incur charges.":
+    [
+      "Acepto enviar esta transcripción y pregunta a OpenRouter. El procesamiento puede generar cargos.",
+      "I agree to send this transcript and question to OpenRouter. Processing may incur charges.",
+      "Concordo em enviar esta transcrição e pergunta ao OpenRouter. O processamento pode gerar cobranças.",
+    ],
+  "Preparing answer…": [
+    "Preparando respuesta…",
+    "Preparing answer…",
+    "Preparando resposta…",
+  ],
+  "Ask about recording": [
+    "Preguntar sobre la grabación",
+    "Ask about recording",
+    "Perguntar sobre a gravação",
+  ],
+  "Insufficient evidence in this recording.": [
+    "No hay evidencia suficiente en esta grabación.",
+    "Insufficient evidence in this recording.",
+    "Não há evidência suficiente nesta gravação.",
+  ],
+
   "Your browser cannot play this audio. Download it or use a browser that supports Ogg Opus.":
     [
       "Tu navegador no puede reproducir este audio. Descárgalo o usa un navegador compatible con Ogg Opus.",

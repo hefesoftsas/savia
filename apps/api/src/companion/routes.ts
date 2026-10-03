@@ -1,3 +1,5 @@
+import type { Context } from "hono";
+import { recordingScopeSchema } from "../auth/personal-api-keys";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { actorFromContext } from "../auth/middleware";
 import { AuthenticationError, type AppActor } from "../auth/types";
@@ -10,6 +12,8 @@ import {
   transcriptSchema,
   summarizeSchema,
   summarySchema,
+  recordingQuestionSchema,
+  recordingAnswerSchema,
 } from "./service";
 
 import {
@@ -41,7 +45,13 @@ export type CompanionOptions = {
   configuration?: Pick<
     AssistantConfigurationRepository,
     "effectiveConfigurationFor"
-  >;
+  > &
+    Partial<
+      Pick<
+        AssistantConfigurationRepository,
+        "effectiveConfigurationForTenant" | "activeTenantFor"
+      >
+    >;
   service?: CompanionService;
 };
 const errorSchema = z.object({
@@ -120,14 +130,19 @@ const capabilitiesSchema = z.object({
   maxCompressedAudioBytes: z.number(),
   audioFormats: z.array(z.enum(["wav", "ogg"])),
   storageAvailable: z.boolean(),
+  grantedRecordingScopes: z.array(recordingScopeSchema).optional(),
   privacyRouting: z.literal("unverified"),
 });
+const recordingReadSecurity: Record<string, string[]>[] = [
+  { oauth2: ["savia.api.read"] },
+  { personalApiKey: [] },
+];
 const capabilities = createRoute({
   method: "get",
   path: "/v1/companion/capabilities",
   tags: ["Companion"],
   summary: "Read the enabled Companion validation limits",
-  security: [{ oauth2: ["savia.api.read"] }],
+  security: recordingReadSecurity,
   responses: {
     200: {
       description: "Validation capabilities",
@@ -282,10 +297,38 @@ export function registerCompanionRoutes(
       throw error;
     }
   });
-  const configuration = (principalId: string) =>
-    options!.configuration!.effectiveConfigurationFor(principalId);
+  const configuration = (actor: AppActor) => {
+    const repo = options!.configuration!;
+    if (actor.credential?.kind === "personal-api-key") {
+      if (!repo.effectiveConfigurationForTenant)
+        throw new CompanionError(
+          "COMPANION_UNAVAILABLE",
+          "Tenant processing configuration is unavailable",
+          503,
+        );
+      return repo.effectiveConfigurationForTenant(
+        actor.principal.id,
+        actor.credential.tenantId,
+      );
+    }
+    return repo.effectiveConfigurationFor(actor.principal.id);
+  };
+  const access = async (c: Context) => {
+    const actor = actorFromContext(c);
+    const keyed =
+      actor.credential?.kind === "personal-api-key"
+        ? actor.credential
+        : undefined;
+    return {
+      ownerId: actor.principal.id,
+      tenantId: keyed
+        ? keyed.tenantId
+        : await options?.configuration?.activeTenantFor?.(actor.principal.id),
+      requireTenant: Boolean(keyed),
+    };
+  };
   app.openapi(capabilities, async (c) => {
-    const config = await configuration(actorFromContext(c).principal.id);
+    const config = await configuration(actorFromContext(c));
     return c.json(
       {
         sttModel: config.transcriptionModel ?? service.sttModel,
@@ -295,6 +338,15 @@ export function registerCompanionRoutes(
         maxCompressedAudioBytes: MAX_OPUS_BYTES,
         audioFormats: ["wav", "ogg"] as ("wav" | "ogg")[],
         storageAvailable: Boolean(options?.storage),
+        ...(actorFromContext(c).credential?.kind === "personal-api-key"
+          ? {
+              grantedRecordingScopes: (
+                actorFromContext(c).credential as {
+                  scopes: import("../auth/personal-api-keys").RecordingScope[];
+                }
+              ).scopes,
+            }
+          : {}),
         privacyRouting: "unverified" as const,
       },
       200,
@@ -303,16 +355,16 @@ export function registerCompanionRoutes(
   app.openapi(transcribe, async (c) =>
     c.json(
       await service.transcribe(
-        await configuration(actorFromContext(c).principal.id),
+        await configuration(actorFromContext(c)),
         c.req.valid("json"),
       ),
       200,
     ),
   );
   const recordings = new CompanionRecordings(options?.storage);
-  const base = {
+  const base: { tags: string[]; security: Record<string, string[]>[] } = {
     tags: ["Companion"],
-    security: [{ oauth2: ["savia.api.write"] }],
+    security: [{ oauth2: ["savia.api.write"] }, { personalApiKey: [] }],
   };
   app.openapi(
     createRoute({
@@ -346,7 +398,7 @@ export function registerCompanionRoutes(
         throw new CompanionError("INVALID_AUDIO", "Missing audio file.");
       uploadBodies.delete(c.req.raw);
       return c.json(
-        await recordings.saveImported(actorFromContext(c).principal.id, {
+        await recordings.saveImported(await access(c), {
           id: input.id,
           name: input.name,
           format: input.format,
@@ -362,6 +414,7 @@ export function registerCompanionRoutes(
       ...base,
       method: "post",
       path: "/v1/companion/recordings/import",
+      security: [{ oauth2: ["savia.api.write"] }],
       summary:
         "Import a selected recording from the current user's connected drive",
       request: {
@@ -397,7 +450,7 @@ export function registerCompanionRoutes(
           fileId: input.fileId,
         });
         return c.json(
-          await recordings.saveImported(actorFromContext(c).principal.id, {
+          await recordings.saveImported(await access(c), {
             id: input.id,
             name: file.name,
             origin: input.provider,
@@ -443,18 +496,12 @@ export function registerCompanionRoutes(
       },
     }),
     async (c) =>
-      c.json(
-        await recordings.save(
-          actorFromContext(c).principal.id,
-          c.req.valid("json"),
-        ),
-        200,
-      ),
+      c.json(await recordings.save(await access(c), c.req.valid("json")), 200),
   );
   app.openapi(
     createRoute({
       ...base,
-      security: [{ oauth2: ["savia.api.read"] }],
+      security: recordingReadSecurity,
       method: "get",
       path: "/v1/companion/recordings",
       summary: "List the current user's private samples",
@@ -469,10 +516,7 @@ export function registerCompanionRoutes(
     }),
     async (c) =>
       c.json(
-        await recordings.list(
-          actorFromContext(c).principal.id,
-          c.req.valid("query").cursor,
-        ),
+        await recordings.list(await access(c), c.req.valid("query").cursor),
         200,
       ),
   );
@@ -480,7 +524,7 @@ export function registerCompanionRoutes(
   app.openapi(
     createRoute({
       ...base,
-      security: [{ oauth2: ["savia.api.read"] }],
+      security: recordingReadSecurity,
       method: "get",
       path: "/v1/companion/recordings/{id}",
       summary: "Download the current user's private sample",
@@ -500,7 +544,7 @@ export function registerCompanionRoutes(
     }),
     async (c) => {
       const id = c.req.valid("param").id;
-      const object = await recordings.get(actorFromContext(c).principal.id, id);
+      const object = await recordings.get(await access(c), id);
       const format = importedAudioFormatSchema.parse(
         object.customMetadata?.format ?? "ogg",
       );
@@ -520,7 +564,7 @@ export function registerCompanionRoutes(
   app.openapi(
     createRoute({
       ...base,
-      security: [{ oauth2: ["savia.api.read"] }],
+      security: recordingReadSecurity,
       method: "get",
       path: "/v1/companion/recordings/{id}/notes",
       summary: "Read saved transcript and draft notes",
@@ -535,10 +579,7 @@ export function registerCompanionRoutes(
     }),
     async (c) =>
       c.json(
-        await recordings.getNotes(
-          actorFromContext(c).principal.id,
-          c.req.valid("param").id,
-        ),
+        await recordings.getNotes(await access(c), c.req.valid("param").id),
         200,
       ),
   );
@@ -565,13 +606,13 @@ export function registerCompanionRoutes(
       },
     }),
     async (c) => {
-      const owner = actorFromContext(c).principal.id;
+      const owner = await access(c);
       const id = c.req.valid("param").id;
       return recordings.withNotesLock(owner, id, async () => {
         let notes = await recordings.getNotes(owner, id);
         if (notes.summary) return c.json(notes, 200);
 
-        const config = await configuration(owner);
+        const config = await configuration(actorFromContext(c));
         if (!notes.transcript) {
           const audio = await recordings.getAudio(owner, id);
           let binary = "";
@@ -617,6 +658,48 @@ export function registerCompanionRoutes(
   app.openapi(
     createRoute({
       ...base,
+      method: "post",
+      path: "/v1/companion/recordings/{id}/questions",
+      summary: "Answer a question using only the saved recording transcript",
+      request: {
+        params,
+        body: {
+          required: true,
+          content: { "application/json": { schema: recordingQuestionSchema } },
+        },
+      },
+      responses: {
+        200: {
+          description: "Draft answer, not persisted",
+          content: { "application/json": { schema: recordingAnswerSchema } },
+        },
+        ...failures,
+      },
+    }),
+    async (c) => {
+      const notes = await recordings.getNotes(
+        await access(c),
+        c.req.valid("param").id,
+      );
+      if (!notes.transcript?.text.trim())
+        throw new CompanionError(
+          "TRANSCRIPT_REQUIRED",
+          "Generate a transcript before asking about this recording.",
+          409,
+        );
+      return c.json(
+        await service.answer(
+          await configuration(actorFromContext(c)),
+          notes.transcript.text,
+          c.req.valid("json"),
+        ),
+        200,
+      );
+    },
+  );
+  app.openapi(
+    createRoute({
+      ...base,
       method: "delete",
       path: "/v1/companion/recordings/{id}",
       summary: "Delete the current user's private sample",
@@ -624,10 +707,7 @@ export function registerCompanionRoutes(
       responses: { 204: { description: "Sample deleted" }, ...failures },
     }),
     async (c) => {
-      await recordings.remove(
-        actorFromContext(c).principal.id,
-        c.req.valid("param").id,
-      );
+      await recordings.remove(await access(c), c.req.valid("param").id);
       return c.body(null, 204);
     },
   );
@@ -635,7 +715,7 @@ export function registerCompanionRoutes(
   app.openapi(summarize, async (c) =>
     c.json(
       await service.summarize(
-        await configuration(actorFromContext(c).principal.id),
+        await configuration(actorFromContext(c)),
         c.req.valid("json"),
       ),
       200,

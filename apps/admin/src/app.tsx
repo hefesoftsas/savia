@@ -184,7 +184,13 @@ function ServiceCredentialsRoute({ services }: { services: AppServices }) {
   );
 }
 
-function AccountRoute({ apiUrl }: { apiUrl: string }) {
+function AccountRoute({
+  apiUrl,
+  services,
+}: {
+  apiUrl: string;
+  services: AppServices;
+}) {
   const translate = useTranslate();
   return (
     <Suspense
@@ -196,7 +202,7 @@ function AccountRoute({ apiUrl }: { apiUrl: string }) {
         />
       }
     >
-      <AccountPage apiUrl={apiUrl} />
+      <AccountPage apiUrl={apiUrl} api={services.apiClient} />
     </Suspense>
   );
 }
@@ -403,6 +409,7 @@ function AppContent({ services }: { services?: AppServices } = {}) {
               path="/account"
               element={
                 <AccountRoute
+                  services={appServices}
                   apiUrl={
                     import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin
                   }

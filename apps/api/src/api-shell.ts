@@ -1,3 +1,5 @@
+import { registerPersonalApiKeyRoutes } from "./auth/personal-api-key-routes";
+import { PersonalApiKeys } from "./auth/personal-api-keys";
 import {
   registrationBridge,
   registrationReadiness,
@@ -294,6 +296,13 @@ function registerOpenApiAuthentication(
   app: OpenAPIHono,
   oauthUrls: PublicAuthUrls,
 ): void {
+  app.openAPIRegistry.registerComponent("securitySchemes", "personalApiKey", {
+    type: "http",
+    scheme: "bearer",
+    bearerFormat: "savia_pat",
+    description:
+      "Personal key restricted to its recording scopes, owner, tenant and deployment",
+  });
   app.openAPIRegistry.registerComponent("securitySchemes", "sessionAuth", {
     type: "apiKey",
     in: "cookie",
@@ -637,7 +646,11 @@ export function createApiShell(
   const authenticate = authenticationMiddleware(
     db,
     authenticator ??
-      betterAuthAuthenticator(resolvedAuthService, oauthResource),
+      betterAuthAuthenticator(
+        resolvedAuthService,
+        oauthResource,
+        new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+      ),
   );
   app.use("/v1/*", (context, next) =>
     anonymousRegistration(context.req.path)
@@ -649,7 +662,11 @@ export function createApiShell(
     authenticationMiddleware(
       db,
       authenticator ??
-        betterAuthAuthenticator(resolvedAuthService, oauthResource),
+        betterAuthAuthenticator(
+          resolvedAuthService,
+          oauthResource,
+          new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+        ),
     ),
   );
   app.use(
@@ -657,7 +674,11 @@ export function createApiShell(
     authenticationMiddleware(
       db,
       authenticator ??
-        betterAuthAuthenticator(resolvedAuthService, oauthResource),
+        betterAuthAuthenticator(
+          resolvedAuthService,
+          oauthResource,
+          new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+        ),
     ),
   );
   if (canonicalHost) {
@@ -667,6 +688,11 @@ export function createApiShell(
     );
     app.use("/api/assistant/*", guard);
   }
+  registerPersonalApiKeyRoutes(
+    app,
+    new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+    new URL(oauthUrls.authorizationUrl).origin,
+  );
   registerHealthRoute(app, db);
   app.doc31("/openapi.json", document);
   app.get("/docs", async (context) => {

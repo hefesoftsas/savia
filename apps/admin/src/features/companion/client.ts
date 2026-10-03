@@ -45,6 +45,7 @@ export type RecordingNotes = {
     openQuestions: string[];
   } | null;
 };
+export type RecordingAnswer = { answer: string; insufficientEvidence: boolean };
 export class CompanionRecordingsClient {
   constructor(private api: ApiClient) {}
   async upload(file: File): Promise<Recording> {
@@ -142,6 +143,12 @@ export class CompanionRecordingsClient {
     return this.api.post(
       `/v1/companion/recordings/${encodeURIComponent(id)}/notes`,
       { consent: true },
+    );
+  }
+  answer(id: string, question: string): Promise<RecordingAnswer> {
+    return this.api.post(
+      `/v1/companion/recordings/${encodeURIComponent(id)}/questions`,
+      { question, consent: true },
     );
   }
   remove(id: string): Promise<void> {

@@ -33,6 +33,8 @@ export function authenticationMiddleware(
         actor,
       );
       await next();
+      if (context.res.status >= 200 && context.res.status < 300)
+        await authenticator.recordSuccessfulUse?.(actor).catch(() => {});
     } catch (exception) {
       if (exception instanceof AuthenticationError)
         return authenticationErrorResponse(exception);

@@ -1,3 +1,6 @@
+import type { ApiClient } from "@/api/api-client";
+import { PersonalApiKeysPanel } from "./personal-api-keys";
+import { personalApiKeyMessages } from "@/i18n/locales/personal-api-keys";
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
@@ -43,10 +46,11 @@ type Account = {
   twoFactorEnabled: boolean;
 };
 
-type AccountTab = "profile" | "security" | "mfa";
+type AccountTab = "profile" | "security" | "mfa" | "keys";
 
 type AccountPageProps = {
   apiUrl: string;
+  api?: ApiClient;
 };
 
 function requestUrl(baseUrl: string, path: string): string {
@@ -135,7 +139,8 @@ function notifyIdentityChanged(): void {
   }
 }
 
-export function AccountPage({ apiUrl }: AccountPageProps) {
+export function AccountPage({ apiUrl, api }: AccountPageProps) {
+  const keyMessages = useMessages(personalApiKeyMessages);
   const t = useMessages(settingsMessages);
   const localError = (message: string) =>
     Object.hasOwn(settingsMessages, message)
@@ -374,6 +379,9 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
               </Badge>
             ) : null}
           </TabsTrigger>
+          {api && (
+            <TabsTrigger value="keys">{keyMessages("API keys")}</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="profile">
@@ -749,6 +757,11 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
             </CardContent>
           </Card>
         </TabsContent>
+        {api && (
+          <TabsContent value="keys">
+            <PersonalApiKeysPanel api={api} />
+          </TabsContent>
+        )}
       </Tabs>
     </main>
   );
