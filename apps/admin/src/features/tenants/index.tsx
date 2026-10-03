@@ -14,7 +14,6 @@ import {
 } from "ra-core";
 import { TenantUserCapacity } from "@/features/users/tenant-user-capacity";
 import { TenantPagesSearchSettingsPanel } from "@/features/tenant-pages-search/tenant-pages-search-settings-panel";
-import { useAppServices } from "@/features/assistant/assistant-context";
 import { TenantSignInLinks } from "@/features/tenant-sso/tenant-sign-in-links";
 import { useWatch } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";

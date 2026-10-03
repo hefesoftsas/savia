@@ -137,6 +137,9 @@ Apply the normal application D1 migrations, including
 `packages/db/migrations/0020_connected_office_documents.sql`, before deploying the API. The
 standalone Studio harness uses `packages/studio-server/migrations/0016_office_revisions.sql`.
 Deploy the API and multi-entry admin build through the existing deployment workflow.
+The preview deployment prepares and verifies the pinned runtime, packages it with
+Brotli, and uploads its five immutable objects to `savia-documents-preview` before
+deploying the gateway. The upload step rejects other buckets and environments.
 The rendered admin gateway configuration binds `OFFICE_RUNTIME` to the selected
 environment's documents bucket and routes `/office` and `/office/*` through its
 worker. Preview and production must use their own configured buckets.

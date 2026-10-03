@@ -111,6 +111,50 @@ function setup(
   const view = render(<OfficeSuitePage services={{ apiClient }} />);
   return { apiClient, files, connectedFiles, connectedPosts, options, ...view };
 }
+it.each([
+  "savia:active-tenant-changed",
+  "savia:identity-changed",
+  "savia:session-cleared",
+])(
+  "clears private document links and reloads when %s fires",
+  async (eventName) => {
+    const original = {
+      id: "tenant-a-document",
+      name: "Tenant A.docx",
+      mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      size: 10,
+      version: 1,
+      updatedAt: "2026-10-02T10:00:00Z",
+    };
+    const view = setup(false, { initialLocal: original });
+    await screen.findByRole("link", { name: "Tenant A.docx" });
+    view.connectedFiles.push({
+      id: "cloud-old",
+      name: "Private old link",
+      format: "docx",
+      provider: "google_drive",
+      url: "https://docs.google.com/document/d/old/edit",
+      createdAt: original.updatedAt,
+    });
+    fireEvent(window, new Event("focus"));
+    await screen.findByRole("link", { name: "Private old link" });
+    view.files.splice(0, view.files.length, {
+      ...original,
+      id: "tenant-b-document",
+      name: "Tenant B.docx",
+    });
+    view.connectedFiles.length = 0;
+    fireEvent(window, new Event(eventName));
+    expect(
+      screen.queryByRole("link", { name: "Tenant A.docx" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Private old link" }),
+    ).not.toBeInTheDocument();
+    await screen.findByRole("link", { name: "Tenant B.docx" });
+  },
+);
+
 it("creates a persisted spreadsheet inline and exposes its editor link", async () => {
   setup();
   await screen.findByText("You have no documents yet");

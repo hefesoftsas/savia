@@ -131,6 +131,7 @@ export function OfficeSuitePage({
   const mounted = useRef(true);
   const loadGeneration = useRef(0);
   const connectedLoadGeneration = useRef(0);
+  const contextGeneration = useRef(0);
   const requestRef = useRef<{ signature: string; id: string } | undefined>(
     undefined,
   );
@@ -231,9 +232,37 @@ export function OfficeSuitePage({
       mounted.current = false;
     };
   }, [loadConnected]);
+  useEffect(() => {
+    const contextChanged = () => {
+      ++contextGeneration.current;
+      ++loadGeneration.current;
+      ++connectedLoadGeneration.current;
+      setDocuments([]);
+      setConnectedDocuments([]);
+      setConnectedProviders([]);
+      setStorage("savia");
+      setSaved(false);
+      setConnectedSaved(undefined);
+      setCreateError("");
+      requestRef.current = undefined;
+      void load();
+      void loadConnected();
+    };
+    const events = [
+      "savia:active-tenant-changed",
+      "savia:identity-changed",
+      "savia:session-cleared",
+    ];
+    for (const event of events) window.addEventListener(event, contextChanged);
+    return () => {
+      for (const event of events)
+        window.removeEventListener(event, contextChanged);
+    };
+  }, [load, loadConnected]);
   async function create(event: React.FormEvent) {
     event.preventDefault();
     if (creatingRef.current || !name.trim()) return;
+    const context = contextGeneration.current;
     creatingRef.current = true;
     setCreating(true);
     setCreateError("");
@@ -243,12 +272,13 @@ export function OfficeSuitePage({
     try {
       if (storage === "savia") {
         const file = await createBlankOfficeFile(format, name);
+        if (!mounted.current || context !== contextGeneration.current) return;
         const body = new FormData();
         body.set("file", file);
         const response = await services.apiClient.request<{
           data: DocumentSummary;
         }>(base, { method: "POST", body });
-        if (!mounted.current) return;
+        if (!mounted.current || context !== contextGeneration.current) return;
         ++loadGeneration.current;
         setLoading(false);
         setLoadError("");
@@ -285,10 +315,18 @@ export function OfficeSuitePage({
         body.set("requestId", requestRef.current.id);
         if (storage !== "google_drive")
           body.set("file", await createBlankOfficeFile(format, name));
+        if (!mounted.current || context !== contextGeneration.current) {
+          waitingTab?.close();
+          return;
+        }
         const response = await services.apiClient.request<{
           data: ConnectedOfficeDocument;
         }>(connectedBase, { method: "POST", body });
         const cloudDocument = response.data;
+        if (!mounted.current || context !== contextGeneration.current) {
+          waitingTab?.close();
+          return;
+        }
         if (
           !isConnectedOfficeDocument(cloudDocument) ||
           cloudDocument.provider !== storage ||
@@ -324,7 +362,7 @@ export function OfficeSuitePage({
       } catch {
         /* popup closure is best-effort */
       }
-      if (mounted.current)
+      if (mounted.current && context === contextGeneration.current)
         setCreateError(
           error instanceof Error
             ? error.message
