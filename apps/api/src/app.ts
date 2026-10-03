@@ -1,5 +1,6 @@
 import { PersonalApiKeys } from "./auth/personal-api-keys";
 import { registerPagesSearchSettingsRoutes } from "./routes/pages-search-settings";
+import { registerBookingRoutes } from "./bookings/routes";
 import { registerPagesSearchRoutes } from "./routes/pages-search";
 import type { PagesSearchBindings } from "./pages/cloudflare-search";
 import { PersonalIntegrationOperations } from "./personal-integrations/operations";
@@ -167,6 +168,10 @@ export function createApp(
   );
   registerRealtimeMutationHints(app, realtime, db);
   registerTenantEmailRoutes(app, db, resolvedAuthService, identityBridgeKey);
+  registerBookingRoutes(app, db, {
+    captcha: publicForms,
+    nango: personalIntegrations?.nango,
+  });
   registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSocialRoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantRegistrationSettingsRoutes(

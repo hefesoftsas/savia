@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { RouteLoading } from "@/components/admin/route-loading";
 import { TenantHostMismatchError } from "@/components/admin/tenant-mismatch-error";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
+import { bookingMessages } from "@/features/bookings/booking-messages";
 
 const RolePages = lazy(async () => ({
   default: (await import("@/features/access-control/role-pages")).RolePages,
@@ -91,6 +92,28 @@ const PagesPage = lazy(() =>
     default: module.PagesPage,
   })),
 );
+const BookingPage = lazy(() =>
+  import("@/features/bookings/booking-page").then((module) => ({
+    default: module.BookingPage,
+  })),
+);
+
+function BookingRoute({ services }: { services: AppServices }) {
+  const tenant = useCurrentTenant();
+  const t = useMessages(bookingMessages);
+  if (tenant.isLoading) return <RouteLoading />;
+  if (tenant.id === null)
+    return (
+      <main className="p-6" role="alert">
+        {t("Appointments are available inside a tenant workspace.")}
+      </main>
+    );
+  return (
+    <Suspense fallback={<RouteLoading variant="cards" />}>
+      <BookingPage services={services} tenantId={tenant.id} />
+    </Suspense>
+  );
+}
 
 const CompanionRecordingsPage = lazy(async () => ({
   default: (await import("@/features/companion/recordings-page"))
@@ -372,6 +395,10 @@ function AppContent({ services }: { services?: AppServices } = {}) {
               <Route
                 path="/tenant-branding"
                 element={<TenantBrandingRoute services={appServices} />}
+              />
+              <Route
+                path="/bookings"
+                element={<BookingRoute services={appServices} />}
               />
               <Route
                 path="/roles"

@@ -102,6 +102,6 @@
 
 ## PR Integration Verification
 
-- Rebased the feature onto the current main branch while preserving Office and Companion changes. Renumbered the SQLite calendar migration to `0022`.
+- Rebased the feature onto the current main branch while preserving Office and Companion changes. Renumbered calendar migrations to `0023` after integrating the Office, Companion and appointment-booking additions on main.
 - Updated source routes and My Day checks pass against that base: 1,111 API tests, 143 Admin widget/client tests, and nine SQLite baseline/migration checks. API, Admin and database type checks and the production Admin build pass.
 - GitHub CI exposed the missing PostgreSQL source-manifest entry. Added the matching native PostgreSQL migration, source checksum and table/index inventories; the previously failing checksum test passes. Live PostgreSQL checks require a configured test database and were not run locally.

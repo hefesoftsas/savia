@@ -103,6 +103,7 @@ it("places work, building and administration in coherent default groups", () => 
   expect(items("administration")).toEqual(
     expect.arrayContaining(["users", "access-control"]),
   );
+  expect(items("operation")).toContain("bookings");
   expect(items("management")).toEqual(["tenants"]);
 });
 
