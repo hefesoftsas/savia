@@ -172,6 +172,67 @@ it("reopens the existing cache for incremental update after a page change", asyn
   );
 });
 
+it("stops fetching stale hits when the query changes during result revalidation", async () => {
+  let resolveFirstGet!: (page: PageDocument) => void;
+  const client = mockClient({
+    list: vi.fn(async () => [summary("first"), summary("remaining")]),
+    get: vi.fn((id: string): Promise<PageDocument> => {
+      if (id === "first")
+        return new Promise((resolve) => {
+          resolveFirstGet = resolve;
+        });
+      return Promise.resolve(document(id));
+    }),
+  });
+  renderSearch(client);
+  const worker = ControlledWorker.instances[0];
+  await waitFor(() =>
+    expect(worker.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "open" }),
+    ),
+  );
+  act(() => {
+    worker.emit({ type: "plan", needed: [], reused: 2, total: 2 });
+    worker.emit({ type: "ready", total: 2, reused: 2, elapsedMs: 3 });
+  });
+
+  const input = screen.getByRole("textbox", { name: "Search page content" });
+  fireEvent.change(input, { target: { value: "first query" } });
+  await waitFor(() =>
+    expect(worker.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "search", term: "first query" }),
+    ),
+  );
+  const firstSearch = worker.postMessage.mock.calls.at(-1)?.[0] as {
+    requestId: number;
+  };
+  act(() =>
+    worker.emit({
+      type: "results",
+      requestId: firstSearch.requestId,
+      hits: [
+        { id: "first", score: 1 },
+        { id: "remaining", score: 0.8 },
+      ],
+      elapsedMs: 1,
+    }),
+  );
+  await waitFor(() => expect(client.get).toHaveBeenCalledWith("first"));
+
+  fireEvent.change(input, { target: { value: "new query" } });
+  expect(worker.postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({ type: "cancel-search" }),
+  );
+  await act(async () => {
+    resolveFirstGet(document("first"));
+    await Promise.resolve();
+  });
+  expect(client.get).not.toHaveBeenCalledWith("remaining");
+  expect(
+    screen.queryByRole("link", { name: "Page first" }),
+  ).not.toBeInTheDocument();
+});
+
 it("revalidates returned ids, kinds, versions, and stale requests before displaying authorized content", async () => {
   const client = mockClient({
     list: vi.fn(async () => [
