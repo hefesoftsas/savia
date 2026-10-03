@@ -71,15 +71,27 @@
       "sha256": "202711425facd93253847e2a8ebf9c1bf36190cf3224791f6ca381e833190bcc"
     },
     {
+      "filename": "0018_office_documents.sql",
+      "sha256": "4a8b71142457bb035eed471fd3d7ff6735f40da4c7d517f14d7836a6d655ef25"
+    },
+    {
       "filename": "0018_pages_search_settings.sql",
       "sha256": "b95cd28776f210a09b6aeb56cc4653bc214670a0712cda06428af353c9da9b8c"
+    },
+    {
+      "filename": "0019_office_settings.sql",
+      "sha256": "bbc047e3177c3006f7f0a52c63a58a9e32514e3bd2e100927550cd84094ff96e"
     },
     {
       "filename": "0019_pages_search_index.sql",
       "sha256": "7de59c53e165cd290e4b88ff568545c23dc01d6981338cbdb5f6c2079f62359b"
     },
     {
-      "filename": "0020_personal_api_keys.sql",
+      "filename": "0020_connected_office_documents.sql",
+      "sha256": "962a3095f00d559053bac9cdc031d15f2cc985ab65a0bb32bd1008da52d6b685"
+    },
+    {
+      "filename": "0021_personal_api_keys.sql",
       "sha256": "0760d58e6744dc85fc2aa13bc0ce1f1cff29af9a830f4c9979fc0b148d326b5d"
     }
   ],
@@ -173,6 +185,16 @@
     },
     {
       "type": "index",
+      "name": "connected_office_documents_owner_created",
+      "table": "connected_office_document_operations"
+    },
+    {
+      "type": "index",
+      "name": "connected_office_documents_provider_file",
+      "table": "connected_office_document_operations"
+    },
+    {
+      "type": "index",
       "name": "crm_sync_changes_scope",
       "table": "crm_sync_changes"
     },
@@ -255,6 +277,11 @@
       "type": "index",
       "name": "notification_unread",
       "table": "notification_deliveries"
+    },
+    {
+      "type": "index",
+      "name": "office_documents_owner_updated",
+      "table": "office_documents"
     },
     {
       "type": "index",
@@ -578,6 +605,11 @@
     },
     {
       "type": "table",
+      "name": "connected_office_document_operations",
+      "table": "connected_office_document_operations"
+    },
+    {
+      "type": "table",
       "name": "crm_collection_bindings",
       "table": "crm_collection_bindings"
     },
@@ -725,6 +757,21 @@
       "type": "table",
       "name": "notification_subscriptions",
       "table": "notification_subscriptions"
+    },
+    {
+      "type": "table",
+      "name": "office_document_revisions",
+      "table": "office_document_revisions"
+    },
+    {
+      "type": "table",
+      "name": "office_documents",
+      "table": "office_documents"
+    },
+    {
+      "type": "table",
+      "name": "office_settings",
+      "table": "office_settings"
     },
     {
       "type": "table",
@@ -2505,6 +2552,157 @@
         }
       ],
       "checkCount": 0
+    },
+    {
+      "name": "connected_office_document_operations",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "owner_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "request_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "request_hash",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "provider",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "format",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "provider_file_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "provider_drive_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "nango_connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "url",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "owner_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id", "owner_id", "request_id"],
+          "origin": "u"
+        },
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 3
     },
     {
       "name": "crm_collection_bindings",
@@ -4602,6 +4800,283 @@
         }
       ],
       "checkCount": 0
+    },
+    {
+      "name": "office_document_revisions",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "document_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "version",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "storage_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "size",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_by",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "created_by",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "SET NULL",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "office_documents",
+          "from": "document_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["document_id", "version"],
+          "origin": "pk"
+        },
+        {
+          "columns": ["storage_key"],
+          "origin": "u"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "office_documents",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "owner_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "mime",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "size",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "version",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "1",
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "storage_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "owner_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "office_settings",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "platform_allowed",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "1",
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "tenant_enabled",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "1",
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "updated_by",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "updated_by",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "SET NULL",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
     },
     {
       "name": "offline_collection_policies",

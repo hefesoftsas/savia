@@ -166,6 +166,20 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=1536"
 
+      - name: Prepare Office runtime assets
+        run: node scripts/prepare-office-runtime.mjs
+
+      - name: Package Office runtime assets
+        run: node scripts/package-office-runtime.mjs
+
+      - name: Upload Office runtime assets to preview R2
+        run: node scripts/upload-office-runtime.mjs
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_DOCUMENTS_BUCKET: ${{ vars.SAVIA_DOCUMENTS_BUCKET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       - name: Deploy savia gateway
         uses: cloudflare/wrangler-action@v4
         with:

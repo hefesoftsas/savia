@@ -95,7 +95,13 @@ export class AssistantConfigurationClient {
     return this.apiClient.get("/v1/assistant/active-tenant");
   }
 
-  setActiveTenant(tenantId: number): Promise<AssistantActiveTenant> {
-    return this.apiClient.put("/v1/assistant/active-tenant", { tenantId });
+  async setActiveTenant(tenantId: number): Promise<AssistantActiveTenant> {
+    const state = await this.apiClient.put<AssistantActiveTenant>(
+      "/v1/assistant/active-tenant",
+      { tenantId },
+    );
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new Event("savia:active-tenant-changed"));
+    return state;
   }
 }

@@ -61,6 +61,12 @@ vi.mock("@/features/tenant-social/tenant-social-settings-panel", () => ({
   TenantSocialSettingsPanel: () => <div>Social sign-in settings</div>,
 }));
 
+vi.mock("@/features/office-settings/office-settings-panel", () => ({
+  OfficeSettingsPanel: ({ tenantId }: { tenantId: number }) => (
+    <div>Office settings for tenant {tenantId}</div>
+  ),
+}));
+
 vi.mock("@/features/tenant-email/tenant-email-settings-panel", () => ({
   TenantEmailSettingsPanel: () => <div>Tenant email settings</div>,
 }));
@@ -216,5 +222,18 @@ describe("StudioTenantCredentialsSection identity providers", () => {
       expect(await screen.findByText("Tenant SAML settings")).toBeVisible();
       expect(screen.queryByRole("alert")).toBeNull();
     },
+  );
+});
+
+it("opens office administration for the selected tenant", async () => {
+  testState.workspaces = [workspace(101), workspace(102)];
+  renderCredentials("/service-credentials?tenantId=102&tab=office");
+  await waitFor(() =>
+    expect(
+      screen.getByRole("tab", { name: "Suite de ofimática" }),
+    ).toHaveAttribute("aria-selected", "true"),
+  );
+  expect(screen.getByRole("tabpanel")).toHaveTextContent(
+    "Office settings for tenant 102",
   );
 });

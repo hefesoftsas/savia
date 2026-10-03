@@ -11,6 +11,7 @@ export const sidebarNavigationItemIds = [
   "studio",
   "my-day",
   "pages",
+  "office-suite",
   "companion-recordings",
   "integrations",
   "provider-credentials",
@@ -195,6 +196,7 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
         operation: [
           "my-day",
           "pages",
+          "office-suite",
           "companion-recordings",
           "dashboard",
           "studio",

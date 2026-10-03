@@ -45,3 +45,8 @@ clearing mounted queries and redirecting to authorization. Clearing auth queries
 while asynchronous cleanup is still pending can trigger another authentication
 check and repeated logout, leaving the current tab blank. Query cleanup still
 runs if workspace cleanup fails.
+
+If the browser does not finish an OAuth redirect within ten seconds, the page
+restores its content and exposes **Continue to Savia** as a normal link to the
+same server-provided destination. It preserves the authorization, PKCE and MFA
+requirements; the link does not create a different session or grant.

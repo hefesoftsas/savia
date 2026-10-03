@@ -72,6 +72,10 @@ function offlineShellPlugin(): Plugin {
   };
 }
 
+const devApiTarget = process.env.SAVIA_DEV_API_URL || "http://127.0.0.1:8787";
+// Isolated previews preserve their public origin for authentication redirects.
+const devChangeOrigin = !process.env.SAVIA_DEV_API_URL;
+
 export default defineConfig({
   plugins: [
     react(),
@@ -247,22 +251,22 @@ export default defineConfig({
       // (/v1/realtime/subscribe) reaches the API through the dev server
       // instead of failing and leaving LiveIndicator stuck on connecting.
       "/api": {
-        target: "http://127.0.0.1:8787",
-        changeOrigin: true,
+        target: devApiTarget,
+        changeOrigin: devChangeOrigin,
         ws: true,
       },
       "/v1": {
-        target: "http://127.0.0.1:8787",
-        changeOrigin: true,
+        target: devApiTarget,
+        changeOrigin: devChangeOrigin,
         ws: true,
       },
       "^/s/": {
-        target: "http://127.0.0.1:8787",
-        changeOrigin: true,
+        target: devApiTarget,
+        changeOrigin: devChangeOrigin,
       },
       "/.well-known": {
-        target: "http://127.0.0.1:8787",
-        changeOrigin: true,
+        target: devApiTarget,
+        changeOrigin: devChangeOrigin,
         ws: true,
       },
     },
