@@ -836,6 +836,213 @@ it("legacy URLs remain team-scoped and have independent revocation controls", as
   });
   expect((await f.app.request(f.publicBase)).status).toBe(404);
 });
+it("creates a stable local short URL for a booking link", async () => {
+  const f = await fixture(),
+    link = await personalLink(f);
+  const endpoint = `${f.base}/public-links/${link.id}/short-url`;
+  const first = await f.app.request(endpoint, { method: "POST" });
+  expect(first.status).toBe(200);
+  const shortUrl = ((await first.json()) as any).data.shortUrl as string;
+  expect(shortUrl).toMatch(/^http:\/\/localhost:5173\/s\/b\/[a-f0-9]{16}$/);
+  const second = await f.app.request(endpoint, { method: "POST" });
+  expect(((await second.json()) as any).data.shortUrl).toBe(shortUrl);
+  const redirect = await f.app.request(new URL(shortUrl).pathname);
+  expect(redirect.status).toBe(302);
+  expect(redirect.headers.get("location")).toBe(link.publicUrl);
+});
+it("uses the configured Shlink provider when creating a booking link", async () => {
+  const destinations: string[] = [],
+    f = await fixture({
+      publicOrigin: "https://booking.savia.test",
+      disableCaptcha: true,
+      shortener: {
+        shorten: async (destination) => {
+          destinations.push(destination);
+          return "https://go.savia.test/booking";
+        },
+      },
+    }),
+    link = await personalLink(f);
+  expect(destinations).toEqual([link.publicUrl]);
+  expect(link.shortUrl).toBe("https://go.savia.test/booking");
+  const listed = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  expect(listed.find((item: any) => item.id === link.id)?.shortUrl).toBe(
+    "https://go.savia.test/booking",
+  );
+});
+it("only shortens active links the caller can manage", async () => {
+  const f = await fixture(),
+    foreign = await personalLink(await fixture()),
+    personal = await personalLink(f),
+    teamResponse = await f.app.request(`${f.base}/public-links`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        scope: { kind: "team" },
+        serviceId: null,
+        expiresAt: null,
+        dailyLimit: 25,
+      }),
+    });
+  expect(teamResponse.status).toBe(201);
+  const team = ((await teamResponse.json()) as any).data;
+  f.actor.memberships[0].role = "viewer";
+  const endpoint = (id: string) => `${f.base}/public-links/${id}/short-url`;
+  expect(
+    (await f.app.request(endpoint(personal.id), { method: "POST" })).status,
+  ).toBe(200);
+  expect(
+    (await f.app.request(endpoint(team.id), { method: "POST" })).status,
+  ).toBe(404);
+  expect(
+    (await f.app.request(endpoint(foreign.id), { method: "POST" })).status,
+  ).toBe(404);
+});
+it("rejects short URLs for revoked or expired links and invalidates redirects", async () => {
+  const f = await fixture(),
+    revoked = await personalLink(f),
+    revokedPath = new URL(revoked.shortUrl).pathname;
+  await f.app.request(`${f.base}/public-links/${revoked.id}/revoke`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: revoked.version }),
+  });
+  expect((await f.app.request(revokedPath)).status).toBe(404);
+  expect(
+    (
+      await f.app.request(`${f.base}/public-links/${revoked.id}/short-url`, {
+        method: "POST",
+      })
+    ).status,
+  ).toBe(404);
+  const expired = await personalLink(f),
+    expiredPath = new URL(expired.shortUrl).pathname;
+  await env.DB.prepare(
+    "UPDATE tenant_booking_public_links SET expires_at=? WHERE id=?",
+  )
+    .bind("2000-01-01T00:00:00.000Z", expired.id)
+    .run();
+  expect((await f.app.request(expiredPath)).status).toBe(404);
+  expect(
+    (
+      await f.app.request(`${f.base}/public-links/${expired.id}/short-url`, {
+        method: "POST",
+      })
+    ).status,
+  ).toBe(404);
+});
+it("deletes inactive links and never recreates a deleted legacy link", async () => {
+  const f = await fixture();
+  const listed = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  const legacy = listed.find(
+    (item: any) => item.id === f.publicBase.split("/").at(-1),
+  );
+  expect(legacy).toBeTruthy();
+  await f.app.request(`${f.base}/public-links/${legacy.id}/revoke`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: legacy.version }),
+  });
+  const deletion = await f.app.request(`${f.base}/public-links/${legacy.id}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: legacy.version + 1 }),
+  });
+  expect(deletion.status).toBe(200);
+  await f.app.request(`${f.base}/public-links`);
+  expect((await f.app.request(f.publicBase)).status).toBe(404);
+  const after = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  expect(after.some((item: any) => item.id === legacy.id)).toBe(false);
+});
+it("does not let another tenant or a nonmanager delete a booking link", async () => {
+  const f = await fixture(),
+    foreign = await personalLink(await fixture()),
+    teamResponse = await f.app.request(`${f.base}/public-links`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        scope: { kind: "team" },
+        serviceId: null,
+        expiresAt: null,
+        dailyLimit: 25,
+      }),
+    });
+  expect(teamResponse.status).toBe(201);
+  const team = ((await teamResponse.json()) as any).data;
+  f.actor.memberships[0].role = "viewer";
+  const deleteLink = (id: string, version: number) =>
+    f.app.request(`${f.base}/public-links/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version }),
+    });
+  expect((await deleteLink(foreign.id, foreign.version)).status).toBe(404);
+  expect((await deleteLink(team.id, team.version)).status).toBe(404);
+});
+it("deletes a booking link with a revision while preserving appointment management", async () => {
+  const f = await fixture(),
+    link = await personalLink(f);
+  const reservation = await f.app.request(`${link.base}/reservations`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify(f.payload),
+  });
+  expect(reservation.status).toBe(201);
+  const managementUrl = ((await reservation.json()) as any).data.managementUrl;
+  const deletion = await f.app.request(`${f.base}/public-links/${link.id}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: link.version }),
+  });
+  expect(deletion.status).toBe(200);
+  expect((await f.app.request(link.base)).status).toBe(404);
+  const listed = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  expect(listed.some((item: any) => item.id === link.id)).toBe(false);
+  expect(
+    (
+      await f.app.request(
+        new URL(managementUrl).pathname.replace("/public/", "/api/public/"),
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) AS count FROM tenant_bookings WHERE tenant_id=?",
+    )
+      .bind(f.tenantId)
+      .first<{ count: number }>(),
+  ).toMatchObject({ count: 1 });
+  expect(
+    (
+      await f.app.request(`${f.base}/public-links/${link.id}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: link.version }),
+      })
+    ).status,
+  ).toBe(404);
+});
+it("rejects stale booking link deletion revisions", async () => {
+  const f = await fixture(),
+    link = await personalLink(f);
+  const response = await f.app.request(`${f.base}/public-links/${link.id}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: link.version + 1 }),
+  });
+  expect(response.status).toBe(409);
+});
 it("link daily admission counts failed attempts once and preserves identical reservation retries", async () => {
   const f = await fixture(),
     link = await personalLink(f, { dailyLimit: 2 }),

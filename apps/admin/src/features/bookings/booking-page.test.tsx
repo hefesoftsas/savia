@@ -745,3 +745,13 @@ it("ignores an invalid appointment date without sending an invalid range", async
   expect(Number.isFinite(Date.parse(query.get("from")!))).toBe(true);
   expect(query.get("from")).not.toBe("2025-03-02T00:00:00.000Z");
 });
+
+it("uses the shared route loading layout while booking settings are fetched", () => {
+  mount({ get: vi.fn(() => new Promise(() => {})), put: vi.fn() });
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Loading booking settings…",
+  );
+  expect(
+    screen.getByRole("status").querySelector('[data-slot="skeleton"]'),
+  ).toBeInTheDocument();
+});

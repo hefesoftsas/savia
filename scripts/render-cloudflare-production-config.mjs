@@ -208,6 +208,7 @@ function gatewayConfig({ publicOrigin, documentsBucket }) {
         "/office/*",
         "/api/*",
         "/v1/*",
+        "/s/*",
         "/.well-known/*",
         "/mcp",
         "/health",

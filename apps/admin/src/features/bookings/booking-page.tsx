@@ -1,3 +1,4 @@
+import { RouteLoading } from "@/components/admin/route-loading";
 import type { AppServices } from "@/app-services";
 import { ApiClientError } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
@@ -413,13 +414,13 @@ export function BookingPage({
         className="mx-auto grid max-w-5xl gap-5 px-4 py-8 md:px-6"
         aria-busy={loading}
       >
-        <div className="h-8 w-52 animate-pulse rounded bg-muted" />
-        <div
-          role={error ? "alert" : "status"}
-          className={error ? "text-sm text-destructive" : "space-y-3"}
-        >
-          {error || t("Loading booking settings…")}
-        </div>
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : (
+          <RouteLoading label={t("Loading booking settings…")} />
+        )}
         {error && (
           <ResponsiveActionButton
             icon={RefreshCw}

@@ -16,11 +16,11 @@ Publish when booking is enabled and an enabled service has an enabled profession
 
 ### Personal and team public links
 
-New links default to a 30-day expiry and 25 admitted booking submissions per UTC day. Choose 24 hours, 7 days, 30 days, or explicitly no expiry; the daily budget can be configured from 1 to 1,000. Copy the canonical URL, use the device's share action, or show a QR code. Shortening is optional and does not grant different booking permissions.
+New links default to a 30-day expiry and 25 admitted booking submissions per UTC day. Choose 24 hours, 7 days, 30 days, or explicitly no expiry; the daily budget can be configured from 1 to 1,000. Copy the canonical URL, use the device's share action, or show a QR code. Each link also receives a Savia short URL; when Shlink is configured, the short URL action uses it and falls back to the Savia URL if the provider is unavailable. Shortening does not grant different booking permissions.
 
-Each link has independent revocation. Personal links expose only enabled services assigned to their fixed professional; optional service-scoped links expose only that service. The server enforces this scope for the catalog, challenge, availability and reservation, including caller-submitted identifiers. Disabled professionals/services, removed membership, inactive tenants, expiry and unpublishing stop new bookings. Existing tenant-wide URLs remain team links and can be revoked through the same panel; they are never silently converted into personal links.
+Each link has independent revocation and deletion. Delete permanently removes the public link from the panel and invalidates its canonical and short URLs, including legacy team links; it does not delete reservations or their private management links. Personal links expose only enabled services assigned to their fixed professional; optional service-scoped links expose only that service. The server enforces this scope for the catalog, challenge, availability and reservation, including caller-submitted identifiers. Disabled professionals/services, removed membership, inactive tenants, expiry and unpublishing stop new bookings. Existing tenant-wide URLs remain team links and can be revoked or deleted through the same panel; they are never silently converted into personal links.
 
-Expiry and revocation do not delete reservations or invalidate their distinct private management links. Management and cancellation policies below continue to apply.
+Expiry and revocation do not delete reservations or invalidate their distinct private management links. Deleting a public link has the same preservation behavior. Management and cancellation policies below continue to apply.
 
 Public booking admission also limits each hashed client IP to 20 submissions and each tenant to 1,000 submissions per UTC day. Failed admitted attempts consume the budget; retrying identical details with the same request key reuses admission and does not consume it twice. Changing the payload under that key conflicts. Persistent minute limits and CAPTCHA remain in force; browsing calendar days does not consume submission budgets. Public body size is limited to 32 KiB. A bounded range contains at most 31 dates and fetches each calendar's busy intervals once, rather than making a provider request for each day. Unknown calendar availability stops booking with a retryable error.
 
@@ -92,7 +92,7 @@ hides the join action immediately and queues deletion of the same provider event
 Links are accepted only as HTTPS participant URLs. The existing tenant grant,
 professional membership and pinned Nango connection checks apply to every job.
 
-Deploy the forward migrations `0027_booking_conferences.sql` for D1 and PostgreSQL
+Deploy the forward migrations `0028_booking_conferences.sql` for D1 and PostgreSQL
 before the updated API. No live provider calls are required by the automated
 fixtures; live account, policy and license compatibility still needs verification
 in the target environment.
@@ -105,7 +105,7 @@ The scheduler processes a durable outbox, leases work and retries transient erro
 
 ## Deployment and verification
 
-Both SQLite/D1 and PostgreSQL have forward migrations `0022_tenant_bookings.sql` and `0026_booking_public_links.sql`. The latter adds scoped links, daily admission receipts and stored customer locale, and preserves existing tenant URLs as independently revocable team links. Preview deployment applies the D1 migration before the API is deployed. Existing tenants remain disabled until configured. API reference is generated from the Booking OpenAPI routes.
+Both SQLite/D1 and PostgreSQL have forward migrations `0022_tenant_bookings.sql`, `0026_booking_public_links.sql` and `0027_booking_public_link_short_urls.sql`. Migration `0026` adds scoped links, daily admission receipts and stored customer locale, and preserves existing tenant URLs as independently revocable team links. Migration `0027` adds short URL storage and deletion tombstones. Apply the D1 migration before deploying the updated API. Existing tenants remain disabled until configured. API reference is generated from the Booking OpenAPI routes.
 
 Public requests enforce body limits, per-link request throttling, no-cache and no-referrer headers, and captcha verification. ALTCHA proofs are consumed once; retrying the same confirmed request key returns the existing reservation. Captcha bypass is limited to local development origins.
 
