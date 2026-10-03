@@ -45,7 +45,11 @@ Companion group for exact request and response contracts.
 
 Generating notes requires separate provider consent and `recordings:process`.
 The existing scheduled Worker runtime processes up to eight bounded operations
-per invocation. Each operation acquires an R2 conditional-write lease, checks the
+per invocation. Preview and production deployment configuration renders a
+once-per-minute cron trigger. The preview worker scans at most 1,000 queue entries
+and processes eligible entries in key order; large sustained backlogs can delay
+later jobs. It does not provide production queue fairness or a completion-time SLA.
+Each operation acquires an R2 conditional-write lease, checks the
 owner's current active workspace membership and resolves backend provider settings.
 No bearer token or provider key is stored in a job. Lease ownership prevents
 concurrent workers from submitting the same operation.
