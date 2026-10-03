@@ -457,6 +457,13 @@ it("keeps cancellation available when rescheduling is not permitted", async () =
 
 it.each([
   {
+    reason: "the professional becomes unavailable",
+    status: 404,
+    refreshed: () =>
+      manageData(confirmedReservation(), { canReschedule: false }),
+    cancelState: "enabled",
+  },
+  {
     reason: "permission is revoked",
     refreshed: () =>
       manageData(confirmedReservation(), { canReschedule: false }),
@@ -475,7 +482,7 @@ it.each([
   },
 ])(
   "closes rescheduling after a conflict when $reason",
-  async ({ refreshed, cancelState }) => {
+  async ({ refreshed, cancelState, status = 409 }) => {
     const requests: string[] = [];
     let manageReads = 0;
     vi.stubGlobal(
@@ -494,7 +501,7 @@ it.each([
         if (url.pathname === `${managePath}/reschedule`)
           return Response.json(
             { error: { message: "Revision changed" } },
-            { status: 409 },
+            { status },
           );
         throw new Error(`Unexpected management path ${url.pathname}`);
       }),

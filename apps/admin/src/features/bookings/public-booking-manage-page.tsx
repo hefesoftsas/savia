@@ -182,7 +182,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
       setReviewing(false);
       setUpdated(true);
     } catch (requestError) {
-      if ((requestError as ApiError)?.status === 409) {
+      if ([404, 409].includes((requestError as ApiError)?.status ?? 0)) {
         try {
           const current = await publicRequest<ManageBootstrap>(managePath);
           setBootstrap(current);
