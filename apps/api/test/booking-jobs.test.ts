@@ -308,3 +308,271 @@ it("expires admission hashes in bounded batches while retaining the seven-day re
       .first(),
   ).toEqual({ request_hash: "recent-hash" });
 });
+
+async function seedCalendar() {
+  const f = await seed("calendar");
+  const principal = `meeting-${f.id}`;
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?,'test',?,?,'Professional',1,'2026-01-01','2026-01-01')",
+  )
+    .bind(principal, principal, `${principal}@example.test`)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at) VALUES(?,?,?,'operator',1,'2026-01-01','2026-01-01')",
+  )
+    .bind(crypto.randomUUID(), principal, f.tenantId)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO tenant_booking_calendar_grants(tenant_id,principal_id,provider,connection_id) VALUES(?,?,'google_calendar','meeting-connection')",
+  )
+    .bind(f.tenantId, principal)
+    .run();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET principal_id=?,calendar_provider='google_calendar',calendar_connection_id='meeting-connection' WHERE id=?",
+  )
+    .bind(principal, f.id)
+    .run();
+  return f;
+}
+
+it("stops showing a pending conference when the calendar grant is revoked", async () => {
+  const { readBooking, reservationView } =
+    await import("../src/bookings/repository");
+  const f = await seedCalendar();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET conference_provider='google_meet',conference_status='pending' WHERE id=?",
+  )
+    .bind(f.id)
+    .run();
+  await env.DB.prepare(
+    "DELETE FROM tenant_booking_calendar_grants WHERE tenant_id=?",
+  )
+    .bind(f.tenantId)
+    .run();
+  await runBookingJobs(env.DB, {
+    publicOrigin: "https://savia.test",
+    now: () => f.now,
+  });
+  const row = await readBooking(env.DB, f.tenantId, f.id);
+  const view = await reservationView(env.DB, row!);
+  expect(view.calendarStatus).toBe("skipped");
+  expect(view.conference?.status).toBe("failed");
+});
+
+it("persists a meeting link and exposes it only while the booking is confirmed", async () => {
+  const { readBooking, reservationView } =
+    await import("../src/bookings/repository");
+  const f = await seedCalendar();
+  const conference = {
+    provider: "google_meet" as const,
+    joinUrl: "https://meet.google.com/abc-defg-hij",
+    status: "ready" as const,
+  };
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://example.test",
+    calendar: {
+      busy: async () => [],
+      sync: async () => ({ externalId: "meeting-id", conference }),
+    },
+  });
+  const row = await readBooking(env.DB, f.tenantId, f.id);
+  expect(row?.external_id).toBe("meeting-id");
+  expect((await reservationView(env.DB, row!)).conference).toEqual(conference);
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET status='cancelled' WHERE id=?",
+  )
+    .bind(f.id)
+    .run();
+  expect(
+    (
+      await reservationView(
+        env.DB,
+        (await readBooking(env.DB, f.tenantId, f.id))!,
+      )
+    ).conference,
+  ).toBeNull();
+});
+
+it("saves the provider event before retrying a pending conference and reuses it", async () => {
+  const { readBooking, reservationView } =
+    await import("../src/bookings/repository");
+  const f = await seedCalendar();
+  let time = f.now;
+  const ids: Array<string | null> = [];
+  const opts = {
+    now: () => time,
+    publicOrigin: "https://example.test",
+    calendar: {
+      busy: async () => [],
+      sync: async (input: { externalId: string | null }) => {
+        ids.push(input.externalId);
+        return {
+          externalId: "pending-event",
+          conference: {
+            provider: "google_meet" as const,
+            joinUrl:
+              ids.length === 1 ? null : "https://meet.google.com/abc-defg-hij",
+            status:
+              ids.length === 1 ? ("pending" as const) : ("ready" as const),
+          },
+        };
+      },
+    },
+  };
+  await runBookingJobs(env.DB, opts);
+  expect((await readBooking(env.DB, f.tenantId, f.id))?.external_id).toBe(
+    "pending-event",
+  );
+  expect(
+    (
+      await reservationView(
+        env.DB,
+        (await readBooking(env.DB, f.tenantId, f.id))!,
+      )
+    ).conference?.status,
+  ).toBe("pending");
+  expect(
+    (
+      await reservationView(
+        env.DB,
+        (await readBooking(env.DB, f.tenantId, f.id))!,
+      )
+    ).calendarStatus,
+  ).toBe("pending");
+  time += 120000;
+  await runBookingJobs(env.DB, opts);
+  expect(ids).toEqual([null, "pending-event"]);
+  expect(
+    (
+      await reservationView(
+        env.DB,
+        (await readBooking(env.DB, f.tenantId, f.id))!,
+      )
+    ).conference?.status,
+  ).toBe("ready");
+});
+
+it("keeps a confirmed appointment when its calendar cannot create video meetings", async () => {
+  const { readBooking, reservationView } =
+    await import("../src/bookings/repository");
+  const f = await seedCalendar();
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://example.test",
+    calendar: {
+      busy: async () => [],
+      sync: async () => ({
+        externalId: "plain-event",
+        conference: {
+          provider: null,
+          joinUrl: null,
+          status: "unsupported" as const,
+        },
+      }),
+    },
+  });
+  const result = await reservationView(
+    env.DB,
+    (await readBooking(env.DB, f.tenantId, f.id))!,
+  );
+  expect(result.status).toBe("confirmed");
+  expect(result.calendarStatus).toBe("completed");
+  expect(result.conference?.status).toBe("unsupported");
+});
+
+it("ends bounded conference polling without leaving an appointment permanently pending", async () => {
+  const { readBooking, reservationView } =
+    await import("../src/bookings/repository");
+  const f = await seedCalendar();
+  let now = f.now;
+  const opts = {
+    now: () => now,
+    publicOrigin: "https://example.test",
+    calendar: {
+      busy: async () => [],
+      sync: async () => ({
+        externalId: "slow-meeting",
+        conference: {
+          provider: "google_meet" as const,
+          joinUrl: null,
+          status: "pending" as const,
+        },
+      }),
+    },
+  };
+  for (let i = 0; i < 5; i++) {
+    await runBookingJobs(env.DB, opts);
+    now += 3600000;
+  }
+  const view = await reservationView(
+    env.DB,
+    (await readBooking(env.DB, f.tenantId, f.id))!,
+  );
+  expect(view.status).toBe("confirmed");
+  expect(view.conference).toEqual({
+    provider: "google_meet",
+    joinUrl: null,
+    status: "failed",
+  });
+  expect(
+    await env.DB.prepare(
+      "SELECT attempts,status FROM tenant_booking_jobs WHERE booking_id=?",
+    )
+      .bind(f.id)
+      .first(),
+  ).toEqual({ attempts: 5, status: "completed" });
+});
+
+it("does not attach an old revision's conference when the booking changes during calendar I/O", async () => {
+  const { readBooking, reservationView } =
+    await import("../src/bookings/repository");
+  const f = await seedCalendar();
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://example.test",
+    calendar: {
+      busy: async () => [],
+      sync: async () => {
+        await env.DB.prepare(
+          "UPDATE tenant_bookings SET version=2,status='cancelled' WHERE id=?",
+        )
+          .bind(f.id)
+          .run();
+        return {
+          externalId: "recovered",
+          conference: {
+            provider: "google_meet" as const,
+            joinUrl: "https://meet.google.com/old",
+            status: "ready" as const,
+          },
+        };
+      },
+    },
+  });
+  const row = await readBooking(env.DB, f.tenantId, f.id);
+  expect(row?.external_id).toBe("recovered");
+  expect(row?.conference_url).toBeNull();
+  expect((await reservationView(env.DB, row!)).conference).toBeNull();
+});
+
+it("does not advertise pending video creation for legacy completed calendar events", async () => {
+  const { readBooking, reservationView } =
+    await import("../src/bookings/repository");
+  const f = await seedCalendar();
+  await env.DB.prepare(
+    "UPDATE tenant_booking_jobs SET status='completed' WHERE booking_id=?",
+  )
+    .bind(f.id)
+    .run();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET external_id='legacy-event' WHERE id=?",
+  )
+    .bind(f.id)
+    .run();
+  const view = await reservationView(
+    env.DB,
+    (await readBooking(env.DB, f.tenantId, f.id))!,
+  );
+  expect(view.conference).toBeNull();
+});

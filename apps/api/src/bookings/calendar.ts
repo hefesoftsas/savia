@@ -16,8 +16,18 @@ type SyncInput = BookingCalendarInput & {
   endsAt: string;
   externalId: string | null;
   cancelled: boolean;
+  conferenceProvider?: "google_meet" | "teams";
 };
 type BusyPeriod = { start: string; end: string };
+
+export type BookingCalendarSyncResult = {
+  externalId: string | null;
+  conference: {
+    provider: "google_meet" | "teams" | null;
+    joinUrl: string | null;
+    status: "ready" | "pending" | "unsupported" | "failed";
+  } | null;
+};
 
 const unavailable = () => new Error("Booking calendar is unavailable");
 const outlookUtcPreference = { prefer: 'outlook.timezone="UTC"' } as const;
@@ -85,6 +95,102 @@ function eventPath(provider: BookingProvider, id: string): string {
   return provider === "google_calendar"
     ? `/calendar/v3/calendars/primary/events/${encodeURIComponent(id)}`
     : `/v1.0/me/events/${encodeURIComponent(id)}`;
+}
+
+const unsupportedConference: NonNullable<
+  BookingCalendarSyncResult["conference"]
+> = {
+  provider: null,
+  joinUrl: null,
+  status: "unsupported",
+};
+
+function safeJoinUrl(
+  value: unknown,
+  provider: "google_meet" | "teams",
+): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    const hostAllowed =
+      provider === "google_meet"
+        ? url.hostname === "meet.google.com"
+        : [
+            "teams.microsoft.com",
+            "teams.live.com",
+            "teams.cloud.microsoft",
+          ].includes(url.hostname);
+    if (
+      url.protocol !== "https:" ||
+      !hostAllowed ||
+      url.username ||
+      url.password
+    )
+      return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function googleConference(
+  value: unknown,
+  previouslyRequested = false,
+): BookingCalendarSyncResult["conference"] {
+  const event = record(value);
+  const conferenceData = record(event?.conferenceData);
+  if (!conferenceData && typeof event?.hangoutLink === "string") {
+    const joinUrl = safeJoinUrl(event.hangoutLink, "google_meet");
+    return joinUrl
+      ? { provider: "google_meet", joinUrl, status: "ready" }
+      : previouslyRequested
+        ? { provider: "google_meet", joinUrl: null, status: "pending" }
+        : unsupportedConference;
+  }
+  if (!conferenceData)
+    return previouslyRequested
+      ? { provider: "google_meet", joinUrl: null, status: "pending" }
+      : unsupportedConference;
+  const createRequest = record(conferenceData.createRequest);
+  const status = record(createRequest?.status)?.statusCode;
+  if (status === "failure" || status === "FAILURE")
+    return { provider: "google_meet", joinUrl: null, status: "failed" };
+  const solution = record(conferenceData.conferenceSolution);
+  const solutionType = record(solution?.key)?.type;
+  const isMeet = solutionType === "hangoutsMeet" || previouslyRequested;
+  if (!isMeet) return unsupportedConference;
+  const entries = Array.isArray(conferenceData.entryPoints)
+    ? conferenceData.entryPoints
+    : [];
+  const video = entries.find(
+    (entry) => record(entry)?.entryPointType === "video",
+  );
+  const joinUrl = safeJoinUrl(
+    record(video)?.uri ?? event?.hangoutLink,
+    "google_meet",
+  );
+  if (joinUrl) return { provider: "google_meet", joinUrl, status: "ready" };
+  return { provider: "google_meet", joinUrl: null, status: "pending" };
+}
+
+function outlookConference(
+  value: unknown,
+  previouslyRequested = false,
+): BookingCalendarSyncResult["conference"] {
+  const event = record(value);
+  if (event?.isOnlineMeeting === false && previouslyRequested)
+    return { provider: "teams", joinUrl: null, status: "failed" };
+  if (
+    event?.isOnlineMeeting !== true ||
+    event.onlineMeetingProvider !== "teamsForBusiness"
+  )
+    return previouslyRequested
+      ? { provider: "teams", joinUrl: null, status: "pending" }
+      : unsupportedConference;
+  const joinUrl = safeJoinUrl(record(event.onlineMeeting)?.joinUrl, "teams");
+  return joinUrl
+    ? { provider: "teams", joinUrl, status: "ready" }
+    : { provider: "teams", joinUrl: null, status: "pending" };
 }
 
 async function bookingEventId(id: string): Promise<string> {
@@ -176,6 +282,70 @@ export function createBookingCalendarAdapter(
     return event.id;
   }
 
+  async function conferenceCapability(
+    connection: ActivePersonalIntegrationConnection,
+    provider: BookingProvider,
+  ): Promise<"google_meet" | "teams" | null> {
+    const response = await proxy(connection, {
+      method: "GET",
+      path:
+        provider === "google_calendar"
+          ? "/calendar/v3/calendars/primary"
+          : "/v1.0/me/calendar?$select=allowedOnlineMeetingProviders",
+    });
+    const payload = record(await response.json().catch(() => undefined));
+    if (!payload) throw unavailable();
+    if (provider === "google_calendar") {
+      const properties = record(payload.conferenceProperties);
+      if (
+        !properties ||
+        !Array.isArray(properties.allowedConferenceSolutionTypes) ||
+        properties.allowedConferenceSolutionTypes.some(
+          (item) => typeof item !== "string",
+        )
+      )
+        throw unavailable();
+      return properties.allowedConferenceSolutionTypes.includes("hangoutsMeet")
+        ? "google_meet"
+        : null;
+    }
+    if (
+      !Array.isArray(payload.allowedOnlineMeetingProviders) ||
+      payload.allowedOnlineMeetingProviders.some(
+        (item) => typeof item !== "string",
+      )
+    )
+      throw unavailable();
+    return payload.allowedOnlineMeetingProviders.includes("teamsForBusiness")
+      ? "teams"
+      : null;
+  }
+
+  async function eventConference(
+    connection: ActivePersonalIntegrationConnection,
+    provider: BookingProvider,
+    id: string,
+    conferenceProvider?: "google_meet" | "teams",
+  ): Promise<BookingCalendarSyncResult["conference"]> {
+    const response = await proxy(connection, {
+      method: "GET",
+      path:
+        provider === "google_calendar"
+          ? `${eventPath(provider, id)}?fields=id,conferenceData,hangoutLink`
+          : `${eventPath(provider, id)}?${new URLSearchParams({
+              $select: "id,isOnlineMeeting,onlineMeetingProvider,onlineMeeting",
+            })}`,
+      ...(provider === "outlook"
+        ? { upstreamHeaders: outlookUtcPreference }
+        : {}),
+    });
+    const event = record(await response.json().catch(() => undefined));
+    if (!event || event.id !== id) throw unavailable();
+    return provider === "google_calendar"
+      ? googleConference(event, conferenceProvider === "google_meet")
+      : outlookConference(event, conferenceProvider === "teams");
+  }
+
   return {
     async busy(input: BusyInput): Promise<BusyPeriod[]> {
       const from = validInstant(input.from);
@@ -244,7 +414,7 @@ export function createBookingCalendarAdapter(
       return periods;
     },
 
-    async sync(input: SyncInput): Promise<string | null> {
+    async sync(input: SyncInput): Promise<BookingCalendarSyncResult> {
       const startsAt = validInstant(input.startsAt);
       const endsAt = validInstant(input.endsAt);
       if (
@@ -262,7 +432,7 @@ export function createBookingCalendarAdapter(
           (input.provider === "google_calendar"
             ? await bookingEventId(input.id)
             : await findOutlookEvent(connection, input.id));
-        if (!id) return null;
+        if (!id) return { externalId: null, conference: null };
         const request = {
           method: "DELETE" as const,
           path: eventPath(input.provider, id),
@@ -278,14 +448,17 @@ export function createBookingCalendarAdapter(
               (response.status === 404 || response.status === 410)) ||
             (input.provider === "outlook" && response.status === 404)
           )
-            return id;
+            return { externalId: id, conference: null };
           throw unavailable();
         } catch {
           throw unavailable();
         }
       }
 
-      const body =
+      const conferenceProvider = input.externalId
+        ? null
+        : await conferenceCapability(connection, input.provider);
+      const baseBody =
         input.provider === "google_calendar"
           ? {
               summary: input.title,
@@ -302,30 +475,69 @@ export function createBookingCalendarAdapter(
             };
       if (input.provider === "google_calendar") {
         const id = input.externalId ?? (await bookingEventId(input.id));
-        const eventBody = { ...body, id };
+        const eventBody = {
+          ...baseBody,
+          id,
+          ...(!input.externalId && conferenceProvider === "google_meet"
+            ? {
+                conferenceData: {
+                  createRequest: {
+                    requestId: id,
+                    conferenceSolutionKey: { type: "hangoutsMeet" },
+                  },
+                },
+              }
+            : {}),
+        };
+        const query =
+          conferenceProvider === "google_meet" || input.externalId
+            ? "?conferenceDataVersion=1"
+            : "";
         if (input.externalId) {
+          const currentConference = await eventConference(
+            connection,
+            input.provider,
+            id,
+            input.conferenceProvider,
+          );
           await proxy(connection, {
-            method: "PUT",
-            path: eventPath(input.provider, id),
+            method: "PATCH",
+            path: `${eventPath(input.provider, id)}${query}`,
             body: eventBody,
           });
-          return id;
+          return { externalId: id, conference: currentConference };
         }
         try {
           const response = await nango.proxy({
             method: "POST",
-            path: "/calendar/v3/calendars/primary/events",
+            path: `/calendar/v3/calendars/primary/events${query}`,
             connection,
             body: eventBody,
           });
-          if (response.ok) return id;
+          if (response.ok) {
+            const event = record(await response.json().catch(() => undefined));
+            if (typeof event?.id === "string" && event.id !== id)
+              throw unavailable();
+            return {
+              externalId: id,
+              conference: conferenceProvider
+                ? googleConference(event, conferenceProvider === "google_meet")
+                : unsupportedConference,
+            };
+          }
           if (response.status === 409) {
+            const currentConference = await eventConference(
+              connection,
+              input.provider,
+              id,
+              conferenceProvider ?? undefined,
+            );
             await proxy(connection, {
-              method: "PUT",
-              path: eventPath(input.provider, id),
-              body: eventBody,
+              method: "PATCH",
+              path: `${eventPath(input.provider, id)}${query}`,
+              body: { ...baseBody, id },
             });
-            return id;
+            return { externalId: id, conference: currentConference };
           }
           throw unavailable();
         } catch {
@@ -336,24 +548,46 @@ export function createBookingCalendarAdapter(
       const existingId =
         input.externalId ?? (await findOutlookEvent(connection, input.id));
       if (existingId) {
+        const currentConference = await eventConference(
+          connection,
+          input.provider,
+          existingId,
+          input.conferenceProvider ?? conferenceProvider ?? undefined,
+        );
         await proxy(connection, {
           method: "PATCH",
           path: eventPath(input.provider, existingId),
-          body,
+          body: baseBody,
           upstreamHeaders: outlookUtcPreference,
         });
-        return existingId;
+        return { externalId: existingId, conference: currentConference };
       }
       const transactionId = await bookingEventId(input.id);
       const response = await proxy(connection, {
         method: "POST",
         path: "/v1.0/me/events",
-        body: { ...body, transactionId },
+        body: {
+          ...baseBody,
+          transactionId,
+          ...(conferenceProvider === "teams"
+            ? {
+                isOnlineMeeting: true,
+                onlineMeetingProvider: "teamsForBusiness",
+              }
+            : {}),
+        },
         upstreamHeaders: outlookUtcPreference,
       });
       const event = record(await response.json().catch(() => undefined));
       if (typeof event?.id !== "string" || !event.id) throw unavailable();
-      return event.id;
+      const conference =
+        conferenceProvider === "teams"
+          ? outlookConference(event, true)
+          : unsupportedConference;
+      return {
+        externalId: event.id,
+        conference,
+      };
     },
   };
 }

@@ -415,6 +415,67 @@ it("shows tenant-zone reservation details and reports failed delivery before can
   expect(apiClient.get.mock.calls[1][0]).toContain("&to=");
 });
 
+it("refreshes reservation conference state for the current tenant", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+  };
+  const reservation = {
+    id: "reservation-2",
+    serviceId: "consult",
+    professionalId: "professional-1",
+    serviceName: "Consultation",
+    professionalName: "Ari",
+    startsAt: "2026-10-05T14:00:00Z",
+    endsAt: "2026-10-05T14:30:00Z",
+    customerName: "Casey Customer",
+    customerEmail: "casey@example.test",
+    status: "confirmed" as const,
+    version: 1,
+    deliveryStatus: "sent",
+    calendarStatus: "created",
+    conference: { provider: "google_meet", joinUrl: null, status: "pending" },
+  };
+  const apiClient = {
+    get: vi
+      .fn()
+      .mockResolvedValueOnce({ data: bootstrap })
+      .mockResolvedValueOnce({ data: [reservation] })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            ...reservation,
+            conference: {
+              provider: "google_meet",
+              joinUrl: "https://meet.google.com/abc-defg-hij",
+              status: "ready",
+            },
+          },
+        ],
+      }),
+    put: vi.fn(),
+    post: vi.fn(),
+  };
+  mount(apiClient, 42);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
+  expect(
+    await screen.findByText(/link is being prepared/i),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(
+    await screen.findByRole("link", { name: "Join Google Meet" }),
+  ).toHaveAttribute("href", "https://meet.google.com/abc-defg-hij");
+  expect(apiClient.get.mock.calls[2][0]).toMatch(
+    /^\/v1\/tenants\/42\/booking\/reservations\?from=/,
+  );
+});
+
 it("edits multiple weekly periods with time controls and saves each interval", async () => {
   const bootstrap = {
     settings,

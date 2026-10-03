@@ -12,6 +12,10 @@ import { bookingMessages } from "./booking-messages";
 import type { Period, Exception, Settings } from "./booking-types";
 import { BookingSetupWizard, WeeklyHoursEditor } from "./booking-setup-wizard";
 import { BookingPublicLinksPanel } from "./booking-public-links-panel";
+import {
+  BookingConference,
+  type BookingConferenceState,
+} from "./booking-conference";
 type Bootstrap = {
   settings: Settings;
   candidates: Array<{ principalId: string; displayName: string }>;
@@ -34,6 +38,7 @@ type Reservation = {
   version: number;
   deliveryStatus: string;
   calendarStatus: string;
+  conference?: BookingConferenceState;
 };
 type Tab = "settings" | "availability" | "reservations" | "sharing";
 
@@ -840,6 +845,14 @@ export function BookingPage({
                         <span className="text-muted-foreground">
                           {displayTime(reservation.endsAt, tZone, locale)}
                         </span>
+                        {reservation.conference && (
+                          <div className="mt-2 whitespace-normal">
+                            <BookingConference
+                              conference={reservation.conference}
+                              status={reservation.status}
+                            />
+                          </div>
+                        )}
                       </td>
                       <td className="p-3">{reservation.serviceName}</td>
                       <td className="p-3">{reservation.professionalName}</td>

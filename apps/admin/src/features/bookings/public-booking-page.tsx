@@ -9,6 +9,10 @@ import { publicBookingWizardMessages } from "./public-booking-wizard-messages";
 import { PublicBookingAvailability } from "./public-booking-availability";
 import { PublicBookingSummary } from "./public-booking-summary";
 import type { BookingLinkScope, BookingSelection } from "./booking-types";
+import {
+  BookingConference,
+  type BookingConferenceState,
+} from "./booking-conference";
 
 type PublicCatalog = {
   id: string;
@@ -89,6 +93,7 @@ export function PublicBookingPage({ token }: { token: string }) {
     startsAt: string;
     endsAt: string;
     managementUrl: string;
+    conference?: BookingConferenceState;
   }>();
 
   useEffect(() => {
@@ -262,7 +267,11 @@ export function PublicBookingPage({ token }: { token: string }) {
     setError("");
     try {
       const result = await publicRequest<{
-        reservation: { startsAt: string; endsAt: string };
+        reservation: {
+          startsAt: string;
+          endsAt: string;
+          conference?: BookingConferenceState;
+        };
         managementUrl: string;
       }>(`/api/public/bookings/${encodeURIComponent(token)}/reservations`, {
         method: "POST",
@@ -329,6 +338,11 @@ export function PublicBookingPage({ token }: { token: string }) {
       <main className="mx-auto grid max-w-2xl gap-5 px-4 py-10">
         <h1 className="text-2xl font-semibold">{t("Appointment confirmed")}</h1>
         <PublicBookingSummary catalog={catalog} selection={selection} />
+        <BookingConference
+          conference={reservation.conference}
+          status="confirmed"
+          pendingAction="manage"
+        />
         <a
           className="underline underline-offset-4"
           href={reservation.managementUrl}

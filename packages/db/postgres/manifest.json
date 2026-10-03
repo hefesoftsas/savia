@@ -113,6 +113,10 @@
     {
       "filename": "0026_booking_public_links.sql",
       "sha256": "6ffa216872a2caae9e5dc9530886de1208f633d5057ca0bdc0967f77355d67fa"
+    },
+    {
+      "filename": "0027_booking_conferences.sql",
+      "sha256": "1d901032ff247b358db5bfda640919c5431b0ff852ac229a1f40dd36940f7aa3"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -13203,6 +13207,30 @@
           "notnull": 1,
           "dflt_value": "'en'",
           "pk": 0
+        },
+        {
+          "cid": 22,
+          "name": "conference_provider",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 23,
+          "name": "conference_url",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 24,
+          "name": "conference_status",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -13236,7 +13264,7 @@
           "origin": "pk"
         }
       ],
-      "checkCount": 2
+      "checkCount": 4
     },
     {
       "name": "personal_calendar_sources",

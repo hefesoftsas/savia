@@ -5376,6 +5376,14 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
               }[];
             };
           };
@@ -5491,6 +5499,14 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
               };
             };
           };
@@ -6296,6 +6312,14 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  conference?: {
+                    /** @enum {string|null} */
+                    provider: "google_meet" | "teams" | null;
+                    /** Format: uri */
+                    joinUrl: string | null;
+                    /** @enum {string} */
+                    status: "ready" | "pending" | "unsupported" | "failed";
+                  } | null;
                 };
                 managementUrl: string;
               };
@@ -6328,6 +6352,14 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  conference?: {
+                    /** @enum {string|null} */
+                    provider: "google_meet" | "teams" | null;
+                    /** Format: uri */
+                    joinUrl: string | null;
+                    /** @enum {string} */
+                    status: "ready" | "pending" | "unsupported" | "failed";
+                  } | null;
                 };
                 managementUrl: string;
               };
@@ -6435,6 +6467,14 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  conference?: {
+                    /** @enum {string|null} */
+                    provider: "google_meet" | "teams" | null;
+                    /** Format: uri */
+                    joinUrl: string | null;
+                    /** @enum {string} */
+                    status: "ready" | "pending" | "unsupported" | "failed";
+                  } | null;
                 };
                 publicUrl: string | null;
                 timeZone: string;
@@ -6752,6 +6792,14 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
               };
             };
           };
@@ -6866,6 +6914,14 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
               };
             };
           };

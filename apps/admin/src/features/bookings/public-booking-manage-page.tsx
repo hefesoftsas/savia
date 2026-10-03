@@ -5,6 +5,10 @@ import { bookingMessages } from "./booking-messages";
 import { PublicBookingAvailability } from "./public-booking-availability";
 import { PublicBookingSummary } from "./public-booking-summary";
 import type { BookingSelection } from "./booking-types";
+import {
+  BookingConference,
+  type BookingConferenceState,
+} from "./booking-conference";
 
 type Reservation = {
   id: string;
@@ -20,6 +24,7 @@ type Reservation = {
   version: number;
   deliveryStatus: string;
   calendarStatus: string;
+  conference?: BookingConferenceState;
 };
 type ManageBootstrap = {
   reservation: Reservation;
@@ -68,6 +73,8 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [conferenceRefreshError, setConferenceRefreshError] = useState("");
   const [rescheduling, setRescheduling] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [updated, setUpdated] = useState(false);
@@ -109,6 +116,20 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   }, [rescheduling, reviewing]);
 
   const reservation = bootstrap?.reservation;
+  async function refreshAppointment() {
+    setRefreshing(true);
+    setConferenceRefreshError("");
+    try {
+      const data = await publicRequest<ManageBootstrap>(managePath);
+      setBootstrap(data);
+    } catch {
+      setConferenceRefreshError(
+        t("The appointment could not be refreshed. Try again."),
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }
   const summaryCatalog = useMemo(
     () =>
       bootstrap
@@ -286,6 +307,28 @@ export function PublicBookingManagePage({ token }: { token: string }) {
       <p role="status" className="text-sm">
         {t(reservation.status === "confirmed" ? "Confirmed" : "Cancelled")}
       </p>
+      <BookingConference
+        conference={reservation.conference}
+        status={reservation.status}
+      />
+      {reservation.status === "confirmed" &&
+        reservation.conference?.status === "pending" && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={refreshing}
+            onClick={() => void refreshAppointment()}
+          >
+            {refreshing
+              ? t("Refreshing appointment…")
+              : t("Refresh appointment")}
+          </Button>
+        )}
+      {conferenceRefreshError && (
+        <p role="alert" className="text-sm text-destructive">
+          {conferenceRefreshError}
+        </p>
+      )}
       {updated && summaryCatalog && selection && (
         <section className="grid gap-2" aria-live="polite">
           <h2 className="text-lg font-semibold">{t("Updated appointment")}</h2>
