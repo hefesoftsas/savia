@@ -106,31 +106,44 @@ Apply migrations `0008_pages.sql`, `0009_issue_connections.sql`, `0010_pages_fol
 
 Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Deleting a page removes its attachment metadata and attempts to delete every stored attachment blob from the document bucket. It is not a retention mechanism: preserve any required copies before deleting the page. Failed bucket deletions may leave orphaned blobs for deployment cleanup. Revision retention is unbounded unless the owner explicitly clears prior versions.
 
-### Browser text search
+### Cloudflare semantic search
 
-The Pages home can build a local full-text index for the first 200 accessible
-page summaries returned by the server. Folders are skipped. A Web Worker uses
-FlexSearch and IndexedDB to retain the search postings and a small page/version
-manifest, scoped to the signed-in user and API. The server remains the canonical
-source for page content; document bodies, titles and snippets are not stored in
-the manifest. Search reads saved titles and rich-text leaves only. It does not
-fetch attachment bytes, collection records or external provider data.
+Local FlexSearch search has been removed. Existing derived browser indexes are
+removed on a best-effort basis when Pages opens; page content remains canonical
+in the backend.
 
-The progress panel shows the cache check, pages reused, page reads and indexing.
-Only missing or changed page versions are fetched. Search terms stay in the
-browser and are not sent to the Pages API. Each displayed result is fetched
-again and checked for current access, page kind and indexed version; title and
-snippet come from that authorized response. A failed cache operation explains
-that IndexedDB must be available and offers a retry or full rebuild.
+Cloudflare semantic search is disabled by default for every tenant. A platform
+administrator grants the capability in the tenant administration screen. The
+tenant administrator can then activate or deactivate it in **Page search** in
+the tenant settings. Revoking the grant also turns activation off; granting it
+again does not reactivate it. Ordinary members cannot change either setting.
+Both controls are enforced by the API, including indexing and querying.
 
-Page changes and returning focus to the tab invalidate the current results.
-Choose **Update index** to reconcile the existing cache against the current
-page versions, or **Rebuild index** to replace the cache. Cancel stops the
-current indexing operation. Closing the component terminates its worker; the
-scoped IndexedDB index remains available for the next visit. Logging out clears
-the local Pages search cache. Browser text search supplements the existing
-server title/list search, which remains available when the local index is not
-used or the browser cannot build it.
+When enabled, Pages offers semantic search backed by Cloudflare Workers AI
+(`@cf/baai/bge-m3`) and a dedicated Vectorize index. **Update index** sends missing
+or changed saved page versions to Cloudflare, with visible progress and cancel.
+It works on the first 200 accessible page summaries, skips folders, and indexes
+titles and saved rich-text leaves in batches. Attachments, embedded collection
+records and external provider data are excluded. Vectorize submissions are
+asynchronous; new results may take a few seconds to become searchable.
+
+Vectors use a tenant namespace. Search returns only pages that the caller can
+currently read in that tenant, checks the indexed version, and reads titles from
+the authorized backend document. Vector metadata contains page IDs and versions,
+not document bodies. Removing access or deleting a page prevents its appearance
+in results even while an older vector remains in Cloudflare. Turning search off
+stops new indexing and querying; it does not erase previously submitted vectors.
+The ordinary server text/title search remains available in all cases. Deployed
+semantic queries are limited to 30 per minute per tenant to bound repeated AI
+requests; the browser also debounces typing.
+
+Preview provisions the isolated `savia-pages-search-preview` Vectorize index
+(1024 dimensions, cosine) and binds it with Workers AI. The deployment token must
+have Vectorize edit permissions. Production search remains unavailable unless
+`SAVIA_PAGES_SEARCH_INDEX` is set to a separately provisioned production index
+when rendering the Worker configuration. No search consumption is incurred by
+tenants whose capability or activation is disabled. Cloudflare usage quotas and
+charges still apply when tenants enable the feature.
 
 The new editor dependencies (`platejs`, `@platejs/basic-nodes`, `@platejs/link`) use MIT licenses. Their attribution notice ships at `/licenses/plate.txt`. Existing Nango is an external service accepted for this integration; this implementation does not claim that Nango itself is MIT/Apache licensed.
 
@@ -212,6 +225,3 @@ destination. Local or unavailable-provider fallback links use `/s/p/{code}` on
 the current Savia host and are stored on the backend. A localhost link remains
 local to that machine; public sharing outside the machine requires a deployed
 public origin. Shortening failure leaves the original full link usable.
-
-The persistent search Worker requires IndexedDB and Web Locks. Browsers without
-Web Locks fail closed instead of allowing concurrent tabs to corrupt the cache.
