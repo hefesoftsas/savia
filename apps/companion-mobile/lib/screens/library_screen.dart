@@ -42,6 +42,7 @@ class LibraryScreen extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 20),
             if (controller.loading) const LinearProgressIndicator(),
             if (controller.failure != null) FailureNotice(controller.failure!),
             if (!controller.loading && controller.recordings.isEmpty)
@@ -62,13 +63,37 @@ class LibraryScreen extends StatelessWidget {
               ),
             for (final recording in controller.recordings)
               ListTile(
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                leading: const Icon(Icons.graphic_eq),
-                title: Text(recording.name ?? l.record),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.graphic_eq,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                title: Text(
+                  recording.name ?? l.record,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 subtitle: Text(
                   '${DateFormat.yMMMd(Localizations.localeOf(context).languageCode).add_Hm().format(recording.createdAt.toLocal())} · ${(recording.bytes / 1000000).toStringAsFixed(2)} MB',
                 ),
-                trailing: const Icon(Icons.chevron_right),
+                subtitleTextStyle: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.6,
+                    ),
+                shape: Border(
+                  bottom: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right, size: 20),
                 onTap: () => onSelect(recording),
               ),
             if (controller.cursor != null)

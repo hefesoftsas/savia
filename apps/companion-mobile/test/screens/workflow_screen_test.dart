@@ -1,4 +1,11 @@
 import 'dart:io';
+
+import '../capture/capture_controller_test.dart' show FakeCapture, FakeImport;
+
+import 'package:companion_mobile/capture/capture_controller.dart';
+import 'package:companion_mobile/screens/capture_screen.dart';
+import 'package:companion_mobile/screens/connect_screen.dart';
+
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -180,6 +187,74 @@ Future<void> main() async {
         });
       }
       await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'capture and connection layouts adapt to narrow and wide screens',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final capture = CaptureController(
+        native: FakeCapture(),
+        importer: FakeImport(),
+        files: TempFiles(Directory.systemTemp),
+        uploader: (_, _, _) async {},
+      );
+      final config = MobileConfig.preview(clientId: 'fixture');
+      for (final width in [320.0, 768.0]) {
+        tester.view.physicalSize = Size(width, 900);
+        for (final name in ['connect', 'capture']) {
+          final key = GlobalKey();
+          await tester.pumpWidget(
+            CompanionApp(
+              config: config,
+              locale: const Locale('es'),
+              home: RepaintBoundary(
+                key: key,
+                child: MediaQuery(
+                  data: MediaQueryData(
+                    textScaler: TextScaler.linear(width == 320 ? 2 : 1),
+                  ),
+                  child: name == 'connect'
+                      ? ConnectScreen(config: config)
+                      : Scaffold(
+                          body: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 720),
+                              child: CaptureScreen(
+                                controller: capture,
+                                canUpload: true,
+                                onUploaded: () {},
+                              ),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          if (const bool.fromEnvironment('SAVIA_VISUAL_REVIEW')) {
+            await tester.runAsync(() async {
+              final boundary =
+                  key.currentContext!.findRenderObject()!
+                      as RenderRepaintBoundary;
+              final image = await boundary.toImage(pixelRatio: 1);
+              final data = await image.toByteData(
+                format: ui.ImageByteFormat.png,
+              );
+              await Directory('build/visual-review').create(recursive: true);
+              await File('build/visual-review/$name-${width.toInt()}.png')
+                  .writeAsBytes(data!.buffer.asUint8List());
+            });
+          }
+        }
+      }
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(capture.shutdown);
+      capture.dispose();
     },
   );
 }

@@ -129,3 +129,11 @@ Follow-up regressions preserve the administrative client's original scope list
 and legacy public loopback callbacks. Mobile processing resolves AI configuration
 from the same membership-validated selected workspace as recording access; tests
 reject missing/inactive workspaces before any provider call.
+
+## Visual hierarchy
+
+The mobile theme follows Savia's emerald actions and neutral reading surfaces.
+Recording names, metadata, playback, notes and questions have distinct typography
+and spacing. Capture emphasizes its primary microphone action; upload and provider
+consents remain adjacent to the actions they authorize. Error notices include an
+icon and text, and layouts adapt to enlarged text and tablet widths.

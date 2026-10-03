@@ -29,11 +29,31 @@ class FailureNotice extends StatelessWidget {
     };
     return Semantics(
       liveRegion: true,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Text(
-          '$message${stage == null ? '' : ' · $stage'}${failure.providerStatus == null ? '' : ' (HTTP ${failure.providerStatus})'}',
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 20,
+              color: Theme.of(context).colorScheme.onErrorContainer,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '$message${stage == null ? '' : ' · $stage'}${failure.providerStatus == null ? '' : ' (HTTP ${failure.providerStatus})'}',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

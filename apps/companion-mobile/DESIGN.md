@@ -19,3 +19,20 @@ familiar touch and accessibility behavior.
 The design is inherited from the approved mobile specification. It does not
 introduce a new visual identity. App UI is localized in English, Spanish and
 Portuguese; server content is shown in its original language.
+
+## Refinement: task hierarchy
+
+The shared Flutter theme in `lib/theme.dart` pins the desktop palette instead of
+letting seed-generated colors drift. Semibold page/section titles contrast with
+muted recording metadata. Inputs use white surfaces; controls have 12px corners
+and at least 52px height while remaining free to grow with text.
+
+Library rows use a quiet emerald audio mark and a separator. Capture has one
+focused microphone surface; draft metadata and consent follow the reading order.
+Recording details separate playback, saved notes and questions with spacing and
+rules. Errors have a semantic icon and readable tinted surface, without relying
+on color alone. No decorative animation or fabricated waveform is introduced.
+
+Layout verification includes 320px phones at 200% text and 768px tablet layouts.
+Rendered fixtures are visual evidence only, not proof of device recording or
+provider processing.

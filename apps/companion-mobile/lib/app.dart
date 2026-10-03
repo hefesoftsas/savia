@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'config.dart';
+import 'theme.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/connect_screen.dart';
 
@@ -18,11 +19,7 @@ class CompanionApp extends StatelessWidget {
     locale: locale,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff176647)),
-      scaffoldBackgroundColor: const Color(0xfff6f8f7),
-      useMaterial3: true,
-    ),
+    theme: companionTheme(),
     home: home ?? ConnectScreen(config: config),
   );
 }
