@@ -1,6 +1,6 @@
 # Tenant branding
 
-Owner: Savia platform team. Last reviewed: 2026-10-02.
+Owner: Savia platform team. Last reviewed: 2026-10-03.
 
 Commercial tenants can customize their public identity without changing authentication
 or access to application data. Open **Administración → Identidad del espacio** from the sidebar.
@@ -20,6 +20,12 @@ These actions are also available to read-only members and never save branding or
 change the tenant slug. Switching organizations updates the URL and clears feedback.
 Preview and production use their respective canonical hosts. If the saved slug or
 a recognized Savia hostname is unavailable, no URL is fabricated.
+
+Below 640 px, the URL actions and the standard Save, Cancel, and Delete controls
+show only icons with accessible names and 44 px touch targets. Their labels
+remain visible on larger screens.
+The branding editor follows the same pattern for saving, discarding, reloading,
+removing images, restoring the default animation, and session recovery.
 
 New tenant URLs are generated from the tenant name: accents are removed, letters
 are lowercased, and runs of characters outside `a-z` and `0-9` become hyphens.

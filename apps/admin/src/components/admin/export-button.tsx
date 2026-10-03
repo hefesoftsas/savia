@@ -16,6 +16,7 @@ import {
   useResourceTranslation,
 } from "ra-core";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * A button that exports list data to a file.
@@ -115,12 +116,20 @@ export const ExportButton = (props: ExportButtonProps) => {
       variant="outline"
       onClick={handleClick}
       disabled={total === 0}
-      className={className}
+      className={cn(
+        icon && "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
+        className,
+      )}
       size={iconOnly ? "icon" : "default"}
-      aria-label={iconOnly && typeof label === "string" ? label : undefined}
+      aria-label={typeof label === "string" ? label : undefined}
+      title={typeof label === "string" ? label : undefined}
     >
       {icon}
-      {!iconOnly ? label : null}
+      {!iconOnly ? (
+        <span className={icon ? "sr-only sm:not-sr-only" : undefined}>
+          {label}
+        </span>
+      ) : null}
     </Button>
   );
 

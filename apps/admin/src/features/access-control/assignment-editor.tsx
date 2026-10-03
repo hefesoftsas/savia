@@ -7,6 +7,7 @@ import { useMessages } from "@/i18n/core";
 import { accessMessages } from "@/i18n/locales/access";
 import { EffectivePermissions } from "./effective-permissions";
 import { useEffect, useState } from "react";
+import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOnlineStatus } from "@/offline/use-online-status";
 import type {
@@ -178,6 +179,7 @@ export function AssignmentEditor({
               </label>
             ))}
           <Button
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             onClick={async () => {
               if (revision === undefined) return;
               setBusy(true);
@@ -202,7 +204,10 @@ export function AssignmentEditor({
               }
             }}
           >
-            {busy ? t("Saving…") : t("Save assignments")}
+            <Save aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">
+              {busy ? t("Saving…") : t("Save assignments")}
+            </span>
           </Button>
         </fieldset>
       )}

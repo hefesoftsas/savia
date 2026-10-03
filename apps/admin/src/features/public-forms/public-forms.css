@@ -164,14 +164,30 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+@media (max-width: 640px) {
+  .public-form-page button {
+    height: auto;
+    min-height: 44px;
+  }
+}
+@media (max-width: 640px) {
+  .public-link-manager button {
+    height: auto;
+    min-height: 44px;
+  }
+  .public-link-manager button[aria-label] {
+    min-width: 44px;
+  }
+}
 @media (max-width: 480px) {
   .public-link-actions {
     flex-direction: column;
     align-items: stretch;
   }
   .public-link-actions > button {
-    min-height: 2.75rem;
+    min-height: 44px;
     width: 100%;
+    height: auto;
   }
   .public-link-qr {
     width: 100%;
@@ -235,7 +251,7 @@
 }
 
 .public-quote-notice-actions > button {
-  min-height: 2.5rem;
+  min-height: 2.75rem;
 }
 
 /* Brand tokens for the shared insurance comparator (same names as the

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { RotateCcw, Save, Trash2 } from "lucide-react";
 import { useMessages } from "@/i18n/core";
 import { ApiClientError, type ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
@@ -151,9 +152,11 @@ export function TenantSSOSettingsPanel({
             <Button
               type="button"
               variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => setAttempt((value) => value + 1)}
             >
-              {t("Retry")}
+              <RotateCcw aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t("Retry")}</span>
             </Button>
           </div>
         ) : (
@@ -256,16 +259,27 @@ export function TenantSSOSettingsPanel({
                 </p>
               ) : null}
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={busy || loading}>
-                  {t("Save SSO settings")}
+                <Button
+                  type="submit"
+                  disabled={busy || loading}
+                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+                >
+                  <Save aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">
+                    {t("Save SSO settings")}
+                  </span>
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
                   disabled={busy || !configured}
+                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                   onClick={() => void remove()}
                 >
-                  {t("Remove SSO settings")}
+                  <Trash2 aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">
+                    {t("Remove SSO settings")}
+                  </span>
                 </Button>
               </div>
             </form>
