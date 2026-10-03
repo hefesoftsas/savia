@@ -1,0 +1,223 @@
+name: Companion downloads
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: companion-downloads-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android:
+    name: Build Android preview
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: apps/companion-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Require the Savia mobile OAuth client ID
+        env:
+          SAVIA_MOBILE_CLIENT_ID: ${{ vars.SAVIA_MOBILE_CLIENT_ID }}
+        run: |
+          if [ -z "$SAVIA_MOBILE_CLIENT_ID" ]; then
+            echo "Repository variable SAVIA_MOBILE_CLIENT_ID must be configured before publishing downloads." >&2
+            exit 1
+          fi
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - run: dart format --output=none --set-exit-if-changed lib test integration_test
+      - run: flutter analyze
+      - run: flutter test
+      - name: Build debug APK for preview distribution
+        env:
+          SAVIA_MOBILE_CLIENT_ID: ${{ vars.SAVIA_MOBILE_CLIENT_ID }}
+        run: flutter build apk --debug --dart-define=SAVIA_MOBILE_CLIENT_ID="$SAVIA_MOBILE_CLIENT_ID"
+      - name: Stage download
+        run: |
+          mkdir -p "$RUNNER_TEMP/companion-downloads"
+          cp build/app/outputs/flutter-apk/app-debug.apk "$RUNNER_TEMP/companion-downloads/savia-companion-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion-android-preview
+          path: ${{ runner.temp }}/companion-downloads/savia-companion-android.apk
+          if-no-files-found: error
+
+  windows:
+    name: Build Windows x64 preview
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 45
+    needs: [desktop-tests]
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - run: pnpm install --frozen-lockfile
+      - name: Build NSIS installer
+        run: pnpm --filter @savia/companion exec tauri build --target x86_64-pc-windows-msvc --bundles nsis -- --locked
+      - name: Stage download
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          installers=(apps/companion/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe)
+          if [ "${#installers[@]}" -ne 1 ]; then
+            echo "Expected one Windows NSIS installer; found ${#installers[@]}." >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/companion-downloads"
+          cp "${installers[0]}" "$RUNNER_TEMP/companion-downloads/savia-companion-windows-x64.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion-windows-preview
+          path: ${{ runner.temp }}/companion-downloads/savia-companion-windows-x64.exe
+          if-no-files-found: error
+
+  macos:
+    name: Build macOS Apple silicon preview
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-14
+    timeout-minutes: 45
+    needs: [desktop-tests]
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - run: pnpm install --frozen-lockfile
+      - name: Build Apple silicon DMG
+        run: pnpm --filter @savia/companion exec tauri build --target aarch64-apple-darwin --bundles dmg -- --locked
+      - name: Stage download
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          installers=(apps/companion/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg)
+          if [ "${#installers[@]}" -ne 1 ]; then
+            echo "Expected one Apple silicon DMG; found ${#installers[@]}." >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/companion-downloads"
+          cp "${installers[0]}" "$RUNNER_TEMP/companion-downloads/savia-companion-macos-arm64.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion-macos-preview
+          path: ${{ runner.temp }}/companion-downloads/savia-companion-macos-arm64.dmg
+          if-no-files-found: error
+
+  desktop-tests:
+    name: Test desktop Companion
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @savia/companion test
+
+  publish:
+    name: Publish complete preview release
+    if: github.ref == 'refs/heads/main'
+    needs: [android, windows, macos]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: companion-*-preview
+          path: downloads
+          merge-multiple: true
+      - name: Check the complete download set
+        run: |
+          set -euo pipefail
+          expected=(
+            savia-companion-android.apk
+            savia-companion-windows-x64.exe
+            savia-companion-macos-arm64.dmg
+          )
+          for file in "${expected[@]}"; do
+            if [ ! -s "downloads/$file" ]; then
+              echo "Required download is missing or empty: $file" >&2
+              exit 1
+            fi
+          done
+          file_count="$(find downloads -maxdepth 1 -type f | awk 'END { print NR }')"
+          if [ "$file_count" -ne "${#expected[@]}" ]; then
+            echo "Unexpected files found in the staged download set." >&2
+            exit 1
+          fi
+      - name: Create draft release and upload all downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="companion-preview-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          Savia Companion preview builds for Android, Windows x64, and macOS Apple silicon.
+
+          Android is a debug APK signed with a generated debug test key. The Windows installer and macOS app are unsigned; the macOS build is not notarized. These are test artifacts, not qualified or production releases. OS security warnings are expected.
+          NOTES
+          gh release create "$tag" \
+            downloads/savia-companion-android.apk \
+            downloads/savia-companion-windows-x64.exe \
+            downloads/savia-companion-macos-arm64.dmg \
+            --draft \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Savia Companion preview $tag" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+          uploaded="$(gh release view "$tag" --json assets --jq '[.assets[].name] | sort | join("\n")')"
+          expected="$(printf '%s\n' \
+            savia-companion-android.apk \
+            savia-companion-macos-arm64.dmg \
+            savia-companion-windows-x64.exe | sort)"
+          if [ "$uploaded" != "$expected" ]; then
+            echo "Draft release does not contain exactly the required downloads; leaving it unpublished." >&2
+            exit 1
+          fi
+          gh release edit "$tag" --draft=false
