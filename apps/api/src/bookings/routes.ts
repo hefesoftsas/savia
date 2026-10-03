@@ -7,6 +7,7 @@ import {
   bookingAgendaRangeSchema,
 } from "@savia/studio-shared/booking-agenda-contracts";
 import { actorFromContext } from "../auth/middleware";
+import { SAVIA_READ_SCOPE } from "../auth/oauth-resource";
 import { authorizeBranding } from "../tenant-branding/service";
 import {
   captchaConfiguration,
@@ -246,8 +247,9 @@ export function registerBookingRoutes(
       const actor = actorFromContext(c);
       if (
         !actor.principal.isActive ||
-        (actor.credential !== undefined &&
-          actor.credential.kind !== "interactive")
+        actor.credential?.kind === "personal-api-key" ||
+        (actor.credential?.kind === "oauth" &&
+          !actor.credential.scopes.includes(SAVIA_READ_SCOPE))
       )
         throw new HTTPException(403, {
           message: "Booking agenda access denied.",
