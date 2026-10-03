@@ -3,7 +3,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { authenticationMiddleware } from "../src/auth/middleware";
 import { registerCompanionRoutes } from "../src/companion/routes";
-import type { CompanionService } from "../src/companion/service";
+import { CompanionService } from "../src/companion/service";
 import { CompanionRecordings } from "../src/companion/recordings";
 import { opusFixtureBase64 } from "./fixtures/companion-tone";
 import { platformAdministratorAuthenticator } from "./auth-fixtures";
@@ -186,6 +186,104 @@ describe("saved Companion recording notes", () => {
       expect(retried.status).toBe(200);
       expect(second.transcribe).not.toHaveBeenCalled();
       expect(second.summarize).toHaveBeenCalledTimes(1);
+    } finally {
+      await new CompanionRecordings(env.DOCUMENTS)
+        .remove(owner, id)
+        .catch(() => {});
+    }
+  });
+
+  it("returns only safe provider status diagnostics when transcription is rejected", async () => {
+    const id = crypto.randomUUID();
+    const providerSecret = "sk-or-provider-secret";
+    const service = new CompanionService({
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            error: { code: providerSecret, message: "private provider detail" },
+          }),
+          { status: 413 },
+        ),
+    });
+    const instance = app(owner, service);
+    await saveSample(instance, id);
+    try {
+      const response = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(consent),
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(502);
+      expect(body).toMatchObject({
+        error: {
+          code: "PROVIDER_REQUEST_FAILED",
+          providerOperation: "transcription",
+          upstreamStatus: 413,
+        },
+      });
+      expect(JSON.stringify(body)).not.toContain(providerSecret);
+      expect(JSON.stringify(body)).not.toContain("private provider detail");
+      expect(JSON.stringify(body)).not.toContain("mock-server-key");
+    } finally {
+      await new CompanionRecordings(env.DOCUMENTS)
+        .remove(owner, id)
+        .catch(() => {});
+    }
+  });
+
+  it("returns safe summary rejection diagnostics while preserving the transcript without retrying", async () => {
+    const id = crypto.randomUUID();
+    const providerSecret = "provider-response-private-detail";
+    let providerCalls = 0;
+    const service = new CompanionService({
+      fetch: async (input) => {
+        providerCalls++;
+        if (String(input).includes("audio/transcriptions"))
+          return Response.json({ text: "Persist this transcript." });
+        return new Response(
+          JSON.stringify({
+            error: { code: "private_provider_code", message: providerSecret },
+          }),
+          { status: 429 },
+        );
+      },
+    });
+    const instance = app(owner, service);
+    await saveSample(instance, id);
+    try {
+      const failed = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(consent),
+        },
+      );
+      const body = await failed.json();
+      expect(failed.status).toBe(502);
+      expect(body).toMatchObject({
+        error: {
+          code: "PROVIDER_REQUEST_FAILED",
+          providerOperation: "summary",
+          upstreamStatus: 429,
+        },
+      });
+      expect(JSON.stringify(body)).not.toContain(providerSecret);
+      expect(JSON.stringify(body)).not.toContain("private_provider_code");
+      expect(providerCalls).toBe(2);
+      expect(
+        await (
+          await instance.request(`/v1/companion/recordings/${id}/notes`)
+        ).json(),
+      ).toMatchObject({
+        transcript: { text: "Persist this transcript." },
+        summary: null,
+      });
+      expect(providerCalls).toBe(2);
     } finally {
       await new CompanionRecordings(env.DOCUMENTS)
         .remove(owner, id)

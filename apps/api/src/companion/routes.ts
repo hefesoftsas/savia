@@ -14,6 +14,7 @@ import {
   summarySchema,
   recordingQuestionSchema,
   recordingAnswerSchema,
+  companionProviderOperationSchema,
 } from "./service";
 
 import {
@@ -55,8 +56,27 @@ export type CompanionOptions = {
   service?: CompanionService;
 };
 const errorSchema = z.object({
-  error: z.object({ code: z.string(), message: z.string() }),
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    providerOperation: companionProviderOperationSchema.optional(),
+    upstreamStatus: z.number().int().min(100).max(599).optional(),
+  }),
 });
+function companionErrorBody(error: CompanionError) {
+  return {
+    error: {
+      code: error.code,
+      message: error.message,
+      ...(error.providerOperation && error.upstreamStatus !== undefined
+        ? {
+            providerOperation: error.providerOperation,
+            upstreamStatus: error.upstreamStatus,
+          }
+        : {}),
+    },
+  };
+}
 const failures = Object.fromEntries(
   [400, 401, 403, 404, 409, 413, 502, 503, 504].map((status) => [
     status,
@@ -284,16 +304,10 @@ export function registerCompanionRoutes(
       await next();
       // Hono's composed handlers may already have converted a thrown route error.
       if (c.error instanceof CompanionError)
-        c.res = c.json(
-          { error: { code: c.error.code, message: c.error.message } },
-          c.error.status,
-        );
+        c.res = c.json(companionErrorBody(c.error), c.error.status);
     } catch (error) {
       if (error instanceof CompanionError)
-        return c.json(
-          { error: { code: error.code, message: error.message } },
-          error.status,
-        );
+        return c.json(companionErrorBody(error), error.status);
       throw error;
     }
   });

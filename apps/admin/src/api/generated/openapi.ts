@@ -643,6 +643,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -657,6 +660,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -671,6 +677,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -685,6 +694,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -699,6 +711,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -713,6 +728,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -727,6 +745,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -741,6 +762,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -755,6 +779,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -829,6 +856,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -843,6 +873,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -857,6 +890,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -871,6 +907,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -885,6 +924,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -899,6 +941,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -913,6 +958,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -927,6 +975,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -941,6 +992,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1020,6 +1074,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1034,6 +1091,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1048,6 +1108,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1062,6 +1125,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1076,6 +1142,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1090,6 +1159,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1104,6 +1176,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1118,6 +1193,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1132,6 +1210,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1215,6 +1296,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1229,6 +1313,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1243,6 +1330,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1257,6 +1347,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1271,6 +1364,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1285,6 +1381,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1299,6 +1398,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1313,6 +1415,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1327,6 +1432,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1400,6 +1508,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1414,6 +1525,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1428,6 +1542,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1442,6 +1559,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1456,6 +1576,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1470,6 +1593,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1484,6 +1610,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1498,6 +1627,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1512,6 +1644,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1584,6 +1719,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1598,6 +1736,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1612,6 +1753,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1626,6 +1770,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1640,6 +1787,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1654,6 +1804,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1668,6 +1821,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1682,6 +1838,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1696,6 +1855,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1749,6 +1911,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1763,6 +1928,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1777,6 +1945,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1791,6 +1962,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1805,6 +1979,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1819,6 +1996,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1833,6 +2013,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1847,6 +2030,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1861,6 +2047,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1898,6 +2087,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1912,6 +2104,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1926,6 +2121,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1940,6 +2138,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1954,6 +2155,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1968,6 +2172,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1982,6 +2189,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -1996,6 +2206,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2010,6 +2223,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2077,6 +2293,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2091,6 +2310,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2105,6 +2327,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2119,6 +2344,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2133,6 +2361,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2147,6 +2378,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2161,6 +2395,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2175,6 +2412,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2189,6 +2429,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2252,6 +2495,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2266,6 +2512,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2280,6 +2529,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2294,6 +2546,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2308,6 +2563,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2322,6 +2580,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2336,6 +2597,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2350,6 +2614,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2364,6 +2631,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2427,6 +2697,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2441,6 +2714,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2455,6 +2731,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2469,6 +2748,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2483,6 +2765,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2497,6 +2782,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2511,6 +2799,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2525,6 +2816,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2539,6 +2833,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2610,6 +2907,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2624,6 +2924,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2638,6 +2941,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2652,6 +2958,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2666,6 +2975,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2680,6 +2992,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2694,6 +3009,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2708,6 +3026,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };
@@ -2722,6 +3043,9 @@ export interface paths {
               error: {
                 code: string;
                 message: string;
+                /** @enum {string} */
+                providerOperation?: "transcription" | "summary" | "question";
+                upstreamStatus?: number;
               };
             };
           };

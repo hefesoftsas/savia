@@ -1,7 +1,8 @@
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { StoreContextProvider, memoryStore } from "ra-core";
+import { StoreContextProvider, memoryStore, useLocaleState } from "ra-core";
+import { ApiClientError } from "@/api/api-client";
 import { CompanionRecordingsPage } from "./recordings-page";
 import type { CompanionRecordingsClient } from "./client";
 const recording = {
@@ -33,12 +34,19 @@ beforeEach(() => {
   URL.revokeObjectURL = vi.fn();
 });
 afterEach(cleanup);
+function LocaleButton({ locale, label }: { locale: string; label: string }) {
+  const [, setLocale] = useLocaleState();
+  return <button onClick={() => setLocale(locale)}>{label}</button>;
+}
 function show(client: ReturnType<typeof mockClient>) {
   return render(
     <StoreContextProvider value={memoryStore({ locale: "en" })}>
-      <CompanionRecordingsPage
-        client={client as unknown as CompanionRecordingsClient}
-      />
+      <>
+        <LocaleButton locale="es" label="Español" />
+        <CompanionRecordingsPage
+          client={client as unknown as CompanionRecordingsClient}
+        />
+      </>
     </StoreContextProvider>,
   );
 }
@@ -63,6 +71,94 @@ it("requires consent before processing and restores saved notes after remount", 
   client.notes.mockResolvedValue(result);
   show(client);
   expect(await screen.findByText("Backend saved notes")).toBeVisible();
+  expect(client.generate).toHaveBeenCalledTimes(1);
+});
+
+it("shows safe provider diagnostics and recovers a transcript after summary processing fails", async () => {
+  const client = mockClient();
+  client.generate.mockRejectedValue(
+    new ApiClientError(
+      502,
+      "PROVIDER_REQUEST_FAILED",
+      "Provider request failed",
+      {
+        error: {
+          code: "PROVIDER_REQUEST_FAILED",
+          message: "Provider request failed",
+          providerOperation: "summary",
+          upstreamStatus: 429,
+        },
+      },
+    ),
+  );
+  client.notes.mockResolvedValue({
+    transcript: {
+      text: "A transcript persisted before summary generation failed.",
+      source: "system",
+      model: "openai/whisper-large-v3",
+      durationSeconds: 10,
+    },
+    summary: null,
+  });
+  const user = userEvent.setup();
+  show(client);
+  await user.click(await screen.findByRole("checkbox"));
+  await user.click(screen.getByRole("button", { name: "Generate summary" }));
+
+  expect(
+    await screen.findByText(
+      "Summary provider returned HTTP 429. Check provider usage before trying again.",
+    ),
+  ).toBeVisible();
+  expect(
+    await screen.findByText(
+      "A transcript persisted before summary generation failed.",
+    ),
+  ).toBeInTheDocument();
+  expect(client.notes).toHaveBeenCalledWith("one");
+  await user.click(screen.getByRole("button", { name: "Español" }));
+  expect(
+    await screen.findByText(
+      "El proveedor de resúmenes respondió HTTP 429. Revisa el consumo del proveedor antes de reintentar.",
+    ),
+  ).toBeVisible();
+});
+
+it("ignores unrecognized provider diagnostic values", async () => {
+  const client = mockClient();
+  client.generate.mockRejectedValue(
+    new ApiClientError(
+      502,
+      "PROVIDER_REQUEST_FAILED",
+      "Provider request failed",
+      {
+        error: {
+          code: "PROVIDER_REQUEST_FAILED",
+          message: "Provider request failed",
+          providerOperation: "transcription\nprivate detail",
+          upstreamStatus: "429 private detail",
+        },
+      },
+    ),
+  );
+  client.notes.mockResolvedValue({ transcript: null, summary: null });
+  const user = userEvent.setup();
+  show(client);
+  await user.click(await screen.findByRole("checkbox"));
+  await user.click(screen.getByRole("button", { name: "Generate summary" }));
+
+  expect(
+    await screen.findByText(
+      "Processing failed. Check provider usage before trying again.",
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText(/private detail/)).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Español" }));
+  expect(
+    await screen.findByText(
+      "El procesamiento falló. Revisa el consumo del proveedor antes de reintentar.",
+    ),
+  ).toBeVisible();
   expect(client.generate).toHaveBeenCalledTimes(1);
 });
 it("exposes an empty state without fictional samples", async () => {

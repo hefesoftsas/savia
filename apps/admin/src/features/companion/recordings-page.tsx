@@ -18,6 +18,13 @@ import {
 
 import { RecordingQuestions } from "./recording-questions";
 import { RecordingUpload } from "./recording-upload";
+import {
+  processingFailure,
+  providerFailureMessage,
+  readProviderFailure,
+  type ProcessingFailure,
+  type ProviderFailure,
+} from "./provider-error";
 
 // Operate: an owner-private audio inbox, using Savia's neutral surfaces and
 // emerald actions. The list leads to one listening/review workspace; generated
@@ -42,7 +49,9 @@ export function CompanionRecordingsPage({
   const [audio, setAudio] = useState<string | null>(null),
     [loading, setLoading] = useState(true),
     [loadingDetail, setLoadingDetail] = useState(false);
-  const [error, setError] = useState(""),
+  const [error, setError] = useState<
+      string | ProviderFailure | ProcessingFailure | null
+    >(null),
     [consent, setConsent] = useState(false),
     [processing, setProcessing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false),
@@ -66,7 +75,7 @@ export function CompanionRecordingsPage({
     });
   const load = async (next?: string) => {
     setLoading(true);
-    setError("");
+    setError(null);
     try {
       let result = await client.list(next);
       const visited = new Set<string>();
@@ -126,7 +135,7 @@ export function CompanionRecordingsPage({
     let disposed = false,
       objectUrl: string | null = null;
     setLoadingDetail(true);
-    setError("");
+    setError(null);
     void Promise.allSettled([
       client.audio(selected.id, controller.signal),
       client.notes(selected.id),
@@ -157,15 +166,13 @@ export function CompanionRecordingsPage({
     if (!selected || !consent || inFlight.current) return;
     inFlight.current = true;
     setProcessing(true);
-    setError("");
+    setError(null);
     try {
       const result = await client.generate(selected.id);
       if (mounted.current) setNotes(result);
-    } catch {
+    } catch (error) {
       if (mounted.current) {
-        setError(
-          t("Processing failed. Check provider usage before trying again."),
-        );
+        setError(readProviderFailure(error) ?? processingFailure);
         const partial = await client.notes(selected.id).catch(() => null);
         if (mounted.current && partial) setNotes(partial);
       }
@@ -219,7 +226,7 @@ export function CompanionRecordingsPage({
             ]);
             setSelected(recording);
             setUploadOpen(false);
-            setError("");
+            setError(null);
           }}
         />
       )}
@@ -228,7 +235,13 @@ export function CompanionRecordingsPage({
           role="alert"
           className="mb-4 rounded-lg border border-destructive/40 p-3 text-sm text-destructive"
         >
-          {error}
+          {typeof error === "string"
+            ? error
+            : "kind" in error
+              ? t(
+                  "Processing failed. Check provider usage before trying again.",
+                )
+              : providerFailureMessage(error, t)}
         </p>
       )}
       {loading && !recordings.length ? (
