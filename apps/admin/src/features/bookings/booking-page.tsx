@@ -261,6 +261,26 @@ export function BookingPage({
   async function saveSettings(event: FormEvent) {
     event.preventDefault();
     if (!settings) return;
+    if (
+      settings.published &&
+      (!settings.enabled ||
+        !settings.services.some(
+          (service) =>
+            service.enabled &&
+            service.professionalIds.some((id) =>
+              settings.professionals.some(
+                (professional) =>
+                  professional.id === id && professional.enabled,
+              ),
+            ),
+        ))
+    ) {
+      setNotice("");
+      setError(
+        t("Enable a service and an assigned professional before publishing."),
+      );
+      return;
+    }
     setSaving(true);
     setError("");
     setNotice("");
@@ -277,9 +297,22 @@ export function BookingPage({
       setError(
         isConflict(exception)
           ? t("Booking settings changed elsewhere. Reload before saving again.")
-          : t(
-              "Booking settings could not be saved. Check your connection and retry.",
-            ),
+          : exception instanceof ApiClientError
+            ? t(
+                "Booking settings could not be saved (HTTP %{status}): %{message}",
+                {
+                  status: exception.status,
+                  message: Object.prototype.hasOwnProperty.call(
+                    bookingMessages,
+                    exception.message,
+                  )
+                    ? t(exception.message as keyof typeof bookingMessages)
+                    : exception.message,
+                },
+              )
+            : t(
+                "Booking settings could not be saved. Check your connection and retry.",
+              ),
       );
     } finally {
       setSaving(false);
@@ -492,6 +525,8 @@ export function BookingPage({
     );
 
   const tZone = settings?.timeZone ?? "UTC";
+  const publicReady =
+    bootstrap.settings.enabled && bootstrap.settings.published;
   return (
     <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:px-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -503,7 +538,7 @@ export function BookingPage({
             {t("Manage appointments and your availability.")}
           </p>
         </div>
-        {bootstrap.publicUrl && (
+        {publicReady && bootstrap.publicUrl && (
           <a
             className="text-sm font-medium underline underline-offset-4"
             href={bootstrap.publicUrl}
@@ -623,6 +658,11 @@ export function BookingPage({
                 {t("Published")}
               </label>
             </div>
+            <p className="text-sm text-muted-foreground">
+              {t(
+                "Enable a service and an assigned professional before publishing.",
+              )}
+            </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {(
                 [
@@ -649,7 +689,7 @@ export function BookingPage({
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <strong>{t("Public booking page")}</strong>
-              {bootstrap.publicUrl ? (
+              {publicReady && bootstrap.publicUrl ? (
                 <a
                   className="break-all underline underline-offset-4"
                   href={bootstrap.publicUrl}
@@ -657,7 +697,11 @@ export function BookingPage({
                   {bootstrap.publicUrl}
                 </a>
               ) : (
-                <span className="text-muted-foreground">—</span>
+                <span className="text-muted-foreground">
+                  {t(
+                    "Save enabled and published settings to open the public page.",
+                  )}
+                </span>
               )}
             </div>
           </section>
