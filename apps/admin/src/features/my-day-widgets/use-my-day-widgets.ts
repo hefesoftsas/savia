@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  translateMessage,
+  useAppLocale,
+  type MessageParams,
+} from "@/i18n/core";
+import { myDayStateMessages } from "./my-day-state-messages";
 import type { UserPreferencesClient } from "@/api/user-preferences-client";
 import {
   defaultMyDayWidgets,
@@ -10,6 +16,15 @@ import {
 let layoutCache = new WeakMap<UserPreferencesClient, MyDayWidgetsLayout>();
 let layoutRevisions = new WeakMap<UserPreferencesClient, number>();
 let sessionGeneration = 0;
+type WidgetMessage = {
+  key: keyof typeof myDayStateMessages;
+  params?: MessageParams;
+};
+type WidgetFeedback = string | WidgetMessage | null;
+const message = (
+  key: WidgetMessage["key"],
+  params?: MessageParams,
+): WidgetMessage => ({ key, params });
 
 function clearLayoutCache() {
   sessionGeneration += 1;
@@ -31,6 +46,7 @@ if (typeof window !== "undefined") {
 export function useMyDayWidgets(
   userPreferences: UserPreferencesClient | undefined,
 ) {
+  const locale = useAppLocale();
   const [layoutState, setLayoutState] = useState<MyDayWidgetsLayout | null>(
     () => (userPreferences ? (layoutCache.get(userPreferences) ?? null) : null),
   );
@@ -41,7 +57,7 @@ export function useMyDayWidgets(
   const [currentSessionGeneration, setCurrentSessionGeneration] =
     useState(sessionGeneration);
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackState, setFeedback] = useState<WidgetFeedback>(null);
   const revision = useRef(0);
   const layout =
     layoutOwner === userPreferences
@@ -104,7 +120,7 @@ export function useMyDayWidgets(
             setLayoutState(defaultMyDayWidgets());
             setLayoutOwner(userPreferences);
             setFeedback(
-              "Tus widgets guardados no se pudieron leer. Empezamos de cero.",
+              message("Saved widgets could not be read. Starting over."),
             );
           }
         },
@@ -118,7 +134,7 @@ export function useMyDayWidgets(
             return;
           if (!existing) setLayoutState(defaultMyDayWidgets());
           setLayoutOwner(userPreferences);
-          setFeedback("No pudimos cargar tus widgets. Reintenta.");
+          setFeedback(message("Could not load widgets. Try again."));
         },
       )
       .finally(() => {
@@ -136,11 +152,14 @@ export function useMyDayWidgets(
   }, [userPreferences, currentSessionGeneration]);
 
   const persist = useCallback(
-    async (next: MyDayWidgetsLayout, successMessage: string | null) => {
+    async (
+      next: MyDayWidgetsLayout,
+      successMessage: WidgetMessage["key"] | null,
+    ) => {
       if (!userPreferences) {
         setLayoutState(next);
         setLayoutOwner(undefined);
-        if (successMessage) setFeedback(successMessage);
+        if (successMessage) setFeedback(message(successMessage));
         return true;
       }
       setSaving(true);
@@ -160,14 +179,14 @@ export function useMyDayWidgets(
         layoutCache.set(userPreferences, parsed);
         setLayoutState(parsed);
         setLayoutOwner(userPreferences);
-        if (successMessage) setFeedback(successMessage);
+        if (successMessage) setFeedback(message(successMessage));
         return true;
       } catch {
         if (
           generation === sessionGeneration &&
           revision.current === saveRevision
         ) {
-          setFeedback("No pudimos guardar tus widgets. Reintenta.");
+          setFeedback(message("Could not save widgets. Try again."));
         }
         return false;
       } finally {
@@ -184,7 +203,7 @@ export function useMyDayWidgets(
           version: 1,
           widgets: [...(layout?.widgets ?? []), widget],
         },
-        "Widget agregado a Mi día.",
+        "Widget added to My Day.",
       ),
     [layout, persist],
   );
@@ -196,7 +215,7 @@ export function useMyDayWidgets(
           version: 1,
           widgets: (layout?.widgets ?? []).filter((widget) => widget.id !== id),
         },
-        "Widget eliminado.",
+        "Widget removed.",
       ),
     [layout, persist],
   );
@@ -250,7 +269,15 @@ export function useMyDayWidgets(
     widgets: layout?.widgets ?? [],
     loading,
     saving,
-    feedback,
+    feedback:
+      typeof feedbackState === "object" && feedbackState
+        ? translateMessage(
+            myDayStateMessages,
+            feedbackState.key,
+            locale,
+            feedbackState.params,
+          )
+        : feedbackState,
     unavailable: !userPreferences,
     setFeedback,
     add,
@@ -283,7 +310,7 @@ export function useMyDayWidgets(
           generation === sessionGeneration &&
           revision.current === requestRevision
         ) {
-          setFeedback("No pudimos cargar tus widgets. Reintenta.");
+          setFeedback(message("Could not load widgets. Try again."));
         }
       } finally {
         if (

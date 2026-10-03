@@ -4,7 +4,7 @@ import Android from "@thesvg/react/android";
 import Windows from "@thesvg/react/windows";
 import Apple from "@thesvg/react/apple";
 import { Button } from "@/components/ui/button";
-import { useMessages } from "@/i18n/core";
+import { intlLocale, useAppLocale, useMessages } from "@/i18n/core";
 import { companionDownloadMessages } from "./companion-downloads-messages";
 import { IntegrationGroup } from "./integration-ui";
 
@@ -71,6 +71,7 @@ type DownloadState =
   | { status: "ready"; release: CompanionRelease | null };
 export function CompanionDownloads() {
   const t = useMessages(companionDownloadMessages);
+  const locale = useAppLocale();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<DownloadState>({ status: "loading" });
   useEffect(() => {
@@ -192,7 +193,11 @@ export function CompanionDownloads() {
                     <Download aria-hidden="true" className="size-4" />
                     {action}
                     <span className="text-xs text-muted-foreground">
-                      {(release.assets[id].bytes / 1000000).toFixed(1)} MB
+                      {new Intl.NumberFormat(intlLocale(locale), {
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: 1,
+                      }).format(release.assets[id].bytes / 1000000)}{" "}
+                      MB
                     </span>
                   </a>
                 </Button>

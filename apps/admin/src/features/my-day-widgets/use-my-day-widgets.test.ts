@@ -1,6 +1,27 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import {
+  act,
+  cleanup,
+  renderHook as renderHookBase,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { memoryStore } from "ra-core";
 import { useMyDayWidgets } from "./use-my-day-widgets";
+import {
+  AppLocaleTestWrapper,
+  appLocaleWrapperFor,
+} from "./app-locale-test-wrapper";
+
+function renderHook<Props, Result>(
+  callback: (props: Props) => Result,
+  options?: { initialProps?: Props },
+) {
+  return renderHookBase(callback, {
+    ...options,
+    wrapper: AppLocaleTestWrapper,
+  });
+}
+afterEach(cleanup);
 
 function createPreferences(widgets: unknown[] = []) {
   return {
@@ -139,6 +160,28 @@ describe("useMyDayWidgets", () => {
       version: 1,
       widgets: [expect.objectContaining({ id: "w_1" })],
     });
+  });
+
+  it("translates cached system feedback when the mounted locale changes", async () => {
+    const preferences = createPreferences();
+    preferences.getMyDayWidgets.mockRejectedValue(new Error("offline"));
+    const store = memoryStore({ locale: "es" });
+    const wrapper = appLocaleWrapperFor(store);
+    const hooked = renderHookBase(() => useMyDayWidgets(preferences as never), {
+      wrapper,
+    });
+    await waitFor(() =>
+      expect(hooked.result.current.feedback).toBe(
+        "No pudimos cargar tus widgets. Reintenta.",
+      ),
+    );
+    act(() => store.setItem("locale", "en"));
+    await waitFor(() =>
+      expect(hooked.result.current.feedback).toBe(
+        "Could not load your widgets. Try again.",
+      ),
+    );
+    expect(preferences.getMyDayWidgets).toHaveBeenCalledTimes(1);
   });
 
   it("reorders widgets with drag and drop order and persists", async () => {

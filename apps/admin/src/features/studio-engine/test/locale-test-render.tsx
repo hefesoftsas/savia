@@ -1,3 +1,4 @@
+import type { AppLocale } from "@/i18n/app-locale";
 import type { ReactElement, ReactNode } from "react";
 import {
   render as baseRender,
@@ -7,9 +8,13 @@ import { StoreContextProvider, memoryStore } from "ra-core";
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 
 /** Existing Spanish UI specifications explicitly opt into their expected locale. */
-export function render(ui: ReactElement, options: RenderOptions = {}) {
-  const store = memoryStore({ locale: "es" });
-  const Outer = options.wrapper;
+export function render(
+  ui: ReactElement,
+  options: RenderOptions & { locale?: AppLocale } = {},
+) {
+  const { locale = "es", ...renderOptions } = options;
+  const store = memoryStore({ locale });
+  const Outer = renderOptions.wrapper;
   function Wrapper({ children }: { children: ReactNode }) {
     const content = (
       <StoreContextProvider value={store}>
@@ -18,5 +23,5 @@ export function render(ui: ReactElement, options: RenderOptions = {}) {
     );
     return Outer ? <Outer>{content}</Outer> : content;
   }
-  return baseRender(ui, { ...options, wrapper: Wrapper });
+  return baseRender(ui, { ...renderOptions, wrapper: Wrapper });
 }

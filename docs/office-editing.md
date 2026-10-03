@@ -1,6 +1,6 @@
 # Office documents and editing
 
-Owner: Savia platform team. Reviewed: 2026-10-02.
+Owner: Savia platform team. Reviewed: 2026-10-03.
 
 Savia opens DOCX, XLSX and PPTX attachments in a separate `/office/` tab using
 ZetaOffice (LibreOffice compiled to WebAssembly). The document engine runs in the
@@ -16,8 +16,10 @@ Open **Office suite** from the sidebar to create a Document (DOCX), Spreadsheet
 **Create and save**. The saved-document list opens each file in a separate editor
 tab. Use **Delete document** beside a Savia file and confirm to permanently
 remove it and all its versions. Deletion checks the displayed version so a
-concurrent edit cannot be silently discarded; reload and review before retrying. Files are private to their owner and active workspace; document bytes stay
-in R2 and metadata and immutable revision history stay in D1. Returning to the
+concurrent edit cannot be silently discarded; reload and review before retrying.
+Files are private to their owner by default and can be shared with selected
+active members of the same workspace. Document bytes stay in R2 and metadata,
+sharing permissions and immutable revision history stay in D1. Returning to the
 list refreshes its current versions. There is no browser document persistence.
 
 The editor shows a discreet ZetaOffice attribution in its loading screen and
@@ -25,6 +27,29 @@ footer. Product navigation and creation controls use **Office suite**.
 The editor uses the native ZetaOffice interface, including its menus, toolbars,
 rulers and sidebar. Savia provides the document header, save action and revision
 history around the native editor.
+
+## Sharing Savia documents
+
+The owner can choose **Share document** beside a Savia-hosted file. Search the
+workspace's active members, then assign **Can view**, **Can edit**, or **No
+access** and select **Save permissions**. Existing recipients remain listed even
+when they are outside the current member-search results. Permission changes use
+a separate version check; if another change wins, reload permissions and review
+the current list before saving again.
+
+Recipients see the file in **Office suite**, with the owner's name and their
+permission. Readers can open the native viewer, download the original file, and
+view/download revision history. Readers cannot save changes. Editors can save
+new revisions, which record the actual editor's identity; concurrent edits still
+use the existing optimistic version check rather than live coauthoring. Only the
+owner can delete the document or manage access.
+
+The API checks the caller's active workspace and current membership on every
+operation. Sharing rejects recipients from other workspaces or inactive accounts.
+Removing a grant or deactivating the recipient's membership blocks subsequent
+opens, downloads, history requests and saves, including saves from an already-open
+editor. Content already downloaded or loaded in a browser cannot be withdrawn.
+Sharing does not create a public or anonymous link.
 
 ## Connected Google Drive and OneDrive documents
 
@@ -50,7 +75,13 @@ link in Savia. The saved-document list identifies the provider and retains the
 link after a refresh. File contents and future edits remain with the provider;
 these entries do not have Savia R2 revisions or automatic synchronization.
 Disconnecting an integration stops new creation but preserves existing references.
-Provider permissions still govern who can open each external document.
+Provider permissions still govern who can open each external document. Share
+those files through Google Drive or OneDrive; this does not make the reference
+appear in another Savia member's list. Savia's **Share document** action applies
+only to Savia-hosted files. Provider API sharing is technically feasible through
+Google Drive `permissions.create` or Microsoft Graph `driveItem invite`, but
+would also require recipient identity mapping, granted provider permissions and
+tracked revocation when Savia membership ends; that integration is not enabled.
 The saved list shows the storage provider's icon and name beside each file.
 Use the storage filters to narrow the list to Savia or connected Google Drive
 and OneDrive accounts. Cloud filters and provider icons appear only for active
@@ -147,7 +178,8 @@ Apply the normal application D1 migrations, including
 `packages/db/migrations/0055_office_revisions.sql` and
 `packages/db/migrations/0018_office_documents.sql`,
 `packages/db/migrations/0019_office_settings.sql` and
-`packages/db/migrations/0020_connected_office_documents.sql`, before deploying the API. The
+`packages/db/migrations/0020_connected_office_documents.sql` and
+`packages/db/migrations/0025_office_document_shares.sql`, before deploying the API. The
 standalone Studio harness uses `packages/studio-server/migrations/0016_office_revisions.sql`.
 Deploy the API and multi-entry admin build through the existing deployment workflow.
 The preview deployment prepares and verifies the pinned runtime, packages it with

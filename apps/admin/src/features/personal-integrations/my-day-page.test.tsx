@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { render } from "../studio-engine/test/locale-test-render";
 import userEvent from "@testing-library/user-event";
 import {
   afterEach,

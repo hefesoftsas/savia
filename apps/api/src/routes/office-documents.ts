@@ -23,6 +23,8 @@ const summarySchema = z.object({
   size: z.number().int(),
   version: z.number().int(),
   updatedAt: z.string(),
+  role: z.enum(["owner", "reader", "editor"]),
+  ownerName: z.string(),
 });
 const officeSchema = summarySchema.extend({
   field: z.null(),
@@ -223,6 +225,86 @@ const deleteRoute = createRoute({
     ...disabledResponse,
   },
 });
+const memberSchema = z.object({
+  principalId: z.string(),
+  displayName: z.string(),
+  email: z.string(),
+});
+const membersRoute = createRoute({
+  method: "get",
+  path: "/v1/office-documents/members",
+  tags: ["Office documents"],
+  summary: "Find active members in the current tenant",
+  security,
+  request: {
+    query: z.object({ q: z.string().max(200).optional().default("") }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": { schema: envelope(z.array(memberSchema)) },
+      },
+      description: "Tenant members",
+    },
+    ...disabledResponse,
+  },
+});
+const shareSchema = z.object({
+  principalId: z.string(),
+  role: z.enum(["reader", "editor"]),
+  displayName: z.string(),
+  email: z.string(),
+});
+const sharesRoute = createRoute({
+  method: "get",
+  path: "/v1/office-documents/{id}/shares",
+  tags: ["Office documents"],
+  summary: "List document access grants",
+  security,
+  request: { params: idParam },
+  responses: jsonResponse(
+    z.object({ version: z.number().int(), shares: z.array(shareSchema) }),
+    "Document shares",
+  ),
+});
+const setSharesRoute = createRoute({
+  method: "put",
+  path: "/v1/office-documents/{id}/shares",
+  tags: ["Office documents"],
+  summary: "Replace document access grants",
+  security: writeSecurity,
+  request: {
+    params: idParam,
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            version: z.number().int().positive(),
+            shares: z
+              .array(
+                z.object({
+                  principalId: z.string().min(1),
+                  role: z.enum(["reader", "editor"]),
+                }),
+              )
+              .max(200),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    ...jsonResponse(
+      z.object({ version: z.number().int(), shares: z.array(shareSchema) }),
+      "Updated document shares",
+    ),
+    409: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Shares changed",
+    },
+  },
+});
 
 export function registerOfficeDocumentRoutes(
   app: OpenAPIHono,
@@ -299,6 +381,28 @@ export function registerOfficeDocumentRoutes(
     handler: (context: Context) => Promise<Response>,
   ) => app.openapi(route as never, handler as never);
   register(listRoute, (c) => run(() => service(c).list()));
+  register(membersRoute, (c) =>
+    run(() => service(c).members(c.req.query("q") ?? "")),
+  );
+  register(sharesRoute, (c) =>
+    run(() => service(c).shares(c.req.param("id")!)),
+  );
+  register(setSharesRoute, async (c) => {
+    try {
+      const body = await c.req.json<{
+        version: number;
+        shares: Array<{ principalId: string; role: "reader" | "editor" }>;
+      }>();
+      return await run(() => service(c).setShares(c.req.param("id")!, body));
+    } catch (failure) {
+      if (failure instanceof OfficeDocumentsError)
+        return Response.json(
+          { error: { code: failure.code, message: failure.message } },
+          { status: failure.status, headers: { "cache-control": "no-store" } },
+        );
+      throw failure;
+    }
+  });
   register(createDocumentRoute, async (c) => {
     try {
       const file = (await c.req.formData()).get("file");

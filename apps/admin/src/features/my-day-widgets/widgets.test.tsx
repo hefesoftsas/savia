@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
+import { render } from "../studio-engine/test/locale-test-render";
 import { afterEach, expect, it, vi } from "vitest";
 import { WidgetCard } from "./widgets";
 

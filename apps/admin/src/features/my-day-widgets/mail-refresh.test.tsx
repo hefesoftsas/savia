@@ -3,15 +3,20 @@ import {
   act,
   cleanup,
   fireEvent,
-  render,
-  renderHook,
+  renderHook as renderHookBase,
   screen,
 } from "@testing-library/react";
+import { render } from "../studio-engine/test/locale-test-render";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useMyDayMail, type PersonalMailLike } from "./use-my-day-mail";
 import { ApiClientError } from "@/api/api-client";
 import { MyDayWidgetsSection } from "./section";
 import { MailWidgetBody } from "./mail-widget";
+import { AppLocaleTestWrapper } from "./app-locale-test-wrapper";
+
+function renderHook<Result>(callback: () => Result) {
+  return renderHookBase(callback, { wrapper: AppLocaleTestWrapper });
+}
 
 const message = (id: string) => ({
   id,
