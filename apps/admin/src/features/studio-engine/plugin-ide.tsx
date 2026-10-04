@@ -1,7 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   ArrowLeft,
   Download,
+  MoreHorizontal,
+  MessageSquare,
+  Code2,
+  Eye,
   Play,
   Send,
   Square,
@@ -9,6 +19,15 @@ import {
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { useAppServices } from "@/features/assistant/assistant-context";
@@ -24,12 +43,19 @@ import {
   serializePluginProject,
   type IdeFiles,
 } from "./plugin-ide-project";
+import { readPluginIdeTheme, observePluginIdeTheme } from "./plugin-ide-theme";
 import { createPluginPreviewDocument } from "./plugin-ide-preview";
 import { pluginAuthoringResultSchema } from "@savia/studio-shared/plugin-authoring";
 import "./plugin-ide.css";
 
 import type { ProjectDraft } from "./plugin-project-session";
 
+const wideQuery = "(min-width: 1100px)";
+function subscribeWidth(notify: () => void) {
+  const query = window.matchMedia(wideQuery);
+  query.addEventListener("change", notify);
+  return () => query.removeEventListener("change", notify);
+}
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type Proposal = { message: string; files: IdeFiles };
 type Preview = {
@@ -58,6 +84,13 @@ export default function PluginIde({
   onPublished: () => void | Promise<unknown>;
 }) {
   const t = useMessages(pluginIdeMessages);
+  const wide = useSyncExternalStore(
+    subscribeWidth,
+    () => window.matchMedia(wideQuery).matches,
+    () => false,
+  );
+  const [pane, setPane] = useState<"chat" | "code" | "preview">("chat");
+  const visiblePane = wide && pane === "chat" ? "preview" : pane;
   const locale = useAppLocale();
   const { apiClient } = useAppServices();
   const [files, setFiles] = useState<IdeFiles>(
@@ -97,7 +130,17 @@ export default function PluginIde({
   const savedSnapshot = useRef(snapshot);
   const currentSnapshot = useRef(snapshot);
   currentSnapshot.current = snapshot;
+  const surface = useRef<HTMLElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    if (!surface.current || !preview) return;
+    return observePluginIdeTheme(surface.current, (theme) => {
+      frame.current?.contentWindow?.postMessage(
+        { type: "savia-plugin-ide-theme", session: preview.session, theme },
+        "*",
+      );
+    });
+  }, [preview?.session]);
   const importInput = useRef<HTMLInputElement>(null);
   const controller = useRef<AbortController | null>(null);
   const active = useRef(true);
@@ -231,6 +274,7 @@ export default function PluginIde({
     }
   }
   async function runPreview() {
+    setPane("preview");
     if (busy) return;
     const revision = snapshot;
     setBusy("compile");
@@ -248,6 +292,7 @@ export default function PluginIde({
           compiled.store,
           session,
           locale,
+          readPluginIdeTheme(surface.current ?? document.documentElement),
         ),
         session,
         snapshot: revision,
@@ -344,16 +389,17 @@ export default function PluginIde({
     preview.snapshot === snapshot &&
     (published?.snapshot !== snapshot || published.destination !== destination);
   return (
-    <section className="plugin-ide" aria-label={t("title")}>
+    <section ref={surface} className="plugin-ide" aria-label={t("title")}>
       <header className="plugin-ide-header">
-        <div>
+        <div className="plugin-ide-heading">
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
+            aria-label={t("back")}
             disabled={!!busy}
             onClick={() => {
               if (
-                !!onDraftChange ||
+                onDraftChange ||
                 snapshot === savedSnapshot.current ||
                 window.confirm(t("discardConfirm"))
               )
@@ -361,30 +407,81 @@ export default function PluginIde({
             }}
           >
             <ArrowLeft aria-hidden="true" />
-            {t("back")}
           </Button>
-          <h2 className="mt-3 text-xl font-semibold">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("intro")}</p>
+          <h2>{t("title")}</h2>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="plugin-ide-actions">
           <Button
             variant="outline"
             size="sm"
             disabled={!!busy}
-            onClick={exportProject}
+            aria-label={t("run")}
+            onClick={() => void runPreview()}
           >
-            <Download aria-hidden="true" />
-            {t("export")}
+            <Play aria-hidden="true" />
+            {t("tryPreview")}
           </Button>
           <Button
-            variant="outline"
             size="sm"
-            disabled={!!busy}
-            onClick={() => importInput.current?.click()}
+            disabled={!canPublish}
+            aria-label={t(busy === "publish" ? "publishing" : "publish")}
+            onClick={() => void publish()}
           >
             <Upload aria-hidden="true" />
-            {t("import")}
+            {t(busy === "publish" ? "publishing" : "publishShort")}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t("projectOptions")}
+                disabled={!!busy}
+              >
+                <MoreHorizontal aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {preview && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    currentPreview.current = null;
+                    setPreview(null);
+                  }}
+                >
+                  <Square aria-hidden="true" />
+                  {t("stop")}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onSelect={exportProject}>
+                <Download aria-hidden="true" />
+                {t("export")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => importInput.current?.click()}>
+                <Upload aria-hidden="true" />
+                {t("import")}
+              </DropdownMenuItem>
+              {canPublishShared && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuRadioGroup
+                    aria-label={t("destination")}
+                    value={destination}
+                    onValueChange={(value) =>
+                      setDestination(value as "tenant" | "shared")
+                    }
+                  >
+                    <DropdownMenuRadioItem value="tenant">
+                      {t("tenantStore")}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="shared">
+                      {t("sharedStore")}
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <input
             ref={importInput}
             type="file"
@@ -393,30 +490,38 @@ export default function PluginIde({
             aria-label={t("import")}
             onChange={(event) => void importProject(event.target.files?.[0])}
           />
-          {canPublishShared && (
-            <select
-              aria-label={t("destination")}
-              value={destination}
-              onChange={(event) =>
-                setDestination(event.target.value as "tenant" | "shared")
-              }
-              disabled={!!busy}
-              className="rounded border bg-background p-2 text-sm"
-            >
-              <option value="tenant">{t("tenantStore")}</option>
-              <option value="shared">{t("sharedStore")}</option>
-            </select>
-          )}
-          <Button
-            size="sm"
-            disabled={!canPublish}
-            onClick={() => void publish()}
-          >
-            <Upload aria-hidden="true" />
-            {t(busy === "publish" ? "publishing" : "publish")}
-          </Button>
         </div>
       </header>
+      <nav className="plugin-ide-navigation" aria-label={t("workspaceViews")}>
+        <button
+          type="button"
+          className="plugin-ide-chat-switch"
+          aria-pressed={visiblePane === "chat"}
+          aria-controls="plugin-ide-chat-panel"
+          onClick={() => setPane("chat")}
+        >
+          <MessageSquare aria-hidden="true" />
+          {t("chatTab")}
+        </button>
+        <button
+          type="button"
+          aria-pressed={visiblePane === "code"}
+          aria-controls="plugin-ide-code-panel"
+          onClick={() => setPane("code")}
+        >
+          <Code2 aria-hidden="true" />
+          {t("codeTab")}
+        </button>
+        <button
+          type="button"
+          aria-pressed={visiblePane === "preview"}
+          aria-controls="plugin-ide-preview-panel"
+          onClick={() => setPane("preview")}
+        >
+          <Eye aria-hidden="true" />
+          {t("preview")}
+        </button>
+      </nav>
       {error && (
         <p className="plugin-ide-notice text-destructive" role="alert">
           {error}
@@ -438,10 +543,14 @@ export default function PluginIde({
           </p>
         </div>
       )}
-      <div className="plugin-ide-panes">
-        <aside className="plugin-ide-chat" aria-label={t("chat")}>
+      <div className="plugin-ide-panes" data-pane={visiblePane}>
+        <aside
+          id="plugin-ide-chat-panel"
+          className="plugin-ide-chat"
+          aria-label={t("chat")}
+        >
           <h3 className="font-semibold">{t("chat")}</h3>
-          <p className="text-sm text-muted-foreground">{t("aiHint")}</p>
+
           <div className="plugin-ide-conversation" aria-live="polite">
             {history.map((item, index) => (
               <p
@@ -493,7 +602,7 @@ export default function PluginIde({
               event.preventDefault();
               void generate();
             }}
-            className="mt-auto space-y-2"
+            className="plugin-ide-prompt space-y-3"
           >
             <label htmlFor="plugin-ide-prompt" className="text-sm font-medium">
               {t("prompt")}
@@ -502,7 +611,7 @@ export default function PluginIde({
               id="plugin-ide-prompt"
               value={prompt}
               maxLength={8000}
-              rows={4}
+              rows={5}
               disabled={!!busy}
               placeholder={t("placeholder")}
               onChange={(event) => setPrompt(event.target.value)}
@@ -530,23 +639,28 @@ export default function PluginIde({
               </Button>
             )}
           </form>
+          <p className="plugin-ide-hint">{t("aiHint")}</p>
         </aside>
-        <section className="plugin-ide-code" aria-label={t("files")}>
-          <div
-            className="plugin-ide-file-tabs"
-            role="group"
-            aria-label={t("files")}
-          >
-            {(Object.keys(files) as (keyof IdeFiles)[]).map((name) => (
-              <button
-                type="button"
-                key={name}
-                aria-pressed={selected === name}
-                onClick={() => setSelected(name)}
-              >
-                {name}
-              </button>
-            ))}
+        <section
+          id="plugin-ide-code-panel"
+          className="plugin-ide-code"
+          aria-label={t("files")}
+        >
+          <div className="plugin-ide-file-picker">
+            <label htmlFor="plugin-ide-file">{t("file")}</label>
+            <select
+              id="plugin-ide-file"
+              value={selected}
+              onChange={(event) =>
+                setSelected(event.target.value as keyof IdeFiles)
+              }
+            >
+              {(Object.keys(files) as (keyof IdeFiles)[]).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
           </div>
           <MonacoCodeEditor
             key={selected}
@@ -561,55 +675,35 @@ export default function PluginIde({
             contextDeclarations={pluginIdeDeclarations}
             height={520}
           />
-          <footer className="flex flex-wrap items-center gap-2 border-t p-3">
-            <p className="flex-1 text-xs text-muted-foreground">
-              {t(onDraftChange ? "autosaveHint" : "draft")}
-            </p>
-            {undo && (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={!!busy}
-                onClick={() => {
-                  replaceFiles(undo);
-                  setUndo(null);
-                }}
-              >
-                <Undo2 aria-hidden="true" />
-                {t("undo")}
-              </Button>
-            )}
-          </footer>
+          {(undo || !onDraftChange) && (
+            <footer className="flex flex-wrap items-center gap-2 border-t p-3">
+              {!onDraftChange && (
+                <p className="flex-1 text-xs text-muted-foreground">
+                  {t("draft")}
+                </p>
+              )}
+              {undo && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!!busy}
+                  onClick={() => {
+                    replaceFiles(undo);
+                    setUndo(null);
+                  }}
+                >
+                  <Undo2 aria-hidden="true" />
+                  {t("undo")}
+                </Button>
+              )}
+            </footer>
+          )}
         </section>
-        <section className="plugin-ide-preview" aria-label={t("preview")}>
-          <header className="flex flex-wrap items-center gap-2 border-b p-3">
-            <h3 className="mr-auto font-semibold">{t("preview")}</h3>
-            {preview && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  currentPreview.current = null;
-                  setPreview(null);
-                }}
-                aria-label={t("stop")}
-              >
-                <Square aria-hidden="true" />
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!!busy}
-              onClick={() => void runPreview()}
-            >
-              <Play aria-hidden="true" />
-              {t("run")}
-            </Button>
-          </header>
-          <p className="border-b px-3 py-2 text-xs text-muted-foreground">
-            {t("fixtures")}
-          </p>
+        <section
+          id="plugin-ide-preview-panel"
+          className="plugin-ide-preview"
+          aria-label={t("preview")}
+        >
           {preview ? (
             <iframe
               ref={frame}
@@ -617,6 +711,18 @@ export default function PluginIde({
               title={t("frame")}
               sandbox="allow-scripts"
               referrerPolicy="no-referrer"
+              onLoad={() =>
+                frame.current?.contentWindow?.postMessage(
+                  {
+                    type: "savia-plugin-ide-theme",
+                    session: preview.session,
+                    theme: readPluginIdeTheme(
+                      surface.current ?? document.documentElement,
+                    ),
+                  },
+                  "*",
+                )
+              }
               srcDoc={preview.document}
               className="plugin-ide-frame"
             />

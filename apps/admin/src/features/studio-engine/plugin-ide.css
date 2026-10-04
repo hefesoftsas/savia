@@ -1,98 +1,183 @@
 .plugin-ide {
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  --ide-line: color-mix(in srgb, var(--foreground) 14%, var(--background));
+  --ide-soft: color-mix(in srgb, var(--foreground) 4%, var(--background));
+  --ide-secondary: color-mix(in srgb, var(--foreground) 70%, var(--background));
+  border: 1px solid var(--ide-line);
+  border-radius: var(--radius);
   background: var(--background);
   color: var(--foreground);
   overflow: hidden;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.plugin-ide-header,
+.plugin-ide-heading,
+.plugin-ide-actions,
+.plugin-ide-navigation,
+.plugin-ide-file-picker {
+  display: flex;
+  align-items: center;
 }
 .plugin-ide-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 20px;
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+.plugin-ide-heading {
+  gap: 8px;
+  min-width: 0;
+}
+.plugin-ide-heading h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.plugin-ide-actions {
+  gap: 8px;
+}
+.plugin-ide-navigation {
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--ide-line);
+}
+.plugin-ide-navigation button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--ide-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.plugin-ide-navigation svg {
+  width: 16px;
+  height: 16px;
+}
+.plugin-ide-navigation button[aria-pressed="true"] {
+  color: var(--foreground);
+  border-bottom-color: var(--primary);
+}
+.plugin-ide-navigation button:hover {
+  background: var(--ide-soft);
 }
 .plugin-ide-panes {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
 }
+.plugin-ide-panes > * {
+  min-width: 0;
+}
+.plugin-ide-panes[data-pane="chat"] > :not(.plugin-ide-chat),
+.plugin-ide-panes[data-pane="code"] > :not(.plugin-ide-code),
+.plugin-ide-panes[data-pane="preview"] > :not(.plugin-ide-preview) {
+  display: none;
+}
 .plugin-ide-chat {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  min-width: 0;
-  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  padding: 20px;
+}
+.plugin-ide-chat h3 {
+  font-size: 14px;
 }
 .plugin-ide-conversation {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: 300px;
+  max-height: 340px;
   overflow: auto;
   overflow-wrap: anywhere;
 }
+.plugin-ide-conversation:empty {
+  display: none;
+}
 .plugin-ide-user-message {
-  background: var(--muted);
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: var(--ide-soft);
+  border-radius: var(--radius);
+  padding: 12px;
   font-size: 14px;
   white-space: pre-wrap;
 }
-.plugin-ide-code,
-.plugin-ide-preview {
-  min-width: 0;
+.plugin-ide-prompt textarea {
+  font: inherit;
+  background: var(--background);
+  border-color: var(--ide-line);
+  box-shadow: none;
+  min-height: 120px;
+  caret-color: var(--primary);
 }
-.plugin-ide-file-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  border-bottom: 1px solid var(--border);
-  background: var(--muted);
+.plugin-ide-prompt textarea::placeholder {
+  color: var(--ide-secondary);
 }
-.plugin-ide-file-tabs button {
-  padding: 12px 10px;
+.plugin-ide-hint {
+  color: var(--ide-secondary);
   font-size: 12px;
-  font-family: monospace;
-  border-bottom: 2px solid transparent;
+  line-height: 1.6;
 }
-.plugin-ide-file-tabs button[aria-pressed="true"] {
-  border-bottom-color: var(--primary);
+.plugin-ide-file-picker {
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ide-line);
+  background: var(--ide-soft);
+}
+.plugin-ide-file-picker label {
+  color: var(--ide-secondary);
+  font-size: 12px;
+}
+.plugin-ide-file-picker select {
+  min-width: 0;
+  flex: 1;
+  max-width: 290px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--ide-line);
+  border-radius: calc(var(--radius) - 2px);
   background: var(--background);
   color: var(--foreground);
-}
-.plugin-ide-file-tabs button:hover {
-  background: var(--accent);
+  font:
+    12px ui-monospace,
+    monospace;
 }
 .plugin-ide button:focus-visible,
-.plugin-ide summary:focus-visible {
+.plugin-ide summary:focus-visible,
+.plugin-ide select:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
-.plugin-ide-preview {
-  border-top: 1px solid var(--border);
+.plugin-ide ::selection {
+  background: color-mix(in srgb, var(--primary) 25%, transparent);
+}
+.plugin-ide-conversation,
+.plugin-ide-console pre {
+  scrollbar-color: var(--ide-line) transparent;
+  scrollbar-width: thin;
 }
 .plugin-ide-frame {
   display: block;
   width: 100%;
-  height: 460px;
+  height: clamp(320px, 55dvh, 580px);
   border: 0;
-  background: white;
+  background: var(--background);
 }
 .plugin-ide-preview-empty {
   display: grid;
   place-content: center;
-  min-height: 360px;
+  min-height: 300px;
   padding: 32px;
-  color: var(--muted-foreground);
+  color: var(--ide-secondary);
   font-size: 14px;
   text-align: center;
 }
 .plugin-ide-console {
-  border-top: 1px solid var(--border);
-  padding: 12px;
+  border-top: 1px solid var(--ide-line);
+  padding: 12px 16px;
   font-size: 12px;
+  color: var(--ide-secondary);
 }
 .plugin-ide-console pre,
 .plugin-ide-proposal pre {
@@ -103,7 +188,7 @@
   padding: 8px 0;
 }
 .plugin-ide-proposal {
-  border-block: 1px solid var(--border);
+  border-block: 1px solid var(--ide-line);
   padding-block: 12px;
   font-size: 12px;
 }
@@ -114,28 +199,69 @@
   cursor: pointer;
 }
 .plugin-ide-notice {
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ide-line);
+  font-size: 13px;
   overflow-wrap: anywhere;
-}
-@media (min-width: 1100px) {
-  .plugin-ide-panes {
-    grid-template-columns: minmax(230px, 0.7fr) minmax(320px, 1.2fr) minmax(
-        300px,
-        1fr
-      );
-  }
-  .plugin-ide-chat {
-    border-bottom: 0;
-    border-right: 1px solid var(--border);
-  }
-  .plugin-ide-preview {
-    border-top: 0;
-    border-left: 1px solid var(--border);
-  }
 }
 .plugin-ide .form-html-designer-code {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 12px;
+}
+.plugin-ide .monaco-code-editor-surface {
+  height: clamp(280px, 55dvh, 520px) !important;
+}
+@media (max-width: 599px) {
+  .plugin-ide-header button,
+  .plugin-ide-file-picker select {
+    min-height: 44px;
+  }
+  .plugin-ide-prompt textarea {
+    font-size: 16px;
+  }
+  .plugin-ide-header {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .plugin-ide-heading {
+    flex: 1 1 100%;
+  }
+  .plugin-ide-actions {
+    width: 100%;
+  }
+  .plugin-ide-actions > button:first-child {
+    flex: 1;
+  }
+  .plugin-ide-navigation {
+    padding: 0 8px;
+  }
+  .plugin-ide-navigation button {
+    flex: 1;
+    padding-inline: 8px;
+  }
+  .plugin-ide-chat {
+    padding: 16px;
+  }
+  .plugin-ide-chat h3 {
+    display: none;
+  }
+}
+@media (min-width: 1100px) {
+  .plugin-ide-panes {
+    grid-template-columns: minmax(260px, 0.8fr) minmax(0, 2fr);
+    min-height: 520px;
+  }
+  .plugin-ide .plugin-ide-panes[data-pane] > .plugin-ide-chat {
+    display: flex;
+    border-right: 1px solid var(--ide-line);
+  }
+  .plugin-ide-navigation .plugin-ide-chat-switch {
+    display: none;
+  }
+  .plugin-ide-navigation {
+    justify-content: flex-end;
+  }
+  .plugin-ide-chat .plugin-ide-prompt {
+    margin-top: auto;
+  }
 }

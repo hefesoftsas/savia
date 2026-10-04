@@ -1,5 +1,9 @@
 import type { PluginIdeFixtures } from "./plugin-ide-project";
 import type { StoreJson } from "@savia/studio-shared/plugin-store";
+import {
+  sanitizePluginIdeTheme,
+  type PluginIdeTheme,
+} from "./plugin-ide-theme";
 
 export function createPluginPreviewDocument(
   entryJs: string,
@@ -7,8 +11,10 @@ export function createPluginPreviewDocument(
   store: StoreJson,
   session: string,
   locale: "es" | "en" | "pt",
+  theme?: PluginIdeTheme,
 ): string {
   const previewFixtures = sanitizePreviewValue(fixtures);
+  const previewTheme = sanitizePluginIdeTheme(theme);
   const previewNotice = {
     es: "Vista previa simulada · no se guardan datos",
     en: "Mock preview · no data is saved",
@@ -20,6 +26,7 @@ export function createPluginPreviewDocument(
     store,
     session,
     locale,
+    theme: previewTheme,
   })
     .replaceAll("&", "\\u0026")
     .replaceAll("<", "\\u003c")
@@ -33,7 +40,7 @@ export function createPluginPreviewDocument(
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Savia plugin preview</title>
-  <style>html,body,#root{min-height:100%;margin:0}body{font:14px system-ui,sans-serif;color:#1b2430}.notice{padding:14px 18px;background:#f4f6f8;color:#526070;font-size:12px}#root{padding:12px}pre{white-space:pre-wrap;color:#a00020;padding:16px}</style>
+  <style>html,body,#root{min-height:100%;margin:0}body{font-size:14px;color:#1b2430}.notice{padding:14px 18px;background:#f4f6f8;color:#526070;font-size:12px}#root{padding:12px}pre{white-space:pre-wrap;color:#a00020;padding:16px}</style>
 </head>
 <body>
   <div class="notice">${previewNotice}</div>
@@ -41,6 +48,45 @@ export function createPluginPreviewDocument(
   <script type="application/json" id="preview-payload">${payload}</script>
   <script type="module">
     const payload = JSON.parse(document.getElementById("preview-payload").textContent);
+    const themeColorKeys = ["background", "foreground", "muted", "mutedForeground", "border", "primary"];
+    function safeTheme(value) {
+      if (!value || typeof value !== "object") return null;
+      const theme = {};
+      for (const key of themeColorKeys) {
+        if (typeof value[key] !== "string" || !/^#[0-9a-f]{6}$/i.test(value[key])) return null;
+        theme[key] = value[key];
+      }
+      if (typeof value.fontFamily !== "string" || value.fontFamily.length > 160 || !/^[\\w\\s,'"-]+$/.test(value.fontFamily)) return null;
+      if (typeof value.isDark !== "boolean") return null;
+      theme.fontFamily = value.fontFamily;
+      theme.isDark = value.isDark;
+      return theme;
+    }
+    function applyTheme(value) {
+      const theme = safeTheme(value);
+      if (!theme) return;
+      const root = document.documentElement;
+      root.style.setProperty("--background", theme.background);
+      root.style.setProperty("--foreground", theme.foreground);
+      root.style.setProperty("--muted", theme.muted);
+      root.style.setProperty("--muted-foreground", theme.mutedForeground);
+      root.style.setProperty("--border", theme.border);
+      root.style.setProperty("--primary", theme.primary);
+      root.style.colorScheme = theme.isDark ? "dark" : "light";
+      document.body.style.backgroundColor = theme.background;
+      document.body.style.color = theme.foreground;
+      document.body.style.fontFamily = theme.fontFamily;
+      const notice = document.querySelector(".notice");
+      const background = theme.background.slice(1).match(/.{2}/g).map((channel) => parseInt(channel, 16));
+      const foreground = theme.foreground.slice(1).match(/.{2}/g).map((channel) => parseInt(channel, 16));
+      notice.style.backgroundColor = "#" + background.map((channel, index) => Math.round(channel * 0.94 + foreground[index] * 0.06).toString(16).padStart(2, "0")).join("");
+      notice.style.color = theme.mutedForeground;
+    }
+    applyTheme(payload.theme);
+    window.addEventListener("message", (event) => {
+      if (event.source !== parent || event.data?.type !== "savia-plugin-ide-theme" || event.data?.session !== payload.session) return;
+      applyTheme(event.data.theme);
+    });
     let emittedLogs = 0;
     let emittedErrors = 0;
     let emittedReady = false;

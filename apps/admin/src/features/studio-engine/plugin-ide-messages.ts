@@ -1,4 +1,15 @@
 export const pluginIdeMessages = {
+  tryPreview: ["Probar", "Run", "Testar"],
+  publishShort: ["Publicar", "Publish", "Publicar"],
+  projectOptions: [
+    "Opciones del proyecto",
+    "Project options",
+    "Opções do projeto",
+  ],
+  workspaceViews: ["Vistas del editor", "Editor views", "Vistas do editor"],
+  chatTab: ["Chat", "Chat", "Chat"],
+  codeTab: ["Código", "Code", "Código"],
+  file: ["Archivo", "File", "Arquivo"],
   editSource: ["Editar código", "Edit source", "Editar código"],
   destination: [
     "Destino de publicación",
