@@ -25,7 +25,7 @@ async function executeMigration(sql: string) {
 
 beforeAll(async () => {
   for (const [filename, sql] of migrations) {
-    if (filename.endsWith("0034_zoom_personal_meetings.sql")) break;
+    if (filename.endsWith("0035_zoom_personal_meetings.sql")) break;
     await executeMigration(sql);
   }
   await env.DB.prepare(
@@ -57,7 +57,7 @@ beforeAll(async () => {
       'zoom-migration-principal', 'google_calendar', 'create-event', 'succeeded', 'now')`,
   ).run();
   const zoomMigration = migrations.find(([filename]) =>
-    filename.endsWith("0034_zoom_personal_meetings.sql"),
+    filename.endsWith("0035_zoom_personal_meetings.sql"),
   )?.[1];
   if (!zoomMigration) throw new Error("Zoom migration was not found");
   await executeMigration(zoomMigration);

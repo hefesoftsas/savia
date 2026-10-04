@@ -2,39 +2,28 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AssistantThreadList } from "./assistant-thread-list";
-import type { AssistantThreadRecord } from "./assistant-thread-storage";
+import type { AssistantThreadSummary } from "./assistant-threads-client";
 
-const sampleThreads: AssistantThreadRecord[] = [
+const sampleThreads: AssistantThreadSummary[] = [
   {
     id: "thread-1",
+    userId: "owner",
     title: "¿Cuántos clientes por ciudad?",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    messages: [
-      {
-        id: "msg-1",
-        role: "user",
-        parts: [{ type: "text", text: "¿Cuántos clientes por ciudad?" }],
-      },
-      {
-        id: "msg-2",
-        role: "assistant",
-        parts: [{ type: "text", text: "Hay 42 en Bogotá y 28 en Medellín." }],
-      },
-    ],
+    revision: 2,
+    messageCount: 2,
+    preview: "¿Cuántos clientes por ciudad? Medellín",
   },
   {
     id: "thread-2",
+    userId: "owner",
     title: "Cotizaciones de seguros",
     createdAt: new Date(Date.now() - 3600 * 1000).toISOString(),
     updatedAt: new Date(Date.now() - 3600 * 1000).toISOString(),
-    messages: [
-      {
-        id: "msg-3",
-        role: "user",
-        parts: [{ type: "text", text: "Muestra las cotizaciones aprobadas" }],
-      },
-    ],
+    revision: 1,
+    messageCount: 1,
+    preview: "Muestra las cotizaciones aprobadas",
   },
 ];
 
@@ -112,10 +101,12 @@ describe("AssistantThreadList", () => {
     const searchInput = screen.getByRole("textbox", {
       name: "Buscar conversaciones",
     });
-    await user.type(searchInput, "Medellín");
+    await user.type(searchInput, "Cotizaciones");
 
-    expect(screen.getByText("¿Cuántos clientes por ciudad?")).toBeVisible();
-    expect(screen.queryByText("Cotizaciones de seguros")).not.toBeInTheDocument();
+    expect(screen.getByText("Cotizaciones de seguros")).toBeVisible();
+    expect(
+      screen.queryByText("¿Cuántos clientes por ciudad?"),
+    ).not.toBeInTheDocument();
   });
 
   it("calls onDeleteThread when clicking delete button", async () => {

@@ -37,7 +37,29 @@ function saveStoredThread(thread: AssistantThreadRecord, _userId?: string) {
 function createMockServices(): AppServices {
   return {
     apiClient: {
-      get: vi.fn(async () => ({ threads: [...serverThreads.values()] })),
+      get: vi.fn(async (path: string) => {
+        if (path.split("?", 1)[0] === "/api/assistant/threads") {
+          return {
+            threads: [...serverThreads.values()].map((thread) => ({
+              id: thread.id,
+              userId: thread.userId,
+              title: thread.title,
+              createdAt: thread.createdAt,
+              updatedAt: thread.updatedAt,
+              revision: thread.revision,
+              context: (thread as any).context,
+              messageCount: thread.messages.length,
+              preview:
+                thread.messages
+                  .at(-1)
+                  ?.parts.filter((part) => part.type === "text")
+                  .map((part) => part.text)
+                  .join(" ") ?? "",
+            })),
+          };
+        }
+        return serverThreads.get(decodeURIComponent(path.split("/").pop()!));
+      }),
       put: vi.fn(async (path: string, body: any) => {
         const id = path.split("/").pop()!;
         const old = serverThreads.get(id);

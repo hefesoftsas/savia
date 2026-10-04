@@ -32,9 +32,12 @@ export const assistantThreadWriteSchema = z
   })
   .strict();
 
-export type AssistantThreadContext = z.infer<
+export type AssistantThreadContextInput = z.infer<
   typeof assistantThreadContextSchema
 >;
+export type AssistantThreadContext = AssistantThreadContextInput & {
+  tenantId: number | null;
+};
 export type AssistantThreadMessage = z.infer<
   typeof assistantThreadMessagesSchema
 >[number];
@@ -47,6 +50,10 @@ export type AssistantThread = {
   messages: AssistantThreadMessage[];
   revision: number;
   context?: AssistantThreadContext;
+};
+export type AssistantThreadSummary = Omit<AssistantThread, "messages"> & {
+  messageCount: null;
+  preview: string;
 };
 export type AssistantThreadWrite = z.infer<typeof assistantThreadWriteSchema>;
 
@@ -70,7 +77,7 @@ export class AssistantThreadRepository {
     const { results } = await this.db
       .prepare(
         `SELECT id, user_id, title, created_at, updated_at, messages, revision,
-                context_kind, context_id, context_title
+                context_kind, context_id, context_title, context_tenant_id
          FROM assistant_threads WHERE user_id = ?
          ORDER BY updated_at DESC, id DESC LIMIT 50`,
       )
@@ -79,22 +86,57 @@ export class AssistantThreadRepository {
     return results.map(decodeThread);
   }
 
+  async listSummaries(userId: string): Promise<AssistantThreadSummary[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT id, user_id, title, created_at, updated_at, revision,
+                context_kind, context_id, context_title, context_tenant_id
+         FROM assistant_threads WHERE user_id = ?
+         ORDER BY updated_at DESC, id DESC LIMIT 50`,
+      )
+      .bind(userId)
+      .all<ThreadSummaryRow>();
+    return results.map(decodeThreadSummary);
+  }
+
   async findByContext(
     userId: string,
-    kind: AssistantThreadContext["kind"],
+    kind: AssistantThreadContextInput["kind"],
     id: string,
+    tenantId: number | null,
   ): Promise<AssistantThread | null> {
     const row = await this.db
       .prepare(
         `SELECT id, user_id, title, created_at, updated_at, messages, revision,
-                context_kind, context_id, context_title
+                context_kind, context_id, context_title, context_tenant_id
          FROM assistant_threads
          WHERE user_id = ? AND context_kind = ? AND context_id = ?
+           AND COALESCE(context_tenant_id, -1) = ?
          LIMIT 1`,
       )
-      .bind(userId, kind, id)
+      .bind(userId, kind, id, tenantId ?? -1)
       .first<ThreadRow>();
     return row ? decodeThread(row) : null;
+  }
+
+  async findSummaryByContext(
+    userId: string,
+    kind: AssistantThreadContextInput["kind"],
+    id: string,
+    tenantId: number | null,
+  ): Promise<AssistantThreadSummary | null> {
+    const row = await this.db
+      .prepare(
+        `SELECT id, user_id, title, created_at, updated_at, revision,
+                context_kind, context_id, context_title, context_tenant_id
+         FROM assistant_threads
+         WHERE user_id = ? AND context_kind = ? AND context_id = ?
+           AND COALESCE(context_tenant_id, -1) = ?
+         LIMIT 1`,
+      )
+      .bind(userId, kind, id, tenantId ?? -1)
+      .first<ThreadSummaryRow>();
+    return row ? decodeThreadSummary(row) : null;
   }
 
   async get(userId: string, id: string): Promise<AssistantThread | null> {
@@ -102,7 +144,7 @@ export class AssistantThreadRepository {
     const row = await this.db
       .prepare(
         `SELECT id, user_id, title, created_at, updated_at, messages, revision,
-                context_kind, context_id, context_title
+                context_kind, context_id, context_title, context_tenant_id
          FROM assistant_threads WHERE user_id = ? AND id = ?`,
       )
       .bind(userId, id)
@@ -114,6 +156,7 @@ export class AssistantThreadRepository {
     userId: string,
     id: string,
     input: AssistantThreadWrite,
+    contextTenantId: number | null = null,
   ): Promise<AssistantThread> {
     if (!threadIdSchema.safeParse(id).success)
       throw new TypeError("Invalid conversation identifier.");
@@ -141,8 +184,8 @@ export class AssistantThreadRepository {
           .prepare(
             `INSERT INTO assistant_threads
              (id, user_id, title, created_at, updated_at, messages, revision,
-              context_kind, context_id, context_title)
-             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+              context_kind, context_id, context_title, context_tenant_id)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
           )
           .bind(
             id,
@@ -154,6 +197,7 @@ export class AssistantThreadRepository {
             context?.kind ?? null,
             context?.id ?? null,
             context?.title ?? null,
+            context ? contextTenantId : null,
           )
           .run();
       } catch (error) {
@@ -168,10 +212,12 @@ export class AssistantThreadRepository {
         if (
           context &&
           (context.kind !== existing.context.kind ||
-            context.id !== existing.context.id)
+            context.id !== existing.context.id ||
+            contextTenantId !== existing.context.tenantId)
         )
           throw new AssistantThreadConflictError();
         context = existing.context;
+        contextTenantId = existing.context.tenantId;
       }
       let result: D1Result;
       try {
@@ -179,7 +225,8 @@ export class AssistantThreadRepository {
           .prepare(
             `UPDATE assistant_threads
              SET title = ?, updated_at = ?, messages = ?, revision = revision + 1,
-                 context_kind = ?, context_id = ?, context_title = ?
+                 context_kind = ?, context_id = ?, context_title = ?,
+                 context_tenant_id = ?
              WHERE id = ? AND user_id = ? AND revision = ?`,
           )
           .bind(
@@ -189,6 +236,7 @@ export class AssistantThreadRepository {
             context?.kind ?? null,
             context?.id ?? null,
             context?.title ?? null,
+            context ? contextTenantId : null,
             id,
             userId,
             parsed.expectedRevision,
@@ -232,7 +280,33 @@ type ThreadRow = {
   context_kind: "recording" | "session" | null;
   context_id: string | null;
   context_title: string | null;
+  context_tenant_id: number | null;
 };
+
+type ThreadSummaryRow = Omit<ThreadRow, "messages">;
+
+function decodeThreadSummary(row: ThreadSummaryRow): AssistantThreadSummary {
+  const context =
+    row.context_kind && row.context_id && row.context_title
+      ? {
+          kind: row.context_kind,
+          id: row.context_id,
+          title: row.context_title,
+          tenantId: row.context_tenant_id,
+        }
+      : undefined;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    revision: row.revision,
+    messageCount: null,
+    preview: "",
+    ...(context ? { context } : {}),
+  };
+}
 
 function decodeThread(row: ThreadRow): AssistantThread {
   let messages: unknown;
@@ -247,6 +321,7 @@ function decodeThread(row: ThreadRow): AssistantThread {
           kind: row.context_kind,
           id: row.context_id,
           title: row.context_title,
+          tenantId: row.context_tenant_id,
         }
       : undefined;
   return {

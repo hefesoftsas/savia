@@ -58,6 +58,7 @@ export type AssistantRouteDependencies = {
     kind: "recording" | "session";
     title: string;
     content: string;
+    tenantId: number | null;
   }>;
 };
 
@@ -110,20 +111,49 @@ export function registerAssistantRoutes(
         },
         400,
       );
-    const matching =
-      kind && id
-        ? await repo.findByContext(
-            actor.principal.id,
-            kind as "recording" | "session",
+    let matching: Awaited<ReturnType<typeof repo.findSummaryByContext>> = null;
+    if (kind && id) {
+      if (!dependencies.loadThreadContext)
+        return context.json(
+          {
+            error: {
+              code: "ASSISTANT_UNAVAILABLE",
+              message: "Conversation context is unavailable",
+            },
+          },
+          503,
+        );
+      try {
+        const source = await dependencies.loadThreadContext(
+          actor,
+          context.req.raw,
+          {
+            kind: kind as "recording" | "session",
             id,
-          )
-        : null;
+            title: "Context lookup",
+          },
+        );
+        matching = await repo.findSummaryByContext(
+          actor.principal.id,
+          kind as "recording" | "session",
+          id,
+          source.tenantId,
+        );
+      } catch (error) {
+        if (error instanceof CompanionError)
+          return context.json(
+            { error: { code: error.code, message: error.message } },
+            error.status,
+          );
+        throw error;
+      }
+    }
     const threads =
       kind && id
         ? matching
           ? [matching]
           : []
-        : await repo.list(actor.principal.id);
+        : await repo.listSummaries(actor.principal.id);
     return context.json({ threads });
   });
 
@@ -156,10 +186,39 @@ export function registerAssistantRoutes(
         400,
       );
     try {
+      let contextTenantId: number | null = null;
+      if (parsed.data.context) {
+        if (!dependencies.loadThreadContext)
+          return context.json(
+            {
+              error: {
+                code: "ASSISTANT_UNAVAILABLE",
+                message: "Conversation context is unavailable",
+              },
+            },
+            503,
+          );
+        try {
+          const resolved = await dependencies.loadThreadContext(
+            actor,
+            context.req.raw,
+            parsed.data.context,
+          );
+          contextTenantId = resolved.tenantId;
+        } catch (error) {
+          if (error instanceof CompanionError)
+            return context.json(
+              { error: { code: error.code, message: error.message } },
+              error.status,
+            );
+          throw error;
+        }
+      }
       const thread = await new AssistantThreadRepository(dependencies.db).save(
         actor.principal.id,
         context.req.param("id"),
         parsed.data,
+        contextTenantId,
       );
       return context.json(thread);
     } catch (error) {
@@ -233,11 +292,11 @@ export function registerAssistantRoutes(
     const actor = actorFromContext(context);
     try {
       let trustedContext:
-        | Awaited<
-            ReturnType<
-              NonNullable<AssistantRouteDependencies["loadThreadContext"]>
-            >
-          >
+        | {
+            kind: "recording" | "session";
+            title: string;
+            content: string;
+          }
         | undefined;
       if (parsed.data.threadId) {
         if (!dependencies?.db)
@@ -271,11 +330,27 @@ export function registerAssistantRoutes(
               503,
             );
           try {
-            trustedContext = await dependencies.loadThreadContext(
+            const resolved = await dependencies.loadThreadContext(
               actor,
               context.req.raw,
               thread.context,
             );
+            if (resolved.tenantId !== thread.context.tenantId)
+              return context.json(
+                {
+                  error: {
+                    code: "CONTEXT_WORKSPACE_MISMATCH",
+                    message:
+                      "This conversation belongs to a different workspace.",
+                  },
+                },
+                409,
+              );
+            trustedContext = {
+              kind: resolved.kind,
+              title: resolved.title,
+              content: resolved.content,
+            };
           } catch (error) {
             if (error instanceof CompanionError)
               return context.json(
