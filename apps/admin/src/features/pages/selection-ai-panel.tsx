@@ -17,6 +17,8 @@ import {
 import { useMessages } from "@/i18n/core";
 import { selectionAIMessages } from "./selection-ai-messages";
 import { requestSelectionAI } from "./selection-ai-request";
+import { translationLabels, translationVariants } from "./translation-variants";
+import { translationEmployeeTemplate } from "../personal-integrations/translation-employee-template";
 
 export function SelectionAIPanel({
   api,
@@ -34,6 +36,8 @@ export function SelectionAIPanel({
   const t = useMessages(selectionAIMessages);
   const id = useId();
   const [employees, setEmployees] = useState<VirtualEmployee[]>([]);
+  const [creatingTranslator, setCreatingTranslator] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState(0);
   const [employeeId, setEmployeeId] = useState("");
   const [employeesError, setEmployeesError] = useState(false);
   const [employeesLoading, setEmployeesLoading] = useState(true);
@@ -43,7 +47,11 @@ export function SelectionAIPanel({
   const [running, setRunning] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<
-    "Request failed" | "Selection changed" | "Copy failed" | null
+    | "Request failed"
+    | "Selection changed"
+    | "Copy failed"
+    | "Translator failed"
+    | null
   >(null);
   const [copied, setCopied] = useState(false);
   const controller = useRef<AbortController | null>(null);
@@ -55,10 +63,7 @@ export function SelectionAIPanel({
     new VirtualEmployeesClient(api)
       .list()
       .then((items) => {
-        if (active)
-          setEmployees(
-            items.filter((employee) => employee.status === "active"),
-          );
+        if (active) setEmployees(items);
       })
       .catch(() => {
         if (active) setEmployeesError(true);
@@ -94,6 +99,7 @@ export function SelectionAIPanel({
     setResponse("");
     setError(null);
     setCopied(false);
+    setSelectedVariant(0);
     try {
       const result = await requestSelectionAI(api, {
         text,
@@ -122,16 +128,36 @@ export function SelectionAIPanel({
   }
   function apply(mode: "replace" | "insert") {
     if (!complete || running) return;
-    if (onApply(response, mode)) onClose();
+    if (onApply(appliedText, mode)) onClose();
     else setError("Selection changed");
   }
   async function copy() {
     try {
-      await navigator.clipboard.writeText(response);
+      await navigator.clipboard.writeText(appliedText);
       setCopied(true);
       setError(null);
     } catch {
       setError("Copy failed");
+    }
+  }
+
+  const variants = complete ? translationVariants(response) : null;
+  const appliedText = variants?.[selectedVariant] ?? response;
+  async function createTranslator() {
+    if (creatingTranslator) return;
+    setCreatingTranslator(true);
+    setError(null);
+    try {
+      const data = await new VirtualEmployeesClient(api).create(
+        translationEmployeeTemplate,
+      );
+      setEmployees((items) => [...items, data]);
+      setEmployeeId(data.id);
+      setInstruction(t("Translator prompt"));
+    } catch {
+      setError("Translator failed");
+    } finally {
+      setCreatingTranslator(false);
     }
   }
 
@@ -169,15 +195,42 @@ export function SelectionAIPanel({
               value={employeeId}
               onChange={(event) => {
                 setEmployeeId(event.target.value);
+                if (
+                  employees.find(
+                    (employee) => employee.id === event.target.value,
+                  )?.handle === "traductor"
+                )
+                  setInstruction(t("Translator prompt"));
               }}
             >
               <option value="">{t("Connected model")}</option>
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.name} (@{employee.handle})
-                </option>
-              ))}
+              {employees
+                .filter((employee) => employee.status === "active")
+                .map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name} (@{employee.handle})
+                  </option>
+                ))}
             </select>
+            {!employeesLoading &&
+              !employeesError &&
+              !employees.some(
+                (employee) => employee.handle === "traductor",
+              ) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={running || creatingTranslator}
+                  onClick={() => void createTranslator()}
+                >
+                  {t(
+                    creatingTranslator
+                      ? "Creating translator"
+                      : "Create translator",
+                  )}
+                </Button>
+              )}
             {employeesError && (
               <div className="text-muted-foreground text-sm">
                 <p role="status">{t("Employees failed")}</p>
@@ -216,7 +269,18 @@ export function SelectionAIPanel({
                     size="sm"
                     variant="outline"
                     disabled={running}
-                    onClick={() => setInstruction(t(`${action} prompt`))}
+                    onClick={() =>
+                      setInstruction(
+                        t(
+                          action === "Translate" &&
+                            employees.find(
+                              (employee) => employee.id === employeeId,
+                            )?.handle === "traductor"
+                            ? "Translator prompt"
+                            : `${action} prompt`,
+                        ),
+                      )
+                    }
                   >
                     {t(action)}
                   </Button>
@@ -224,7 +288,10 @@ export function SelectionAIPanel({
               )}
             </div>
             <div className="flex items-center gap-3">
-              <Button type="submit" disabled={running || !instruction.trim()}>
+              <Button
+                type="submit"
+                disabled={running || creatingTranslator || !instruction.trim()}
+              >
                 {t("Generate")}
               </Button>
               {running && (
@@ -239,6 +306,11 @@ export function SelectionAIPanel({
               {t("Generating")}
             </p>
           )}
+          {complete && (
+            <p role="status" className="sr-only">
+              {t("Response ready")}
+            </p>
+          )}
           {error && (
             <p role="alert" className="text-destructive text-sm">
               {t(error)}
@@ -251,9 +323,43 @@ export function SelectionAIPanel({
               aria-busy={running}
             >
               <h3 className="text-sm font-medium">{t("Response")}</h3>
-              <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                {response}
-              </div>
+              {variants ? (
+                <fieldset className="space-y-2">
+                  <legend className="mb-2 text-sm text-muted-foreground">
+                    {t("Choose translation")}
+                  </legend>
+                  {variants.map((variant, index) => (
+                    <label
+                      key={translationLabels[index]}
+                      className="flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[:checked]:border-primary has-[:checked]:bg-accent"
+                    >
+                      <input
+                        type="radio"
+                        name={`${id}-variant`}
+                        aria-label={t(translationLabels[index])}
+                        checked={selectedVariant === index}
+                        onChange={() => {
+                          setSelectedVariant(index);
+                          setCopied(false);
+                        }}
+                        className="mt-1 shrink-0 accent-primary"
+                      />
+                      <span className="min-w-0 space-y-1">
+                        <span className="block text-sm font-medium">
+                          {t(translationLabels[index])}
+                        </span>
+                        <span className="block whitespace-pre-wrap break-words text-sm leading-relaxed">
+                          {variant}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+              ) : (
+                <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                  {response}
+                </div>
+              )}
               {complete && (
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={() => apply("replace")}>

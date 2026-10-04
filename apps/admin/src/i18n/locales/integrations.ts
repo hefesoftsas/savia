@@ -205,9 +205,9 @@ export const personalIntegrationsMessages = {
   ],
   "en el chat, con acceso scoped a colecciones y base de conocimiento Cloudflare RAG.":
     [
-      "en el chat, con acceso scoped a colecciones y base de conocimiento Cloudflare RAG.",
-      "in chat, with scoped access to collections and the Cloudflare RAG knowledge base.",
-      "no chat, com acesso com escopo a coleções e à base de conhecimento Cloudflare RAG.",
+      "en el chat, en modo de solo texto o con acceso limitado a las colecciones y documentos que autorices.",
+      "in chat, in text-only mode or with scoped access to collections and documents you authorize.",
+      "no chat, no modo somente texto ou com acesso limitado às coleções e aos documentos que você autorizar.",
     ],
   "Nuevo Empleado": ["Nuevo Empleado", "New Employee", "Novo Funcionário"],
   "Buscar empleado por nombre o @handle...": [
@@ -227,9 +227,9 @@ export const personalIntegrationsMessages = {
   ],
   "Crea tu primer empleado virtual asignándole un rol, colecciones permitidas y documentos para potenciar tu equipo.":
     [
-      "Crea tu primer empleado virtual asignándole un rol, colecciones permitidas y documentos para potenciar tu equipo.",
-      "Create your first virtual employee by assigning a role, allowed collections, and documents to boost your team.",
-      "Crie seu primeiro funcionário virtual atribuindo uma função, coleções permitidas e documentos para impulsionar sua equipe.",
+      "Crea tu primer empleado virtual con instrucciones de solo texto o acceso limitado a datos y documentos de trabajo.",
+      "Create your first virtual employee with text-only instructions or scoped access to workspace data and documents.",
+      "Crie seu primeiro funcionário virtual com instruções somente de texto ou acesso limitado aos dados e documentos de trabalho.",
     ],
   "Crear Empleado": ["Crear Empleado", "Create Employee", "Criar Funcionário"],
   Activo: ["Activo", "Active", "Ativo"],
@@ -260,11 +260,45 @@ export const personalIntegrationsMessages = {
     "New AI Virtual Employee",
     "Novo Funcionário Virtual de IA",
   ],
-  "Configura el perfil, personalidad, colecciones accesibles y base de conocimiento Cloudflare RAG.":
+  "Plantilla: Traductor español → inglés": [
+    "Plantilla: Traductor español → inglés",
+    "Template: Spanish → English translator",
+    "Modelo: Tradutor espanhol → inglês",
+  ],
+  "Modo del empleado": [
+    "Modo del empleado",
+    "Employee mode",
+    "Modo do funcionário",
+  ],
+  "Solo texto": ["Solo texto", "Text only", "Somente texto"],
+  "Workspace tools": [
+    "Herramientas del espacio de trabajo",
+    "Workspace tools",
+    "Ferramentas do espaço de trabalho",
+  ],
+  "Elige si el empleado usará solo el texto que recibe o también las herramientas y los datos de trabajo que autorices.":
     [
-      "Configura el perfil, personalidad, colecciones accesibles y base de conocimiento Cloudflare RAG.",
-      "Configure the profile, personality, accessible collections, and Cloudflare RAG knowledge base.",
-      "Configure o perfil, a personalidade, as coleções acessíveis e a base de conhecimento Cloudflare RAG.",
+      "Elige si el empleado usará solo el texto que recibe o también las herramientas y los datos de trabajo que autorices.",
+      "Choose whether the employee uses only supplied text or also the workspace tools and data you authorize.",
+      "Escolha se o funcionário usará somente o texto fornecido ou também as ferramentas e os dados de trabalho que você autorizar.",
+    ],
+  "Solo se procesa el texto y las instrucciones proporcionadas. No se usan colecciones, documentos ni herramientas del espacio de trabajo.":
+    [
+      "Solo se procesa el texto y las instrucciones proporcionadas. No se usan colecciones, documentos ni herramientas del espacio de trabajo.",
+      "Only the supplied text and instructions are processed. Workspace collections, documents, and tools are not used.",
+      "Somente o texto e as instruções fornecidos são processados. Coleções, documentos e ferramentas do espaço de trabalho não são usados.",
+    ],
+  "El empleado puede usar las colecciones y los documentos que autorices en las pestañas de acceso del espacio de trabajo.":
+    [
+      "El empleado puede usar las colecciones y los documentos que autorices en las pestañas de acceso del espacio de trabajo.",
+      "The employee can use the collections and documents you authorize in the workspace access tabs.",
+      "O funcionário pode usar as coleções e os documentos que você autorizar nas abas de acesso do espaço de trabalho.",
+    ],
+  "Elige al menos una colección o activa el acceso a todas las colecciones para usar Workspace tools.":
+    [
+      "Elige al menos una colección o activa el acceso a todas las colecciones para usar Workspace tools.",
+      "Choose at least one collection or enable all-collection access to use Workspace tools.",
+      "Escolha pelo menos uma coleção ou habilite o acesso a todas as coleções para usar as ferramentas do espaço de trabalho.",
     ],
   Perfil: ["Perfil", "Profile", "Perfil"],
   "Rol & Prompt": ["Rol & Prompt", "Role & Prompt", "Função e Prompt"],

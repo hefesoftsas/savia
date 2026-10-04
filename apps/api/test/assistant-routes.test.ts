@@ -275,6 +275,35 @@ describe("assistant routes", () => {
     );
   });
 
+  it("forwards responseMode text to the assistant service", async () => {
+    const service = createAssistantService();
+    const response = await createAssistantApp(service).request(
+      "http://api.savia.test/api/assistant/chat",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer current-user-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          responseMode: "text",
+          messages: [
+            {
+              id: "message-1",
+              role: "user",
+              parts: [{ type: "text", text: "Translate this into Spanish" }],
+            },
+          ],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(service.chat).toHaveBeenCalledWith(
+      expect.objectContaining({ responseMode: "text" }),
+    );
+  });
+
   it("allows a read-scoped OAuth token to start an assistant chat", async () => {
     const service = createAssistantService();
     const response = await createReadScopedAssistantApp(service).request(
