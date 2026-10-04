@@ -520,6 +520,28 @@ export const bookingMessages = {
     "Join video meeting",
     "Entrar na videochamada",
   ],
+  "Generate video link": [
+    "Generar enlace de videollamada",
+    "Generate video link",
+    "Gerar link de videochamada",
+  ],
+  "Generating video link…": [
+    "Generando enlace de videollamada…",
+    "Generating video link…",
+    "Gerando link de videochamada…",
+  ],
+  "Connect an eligible Google Calendar or Outlook calendar to generate a video link.":
+    [
+      "Conecta un calendario de Google Calendar u Outlook compatible para generar un enlace de videollamada.",
+      "Connect an eligible Google Calendar or Outlook calendar to generate a video link.",
+      "Conecte um calendário compatível do Google Calendar ou Outlook para gerar um link de videochamada.",
+    ],
+  "Video meeting link request failed. Check the calendar connection and retry.":
+    [
+      "No se pudo solicitar el enlace de videollamada. Revisa la conexión del calendario e inténtalo de nuevo.",
+      "Video meeting link request failed. Check the calendar connection and retry.",
+      "Não foi possível solicitar o link da videochamada. Verifique a conexão do calendário e tente novamente.",
+    ],
   "Video meeting link is being prepared. Refresh to check again.": [
     "Se está preparando el enlace de videollamada. Actualiza para comprobarlo de nuevo.",
     "Video meeting link is being prepared. Refresh to check again.",

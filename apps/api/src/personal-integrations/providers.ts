@@ -34,7 +34,7 @@ const providerTemplates: readonly ProviderTemplate[] = [
   {
     id: "google_calendar",
     displayName: "Google Calendar",
-    capabilities: ["events:read", "events:create"],
+    capabilities: ["events:read", "events:create", "events:delete"],
     integrationId: (configuration) =>
       configured(configuration.googleCalendarIntegrationId),
   },
@@ -46,6 +46,7 @@ const providerTemplates: readonly ProviderTemplate[] = [
       "messages:send",
       "events:read",
       "events:create",
+      "events:delete",
     ],
     integrationId: (configuration) =>
       configured(configuration.outlookIntegrationId),

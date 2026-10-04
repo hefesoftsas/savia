@@ -68,6 +68,7 @@ export type PersonalIntegrationConnectSession = {
 
 export type PersonalCalendarEvent = {
   id: string;
+  connectionId?: string;
   title: string | null;
   startsAt: string | null;
   endsAt: string | null;
@@ -402,6 +403,24 @@ export class PersonalIntegrationsClient {
         input,
       )
     ).data;
+  }
+
+  async deleteCalendarEvent(input: {
+    provider: PersonalCalendarProvider;
+    eventId: string;
+    connectionId: string;
+  }): Promise<void> {
+    await this.api.delete(
+      `/v1/personal-integrations/events/${encodeURIComponent(input.provider)}/${encodeURIComponent(input.eventId)}`,
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmed: true,
+          connectionId: input.connectionId,
+        }),
+      },
+    );
+    this.eventsInflight.clear();
   }
 
   async previewIssue(url: string): Promise<PersonalIssuePreview> {

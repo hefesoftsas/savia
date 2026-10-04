@@ -39,6 +39,24 @@ export const calendarMessages = {
     "Open bookings in tenant",
     "Abrir reservas na organização",
   ],
+  "Delete event": ["Eliminar evento", "Delete event", "Excluir evento"],
+  "Confirm delete": [
+    "Confirmar eliminación",
+    "Confirm delete",
+    "Confirmar exclusão",
+  ],
+  "This permanently removes the event from your connected calendar.": [
+    "Esto elimina el evento de forma permanente de tu calendario conectado.",
+    "This permanently removes the event from your connected calendar.",
+    "Isso remove permanentemente o evento do seu calendário conectado.",
+  ],
+  "Could not delete this event. Try again.": [
+    "No se pudo eliminar el evento. Inténtalo de nuevo.",
+    "Could not delete this event. Try again.",
+    "Não foi possível excluir o evento. Tente novamente.",
+  ],
+  "Deleting…": ["Eliminando…", "Deleting…", "Excluindo…"],
+  Cancel: ["Cancelar", "Cancel", "Cancelar"],
   Day: ["Día", "Day", "Dia"],
   Week: ["Semana", "Week", "Semana"],
   Month: ["Mes", "Month", "Mês"],
@@ -191,7 +209,6 @@ export const calendarMessages = {
   "Delete %{name}": ["Eliminar %{name}", "Delete %{name}", "Excluir %{name}"],
   Name: ["Nombre", "Name", "Nome"],
   Save: ["Guardar", "Save", "Salvar"],
-  Cancel: ["Cancelar", "Cancel", "Cancelar"],
   "Could not read file": [
     "No pudimos leer el archivo.",
     "We could not read the file.",

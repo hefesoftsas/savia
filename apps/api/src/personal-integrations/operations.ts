@@ -40,6 +40,7 @@ export type PersonalMessage = {
 
 export type PersonalEvent = {
   id: string;
+  connectionId?: string;
   title: string | null;
   startsAt: string | null;
   endsAt: string | null;
@@ -60,6 +61,8 @@ const calendarRangeMaxMilliseconds = 62 * 24 * 60 * 60 * 1000;
 const googleVideoCallProperty = "saviaVideoCall";
 const outlookVideoCallPropertyId =
   "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaVideoCall";
+const outlookBookingPropertyId =
+  "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ab} Name SaviaBookingId";
 const outlookVideoCallExpand = `singleValueExtendedProperties($filter=id eq '${outlookVideoCallPropertyId}')`;
 
 // Microsoft Graph returns Windows timezone IDs. Keep this small, explicit map
@@ -2052,6 +2055,103 @@ export class PersonalIntegrationOperations {
     );
   }
 
+  async deleteCalendarEvent(input: {
+    principalId: string;
+    provider: "google_calendar" | "outlook";
+    eventId: string;
+    expectedConnectionId?: string;
+  }): Promise<void> {
+    if (
+      !input.eventId ||
+      input.eventId.length > 255 ||
+      input.eventId.trim() !== input.eventId ||
+      /[\u0000-\u001f\u007f]/.test(input.eventId)
+    )
+      return invalidAction("The calendar event id is invalid");
+    const connection = await this.connectedConnection(
+      input.principalId,
+      input.provider,
+    );
+    if (
+      input.expectedConnectionId &&
+      connection.id !== input.expectedConnectionId
+    )
+      throw new PersonalIntegrationUnavailableError(
+        "The personal integration connection changed; refresh the calendar and try again",
+      );
+    const outlookParameters = new URLSearchParams({
+      $select: "id,type,singleValueExtendedProperties",
+      $expand: `singleValueExtendedProperties($filter=id eq '${outlookBookingPropertyId}')`,
+    });
+    const deletePath =
+      input.provider === "google_calendar"
+        ? `/calendar/v3/calendars/primary/events/${encodeURIComponent(input.eventId)}`
+        : `/v1.0/me/events/${encodeURIComponent(input.eventId)}`;
+    const detailsPath =
+      input.provider === "google_calendar"
+        ? deletePath
+        : `${deletePath}?${outlookParameters}`;
+    let detailsResponse: Response;
+    try {
+      detailsResponse = await this.nango.proxy({
+        method: "GET",
+        path: detailsPath,
+        connection,
+        ...(input.provider === "outlook"
+          ? { upstreamHeaders: outlookUtcPreference }
+          : {}),
+      });
+    } catch {
+      throw new PersonalIntegrationUpstreamError();
+    }
+    if (!detailsResponse.ok) throw new PersonalIntegrationUpstreamError();
+    const details = await detailsResponse.json().catch(() => undefined);
+    if (!details || typeof details !== "object" || Array.isArray(details))
+      throw new PersonalIntegrationUpstreamError();
+    const event = details as Record<string, unknown>;
+    if (event.id !== input.eventId)
+      throw new PersonalIntegrationUpstreamError();
+    if (
+      (input.provider === "google_calendar" &&
+        Array.isArray(event.recurrence) &&
+        event.recurrence.length > 0) ||
+      (input.provider === "outlook" && event.type === "seriesMaster")
+    )
+      return invalidAction("Recurring calendar series cannot be deleted here");
+    if (
+      input.provider === "outlook" &&
+      !["singleInstance", "occurrence", "exception"].includes(
+        event.type as string,
+      )
+    )
+      return invalidAction("This Outlook event type cannot be deleted here");
+    if (
+      input.provider === "outlook" &&
+      Array.isArray(event.singleValueExtendedProperties) &&
+      event.singleValueExtendedProperties.some((property) => {
+        if (
+          !property ||
+          typeof property !== "object" ||
+          Array.isArray(property)
+        )
+          return false;
+        const item = property as Record<string, unknown>;
+        return item.id === outlookBookingPropertyId;
+      })
+    )
+      return invalidAction(
+        "Savia booking events must be cancelled from bookings",
+      );
+
+    await this.write(connection, "delete-event", {
+      method: "DELETE",
+      path: deletePath,
+      ...(input.provider === "outlook"
+        ? { upstreamHeaders: outlookUtcPreference }
+        : {}),
+    });
+  }
+
   async createCalendarEvent(input: {
     principalId: string;
     provider: "google_calendar" | "outlook";
@@ -2143,7 +2243,7 @@ export class PersonalIntegrationOperations {
         ? eventsFromGoogle({ items: [payload] }, false, videoCallMarker)[0]
         : eventsFromOutlook({ value: [payload] }, false, videoCallMarker)[0];
     if (!event) throw new PersonalIntegrationUpstreamError();
-    return event;
+    return { ...event, connectionId: connection.id };
   }
 
   private async conferenceCapability(
@@ -2331,9 +2431,9 @@ export class PersonalIntegrationOperations {
 
   private async write(
     connection: ActivePersonalIntegrationConnection,
-    eventType: "send-email" | "create-event" | "upload-file",
+    eventType: "send-email" | "create-event" | "delete-event" | "upload-file",
     request: {
-      method: "POST" | "PUT";
+      method: "POST" | "PUT" | "DELETE";
       path: string;
       body?: unknown;
       rawBody?: string | Uint8Array<ArrayBuffer>;

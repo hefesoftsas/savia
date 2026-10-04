@@ -28,14 +28,19 @@ function createClient(
 ) {
   return {
     listConnections: vi.fn().mockResolvedValue([
-      { status: "connected", provider: "google_calendar" },
-      { status: "connected", provider: "outlook" },
+      {
+        id: "google-connection",
+        status: "connected",
+        provider: "google_calendar",
+      },
+      { id: "outlook-connection", status: "connected", provider: "outlook" },
     ]),
     listEvents: vi.fn(({ provider }) =>
       Promise.resolve(provider === eventProvider ? events : []),
     ),
     createCalendarEvent: vi.fn().mockResolvedValue({
       id: "created-1",
+      connectionId: "outlook-connection",
       title: "Planning",
       startsAt: "2026-10-04T15:00:00.000Z",
       endsAt: "2026-10-04T15:30:00.000Z",
@@ -46,6 +51,7 @@ function createClient(
         status: "ready",
       },
     }),
+    deleteCalendarEvent: vi.fn().mockResolvedValue(undefined),
     listBookingAgenda: vi.fn().mockResolvedValue([]),
   } as unknown as PersonalIntegrationsLike;
 }
@@ -77,6 +83,33 @@ afterEach(() => {
 });
 
 describe("My Day video calls", () => {
+  it("can delete a newly created event immediately using its originating connection", async () => {
+    const user = userEvent.setup();
+    const client = createClient();
+    renderApp(client);
+
+    await user.type(screen.getByLabelText("Task"), "Planning");
+    await user.click(screen.getByLabelText("Create a video call"));
+    await user.selectOptions(
+      screen.getByLabelText("Calendar for the video call"),
+      "outlook",
+    );
+    await user.click(screen.getByRole("button", { name: "Create task" }));
+    await user.click(screen.getByRole("button", { name: "Confirm creation" }));
+
+    await user.click(await screen.findByRole("button", { name: /Planning/ }));
+    await user.click(screen.getByRole("button", { name: "Delete event" }));
+    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+
+    await waitFor(() =>
+      expect(client.deleteCalendarEvent).toHaveBeenCalledWith({
+        provider: "outlook",
+        eventId: "created-1",
+        connectionId: "outlook-connection",
+      }),
+    );
+  });
+
   it("confirms and creates one call in the selected calendar", async () => {
     const user = userEvent.setup();
     const client = createClient();

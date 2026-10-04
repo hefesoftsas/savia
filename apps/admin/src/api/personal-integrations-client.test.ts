@@ -120,6 +120,28 @@ it("requests a video conference only when creating a video call", async () => {
   });
 });
 
+it("deletes a calendar event only after confirmed deletion and uses an encoded event id", async () => {
+  const remove = vi.fn().mockResolvedValue({ data: { deleted: true } });
+  const client = new PersonalIntegrationsClient({ delete: remove } as never);
+
+  await client.deleteCalendarEvent({
+    provider: "outlook",
+    eventId: "event/part?other&value",
+    connectionId: "calendar-connection-1",
+  });
+
+  expect(remove).toHaveBeenCalledWith(
+    "/v1/personal-integrations/events/outlook/event%2Fpart%3Fother%26value",
+    {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmed: true,
+        connectionId: "calendar-connection-1",
+      }),
+    },
+  );
+});
+
 it("invalidates cached connections and notifies Pages after a successful connection", async () => {
   const connection = {
     id: "jira-1",

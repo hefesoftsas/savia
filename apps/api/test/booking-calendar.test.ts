@@ -243,6 +243,118 @@ describe("booking calendar adapter", () => {
     ).rejects.toThrow(/unavailable/i);
   });
 
+  it.each([true, false])(
+    "retries failed Meet provisioning with a new request id (saved event: %s)",
+    async (savedEvent) => {
+      await seedConnection();
+      const previousId =
+        "d7a6e686c2668884465fd3a23e4009e673b937b412fd3a4e05f50d07f3506ba3";
+      let requestId = previousId;
+      let statusCode = "failure";
+      const requests: string[] = [];
+      const nango = fakeNango(async ({ method, path, body }) => {
+        if (path === "/calendar/v3/calendars/primary")
+          return Response.json({
+            conferenceProperties: {
+              allowedConferenceSolutionTypes: ["hangoutsMeet"],
+            },
+          });
+        if (method === "POST") return new Response(null, { status: 409 });
+        if (method === "PATCH") {
+          const data = body as {
+            conferenceData?: { createRequest: { requestId: string } };
+          };
+          if (data.conferenceData) {
+            requestId = data.conferenceData.createRequest.requestId;
+            requests.push(requestId);
+            if (requestId !== previousId) statusCode = "pending";
+          }
+          return Response.json({});
+        }
+        return Response.json({
+          id: path.split("?")[0]?.split("/").at(-1),
+          conferenceData: {
+            createRequest: {
+              requestId,
+              status: { statusCode },
+              conferenceSolutionKey: { type: "hangoutsMeet" },
+            },
+          },
+        });
+      });
+      const adapter = createBookingCalendarAdapter(env.DB, nango);
+      const input = {
+        ...calendarInput,
+        id: "booking-failed-meet-retry",
+        title: "Consultation",
+        startsAt: "2026-03-01T09:00:00Z",
+        endsAt: "2026-03-01T10:00:00Z",
+        externalId: savedEvent ? previousId : null,
+        cancelled: false,
+        requestConference: true,
+      };
+      const result = await adapter.sync(input);
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).not.toBe(previousId);
+      expect(result.conference?.status).toBe("pending");
+      await adapter.sync({ ...input, externalId: result.externalId });
+      expect(requests).toHaveLength(1);
+    },
+  );
+
+  it("adds Meet to a recovered Google event that has no persisted external id", async () => {
+    await seedConnection();
+    let patchedConference: unknown;
+    const nango = fakeNango(async ({ method, path, body }) => {
+      if (path === "/calendar/v3/calendars/primary")
+        return Response.json({
+          conferenceProperties: {
+            allowedConferenceSolutionTypes: ["hangoutsMeet"],
+          },
+        });
+      if (method === "POST") return new Response(null, { status: 409 });
+      if (method === "PATCH") {
+        patchedConference = (body as Record<string, unknown>).conferenceData;
+        return Response.json({});
+      }
+      return Response.json({
+        id: path.split("?")[0]?.split("/").at(-1),
+        ...(patchedConference
+          ? {
+              conferenceData: {
+                conferenceSolution: { key: { type: "hangoutsMeet" } },
+                entryPoints: [
+                  {
+                    entryPointType: "video",
+                    uri: "https://meet.google.com/abc-defg-hij",
+                  },
+                ],
+              },
+            }
+          : {}),
+      });
+    });
+    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+      ...calendarInput,
+      id: "booking-recovered-no-meet",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: null,
+      cancelled: false,
+      requestConference: true,
+    });
+    expect(patchedConference).toMatchObject({
+      createRequest: {
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    });
+    expect(result.conference).toMatchObject({
+      status: "ready",
+      joinUrl: "https://meet.google.com/abc-defg-hij",
+    });
+  });
+
   it("uses deterministic Google IDs and recovers create conflicts by updating", async () => {
     await seedConnection();
     const requests: Array<{ method: string; path: string; body?: unknown }> =
@@ -356,6 +468,132 @@ describe("booking calendar adapter", () => {
       },
     });
   });
+
+  it("adds Meet to an existing Google event without creating a second event", async () => {
+    await seedConnection();
+    const requests: Array<{ method: string; path: string; body?: unknown }> =
+      [];
+    const nango = fakeNango(async ({ method, path, body }) => {
+      requests.push({ method, path, body });
+      if (path === "/calendar/v3/calendars/primary")
+        return Response.json({
+          conferenceProperties: {
+            allowedConferenceSolutionTypes: ["hangoutsMeet"],
+          },
+        });
+      if (method === "GET" && path.includes("fields=id,conferenceData"))
+        return Response.json({ id: "existing-event" });
+      if (method === "PATCH") return Response.json({ id: "existing-event" });
+      throw new Error(`Unexpected provider request: ${method} ${path}`);
+    });
+
+    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+      ...calendarInput,
+      id: "booking-existing-event",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: "existing-event",
+      cancelled: false,
+      requestConference: true,
+    });
+
+    expect(requests.filter(({ method }) => method === "POST")).toHaveLength(0);
+    expect(requests.some(({ method }) => method === "PATCH")).toBe(true);
+    expect(requests.find(({ method }) => method === "PATCH")?.path).toContain(
+      "conferenceDataVersion=1",
+    );
+    expect(
+      requests.find(({ method }) => method === "PATCH")?.body,
+    ).toMatchObject({
+      conferenceData: {
+        createRequest: {
+          conferenceSolutionKey: { type: "hangoutsMeet" },
+        },
+      },
+    });
+    expect(result.externalId).toBe("existing-event");
+  });
+
+  it.each([
+    ["google_calendar", "Google Calendar"],
+    ["outlook", "Outlook Calendar"],
+  ] as const)(
+    "updates the existing %s event during a pending-link reschedule",
+    async (provider) => {
+      await seedConnection(provider);
+      const requests: Array<{ method: string; path: string; body?: unknown }> =
+        [];
+      const nango = fakeNango(async ({ method, path, body }) => {
+        requests.push({ method, path, body });
+        if (
+          path === "/calendar/v3/calendars/primary" &&
+          provider === "google_calendar"
+        )
+          return Response.json({
+            conferenceProperties: {
+              allowedConferenceSolutionTypes: ["hangoutsMeet"],
+            },
+          });
+        if (path.startsWith("/v1.0/me/calendar?") && provider === "outlook")
+          return Response.json({
+            allowedOnlineMeetingProviders: ["teamsForBusiness"],
+          });
+        if (method === "GET")
+          return provider === "google_calendar"
+            ? Response.json({
+                id: "existing-event",
+                conferenceData: {
+                  createRequest: { status: { statusCode: "pending" } },
+                  conferenceSolution: { key: { type: "hangoutsMeet" } },
+                },
+              })
+            : Response.json({
+                id: "existing-event",
+                isOnlineMeeting: true,
+                onlineMeetingProvider: "teamsForBusiness",
+              });
+        return Response.json({ id: "existing-event" });
+      });
+
+      await createBookingCalendarAdapter(env.DB, nango).sync({
+        ...calendarInput,
+        provider,
+        id: `booking-reschedule-${provider}`,
+        title: "Updated consultation",
+        startsAt: "2026-03-02T09:00:00Z",
+        endsAt: "2026-03-02T10:00:00Z",
+        externalId: "existing-event",
+        conferenceProvider:
+          provider === "google_calendar" ? "google_meet" : "teams",
+        requestConference: true,
+        cancelled: false,
+      });
+
+      expect(requests.some(({ method }) => method === "PATCH")).toBe(true);
+      expect(
+        requests.find(({ method }) => method === "PATCH")?.body,
+      ).toMatchObject(
+        provider === "google_calendar"
+          ? {
+              summary: "Updated consultation",
+              start: { dateTime: "2026-03-02T09:00:00.000Z" },
+            }
+          : {
+              subject: "Updated consultation",
+              start: { dateTime: "2026-03-02T09:00:00.000Z", timeZone: "UTC" },
+            },
+      );
+      if (provider === "google_calendar")
+        expect(
+          requests.find(({ method }) => method === "PATCH")?.body,
+        ).not.toHaveProperty("conferenceData.createRequest");
+      else
+        expect(
+          requests.find(({ method }) => method === "PATCH")?.body,
+        ).not.toHaveProperty("isOnlineMeeting");
+    },
+  );
 
   it("preserves the requested Google provider while conference provisioning is pending", async () => {
     await seedConnection();
