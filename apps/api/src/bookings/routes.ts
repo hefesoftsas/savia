@@ -732,13 +732,168 @@ export function registerBookingRoutes(
           ...(auth.canManage ? [] : [actor.principal.id]),
         )
         .all<BookingRow>();
+      const rows = await Promise.all(
+        r.results.map(async (row) => {
+          const reservation = await reservationView(db, row);
+          const grant = await readGrant(db, id, row.principal_id);
+          const connection = grant
+            ? await createPersonalIntegrationRepository(
+                db,
+              ).findActiveConnection(row.principal_id, grant.provider)
+            : null;
+          return {
+            ...reservation,
+            canGenerateConference:
+              row.status === "confirmed" &&
+              !["ready", "pending", "unsupported"].includes(
+                reservation.conference?.status ?? "",
+              ) &&
+              Boolean(
+                connection?.status === "connected" &&
+                connection.id === grant?.connection_id &&
+                (!row.calendar_provider ||
+                  (row.calendar_provider === grant?.provider &&
+                    row.calendar_connection_id === grant?.connection_id)),
+              ),
+          };
+        }),
+      );
       return c.json({
-        data: await Promise.all(r.results.map((r) => reservationView(db, r))),
+        data: rows,
       });
     },
     undefined,
     rangeSchema,
     z.array(reservationSchema),
+  );
+  route(
+    "post",
+    `${root}/reservations/{id}/conference`,
+    async (c) => {
+      const id = tenant(c),
+        actor = actorFromContext(c),
+        auth = await authorizeHistory(c, id),
+        input = await body(c, revisionSchema),
+        row = await readBooking(db, id, c.req.param("id")!);
+      if (!row)
+        throw new HTTPException(404, { message: "Reservation unavailable." });
+      if (!auth.canManage && row.principal_id !== actor.principal.id)
+        throw new HTTPException(403, { message: "Reservation access denied." });
+      if (row.status !== "confirmed" || row.version !== input.version)
+        throw conflict();
+
+      const current = await reservationView(db, row);
+      if (
+        current.conference?.status === "ready" ||
+        current.conference?.status === "pending" ||
+        current.conference?.status === "unsupported"
+      )
+        return c.json({ data: current });
+
+      const professionalState = await readSettings(db, id);
+      const professionalActive = await db
+        .prepare(
+          "SELECT 1 FROM tenants t JOIN identity_principal p ON p.id=? AND p.is_active=1 JOIN identity_tenant_membership m ON m.tenant_id=t.id AND m.principal_id=p.id AND m.is_active=1 WHERE t.id=? AND t.kind='commercial' AND t.is_active=1",
+        )
+        .bind(row.principal_id, id)
+        .first();
+      if (
+        !professionalActive ||
+        !professionalState.settings.professionals.some(
+          (professional) =>
+            professional.id === row.professional_id &&
+            professional.principalId === row.principal_id &&
+            professional.enabled,
+        )
+      )
+        throw new HTTPException(409, {
+          message:
+            "The assigned professional is no longer eligible for calendar actions.",
+        });
+
+      const grant = await readGrant(db, id, row.principal_id);
+      if (!grant)
+        throw new HTTPException(409, {
+          message:
+            "Connect an eligible calendar before generating a video link.",
+        });
+      const connection = await createPersonalIntegrationRepository(
+        db,
+      ).findActiveConnection(row.principal_id, grant.provider);
+      if (
+        !connection ||
+        connection.status !== "connected" ||
+        connection.id !== grant.connection_id
+      )
+        throw new HTTPException(409, {
+          message:
+            "Reconnect an eligible calendar before generating a video link.",
+        });
+      if (
+        row.calendar_provider &&
+        (row.calendar_provider !== grant.provider ||
+          row.calendar_connection_id !== grant.connection_id)
+      )
+        throw new HTTPException(409, {
+          message:
+            "Reconnect the calendar used for this reservation before generating a video link.",
+        });
+
+      const conferenceProvider =
+        grant.provider === "google_calendar" ? "google_meet" : "teams";
+      await db.batch([
+        db
+          .prepare(
+            "UPDATE tenant_bookings SET calendar_provider=?,calendar_connection_id=?,conference_provider=?,conference_url=NULL,conference_status='pending' WHERE tenant_id=? AND id=? AND status='confirmed' AND version=? AND (calendar_provider IS NULL OR (calendar_provider=? AND calendar_connection_id=?)) AND (conference_status IS NULL OR conference_status='failed') AND NOT EXISTS(SELECT 1 FROM tenant_booking_delivery_locks WHERE tenant_id=? AND booking_id=? AND lease_until>?)",
+          )
+          .bind(
+            grant.provider,
+            grant.connection_id,
+            conferenceProvider,
+            id,
+            row.id,
+            input.version,
+            grant.provider,
+            grant.connection_id,
+            id,
+            row.id,
+            now(),
+          ),
+        db
+          .prepare(
+            "INSERT INTO tenant_booking_jobs(id,tenant_id,booking_id,revision,kind,due_at) SELECT ?,?,?,?,'calendar',? WHERE EXISTS(SELECT 1 FROM tenant_bookings WHERE tenant_id=? AND id=? AND status='confirmed' AND version=? AND conference_status='pending') AND NOT EXISTS(SELECT 1 FROM tenant_booking_delivery_locks WHERE tenant_id=? AND booking_id=? AND lease_until>?) ON CONFLICT(tenant_id,booking_id,revision,kind) DO UPDATE SET status='pending',attempts=0,due_at=excluded.due_at,lease_until=NULL,lease_token=NULL,error_code=NULL WHERE tenant_booking_jobs.status IN ('failed','skipped','completed')",
+          )
+          .bind(
+            crypto.randomUUID(),
+            id,
+            row.id,
+            row.version,
+            now(),
+            id,
+            row.id,
+            row.version,
+            id,
+            row.id,
+            now(),
+          ),
+      ]);
+      const refreshed = await readBooking(db, id, row.id);
+      if (
+        !refreshed ||
+        refreshed.status !== "confirmed" ||
+        refreshed.version !== input.version
+      )
+        throw conflict();
+      if (refreshed.conference_status !== "pending")
+        throw new HTTPException(409, {
+          message:
+            "Calendar sync is in progress. Retry generating the video link shortly.",
+        });
+      return c.json({ data: await reservationView(db, refreshed) });
+    },
+    revisionSchema,
+    undefined,
+    reservationSchema,
   );
   route(
     "post",

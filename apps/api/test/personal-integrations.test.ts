@@ -134,6 +134,40 @@ function fakeNango() {
   };
 }
 
+async function seedGoogleBooking(
+  connectionId: string,
+  input: { id: string; externalId?: string },
+) {
+  const tenantId = Date.now() * 10 + Math.floor(Math.random() * 10);
+  const uniqueId = crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at) VALUES(?,?, 'Calendar delete test',1,'now','now')",
+  )
+    .bind(tenantId, `calendar-delete-${uniqueId}`)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO tenant_bookings (
+      id, tenant_id, professional_id, principal_id, service_id, service_name,
+      professional_name, starts_at, ends_at, buffer_minutes, customer_name,
+      customer_email, manage_token, request_key, request_hash, status, version,
+      calendar_provider, calendar_connection_id, external_id, created_at
+    ) VALUES (?, ?, 'professional-1', ?, 'service-1', 'Consultation', 'Professional',
+      '2026-01-01T10:00:00.000Z', '2026-01-01T10:30:00.000Z', 0, 'Customer',
+      'customer@example.test', ?, ?, 'request-hash', 'confirmed', 1,
+      'google_calendar', ?, ?, '2026-01-01T00:00:00.000Z')`,
+  )
+    .bind(
+      input.id,
+      tenantId,
+      "test-agency-member",
+      `manage-${uniqueId}`,
+      `request-${uniqueId}`,
+      connectionId,
+      input.externalId ?? null,
+    )
+    .run();
+}
+
 describe("personal integration providers", () => {
   beforeAll(applyMigrations);
   beforeEach(async () => {
@@ -164,8 +198,18 @@ describe("personal integration providers", () => {
       data: expect.arrayContaining([
         expect.objectContaining({ id: "google_drive" }),
         expect.objectContaining({ id: "gmail" }),
-        expect.objectContaining({ id: "google_calendar" }),
-        expect.objectContaining({ id: "outlook" }),
+        expect.objectContaining({
+          id: "google_calendar",
+          attributes: expect.objectContaining({
+            capabilities: ["events:read", "events:create", "events:delete"],
+          }),
+        }),
+        expect.objectContaining({
+          id: "outlook",
+          attributes: expect.objectContaining({
+            capabilities: expect.arrayContaining(["events:delete"]),
+          }),
+        }),
         expect.objectContaining({ id: "onedrive_personal" }),
         expect.objectContaining({ id: "onedrive_business" }),
         expect.objectContaining({
@@ -1471,6 +1515,348 @@ describe("personal integration providers", () => {
     );
   });
 
+  it("deletes a confirmed caller-owned event using an encoded provider event id", async () => {
+    const nango = fakeNango();
+    nango.proxy
+      .mockResolvedValueOnce(Response.json({ id: "event?part&other" }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-calendar-delete-connection",
+        "test-agency-member",
+        "google_calendar",
+        "nango-calendar-delete-connection",
+        "google-calendar-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events/google_calendar/event%3Fpart%26other",
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          confirmed: true,
+          connectionId: "personal-calendar-delete-connection",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        method: "GET",
+        path: "/calendar/v3/calendars/primary/events/event%3Fpart%26other",
+      }),
+    );
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: "DELETE",
+        path: "/calendar/v3/calendars/primary/events/event%3Fpart%26other",
+      }),
+    );
+  });
+
+  it("deletes one Outlook occurrence without putting projection parameters on DELETE", async () => {
+    const nango = fakeNango();
+    const connectionId = "personal-outlook-delete-connection";
+    nango.proxy
+      .mockResolvedValueOnce(
+        Response.json({ id: "event?part&other", type: "occurrence" }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        connectionId,
+        "test-agency-member",
+        "outlook",
+        "nango-outlook-delete-connection",
+        "outlook-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events/outlook/event%3Fpart%26other",
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmed: true, connectionId }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        method: "GET",
+        path: expect.stringContaining("/v1.0/me/events/event%3Fpart%26other?"),
+      }),
+    );
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: "DELETE",
+        path: "/v1.0/me/events/event%3Fpart%26other",
+      }),
+    );
+  });
+
+  it("protects Outlook events marked as Savia bookings", async () => {
+    const nango = fakeNango();
+    const connectionId = "personal-outlook-booking-connection";
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        id: "outlook-booking-event",
+        type: "singleInstance",
+        singleValueExtendedProperties: [
+          {
+            id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ab} Name SaviaBookingId",
+            value: "booking-1",
+          },
+        ],
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        connectionId,
+        "test-agency-member",
+        "outlook",
+        "nango-outlook-booking-connection",
+        "outlook-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events/outlook/outlook-booking-event",
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmed: true, connectionId }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(nango.proxy).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires explicit confirmation before making a provider request", async () => {
+    const nango = fakeNango();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events/google_calendar/event-1",
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          confirmed: false,
+          connectionId: "calendar-connection-1",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(nango.proxy).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete a recurring Google series master", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        id: "series-1",
+        recurrence: ["RRULE:FREQ=WEEKLY"],
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-calendar-series-connection",
+        "test-agency-member",
+        "google_calendar",
+        "nango-calendar-series-connection",
+        "google-calendar-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events/google_calendar/series-1",
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          confirmed: true,
+          connectionId: "personal-calendar-series-connection",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(nango.proxy).toHaveBeenCalledTimes(1);
+    expect(nango.proxy).toHaveBeenCalledWith(
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("protects a Google booking event whose provider create response was lost", async () => {
+    const nango = fakeNango();
+    const connectionId = "personal-calendar-booking-connection";
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        connectionId,
+        "test-agency-member",
+        "google_calendar",
+        "nango-calendar-booking-connection",
+        "google-calendar-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    await seedGoogleBooking(connectionId, { id: "booking-lost-response-1" });
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events/google_calendar/2df149eddfa7678774dcfe541ddd62bc67efcbcfd91ec34ec43483b0ebf74921",
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmed: true, connectionId }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(nango.proxy).not.toHaveBeenCalled();
+  });
+
+  it("rejects deletion when the calendar connection changed after the event was loaded", async () => {
+    const nango = fakeNango();
+    const connectionId = "personal-calendar-reconnect-connection";
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        connectionId,
+        "test-agency-member",
+        "google_calendar",
+        "nango-calendar-reconnect-connection",
+        "google-calendar-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events/google_calendar/event-1",
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          confirmed: true,
+          connectionId: "old-connection",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(503);
+    expect(nango.proxy).not.toHaveBeenCalled();
+  });
+
+  it("reports provider deletion failures instead of returning success", async () => {
+    const nango = fakeNango();
+    nango.proxy
+      .mockResolvedValueOnce(Response.json({ id: "event-1" }))
+      .mockResolvedValueOnce(new Response("rejected", { status: 403 }));
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-calendar-failed-delete-connection",
+        "test-agency-member",
+        "google_calendar",
+        "nango-calendar-failed-delete-connection",
+        "google-calendar-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events/google_calendar/event-1",
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          confirmed: true,
+          connectionId: "personal-calendar-failed-delete-connection",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "PERSONAL_INTEGRATION_REQUEST_FAILED" },
+    });
+  });
+
   it("lists the caller's Outlook day with links that open only in Outlook", async () => {
     const nango = fakeNango();
     nango.proxy.mockResolvedValueOnce(
@@ -1594,6 +1980,7 @@ describe("personal integration providers", () => {
     await expect(response.json()).resolves.toEqual({
       data: {
         id: "outlook-event-2",
+        connectionId: "personal-outlook-create-connection",
         title: "Preparar propuesta",
         startsAt: "2026-01-03T10:00:00.0000000Z",
         endsAt: "2026-01-03T10:30:00.0000000Z",
@@ -1664,6 +2051,7 @@ describe("personal integration providers", () => {
     await expect(response.json()).resolves.toEqual({
       data: {
         id: "google-event-2",
+        connectionId: "personal-google-calendar-create-connection",
         title: "Preparar propuesta",
         startsAt: "2026-01-03T15:00:00.000Z",
         endsAt: "2026-01-03T15:30:00.000Z",
@@ -1751,6 +2139,7 @@ describe("personal integration providers", () => {
     await expect(response.json()).resolves.toMatchObject({
       data: {
         id: "google-meet-event",
+        connectionId: "personal-google-meet-create-connection",
         conference: {
           provider: "google_meet",
           joinUrl: "https://meet.google.com/abc-defg-hij",

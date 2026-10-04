@@ -42,6 +42,7 @@ type Reservation = {
   version: number;
   deliveryStatus: string;
   calendarStatus: string;
+  canGenerateConference?: boolean;
   conference?: BookingConferenceState;
 };
 type Tab = "settings" | "availability" | "reservations" | "sharing";
@@ -106,6 +107,7 @@ export function BookingPage({
   const [reservationsLoading, setReservationsLoading] = useState(false);
   const [reservationsAttempt, setReservationsAttempt] = useState(0);
   const [cancellingId, setCancellingId] = useState("");
+  const [generatingConferenceId, setGeneratingConferenceId] = useState("");
   const ready = !!bootstrap && loadedTenant === tenantId;
   const currentProfessional = useMemo(
     () =>
@@ -436,6 +438,34 @@ export function BookingPage({
       setError(t("Reservation could not be cancelled. Refresh and retry."));
     } finally {
       setCancellingId("");
+    }
+  }
+
+  async function generateConference(reservation: Reservation) {
+    setGeneratingConferenceId(reservation.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await services.apiClient.post<{ data: Reservation }>(
+        `/v1/tenants/${tenantId}/booking/reservations/${encodeURIComponent(reservation.id)}/conference`,
+        { version: reservation.version },
+      );
+      setReservations((current) =>
+        current.map((item) =>
+          item.id === reservation.id ? result.data : item,
+        ),
+      );
+      setNotice(
+        t("Video meeting link is being prepared. Refresh to check again."),
+      );
+    } catch {
+      setError(
+        t(
+          "Video meeting link request failed. Check the calendar connection and retry.",
+        ),
+      );
+    } finally {
+      setGeneratingConferenceId("");
     }
   }
 
@@ -1026,6 +1056,36 @@ export function BookingPage({
                         {reservation.calendarStatus}
                       </td>
                       <td className="p-3">
+                        {reservation.status === "confirmed" &&
+                          reservation.conference?.status !== "ready" &&
+                          reservation.conference?.status !== "pending" &&
+                          reservation.conference?.status !== "unsupported" && (
+                            <div className="mb-2 grid justify-items-start gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={
+                                  !reservation.canGenerateConference ||
+                                  generatingConferenceId === reservation.id
+                                }
+                                onClick={() =>
+                                  void generateConference(reservation)
+                                }
+                              >
+                                {generatingConferenceId === reservation.id
+                                  ? t("Generating video link…")
+                                  : t("Generate video link")}
+                              </Button>
+                              {!reservation.canGenerateConference && (
+                                <span className="max-w-48 text-xs text-muted-foreground">
+                                  {t(
+                                    "Connect an eligible Google Calendar or Outlook calendar to generate a video link.",
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         {reservation.status === "confirmed" && (
                           <ResponsiveActionButton
                             icon={XCircle}

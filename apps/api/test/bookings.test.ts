@@ -264,6 +264,123 @@ it("lists a professional's own confirmed agenda with interval overlap and safe f
   expect(((await touchesOnlyAtEnd.json()) as any).data).toHaveLength(0);
 });
 
+it("queues video-link generation once for the assigned professional and keeps the booking revision", async () => {
+  const f = await fixture();
+  const reservation = ((await (await f.reserve()).json()) as any).data
+    .reservation;
+  const connectionId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,external_account_label,external_account_id,scopes,last_validated_at,disconnected_at,created_at,updated_at) VALUES(?,?, 'google_calendar', ?, 'calendar', 'connected', NULL, NULL, '[]', ?, NULL, ?, ?)",
+  )
+    .bind(connectionId, f.principalId, connectionId, now, now, now)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO tenant_booking_calendar_grants(tenant_id,principal_id,provider,connection_id) VALUES(?,?,'google_calendar',?)",
+  )
+    .bind(f.tenantId, f.principalId, connectionId)
+    .run();
+
+  const request = () =>
+    f.app.request(`${f.base}/reservations/${reservation.id}/conference`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: reservation.version }),
+    });
+  await env.DB.prepare(
+    "INSERT INTO tenant_booking_delivery_locks(tenant_id,booking_id,lease_until,lease_token) VALUES(?,?,?,?)",
+  )
+    .bind(f.tenantId, reservation.id, Date.now() + 60000, crypto.randomUUID())
+    .run();
+  expect((await request()).status).toBe(409);
+  expect(
+    (
+      await env.DB.prepare(
+        "SELECT conference_status FROM tenant_bookings WHERE id=?",
+      )
+        .bind(reservation.id)
+        .first<any>()
+    )?.conference_status,
+  ).toBeNull();
+  await env.DB.prepare(
+    "DELETE FROM tenant_booking_delivery_locks WHERE tenant_id=? AND booking_id=?",
+  )
+    .bind(f.tenantId, reservation.id)
+    .run();
+  const first = await request();
+  expect(first.status).toBe(200);
+  const body = (await first.json()) as any;
+  expect(body.data).toMatchObject({
+    id: reservation.id,
+    status: "confirmed",
+    version: reservation.version,
+    conference: { provider: "google_meet", status: "pending", joinUrl: null },
+  });
+  const second = await request();
+  expect(second.status).toBe(200);
+  expect(
+    await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM tenant_booking_jobs WHERE tenant_id=? AND booking_id=? AND revision=? AND kind='calendar'",
+    )
+      .bind(f.tenantId, reservation.id, reservation.version)
+      .first(),
+  ).toEqual({ count: 1 });
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET conference_url='https://meet.google.com/abc-defg-hij',conference_status='ready' WHERE tenant_id=? AND id=?",
+  )
+    .bind(f.tenantId, reservation.id)
+    .run();
+  expect(((await (await request()).json()) as any).data.conference).toEqual({
+    provider: "google_meet",
+    joinUrl: "https://meet.google.com/abc-defg-hij",
+    status: "ready",
+  });
+  expect(
+    await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM tenant_booking_jobs WHERE tenant_id=? AND booking_id=? AND revision=? AND kind='calendar'",
+    )
+      .bind(f.tenantId, reservation.id, reservation.version)
+      .first(),
+  ).toEqual({ count: 1 });
+});
+
+it("rejects video-link generation for another professional and cancelled reservations", async () => {
+  const f = await fixture();
+  const reservation = ((await (await f.reserve()).json()) as any).data
+    .reservation;
+  const input = JSON.stringify({ version: reservation.version });
+  const endpoint = `${f.base}/reservations/${reservation.id}/conference`;
+  const otherActor = {
+    ...f.actor,
+    principal: { ...f.actor.principal, id: "another-professional" },
+    memberships: f.actor.memberships.map((membership) => ({
+      ...membership,
+      role: "operator",
+    })),
+  };
+  const otherAppArgs: Parameters<typeof createApp> = [env.DB];
+  otherAppArgs[3] = { authenticate: async () => otherActor } as Authenticator;
+  const otherApp = createApp(...otherAppArgs);
+  const denied = await otherApp.request(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: input,
+  });
+  expect(denied.status).toBe(403);
+
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET status='cancelled',version=version+1 WHERE tenant_id=? AND id=?",
+  )
+    .bind(f.tenantId, reservation.id)
+    .run();
+  const cancelled = await f.app.request(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: reservation.version + 1 }),
+  });
+  expect(cancelled.status).toBe(409);
+});
+
 it("keeps an administrator's agenda limited to their own current membership", async () => {
   const f = await fixture();
   const own = ((await (await f.reserve()).json()) as any).data.reservation;

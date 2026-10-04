@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CircleAlert,
   ChevronLeft,
@@ -89,6 +89,9 @@ export function tenantBookingsLink(
 type AgendaOccurrence = CalendarOccurrence & {
   booking?: BookingAgendaEntry;
   conference?: PersonalCalendarConference;
+  personalEventProvider?: "google_calendar" | "outlook";
+  personalEventId?: string;
+  personalConnectionId?: string;
 };
 
 function safeEventConferenceLink(
@@ -138,7 +141,11 @@ export function CalendarView({
   const agendaText = useMessages(agendaMessages);
   const locale = intlLocale(useAppLocale());
   const [managerOpen, setManagerOpen] = useState(false),
-    [detail, setDetail] = useState<CalendarOccurrence | null>(null);
+    [detail, setDetail] = useState<CalendarOccurrence | null>(null),
+    [deleteConfirmation, setDeleteConfirmation] = useState(false),
+    [deletePending, setDeletePending] = useState(false),
+    [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteGeneration = useRef(0);
   const {
     selectedDay,
     setSelectedDay,
@@ -152,18 +159,32 @@ export function CalendarView({
     const reset = () => {
       setManagerOpen(false);
       setDetail(null);
+      setDeleteConfirmation(false);
+      setDeletePending(false);
+      setDeleteError(null);
+      deleteGeneration.current += 1;
     };
     window.addEventListener("savia:identity-changed", reset);
     window.addEventListener("savia:session-cleared", reset);
+    window.addEventListener("savia:personal-integrations-changed", reset);
     return () => {
       window.removeEventListener("savia:identity-changed", reset);
       window.removeEventListener("savia:session-cleared", reset);
+      window.removeEventListener("savia:personal-integrations-changed", reset);
     };
   }, []);
   useEffect(() => {
     setDetail(null);
     setManagerOpen(false);
+    setDeleteConfirmation(false);
+    setDeletePending(false);
+    setDeleteError(null);
+    deleteGeneration.current += 1;
   }, [agenda.personalIntegrations]);
+  useEffect(() => {
+    setDeleteConfirmation(false);
+    setDeleteError(null);
+  }, [detail?.id]);
   useEffect(() => {
     if (!detail?.id.startsWith("savia-booking:")) return;
     const booking = agenda.bookings.entries.find(
@@ -212,6 +233,9 @@ export function CalendarView({
                   timeZone: event.timeZone ?? timeZone,
                   webLink: event.webLink,
                   conference: event.conference,
+                  personalEventProvider: event.provider,
+                  personalEventId: event.id,
+                  personalConnectionId: event.connectionId,
                 },
               ]
             : [],
@@ -362,6 +386,7 @@ export function CalendarView({
   const currentEvents = eventsForDay(events, selectedDay);
   const useEventDetails =
     Boolean(agenda.personalIntegrations?.listBookingAgenda) ||
+    Boolean(agenda.personalIntegrations?.deleteCalendarEvent) ||
     sources.events.length > 0 ||
     events.some((event) => !safeLink(event.webLink));
   const incomplete = Boolean(
@@ -369,6 +394,59 @@ export function CalendarView({
     agenda.syncError ||
     agenda.bookings.error,
   );
+  const detailOccurrence = detail as AgendaOccurrence | null;
+  const deletableProvider = detailOccurrence?.personalEventProvider;
+  const canDeletePersonalEvent = Boolean(
+    detailOccurrence &&
+    !detailOccurrence.booking &&
+    deletableProvider &&
+    detailOccurrence.personalEventId &&
+    detailOccurrence.personalConnectionId &&
+    agenda.calendarProviders.includes(deletableProvider) &&
+    agenda.personalIntegrations?.deleteCalendarEvent,
+  );
+  async function confirmDeleteEvent() {
+    if (
+      !detailOccurrence ||
+      !canDeletePersonalEvent ||
+      !deletableProvider ||
+      !detailOccurrence.personalEventId ||
+      !detailOccurrence.personalConnectionId
+    )
+      return;
+    const generation = deleteGeneration.current;
+    setDeletePending(true);
+    setDeleteError(null);
+    try {
+      await agenda.personalIntegrations!.deleteCalendarEvent!({
+        provider: deletableProvider,
+        eventId: detailOccurrence.personalEventId,
+        connectionId: detailOccurrence.personalConnectionId,
+      });
+    } catch {
+      if (generation !== deleteGeneration.current) return;
+      setDeleteError(t("Could not delete this event. Try again."));
+      setDeletePending(false);
+      return;
+    }
+    if (generation !== deleteGeneration.current) return;
+    const deletedProvider = deletableProvider;
+    const deletedEventId = detailOccurrence.personalEventId;
+    agenda.setEvents((current) =>
+      current.filter(
+        (event) =>
+          event.provider !== deletedProvider || event.id !== deletedEventId,
+      ),
+    );
+    setDeleteConfirmation(false);
+    setDetail(null);
+    setDeletePending(false);
+    try {
+      await agenda.refresh();
+    } catch {
+      // The provider confirmed deletion; the agenda's normal sync notice handles refresh failures.
+    }
+  }
   return (
     <div className="@container/calendar min-w-0 space-y-3 sm:space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -683,7 +761,12 @@ export function CalendarView({
       <Dialog
         open={Boolean(detail)}
         onOpenChange={(open) => {
-          if (!open) setDetail(null);
+          if (!open) {
+            if (deletePending) return;
+            setDetail(null);
+            setDeleteConfirmation(false);
+            setDeleteError(null);
+          }
         }}
       >
         <DialogContent>
@@ -771,6 +854,51 @@ export function CalendarView({
                     {t("Open in calendar")} <ExternalLink className="size-4" />
                   </a>
                 </Button>
+              ) : null}
+              {canDeletePersonalEvent ? (
+                <div className="space-y-2 border-t pt-3">
+                  {deleteError ? (
+                    <p role="alert" className="text-sm text-destructive">
+                      {deleteError}
+                    </p>
+                  ) : null}
+                  {deleteConfirmation ? (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        {t(
+                          "This permanently removes the event from your connected calendar.",
+                        )}
+                      </p>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={deletePending}
+                          onClick={() => setDeleteConfirmation(false)}
+                        >
+                          {t("Cancel")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={deletePending}
+                          onClick={() => void confirmDeleteEvent()}
+                        >
+                          {deletePending ? t("Deleting…") : t("Confirm delete")}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={deletePending}
+                      onClick={() => setDeleteConfirmation(true)}
+                    >
+                      {t("Delete event")}
+                    </Button>
+                  )}
+                </div>
               ) : null}
             </div>
           ) : null}

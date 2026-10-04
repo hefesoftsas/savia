@@ -45,6 +45,7 @@ function service(count = 1) {
     listConnections: vi.fn(async () => []),
     listEvents: vi.fn(async () => []),
     createCalendarEvent: vi.fn(),
+    deleteCalendarEvent: vi.fn(async () => {}),
     listCalendarSources: vi.fn(async () => [source]),
     listCalendarSourceEvents: vi.fn(async () => ({
       data: events,
@@ -87,6 +88,95 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("My Day calendar views", () => {
+  it("requires a second confirmation before deleting a personal provider event and refreshes the agenda", async () => {
+    const user = userEvent.setup(),
+      client = service();
+    vi.mocked(client.listConnections).mockResolvedValue([
+      {
+        id: "calendar-connection-1",
+        status: "connected",
+        provider: "google_calendar",
+      },
+    ]);
+    vi.mocked(client.listEvents)
+      .mockResolvedValueOnce([
+        {
+          id: "google-event-1",
+          title: "Planning",
+          startsAt: "2026-10-03T14:00:00.000Z",
+          endsAt: "2026-10-03T14:30:00.000Z",
+          webLink: null,
+        },
+      ])
+      .mockResolvedValue([]);
+    render(<Harness client={client} />);
+
+    await user.click(await screen.findByRole("button", { name: /Planning/ }));
+    await user.click(screen.getByRole("button", { name: "Eliminar evento" }));
+    expect(client.deleteCalendarEvent).not.toHaveBeenCalled();
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar eliminación" }),
+    );
+
+    await waitFor(() =>
+      expect(client.deleteCalendarEvent).toHaveBeenCalledWith({
+        provider: "google_calendar",
+        eventId: "google-event-1",
+        connectionId: "calendar-connection-1",
+      }),
+    );
+    await waitFor(() => expect(client.listEvents).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps a provider event visible and reports the error when deletion fails", async () => {
+    const user = userEvent.setup(),
+      client = service();
+    vi.mocked(client.listConnections).mockResolvedValue([
+      {
+        id: "calendar-connection-1",
+        status: "connected",
+        provider: "google_calendar",
+      },
+    ]);
+    vi.mocked(client.listEvents).mockResolvedValue([
+      {
+        id: "google-event-1",
+        title: "Planning",
+        startsAt: "2026-10-03T14:00:00.000Z",
+        endsAt: "2026-10-03T14:30:00.000Z",
+        webLink: null,
+      },
+    ]);
+    vi.mocked(client.deleteCalendarEvent!).mockRejectedValueOnce(
+      new Error("Provider rejected deletion"),
+    );
+    render(<Harness client={client} />);
+
+    await user.click(await screen.findByRole("button", { name: /Planning/ }));
+    await user.click(screen.getByRole("button", { name: "Eliminar evento" }));
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar eliminación" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No se pudo eliminar el evento. Inténtalo de nuevo.",
+    );
+    expect(screen.getByRole("dialog", { name: "Planning" })).toBeVisible();
+    expect(client.listEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not offer deletion for imported calendar events", async () => {
+    const user = userEvent.setup(),
+      client = service();
+    render(<Harness client={client} />);
+
+    await user.click(await screen.findByRole("button", { name: /Reunión 1/ }));
+
+    expect(
+      screen.queryByRole("button", { name: "Eliminar evento" }),
+    ).toBeNull();
+  });
+
   it("links to a confirmed canonical tenant booking route and omits unknown hosts", () => {
     expect(
       tenantBookingsLink(
@@ -260,7 +350,7 @@ describe("My Day calendar views", () => {
     await user.click(
       screen.getByRole("button", { name: "Sincronizar calendarios" }),
     );
-    expect(await screen.findByText("Sin eventos para hoy")).toBeVisible();
+    expect(await screen.findByText("Sin eventos para este día.")).toBeVisible();
     expect(
       screen.queryByText(/No pudimos comprobar todos/),
     ).not.toBeInTheDocument();

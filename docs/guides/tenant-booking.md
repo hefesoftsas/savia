@@ -95,6 +95,15 @@ ready call link when it has already been saved; an earlier confirmation email
 still includes the private management link. No video link is exposed in public
 catalogs or availability results.
 
+For an existing confirmed reservation without a meeting link, an administrator
+or the assigned professional can choose **Generate video link** in
+**Bookings → Reservations**. The action uses the assigned professional's current
+calendar grant and requires an active connected Google Calendar or Outlook
+account with meeting support. It reuses the reservation's provider event, keeps
+the reservation confirmed, and reports pending work through the existing calendar
+status. Repeated requests while a link is ready or pending are safe; a request
+made during an active calendar job can be retried after that job finishes.
+
 Rescheduling updates the existing calendar event and preserves its call. Cancelling
 hides the join action immediately and queues deletion of the same provider event.
 Links are accepted only as HTTPS participant URLs. The existing tenant grant,

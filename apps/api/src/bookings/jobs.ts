@@ -144,6 +144,9 @@ export async function runBookingJobs(
             ...(booking.conference_provider
               ? { conferenceProvider: booking.conference_provider }
               : {}),
+            ...(booking.conference_status === "pending"
+              ? { requestConference: true }
+              : {}),
             cancelled: booking.status === "cancelled",
           });
           const externalId = synced.externalId;

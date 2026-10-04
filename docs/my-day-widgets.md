@@ -110,6 +110,13 @@ range. Unsupported `RANGE=THISANDFUTURE` exceptions or unresolvable timezones
 produce a source error. All-day dates retain their original calendar dates.
 Colors are accompanied by source names; selecting a feed event opens its details.
 Safe native HTTPS links open in another tab. Feed text is never rendered as HTML.
+Events from your connected Google Calendar or Outlook account can be removed from
+their detail view after a second confirmation. Savia deletes the exact event from
+the provider and refreshes the agenda; a failed provider request leaves the event
+visible and offers a retry. Imported and subscribed calendar events are read-only.
+Savia appointments linked to provider events stay under the **Bookings**
+cancellation flow so reservation history and calendar delivery remain consistent.
+Recurring series masters are protected from deletion in My Day.
 
 Source names/colors/visibility and imported content persist privately per
 principal. Toggle Google/Outlook visibility without disconnecting the account.

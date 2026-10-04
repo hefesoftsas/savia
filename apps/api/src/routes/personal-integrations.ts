@@ -465,6 +465,7 @@ const createCalendarEventRoute = createRoute({
           schema: z.object({
             data: z.object({
               id: z.string(),
+              connectionId: z.string(),
               title: z.string().nullable(),
               startsAt: z.string().nullable(),
               endsAt: z.string().nullable(),
@@ -485,6 +486,47 @@ const createCalendarEventRoute = createRoute({
     400: { description: "Invalid event details" },
     502: { description: "Provider request failed" },
     503: { description: "Provider or connection unavailable" },
+  },
+});
+
+const deleteCalendarEventRoute = createRoute({
+  method: "delete",
+  path: "/v1/personal-integrations/events/{provider}/{eventId}",
+  tags: ["Personal integrations"],
+  summary: "Delete a confirmed event from a caller-owned calendar",
+  description:
+    "Deletes one event from the caller's primary Google Calendar or Outlook calendar only after explicit confirmation. Savia booking events and recurring series are protected.",
+  security: [{ oauth2: ["savia.api.write"] }],
+  request: {
+    params: z.object({
+      provider: z.enum(["google_calendar", "outlook"]),
+      eventId: z.string().min(1).max(255),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            confirmed: z.literal(true),
+            connectionId: z.string().trim().min(1).max(255),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Calendar event deleted",
+      content: {
+        "application/json": {
+          schema: z.object({ data: z.object({ deleted: z.literal(true) }) }),
+        },
+      },
+    },
+    400: { description: "Confirmation, event id, or event type is invalid" },
+    403: { description: "Connection belongs to a different user" },
+    502: { description: "Provider request failed" },
+    503: { description: "Connection unavailable" },
   },
 });
 
@@ -1079,6 +1121,85 @@ export function registerPersonalIntegrationRoutes(
         },
         200,
       );
+    } catch (exception) {
+      const response = personalErrorResponse(exception);
+      if (!response) throw exception;
+      return context.json(response.body, response.status);
+    }
+  });
+
+  app.openapi(deleteCalendarEventRoute, async (context) => {
+    const actor = actorFromContext(context);
+    if (!operations)
+      return context.json(
+        errorBody(
+          "PERSONAL_INTEGRATION_UNAVAILABLE",
+          "The requested personal integration is unavailable",
+        ),
+        503,
+      );
+    try {
+      const { provider, eventId } = context.req.valid("param");
+      const { connectionId: expectedConnectionId } = context.req.valid("json");
+      const connection = await activeConnectionFor(
+        repository,
+        actor.principal.id,
+        provider,
+      );
+      if (
+        !connection ||
+        connection.status !== "connected" ||
+        connection.id !== expectedConnectionId
+      )
+        throw new PersonalIntegrationUnavailableError(
+          "The personal integration connection changed; refresh the calendar and try again",
+        );
+      if (connection?.status === "connected") {
+        let bookings: { id: string; external_id: string | null }[];
+        try {
+          const result = await database
+            .prepare(
+              `SELECT id, external_id FROM tenant_bookings
+               WHERE principal_id = ? AND calendar_provider = ?
+                 AND calendar_connection_id = ?`,
+            )
+            .bind(actor.principal.id, provider, connection.id)
+            .all<{ id: string; external_id: string | null }>();
+          bookings = result.results;
+        } catch {
+          throw new PersonalIntegrationUpstreamError();
+        }
+        let linkedBooking = bookings.some(
+          (booking) => booking.external_id === eventId,
+        );
+        if (provider === "google_calendar" && !linkedBooking) {
+          for (const booking of bookings) {
+            if (booking.external_id) continue;
+            const digest = await crypto.subtle.digest(
+              "SHA-256",
+              new TextEncoder().encode(booking.id),
+            );
+            const marker = Array.from(new Uint8Array(digest), (byte) =>
+              byte.toString(16).padStart(2, "0"),
+            ).join("");
+            if (marker === eventId) {
+              linkedBooking = true;
+              break;
+            }
+          }
+        }
+        if (linkedBooking)
+          throw new PersonalIntegrationInputError(
+            "Savia booking events must be cancelled from bookings",
+          );
+      }
+      await operations.deleteCalendarEvent({
+        principalId: actor.principal.id,
+        provider,
+        eventId,
+        expectedConnectionId,
+      });
+      return context.json({ data: { deleted: true as const } }, 200);
     } catch (exception) {
       const response = personalErrorResponse(exception);
       if (!response) throw exception;

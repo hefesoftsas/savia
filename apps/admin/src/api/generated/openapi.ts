@@ -5871,6 +5871,7 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                canGenerateConference?: boolean;
                 conference?: {
                   /** @enum {string|null} */
                   provider: "google_meet" | "teams" | null;
@@ -5942,6 +5943,128 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/tenants/{tenantId}/booking/reservations/{id}/conference": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            version: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                serviceId: string;
+                /** Format: uuid */
+                professionalId: string;
+                serviceName: string;
+                professionalName: string;
+                startsAt: string;
+                endsAt: string;
+                customerName: string;
+                customerEmail: string;
+                /** @enum {string} */
+                status: "confirmed" | "cancelled";
+                version: number;
+                deliveryStatus: string;
+                calendarStatus: string;
+                canGenerateConference?: boolean;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/tenants/{tenantId}/booking/reservations/{id}/cancel": {
     parameters: {
       query?: never;
@@ -5994,6 +6117,7 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                canGenerateConference?: boolean;
                 conference?: {
                   /** @enum {string|null} */
                   provider: "google_meet" | "teams" | null;
@@ -7037,6 +7161,7 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  canGenerateConference?: boolean;
                   conference?: {
                     /** @enum {string|null} */
                     provider: "google_meet" | "teams" | null;
@@ -7077,6 +7202,7 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  canGenerateConference?: boolean;
                   conference?: {
                     /** @enum {string|null} */
                     provider: "google_meet" | "teams" | null;
@@ -7192,6 +7318,7 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  canGenerateConference?: boolean;
                   conference?: {
                     /** @enum {string|null} */
                     provider: "google_meet" | "teams" | null;
@@ -7517,6 +7644,7 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                canGenerateConference?: boolean;
                 conference?: {
                   /** @enum {string|null} */
                   provider: "google_meet" | "teams" | null;
@@ -7639,6 +7767,7 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                canGenerateConference?: boolean;
                 conference?: {
                   /** @enum {string|null} */
                   provider: "google_meet" | "teams" | null;
@@ -13712,6 +13841,7 @@ export interface paths {
             "application/json": {
               data: {
                 id: string;
+                connectionId: string;
                 title: string | null;
                 startsAt: string | null;
                 endsAt: string | null;
@@ -13753,6 +13883,89 @@ export interface paths {
       };
     };
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/personal-integrations/events/{provider}/{eventId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a confirmed event from a caller-owned calendar
+     * @description Deletes one event from the caller's primary Google Calendar or Outlook calendar only after explicit confirmation. Savia booking events and recurring series are protected.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          provider: "google_calendar" | "outlook";
+          eventId: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** @enum {boolean} */
+            confirmed: true;
+            connectionId: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Calendar event deleted */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {boolean} */
+                deleted: true;
+              };
+            };
+          };
+        };
+        /** @description Confirmation, event id, or event type is invalid */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Connection belongs to a different user */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider request failed */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Connection unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
     options?: never;
     head?: never;
     patch?: never;
