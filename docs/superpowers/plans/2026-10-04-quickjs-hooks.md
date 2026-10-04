@@ -55,3 +55,6 @@ The feasibility findings are in `docs/experiments/savia-hooks-quickjs/README.md`
 - Local verification: 23 interpreter/handler tests, three workerd integration tests (all 51 catalog hooks), 56 request tests, eight self-hosted hook tests and 11 API route tests passed. Both worker typechecks and Wrangler bundles passed.
 - Repository contract suite passed after adding the new workspace dependency volume and seed directory to the development container.
 - Remote CPU enforcement and preview deployment remain to be verified on GitHub Actions.
+
+- PR: https://github.com/hefesoftsas/savia/pull/172. Preview run 37184133963 was rejected before runner startup: `refs/pull/172/merge` is not allowed by the `preview` environment protection rules. No remote deployment or CPU smoke executed. An environment administrator must permit this reviewed PR ref before retrying.
+- CI hygiene caught a synthetic registration-shaped fixture value after it became tracked. Replaced it with an explicit synthetic placeholder; no real vehicle data was used.

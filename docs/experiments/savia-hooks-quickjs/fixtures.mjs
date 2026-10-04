@@ -14,7 +14,7 @@ const requestBody = JSON.stringify({
   Movimientos: [],
   CorredorID: "probe",
   AgrupadorCatalogo: { ListaCatalogos: [{ CompaniaID: 20 }] },
-  LicensePlate: "TEST00",
+  LicensePlate: "SYNTHETIC-PLATE",
   RiskQuotation: { InsuredQuotation: { NaturalPerson: {} } },
 });
 const xml =
