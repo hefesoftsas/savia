@@ -4,6 +4,11 @@ export type AssistantChatRequest = {
   messages: unknown[];
   employeeId?: string;
   employeeHandle?: string;
+  trustedContext?: {
+    kind: "recording" | "session";
+    title: string;
+    content: string;
+  };
 };
 
 export type AssistantActionRequest = {

@@ -4,6 +4,7 @@ import {
   render as rtlRender,
   screen,
   within,
+  waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,7 +15,6 @@ import { AppServicesProvider } from "./assistant-context";
 import { AssistantBar } from "./assistant-bar";
 import {
   saveActiveThreadId,
-  saveStoredThread,
   type AssistantThreadRecord,
 } from "./assistant-thread-storage";
 
@@ -26,8 +26,36 @@ function render(ui: Parameters<typeof rtlRender>[0]) {
   );
 }
 
+const serverThreads = new Map<
+  string,
+  AssistantThreadRecord & { revision: number }
+>();
+function saveStoredThread(thread: AssistantThreadRecord, _userId?: string) {
+  serverThreads.set(thread.id, { ...thread, revision: 1 });
+}
+
 function createMockServices(): AppServices {
   return {
+    apiClient: {
+      get: vi.fn(async () => ({ threads: [...serverThreads.values()] })),
+      put: vi.fn(async (path: string, body: any) => {
+        const id = path.split("/").pop()!;
+        const old = serverThreads.get(id);
+        const next = {
+          ...body,
+          id,
+          userId: "user-1",
+          revision: (old?.revision ?? 0) + 1,
+          createdAt: old?.createdAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        serverThreads.set(id, next);
+        return next;
+      }),
+      delete: vi.fn(async (path: string) => {
+        serverThreads.delete(path.split("/").pop()!.split("?")[0]);
+      }),
+    },
     authSession: {
       getAccessToken: vi.fn().mockResolvedValue("test-token"),
     },
@@ -121,12 +149,78 @@ function createMockServices(): AppServices {
 describe("AssistantBar History & Thread Switching", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    serverThreads.clear();
     Element.prototype.scrollTo = vi.fn();
   });
 
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("saves the question before contacting the provider and retains it on provider failure", async () => {
+    const user = userEvent.setup();
+    let savedAtRequest = false;
+    const request = vi.fn(async (_url: unknown, options: RequestInit) => {
+      const body = JSON.parse(String(options.body));
+      const saved = serverThreads.get(body.threadId);
+      savedAtRequest =
+        saved?.messages.some((message) =>
+          message.parts.some((part) => part.text === "Review my notes"),
+        ) ?? false;
+      return Response.json(
+        { error: { message: "Provider unavailable" } },
+        { status: 503 },
+      );
+    });
+    vi.stubGlobal("fetch", request);
+    render(
+      <AppServicesProvider services={createMockServices()}>
+        <AssistantBar />
+      </AppServicesProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    const composer = await screen.findByLabelText("Mensaje para el asistente");
+    await user.type(composer, "Review my notes");
+    await user.click(screen.getByRole("button", { name: "Enviar mensaje" }));
+    await waitFor(() => expect(savedAtRequest).toBe(true));
+    expect(
+      [...serverThreads.values()].some((thread) =>
+        thread.messages.some((message) =>
+          message.parts.some((part) => part.text === "Review my notes"),
+        ),
+      ),
+    ).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("does not call the provider when saving the question fails", async () => {
+    const user = userEvent.setup();
+    const services = createMockServices();
+    const request = vi.fn();
+    vi.stubGlobal("fetch", request);
+    render(
+      <AppServicesProvider services={services}>
+        <AssistantBar />
+      </AppServicesProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    const composer = await screen.findByLabelText("Mensaje para el asistente");
+    vi.mocked(services.apiClient.put).mockRejectedValue(new Error("Offline"));
+    await user.type(composer, "Keep this question");
+    await user.click(screen.getByRole("button", { name: "Enviar mensaje" }));
+    await screen.findByText(
+      "No se pudo sincronizar. Tus mensajes siguen aquí. Reintenta antes de salir.",
+    );
+    expect(request).not.toHaveBeenCalled();
+    expect(screen.getByText("Keep this question")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Ver historial" }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Cerrar" }));
+    await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    expect(await screen.findByText("Keep this question")).toBeVisible();
+    vi.unstubAllGlobals();
   });
 
   it("toggles to history view and lists saved conversations", async () => {
@@ -158,6 +252,7 @@ describe("AssistantBar History & Thread Switching", () => {
 
     // Open assistant sheet
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     // Verify chat view is visible with thread title pill
     const matches = await screen.findAllByText("Clientes en Bogotá");
@@ -208,6 +303,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     // Click new conversation button
     await user.click(
@@ -263,6 +359,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     // Go to history
     await user.click(screen.getByRole("button", { name: "Ver historial" }));
@@ -292,6 +389,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     // Verify initial idle state
     expect(screen.queryByText("En línea")).toBeNull();
@@ -343,6 +441,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     const input = screen.getByLabelText("Mensaje para el asistente");
     await user.type(input, "¿Cuáles son los clientes?");
@@ -379,6 +478,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     const input = screen.getByLabelText("Mensaje para el asistente");
     await user.type(input, "¿Cuáles son los clientes?");
@@ -404,6 +504,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     expect(
       await screen.findByText("Empleados Virtuales (@mención)"),
@@ -425,6 +526,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     const input = screen.getByLabelText("Mensaje para el asistente");
     await user.type(input, "@");
@@ -485,6 +587,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     // Verify Sofía employee header is rendered for the assistant response
     const sofiaMatches = await screen.findAllByText("Sofía");
@@ -508,6 +611,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     // Verify attachment button is present and enabled for multimodal model (claude-3.5-sonnet)
     const attachmentBtn = await screen.findByTestId(
@@ -552,6 +656,7 @@ describe("AssistantBar History & Thread Switching", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    await screen.findByLabelText("Mensaje para el asistente");
 
     // Attachment button should be disabled with tooltip explaining text-only model
     const attachmentBtn = await screen.findByTestId(
@@ -564,6 +669,7 @@ describe("AssistantBar History & Thread Switching", () => {
 
 it("keeps the answer visible and earlier narration and tool activity collapsed", async () => {
   window.localStorage.clear();
+  serverThreads.clear();
   const user = userEvent.setup();
   const thread: AssistantThreadRecord = {
     id: "compact-answer",
@@ -605,6 +711,7 @@ it("keeps the answer visible and earlier narration and tool activity collapsed",
     </AppServicesProvider>,
   );
   await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+  await screen.findByLabelText("Mensaje para el asistente");
   expect(
     (
       await screen.findAllByText(
@@ -623,6 +730,7 @@ it("keeps the answer visible and earlier narration and tool activity collapsed",
 
 it("localizes the assistant panel for an English app locale", async () => {
   window.localStorage.clear();
+  serverThreads.clear();
   rtlRender(
     <StoreContextProvider value={memoryStore({ locale: "en" })}>
       <AppLocaleProvider>
@@ -638,7 +746,7 @@ it("localizes the assistant panel for an English app locale", async () => {
     await screen.findByRole("heading", { name: "Savia assistant" }),
   ).toBeVisible();
   expect(screen.getByText("Answers to help you decide and act")).toBeVisible();
-  expect(screen.getByText("How can I help today?")).toBeVisible();
+  expect(await screen.findByText("How can I help today?")).toBeVisible();
   expect(screen.getByText("Suggested queries")).toBeVisible();
   expect(
     screen.getByRole("textbox", { name: "Message for the assistant" }),

@@ -142,6 +142,167 @@ function requireCompanionAccess(actor: AppActor) {
     "An active tenant membership or platform administrator role is required",
   );
 }
+
+async function companionAccessForActor(
+  actor: AppActor,
+  request: Request,
+  configuration: CompanionOptions["configuration"],
+) {
+  const keyed =
+    actor.credential?.kind === "personal-api-key"
+      ? actor.credential
+      : undefined;
+  const recordingScopedOAuth =
+    actor.credential?.kind === "oauth" &&
+    requiredRecordingScope(request) !== null &&
+    actor.credential.scopes.some((scope) =>
+      ["recordings:read", "recordings:upload", "recordings:process"].includes(
+        scope,
+      ),
+    ) &&
+    !actor.credential.scopes.includes(requiredOAuthScope(request));
+  let selectedTenantId: number | undefined;
+  if (recordingScopedOAuth) {
+    const header = request.headers.get("x-savia-tenant-id");
+    selectedTenantId =
+      header && /^\d+$/.test(header) ? Number(header) : undefined;
+    const membership = actor.memberships.find(
+      (entry) =>
+        entry.isActive &&
+        (entry.tenantId ?? entry.agencyId) === selectedTenantId &&
+        selectedTenantId !== undefined &&
+        selectedTenantId > 0 &&
+        entry.tenantSlug,
+    );
+    const tenantHostSlug = parseTenantSlugFromHostname(
+      new URL(request.url).hostname,
+      DEFAULT_CANONICAL_HOST,
+    );
+    const headerSlug = request.headers
+      .get("x-savia-tenant-slug")
+      ?.toLowerCase();
+    if (
+      !membership ||
+      (headerSlug && headerSlug !== membership.tenantSlug?.toLowerCase()) ||
+      (tenantHostSlug &&
+        tenantHostSlug !== membership.tenantSlug?.toLowerCase()) ||
+      (headerSlug && tenantHostSlug && headerSlug !== tenantHostSlug)
+    ) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "Select an active workspace that matches this Savia workspace URL.",
+      );
+    }
+  }
+  return {
+    ownerId: actor.principal.id,
+    tenantId: keyed
+      ? keyed.tenantId
+      : recordingScopedOAuth
+        ? selectedTenantId
+        : await configuration?.activeTenantFor?.(actor.principal.id),
+    requireTenant: Boolean(keyed || recordingScopedOAuth),
+  };
+}
+
+export function createCompanionAssistantContextLoader(
+  options?: CompanionOptions,
+): (
+  actor: AppActor,
+  request: Request,
+  context: { kind: "recording" | "session"; id: string; title: string },
+) => Promise<{
+  kind: "recording" | "session";
+  title: string;
+  content: string;
+}> {
+  return async (actor, request, threadContext) => {
+    requireCompanionAccess(actor);
+    if (!options?.enabled || !options.configuration)
+      throw new CompanionError(
+        "COMPANION_DISABLED",
+        "Companion validation is not enabled on this server.",
+        503,
+      );
+    const sourcePath =
+      threadContext.kind === "recording"
+        ? `recordings/${threadContext.id}/notes`
+        : `sessions/${threadContext.id}`;
+    const companionReadRequest = new Request(
+      new URL(`/v1/companion/${sourcePath}`, request.url),
+      { method: "GET", headers: request.headers },
+    );
+    const owner = await companionAccessForActor(
+      actor,
+      companionReadRequest,
+      options.configuration,
+    );
+    if (threadContext.kind === "recording") {
+      const notes = await new CompanionRecordings(options.storage).getNotes(
+        owner,
+        threadContext.id,
+      );
+      if (!notes.transcript?.text.trim())
+        throw new CompanionError(
+          "TRANSCRIPT_REQUIRED",
+          "Generate a transcript before chatting about this recording.",
+          409,
+        );
+      return {
+        kind: "recording",
+        title: threadContext.title,
+        content: JSON.stringify({
+          transcript: notes.transcript,
+          notes: notes.summary,
+        }),
+      };
+    }
+    if (owner.tenantId === undefined)
+      throw new CompanionError(
+        "WORKSPACE_REQUIRED",
+        "Select an active workspace for recording sessions.",
+        403,
+      );
+    const session = await new CompanionSessions(options.storage).get(
+      { ...owner, requireTenant: true },
+      threadContext.id,
+    );
+    const transcripts = session.chunks.flatMap((chunk) => {
+      const transcript =
+        session.job.transcripts[`${chunk.source}:${chunk.sequence}`];
+      return transcript
+        ? [
+            {
+              source: chunk.source,
+              sequence: chunk.sequence,
+              text: transcript.text,
+            },
+          ]
+        : [];
+    });
+    if (!transcripts.length)
+      throw new CompanionError(
+        "TRANSCRIPT_REQUIRED",
+        "Generate transcripts before chatting about this session.",
+        409,
+      );
+    let remaining = 120_000;
+    const boundedTranscripts = transcripts.flatMap((transcript) => {
+      if (remaining <= 0) return [];
+      const text = transcript.text.slice(0, remaining);
+      remaining -= text.length;
+      return [{ ...transcript, text }];
+    });
+    return {
+      kind: "session",
+      title: threadContext.title,
+      content: JSON.stringify({
+        transcripts: boundedTranscripts,
+        summary: session.job.summary,
+      }),
+    };
+  };
+}
 function cloudFormat(name: string) {
   const result = importedAudioFormatSchema.safeParse(
     ["opus", "oga"].includes(name.split(".").pop()?.toLowerCase() ?? "")
@@ -367,62 +528,12 @@ export function registerCompanionRoutes(
     }
     return repo.effectiveConfigurationFor(actor.principal.id);
   };
-  const access = async (c: Context) => {
-    const actor = actorFromContext(c);
-    const keyed =
-      actor.credential?.kind === "personal-api-key"
-        ? actor.credential
-        : undefined;
-    const recordingScopedOAuth =
-      actor.credential?.kind === "oauth" &&
-      requiredRecordingScope(c.req.raw) !== null &&
-      actor.credential.scopes.some((scope) =>
-        ["recordings:read", "recordings:upload", "recordings:process"].includes(
-          scope,
-        ),
-      ) &&
-      !actor.credential.scopes.includes(requiredOAuthScope(c.req.raw));
-    let selectedTenantId: number | undefined;
-    if (recordingScopedOAuth) {
-      const header = c.req.header("x-savia-tenant-id");
-      selectedTenantId =
-        header && /^\d+$/.test(header) ? Number(header) : undefined;
-      const membership = actor.memberships.find(
-        (entry) =>
-          entry.isActive &&
-          (entry.tenantId ?? entry.agencyId) === selectedTenantId &&
-          selectedTenantId !== undefined &&
-          selectedTenantId > 0 &&
-          entry.tenantSlug,
-      );
-      const tenantHostSlug = parseTenantSlugFromHostname(
-        new URL(c.req.url).hostname,
-        DEFAULT_CANONICAL_HOST,
-      );
-      const headerSlug = c.req.header("x-savia-tenant-slug")?.toLowerCase();
-      if (
-        !membership ||
-        (headerSlug && headerSlug !== membership.tenantSlug?.toLowerCase()) ||
-        (tenantHostSlug &&
-          tenantHostSlug !== membership.tenantSlug?.toLowerCase()) ||
-        (headerSlug && tenantHostSlug && headerSlug !== tenantHostSlug)
-      ) {
-        throw new AuthenticationError(
-          "AUTHORIZATION_FORBIDDEN",
-          "Select an active workspace that matches this Savia workspace URL.",
-        );
-      }
-    }
-    return {
-      ownerId: actor.principal.id,
-      tenantId: keyed
-        ? keyed.tenantId
-        : recordingScopedOAuth
-          ? selectedTenantId
-          : await options?.configuration?.activeTenantFor?.(actor.principal.id),
-      requireTenant: Boolean(keyed || recordingScopedOAuth),
-    };
-  };
+  const access = async (c: Context) =>
+    companionAccessForActor(
+      actorFromContext(c),
+      c.req.raw,
+      options?.configuration,
+    );
   registerCompanionSessionRoutes(app, {
     sessions: new CompanionSessions(options?.storage),
     service,

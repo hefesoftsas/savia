@@ -5,6 +5,20 @@ import { StoreContextProvider, memoryStore, useLocaleState } from "ra-core";
 import { ApiClientError } from "@/api/api-client";
 import { CompanionRecordingsPage } from "./recordings-page";
 import type { CompanionRecordingsClient } from "./client";
+vi.mock("../assistant/recording-assistant", () => ({
+  RecordingAssistant: ({
+    context,
+  }: {
+    context: { kind: string; id: string; title: string };
+  }) => (
+    <div
+      data-testid="recording-assistant"
+      data-kind={context.kind}
+      data-id={context.id}
+      data-title={context.title}
+    />
+  ),
+}));
 const recording = {
   id: "one",
   source: "system",
@@ -50,7 +64,7 @@ function show(client: ReturnType<typeof mockClient>) {
     </StoreContextProvider>,
   );
 }
-it("requires consent before processing and restores saved notes after remount", async () => {
+it("starts processing without a routine consent checkbox and restores saved notes", async () => {
   const client = mockClient(),
     user = userEvent.setup();
   const view = show(client);
@@ -60,11 +74,15 @@ it("requires consent before processing and restores saved notes after remount", 
   await waitFor(() =>
     expect(client.audio).toHaveBeenCalledWith("one", expect.any(AbortSignal)),
   );
-  expect(generate).toBeDisabled();
+  expect(generate).toBeEnabled();
   expect(client.generate).not.toHaveBeenCalled();
-  await user.click(screen.getByRole("checkbox"));
   await user.click(generate);
   expect(await screen.findByText("Backend saved notes")).toBeVisible();
+  const assistant = await screen.findByTestId("recording-assistant");
+  expect(assistant).toHaveAttribute("data-kind", "recording");
+  expect(assistant).toHaveAttribute("data-id", "one");
+  expect(assistant).toHaveAttribute("data-title", "System audio");
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   expect(client.generate).toHaveBeenCalledTimes(1);
   view.unmount();
   expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:private-audio");
@@ -102,8 +120,9 @@ it("shows safe provider diagnostics and recovers a transcript after summary proc
   });
   const user = userEvent.setup();
   show(client);
-  await user.click(await screen.findByRole("checkbox"));
-  await user.click(screen.getByRole("button", { name: "Generate summary" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Generate summary" }),
+  );
 
   expect(
     await screen.findByText(
@@ -144,8 +163,9 @@ it("ignores unrecognized provider diagnostic values", async () => {
   client.notes.mockResolvedValue({ transcript: null, summary: null });
   const user = userEvent.setup();
   show(client);
-  await user.click(await screen.findByRole("checkbox"));
-  await user.click(screen.getByRole("button", { name: "Generate summary" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Generate summary" }),
+  );
 
   expect(
     await screen.findByText(

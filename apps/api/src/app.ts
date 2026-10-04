@@ -12,6 +12,7 @@ import { registerConnectedOfficeDocumentRoutes } from "./routes/connected-office
 import { registerOfficeSettingsRoutes } from "./routes/office-settings";
 import { registerPublicPagesRoutes } from "./pages/public-routes";
 import {
+  createCompanionAssistantContextLoader,
   registerCompanionRoutes,
   type CompanionOptions,
 } from "./companion/routes";
@@ -209,6 +210,7 @@ export function createApp(
     db,
     documents,
     configuration: assistantConfiguration,
+    loadThreadContext: createCompanionAssistantContextLoader(companion),
   });
   registerAssistantConfigurationRoutes(
     app,

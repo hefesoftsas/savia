@@ -5,6 +5,20 @@ import { StoreContextProvider, memoryStore } from "ra-core";
 import { ApiClient } from "@/api/api-client";
 import { RecordingSessions } from "./recording-sessions";
 import type { RecordingSession } from "./sessions-client";
+vi.mock("../assistant/recording-assistant", () => ({
+  RecordingAssistant: ({
+    context,
+  }: {
+    context: { kind: string; id: string; title: string };
+  }) => (
+    <div
+      data-testid="recording-assistant"
+      data-kind={context.kind}
+      data-id={context.id}
+      data-title={context.title}
+    />
+  ),
+}));
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -31,7 +45,7 @@ const session = (id: string): RecordingSession => ({
     summary: null,
   },
 });
-it("requires fresh retry consent, submits once, and clears a partial answer when selection changes", async () => {
+it("keeps retry acknowledgement for ambiguous processing and passes session context to chat", async () => {
   const submissions: { path: string; body: unknown }[] = [];
   const api = new ApiClient({
     baseUrl: "https://savia.test",
@@ -47,20 +61,6 @@ it("requires fresh retry consent, submits once, and clears a partial answer when
           cursor: null,
         });
       submissions.push({ path, body: await request.json() });
-      if (path.endsWith("/questions"))
-        return Response.json({
-          answer: "The budget remains pending.",
-          insufficientEvidence: false,
-          partial: true,
-          evidence: [
-            {
-              source: "microphone",
-              sequence: 0,
-              startSeconds: 0,
-              durationSeconds: 30,
-            },
-          ],
-        });
       return Response.json({
         ...session("one"),
         job: { ...session("one").job, status: "queued" },
@@ -77,12 +77,11 @@ it("requires fresh retry consent, submits once, and clears a partial answer when
     name: "Generate transcript and summary",
   });
   expect(generate).toBeDisabled();
-  await user.click(
-    screen.getByLabelText(
-      "I agree to send audio and transcripts to OpenRouter. Processing may incur charges.",
-    ),
-  );
-  expect(generate).toBeDisabled();
+  expect(screen.queryByText(/I agree to send audio/)).not.toBeInTheDocument();
+  const assistant = await screen.findByTestId("recording-assistant");
+  expect(assistant).toHaveAttribute("data-kind", "session");
+  expect(assistant).toHaveAttribute("data-id", "one");
+  expect(assistant).toHaveAttribute("data-title", "Interview one");
   await user.click(
     screen.getByLabelText("I accept that retrying may incur another charge."),
   );
@@ -98,27 +97,11 @@ it("requires fresh retry consent, submits once, and clears a partial answer when
       body: { consent: true, retryAmbiguous: true },
     },
   ]);
-  await user.type(
-    screen.getByLabelText("Your question"),
-    "What is the budget?",
-  );
-  await user.click(
-    screen.getByLabelText(
-      "I agree to send this transcript and question to OpenRouter. Processing may incur charges.",
-    ),
-  );
-  await user.click(screen.getByRole("button", { name: "Ask about recording" }));
-  expect(await screen.findByText("The budget remains pending.")).toBeVisible();
-  expect(
-    screen.getByText(
-      "This answer uses selected transcript excerpts, not the entire recording.",
-    ),
-  ).toBeVisible();
   await user.click(screen.getByRole("button", { name: /Interview two/ }));
-  expect(
-    screen.queryByText("The budget remains pending."),
-  ).not.toBeInTheDocument();
-  expect(screen.getByLabelText("Your question")).toHaveValue("");
+  expect(await screen.findByTestId("recording-assistant")).toHaveAttribute(
+    "data-id",
+    "two",
+  );
 });
 
 it("opens the desktop review link directly on recording sessions", async () => {

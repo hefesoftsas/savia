@@ -1,6 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { StoreContextProvider, memoryStore } from "ra-core";
 import { ApiClient } from "@/api/api-client";
+import type { AppServices } from "@/app-services";
+import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { RecordingSessions } from "../../recording-sessions";
 import "@/styles/globals.css";
 const session = {
@@ -45,12 +47,35 @@ const session = {
     },
   },
 };
+const thread = {
+  id: "synthetic-thread",
+  userId: "synthetic-user",
+  title: session.name,
+  createdAt: "2026-10-03T15:00:00Z",
+  updatedAt: "2026-10-03T15:00:00Z",
+  messages: [],
+  revision: 1,
+  context: {
+    kind: "session",
+    id: session.id,
+    title: session.name,
+  },
+};
 const api = new ApiClient({
   baseUrl: "https://synthetic.example",
   tokenSource: { getAccessToken: async () => null },
-  fetcher: async (input) => {
+  fetcher: async (input, init) => {
     const path = new URL(String(input)).pathname;
-    if (path.includes("/chunks/")) return new Response("", { status: 404 });
+    if (path === "/api/assistant/threads")
+      return Response.json({ threads: [thread] });
+    if (path === "/api/assistant/threads/synthetic-thread")
+      return Response.json({
+        ...thread,
+        ...JSON.parse(String(init?.body ?? "{}")),
+        revision: 2,
+      });
+    if (path.includes("/chunks/"))
+      return new Response(new Blob(["synthetic audio"], { type: "audio/ogg" }));
     if (path.endsWith("/questions"))
       return Response.json({
         answer: "El presupuesto está pendiente de aprobación.",
@@ -72,20 +97,31 @@ const api = new ApiClient({
     );
   },
 });
+const services = {
+  apiClient: api,
+  authProvider: {
+    getIdentity: async () => ({
+      id: "synthetic-user",
+      fullName: "Preview user",
+    }),
+  },
+} as unknown as AppServices;
 createRoot(document.getElementById("root")!).render(
   <StoreContextProvider value={memoryStore({ locale: "es" })}>
-    <div
-      className="bg-background text-foreground"
-      style={
-        new URLSearchParams(location.search).has("narrow")
-          ? { width: 390, maxWidth: "100%" }
-          : undefined
-      }
-    >
-      <p className="border-b px-6 py-2 text-sm text-muted-foreground">
-        Datos sintéticos · Vista de diseño sin conexión a servicios
-      </p>
-      <RecordingSessions api={api} />
-    </div>
+    <AppServicesProvider services={services}>
+      <div
+        className="bg-background text-foreground"
+        style={
+          new URLSearchParams(location.search).has("narrow")
+            ? { width: 390, maxWidth: "100%" }
+            : undefined
+        }
+      >
+        <p className="border-b px-6 py-2 text-sm text-muted-foreground">
+          Datos sintéticos · Vista de diseño sin conexión a servicios
+        </p>
+        <RecordingSessions api={api} />
+      </div>
+    </AppServicesProvider>
   </StoreContextProvider>,
 );

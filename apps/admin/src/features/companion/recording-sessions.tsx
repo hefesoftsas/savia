@@ -1,5 +1,5 @@
 import "./recording-sessions.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AudioLines, RefreshCw } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,12 @@ import {
   CompanionSessionsClient,
   type RecordingSession,
   type SessionChunk,
-  type SessionAnswer,
 } from "./sessions-client";
+const RecordingAssistant = lazy(() =>
+  import("../assistant/recording-assistant").then((module) => ({
+    default: module.RecordingAssistant,
+  })),
+);
 export const sessionTime = (seconds: number) =>
   `${Math.floor(seconds / 3600)
     .toString()
@@ -166,7 +170,6 @@ function SessionDetail({
   const [session, setSession] = useState(initial);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(false),
-    [consent, setConsent] = useState(false),
     [retry, setRetry] = useState(false);
   const inFlight = useRef(false),
     mounted = useRef(true);
@@ -190,6 +193,9 @@ function SessionDetail({
     return () => abort.abort();
   }, [initial, client]);
   const running = active(session);
+  const hasTranscript = Object.values(session.job.transcripts).some((item) =>
+    item.text.trim(),
+  );
   useEffect(() => {
     if (!running) return;
     const abort = new AbortController();
@@ -230,7 +236,6 @@ function SessionDetail({
       inFlight.current = false;
       if (mounted.current) {
         setBusy(false);
-        setConsent(false);
         setRetry(false);
       }
     }
@@ -293,20 +298,6 @@ function SessionDetail({
                   )}
                 </p>
               )}
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4 accent-primary"
-                  checked={consent}
-                  onChange={(event) => setConsent(event.target.checked)}
-                  disabled={busy}
-                />
-                <span>
-                  {t(
-                    "I agree to send audio and transcripts to OpenRouter. Processing may incur charges.",
-                  )}
-                </span>
-              </label>
               {attention && (
                 <label className="flex items-start gap-2 text-sm">
                   <input
@@ -322,7 +313,7 @@ function SessionDetail({
                 </label>
               )}
               <Button
-                disabled={busy || !consent || (attention && !retry)}
+                disabled={busy || (attention && !retry)}
                 onClick={() => void run(false)}
               >
                 {t(
@@ -345,78 +336,100 @@ function SessionDetail({
             {t("Unable to update this session. Refresh and try again.")}
           </p>
         )}
-        {session.job.summary && (
-          <div className="mt-6 max-w-prose space-y-5">
-            <p className="whitespace-pre-wrap leading-relaxed">
-              {session.job.summary.summary}
-            </p>
-            {[
-              [t("Decisions"), session.job.summary.decisions],
-              [t("Open questions"), session.job.summary.openQuestions],
-            ].map(
-              ([label, items]) =>
-                (items as string[]).length > 0 && (
-                  <div key={label as string}>
-                    <h4 className="font-medium">{label as string}</h4>
+        <div className="recording-session-review">
+          <div className="min-w-0">
+            {session.job.summary && (
+              <div className="mt-6 max-w-prose space-y-5">
+                <p className="whitespace-pre-wrap leading-relaxed">
+                  {session.job.summary.summary}
+                </p>
+                {[
+                  [t("Decisions"), session.job.summary.decisions],
+                  [t("Open questions"), session.job.summary.openQuestions],
+                ].map(
+                  ([label, items]) =>
+                    (items as string[]).length > 0 && (
+                      <div key={label as string}>
+                        <h4 className="font-medium">{label as string}</h4>
+                        <ul className="mt-2 list-disc space-y-2 pl-5">
+                          {(items as string[]).map((item, index) => (
+                            <li key={index}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ),
+                )}
+                {session.job.summary.actions.length > 0 && (
+                  <div>
+                    <h4 className="font-medium">{t("Action items")}</h4>
                     <ul className="mt-2 list-disc space-y-2 pl-5">
-                      {(items as string[]).map((item, index) => (
-                        <li key={index}>{item}</li>
+                      {session.job.summary.actions.map((item, index) => (
+                        <li key={index}>
+                          {item.description}
+                          {item.owner && ` — ${item.owner}`}
+                          {item.dueDate && ` · ${item.dueDate}`}
+                        </li>
                       ))}
                     </ul>
                   </div>
-                ),
-            )}
-            {session.job.summary.actions.length > 0 && (
-              <div>
-                <h4 className="font-medium">{t("Action items")}</h4>
-                <ul className="mt-2 list-disc space-y-2 pl-5">
-                  {session.job.summary.actions.map((item, index) => (
-                    <li key={index}>
-                      {item.description}
-                      {item.owner && ` — ${item.owner}`}
-                      {item.dueDate && ` · ${item.dueDate}`}
-                    </li>
-                  ))}
-                </ul>
+                )}
               </div>
+            )}
+            {Object.keys(session.job.transcripts).length > 0 && (
+              <>
+                <details className="mt-6">
+                  <summary className="cursor-pointer font-medium">
+                    {t("Transcript")}
+                  </summary>
+                  <div className="mt-4 max-w-prose space-y-5">
+                    {session.chunks.map((chunk) => {
+                      const transcript =
+                        session.job.transcripts[
+                          `${chunk.source}:${chunk.sequence}`
+                        ];
+                      return (
+                        transcript && (
+                          <div key={`${chunk.source}:${chunk.sequence}`}>
+                            <p className="text-xs text-muted-foreground">
+                              {sessionTime(chunk.startSeconds)} ·{" "}
+                              {t(
+                                chunk.source === "microphone"
+                                  ? "Microphone"
+                                  : "System audio",
+                              )}
+                            </p>
+                            <p className="mt-1 whitespace-pre-wrap leading-relaxed">
+                              {transcript.text}
+                            </p>
+                          </div>
+                        )
+                      );
+                    })}
+                  </div>
+                </details>
+              </>
             )}
           </div>
-        )}
-        {Object.keys(session.job.transcripts).length > 0 && (
-          <>
-            <details className="mt-6">
-              <summary className="cursor-pointer font-medium">
-                {t("Transcript")}
-              </summary>
-              <div className="mt-4 max-w-prose space-y-5">
-                {session.chunks.map((chunk) => {
-                  const transcript =
-                    session.job.transcripts[
-                      `${chunk.source}:${chunk.sequence}`
-                    ];
-                  return (
-                    transcript && (
-                      <div key={`${chunk.source}:${chunk.sequence}`}>
-                        <p className="text-xs text-muted-foreground">
-                          {sessionTime(chunk.startSeconds)} ·{" "}
-                          {t(
-                            chunk.source === "microphone"
-                              ? "Microphone"
-                              : "System audio",
-                          )}
-                        </p>
-                        <p className="mt-1 whitespace-pre-wrap leading-relaxed">
-                          {transcript.text}
-                        </p>
-                      </div>
-                    )
-                  );
-                })}
-              </div>
-            </details>
-            <SessionQuestions id={session.id} client={client} />
-          </>
-        )}
+          {hasTranscript && (
+            <aside className="min-w-0 recording-session-chat">
+              <Suspense
+                fallback={
+                  <p role="status" className="text-sm text-muted-foreground">
+                    {t("Loading assistant…")}
+                  </p>
+                }
+              >
+                <RecordingAssistant
+                  context={{
+                    kind: "session",
+                    id: session.id,
+                    title: session.name,
+                  }}
+                />
+              </Suspense>
+            </aside>
+          )}
+        </div>
       </section>
     </article>
   );
@@ -529,126 +542,5 @@ function SessionPlayer({
         </p>
       )}
     </div>
-  );
-}
-function SessionQuestions({
-  id,
-  client,
-}: {
-  id: string;
-  client: CompanionSessionsClient;
-}) {
-  const t = useMessages(companionMessages);
-  const [question, setQuestion] = useState(""),
-    [consent, setConsent] = useState(false),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(false),
-    [answer, setAnswer] = useState<SessionAnswer | null>(null);
-  const inFlight = useRef(false),
-    mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  async function ask() {
-    if (inFlight.current || !consent || !question.trim()) return;
-    inFlight.current = true;
-    setBusy(true);
-    setError(false);
-    setAnswer(null);
-    try {
-      const result = await client.answer(id, question.trim());
-      if (mounted.current) setAnswer(result);
-    } catch {
-      if (mounted.current) setError(true);
-    } finally {
-      inFlight.current = false;
-      if (mounted.current) setBusy(false);
-    }
-  }
-  return (
-    <section className="mt-8 max-w-prose border-t pt-6">
-      <h3 className="text-lg font-medium">{t("Ask about this recording")}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {t("Answers use only this transcript. Verify them against the audio.")}
-      </p>
-      <form
-        className="mt-4 space-y-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void ask();
-        }}
-      >
-        <label className="block text-sm font-medium">
-          {t("Your question")}
-          <textarea
-            className="mt-2 block min-h-24 w-full rounded-md border bg-background p-3"
-            required
-            maxLength={2000}
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            disabled={busy}
-          />
-        </label>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1 size-4 accent-primary"
-            checked={consent}
-            onChange={(event) => setConsent(event.target.checked)}
-            disabled={busy}
-          />
-          <span>
-            {t(
-              "I agree to send this transcript and question to OpenRouter. Processing may incur charges.",
-            )}
-          </span>
-        </label>
-        <Button type="submit" disabled={busy || !consent || !question.trim()}>
-          {t(busy ? "Preparing answer…" : "Ask about recording")}
-        </Button>
-      </form>
-      {error && (
-        <p role="alert" className="mt-4 text-destructive">
-          {t("Unable to update this session. Refresh and try again.")}
-        </p>
-      )}
-      {answer && (
-        <div className="mt-5 space-y-3" role="status">
-          {answer.insufficientEvidence && (
-            <p className="font-medium">
-              {t("Insufficient evidence in this recording.")}
-            </p>
-          )}
-          <p className="whitespace-pre-wrap leading-relaxed">{answer.answer}</p>
-          {answer.partial && (
-            <p className="text-sm text-muted-foreground">
-              {t(
-                "This answer uses selected transcript excerpts, not the entire recording.",
-              )}
-            </p>
-          )}
-          <details>
-            <summary className="cursor-pointer text-sm">
-              {t("Evidence used")}
-            </summary>
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
-              {answer.evidence.map((item) => (
-                <li key={`${item.source}:${item.sequence}`}>
-                  {sessionTime(item.startSeconds)} ·{" "}
-                  {t(
-                    item.source === "microphone"
-                      ? "Microphone"
-                      : "System audio",
-                  )}
-                </li>
-              ))}
-            </ul>
-          </details>
-        </div>
-      )}
-    </section>
   );
 }

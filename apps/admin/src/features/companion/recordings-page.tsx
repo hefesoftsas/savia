@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { RecordingSessions } from "./recording-sessions";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
   ChevronDown,
@@ -21,7 +21,6 @@ import {
   type RecordingNotes,
 } from "./client";
 
-import { RecordingQuestions } from "./recording-questions";
 import { RecordingUpload } from "./recording-upload";
 import {
   processingFailure,
@@ -30,6 +29,12 @@ import {
   type ProcessingFailure,
   type ProviderFailure,
 } from "./provider-error";
+
+const RecordingAssistant = lazy(() =>
+  import("../assistant/recording-assistant").then((module) => ({
+    default: module.RecordingAssistant,
+  })),
+);
 
 export function CompanionRecordingsPage(props: {
   services?: Pick<AppServices, "apiClient">;
@@ -88,7 +93,7 @@ function RecordingsTabs(props: {
 
 // Operate: an owner-private audio inbox, using Savia's neutral surfaces and
 // emerald actions. The list leads to one listening/review workspace; generated
-// notes are the content, with consent immediately beside the processing action.
+// notes are the content, with transcript chat available after processing.
 function AudioFilesPage({
   services,
   client: supplied,
@@ -112,7 +117,6 @@ function AudioFilesPage({
   const [error, setError] = useState<
       string | ProviderFailure | ProcessingFailure | null
     >(null),
-    [consent, setConsent] = useState(false),
     [processing, setProcessing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false),
     [uploading, setUploading] = useState(false);
@@ -188,7 +192,6 @@ function AudioFilesPage({
   useEffect(() => {
     setAudio(null);
     setNotes(null);
-    setConsent(false);
     if (!selected) {
       setLoadingDetail(false);
       return;
@@ -225,7 +228,7 @@ function AudioFilesPage({
     };
   }, [client, selected?.id, detailRevision]);
   const generate = async () => {
-    if (!selected || !consent || inFlight.current) return;
+    if (!selected || inFlight.current) return;
     inFlight.current = true;
     setProcessing(true);
     setError(null);
@@ -458,135 +461,126 @@ function AudioFilesPage({
                     />
                   </>
                 )}
-                {!notes?.summary && (
-                  <div className="mt-6 border-t pt-5">
-                    <label className="flex cursor-pointer items-start gap-3 text-sm leading-6">
-                      <input
-                        type="checkbox"
-                        className="mt-1 size-4 accent-primary"
-                        checked={consent}
-                        disabled={processing || uploading}
-                        onChange={(e) => setConsent(e.target.checked)}
-                      />
-                      <span>
-                        {t(
-                          "I have permission to transcribe and summarize this audio with OpenRouter.",
+                <div className="mt-8 grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                  <div className="min-w-0">
+                    {!notes?.summary && (
+                      <div className="mt-6 border-t pt-5">
+                        <Button
+                          className="max-sm:h-11 max-sm:w-full"
+                          disabled={
+                            loadingDetail || processing || uploading || !audio
+                          }
+                          onClick={() => void generate()}
+                        >
+                          {processing && (
+                            <LoaderCircle
+                              className="size-4 animate-spin"
+                              aria-hidden="true"
+                            />
+                          )}
+                          {t(
+                            processing
+                              ? "Preparing transcript and summary…"
+                              : "Generate summary",
+                          )}
+                        </Button>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {t("Processing may incur charges.")}
+                        </p>
+                      </div>
+                    )}
+                    {notes?.summary && (
+                      <article className="mt-8 max-w-prose border-t pt-6">
+                        <h3 className="text-lg font-medium">
+                          {t("Meeting notes")}
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t("AI draft. Verify facts and commitments.")}
+                        </p>
+                        <p className="mt-5 whitespace-pre-wrap text-sm leading-7">
+                          {notes.summary.summary}
+                        </p>
+                        {notes.summary.decisions.length > 0 && (
+                          <>
+                            <h4 className="mb-2 mt-6 font-medium">
+                              {t("Decisions")}
+                            </h4>
+                            <ul className="list-disc space-y-2 pl-5 text-sm">
+                              {notes.summary.decisions.map((x, i) => (
+                                <li key={i}>{x}</li>
+                              ))}
+                            </ul>
+                          </>
                         )}
-                      </span>
-                    </label>
-                    <Button
-                      className="mt-4 w-full sm:w-auto"
-                      disabled={
-                        !consent ||
-                        loadingDetail ||
-                        processing ||
-                        uploading ||
-                        !audio
-                      }
-                      onClick={() => void generate()}
-                    >
-                      {processing && (
-                        <LoaderCircle
-                          className="size-4 animate-spin"
-                          aria-hidden="true"
-                        />
-                      )}
-                      {t(
-                        processing
-                          ? "Preparing transcript and summary…"
-                          : "Generate summary",
-                      )}
-                    </Button>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {t("Processing may incur charges.")}
-                    </p>
-                    <details className="mt-3 text-xs text-muted-foreground">
-                      <summary className="min-h-9 cursor-pointer py-2 focus-visible:outline-2 focus-visible:outline-ring">
-                        {t("How processing works")}
-                      </summary>
-                      <p className="max-w-prose pb-2 leading-5">
-                        {t(
-                          "Savia sends this audio to OpenRouter for transcription and a summary. No automatic retries.",
+                        {notes.summary.actions.length > 0 && (
+                          <>
+                            <h4 className="mb-2 mt-6 font-medium">
+                              {t("Actions")}
+                            </h4>
+                            <ul className="list-disc space-y-2 pl-5 text-sm">
+                              {notes.summary.actions.map((x, i) => (
+                                <li key={i}>
+                                  {x.description}
+                                  {(x.owner || x.dueDate) && (
+                                    <span className="block text-xs text-muted-foreground">
+                                      {[x.owner, x.dueDate]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </>
                         )}
-                      </p>
-                    </details>
+                        {notes.summary.openQuestions.length > 0 && (
+                          <>
+                            <h4 className="mb-2 mt-6 font-medium">
+                              {t("Open questions")}
+                            </h4>
+                            <ul className="list-disc space-y-2 pl-5 text-sm">
+                              {notes.summary.openQuestions.map((x, i) => (
+                                <li key={i}>{x}</li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                      </article>
+                    )}
+                    {notes?.transcript && (
+                      <details className="mt-8 border-t pt-5">
+                        <summary className="cursor-pointer text-sm font-medium">
+                          {t("Transcript")}
+                        </summary>
+                        <p className="mt-4 max-w-prose whitespace-pre-wrap text-sm leading-7">
+                          {notes.transcript.text || t("No speech returned.")}
+                        </p>
+                      </details>
+                    )}
                   </div>
-                )}
-                {notes?.summary && (
-                  <article className="mt-8 max-w-prose border-t pt-6">
-                    <h3 className="text-lg font-medium">
-                      {t("Meeting notes")}
-                    </h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("AI draft. Verify facts and commitments.")}
-                    </p>
-                    <p className="mt-5 whitespace-pre-wrap text-sm leading-7">
-                      {notes.summary.summary}
-                    </p>
-                    {notes.summary.decisions.length > 0 && (
-                      <>
-                        <h4 className="mb-2 mt-6 font-medium">
-                          {t("Decisions")}
-                        </h4>
-                        <ul className="list-disc space-y-2 pl-5 text-sm">
-                          {notes.summary.decisions.map((x, i) => (
-                            <li key={i}>{x}</li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                    {notes.summary.actions.length > 0 && (
-                      <>
-                        <h4 className="mb-2 mt-6 font-medium">
-                          {t("Actions")}
-                        </h4>
-                        <ul className="list-disc space-y-2 pl-5 text-sm">
-                          {notes.summary.actions.map((x, i) => (
-                            <li key={i}>
-                              {x.description}
-                              {(x.owner || x.dueDate) && (
-                                <span className="block text-xs text-muted-foreground">
-                                  {[x.owner, x.dueDate]
-                                    .filter(Boolean)
-                                    .join(" · ")}
-                                </span>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                    {notes.summary.openQuestions.length > 0 && (
-                      <>
-                        <h4 className="mb-2 mt-6 font-medium">
-                          {t("Open questions")}
-                        </h4>
-                        <ul className="list-disc space-y-2 pl-5 text-sm">
-                          {notes.summary.openQuestions.map((x, i) => (
-                            <li key={i}>{x}</li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </article>
-                )}
-                {notes?.transcript?.text.trim() && (
-                  <RecordingQuestions
-                    key={selected.id}
-                    id={selected.id}
-                    client={client}
-                  />
-                )}
-                {notes?.transcript && (
-                  <details className="mt-8 border-t pt-5">
-                    <summary className="cursor-pointer text-sm font-medium">
-                      {t("Transcript")}
-                    </summary>
-                    <p className="mt-4 max-w-prose whitespace-pre-wrap text-sm leading-7">
-                      {notes.transcript.text || t("No speech returned.")}
-                    </p>
-                  </details>
-                )}
+                  {notes?.transcript?.text.trim() && selected && (
+                    <aside className="min-w-0 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:self-start xl:overflow-auto">
+                      <Suspense
+                        fallback={
+                          <p
+                            role="status"
+                            className="text-sm text-muted-foreground"
+                          >
+                            {t("Loading assistant…")}
+                          </p>
+                        }
+                      >
+                        <RecordingAssistant
+                          context={{
+                            kind: "recording",
+                            id: selected.id,
+                            title: source(selected),
+                          }}
+                        />
+                      </Suspense>
+                    </aside>
+                  )}
+                </div>
               </>
             )}
           </section>
