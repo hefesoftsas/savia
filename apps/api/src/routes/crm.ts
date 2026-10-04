@@ -951,6 +951,7 @@ export function registerCrmRoutes(
           createdAt: "",
           updatedAt: "",
         }),
+        scopes: summary.scopes,
         nangoConnectionId: connectionId,
         nangoIntegrationId: provider.integrationId,
       };

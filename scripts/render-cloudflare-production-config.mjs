@@ -136,7 +136,7 @@ function requestsConfig({ domainD1Id }) {
     compatibility_date: "2026-09-04",
     workers_dev: false,
     preview_urls: false,
-    worker_loaders: [{ binding: "LOADER" }],
+    services: [{ binding: "HOOK_SERVICE", service: "savia-hook-executor" }],
     d1_databases: [
       {
         binding: "DB",
@@ -147,6 +147,24 @@ function requestsConfig({ domainD1Id }) {
     ],
     secrets: { required: ["ENCRYPTION_KEY"] },
     observability: { enabled: false },
+  };
+}
+
+function hookExecutorConfig() {
+  return {
+    name: "savia-hook-executor",
+    main: "src/index.ts",
+    compatibility_date: "2026-09-04",
+    workers_dev: false,
+    preview_urls: false,
+    limits: { cpu_ms: 30000 },
+    rules: [
+      {
+        type: "CompiledWasm",
+        globs: ["**/*.wasm"],
+        fallthrough: true,
+      },
+    ],
   };
 }
 
@@ -282,6 +300,7 @@ export async function renderProductionConfigs({
     auth: authConfig(rendered),
     api: apiConfig(rendered),
     "savia-request": requestsConfig(rendered),
+    "hook-executor": hookExecutorConfig(),
     mcp: mcpConfig(rendered),
     "connector-gateway": connectorsConfig(rendered),
     admin: gatewayConfig(rendered),

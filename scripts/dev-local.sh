@@ -122,6 +122,8 @@ fi
 
 pnpm --filter @savia/request run setup:local
 CI=1 pnpm --filter @savia/request run migrate:local
+start_process pnpm --filter @savia/hook-executor exec wrangler dev --local \
+  --ip 127.0.0.1 --port 8798 --inspector-port 9233 --config wrangler.jsonc
 start_process pnpm --filter @savia/request exec wrangler dev --local \
   --ip 127.0.0.1 --port 8797 --inspector-port 9232 --config wrangler.jsonc
 

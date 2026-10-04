@@ -38,7 +38,14 @@ El script toma una instantánea SQLite consistente y copia la configuración de 
 
 ## Despliegue
 
-La configuración de producción añade el Worker privado `savia-request`, su binding `LOADER`, el binding de la API y la migración `0020_savia_request.sql`. El workflow utiliza el secreto `SAVIA_REQUEST_ENCRYPTION_KEY` como `ENCRYPTION_KEY` del Worker. No hay ruta pública, workers.dev ni URL de preview del motor.
+Cloudflare deployment includes the private `savia-request` engine and a separate
+private `savia-hook-executor` Worker reached through `HOOK_SERVICE`. Hooks run in
+fresh QuickJS guests rather than Dynamic Workers; there is no `LOADER` binding or
+per-hook Dynamic Worker creation. The executor's CPU ceiling is 30 seconds and
+the caller's wall timeout is 35 seconds. See [hook execution](../hook-executor/README.md)
+for resource budgets and deployment checks. The workflow supplies
+`SAVIA_REQUEST_ENCRYPTION_KEY` as the engine's `ENCRYPTION_KEY`. Neither the engine
+nor the executor has a public route, workers.dev endpoint or preview URL.
 
 Los datos locales no se publican con el código. Antes de trasladarlos a producción debe transferirse la instantánea privada y configurarse la misma clave para sus variables cifradas (o recifrarlas con la clave del destino). El 6 de septiembre de 2026 se desplegó el motor privado y se transfirió la instantánea al D1 existente: 33 flows (21 visibles), 165 variables, una versión, 54 ejecuciones y cuatro carpetas. La clave correspondiente se configuró en el Worker y como secreto de despliegue de GitHub. La migración SQL crea tablas sin borrar registros anteriores.
 
