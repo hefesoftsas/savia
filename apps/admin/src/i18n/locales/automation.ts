@@ -693,6 +693,55 @@ export const automationMessages = {
     "Screen uninstalled from HubSpot.",
     "Tela desvinculada do HubSpot.",
   ],
+  "No se instaló ninguna pantalla. Revisa los permisos de la conexión %{value0} y vuelve a consultar la disponibilidad.":
+    [
+      "No se instaló ninguna pantalla. Revisa los permisos de la conexión %{value0} y vuelve a consultar la disponibilidad.",
+      "No screens were installed. Check the %{value0} connection permissions and refresh availability.",
+      "Nenhuma tela foi instalada. Verifique as permissões da conexão %{value0} e atualize a disponibilidade.",
+    ],
+  "%{value0} pantallas de %{value2} listas.%{value1}": [
+    "%{value0} pantallas de %{value2} listas.%{value1}",
+    "%{value0} %{value2} screens ready.%{value1}",
+    "%{value0} telas do %{value2} prontas.%{value1}",
+  ],
+  "CRM conectado · %{value0}": [
+    "CRM conectado · %{value0}",
+    "Connected CRM · %{value0}",
+    "CRM conectado · %{value0}",
+  ],
+  "No se pudo consultar %{value0}:": [
+    "No se pudo consultar %{value0}:",
+    "Could not query %{value0}:",
+    "Não foi possível consultar %{value0}:",
+  ],
+  "No hay una conexión %{value0} activa en este tenant. Configúrala en las integraciones de Savia y actualiza la disponibilidad.":
+    [
+      "No hay una conexión %{value0} activa en este tenant. Configúrala en las integraciones de Savia y actualiza la disponibilidad.",
+      "There is no active %{value0} connection in this tenant. Configure one in Savia integrations and refresh availability.",
+      "Não há uma conexão %{value0} ativa neste tenant. Configure-a nas integrações do Savia e atualize a disponibilidade.",
+    ],
+  "Las operaciones disponibles dependen de los permisos de %{value0}. Puedes repetir la instalación sin duplicar pantallas.":
+    [
+      "Las operaciones disponibles dependen de los permisos de %{value0}. Puedes repetir la instalación sin duplicar pantallas.",
+      "Available operations depend on %{value0} permissions. You can repeat the installation without duplicating screens.",
+      "As operações disponíveis dependem das permissões do %{value0}. Você pode repetir a instalação sem duplicar telas.",
+    ],
+  "Al instalar, todos los miembros activos de este tenant podrán consultar estas colecciones usando tu conexión. Solo los administradores podrán modificar registros, según los permisos de %{value0}.":
+    [
+      "Al instalar, todos los miembros activos de este tenant podrán consultar estas colecciones usando tu conexión. Solo los administradores podrán modificar registros, según los permisos de %{value0}.",
+      "Installing allows all active members of this tenant to query these collections using your connection. Only administrators can modify records, subject to %{value0} permissions.",
+      "Ao instalar, todos os membros ativos deste tenant poderão consultar estas coleções usando sua conexão. Apenas administradores poderão modificar registros, conforme as permissões do %{value0}.",
+    ],
+  "Los registros remotos se conservarán.": [
+    "Los registros remotos se conservarán.",
+    "Remote records will be kept.",
+    "Os registros remotos serão mantidos.",
+  ],
+  "Pantalla desvinculada de %{value0}.": [
+    "Pantalla desvinculada de %{value0}.",
+    "Screen uninstalled from %{value0}.",
+    "Tela desvinculada do %{value0}.",
+  ],
   "No se pudo desinstalar la pantalla. Vuelve a intentarlo.": [
     "No se pudo desinstalar la pantalla. Vuelve a intentarlo.",
     "Could not uninstall the screen. Try again.",

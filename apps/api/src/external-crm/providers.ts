@@ -15,6 +15,18 @@ export function isHubSpotNangoConfigured(
   );
 }
 
+function integrationConfigured(
+  configuration: NangoConfiguration,
+  key:
+    "salesforceIntegrationId" | "zohoIntegrationId" | "pipedriveIntegrationId",
+): boolean {
+  return (
+    configured(configuration.baseUrl) &&
+    configured(configuration.apiKey) &&
+    configured(configuration[key])
+  );
+}
+
 export function createCrmProviderRegistry(
   configuration: NangoConfiguration,
 ): Record<CrmProviderId, CrmProviderDefinition> {
@@ -38,20 +50,74 @@ export function createCrmProviderRegistry(
     salesforce: {
       id: "salesforce",
       displayName: "Salesforce",
-      availability: "coming_soon",
-      capabilities: [],
+      availability: integrationConfigured(
+        configuration,
+        "salesforceIntegrationId",
+      )
+        ? "enabled"
+        : "unavailable",
+      capabilities: integrationConfigured(
+        configuration,
+        "salesforceIntegrationId",
+      )
+        ? [
+            "contacts:read",
+            "contacts:write",
+            "companies:read",
+            "companies:write",
+            "deals:read",
+            "deals:write",
+          ]
+        : [],
+      integrationId: configured(configuration.salesforceIntegrationId)
+        ? configuration.salesforceIntegrationId.trim()
+        : undefined,
     },
     zoho: {
       id: "zoho",
       displayName: "Zoho CRM",
-      availability: "coming_soon",
-      capabilities: [],
+      availability: integrationConfigured(configuration, "zohoIntegrationId")
+        ? "enabled"
+        : "unavailable",
+      capabilities: integrationConfigured(configuration, "zohoIntegrationId")
+        ? [
+            "contacts:read",
+            "contacts:write",
+            "companies:read",
+            "companies:write",
+            "deals:read",
+            "deals:write",
+          ]
+        : [],
+      integrationId: configured(configuration.zohoIntegrationId)
+        ? configuration.zohoIntegrationId.trim()
+        : undefined,
     },
     pipedrive: {
       id: "pipedrive",
       displayName: "Pipedrive",
-      availability: "coming_soon",
-      capabilities: [],
+      availability: integrationConfigured(
+        configuration,
+        "pipedriveIntegrationId",
+      )
+        ? "enabled"
+        : "unavailable",
+      capabilities: integrationConfigured(
+        configuration,
+        "pipedriveIntegrationId",
+      )
+        ? [
+            "contacts:read",
+            "contacts:write",
+            "companies:read",
+            "companies:write",
+            "deals:read",
+            "deals:write",
+          ]
+        : [],
+      integrationId: configured(configuration.pipedriveIntegrationId)
+        ? configuration.pipedriveIntegrationId.trim()
+        : undefined,
     },
   };
 }

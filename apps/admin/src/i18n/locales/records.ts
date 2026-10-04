@@ -1271,6 +1271,11 @@ export const recordsMessages = {
     "No related records in HubSpot.",
     "Nenhum registro relacionado no HubSpot.",
   ],
+  "No hay registros relacionados en %{value0}.": [
+    "No hay registros relacionados en %{value0}.",
+    "No related records in %{value0}.",
+    "Nenhum registro relacionado no %{value0}.",
+  ],
   "Esta colección aún no tiene relaciones. Puedes definirlas en Administración → Datos → Relaciones.":
     [
       "Esta colección aún no tiene relaciones. Puedes definirlas en Administración → Datos → Relaciones.",

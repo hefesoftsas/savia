@@ -113,6 +113,10 @@
     {
       "filename": "0026_booking_public_links.sql",
       "sha256": "6ffa216872a2caae9e5dc9530886de1208f633d5057ca0bdc0967f77355d67fa"
+    },
+    {
+      "filename": "0027_crm_organization_connection.sql",
+      "sha256": "64d9e8b78f820f36e17e9a0352bab1be9f301fd12eea3c75bcf36292a1f57d65"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -501,6 +505,16 @@
     {
       "type": "index",
       "name": "tenant_crm_connections_active_unique",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_nango_active_unique",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_organization_active_unique",
       "table": "tenant_crm_connections"
     },
     {

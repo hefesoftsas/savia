@@ -7,6 +7,8 @@ import {
   type CrmProviderId,
   type CrmRepository,
   crmConnectionStatuses,
+  CrmOrganizationConnectionExistsError,
+  CrmConnectionAlreadyAssignedError,
   crmProviderIds,
 } from "./contracts";
 
@@ -126,8 +128,72 @@ function dedupeConnectionsByProvider(
   return connections;
 }
 
+function organizationUniqueConflict(
+  error: unknown,
+): "organization" | "nango" | undefined {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const constraint = Reflect.get(current, "constraint");
+    const message = String(Reflect.get(current, "message") ?? "");
+    if (
+      constraint === "tenant_crm_connections_nango_active_unique" ||
+      message.includes("tenant_crm_connections_nango_active_unique") ||
+      message.includes(
+        "UNIQUE constraint failed: tenant_crm_connections.nango_integration_id, tenant_crm_connections.nango_connection_id",
+      )
+    )
+      return "nango";
+    if (
+      constraint === "tenant_crm_connections_organization_active_unique" ||
+      constraint === "tenant_crm_connections_active_unique" ||
+      message.includes("tenant_crm_connections_active_unique") ||
+      message.includes(
+        "UNIQUE constraint failed: tenant_crm_connections.created_by_principal_id, tenant_crm_connections.tenant_id, tenant_crm_connections.provider",
+      ) ||
+      message.includes("tenant_crm_connections_organization_active_unique") ||
+      message.includes(
+        "UNIQUE constraint failed: tenant_crm_connections.tenant_id",
+      )
+    )
+      return "organization";
+    current = Reflect.get(current, "cause");
+  }
+  return undefined;
+}
+
 export function createCrmRepository(db: D1Database): CrmRepository {
+  async function organizationPolicy(agencyId: number, principalId: string) {
+    const row = await db
+      .prepare(
+        `SELECT provider, created_by_principal_id FROM tenant_crm_connections
+      WHERE tenant_id = ? AND disconnected_at IS NULL LIMIT 1`,
+      )
+      .bind(agencyId)
+      .first<{ provider: string; created_by_principal_id: string }>();
+    return row
+      ? {
+          activeProvider: providerFromRow(row.provider),
+          ownedByCurrentUser: row.created_by_principal_id === principalId,
+        }
+      : { ownedByCurrentUser: false };
+  }
+  async function assertConnectionAvailable(
+    agencyId: number,
+    provider: CrmProviderId,
+    principalId: string,
+  ) {
+    const policy = await organizationPolicy(agencyId, principalId);
+    if (
+      policy.activeProvider &&
+      (!policy.ownedByCurrentUser || policy.activeProvider !== provider)
+    )
+      throw new CrmOrganizationConnectionExistsError();
+  }
   return {
+    organizationPolicy,
+    assertConnectionAvailable,
     async listConnections(agencyId, principalId) {
       const rows = await db
         .prepare(
@@ -174,82 +240,85 @@ export function createCrmRepository(db: D1Database): CrmRepository {
 
     async saveConnection(completion) {
       const now = new Date().toISOString();
-      const current =
-        (await findActiveConnectionForPrincipal(
-          db,
-          completion.provider,
-          completion.actor.principal.id,
-        )) ??
-        (await findActiveConnection(
-          db,
-          completion.agencyId,
-          completion.provider,
-          completion.actor.principal.id,
-        ));
-      const agencyId = current?.agencyId ?? completion.agencyId;
+      await assertConnectionAvailable(
+        completion.agencyId,
+        completion.provider,
+        completion.actor.principal.id,
+      );
+      const current = await findActiveConnection(
+        db,
+        completion.agencyId,
+        completion.provider,
+        completion.actor.principal.id,
+      );
+      const agencyId = completion.agencyId;
       const connectionId = current?.id ?? crypto.randomUUID();
       const scopes = JSON.stringify(completion.scopes ?? []);
-      if (current) {
-        await db
-          .prepare(
-            `UPDATE tenant_crm_connections
+      try {
+        if (current) {
+          const result = await db
+            .prepare(
+              `UPDATE tenant_crm_connections
              SET nango_connection_id = ?, nango_integration_id = ?, status = ?,
                external_account_label = ?, external_account_id = ?, scopes = ?, last_validated_at = ?,
                updated_at = ?
-             WHERE id = ? AND created_by_principal_id = ?`,
-          )
-          .bind(
-            completion.nangoConnectionId,
-            completion.nangoIntegrationId,
-            completion.status,
-            completion.externalAccountLabel ?? null,
-            completion.externalAccountId ?? null,
-            scopes,
-            completion.lastValidatedAt ?? null,
-            now,
-            connectionId,
-            completion.actor.principal.id,
-          )
-          .run();
-      } else {
-        await db
-          .prepare(
-            `INSERT INTO tenant_crm_connections (
+             WHERE id = ? AND created_by_principal_id = ? AND disconnected_at IS NULL`,
+            )
+            .bind(
+              completion.nangoConnectionId,
+              completion.nangoIntegrationId,
+              completion.status,
+              completion.externalAccountLabel ?? null,
+              completion.externalAccountId ?? null,
+              scopes,
+              completion.lastValidatedAt ?? null,
+              now,
+              connectionId,
+              completion.actor.principal.id,
+            )
+            .run();
+          if (result.meta.changes !== 1)
+            throw new CrmOrganizationConnectionExistsError();
+        } else {
+          await db
+            .prepare(
+              `INSERT INTO tenant_crm_connections (
               id, tenant_id, created_by_principal_id, provider,
               nango_connection_id, nango_integration_id, status,
               external_account_label, external_account_id, scopes, last_validated_at, created_at,
               updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .bind(
-            connectionId,
-            agencyId,
-            completion.actor.principal.id,
-            completion.provider,
-            completion.nangoConnectionId,
-            completion.nangoIntegrationId,
-            completion.status,
-            completion.externalAccountLabel ?? null,
-            completion.externalAccountId ?? null,
-            scopes,
-            completion.lastValidatedAt ?? null,
-            now,
-            now,
-          )
-          .run();
+            )
+            .bind(
+              connectionId,
+              agencyId,
+              completion.actor.principal.id,
+              completion.provider,
+              completion.nangoConnectionId,
+              completion.nangoIntegrationId,
+              completion.status,
+              completion.externalAccountLabel ?? null,
+              completion.externalAccountId ?? null,
+              scopes,
+              completion.lastValidatedAt ?? null,
+              now,
+              now,
+            )
+            .run();
+        }
+      } catch (error) {
+        const conflict = organizationUniqueConflict(error);
+        if (conflict === "nango") throw new CrmConnectionAlreadyAssignedError();
+        if (conflict === "organization")
+          throw new CrmOrganizationConnectionExistsError();
+        throw error;
       }
-      const stored =
-        (await findActiveConnectionForPrincipal(
-          db,
-          completion.provider,
-          completion.actor.principal.id,
-        )) ??
-        (await findActiveConnection(
-          db,
-          agencyId,
-          completion.provider,
-          completion.actor.principal.id,
-        ));
+      const stored = await findActiveConnection(
+        db,
+        agencyId,
+        completion.provider,
+        completion.actor.principal.id,
+      );
       if (!stored) throw new Error("The CRM connection was not stored");
       return stored;
     },

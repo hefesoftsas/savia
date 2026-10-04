@@ -105,6 +105,11 @@ async function applicationScenario(postgresUrl?: string) {
   try {
     app = await createApplication(config, {
       NANGO_GITHUB_INTEGRATION_ID: "github-test",
+      NANGO_BASE_URL: "https://nango.test",
+      NANGO_API_KEY: "fixture-key",
+      NANGO_SALESFORCE_INTEGRATION_ID: "salesforce-test",
+      NANGO_ZOHO_INTEGRATION_ID: "zoho-test",
+      NANGO_PIPEDRIVE_INTEGRATION_ID: "pipedrive-test",
     });
     expect(
       (await request(base + "/objects", "GET", undefined, false)).status,
@@ -132,6 +137,15 @@ async function applicationScenario(postgresUrl?: string) {
         }),
       ]),
     );
+    const crmProviders = await json("/v1/crm/providers");
+    for (const id of ["salesforce", "zoho", "pipedrive"]) {
+      expect(crmProviders.data).toContainEqual(
+        expect.objectContaining({
+          id,
+          attributes: expect.objectContaining({ availability: "enabled" }),
+        }),
+      );
+    }
     const users = await json("/v1/identity/users");
     expect(users.data).toEqual(
       expect.arrayContaining([

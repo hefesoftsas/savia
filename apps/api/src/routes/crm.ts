@@ -12,6 +12,8 @@ import type {
 } from "../external-crm/contracts";
 import {
   CrmConnectionAccessError,
+  CrmOrganizationConnectionExistsError,
+  CrmConnectionAlreadyAssignedError,
   CrmConnectionNotFoundError,
   CrmUnavailableError,
   CrmUpstreamError,
@@ -68,6 +70,10 @@ const providerDocumentSchema = z.object({
     displayName: z.string(),
     availability: z.enum(["enabled", "unavailable", "coming_soon"]),
     capabilities: z.array(z.string()),
+    connectionBlocked: z.boolean().optional(),
+    activeProvider: z
+      .enum(["hubspot", "salesforce", "zoho", "pipedrive"])
+      .optional(),
   }),
 });
 const connectSessionSchema = z.object({
@@ -152,7 +158,8 @@ const connectionListRoute = createRoute({
   method: "get",
   path: "/v1/crm/connections",
   tags: ["CRM connections"],
-  summary: "List the current user’s active CRM connections",
+  summary:
+    "List the current user’s active CRM connection in the selected organization",
   security: [{ oauth2: ["savia.api.read"] }],
   request: { query: optionalAgencyIdQuerySchema },
   responses: {
@@ -198,6 +205,7 @@ const connectSessionRoute = createRoute({
     400: { description: "Invalid request or Nango connection identity" },
     403: { description: "An active tenant membership is required" },
     404: { description: "Provider is unknown" },
+    409: { description: "The organization already has a CRM connection" },
     424: { description: "Provider is not available yet" },
     503: { description: "Provider is not configured" },
   },
@@ -234,6 +242,7 @@ const completeConnectionRoute = createRoute({
     },
     403: { description: "An active tenant membership is required" },
     404: { description: "Provider is unknown" },
+    409: { description: "The organization already has a CRM connection" },
     424: { description: "Provider is not available yet" },
     503: { description: "Provider is not configured" },
   },
@@ -265,6 +274,7 @@ const reconnectSessionRoute = createRoute({
     },
     403: { description: "An active tenant membership is required" },
     404: { description: "Provider or connection is not found" },
+    409: { description: "The organization already has a CRM connection" },
     424: { description: "Provider is not available yet" },
     503: { description: "Provider is not configured" },
   },
@@ -497,6 +507,14 @@ function providerStatus(
 }
 
 export function studioErrorResponse(exception: unknown) {
+  if (
+    exception instanceof CrmOrganizationConnectionExistsError ||
+    exception instanceof CrmConnectionAlreadyAssignedError
+  )
+    return {
+      status: 409,
+      body: errorBody(exception.code, exception.message),
+    } as const;
   if (exception instanceof CrmUnavailableError)
     return {
       status: 503,
@@ -658,8 +676,35 @@ export function registerCrmRoutes(
         ),
         403,
       );
+    const policyTenant = await resolveWritableAgencyId(
+      repository,
+      actor,
+      agencyId,
+    );
+    const policy =
+      policyTenant === undefined
+        ? undefined
+        : await repository.organizationPolicy(policyTenant, actor.principal.id);
     return context.json(
-      { data: Object.values(providers).map(providerDocument) },
+      {
+        data: Object.values(providers).map((provider) => {
+          const document = providerDocument(provider);
+          return {
+            ...document,
+            attributes: {
+              ...document.attributes,
+              connectionBlocked: Boolean(
+                policy?.activeProvider &&
+                (!policy.ownedByCurrentUser ||
+                  policy.activeProvider !== provider.id),
+              ),
+              ...(policy?.activeProvider
+                ? { activeProvider: policy.activeProvider }
+                : {}),
+            },
+          };
+        }),
+      },
       200,
     );
   });
@@ -682,7 +727,10 @@ export function registerCrmRoutes(
       );
       return context.json({ data: connections.map(connectionDocument) }, 200);
     }
-    const connections = await repository.listConnectionsForPrincipal(
+    const selectedAgencyId = await resolveWritableAgencyId(repository, actor);
+    if (selectedAgencyId === undefined) return context.json({ data: [] }, 200);
+    const connections = await repository.listConnections(
+      selectedAgencyId,
       actor.principal.id,
     );
     return context.json({ data: connections.map(connectionDocument) }, 200);
@@ -727,6 +775,11 @@ export function registerCrmRoutes(
         503,
       );
     try {
+      await repository.assertConnectionAvailable(
+        agencyId,
+        requestedProvider,
+        actor.principal.id,
+      );
       const session = await dependencies.nango.createConnectSession({
         actor,
         agencyId,
@@ -749,22 +802,18 @@ export function registerCrmRoutes(
         errorBody("CRM_PROVIDER_NOT_FOUND", "CRM provider not found"),
         404,
       );
-    const existing =
-      requestedAgencyId === undefined
-        ? await repository.findActiveConnectionForPrincipal(
-            requestedProvider,
-            actor.principal.id,
-          )
-        : await repository.findActiveConnection(
-            requestedAgencyId,
-            requestedProvider,
-            actor.principal.id,
-          );
-    const agencyId =
-      existing?.agencyId ??
-      (await resolveWritableAgencyId(repository, actor, requestedAgencyId));
+    const agencyId = await resolveWritableAgencyId(
+      repository,
+      actor,
+      requestedAgencyId,
+    );
     if (agencyId === undefined)
       return context.json(membershipRequiredResponse(), 403);
+    const existing = await repository.findActiveConnection(
+      agencyId,
+      requestedProvider,
+      actor.principal.id,
+    );
     if (!existing)
       return context.json(
         errorBody("CRM_CONNECTION_NOT_FOUND", "CRM connection not found"),
@@ -791,6 +840,11 @@ export function registerCrmRoutes(
         503,
       );
     try {
+      await repository.assertConnectionAvailable(
+        agencyId,
+        requestedProvider,
+        actor.principal.id,
+      );
       const session = await dependencies.nango.createConnectSession({
         actor,
         agencyId,
@@ -809,15 +863,11 @@ export function registerCrmRoutes(
     const { agencyId: requestedAgencyId, connectionId } =
       context.req.valid("json");
     const requestedProvider = context.req.valid("param").provider;
-    const existingForPrincipal = isCrmProviderId(requestedProvider)
-      ? await repository.findActiveConnectionForPrincipal(
-          requestedProvider,
-          actor.principal.id,
-        )
-      : undefined;
-    const agencyId =
-      existingForPrincipal?.agencyId ??
-      (await resolveWritableAgencyId(repository, actor, requestedAgencyId));
+    const agencyId = await resolveWritableAgencyId(
+      repository,
+      actor,
+      requestedAgencyId,
+    );
     if (agencyId === undefined)
       return context.json(membershipRequiredResponse(), 403);
     if (!isCrmProviderId(requestedProvider))
@@ -855,6 +905,11 @@ export function registerCrmRoutes(
         503,
       );
     try {
+      await repository.assertConnectionAvailable(
+        agencyId,
+        requestedProvider,
+        actor.principal.id,
+      );
       const summary = await dependencies.nango.getConnection(
         connectionId,
         provider.integrationId,
@@ -878,13 +933,11 @@ export function registerCrmRoutes(
           ),
           403,
         );
-      const current =
-        existingForPrincipal ??
-        (await repository.findActiveConnection(
-          agencyId,
-          requestedProvider,
-          actor.principal.id,
-        ));
+      const current = await repository.findActiveConnection(
+        agencyId,
+        requestedProvider,
+        actor.principal.id,
+      );
       const candidate = {
         ...(current ?? {
           id: "unpersisted-connection",
@@ -922,7 +975,7 @@ export function registerCrmRoutes(
                 (dialectFor(db).name === "postgres"
                   ? "jsonb_set(config::jsonb, '{connectionId}', to_jsonb(?::text))::text"
                   : "json_set(config, '$.connectionId', ?)") +
-                "\n               WHERE " +
+                "\n               WHERE tenant_id IN (?, ?) AND " +
                 dialectFor(db).jsonValue("config", "$.principalId") +
                 " = ?\n                 AND " +
                 dialectFor(db).jsonValue("config", "$.accountId") +
@@ -932,6 +985,8 @@ export function registerCrmRoutes(
             )
             .bind(
               connection.id,
+              `tenant:${agencyId}`,
+              `agency:${agencyId}`,
               actor.principal.id,
               validation.externalAccountId,
               requestedProvider,
@@ -964,20 +1019,18 @@ export function registerCrmRoutes(
         errorBody("CRM_PROVIDER_NOT_FOUND", "CRM provider not found"),
         404,
       );
-    const connection =
-      requestedAgencyId === undefined
-        ? await repository.findActiveConnectionForPrincipal(
-            requestedProvider,
-            actor.principal.id,
-          )
-        : await repository.findActiveConnection(
-            requestedAgencyId,
-            requestedProvider,
-            actor.principal.id,
-          );
-    const agencyId = connection?.agencyId ?? requestedAgencyId;
+    const agencyId = await resolveWritableAgencyId(
+      repository,
+      actor,
+      requestedAgencyId,
+    );
     if (agencyId === undefined || !canManageUserOwnedCrm(actor, agencyId))
       return context.json(membershipRequiredResponse(), 403);
+    const connection = await repository.findActiveConnection(
+      agencyId,
+      requestedProvider,
+      actor.principal.id,
+    );
     const provider = providers[requestedProvider];
     const status = providerStatus(provider);
     if (status)

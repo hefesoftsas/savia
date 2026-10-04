@@ -175,6 +175,65 @@ it("shows the HubSpot empty state without suggesting local relationship configur
     screen.queryByRole("button", { name: "Vincular registro" }),
   ).not.toBeInTheDocument();
 });
+it("names the provider in an empty remote relation state", async () => {
+  vi.mocked(api).mockResolvedValue({ data: [] });
+  const salesforceObject = {
+    ...object,
+    config: {
+      ...object.config,
+      studio: {
+        collection: {
+          sourceId: "salesforce",
+          resource: "contacts",
+          kind: "crm" as const,
+          capabilities: {
+            list: true,
+            read: true,
+            create: false,
+            update: false,
+            delete: false,
+            schema: false,
+            customFields: false,
+          },
+        },
+      },
+    },
+  };
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RecordLinks
+        object={salesforceObject}
+        record={record}
+        onNavigate={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(
+    await screen.findByText("No hay registros relacionados en Salesforce."),
+  ).toBeVisible();
+});
+it("uses hasNextPage when a remote relationship has no exact total", async () => {
+  vi.mocked(api).mockImplementation(async (path) =>
+    path.includes("page=2")
+      ? {
+          data: [
+            { ...group, records: [], total: undefined, hasNextPage: false },
+          ],
+        }
+      : { data: [{ ...group, total: undefined, hasNextPage: true }] },
+  );
+  setup();
+  await screen.findByRole("button", { name: "Agencia Norte" });
+  expect(document.querySelector(".record-links-tab-count")).toBeNull();
+  const next = screen.getByRole("button", { name: "Siguiente" });
+  expect(next).toBeEnabled();
+  fireEvent.click(next);
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      "/record-links/clients/client%2F1?page=2&perPage=20&includeRecords=true",
+    ),
+  );
+});
 it("labels HubSpot contact candidates by their full name before their email", async () => {
   vi.mocked(api).mockImplementation(async (path) =>
     path.startsWith("/records/")

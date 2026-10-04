@@ -83,6 +83,7 @@ export async function handlesHubspotWorkspace(
 }
 export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
   const { db, tenant, actor, crm } = context;
+  const tenantId = Number(tenant.replace(/^(?:agency|tenant):/, ""));
   const app = new Hono();
   app.onError((e, c) =>
     e instanceof HTTPException
@@ -104,9 +105,11 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
     )
       fail("Esta colección pertenece a otra conexión de HubSpot.", 403);
     const owner = binding?.principalId ?? actor.principal.id;
-    const current = await createCrmRepository(
-      db,
-    ).findActiveConnectionForPrincipal("hubspot", owner);
+    const current = await createCrmRepository(db).findActiveConnection(
+      tenantId,
+      "hubspot",
+      owner,
+    );
     if (
       !current ||
       current.status !== "connected" ||
@@ -234,7 +237,8 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
     );
   }
   app.get("/api/crm-workspace", async (c) => {
-    const conn = await createCrmRepository(db).findActiveConnectionForPrincipal(
+    const conn = await createCrmRepository(db).findActiveConnection(
+      tenantId,
       "hubspot",
       actor.principal.id,
     );

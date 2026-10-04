@@ -165,7 +165,7 @@ export function registerStudioRoutes(
             dialectFor(db).jsonValue("config", "$.kind") +
             "='crm' AND " +
             dialectFor(db).jsonValue("config", "$.provider") +
-            "='hubspot' AND " +
+            " IN ('hubspot','salesforce','zoho','pipedrive') AND " +
             dialectFor(db).jsonValue("config", "$.accessScope") +
             "='tenant'",
         )

@@ -52,6 +52,75 @@ it("hides missing mappings and rejects unsafe or unrecognized destinations", () 
 });
 it("renders deal origin links for the standard HubSpot object catalog", () => {
   const dealUrl = "https://app.hubspot.com/contacts/51969008/record/0-3/123";
-  render(<RecordOriginLinks record={{ _crmLinks: [{ provider: "hubspot", label: "Negocio en HubSpot", url: dealUrl }] }} />);
-  expect(screen.getByRole("link", { name: "Negocio en HubSpot" }).getAttribute("href")).toBe(dealUrl);
+  render(
+    <RecordOriginLinks
+      record={{
+        _crmLinks: [
+          { provider: "hubspot", label: "Negocio en HubSpot", url: dealUrl },
+        ],
+      }}
+    />,
+  );
+  expect(
+    screen
+      .getByRole("link", { name: "Negocio en HubSpot" })
+      .getAttribute("href"),
+  ).toBe(dealUrl);
+});
+
+it("opens only validated Salesforce, Zoho, and Pipedrive record URLs with provider labels", () => {
+  render(
+    <RecordOriginLinks
+      record={{
+        _crmLinks: [
+          {
+            provider: "salesforce",
+            label: "Contact in Salesforce",
+            url: "https://acme.lightning.force.com/lightning/r/Contact/003000000000001AAA/view",
+          },
+          {
+            provider: "zoho",
+            label: "Contact in Zoho CRM",
+            url: "https://crm.zoho.com/crm/org123/tab/Contacts/5725767000001234567",
+          },
+          {
+            provider: "pipedrive",
+            label: "Person in Pipedrive",
+            url: "https://acme.pipedrive.com/person/123",
+          },
+          {
+            provider: "salesforce",
+            label: "Untrusted Salesforce link",
+            url: "https://acme.lightning.force.com.evil.test/lightning/r/Contact/003000000000001AAA/view",
+          },
+          {
+            provider: "zoho",
+            label: "Untrusted Zoho link",
+            url: "https://evilzoho.com/crm/org123/tab/Contacts/5725767000001234567",
+          },
+          {
+            provider: "pipedrive",
+            label: "Untrusted Pipedrive link",
+            url: "https://pipedrive.com.evil.test/person/123",
+          },
+        ],
+      }}
+    />,
+  );
+  expect(
+    screen.getByRole("link", { name: "Contact in Salesforce" }),
+  ).toHaveAttribute(
+    "href",
+    "https://acme.lightning.force.com/lightning/r/Contact/003000000000001AAA/view",
+  );
+  expect(
+    screen.getByRole("link", { name: "Contact in Zoho CRM" }),
+  ).toHaveAttribute(
+    "href",
+    "https://crm.zoho.com/crm/org123/tab/Contacts/5725767000001234567",
+  );
+  expect(
+    screen.getByRole("link", { name: "Person in Pipedrive" }),
+  ).toHaveAttribute("href", "https://acme.pipedrive.com/person/123");
+  expect(screen.queryByRole("link", { name: /Untrusted/ })).toBeNull();
 });

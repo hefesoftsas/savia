@@ -91,3 +91,22 @@ it("refreshes delivery history only in the active workspace", () => {
   expect(keys).toContainEqual(["document-delivery", "/v1/studio/3", "file-42"]);
   expect(keys).toContainEqual(["record-activity"]);
 });
+
+it("invalidates each CRM provider discovery cache when sources change", async () => {
+  setStudioRuntime({ embedded: true, tenantId: 3, apiBasePath: "/t/3" });
+  const client = new QueryClient();
+  for (const provider of ["salesforce", "zoho", "pipedrive"])
+    client.setQueryData(["crm-workspace", provider, "/t/3"], {
+      connected: true,
+    });
+  await invalidateStudioRealtimeEvent(
+    client,
+    { topic: "studio", collection: "sources" },
+    { ...getStudioRuntime() },
+  );
+  for (const provider of ["salesforce", "zoho", "pipedrive"])
+    expect(
+      client.getQueryState(["crm-workspace", provider, "/t/3"])?.isInvalidated,
+    ).toBe(true);
+  client.clear();
+});

@@ -106,12 +106,20 @@ export function studioRealtimeQueryKeys(
             ["collection-bindings", sourceScope(runtime)],
             ["collection-catalog", sourceScope(runtime)],
             ["crm-workspace", runtime.apiBasePath],
+            ...["salesforce", "zoho", "pipedrive"].map((provider) => [
+              "crm-workspace",
+              provider,
+              runtime.apiBasePath,
+            ]),
             ["business-setup", runtime.apiBasePath],
           ];
         case "views":
           return [["views"]];
         case "document-delivery":
-          return [["document-delivery", runtime.apiBasePath, String(id)], ["record-activity"]];
+          return [
+            ["document-delivery", runtime.apiBasePath, String(id)],
+            ["record-activity"],
+          ];
         case "audit":
           return [["audit"]];
         default:
@@ -196,6 +204,11 @@ function reconnectQueryKeys(
     ["collection-bindings", sourceScope(runtime)],
     ["collection-catalog", sourceScope(runtime)],
     ["crm-workspace", runtime.apiBasePath],
+    ...["salesforce", "zoho", "pipedrive"].map((provider) => [
+      "crm-workspace",
+      provider,
+      runtime.apiBasePath,
+    ]),
     ["business-setup", runtime.apiBasePath],
     ["audit"],
     ["views"],

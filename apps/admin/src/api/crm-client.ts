@@ -10,6 +10,8 @@ export type CrmProvider = {
   displayName: string;
   availability: CrmProviderAvailability;
   capabilities: string[];
+  connectionBlocked?: boolean;
+  activeProvider?: CrmProviderId;
 };
 
 export type CrmConnection = {
