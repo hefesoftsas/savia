@@ -129,6 +129,10 @@
     {
       "filename": "0030_crm_organization_connection.sql",
       "sha256": "64d9e8b78f820f36e17e9a0352bab1be9f301fd12eea3c75bcf36292a1f57d65"
+    },
+    {
+      "filename": "0031_assistant_transcription_endpoint.sql",
+      "sha256": "f21bd8af168c258c3b993970aceeaf3fca210dadd7f5308da4019c9eb823c8e3"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -2210,6 +2214,14 @@
         {
           "cid": 9,
           "name": "summary_model",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "transcription_endpoint",
           "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,

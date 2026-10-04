@@ -354,6 +354,19 @@ export function AssistantConfigurationPanel({
     }
   };
 
+  const transcriptionRouting = (
+    selected: string,
+    saved?: AssistantConfigurationSetting | null,
+  ) => {
+    const id = selected.trim();
+    const endpoint =
+      models.find((model) => model.id === id)?.transcriptionEndpoint ??
+      (id && id === saved?.transcriptionModel
+        ? saved.transcriptionEndpoint
+        : undefined);
+    return endpoint ? { transcriptionEndpoint: endpoint } : {};
+  };
+
   const saveMeetingModels = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!summary) return;
@@ -363,6 +376,7 @@ export function AssistantConfigurationPanel({
     try {
       const next = await client.saveGlobal({
         transcriptionModel: transcriptionModel.trim() || null,
+        ...transcriptionRouting(transcriptionModel, summary.global),
         summaryModel: summaryModel.trim() || null,
       });
       setSummary(next);
@@ -418,6 +432,7 @@ export function AssistantConfigurationPanel({
             : {}),
         model: tenantModel.trim() || null,
         transcriptionModel: tenantTranscriptionModel.trim() || null,
+        ...transcriptionRouting(tenantTranscriptionModel, selectedOverride),
         summaryModel: tenantSummaryModel.trim() || null,
       });
       setSummary(next);
@@ -629,7 +644,9 @@ export function AssistantConfigurationPanel({
               setMeetingModelNotice(false);
             }}
             models={models.filter(
-              (model) => model.modalities?.audio && model.modalities?.text,
+              (model) =>
+                model.transcriptionEndpoint ||
+                (model.modalities?.audio && model.modalities?.text),
             )}
             disabled={savingMeetingModels}
             fallbackModel={
@@ -1046,7 +1063,8 @@ export function AssistantConfigurationPanel({
                     onChange={setTenantTranscriptionModel}
                     models={models.filter(
                       (model) =>
-                        model.modalities?.audio && model.modalities?.text,
+                        model.transcriptionEndpoint ||
+                        (model.modalities?.audio && model.modalities?.text),
                     )}
                     fallbackModel={
                       summary?.global?.transcriptionModel ??
