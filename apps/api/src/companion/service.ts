@@ -278,7 +278,9 @@ export class CompanionService {
   readonly sttModel: string;
   private send: typeof fetch;
   constructor(options: { fetch?: typeof fetch; sttModel?: string } = {}) {
-    this.send = options.fetch ?? fetch;
+    // Workers' native fetch requires the global receiver, not this service.
+    this.send =
+      options.fetch ?? ((input, init) => globalThis.fetch(input, init));
     this.sttModel = options.sttModel ?? "google/gemini-2.5-flash";
     if (!/^[a-z0-9._-]+\/[a-z0-9._:-]+$/i.test(this.sttModel))
       throw new Error("Invalid Companion STT model");
