@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import PluginIde from "../plugin-ide";
+import { ApiClientError } from "@/api/api-client";
 
 const mocks = vi.hoisted(() => ({
   post: vi.fn(),
@@ -359,6 +360,7 @@ it("shows the user message while generating and retries failure without duplicat
   expect(screen.getByText("Build a counter")).toBeInTheDocument();
   expect(screen.getByText("Generando propuesta…")).toBeInTheDocument();
   expect(screen.getByLabelText("Describe tu plugin")).toHaveValue("");
+  await waitFor(() => expect(mocks.post).toHaveBeenCalled());
   fail(new Error("The model is temporarily unavailable"));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "The model is temporarily unavailable",
@@ -423,4 +425,71 @@ it("moves editor tab selection with arrow keys", () => {
   fireEvent.keyDown(preview, { key: "Home" });
   expect(code).toHaveFocus();
   expect(code).toHaveAttribute("aria-selected", "true");
+});
+
+it("runs preview while AI is pending without clearing the generation state", async () => {
+  mocks.post.mockReturnValue(new Promise(() => {}));
+  mocks.compile.mockResolvedValue({
+    entryJs: "compiled",
+    fixtures: {},
+    store: {},
+  });
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Build a board" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
+  const run = screen.getByRole("button", { name: "Ejecutar vista previa" });
+  expect(run).toBeEnabled();
+  fireEvent.click(run);
+  await screen.findByTitle("Vista previa del plugin");
+  previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
+  expect(screen.getByRole("button", { name: "Cancelar" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Publicar en el store" }),
+  ).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+  expect(
+    screen.getByRole("button", { name: "Publicar en el store" }),
+  ).toBeEnabled();
+});
+
+it("shows localized validation failure with file diagnostics and allows retry", async () => {
+  mocks.post.mockRejectedValue(
+    new ApiClientError(
+      502,
+      "PLUGIN_AUTHORING_INVALID_OUTPUT",
+      "Generated files failed validation",
+      {
+        error: {
+          details: [
+            {
+              file: "store.json",
+              path: "collections.0",
+              message: "Invalid collection declaration",
+            },
+          ],
+        },
+      },
+    ),
+  );
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Build a board" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent(
+    "La IA no consiguió generar archivos válidos",
+  );
+  expect(alert).toHaveTextContent(
+    "store.json (collections.0): Invalid collection declaration",
+  );
+  expect(screen.getByRole("button", { name: "Reintentar" })).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: "Ejecutar vista previa" }),
+  ).toBeEnabled();
 });

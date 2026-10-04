@@ -6,6 +6,7 @@ import {
   pluginAuthoringRequestSchema,
   pluginAuthoringResultSchema,
 } from "@savia/studio-shared/plugin-authoring";
+import { APICallError, NoObjectGeneratedError } from "ai";
 import { createPluginAuthoringService } from "../src/assistant/plugin-authoring";
 import { summarizePluginAuthoringCollections } from "../src/assistant/routes";
 import { createApp } from "../src/app";
@@ -252,7 +253,9 @@ describe("plugin authoring service", () => {
         prompt: "Use the existing collections",
         files,
       }),
-    ).rejects.toMatchObject({ code: "PLUGIN_AUTHORING_UNAVAILABLE" });
+    ).rejects.toMatchObject({
+      code: "PLUGIN_AUTHORING_METADATA_UNAVAILABLE",
+    });
     expect(generate).not.toHaveBeenCalled();
   });
 
@@ -387,8 +390,110 @@ describe("plugin authoring service", () => {
         prompt: "x",
         files,
       }),
-    ).rejects.toMatchObject({ code: "PLUGIN_AUTHORING_UNAVAILABLE" });
+    ).rejects.toMatchObject({ code: "PLUGIN_AUTHORING_NOT_CONFIGURED" });
     expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("reports a rejected provider request without leaking provider details", async () => {
+    const secretProviderDetail = "private-provider-response";
+    const service = createPluginAuthoringService(
+      {
+        effectiveConfigurationForTenant: vi.fn(async () => ({
+          apiKey: "server-only-key",
+          model: "selected/model",
+        })),
+        assertTenantAdministrator: vi.fn(async () => undefined),
+      } as never,
+      {
+        generateObject: vi.fn(async () => {
+          throw new APICallError({
+            message: secretProviderDetail,
+            url: "https://openrouter.ai/api/v1/chat/completions",
+            requestBodyValues: {},
+            responseBody: secretProviderDetail,
+            statusCode: 400,
+          });
+        }) as never,
+      },
+    );
+
+    const error = await service
+      .generate({
+        principalId: "author-1",
+        tenantId: 4,
+        prompt: "x",
+        files,
+      })
+      .catch((reason: unknown) => reason as Error);
+    expect(error).toMatchObject({
+      code: "PLUGIN_AUTHORING_PROVIDER_REQUEST_REJECTED",
+      message: expect.stringContaining("workspace model is available"),
+    });
+    expect(error.message).not.toContain(secretProviderDetail);
+  });
+
+  it("reports incomplete structured output as invalid output rather than provider unavailability", async () => {
+    const service = createPluginAuthoringService(
+      {
+        effectiveConfigurationForTenant: vi.fn(async () => ({
+          apiKey: "server-only-key",
+          model: "selected/model",
+        })),
+        assertTenantAdministrator: vi.fn(async () => undefined),
+      } as never,
+      {
+        generateObject: vi.fn(async () => {
+          throw new NoObjectGeneratedError({
+            response: undefined as never,
+            usage: undefined as never,
+            finishReason: "length",
+          });
+        }) as never,
+      },
+    );
+
+    await expect(
+      service.generate({
+        principalId: "author-1",
+        tenantId: 4,
+        prompt: "x",
+        files,
+      }),
+    ).rejects.toMatchObject({ code: "PLUGIN_AUTHORING_INVALID_OUTPUT" });
+  });
+
+  it("applies the operation deadline to collection metadata and aborts the lookup", async () => {
+    let lookupSignal: AbortSignal | undefined;
+    const service = createPluginAuthoringService(
+      {
+        effectiveConfigurationForTenant: vi.fn(async () => ({
+          apiKey: "server-only-key",
+          model: "selected/model",
+        })),
+        assertTenantAdministrator: vi.fn(async () => undefined),
+      } as never,
+      {
+        timeoutMs: 5,
+        generateObject: vi.fn(),
+        loadCollectionMetadata: vi.fn((_tenantId, signal) => {
+          lookupSignal = signal;
+          return new Promise<never>(() => {});
+        }),
+      },
+    );
+
+    await expect(
+      service.generate({
+        principalId: "author-1",
+        tenantId: 4,
+        prompt: "x",
+        files,
+      }),
+    ).rejects.toMatchObject({
+      code: "PLUGIN_AUTHORING_TIMEOUT",
+      status: 504,
+    });
+    expect(lookupSignal?.aborted).toBe(true);
   });
 
   it("denies non-admin tenant members before reading provider configuration", async () => {
@@ -446,7 +551,88 @@ describe("plugin authoring service", () => {
         prompt: "x",
         files,
       }),
-    ).rejects.toMatchObject({ code: "PLUGIN_AUTHORING_INVALID_OUTPUT" });
+    ).rejects.toMatchObject({
+      code: "PLUGIN_AUTHORING_INVALID_OUTPUT",
+      details: [expect.objectContaining({ file: "entry.tsx" })],
+    });
+  });
+
+  it("repairs generated files once with safe per-file validation diagnostics", async () => {
+    const invalidFiles = {
+      ...files,
+      "entry.tsx": "console.log('missing render export');",
+    };
+    const generate = vi
+      .fn()
+      .mockResolvedValueOnce({
+        object: { message: "Initial attempt", files: invalidFiles },
+      })
+      .mockResolvedValueOnce({
+        object: { message: "Repaired proposal", files },
+      });
+    const service = createPluginAuthoringService(
+      {
+        effectiveConfigurationForTenant: vi.fn(async () => ({
+          apiKey: "server-only-key",
+          model: "selected/model",
+        })),
+        assertTenantAdministrator: vi.fn(async () => undefined),
+      } as never,
+      { generateObject: generate as never },
+    );
+
+    await expect(
+      service.generate({
+        principalId: "author-1",
+        tenantId: 4,
+        prompt: "Add a view",
+        files,
+      }),
+    ).resolves.toEqual({ message: "Repaired proposal", files });
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1]?.[0].prompt).toContain(
+      "entry.tsx: debe exportar render(element, savia) o widgets",
+    );
+    expect(generate.mock.calls[1]?.[0].prompt).toContain(
+      invalidFiles["entry.tsx"],
+    );
+    expect(generate.mock.calls[1]?.[0].maxRetries).toBe(0);
+    expect(generate.mock.calls[1]?.[0].abortSignal).toBe(
+      generate.mock.calls[0]?.[0].abortSignal,
+    );
+  });
+
+  it("accepts a valid store.json when optional arrays use schema defaults", async () => {
+    const defaultedFiles = {
+      ...files,
+      "store.json": JSON.stringify({ format: "savia.store", formatVersion: 1 }),
+    };
+    const service = createPluginAuthoringService(
+      {
+        effectiveConfigurationForTenant: vi.fn(async () => ({
+          apiKey: "server-only-key",
+          model: "selected/model",
+        })),
+        assertTenantAdministrator: vi.fn(async () => undefined),
+      } as never,
+      {
+        generateObject: vi.fn(async () => ({
+          object: { message: "Minimal valid store", files: defaultedFiles },
+        })) as never,
+      },
+    );
+
+    await expect(
+      service.generate({
+        principalId: "author-1",
+        tenantId: 4,
+        prompt: "Add a plugin shell",
+        files,
+      }),
+    ).resolves.toEqual({
+      message: "Minimal valid store",
+      files: defaultedFiles,
+    });
   });
 
   it("rejects source imports and invalid collection declarations", async () => {

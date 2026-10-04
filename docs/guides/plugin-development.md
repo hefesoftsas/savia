@@ -205,7 +205,19 @@ publish, install plugins or access live record values. A failed schema lookup st
 generation rather than guessing the workspace schema.
 Review each changed file in the proposal, then apply or discard it. Applying can
 be undone until the next manual edit. Generation errors leave the current project
-untouched; generation can be cancelled.
+untouched; generation can be cancelled. Previewing the current files remains available
+while AI is generating; applying changes and publishing wait until generation finishes.
+The chat shows elapsed time and permits retry after a failure. The server applies a
+90-second deadline across configuration, metadata lookup and generation; the client
+also bounds token acquisition and transport at 100 seconds even if cancellation is
+not honored by the transport. Provider credential, quota and timeout failures are
+reported separately.
+
+Generated files must pass the manifest, store, collection, source-policy and fixture
+validators. If they fail, the server asks the model once to repair the rejected files
+using bounded per-file diagnostics within the same deadline. Only validated proposals
+are returned. If repair fails, the chat displays the affected file and validation
+path; it does not replace the current project or a previous pending proposal.
 
 Run the preview after editing. It executes the same compiled module that will be
 published, inside an opaque, no-network iframe with mock collection/settings APIs.
