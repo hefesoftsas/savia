@@ -418,11 +418,11 @@ const runtime = {
           );
         },
       );
-      // Each operation persists independently; overlapping cron invocations use R2 leases.
-      for (let step = 0; step < 8; step++) {
-        const result = await jobs.processOne();
-        if (!result.processed) break;
-      }
+      // The durable scan rotates sessions; R2 leases fence overlapping invocations.
+      const report = await jobs.processBatch();
+      console.info(
+        JSON.stringify({ event: "companion_session_batch", ...report }),
+      );
     };
     const runBookings = async () => {
       const bridgeKey = await identityAdministrationBridgeKey(
