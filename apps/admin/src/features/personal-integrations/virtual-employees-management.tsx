@@ -58,6 +58,9 @@ import { ModelCapabilityBadges } from "@/features/assistant-configuration/model-
 import { useMessages } from "@/i18n/core";
 import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
 import { IntegrationHelpTooltip } from "./integration-ui";
+import { createTranslationEmployeeTemplate } from "./translation-employee-template";
+
+type EmployeeAccessMode = "text" | "workspace";
 
 const AVATAR_ICONS: Record<string, ElementType> = {
   briefcase: Briefcase,
@@ -113,6 +116,7 @@ export function VirtualEmployeesManagement({
   const [avatar, setAvatar] = useState("briefcase");
   const [greeting, setGreeting] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [accessMode, setAccessMode] = useState<EmployeeAccessMode>("workspace");
   const [allCollections, setAllCollections] = useState(true);
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
   const [customCollectionInput, setCustomCollectionInput] = useState("");
@@ -202,6 +206,7 @@ export function VirtualEmployeesManagement({
     setAvatar("briefcase");
     setGreeting("");
     setSystemPrompt("");
+    setAccessMode("workspace");
     setAllCollections(true);
     setSelectedCollections([]);
     setCustomCollectionInput("");
@@ -228,6 +233,7 @@ export function VirtualEmployeesManagement({
     setGreeting(emp.greeting || "");
     setSystemPrompt(emp.systemPrompt);
     const isAll = emp.allowedCollections.includes("*");
+    setAccessMode(emp.allowedCollections.length === 0 ? "text" : "workspace");
     setAllCollections(isAll);
     setSelectedCollections(isAll ? [] : emp.allowedCollections);
     setCollectionSearch("");
@@ -235,6 +241,11 @@ export function VirtualEmployeesManagement({
     setStatus(emp.status);
 
     setIsCreateOpen(true);
+
+    if (emp.allowedCollections.length === 0) {
+      setCurrentFiles([]);
+      return;
+    }
 
     // Fetch full files
     try {
@@ -261,10 +272,28 @@ export function VirtualEmployeesManagement({
       setActiveTab("prompt");
       return;
     }
+    if (
+      accessMode === "workspace" &&
+      !allCollections &&
+      selectedCollections.length === 0
+    ) {
+      toast.error(
+        t(
+          "Elige al menos una colección o activa el acceso a todas las colecciones para usar Workspace tools.",
+        ),
+      );
+      setActiveTab("collections");
+      return;
+    }
 
     setSaving(true);
     try {
-      const allowed = allCollections ? ["*"] : selectedCollections;
+      const allowed =
+        accessMode === "text"
+          ? []
+          : allCollections
+            ? ["*"]
+            : selectedCollections;
 
       if (editingEmployee) {
         await client.update(editingEmployee.id, {
@@ -326,7 +355,7 @@ export function VirtualEmployeesManagement({
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !editingEmployee) return;
+    if (!file || !editingEmployee || accessMode !== "workspace") return;
 
     setUploadingFile(true);
     try {
@@ -347,7 +376,7 @@ export function VirtualEmployeesManagement({
   }
 
   async function handleDeleteFile(fileId: string) {
-    if (!editingEmployee) return;
+    if (!editingEmployee || accessMode !== "workspace") return;
     try {
       await client.deleteFile(editingEmployee.id, fileId);
       setCurrentFiles((prev) => prev.filter((f) => f.id !== fileId));
@@ -405,6 +434,36 @@ export function VirtualEmployeesManagement({
     setSelectedCollections([]);
   }
 
+  function changeAccessMode(nextMode: EmployeeAccessMode) {
+    if (nextMode === "text") {
+      setActiveTab("profile");
+    } else if (accessMode === "text") {
+      // Entering workspace mode starts scoped with no data grants. All access
+      // remains an explicit choice within the workspace controls.
+      setAllCollections(false);
+      setSelectedCollections([]);
+    }
+    setAccessMode(nextMode);
+  }
+
+  function openTranslatorTemplate() {
+    const template = createTranslationEmployeeTemplate();
+    resetForm();
+    setEditingEmployee(null);
+    setName(template.name);
+    setHandle(template.handle);
+    setPosition(template.position ?? "");
+    setAvatar(template.avatar ?? "bot");
+    setGreeting(template.greeting ?? "");
+    setSystemPrompt(template.systemPrompt);
+    setAccessMode("text");
+    setAllCollections(false);
+    setSelectedCollections([]);
+    setModel(template.model ?? "");
+    setStatus(template.status ?? "active");
+    setIsCreateOpen(true);
+  }
+
   const filteredEmployees = useMemo(() => {
     const q = search.toLowerCase().trim();
     if (!q) return employees;
@@ -440,10 +499,20 @@ export function VirtualEmployeesManagement({
             </IntegrationHelpTooltip>
           </div>
         </div>
-        <Button onClick={openCreate} className="shrink-0 gap-1.5">
-          <Plus className="size-4" />
-          {t("Nuevo Empleado")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={openTranslatorTemplate}
+            className="shrink-0 gap-1.5"
+          >
+            {t("Plantilla: Traductor español → inglés")}
+          </Button>
+          <Button onClick={openCreate} className="shrink-0 gap-1.5">
+            <Plus className="size-4" />
+            {t("Nuevo Empleado")}
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -490,6 +559,7 @@ export function VirtualEmployeesManagement({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredEmployees.map((emp) => {
             const Icon = getEmployeeAvatarIcon(emp.avatar);
+            const isTextOnly = emp.allowedCollections.length === 0;
             const isAll = emp.allowedCollections.includes("*");
 
             return (
@@ -535,7 +605,14 @@ export function VirtualEmployeesManagement({
                   <div className="flex flex-wrap items-center gap-2 pt-2 border-t text-[11px] text-muted-foreground">
                     <span className="inline-flex items-center gap-1 font-medium">
                       <Database className="size-3.5 text-muted-foreground" />
-                      {isAll ? (
+                      {isTextOnly ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-normal py-0"
+                        >
+                          {t("Solo texto")}
+                        </Badge>
+                      ) : isAll ? (
                         <Badge
                           variant="outline"
                           className="text-[10px] font-normal py-0"
@@ -554,15 +631,19 @@ export function VirtualEmployeesManagement({
                       )}
                     </span>
 
-                    <span className="inline-flex items-center gap-1 font-medium">
-                      <FileCode className="size-3.5 text-muted-foreground" />
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] font-normal py-0"
-                      >
-                        {t("%{count} docs RAG", { count: emp.filesCount ?? 0 })}
-                      </Badge>
-                    </span>
+                    {!isTextOnly && (
+                      <span className="inline-flex items-center gap-1 font-medium">
+                        <FileCode className="size-3.5 text-muted-foreground" />
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-normal py-0"
+                        >
+                          {t("%{count} docs RAG", {
+                            count: emp.filesCount ?? 0,
+                          })}
+                        </Badge>
+                      </span>
+                    )}
                   </div>
 
                   {emp.model ? (
@@ -623,29 +704,79 @@ export function VirtualEmployeesManagement({
             </DialogTitle>
             <DialogDescription>
               {t(
-                "Configura el perfil, personalidad, colecciones accesibles y base de conocimiento Cloudflare RAG.",
+                "Elige si el empleado usará solo el texto que recibe o también las herramientas y los datos de trabajo que autorices.",
               )}
             </DialogDescription>
           </DialogHeader>
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">
+              {t("Modo del empleado")}
+            </legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["text", "Solo texto"],
+                  ["workspace", "Workspace tools"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={accessMode === mode}
+                  onClick={() => changeAccessMode(mode)}
+                  className={`min-h-11 rounded-md border px-3 py-2 text-sm font-medium transition ${
+                    accessMode === mode
+                      ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/40"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/40"
+                  }`}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {accessMode === "text"
+                ? t(
+                    "Solo se procesa el texto y las instrucciones proporcionadas. No se usan colecciones, documentos ni herramientas del espacio de trabajo.",
+                  )
+                : t(
+                    "El empleado puede usar las colecciones y los documentos que autorices en las pestañas de acceso del espacio de trabajo.",
+                  )}
+            </p>
+          </fieldset>
 
           <Tabs
             value={activeTab}
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="grid h-auto w-full grid-cols-2 sm:h-9 sm:grid-cols-5">
+            <TabsList
+              className={`grid h-auto w-full ${
+                accessMode === "text"
+                  ? "grid-cols-1 sm:grid-cols-3"
+                  : "grid-cols-2 sm:grid-cols-5"
+              } sm:h-9`}
+            >
               <TabsTrigger className="min-h-11 sm:min-h-0" value="profile">
                 {t("Perfil")}
               </TabsTrigger>
               <TabsTrigger className="min-h-11 sm:min-h-0" value="prompt">
                 {t("Rol & Prompt")}
               </TabsTrigger>
-              <TabsTrigger className="min-h-11 sm:min-h-0" value="collections">
-                {t("Colecciones")}
-              </TabsTrigger>
-              <TabsTrigger className="min-h-11 sm:min-h-0" value="rag">
-                {t("Base RAG")}
-              </TabsTrigger>
+              {accessMode === "workspace" && (
+                <>
+                  <TabsTrigger
+                    className="min-h-11 sm:min-h-0"
+                    value="collections"
+                  >
+                    {t("Colecciones")}
+                  </TabsTrigger>
+                  <TabsTrigger className="min-h-11 sm:min-h-0" value="rag">
+                    {t("Base RAG")}
+                  </TabsTrigger>
+                </>
+              )}
               <TabsTrigger className="min-h-11 sm:min-h-0" value="model">
                 {t("Modelo")}
               </TabsTrigger>
@@ -780,343 +911,351 @@ export function VirtualEmployeesManagement({
             </TabsContent>
 
             {/* TAB 3: COLECCIONES CRM */}
-            <TabsContent value="collections" className="space-y-4 pt-3">
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div className="space-y-0.5 pr-4">
-                  <Label className="text-sm font-medium">
-                    {t("Acceso a Todas las Colecciones de Studio")}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {t(
-                      "Si está activo, el empleado puede consultar cualquier colección de Studio sin restricciones.",
-                    )}
-                  </p>
-                </div>
-                <Switch
-                  checked={allCollections}
-                  onCheckedChange={(checked) => setAllCollections(checked)}
-                />
-              </div>
-
-              {!allCollections && (
-                <div className="space-y-3 pt-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Label className="text-sm font-medium">
-                        {t("Colecciones Permitidas (Acceso Scoped)")}
-                      </Label>
-                      <Badge variant="outline" className="text-xs font-mono">
-                        {t("%{count} seleccionadas", {
-                          count: selectedCollections.length,
-                        })}
-                      </Badge>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs px-2 max-sm:h-11"
-                        onClick={selectAllCollections}
-                        disabled={filteredCollections.length === 0}
-                      >
-                        {t("Seleccionar visibles")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs px-2 text-muted-foreground hover:text-destructive max-sm:h-11"
-                        onClick={clearSelectedCollections}
-                        disabled={selectedCollections.length === 0}
-                      >
-                        {t("Limpiar selección")}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Buscador de colecciones */}
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                    <Input
-                      placeholder={t(
-                        "Buscar por nombre o identificador (ej. Empresas, Contactos, cotizaciones)...",
-                      )}
-                      value={collectionSearch}
-                      onChange={(e) => setCollectionSearch(e.target.value)}
-                      className="pl-9 text-xs h-9"
-                    />
-                  </div>
-
-                  {/* Listado de colecciones disponibles */}
-                  {loadingCollections ? (
-                    <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2">
-                      <Loader2 className="size-4 animate-spin text-primary" />
-                      <span>{t("Cargando colecciones del sistema...")}</span>
-                    </div>
-                  ) : filteredCollections.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground bg-muted/10">
-                      {collectionSearch.trim() ? (
-                        <p>
-                          {t(
-                            'No se encontraron colecciones que coincidan con "%{query}".',
-                            { query: collectionSearch },
-                          )}
-                        </p>
-                      ) : (
-                        <p>
-                          {t(
-                            "No hay colecciones disponibles en este tenant. Puedes añadir una abajo.",
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto p-1 rounded-md border bg-background/50">
-                      {filteredCollections.map((col) => {
-                        const checked = selectedCollections.includes(col.name);
-                        return (
-                          <button
-                            key={col.name}
-                            type="button"
-                            onClick={() => toggleCollection(col.name)}
-                            className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-left transition ${
-                              checked
-                                ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/40 shadow-xs"
-                                : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/40"
-                            }`}
-                          >
-                            <div className="pt-0.5 shrink-0">
-                              {checked ? (
-                                <CheckCircle2 className="size-4 text-primary" />
-                              ) : (
-                                <Database className="size-4 text-muted-foreground/60" />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs font-semibold text-foreground truncate">
-                                {col.label}
-                              </div>
-                              <div className="font-mono text-[10px] text-muted-foreground truncate">
-                                {col.name}
-                              </div>
-                              {col.description && (
-                                <div
-                                  className="text-[10px] text-muted-foreground/80 truncate mt-0.5"
-                                  title={col.description}
-                                >
-                                  {col.description}
-                                </div>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Añadir colección personalizada */}
-                  <div className="pt-2">
-                    <Label className="text-xs text-muted-foreground">
-                      {t("Añadir colección personalizada:")}
+            {accessMode === "workspace" && (
+              <TabsContent value="collections" className="space-y-4 pt-3">
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5 pr-4">
+                    <Label className="text-sm font-medium">
+                      {t("Acceso a Todas las Colecciones de Studio")}
                     </Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        placeholder={t("nombre_coleccion")}
-                        value={customCollectionInput}
-                        onChange={(e) =>
-                          setCustomCollectionInput(e.target.value)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addCustomCollection();
-                          }
-                        }}
-                        className="font-mono text-xs h-8"
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={addCustomCollection}
-                      >
-                        {t("Añadir")}
-                      </Button>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t(
+                        "Si está activo, el empleado puede consultar cualquier colección de Studio sin restricciones.",
+                      )}
+                    </p>
                   </div>
+                  <Switch
+                    checked={allCollections}
+                    onCheckedChange={(checked) => setAllCollections(checked)}
+                  />
+                </div>
 
-                  {/* Resumen de colecciones seleccionadas */}
-                  {selectedCollections.length > 0 && (
-                    <div className="pt-2">
-                      <Label className="text-xs text-muted-foreground mb-1.5 block">
-                        {t("Colecciones seleccionadas (%{count}):", {
-                          count: selectedCollections.length,
-                        })}
-                      </Label>
-                      <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto">
-                        {selectedCollections.map((colName) => {
-                          const item = allKnownCollections.find(
-                            (c) => c.name === colName,
+                {!allCollections && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-sm font-medium">
+                          {t("Colecciones Permitidas (Acceso Scoped)")}
+                        </Label>
+                        <Badge variant="outline" className="text-xs font-mono">
+                          {t("%{count} seleccionadas", {
+                            count: selectedCollections.length,
+                          })}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs px-2 max-sm:h-11"
+                          onClick={selectAllCollections}
+                          disabled={filteredCollections.length === 0}
+                        >
+                          {t("Seleccionar visibles")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs px-2 text-muted-foreground hover:text-destructive max-sm:h-11"
+                          onClick={clearSelectedCollections}
+                          disabled={selectedCollections.length === 0}
+                        >
+                          {t("Limpiar selección")}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Buscador de colecciones */}
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                      <Input
+                        placeholder={t(
+                          "Buscar por nombre o identificador (ej. Empresas, Contactos, cotizaciones)...",
+                        )}
+                        value={collectionSearch}
+                        onChange={(e) => setCollectionSearch(e.target.value)}
+                        className="pl-9 text-xs h-9"
+                      />
+                    </div>
+
+                    {/* Listado de colecciones disponibles */}
+                    {loadingCollections ? (
+                      <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2">
+                        <Loader2 className="size-4 animate-spin text-primary" />
+                        <span>{t("Cargando colecciones del sistema...")}</span>
+                      </div>
+                    ) : filteredCollections.length === 0 ? (
+                      <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground bg-muted/10">
+                        {collectionSearch.trim() ? (
+                          <p>
+                            {t(
+                              'No se encontraron colecciones que coincidan con "%{query}".',
+                              { query: collectionSearch },
+                            )}
+                          </p>
+                        ) : (
+                          <p>
+                            {t(
+                              "No hay colecciones disponibles en este tenant. Puedes añadir una abajo.",
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto p-1 rounded-md border bg-background/50">
+                        {filteredCollections.map((col) => {
+                          const checked = selectedCollections.includes(
+                            col.name,
                           );
                           return (
-                            <Badge
-                              key={colName}
-                              variant="secondary"
-                              className="text-xs gap-1.5 py-1 px-2 border"
+                            <button
+                              key={col.name}
+                              type="button"
+                              onClick={() => toggleCollection(col.name)}
+                              className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-left transition ${
+                                checked
+                                  ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/40 shadow-xs"
+                                  : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/40"
+                              }`}
                             >
-                              <span className="font-medium text-[11px]">
-                                {item?.label || colName}
-                              </span>
-                              <span className="font-mono text-[10px] text-muted-foreground">
-                                ({colName})
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => toggleCollection(colName)}
-                                className="ml-1 hover:text-destructive text-muted-foreground transition max-sm:ml-0 max-sm:flex max-sm:size-11 max-sm:shrink-0 max-sm:items-center max-sm:justify-center"
-                                title={t("Quitar")}
-                                aria-label={`${t("Quitar")} ${colName}`}
-                              >
-                                ×
-                              </button>
-                            </Badge>
+                              <div className="pt-0.5 shrink-0">
+                                {checked ? (
+                                  <CheckCircle2 className="size-4 text-primary" />
+                                ) : (
+                                  <Database className="size-4 text-muted-foreground/60" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-semibold text-foreground truncate">
+                                  {col.label}
+                                </div>
+                                <div className="font-mono text-[10px] text-muted-foreground truncate">
+                                  {col.name}
+                                </div>
+                                {col.description && (
+                                  <div
+                                    className="text-[10px] text-muted-foreground/80 truncate mt-0.5"
+                                    title={col.description}
+                                  >
+                                    {col.description}
+                                  </div>
+                                )}
+                              </div>
+                            </button>
                           );
                         })}
                       </div>
+                    )}
+
+                    {/* Añadir colección personalizada */}
+                    <div className="pt-2">
+                      <Label className="text-xs text-muted-foreground">
+                        {t("Añadir colección personalizada:")}
+                      </Label>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          placeholder={t("nombre_coleccion")}
+                          value={customCollectionInput}
+                          onChange={(e) =>
+                            setCustomCollectionInput(e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addCustomCollection();
+                            }
+                          }}
+                          className="font-mono text-xs h-8"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={addCustomCollection}
+                        >
+                          {t("Añadir")}
+                        </Button>
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
-            </TabsContent>
+
+                    {/* Resumen de colecciones seleccionadas */}
+                    {selectedCollections.length > 0 && (
+                      <div className="pt-2">
+                        <Label className="text-xs text-muted-foreground mb-1.5 block">
+                          {t("Colecciones seleccionadas (%{count}):", {
+                            count: selectedCollections.length,
+                          })}
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto">
+                          {selectedCollections.map((colName) => {
+                            const item = allKnownCollections.find(
+                              (c) => c.name === colName,
+                            );
+                            return (
+                              <Badge
+                                key={colName}
+                                variant="secondary"
+                                className="text-xs gap-1.5 py-1 px-2 border"
+                              >
+                                <span className="font-medium text-[11px]">
+                                  {item?.label || colName}
+                                </span>
+                                <span className="font-mono text-[10px] text-muted-foreground">
+                                  ({colName})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCollection(colName)}
+                                  className="ml-1 hover:text-destructive text-muted-foreground transition max-sm:ml-0 max-sm:flex max-sm:size-11 max-sm:shrink-0 max-sm:items-center max-sm:justify-center"
+                                  title={t("Quitar")}
+                                  aria-label={`${t("Quitar")} ${colName}`}
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+            )}
 
             {/* TAB 4: BASE DE CONOCIMIENTO (CLOUDFLARE RAG) */}
-            <TabsContent value="rag" className="space-y-4 pt-3">
-              <div>
-                <Label className="text-sm font-medium">
-                  {t("Documentos de Referencia (Cloudflare RAG)")}
-                </Label>
-                <p className="text-xs text-muted-foreground mb-3">
-                  {t(
-                    "Sube manuales, políticas, tarifas o catálogos (PDF, MD, TXT, CSV, JSON). El motor RAG de Cloudflare generará embeddings para recuperar contexto relevante.",
-                  )}
-                </p>
-              </div>
-
-              {!editingEmployee ? (
-                <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground bg-muted/20">
-                  <p>
+            {accessMode === "workspace" && (
+              <TabsContent value="rag" className="space-y-4 pt-3">
+                <div>
+                  <Label className="text-sm font-medium">
+                    {t("Documentos de Referencia (Cloudflare RAG)")}
+                  </Label>
+                  <p className="text-xs text-muted-foreground mb-3">
                     {t(
-                      "Guarda el empleado primero para habilitar la carga de documentos RAG.",
+                      "Sube manuales, políticas, tarifas o catálogos (PDF, MD, TXT, CSV, JSON). El motor RAG de Cloudflare generará embeddings para recuperar contexto relevante.",
                     )}
                   </p>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept=".pdf,.txt,.md,.markdown,.csv,.json"
-                        onChange={(e) => void handleFileUpload(e)}
-                        disabled={uploadingFile}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 pointer-events-none"
-                        disabled={uploadingFile}
-                      >
-                        <Upload className="size-4" />
-                        {uploadingFile
-                          ? t("Indexando RAG...")
-                          : t("Subir Documento")}
-                      </Button>
-                    </label>
-                    <span className="text-xs text-muted-foreground">
-                      {t(
-                        "Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)",
-                      )}
-                    </span>
-                  </div>
 
-                  {currentFiles.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
+                {!editingEmployee ? (
+                  <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground bg-muted/20">
+                    <p>
                       {t(
-                        "No hay documentos cargados para este empleado virtual.",
+                        "Guarda el empleado primero para habilitar la carga de documentos RAG.",
                       )}
                     </p>
-                  ) : (
-                    <div className="rounded-lg border divide-y">
-                      {currentFiles.map((file) => (
-                        <div
-                          key={file.id}
-                          className="flex items-center justify-between p-3 text-xs"
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.txt,.md,.markdown,.csv,.json"
+                          onChange={(e) => void handleFileUpload(e)}
+                          disabled={uploadingFile}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 pointer-events-none"
+                          disabled={uploadingFile}
                         >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <FileText className="size-4 text-primary shrink-0" />
-                            <div className="min-w-0">
-                              <p className="font-medium truncate">
-                                {file.name}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">
-                                {(file.sizeBytes / 1024).toFixed(1)} KB •{" "}
-                                {new Date(file.createdAt).toLocaleDateString()}
-                              </p>
+                          <Upload className="size-4" />
+                          {uploadingFile
+                            ? t("Indexando RAG...")
+                            : t("Subir Documento")}
+                        </Button>
+                      </label>
+                      <span className="text-xs text-muted-foreground">
+                        {t(
+                          "Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)",
+                        )}
+                      </span>
+                    </div>
+
+                    {currentFiles.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">
+                        {t(
+                          "No hay documentos cargados para este empleado virtual.",
+                        )}
+                      </p>
+                    ) : (
+                      <div className="rounded-lg border divide-y">
+                        {currentFiles.map((file) => (
+                          <div
+                            key={file.id}
+                            className="flex items-center justify-between p-3 text-xs"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="size-4 text-primary shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">
+                                  {file.name}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {(file.sizeBytes / 1024).toFixed(1)} KB •{" "}
+                                  {new Date(
+                                    file.createdAt,
+                                  ).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {file.ragStatus === "indexed" && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20"
+                                >
+                                  <CheckCircle2 className="size-3 mr-1" />
+                                  {t("Indexado RAG")}
+                                </Badge>
+                              )}
+                              {file.ragStatus === "pending" && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] text-amber-600 border-amber-300 bg-amber-50"
+                                >
+                                  <Clock className="size-3 mr-1" />
+                                  {t("Procesando")}
+                                </Badge>
+                              )}
+                              {file.ragStatus === "failed" && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] text-destructive border-destructive/30"
+                                >
+                                  <AlertCircle className="size-3 mr-1" />
+                                  {t("Error")}
+                                </Badge>
+                              )}
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="size-7 p-0 text-destructive hover:bg-destructive/10 max-sm:size-11"
+                                aria-label={`${t("Quitar")} ${file.name}`}
+                                onClick={() => void handleDeleteFile(file.id)}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
                             </div>
                           </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            {file.ragStatus === "indexed" && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20"
-                              >
-                                <CheckCircle2 className="size-3 mr-1" />
-                                {t("Indexado RAG")}
-                              </Badge>
-                            )}
-                            {file.ragStatus === "pending" && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] text-amber-600 border-amber-300 bg-amber-50"
-                              >
-                                <Clock className="size-3 mr-1" />
-                                {t("Procesando")}
-                              </Badge>
-                            )}
-                            {file.ragStatus === "failed" && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] text-destructive border-destructive/30"
-                              >
-                                <AlertCircle className="size-3 mr-1" />
-                                {t("Error")}
-                              </Badge>
-                            )}
-
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="size-7 p-0 text-destructive hover:bg-destructive/10 max-sm:size-11"
-                              aria-label={`${t("Quitar")} ${file.name}`}
-                              onClick={() => void handleDeleteFile(file.id)}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </TabsContent>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+            )}
 
             {/* TAB 5: MODELO LLM */}
             <TabsContent value="model" className="space-y-4 pt-3">
