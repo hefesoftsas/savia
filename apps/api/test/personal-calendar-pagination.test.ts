@@ -35,6 +35,27 @@ const range = {
   to: new Date("2026-02-01T00:00:00.000Z"),
 };
 
+const outlookCalendarSelect =
+  "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting";
+const outlookVideoCallExpand =
+  "singleValueExtendedProperties($filter=id eq 'String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaVideoCall')";
+
+function outlookCalendarContinuation(
+  overrides: Record<string, string> = {},
+): string {
+  const params = new URLSearchParams({
+    startDateTime: range.from.toISOString(),
+    endDateTime: range.to.toISOString(),
+    $top: "100",
+    $orderby: "start/dateTime",
+    $expand: outlookVideoCallExpand,
+    $select: outlookCalendarSelect,
+    $skiptoken: "opaque",
+    ...overrides,
+  });
+  return `https://graph.microsoft.com/v1.0/me/calendarView?${params.toString()}`;
+}
+
 describe("personal calendar provider pagination", () => {
   it("loads all Google events across nextPageToken pages and preserves all-day metadata", async () => {
     const { service, proxy } = operations("google_calendar", [
@@ -102,8 +123,7 @@ describe("personal calendar provider pagination", () => {
   });
 
   it("follows only Outlook calendarView continuations for the original range", async () => {
-    const next =
-      "https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=2026-01-01T00%3A00%3A00.000Z&endDateTime=2026-02-01T00%3A00%3A00.000Z&%24top=100&%24orderby=start%2FdateTime&%24select=id%2Csubject%2Cstart%2Cend%2CwebLink%2CisAllDay%2CisCancelled%2CshowAs%2CoriginalStartTimeZone%2CoriginalEndTimeZone&%24skiptoken=opaque";
+    const next = outlookCalendarContinuation();
     const { service, proxy } = operations("outlook", [
       Response.json({
         value: [
@@ -255,6 +275,17 @@ describe("personal calendar provider pagination", () => {
     [
       "different range",
       "https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=2026-02-01T00%3A00%3A00.000Z&endDateTime=2026-03-01T00%3A00%3A00.000Z&%24skiptoken=x",
+    ],
+    [
+      "malformed property expansion",
+      outlookCalendarContinuation({
+        $expand:
+          "singleValueExtendedProperties($filter=id eq 'String {00000000-0000-0000-0000-000000000000} Name OtherProperty')",
+      }),
+    ],
+    [
+      "malformed projection",
+      outlookCalendarContinuation({ $select: "id,subject,start,end" }),
     ],
   ])(
     "rejects an unsafe Outlook continuation (%s)",
