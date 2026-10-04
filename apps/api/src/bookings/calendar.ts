@@ -21,7 +21,8 @@ type SyncInput = BookingCalendarInput & {
   endsAt: string;
   externalId: string | null;
   cancelled: boolean;
-  conferenceProvider?: "google_meet" | "teams" | "jitsi";
+  conferenceProvider?: "google_meet" | "teams" | "jitsi" | "zoom";
+  zoomJoinUrl?: string;
   conferenceUrl?: string;
   requestConference?: boolean;
 };
@@ -30,7 +31,7 @@ type BusyPeriod = { start: string; end: string };
 export type BookingCalendarSyncResult = {
   externalId: string | null;
   conference: {
-    provider: "google_meet" | "teams" | "jitsi" | null;
+    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
     joinUrl: string | null;
     status: "ready" | "pending" | "unsupported" | "failed";
   } | null;
@@ -154,6 +155,23 @@ function safeJoinUrl(
     if (
       url.protocol !== "https:" ||
       !hostAllowed ||
+      url.username ||
+      url.password
+    )
+      return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function safeZoomJoinUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      !(url.hostname === "zoom.us" || url.hostname.endsWith(".zoom.us")) ||
       url.username ||
       url.password
     )
@@ -573,35 +591,40 @@ export function createBookingCalendarAdapter(
         }
       }
 
-      const jitsiUrl =
-        input.conferenceProvider === "jitsi"
-          ? safeJitsiUrl(input.conferenceUrl)
-          : null;
-      if (input.conferenceProvider === "jitsi" && !jitsiUrl)
+      const externalUrl =
+        input.conferenceProvider === "zoom"
+          ? safeZoomJoinUrl(input.zoomJoinUrl)
+          : input.conferenceProvider === "jitsi"
+            ? safeJitsiUrl(input.conferenceUrl)
+            : null;
+      if (
+        (input.conferenceProvider === "jitsi" ||
+          input.conferenceProvider === "zoom") &&
+        !externalUrl
+      )
         throw unavailable();
-      const jitsiConference = jitsiUrl
+      const externalConference = externalUrl
         ? {
-            provider: "jitsi" as const,
-            joinUrl: jitsiUrl,
+            provider: input.conferenceProvider as "jitsi" | "zoom",
+            joinUrl: externalUrl,
             status: "ready" as const,
           }
         : null;
-      const conferenceProvider =
-        input.conferenceProvider === "jitsi"
-          ? null
-          : input.requestConference || !input.externalId
-            ? await conferenceCapability(connection, input.provider)
-            : null;
+      const conferenceProvider = externalConference
+        ? null
+        : input.requestConference || !input.externalId
+          ? await conferenceCapability(connection, input.provider)
+          : null;
       const baseBody =
         input.provider === "google_calendar"
           ? {
               summary: input.title,
               start: { dateTime: startsAt },
               end: { dateTime: endsAt },
-              ...(jitsiUrl
+              ...(externalUrl
                 ? {
-                    description: `Join the video meeting: ${jitsiUrl}`,
-                    location: jitsiUrl,
+                    description: `Join the ${input.conferenceProvider === "zoom" ? "Zoom" : "video"} meeting: ${externalUrl}`,
+                    location: externalUrl,
                   }
                 : {}),
             }
@@ -609,13 +632,13 @@ export function createBookingCalendarAdapter(
               subject: input.title,
               start: graphDateTime(startsAt),
               end: graphDateTime(endsAt),
-              ...(jitsiUrl
+              ...(externalUrl
                 ? {
                     body: {
                       contentType: "text",
-                      content: `Join the video meeting: ${jitsiUrl}`,
+                      content: `Join the ${input.conferenceProvider === "zoom" ? "Zoom" : "video"} meeting: ${externalUrl}`,
                     },
-                    location: { displayName: jitsiUrl },
+                    location: { displayName: externalUrl },
                   }
                 : {}),
               singleValueExtendedProperties: [
@@ -644,7 +667,7 @@ export function createBookingCalendarAdapter(
             : "";
         if (input.externalId) {
           const currentConference =
-            jitsiConference ??
+            externalConference ??
             (await eventConference(
               connection,
               input.provider,
@@ -655,7 +678,7 @@ export function createBookingCalendarAdapter(
               input.requestConference === true,
             ));
           const shouldRequest =
-            !jitsiConference &&
+            !externalConference &&
             input.requestConference &&
             conferenceProvider === "google_meet" &&
             currentConference?.status !== "ready" &&
@@ -683,7 +706,7 @@ export function createBookingCalendarAdapter(
           return {
             externalId: id,
             conference:
-              jitsiConference ??
+              externalConference ??
               (shouldRequest
                 ? await eventConference(
                     connection,
@@ -708,7 +731,7 @@ export function createBookingCalendarAdapter(
             return {
               externalId: id,
               conference:
-                jitsiConference ??
+                externalConference ??
                 (conferenceProvider
                   ? googleConference(
                       event,
@@ -719,7 +742,7 @@ export function createBookingCalendarAdapter(
           }
           if (response.status === 409) {
             const currentConference =
-              jitsiConference ??
+              externalConference ??
               (await eventConference(
                 connection,
                 input.provider,
@@ -728,7 +751,7 @@ export function createBookingCalendarAdapter(
                 input.requestConference === true,
               ));
             const shouldRequest =
-              !jitsiConference &&
+              !externalConference &&
               input.requestConference &&
               conferenceProvider === "google_meet" &&
               currentConference?.status !== "ready" &&
@@ -757,7 +780,7 @@ export function createBookingCalendarAdapter(
             return {
               externalId: id,
               conference:
-                jitsiConference ??
+                externalConference ??
                 (shouldRequest
                   ? await eventConference(
                       connection,
@@ -778,7 +801,7 @@ export function createBookingCalendarAdapter(
         input.externalId ?? (await findOutlookEvent(connection, input.id));
       if (existingId) {
         const currentConference =
-          jitsiConference ??
+          externalConference ??
           (await eventConference(
             connection,
             input.provider,
@@ -789,7 +812,7 @@ export function createBookingCalendarAdapter(
             input.requestConference === true,
           ));
         const shouldRequest =
-          !jitsiConference &&
+          !externalConference &&
           input.requestConference &&
           conferenceProvider === "teams" &&
           currentConference?.status !== "ready" &&
@@ -812,7 +835,7 @@ export function createBookingCalendarAdapter(
         return {
           externalId: existingId,
           conference:
-            jitsiConference ??
+            externalConference ??
             (shouldRequest
               ? outlookConference(patched, true)
               : (currentConference ?? unsupportedConference)),
@@ -837,7 +860,7 @@ export function createBookingCalendarAdapter(
       const event = record(await response.json().catch(() => undefined));
       if (typeof event?.id !== "string" || !event.id) throw unavailable();
       const conference =
-        jitsiConference ??
+        externalConference ??
         (conferenceProvider === "teams"
           ? outlookConference(event, true)
           : unsupportedConference);

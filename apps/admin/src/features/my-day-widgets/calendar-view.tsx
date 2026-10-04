@@ -202,7 +202,6 @@ export function CalendarView({
             startsAt: booking.startsAt,
             endsAt: booking.endsAt,
             timeZone: booking.timeZone,
-            conference: booking.conference ?? undefined,
             booking,
           }
         : current,
@@ -250,7 +249,7 @@ export function CalendarView({
         allDay: false,
         timeZone: booking.timeZone,
         webLink: null,
-        conference: booking.conference ?? undefined,
+        conference: booking.conference,
         booking,
       })),
       ...sources.events,
@@ -317,9 +316,11 @@ export function CalendarView({
     const meetingProvider =
       conference?.provider === "jitsi"
         ? "Jitsi"
-        : conference?.provider === "google_meet"
-          ? agendaText("Google Meet")
-          : agendaText("Microsoft Teams");
+        : conference?.provider === "zoom"
+          ? agendaText("Zoom")
+          : conference?.provider === "google_meet"
+            ? agendaText("Google Meet")
+            : agendaText("Microsoft Teams");
     return (
       <div
         key={`${event.sourceId}:${event.id}`}
@@ -804,9 +805,11 @@ export function CalendarView({
                     const providerName =
                       conference.provider === "jitsi"
                         ? "Jitsi"
-                        : conference.provider === "google_meet"
-                          ? agendaText("Google Meet")
-                          : agendaText("Microsoft Teams");
+                        : conference.provider === "zoom"
+                          ? agendaText("Zoom")
+                          : conference.provider === "google_meet"
+                            ? agendaText("Google Meet")
+                            : agendaText("Microsoft Teams");
                     return joinUrl ? (
                       <Button asChild variant="outline">
                         <a

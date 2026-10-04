@@ -28,6 +28,7 @@ export type CalendarSourcesClient = Pick<
 >;
 
 export type PersonalIntegrationProviderId =
+  | "zoom"
   | "google_drive"
   | "gmail"
   | "google_calendar"
@@ -78,7 +79,7 @@ export type PersonalCalendarEvent = {
   conference?: PersonalCalendarConference;
 };
 export type PersonalCalendarConference = {
-  provider: "google_meet" | "teams" | "jitsi" | null;
+  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
   joinUrl: string | null;
   status: "ready" | "pending" | "unsupported" | "failed";
 };
@@ -396,7 +397,8 @@ export class PersonalIntegrationsClient {
     startsAt: string;
     endsAt: string;
     videoCall?: boolean;
-    conferenceProvider?: "jitsi";
+    conferenceProvider?: "jitsi" | "zoom";
+    requestId?: string;
     attendees?: string[];
   }): Promise<PersonalCalendarEvent> {
     return (

@@ -82,7 +82,8 @@ type PendingCalendarTask = {
   endsAt: string;
   minutes: number;
   videoCall: boolean;
-  conferenceProvider?: "jitsi";
+  conferenceProvider?: "jitsi" | "zoom";
+  requestId?: string;
   attendees?: string[];
   destination?: CalendarProvider;
 };
@@ -102,7 +103,8 @@ export type PersonalIntegrationsLike = {
     startsAt: string;
     endsAt: string;
     videoCall?: boolean;
-    conferenceProvider?: "jitsi";
+    conferenceProvider?: "jitsi" | "zoom";
+    requestId?: string;
     attendees?: string[];
   }) => Promise<PersonalCalendarEvent>;
   deleteCalendarEvent?: (args: {
@@ -126,17 +128,19 @@ export function calendarProviderLabel(provider: CalendarProvider): string {
 }
 
 function conferenceProviderLabel(
-  provider: "google_meet" | "teams" | "jitsi",
+  provider: "google_meet" | "teams" | "jitsi" | "zoom",
 ): string {
   return provider === "jitsi"
     ? "Jitsi"
-    : provider === "google_meet"
-      ? "Google Meet"
-      : "Microsoft Teams";
+    : provider === "zoom"
+      ? "Zoom"
+      : provider === "google_meet"
+        ? "Google Meet"
+        : "Microsoft Teams";
 }
 
 export function safeConferenceLink(
-  provider: "google_meet" | "teams" | "jitsi" | null,
+  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null,
   value: string | null,
 ): string | undefined {
   if (!provider) return undefined;
@@ -148,16 +152,18 @@ export function safeConferenceLink(
       ? hostname === "meet.jit.si" &&
         new URL(safe).port === "" &&
         /^\/[A-Za-z0-9_-]+$/.test(new URL(safe).pathname)
-      : provider === "google_meet"
-        ? hostname === "meet.google.com"
-        : [
-            "teams.microsoft.com",
-            "teams.live.com",
-            "teams.cloud.microsoft",
-            "gov.teams.microsoft.us",
-            "dod.teams.microsoft.us",
-            "teams.microsoftonline.cn",
-          ].includes(hostname);
+      : provider === "zoom"
+        ? hostname === "zoom.us" || hostname.endsWith(".zoom.us")
+        : provider === "google_meet"
+          ? hostname === "meet.google.com"
+          : [
+              "teams.microsoft.com",
+              "teams.live.com",
+              "teams.cloud.microsoft",
+              "gov.teams.microsoft.us",
+              "dod.teams.microsoft.us",
+              "teams.microsoftonline.cn",
+            ].includes(hostname);
   return allowed ? safe : undefined;
 }
 
@@ -177,6 +183,7 @@ const message = (
 type AgendaSnapshot = {
   events: CalendarEvent[];
   calendarProviders: CalendarProvider[];
+  zoomConnected: boolean;
   loading: boolean;
   feedback: AgendaFeedback;
   syncError: AgendaFeedback;
@@ -197,6 +204,7 @@ function emptyAgendaSnapshot(): AgendaSnapshot {
   return {
     events: [],
     calendarProviders: [],
+    zoomConnected: false,
     loading: true,
     feedback: null,
     syncError: null,
@@ -553,6 +561,11 @@ export function useMyDayAgenda(
         publishAgenda(target, {
           ...target.snapshot,
           calendarProviders: connectedCalendars,
+          zoomConnected: connections.some(
+            (connection) =>
+              connection.provider === "zoom" &&
+              connection.status === "connected",
+          ),
           events: target.snapshot.events.filter((event) =>
             connectedSet.has(event.provider),
           ),
@@ -563,6 +576,7 @@ export function useMyDayAgenda(
           publishAgenda(target, {
             events: [],
             calendarProviders: [],
+            zoomConnected: false,
             loading: false,
             syncError: null,
             feedback: isCalendarConnectNoticeDismissed()
@@ -802,6 +816,7 @@ export function useMyDayAgenda(
     setEvents,
     eventGroups,
     calendarProviders,
+    zoomConnected: snapshot.zoomConnected,
     loading: loading || bookings.loading,
     bookings,
     feedback,
@@ -1080,8 +1095,8 @@ export function QuickTaskWidgetBody({
   const [time, setTime] = useState(nextHalfHour);
   const [duration, setDuration] = useState("30");
   const [videoCall, setVideoCall] = useState(false);
-  const [conferenceProvider, setConferenceProvider] = useState<
-    "automatic" | "jitsi"
+  const [conferencePlatform, setConferencePlatform] = useState<
+    "automatic" | "jitsi" | "zoom"
   >("automatic");
   const [guestEmails, setGuestEmails] = useState("");
   const [callDate, setCallDate] = useState(() => dateKey(new Date()));
@@ -1100,7 +1115,7 @@ export function QuickTaskWidgetBody({
       setTitle("");
       setCreating(false);
       setVideoCall(false);
-      setConferenceProvider("automatic");
+      setConferencePlatform("automatic");
       setGuestEmails("");
       setCallDate(dateKey(new Date()));
       setSelectedDestination("");
@@ -1153,6 +1168,10 @@ export function QuickTaskWidgetBody({
       setFeedback(message("Puedes invitar hasta 50 personas."));
       return;
     }
+    if (videoCall && conferencePlatform === "zoom" && !agenda.zoomConnected) {
+      setFeedback(message("Conecta Zoom para crear videollamadas."));
+      return;
+    }
     const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
     setPendingTask({
       title: title.trim(),
@@ -1162,9 +1181,14 @@ export function QuickTaskWidgetBody({
       videoCall,
       ...(videoCall
         ? {
-            ...(conferenceProvider === "jitsi"
+            ...(conferencePlatform === "jitsi"
               ? { conferenceProvider: "jitsi" as const }
-              : {}),
+              : conferencePlatform === "zoom"
+                ? {
+                    conferenceProvider: "zoom" as const,
+                    requestId: crypto.randomUUID(),
+                  }
+                : {}),
             ...(attendees.length ? { attendees } : {}),
             destination:
               selectedDestination &&
@@ -1189,6 +1213,7 @@ export function QuickTaskWidgetBody({
     }
     setCreating(true);
     setFeedback(null);
+    let closeConfirmation = true;
     try {
       const targetProviders = pendingTask.videoCall
         ? pendingTask.destination
@@ -1211,6 +1236,9 @@ export function QuickTaskWidgetBody({
                       ...(pendingTask.conferenceProvider
                         ? { conferenceProvider: pendingTask.conferenceProvider }
                         : {}),
+                      ...(pendingTask.requestId
+                        ? { requestId: pendingTask.requestId }
+                        : {}),
                       ...(pendingTask.attendees?.length
                         ? { attendees: pendingTask.attendees }
                         : {}),
@@ -1230,6 +1258,7 @@ export function QuickTaskWidgetBody({
         result.event ? [] : [result.provider],
       );
       if (created.length === 0) {
+        closeConfirmation = pendingTask.conferenceProvider !== "zoom";
         setFeedback(
           message("No pudimos crear la tarea en tus calendarios conectados."),
         );
@@ -1260,7 +1289,7 @@ export function QuickTaskWidgetBody({
       );
     } finally {
       setCreating(false);
-      setPendingTask(null);
+      if (closeConfirmation) setPendingTask(null);
     }
   }
 
@@ -1322,6 +1351,56 @@ export function QuickTaskWidgetBody({
           </label>
           {videoCall ? (
             <div className="space-y-2">
+              <Label htmlFor="my-day-call-platform">
+                {t("Proveedor de videollamada")}
+              </Label>
+              <select
+                id="my-day-call-platform"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={conferencePlatform}
+                onChange={(event) =>
+                  setConferencePlatform(
+                    event.target.value as "automatic" | "jitsi" | "zoom",
+                  )
+                }
+              >
+                <option value="automatic">
+                  {t("Automático (Google Meet o Teams)")}
+                </option>
+                <option value="jitsi">{t("Jitsi")}</option>
+                <option value="zoom" disabled={!agenda.zoomConnected}>
+                  {t("Zoom")}
+                </option>
+              </select>
+              {!agenda.zoomConnected && (
+                <a
+                  href="#/my-integrations?tab=connections"
+                  className="block text-sm underline"
+                >
+                  {t("Conecta Zoom para crear videollamadas.")}
+                </a>
+              )}
+              <Label htmlFor="my-day-guests">
+                {t("Correos de los invitados")}
+              </Label>
+              <Input
+                id="my-day-guests"
+                type="email"
+                multiple
+                value={guestEmails}
+                onChange={(event) => setGuestEmails(event.target.value)}
+                maxLength={13000}
+                aria-describedby="my-day-guests-help"
+                placeholder={t("ana@example.com, bob@example.com")}
+              />
+              <p
+                id="my-day-guests-help"
+                className="text-xs text-muted-foreground"
+              >
+                {t(
+                  "Separa los correos con comas. Recibirán una invitación con el enlace de la reunión.",
+                )}
+              </p>
               <Label htmlFor="my-day-call-date">
                 {t("Fecha de la videollamada")}
               </Label>
@@ -1351,49 +1430,19 @@ export function QuickTaskWidgetBody({
               >
                 {calendarProviders.map((provider) => (
                   <option key={provider} value={provider}>
-                    {calendarProviderLabel(provider)}
+                    {calendarProviderLabel(provider)} —{" "}
+                    {t(
+                      conferencePlatform === "jitsi"
+                        ? "Jitsi"
+                        : conferencePlatform === "zoom"
+                          ? "Zoom"
+                          : provider === "google_calendar"
+                            ? "Google Meet"
+                            : "Microsoft Teams",
+                    )}
                   </option>
                 ))}
               </select>
-              <Label htmlFor="my-day-conference-provider">
-                {t("Proveedor de videollamada")}
-              </Label>
-              <select
-                id="my-day-conference-provider"
-                value={conferenceProvider}
-                onChange={(event) =>
-                  setConferenceProvider(
-                    event.target.value as "automatic" | "jitsi",
-                  )
-                }
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="automatic">
-                  {t("Automático (Google Meet o Teams)")}
-                </option>
-                <option value="jitsi">{t("Jitsi")}</option>
-              </select>
-              <Label htmlFor="my-day-guests">
-                {t("Correos de los invitados")}
-              </Label>
-              <Input
-                id="my-day-guests"
-                type="email"
-                multiple
-                value={guestEmails}
-                onChange={(event) => setGuestEmails(event.target.value)}
-                maxLength={13000}
-                aria-describedby="my-day-guests-help"
-                placeholder={t("ana@example.com, bob@example.com")}
-              />
-              <p
-                id="my-day-guests-help"
-                className="text-xs text-muted-foreground"
-              >
-                {t(
-                  "Separa los correos con comas. Recibirán una invitación con el enlace de la reunión.",
-                )}
-              </p>
             </div>
           ) : null}
         </div>
@@ -1443,14 +1492,15 @@ export function QuickTaskWidgetBody({
                     "Crearás esta videollamada en %{calendar} con %{provider}.",
                     {
                       calendar: calendarProviderLabel(pendingTask.destination),
-                      provider:
+                      provider: t(
                         pendingTask.conferenceProvider === "jitsi"
                           ? "Jitsi"
-                          : t(
-                              pendingTask.destination === "google_calendar"
-                                ? "Google Meet"
-                                : "Microsoft Teams",
-                            ),
+                          : pendingTask.conferenceProvider === "zoom"
+                            ? "Zoom"
+                            : pendingTask.destination === "google_calendar"
+                              ? "Google Meet"
+                              : "Microsoft Teams",
+                      ),
                     },
                   )}
                 </span>
@@ -1464,6 +1514,11 @@ export function QuickTaskWidgetBody({
               ) : null}
             </DialogDescription>
           </DialogHeader>
+          {pendingTask?.conferenceProvider === "zoom" && agenda.feedback && (
+            <p role="alert" className="text-sm text-destructive">
+              {agenda.feedback}
+            </p>
+          )}
           <DialogFooter>
             <Button
               type="button"

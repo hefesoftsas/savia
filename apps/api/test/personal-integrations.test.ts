@@ -63,6 +63,7 @@ const configuredProviders = createPersonalIntegrationProviderRegistry({
   jiraIntegrationId: "jira-savia",
   linearIntegrationId: "linear-savia",
   githubIntegrationId: "github-savia",
+  zoomIntegrationId: "zoom-savia",
 });
 const payloadCipher = new PersonalActionPayloadCipher("test-mcp-shared-secret");
 
@@ -181,7 +182,7 @@ describe("personal integration providers", () => {
     await seedPrincipal();
   });
 
-  it("lists all nine personal providers for an authenticated user", async () => {
+  it("lists all ten personal providers for an authenticated user", async () => {
     const app = createApp(
       env.DB,
       undefined,
@@ -230,6 +231,16 @@ describe("personal integration providers", () => {
             capabilities: ["issues:read"],
           }),
         }),
+        expect.objectContaining({
+          id: "zoom",
+          attributes: expect.objectContaining({
+            capabilities: [
+              "meetings:create",
+              "meetings:update",
+              "meetings:delete",
+            ],
+          }),
+        }),
       ]),
     });
   });
@@ -244,6 +255,7 @@ describe("personal integration providers", () => {
     ["jira", "jira-savia"],
     ["linear", "linear-savia"],
     ["github", "github-savia"],
+    ["zoom", "zoom-savia"],
   ] as const)(
     "creates a scoped Nango session for %s",
     async (provider, integrationId) => {
@@ -418,6 +430,45 @@ describe("personal integration providers", () => {
         },
       ],
     });
+  });
+
+  it("starts a fresh Zoom connection when reconnecting so existing grants cannot switch accounts", async () => {
+    const nango = fakeNango();
+    nango.getConnection.mockResolvedValue({
+      connectionId: "nango-zoom-original",
+      providerConfigKey: "zoom-savia",
+      tags: {
+        end_user_id: "test-agency-member",
+        end_user_email: "member@savia.test",
+        end_user_display_name: "Savia Test Member",
+      },
+      metadata: { scopes: [], account_name: "member@savia.test" },
+    });
+    const app = configuredApp(nango);
+    const complete = await app.request(
+      "https://savia.test/v1/personal-integrations/connections/zoom/complete",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ connectionId: "nango-zoom-original" }),
+      },
+    );
+    expect(complete.status).toBe(200);
+    const reconnect = await app.request(
+      "https://savia.test/v1/personal-integrations/connections/zoom/reconnect-session",
+      { method: "POST" },
+    );
+    expect(reconnect.status).toBe(200);
+    expect(nango.createReconnectSession).not.toHaveBeenCalled();
+    expect(nango.createConnectSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "zoom",
+        integrationId: "zoom-savia",
+        actor: expect.objectContaining({
+          principal: expect.objectContaining({ id: "test-agency-member" }),
+        }),
+      }),
+    );
   });
 
   it("reconnects and disconnects only the caller's saved connection", async () => {

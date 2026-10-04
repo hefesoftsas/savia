@@ -36,6 +36,27 @@ export const agendaMessages = {
     "You can invite up to 50 people.",
     "Você pode convidar até 50 pessoas.",
   ],
+  Zoom: ["Zoom", "Zoom", "Zoom"],
+  "Plataforma de videollamada": [
+    "Plataforma de videollamada",
+    "Video call platform",
+    "Plataforma de videochamada",
+  ],
+  "Google Meet o Teams según el calendario": [
+    "Google Meet o Teams según el calendario",
+    "Google Meet or Teams based on calendar",
+    "Google Meet ou Teams conforme o calendário",
+  ],
+  "Conecta Zoom para crear videollamadas.": [
+    "Conecta Zoom para crear videollamadas.",
+    "Connect Zoom to create video calls.",
+    "Conecte o Zoom para criar videochamadas.",
+  ],
+  "Connect Zoom to create video calls.": [
+    "Conecta Zoom para crear videollamadas.",
+    "Connect Zoom to create video calls.",
+    "Conecte o Zoom para criar videochamadas.",
+  ],
   "Mi día": ["Mi día", "My day", "Meu dia"],
   "Calendarios personales": [
     "Calendarios personales",

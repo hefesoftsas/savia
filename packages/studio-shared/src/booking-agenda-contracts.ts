@@ -35,7 +35,7 @@ export const bookingAgendaEntrySchema = z.object({
     .nullable(),
   conference: z
     .object({
-      provider: z.enum(["google_meet", "teams", "jitsi"]).nullable(),
+      provider: z.enum(["google_meet", "teams", "jitsi", "zoom"]).nullable(),
       joinUrl: z.string().url().nullable(),
       status: z.enum(["ready", "pending", "unsupported", "failed"]),
     })

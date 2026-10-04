@@ -52,6 +52,7 @@ function apiConfig({
   domainD1Id,
   jiraIntegrationId,
   githubIntegrationId,
+  zoomIntegrationId,
   publicOrigin,
 }) {
   return {
@@ -105,6 +106,9 @@ function apiConfig({
       NANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID: "one-drive-personal",
       NANGO_OUTLOOK_INTEGRATION_ID: "outlook",
       NANGO_LINEAR_INTEGRATION_ID: "linear",
+      ...(zoomIntegrationId
+        ? { NANGO_ZOOM_INTEGRATION_ID: zoomIntegrationId }
+        : {}),
       ...(githubIntegrationId
         ? { NANGO_GITHUB_INTEGRATION_ID: githubIntegrationId }
         : {}),
@@ -257,6 +261,7 @@ export async function renderProductionConfigs({
   documentsBucket = defaultDocumentsBucket,
   jiraIntegrationId,
   githubIntegrationId,
+  zoomIntegrationId,
   outputRoot,
   publicOrigin = defaultPublicOrigin,
 }) {
@@ -278,6 +283,14 @@ export async function renderProductionConfigs({
     domainD1Id: requiredValue(domainD1Id, "SAVIA_DOMAIN_D1_ID"),
     outputRoot: requiredValue(outputRoot, "SAVIA_DEPLOY_CONFIG_ROOT"),
     publicOrigin: originValue(publicOrigin),
+    ...(zoomIntegrationId?.trim()
+      ? {
+          zoomIntegrationId: requiredValue(
+            zoomIntegrationId,
+            "NANGO_ZOOM_INTEGRATION_ID",
+          ),
+        }
+      : {}),
     ...(githubIntegrationId?.trim()
       ? {
           githubIntegrationId: requiredValue(
@@ -370,6 +383,7 @@ async function main() {
     pagesSearchIndex: process.env.SAVIA_PAGES_SEARCH_INDEX,
     jiraIntegrationId: process.env.NANGO_JIRA_INTEGRATION_ID,
     githubIntegrationId: process.env.NANGO_GITHUB_INTEGRATION_ID,
+    zoomIntegrationId: process.env.NANGO_ZOOM_INTEGRATION_ID,
     outputRoot: process.env.SAVIA_DEPLOY_CONFIG_ROOT ?? process.cwd(),
     publicOrigin: process.env.SAVIA_PUBLIC_ORIGIN,
   });

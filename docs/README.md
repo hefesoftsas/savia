@@ -60,6 +60,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Account email](guides/account-email.md) — email verification, password recovery, tenant SMTP settings and local Mailpit testing.
 - [Social sign-in](guides/social-sign-in.md) — optional Google, Microsoft and ChatGPT sign-in, provider registration and tenant controls.
 
+- [Zoom video meetings](guides/zoom-integration.md) — personal Zoom OAuth setup and calendar-backed meeting lifecycle.
 - [Tenant booking](guides/tenant-booking.md) — native tenant services, availability, public reservations and optional personal calendars.
 
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.

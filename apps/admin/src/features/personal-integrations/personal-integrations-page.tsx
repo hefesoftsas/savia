@@ -10,7 +10,7 @@ import MicrosoftOutlook from "@thesvg/react/microsoft-outlook";
 import Jira from "@thesvg/react/jira";
 import Linear from "@thesvg/react/linear";
 import Github from "@thesvg/react/github";
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, Video } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import type {
   PersonalIntegrationConnection,
@@ -49,6 +49,12 @@ export type PersonalNangoConnectFactory = () => {
 const browserNangoFactory: PersonalNangoConnectFactory = () => new Nango();
 
 const unavailableProviders: PersonalIntegrationProvider[] = [
+  {
+    id: "zoom",
+    displayName: "Zoom",
+    availability: "unavailable",
+    capabilities: [],
+  },
   {
     id: "google_drive",
     displayName: "Google Drive",
@@ -128,6 +134,7 @@ function connectionIdFromEvent(event: unknown): string | undefined {
 
 function providerIcon(provider: PersonalIntegrationProviderId) {
   return {
+    zoom: Video,
     google_drive: GoogleDrive,
     gmail: Gmail,
     google_calendar: GoogleCalendar,
@@ -433,6 +440,11 @@ export function PersonalIntegrationsPage({
   }
 
   const groups = [
+    {
+      id: "video-integrations",
+      title: "Zoom",
+      providers: providers.filter((provider) => provider.id === "zoom"),
+    },
     {
       id: "google-integrations",
       title: "Google",

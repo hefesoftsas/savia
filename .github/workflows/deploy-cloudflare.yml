@@ -89,6 +89,7 @@ jobs:
           SAVIA_PAGES_SEARCH_INDEX: ${{ vars.SAVIA_PAGES_SEARCH_INDEX }}
           NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
           NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
 
       - name: Upload secrets using explicit environment configuration
         run: node scripts/upload-cloudflare-secrets.mjs

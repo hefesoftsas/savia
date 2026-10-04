@@ -28,9 +28,10 @@ const tenantId = 995001;
 const bookingId = "b5ba0918-fc1d-4650-80b6-e630312e9181";
 
 beforeAll(async () => {
-  for (const migration of migrations)
-    if (!migration.name.endsWith("0033_booking_jitsi_conference.sql"))
-      await apply(migration.sql);
+  for (const migration of migrations) {
+    if (migration.name.endsWith("0033_booking_jitsi_conference.sql")) break;
+    await apply(migration.sql);
+  }
   const now = "2026-10-04T12:00:00.000Z";
   await env.DB.prepare(
     "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at) VALUES(?,?,?,1,?,?)",

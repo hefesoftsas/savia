@@ -164,7 +164,24 @@ and `calendar.events.freebusy` (each prefixed with
 Updating Nango scopes does not upgrade existing OAuth tokens: reconnect an
 account if it lacks the newly required permissions. Teams availability depends
 on the actual calendar capability, not merely on having an Outlook connection.
-Zoom and Jitsi require separate provider setup and are not offered by this flow.
+Zoom is a separate personal connection. Connect it in **Connections**, then
+choose **Video call platform → Zoom** in Quick Task and select the Google or
+Outlook destination calendar. The confirmation includes both choices. Savia
+stores the attendee link in the calendar event and displays **Join Zoom** after
+refresh. The connected Zoom account owns the meeting; Google/Outlook remains the
+calendar destination. Deleting a Savia-created personal Zoom event also deletes
+its associated Zoom meeting. Imported Zoom URLs alone never authorize deleting a
+meeting.
+
+A creation retry retains its request identifier. The backend stores the meeting
+identity before linking the calendar event. If a Zoom create response is lost,
+Savia blocks a second create for that request until the uncertain result is
+reconciled, avoiding duplicate meetings. Reconnecting to another Zoom account
+does not transfer control over meetings created with the old connection.
+See [Zoom setup](guides/zoom-integration.md) for the required OAuth configuration.
+Jitsi remains available as a separate choice without a Zoom connection. See
+[Jitsi meetings](guides/jitsi-meetings.md) for its public room behavior and guest
+invitations.
 
 Deployment requires D1 migration `0023_personal_calendars.sql`; self-hosted
 PostgreSQL uses its matching native migration and source manifest. Both use the

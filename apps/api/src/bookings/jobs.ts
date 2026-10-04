@@ -3,10 +3,13 @@ import { readBooking, readSettings, readGrant } from "./repository";
 import { formatBookingEmail } from "./email";
 import { safeBookingConferenceUrl } from "./conference";
 import { cleanupBookingAdmissions } from "./public-policy";
+import { createPersonalIntegrationRepository } from "../personal-integrations/repository";
+import type { createZoomMeetingService } from "../personal-integrations/zoom";
 export type BookingJobsOptions = {
   now?: () => number;
   publicOrigin: string;
   calendar?: ReturnType<typeof createBookingCalendarAdapter>;
+  zoom?: Pick<ReturnType<typeof createZoomMeetingService>, "sync">;
   sendMail?: (input: {
     tenantId: number;
     to: string;
@@ -116,7 +119,9 @@ export async function runBookingJobs(
           if (
             !grant ||
             grant.provider !== booking.calendar_provider ||
-            grant.connection_id !== booking.calendar_connection_id
+            grant.connection_id !== booking.calendar_connection_id ||
+            (booking.zoom_connection_id &&
+              grant.zoom_connection_id !== booking.zoom_connection_id)
           ) {
             await finish("skipped");
             continue;
@@ -132,6 +137,30 @@ export async function runBookingJobs(
             await finish("skipped");
             continue;
           }
+          if (booking.zoom_connection_id) {
+            const calendarConnection =
+              await createPersonalIntegrationRepository(
+                db,
+              ).findActiveConnection(booking.principal_id, grant.provider);
+            if (
+              !calendarConnection ||
+              calendarConnection.status !== "connected" ||
+              calendarConnection.id !== grant.connection_id
+            )
+              throw Error("Calendar connection unavailable");
+          }
+          const zoomMeeting = booking.zoom_connection_id
+            ? await options.zoom?.sync({
+                principalId: booking.principal_id,
+                connectionId: booking.zoom_connection_id,
+                resourceKey: `booking:${booking.id}`,
+                title: booking.service_name,
+                startsAt: booking.starts_at,
+                endsAt: booking.ends_at,
+                cancelled: booking.status === "cancelled",
+              })
+            : undefined;
+          if (booking.zoom_connection_id && !options.zoom) throw Error();
           const synced = await options.calendar.sync({
             principalId: booking.principal_id,
             provider: grant.provider,
@@ -141,10 +170,16 @@ export async function runBookingJobs(
             startsAt: booking.starts_at,
             endsAt: booking.ends_at,
             externalId: booking.external_id,
-            ...(booking.conference_provider
-              ? { conferenceProvider: booking.conference_provider }
+            ...(booking.zoom_connection_id
+              ? { conferenceProvider: "zoom" as const }
+              : booking.conference_provider
+                ? { conferenceProvider: booking.conference_provider }
+                : {}),
+            ...(zoomMeeting && booking.status === "confirmed"
+              ? { zoomJoinUrl: zoomMeeting.joinUrl }
               : {}),
-            ...(booking.conference_status === "pending"
+            ...(!booking.zoom_connection_id &&
+            booking.conference_status === "pending"
               ? { requestConference: true }
               : {}),
             ...(booking.conference_provider === "jitsi" &&
@@ -197,7 +232,9 @@ export async function runBookingJobs(
               "UPDATE tenant_bookings SET conference_provider=?,conference_url=?,conference_status=? WHERE tenant_id=? AND id=? AND version=? AND EXISTS(SELECT 1 FROM tenant_booking_delivery_locks WHERE tenant_id=? AND booking_id=? AND lease_token=?)",
             )
             .bind(
-              conference?.provider ?? null,
+              conference?.provider === "zoom"
+                ? null
+                : (conference?.provider ?? null),
               joinUrl,
               conferenceStatus,
               job.tenant_id,

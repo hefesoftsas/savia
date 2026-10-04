@@ -18,6 +18,46 @@ export const bookingMessages = {
     "New appointments include the meeting link in confirmations and reminders.",
     "Os novos agendamentos incluem o link da reunião nas confirmações e nos lembretes.",
   ],
+  "The tenant-wide Jitsi setting takes priority. This Zoom default applies when automatic is selected.":
+    [
+      "La configuración de Jitsi de la organización tiene prioridad. Este valor de Zoom se usa cuando está seleccionado el modo automático.",
+      "The tenant-wide Jitsi setting takes priority. This Zoom default applies when automatic is selected.",
+      "A configuração de Jitsi da organização tem prioridade. Este padrão do Zoom vale quando o modo automático está selecionado.",
+    ],
+  Zoom: ["Zoom", "Zoom", "Zoom"],
+  "Zoom needs reconnection": [
+    "Zoom necesita reconexión",
+    "Zoom needs reconnection",
+    "O Zoom precisa ser reconectado",
+  ],
+  "Join Zoom": ["Unirse a Zoom", "Join Zoom", "Entrar no Zoom"],
+  "Video call platform": [
+    "Plataforma de videollamada",
+    "Video call platform",
+    "Plataforma de videochamada",
+  ],
+  "Calendar default (Meet or Teams)": [
+    "Según el calendario (Meet o Teams)",
+    "Calendar default (Meet or Teams)",
+    "Conforme o calendário (Meet ou Teams)",
+  ],
+  "Use Zoom for appointments": [
+    "Usar Zoom para las citas",
+    "Use Zoom for appointments",
+    "Usar Zoom para agendamentos",
+  ],
+  "Connect Zoom first. Only you can authorize your Zoom account for appointments.":
+    [
+      "Conecta Zoom primero. Solo tú puedes autorizar tu cuenta de Zoom para las citas.",
+      "Connect Zoom first. Only you can authorize your Zoom account for appointments.",
+      "Conecte o Zoom primeiro. Só você pode autorizar sua conta do Zoom para agendamentos.",
+    ],
+  "Zoom authorized for appointments": [
+    "Zoom autorizado para las citas",
+    "Zoom authorized for appointments",
+    "Zoom autorizado para agendamentos",
+  ],
+
   Appointments: ["Citas", "Appointments", "Agendamentos"],
   "Manage appointments and your availability.": [
     "Administra las citas y tu disponibilidad.",

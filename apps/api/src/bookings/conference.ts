@@ -18,7 +18,12 @@ export function safeBookingConferenceUrl(
   value: unknown,
 ): string | null {
   const safe = safeConferenceUrl(value);
-  if (!safe || provider !== "jitsi") return safe;
+  if (!safe) return null;
+  if (provider === "zoom") {
+    const host = new URL(safe).hostname;
+    return host === "zoom.us" || host.endsWith(".zoom.us") ? safe : null;
+  }
+  if (provider !== "jitsi") return safe;
   const url = new URL(safe);
   return value === url.href &&
     url.hostname === "meet.jit.si" &&
@@ -40,6 +45,7 @@ export function bookingConference(
     | "conference_provider"
     | "conference_url"
     | "conference_status"
+    | "zoom_connection_id"
   >,
   calendarStatus: string,
 ): BookingConference | null {
@@ -54,13 +60,14 @@ export function bookingConference(
     (calendarStatus === "completed" || calendarStatus === "not_requested")
   )
     return null;
-  const provider =
-    row.conference_provider ??
-    (row.calendar_provider === "google_calendar"
-      ? "google_meet"
-      : row.calendar_provider === "outlook"
-        ? "teams"
-        : null);
+  const provider = row.zoom_connection_id
+    ? "zoom"
+    : (row.conference_provider ??
+      (row.calendar_provider === "google_calendar"
+        ? "google_meet"
+        : row.calendar_provider === "outlook"
+          ? "teams"
+          : null));
   const status =
     row.conference_status === "pending" && calendarStatus === "skipped"
       ? "failed"

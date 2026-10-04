@@ -69,8 +69,24 @@ option, when a professional has granted calendar access, new appointments reques
 a video call if that calendar advertises support: Google Meet for Google Calendar,
 or Teams for Outlook. Savia checks the actual calendar capabilities; connecting
 an account alone does not guarantee conferencing support. A calendar without the
-capability still receives an ordinary appointment. Zoom is not part of this
-booking integration.
+capability still receives an ordinary appointment. Professionals can instead
+connect Zoom and select **Bookings → Availability → Use Zoom for appointments**.
+This explicitly grants their current Zoom connection to this tenant, alongside
+the destination calendar. New reservations then create a Zoom meeting and store
+its attendee link in that calendar event. A reservation administrator cannot
+grant another professional's personal Zoom account. Choosing **Calendar default
+(Meet or Teams)** revokes the Zoom grant for the tenant and uses native calendar
+conferencing for new appointments.
+
+For an existing reservation without a ready or pending link, choose Zoom under
+**Reservations → Video call platform → Generate video link** when its assigned
+professional has authorized Zoom. An unsupported native Meet/Teams capability
+does not prevent using an authorized Zoom account. Existing ready/pending links
+are retained. Rescheduling updates the same Zoom meeting; cancellation deletes
+it through the original authorized connection. Revoked or replaced connections
+stop external changes until access can be safely restored. No host start URL is
+exposed. See [Zoom setup](zoom-integration.md). The tenant’s Jitsi setting takes
+precedence over this personal Zoom default.
 
 Choose **Jitsi** to give each new reservation a unique room on `meet.jit.si`.
 Savia saves the room before queuing delivery, so confirmation and reminder emails

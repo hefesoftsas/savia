@@ -22,6 +22,7 @@ import {
   PersonalIntegrationUpstreamError,
 } from "./contracts";
 import { parseIssueLink } from "@savia/studio-shared/issue-links";
+import { createZoomMeetingService } from "./zoom";
 
 export type PersonalFile = {
   id: string;
@@ -48,7 +49,7 @@ export type PersonalEvent = {
   allDay?: boolean;
   timeZone?: string | null;
   conference?: {
-    provider: "google_meet" | "teams" | "jitsi" | null;
+    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
     joinUrl: string | null;
     status: "ready" | "pending" | "unsupported" | "failed";
   };
@@ -1345,10 +1346,15 @@ function eventsFromOutlook(
 }
 
 export class PersonalIntegrationOperations {
+  private readonly zoomMeetings?: ReturnType<typeof createZoomMeetingService>;
+
   constructor(
     private readonly repository: PersonalIntegrationRepository,
     private readonly nango: PersonalIntegrationNangoClient,
-  ) {}
+    database?: D1Database,
+  ) {
+    if (database) this.zoomMeetings = createZoomMeetingService(database, nango);
+  }
 
   async previewIssue(input: {
     principalId: string;
@@ -2109,7 +2115,12 @@ export class PersonalIntegrationOperations {
       if (input.provider === "google_calendar") {
         const nextToken = record.nextPageToken;
         if (nextToken === undefined || nextToken === null || nextToken === "")
-          return events;
+          return this.attachZoomConferences(
+            input.principalId,
+            input.provider,
+            connection,
+            events,
+          );
         if (
           typeof nextToken !== "string" ||
           nextToken.length > 1024 ||
@@ -2121,7 +2132,12 @@ export class PersonalIntegrationOperations {
       } else {
         const nextLink = record["@odata.nextLink"];
         if (nextLink === undefined || nextLink === null || nextLink === "")
-          return events;
+          return this.attachZoomConferences(
+            input.principalId,
+            input.provider,
+            connection,
+            events,
+          );
         const continuation = calendarOutlookContinuation(
           nextLink,
           outlookPath,
@@ -2137,6 +2153,32 @@ export class PersonalIntegrationOperations {
     throw new PersonalIntegrationUpstreamError(
       "The calendar contains more pages than can be read at once",
     );
+  }
+
+  private async attachZoomConferences(
+    principalId: string,
+    provider: "google_calendar" | "outlook",
+    connection: ActivePersonalIntegrationConnection,
+    events: PersonalEvent[],
+  ): Promise<PersonalEvent[]> {
+    if (!this.zoomMeetings) return events;
+    const joinUrls = await this.zoomMeetings.calendarMeetings({
+      principalId,
+      provider,
+      calendarConnectionId: connection.id,
+      calendarNangoConnectionId: connection.nangoConnectionId,
+      calendarNangoIntegrationId: connection.nangoIntegrationId,
+      eventIds: events.map((event) => event.id),
+    });
+    return events.map((event) => {
+      const joinUrl = joinUrls.get(event.id);
+      return joinUrl
+        ? {
+            ...event,
+            conference: { provider: "zoom", joinUrl, status: "ready" },
+          }
+        : event;
+    });
   }
 
   async deleteCalendarEvent(input: {
@@ -2227,6 +2269,15 @@ export class PersonalIntegrationOperations {
         "Savia booking events must be cancelled from bookings",
       );
 
+    await this.zoomMeetings?.cancelCalendarEvent({
+      principalId: input.principalId,
+      provider: input.provider,
+      calendarConnectionId: connection.id,
+      calendarNangoConnectionId: connection.nangoConnectionId,
+      calendarNangoIntegrationId: connection.nangoIntegrationId,
+      eventId: input.eventId,
+    });
+
     await this.write(connection, "delete-event", {
       method: "DELETE",
       path: deletePath,
@@ -2243,7 +2294,8 @@ export class PersonalIntegrationOperations {
     startsAt: string;
     endsAt: string;
     videoCall?: boolean;
-    conferenceProvider?: "jitsi";
+    conferenceProvider?: "zoom" | "jitsi";
+    requestId?: string;
     attendees?: string[];
   }): Promise<PersonalEvent> {
     const title = requiredActionText(input, "title", 2000);
@@ -2251,6 +2303,27 @@ export class PersonalIntegrationOperations {
     const endsAt = eventDate(input, "endsAt");
     if (endsAt <= startsAt)
       return invalidAction("The event end must be after its start");
+    if (input.videoCall && input.conferenceProvider === "zoom") {
+      if (title.length > 200)
+        return invalidAction(
+          "Zoom meeting titles cannot exceed 200 characters",
+        );
+      if (endsAt.getTime() - startsAt.getTime() > 24 * 60 * 60 * 1000)
+        return invalidAction("Zoom meetings cannot exceed 24 hours");
+    }
+    if (
+      input.requestId !== undefined &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        input.requestId,
+      )
+    )
+      return invalidAction("The event request id is invalid");
+    if (
+      input.videoCall &&
+      input.conferenceProvider === "zoom" &&
+      input.requestId === undefined
+    )
+      return invalidAction("A requestId is required for Zoom video calls");
     if (input.conferenceProvider && !input.videoCall)
       return invalidAction("A conference provider requires videoCall");
     const attendees = calendarAttendees(input);
@@ -2258,27 +2331,65 @@ export class PersonalIntegrationOperations {
       input.principalId,
       input.provider,
     );
+    const requestId = input.requestId ?? crypto.randomUUID();
     const jitsiUrl =
       input.conferenceProvider === "jitsi"
         ? `https://meet.jit.si/savia-${crypto.randomUUID()}`
         : null;
     const conferenceProvider =
-      input.videoCall && !jitsiUrl
-        ? await this.conferenceCapability(connection, input.provider)
-        : null;
+      input.videoCall && input.conferenceProvider === "zoom"
+        ? "zoom"
+        : input.videoCall && input.conferenceProvider !== "jitsi"
+          ? await this.conferenceCapability(connection, input.provider)
+          : null;
+    const zoomConnection =
+      conferenceProvider === "zoom"
+        ? await this.connectedConnection(input.principalId, "zoom")
+        : undefined;
+    if (conferenceProvider === "zoom" && !this.zoomMeetings)
+      throw new PersonalIntegrationUnavailableError(
+        "Zoom meeting creation is unavailable",
+      );
+    const zoomMeeting =
+      conferenceProvider === "zoom"
+        ? await this.zoomMeetings!.sync({
+            principalId: input.principalId,
+            connectionId: zoomConnection!.id,
+            resourceKey: `my-day:${requestId}`,
+            title,
+            startsAt: startsAt.toISOString(),
+            endsAt: endsAt.toISOString(),
+            cancelled: false,
+            immutableRequest: JSON.stringify({
+              provider: input.provider,
+              calendarConnectionId: connection.id,
+              calendarNangoConnectionId: connection.nangoConnectionId,
+              calendarNangoIntegrationId: connection.nangoIntegrationId,
+              title,
+              startsAt: startsAt.toISOString(),
+              endsAt: endsAt.toISOString(),
+              attendees: [...attendees].sort(),
+            }),
+          })
+        : undefined;
     const requestConference =
-      input.videoCall && !jitsiUrl && conferenceProvider !== null;
+      input.videoCall &&
+      (conferenceProvider === "google_meet" || conferenceProvider === "teams");
     const videoCallMarker: VideoCallMarker | null = input.videoCall
       ? requestConference
         ? "requested"
-        : "unsupported"
+        : conferenceProvider === "zoom" || jitsiUrl
+          ? null
+          : "unsupported"
       : null;
-    const response = await this.write(
-      connection,
-      "create-event",
+    const googleEventId =
+      input.provider === "google_calendar" && input.requestId
+        ? `savia${requestId.replaceAll("-", "").toLowerCase()}`
+        : undefined;
+    const eventRequest =
       input.provider === "google_calendar"
         ? {
-            method: "POST",
+            method: "POST" as const,
             path: `/calendar/v3/calendars/primary/events${
               requestConference || attendees.length
                 ? `?${[
@@ -2288,9 +2399,16 @@ export class PersonalIntegrationOperations {
                 : ""
             }`,
             body: {
+              ...(googleEventId ? { id: googleEventId } : {}),
               summary: title,
               start: { dateTime: startsAt.toISOString() },
               end: { dateTime: endsAt.toISOString() },
+              ...(zoomMeeting
+                ? {
+                    location: zoomMeeting.joinUrl,
+                    description: `Join Zoom meeting: ${zoomMeeting.joinUrl}`,
+                  }
+                : {}),
               ...(attendees.length
                 ? { attendees: attendees.map((email) => ({ email })) }
                 : {}),
@@ -2304,7 +2422,7 @@ export class PersonalIntegrationOperations {
                 ? {
                     conferenceData: {
                       createRequest: {
-                        requestId: crypto.randomUUID(),
+                        requestId,
                         conferenceSolutionKey: { type: "hangoutsMeet" },
                       },
                     },
@@ -2331,12 +2449,22 @@ export class PersonalIntegrationOperations {
             },
           }
         : {
-            method: "POST",
+            method: "POST" as const,
             path: "/v1.0/me/events",
             body: {
+              ...(input.requestId ? { transactionId: input.requestId } : {}),
               subject: title,
               start: graphDateTime(startsAt),
               end: graphDateTime(endsAt),
+              ...(zoomMeeting
+                ? {
+                    location: { displayName: zoomMeeting.joinUrl },
+                    body: {
+                      contentType: "text",
+                      content: `Join Zoom meeting: ${zoomMeeting.joinUrl}`,
+                    },
+                  }
+                : {}),
               ...(attendees.length
                 ? {
                     attendees: attendees.map((address) => ({
@@ -2385,27 +2513,78 @@ export class PersonalIntegrationOperations {
                   : {}),
             },
             upstreamHeaders: outlookUtcPreference,
-          },
-    );
+          };
+    let response: Response;
+    const associatedOutlookEventId =
+      zoomMeeting && input.provider === "outlook"
+        ? await this.zoomMeetings!.associatedCalendarEvent({
+            principalId: input.principalId,
+            resourceKey: `my-day:${requestId}`,
+            provider: input.provider,
+            calendarConnectionId: connection.id,
+            calendarNangoConnectionId: connection.nangoConnectionId,
+            calendarNangoIntegrationId: connection.nangoIntegrationId,
+          })
+        : undefined;
+    if (associatedOutlookEventId) {
+      response = await this.nango.proxy({
+        method: "GET",
+        path: `/v1.0/me/events/${encodeURIComponent(associatedOutlookEventId)}`,
+        connection,
+        upstreamHeaders: outlookUtcPreference,
+      });
+      if (!response.ok) throw new PersonalIntegrationUpstreamError();
+    } else {
+      try {
+        response = await this.write(connection, "create-event", eventRequest);
+      } catch (error) {
+        if (
+          !googleEventId ||
+          !(error instanceof PersonalIntegrationUpstreamError)
+        )
+          throw error;
+        response = await this.nango.proxy({
+          method: "GET",
+          path: `/calendar/v3/calendars/primary/events/${encodeURIComponent(googleEventId)}`,
+          connection,
+        });
+        if (!response.ok) throw error;
+      }
+    }
     const payload = await response.json().catch(() => undefined);
     const event =
       input.provider === "google_calendar"
         ? eventsFromGoogle({ items: [payload] }, false, videoCallMarker)[0]
         : eventsFromOutlook({ value: [payload] }, false, videoCallMarker)[0];
     if (!event) throw new PersonalIntegrationUpstreamError();
-    return {
-      ...event,
-      connectionId: connection.id,
-      ...(jitsiUrl
-        ? {
-            conference: {
-              provider: "jitsi" as const,
-              joinUrl: jitsiUrl,
-              status: "ready" as const,
-            },
-          }
-        : {}),
-    };
+    if (
+      (googleEventId && event.id !== googleEventId) ||
+      (associatedOutlookEventId && event.id !== associatedOutlookEventId)
+    )
+      throw new PersonalIntegrationUpstreamError();
+    if (zoomMeeting) {
+      await this.zoomMeetings!.associateCalendarEvent({
+        principalId: input.principalId,
+        resourceKey: `my-day:${requestId}`,
+        provider: input.provider,
+        calendarConnectionId: connection.id,
+        calendarNangoConnectionId: connection.nangoConnectionId,
+        calendarNangoIntegrationId: connection.nangoIntegrationId,
+        eventId: event.id,
+      });
+      event.conference = {
+        provider: "zoom",
+        joinUrl: zoomMeeting.joinUrl,
+        status: "ready",
+      };
+    }
+    if (jitsiUrl)
+      event.conference = {
+        provider: "jitsi",
+        joinUrl: jitsiUrl,
+        status: "ready",
+      };
+    return { ...event, connectionId: connection.id };
   }
 
   private async conferenceCapability(

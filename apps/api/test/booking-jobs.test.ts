@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 import { runBookingJobs } from "../src/bookings/jobs";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
@@ -335,6 +335,98 @@ async function seedCalendar() {
   return f;
 }
 
+it("creates Zoom with a stable booking key before syncing the existing calendar event", async () => {
+  const f = await seedCalendar();
+  const calendarConnectionId = `calendar-${f.id}`;
+  await env.DB.prepare(
+    "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,scopes,created_at,updated_at) VALUES(?,?,'google_calendar',?,'google-calendar','connected','[]','now','now')",
+  )
+    .bind(calendarConnectionId, `meeting-${f.id}`, calendarConnectionId)
+    .run();
+  await env.DB.prepare(
+    "UPDATE tenant_booking_calendar_grants SET connection_id=? WHERE tenant_id=?",
+  )
+    .bind(calendarConnectionId, f.tenantId)
+    .run();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET calendar_connection_id=? WHERE id=?",
+  )
+    .bind(calendarConnectionId, f.id)
+    .run();
+  const zoomConnectionId = `zoom-${f.id}`;
+  const now = new Date(f.now).toISOString();
+  await env.DB.prepare(
+    "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,scopes,created_at,updated_at) VALUES(?,?, 'zoom', ?, 'zoom', 'connected', '[]', ?, ?)",
+  )
+    .bind(zoomConnectionId, `meeting-${f.id}`, zoomConnectionId, now, now)
+    .run();
+  await env.DB.prepare(
+    "UPDATE tenant_booking_calendar_grants SET zoom_connection_id=? WHERE tenant_id=? AND principal_id=?",
+  )
+    .bind(zoomConnectionId, f.tenantId, `meeting-${f.id}`)
+    .run();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET zoom_connection_id=?,conference_status='pending',external_id='saved-calendar-event' WHERE tenant_id=? AND id=?",
+  )
+    .bind(zoomConnectionId, f.tenantId, f.id)
+    .run();
+  const zoomInputs: unknown[] = [];
+  const calendarInputs: unknown[] = [];
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://example.test",
+    zoom: {
+      sync: async (input) => {
+        zoomInputs.push(input);
+        return {
+          meetingId: "zoom-meeting-123",
+          joinUrl: "https://zoom.us/j/123456789?pwd=secret",
+        };
+      },
+    },
+    calendar: {
+      busy: async () => [],
+      sync: async (input) => {
+        calendarInputs.push(input);
+        return {
+          externalId: input.externalId,
+          conference: {
+            provider: "zoom" as const,
+            joinUrl: input.zoomJoinUrl ?? null,
+            status: "ready" as const,
+          },
+        };
+      },
+    },
+  });
+  expect(zoomInputs).toEqual([
+    {
+      principalId: `meeting-${f.id}`,
+      connectionId: zoomConnectionId,
+      resourceKey: `booking:${f.id}`,
+      title: "Consultation",
+      startsAt: "2026-10-06T15:00:00.000Z",
+      endsAt: "2026-10-06T15:30:00.000Z",
+      cancelled: false,
+    },
+  ]);
+  expect(calendarInputs[0]).toMatchObject({
+    externalId: "saved-calendar-event",
+    conferenceProvider: "zoom",
+    zoomJoinUrl: "https://zoom.us/j/123456789?pwd=secret",
+  });
+  const saved = await env.DB.prepare(
+    "SELECT conference_provider,conference_status,conference_url FROM tenant_bookings WHERE tenant_id=? AND id=?",
+  )
+    .bind(f.tenantId, f.id)
+    .first();
+  expect(saved).toEqual({
+    conference_provider: null,
+    conference_status: "ready",
+    conference_url: "https://zoom.us/j/123456789?pwd=secret",
+  });
+});
+
 it("stops showing a pending conference when the calendar grant is revoked", async () => {
   const { readBooking, reservationView } =
     await import("../src/bookings/repository");
@@ -626,4 +718,39 @@ it("does not advertise pending video creation for legacy completed calendar even
     (await readBooking(env.DB, f.tenantId, f.id))!,
   );
   expect(view.conference).toBeNull();
+});
+
+it("does not write Zoom when the pinned destination calendar is disconnected", async () => {
+  const f = await seedCalendar();
+  await env.DB.prepare(
+    "UPDATE tenant_booking_calendar_grants SET zoom_connection_id='zoom-stale-calendar' WHERE tenant_id=?",
+  )
+    .bind(f.tenantId)
+    .run();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET zoom_connection_id='zoom-stale-calendar' WHERE id=?",
+  )
+    .bind(f.id)
+    .run();
+  const zoomSync = vi
+    .fn()
+    .mockResolvedValue({ meetingId: "123", joinUrl: "https://zoom.us/j/123" });
+  const calendarSync = vi
+    .fn()
+    .mockRejectedValue(new Error("Calendar disconnected"));
+  await runBookingJobs(env.DB, {
+    now: () => f.now,
+    publicOrigin: "https://example.test",
+    zoom: { sync: zoomSync },
+    calendar: { busy: async () => [], sync: calendarSync },
+  });
+  expect(zoomSync).not.toHaveBeenCalled();
+  expect(calendarSync).not.toHaveBeenCalled();
+  expect(
+    await env.DB.prepare(
+      "SELECT status FROM tenant_booking_jobs WHERE booking_id=? AND kind='calendar'",
+    )
+      .bind(f.id)
+      .first(),
+  ).toEqual({ status: "failed" });
 });

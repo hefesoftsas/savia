@@ -4981,7 +4981,7 @@ export interface paths {
                 } | null;
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "jitsi" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -5143,6 +5143,14 @@ export interface paths {
                   /** @enum {string|null} */
                   provider: "google_calendar" | "outlook" | null;
                   status: string;
+                  /**
+                   * @default auto
+                   * @enum {string}
+                   */
+                  conferenceProvider: "auto" | "zoom";
+                  /** @enum {string} */
+                  zoomStatus:
+                    "connected" | "not_connected" | "reconnect_required";
                 };
               };
             };
@@ -5292,6 +5300,14 @@ export interface paths {
                   /** @enum {string|null} */
                   provider: "google_calendar" | "outlook" | null;
                   status: string;
+                  /**
+                   * @default auto
+                   * @enum {string}
+                   */
+                  conferenceProvider: "auto" | "zoom";
+                  /** @enum {string} */
+                  zoomStatus:
+                    "connected" | "not_connected" | "reconnect_required";
                 };
               };
             };
@@ -5475,6 +5491,14 @@ export interface paths {
                   /** @enum {string|null} */
                   provider: "google_calendar" | "outlook" | null;
                   status: string;
+                  /**
+                   * @default auto
+                   * @enum {string}
+                   */
+                  conferenceProvider: "auto" | "zoom";
+                  /** @enum {string} */
+                  zoomStatus:
+                    "connected" | "not_connected" | "reconnect_required";
                 };
               };
             };
@@ -5643,6 +5667,14 @@ export interface paths {
                   /** @enum {string|null} */
                   provider: "google_calendar" | "outlook" | null;
                   status: string;
+                  /**
+                   * @default auto
+                   * @enum {string}
+                   */
+                  conferenceProvider: "auto" | "zoom";
+                  /** @enum {string} */
+                  zoomStatus:
+                    "connected" | "not_connected" | "reconnect_required";
                 };
               };
             };
@@ -5728,6 +5760,8 @@ export interface paths {
           "application/json": {
             /** @enum {string|null} */
             provider: "google_calendar" | "outlook" | null;
+            /** @enum {string} */
+            conferenceProvider?: "auto" | "zoom";
           };
         };
       };
@@ -5800,6 +5834,14 @@ export interface paths {
                   /** @enum {string|null} */
                   provider: "google_calendar" | "outlook" | null;
                   status: string;
+                  /**
+                   * @default auto
+                   * @enum {string}
+                   */
+                  conferenceProvider: "auto" | "zoom";
+                  /** @enum {string} */
+                  zoomStatus:
+                    "connected" | "not_connected" | "reconnect_required";
                 };
               };
             };
@@ -5910,9 +5952,10 @@ export interface paths {
                 deliveryStatus: string;
                 calendarStatus: string;
                 canGenerateConference?: boolean;
+                availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "jitsi" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -6004,6 +6047,11 @@ export interface paths {
         content: {
           "application/json": {
             version: number;
+            /**
+             * @default auto
+             * @enum {string}
+             */
+            provider?: "auto" | "zoom";
           };
         };
       };
@@ -6034,9 +6082,10 @@ export interface paths {
                 deliveryStatus: string;
                 calendarStatus: string;
                 canGenerateConference?: boolean;
+                availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "jitsi" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -6156,9 +6205,10 @@ export interface paths {
                 deliveryStatus: string;
                 calendarStatus: string;
                 canGenerateConference?: boolean;
+                availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "jitsi" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -7200,9 +7250,10 @@ export interface paths {
                   deliveryStatus: string;
                   calendarStatus: string;
                   canGenerateConference?: boolean;
+                  availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
                     /** @enum {string|null} */
-                    provider: "google_meet" | "teams" | "jitsi" | null;
+                    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                     /** Format: uri */
                     joinUrl: string | null;
                     /** @enum {string} */
@@ -7241,9 +7292,10 @@ export interface paths {
                   deliveryStatus: string;
                   calendarStatus: string;
                   canGenerateConference?: boolean;
+                  availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
                     /** @enum {string|null} */
-                    provider: "google_meet" | "teams" | "jitsi" | null;
+                    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                     /** Format: uri */
                     joinUrl: string | null;
                     /** @enum {string} */
@@ -7357,9 +7409,10 @@ export interface paths {
                   deliveryStatus: string;
                   calendarStatus: string;
                   canGenerateConference?: boolean;
+                  availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
                     /** @enum {string|null} */
-                    provider: "google_meet" | "teams" | "jitsi" | null;
+                    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                     /** Format: uri */
                     joinUrl: string | null;
                     /** @enum {string} */
@@ -7683,9 +7736,10 @@ export interface paths {
                 deliveryStatus: string;
                 calendarStatus: string;
                 canGenerateConference?: boolean;
+                availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "jitsi" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -7806,9 +7860,10 @@ export interface paths {
                 deliveryStatus: string;
                 calendarStatus: string;
                 canGenerateConference?: boolean;
+                availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "jitsi" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -13015,7 +13070,8 @@ export interface paths {
                   | "onedrive_business"
                   | "jira"
                   | "linear"
-                  | "github";
+                  | "github"
+                  | "zoom";
                 /** @enum {string} */
                 kind: "personal-integration-provider";
                 attributes: {
@@ -13077,7 +13133,8 @@ export interface paths {
                     | "onedrive_business"
                     | "jira"
                     | "linear"
-                    | "github";
+                    | "github"
+                    | "zoom";
                   /** @enum {string} */
                   status:
                     | "pending"
@@ -13215,7 +13272,8 @@ export interface paths {
                     | "onedrive_business"
                     | "jira"
                     | "linear"
-                    | "github";
+                    | "github"
+                    | "zoom";
                   /** @enum {string} */
                   status:
                     | "pending"
@@ -13812,7 +13870,7 @@ export interface paths {
                 timeZone?: string | null;
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "jitsi" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -13867,7 +13925,9 @@ export interface paths {
             endsAt: string;
             videoCall?: boolean;
             /** @enum {string} */
-            conferenceProvider?: "jitsi";
+            conferenceProvider?: "jitsi" | "zoom";
+            /** Format: uuid */
+            requestId?: string;
             attendees?: string[];
           };
         };
@@ -13890,7 +13950,7 @@ export interface paths {
                 webLink: string | null;
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "jitsi" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */

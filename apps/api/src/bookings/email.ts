@@ -11,6 +11,7 @@ type EmailBooking = Pick<
   | "ends_at"
 > & {
   customer_locale?: string | null;
+  zoom_connection_id?: string | null;
   conference_status?: string | null;
   conference_provider?: "google_meet" | "teams" | "jitsi" | null;
   conference_url?: string | null;
@@ -127,7 +128,9 @@ export function formatBookingEmail(input: {
   const joinUrl =
     input.kind !== "cancellation" && input.booking.conference_status === "ready"
       ? safeBookingConferenceUrl(
-          input.booking.conference_provider,
+          input.booking.zoom_connection_id
+            ? "zoom"
+            : input.booking.conference_provider,
           input.booking.conference_url,
         )
       : null;

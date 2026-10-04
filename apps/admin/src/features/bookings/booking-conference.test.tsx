@@ -8,7 +8,7 @@ afterEach(cleanup);
 
 function renderConference(
   conference: {
-    provider: "google_meet" | "teams" | "jitsi" | null;
+    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
     joinUrl: string | null;
     status: "ready" | "pending" | "unsupported" | "failed";
   } | null,
@@ -25,6 +25,7 @@ function renderConference(
 
 it.each([
   ["jitsi", "https://meet.jit.si/savia-test-room", "Join Jitsi"],
+  ["zoom", "https://us02web.zoom.us/j/123?pwd=abc", "Join Zoom"],
   ["google_meet", "https://meet.google.com/abc-defg-hij", "Join Google Meet"],
   ["teams", "https://teams.microsoft.com/l/meetup-join/123", "Join Teams"],
   ["teams", "https://teams.cloud.microsoft/meet/123", "Join Teams"],
@@ -101,10 +102,20 @@ it("hides conference details after cancellation", () => {
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });
 
+it("rejects a deceptive Zoom hostname", () => {
+  renderConference({
+    provider: "zoom",
+    joinUrl: "https://zoom.us.evil.test/j/123",
+    status: "ready",
+  });
+  expect(screen.queryByRole("link")).not.toBeInTheDocument();
+});
+
 it.each([
   "https://evil.example/room",
   "https://meet.jit.si.evil.example/room",
   "https://meet.jit.si/",
+  "https://meet.jit.si/room/extra",
 ])("hides an invalid Jitsi room %s", (joinUrl) => {
   renderConference({ provider: "jitsi", joinUrl, status: "ready" });
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
