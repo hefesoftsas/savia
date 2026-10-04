@@ -134,6 +134,242 @@ describe("Pages API", () => {
   beforeAll(applyMigrations);
   beforeEach(seed);
 
+  it("captures a link into a private folder and returns its initial revision", async () => {
+    const app = appFor(actor("page-owner", 9201));
+    const response = await app.request("/v1/pages/capture", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        captureId: "b1b58f9e-1eac-4a10-a795-fc71e5c85a11",
+        title: "Example article",
+        url: "https://example.test/article?x=1",
+        note: "Read this later",
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const page = ((await response.json()) as any).data;
+    expect(page).toMatchObject({
+      title: "Example article",
+      kind: "page",
+      version: 1,
+      role: "owner",
+      parentId: expect.any(String),
+      rootId: expect.any(String),
+    });
+    expect(page.content).toEqual([
+      {
+        type: "p",
+        children: [
+          {
+            type: "a",
+            url: "https://example.test/article?x=1",
+            children: [{ text: "https://example.test/article?x=1" }],
+          },
+        ],
+      },
+      { type: "p", children: [{ text: "Read this later" }] },
+    ]);
+    const folder = (
+      (await (await app.request(`/v1/pages/${page.parentId}`)).json()) as any
+    ).data;
+    expect(folder).toMatchObject({
+      kind: "folder",
+      title: "Saved links",
+      role: "owner",
+      isShared: false,
+    });
+    const folderRevisions = (
+      (await (
+        await app.request(`/v1/pages/${page.parentId}/revisions`)
+      ).json()) as any
+    ).data;
+    expect(folderRevisions).toEqual([
+      expect.objectContaining({ version: 1, title: "Saved links" }),
+    ]);
+    const revisions = (
+      (await (
+        await app.request(`/v1/pages/${page.id}/revisions`)
+      ).json()) as any
+    ).data;
+    expect(revisions).toEqual([
+      expect.objectContaining({ version: 1, title: "Example article" }),
+    ]);
+  });
+
+  it("returns the same captured page for retries but scopes capture IDs to tenant and owner", async () => {
+    const captureId = "b1b58f9e-1eac-4a10-a795-fc71e5c85a12";
+    const request = (user: AppActor) =>
+      appFor(user).request("/v1/pages/capture", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          captureId,
+          title: "Retry",
+          url: "https://example.test/",
+        }),
+      });
+
+    const [firstResponse, retryResponse] = await Promise.all([
+      request(actor("page-owner", 9201)),
+      request(actor("page-owner", 9201)),
+    ]);
+    const first = ((await firstResponse.json()) as any).data;
+    const retry = ((await retryResponse.json()) as any).data;
+    const otherOwner = (
+      (await (await request(actor("page-reader", 9201))).json()) as any
+    ).data;
+    const otherTenant = (
+      (await (await request(actor("page-outsider", 9202))).json()) as any
+    ).data;
+
+    expect(retry.id).toBe(first.id);
+    expect(otherOwner.id).not.toBe(first.id);
+    expect(otherTenant.id).not.toBe(first.id);
+    expect(first.ownerId).toBe("page-owner");
+    expect(otherOwner.ownerId).toBe("page-reader");
+    expect(otherTenant.ownerId).toBe("page-outsider");
+  });
+
+  it("rejects invalid capture URLs and non-folder or inaccessible parents", async () => {
+    const app = appFor(actor("page-owner", 9201));
+    const invalid = await app.request("/v1/pages/capture", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        captureId: "b1b58f9e-1eac-4a10-a795-fc71e5c85a13",
+        title: "Bad URL",
+        url: "javascript:alert(1)",
+      }),
+    });
+    expect(invalid.status).toBe(400);
+    const credentials = await app.request("/v1/pages/capture", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        captureId: "b1b58f9e-1eac-4a10-a795-fc71e5c85a20",
+        title: "Credential URL",
+        url: "https://user:password@example.test/",
+      }),
+    });
+    expect(credentials.status).toBe(400);
+
+    const page = await new PagesService(
+      env.DB,
+      actor("page-owner", 9201),
+    ).create({ title: "Not a folder" });
+    const notFolder = await app.request("/v1/pages/capture", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        captureId: "b1b58f9e-1eac-4a10-a795-fc71e5c85a14",
+        title: "Nested link",
+        url: "https://example.test/",
+        parentId: page.id,
+      }),
+    });
+    expect(notFolder.status).toBe(400);
+
+    const hiddenParent = await new PagesService(
+      env.DB,
+      actor("page-outsider", 9202),
+    ).create({ title: "Other tenant folder", kind: "folder" });
+    const forbidden = await app.request("/v1/pages/capture", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        captureId: "b1b58f9e-1eac-4a10-a795-fc71e5c85a15",
+        title: "Forbidden nested link",
+        url: "https://example.test/",
+        parentId: hiddenParent.id,
+      }),
+    });
+    expect(forbidden.status).toBe(404);
+  });
+
+  it("does not place a capture into an existing shared folder with the requested name", async () => {
+    const owner = appFor(actor("page-owner", 9201));
+    const folder = await new PagesService(
+      env.DB,
+      actor("page-owner", 9201),
+    ).create({
+      title: "Saved links",
+      kind: "folder",
+    });
+    await owner.request(`/v1/pages/${folder.id}/shares`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        version: 1,
+        shares: [{ principalId: "page-reader", role: "editor" }],
+      }),
+    });
+    const reader = appFor(actor("page-reader", 9201));
+    const response = await reader.request("/v1/pages/capture", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        captureId: "b1b58f9e-1eac-4a10-a795-fc71e5c85a16",
+        title: "Private destination",
+        url: "https://example.test/",
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const page = ((await response.json()) as any).data;
+    expect(page.parentId).not.toBe(folder.id);
+    expect(page.ownerId).toBe("page-reader");
+    expect(page.role).toBe("owner");
+  });
+
+  it("moves captures to a private root when its default folder has an active public link", async () => {
+    const app = appFor(actor("page-owner", 9201));
+    const capture = (captureId: string) =>
+      app.request("/v1/pages/capture", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          captureId,
+          title: "Link",
+          url: "https://example.test/",
+        }),
+      });
+    const first = (
+      (await (
+        await capture("b1b58f9e-1eac-4a10-a795-fc71e5c85a17")
+      ).json()) as any
+    ).data;
+    await env.DB.prepare(
+      `INSERT INTO page_public_links (id,page_id,tenant_id,token,created_by,created_at,expires_at,revoked_at)
+       VALUES ('capture-public-link',?,?,?,'page-owner',?,?,NULL)`,
+    )
+      .bind(
+        first.parentId,
+        9201,
+        "a".repeat(64),
+        new Date().toISOString(),
+        new Date(Date.now() + 60_000).toISOString(),
+      )
+      .run();
+
+    const whilePublic = (
+      (await (
+        await capture("b1b58f9e-1eac-4a10-a795-fc71e5c85a18")
+      ).json()) as any
+    ).data;
+    expect(whilePublic.parentId).not.toBe(first.parentId);
+
+    await env.DB.prepare(
+      "UPDATE page_public_links SET expires_at='2000-01-01T00:00:00.000Z' WHERE id='capture-public-link'",
+    ).run();
+    const afterExpiry = (
+      (await (
+        await capture("b1b58f9e-1eac-4a10-a795-fc71e5c85a19")
+      ).json()) as any
+    ).data;
+    expect(afterExpiry.parentId).toBe(first.parentId);
+  });
+
   it("creates a private root and nested page and rejects stale document saves", async () => {
     const app = appFor(actor("page-owner", 9201));
     const created = await app.request("/v1/pages", {

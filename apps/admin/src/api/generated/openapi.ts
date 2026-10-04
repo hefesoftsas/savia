@@ -15144,6 +15144,153 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/pages/capture": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Capture an HTTP(S) link as a private Page */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            captureId: string;
+            title: string;
+            url: string;
+            note?: string;
+            parentId?: string;
+            folderTitle?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Captured page document */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                kind: "page" | "folder";
+                id: string;
+                parentId: string | null;
+                rootId: string;
+                title: string;
+                version: number;
+                updatedAt: string;
+                ownerId: string;
+                /** @enum {string} */
+                role: "owner" | "editor" | "reader";
+                isShared: boolean;
+                binding: {
+                  domain: string;
+                  collection: string;
+                  recordId: string;
+                } | null;
+                excerpt?: string;
+                content: {
+                  [key: string]: unknown;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Captured page document */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                kind: "page" | "folder";
+                id: string;
+                parentId: string | null;
+                rootId: string;
+                title: string;
+                version: number;
+                updatedAt: string;
+                ownerId: string;
+                /** @enum {string} */
+                role: "owner" | "editor" | "reader";
+                isShared: boolean;
+                binding: {
+                  domain: string;
+                  collection: string;
+                  recordId: string;
+                } | null;
+                excerpt?: string;
+                content: {
+                  [key: string]: unknown;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Page not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Version conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/pages": {
     parameters: {
       query?: never;
