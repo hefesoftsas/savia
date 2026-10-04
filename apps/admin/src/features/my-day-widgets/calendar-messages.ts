@@ -71,6 +71,7 @@ export const calendarMessages = {
     "Sync calendars",
     "Sincronizar calendários",
   ],
+  "Refresh agenda": ["Actualizar agenda", "Refresh agenda", "Atualizar agenda"],
   "No events for this day.": [
     "Sin eventos para este día.",
     "No events for this day.",

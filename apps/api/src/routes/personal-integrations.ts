@@ -409,6 +409,18 @@ const eventListRoute = createRoute({
                 webLink: z.string().url().nullable(),
                 allDay: z.boolean().optional(),
                 timeZone: z.string().nullable().optional(),
+                conference: z
+                  .object({
+                    provider: z.enum(["google_meet", "teams"]).nullable(),
+                    joinUrl: z.string().url().nullable(),
+                    status: z.enum([
+                      "ready",
+                      "pending",
+                      "unsupported",
+                      "failed",
+                    ]),
+                  })
+                  .optional(),
               }),
             ),
           }),
@@ -439,6 +451,7 @@ const createCalendarEventRoute = createRoute({
             title: z.string().trim().min(1).max(2000),
             startsAt: z.string().trim().min(1).max(64),
             endsAt: z.string().trim().min(1).max(64),
+            videoCall: z.boolean().optional(),
           }),
         },
       },
@@ -456,6 +469,13 @@ const createCalendarEventRoute = createRoute({
               startsAt: z.string().nullable(),
               endsAt: z.string().nullable(),
               webLink: z.string().url().nullable(),
+              conference: z
+                .object({
+                  provider: z.enum(["google_meet", "teams"]).nullable(),
+                  joinUrl: z.string().url().nullable(),
+                  status: z.enum(["ready", "pending", "unsupported", "failed"]),
+                })
+                .optional(),
             }),
           }),
         },
@@ -1086,6 +1106,7 @@ export function registerPersonalIntegrationRoutes(
             title: input.title,
             startsAt: input.startsAt,
             endsAt: input.endsAt,
+            videoCall: input.videoCall,
           }),
         },
         201,

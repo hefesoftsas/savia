@@ -5,6 +5,7 @@ import {
   ChevronRight,
   ExternalLink,
   LoaderCircle,
+  RefreshCw,
   Settings2,
 } from "lucide-react";
 import type {
@@ -26,7 +27,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { AgendaState } from "./agenda-widget";
+import { safeConferenceLink, type AgendaState } from "./agenda-widget";
+import type { PersonalCalendarConference } from "@/api/personal-integrations-client";
+import { agendaMessages } from "./agenda-messages";
 import {
   calendarDays,
   addDays,
@@ -83,7 +86,18 @@ export function tenantBookingsLink(
     ? `${buildTenantOrigin(normalizedSlug, canonical)}/#/bookings?tab=reservations&date=${encodeURIComponent(date)}`
     : null;
 }
-type AgendaOccurrence = CalendarOccurrence & { booking?: BookingAgendaEntry };
+type AgendaOccurrence = CalendarOccurrence & {
+  booking?: BookingAgendaEntry;
+  conference?: PersonalCalendarConference;
+};
+
+function safeEventConferenceLink(
+  conference: PersonalCalendarConference | undefined,
+) {
+  return conference?.status === "ready"
+    ? safeConferenceLink(conference.provider, conference.joinUrl)
+    : undefined;
+}
 function eventTime(
   event: CalendarOccurrence,
   locale: string,
@@ -121,6 +135,7 @@ export function CalendarView({
   legacyDay: ReactNode;
 }) {
   const t = useMessages(calendarMessages);
+  const agendaText = useMessages(agendaMessages);
   const locale = intlLocale(useAppLocale());
   const [managerOpen, setManagerOpen] = useState(false),
     [detail, setDetail] = useState<CalendarOccurrence | null>(null);
@@ -196,6 +211,7 @@ export function CalendarView({
                     event.allDay ?? /^\d{4}-\d{2}-\d{2}$/.test(event.startsAt),
                   timeZone: event.timeZone ?? timeZone,
                   webLink: event.webLink,
+                  conference: event.conference,
                 },
               ]
             : [],
@@ -269,30 +285,74 @@ export function CalendarView({
         : (sources.sources.find((source) => source.id === id)?.color ??
           "slate");
   }
-  function eventRow(event: CalendarOccurrence, compact = false) {
+  function eventRow(event: AgendaOccurrence, compact = false) {
+    const conference = event.conference;
+    const joinUrl = safeEventConferenceLink(conference);
+    const meetingProvider =
+      conference?.provider === "google_meet"
+        ? agendaText("Google Meet")
+        : agendaText("Microsoft Teams");
     return (
-      <button
-        type="button"
+      <div
         key={`${event.sourceId}:${event.id}`}
-        onClick={() => setDetail(event)}
-        className={`w-full min-w-0 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${sourceColors[sourceColor(event.sourceId)]}`}
-        aria-label={`${event.title || t("Untitled event")}, ${eventTime(event, locale, t("All day"))}, ${sourceName(event.sourceId)}`}
+        className={`min-w-0 rounded-md px-2 py-1.5 ${sourceColors[sourceColor(event.sourceId)]}`}
       >
-        <span
-          className={
-            compact
-              ? "block truncate font-medium"
-              : "block break-words text-sm font-medium"
-          }
+        <button
+          type="button"
+          onClick={() => setDetail(event)}
+          className="w-full min-w-0 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`${event.title || t("Untitled event")}, ${eventTime(event, locale, t("All day"))}, ${sourceName(event.sourceId)}`}
         >
-          {event.allDay ? "" : `${eventTime(event, locale, t("All day"))} · `}
-          {event.title || t("Untitled event")}
-        </span>
-        <span className="mt-0.5 block truncate text-[11px]">
-          {event.allDay ? `${t("All day")} · ` : ""}
-          {sourceName(event.sourceId)}
-        </span>
-      </button>
+          <span
+            className={
+              compact
+                ? "block truncate font-medium"
+                : "block break-words text-sm font-medium"
+            }
+          >
+            {event.allDay ? "" : `${eventTime(event, locale, t("All day"))} · `}
+            {event.title || t("Untitled event")}
+          </span>
+          <span className="mt-0.5 block truncate text-[11px]">
+            {event.allDay ? `${t("All day")} · ` : ""}
+            {sourceName(event.sourceId)}
+          </span>
+        </button>
+        {conference ? (
+          <div className="mt-1 text-[11px]">
+            {conference.status === "ready" && joinUrl ? (
+              <a
+                href={joinUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={agendaText("Unirse a %{provider}", {
+                  provider: meetingProvider,
+                })}
+                className="inline-flex items-center gap-1 font-medium underline"
+              >
+                {agendaText("Unirse a %{provider}", {
+                  provider: meetingProvider,
+                })}
+                <ExternalLink className="size-3" />
+              </a>
+            ) : (
+              <span>
+                {conference.status === "pending"
+                  ? agendaText("El enlace de la reunión se está preparando.")
+                  : conference.status === "unsupported"
+                    ? agendaText(
+                        "Las videollamadas no son compatibles con esta cuenta de calendario.",
+                      )
+                    : conference.status === "failed"
+                      ? agendaText("No se pudo crear el enlace de la reunión.")
+                      : agendaText(
+                          "El enlace de la reunión no está disponible.",
+                        )}
+              </span>
+            )}
+          </div>
+        ) : null}
+      </div>
     );
   }
   function showDay(day: Date) {
@@ -330,6 +390,17 @@ export function CalendarView({
             </Button>
           ))}
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-11 @min-[28rem]/calendar:size-9"
+          aria-label={t("Refresh agenda")}
+          title={t("Refresh agenda")}
+          onClick={() => void agenda.refresh()}
+        >
+          <RefreshCw className="size-4" />
+        </Button>
         <Button
           type="button"
           variant="outline"
@@ -639,6 +710,51 @@ export function CalendarView({
               <p className="text-muted-foreground">
                 {t("Source time zone: %{zone}", { zone: detail.timeZone })}
               </p>
+              {(detail as AgendaOccurrence).conference
+                ? (() => {
+                    const conference = (detail as AgendaOccurrence).conference!;
+                    const joinUrl = safeEventConferenceLink(conference);
+                    const providerName =
+                      conference.provider === "google_meet"
+                        ? agendaText("Google Meet")
+                        : agendaText("Microsoft Teams");
+                    return joinUrl ? (
+                      <Button asChild variant="outline">
+                        <a
+                          href={joinUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={agendaText("Unirse a %{provider}", {
+                            provider: providerName,
+                          })}
+                        >
+                          {agendaText("Unirse a %{provider}", {
+                            provider: providerName,
+                          })}
+                          <ExternalLink className="size-4" />
+                        </a>
+                      </Button>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        {conference.status === "pending"
+                          ? agendaText(
+                              "El enlace de la reunión se está preparando.",
+                            )
+                          : conference.status === "unsupported"
+                            ? agendaText(
+                                "Las videollamadas no son compatibles con esta cuenta de calendario.",
+                              )
+                            : conference.status === "failed"
+                              ? agendaText(
+                                  "No se pudo crear el enlace de la reunión.",
+                                )
+                              : agendaText(
+                                  "El enlace de la reunión no está disponible.",
+                                )}
+                      </p>
+                    );
+                  })()
+                : null}
               {(detail as AgendaOccurrence).booking ? (
                 <BookingDetails
                   booking={(detail as AgendaOccurrence).booking!}
