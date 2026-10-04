@@ -1,5 +1,15 @@
 PRAGMA defer_foreign_keys = ON;
 --> statement-breakpoint
+CREATE TABLE zoom_personal_meetings_collaboration_backup AS
+SELECT principal_id, resource_key, connection_id, nango_connection_id,
+  nango_integration_id, immutable_request, meeting_id, join_url,
+  calendar_connection_id, calendar_nango_connection_id,
+  calendar_nango_integration_id, calendar_provider, calendar_event_id,
+  state, created_at, updated_at
+FROM zoom_personal_meetings;
+--> statement-breakpoint
+DROP TABLE zoom_personal_meetings;
+--> statement-breakpoint
 CREATE TABLE personal_integration_audit_events_collaboration_backup AS
 SELECT id, connection_id, principal_id, provider, event_type, outcome, error_code, created_at
 FROM personal_integration_audit_events;
@@ -39,6 +49,45 @@ FROM personal_integration_connections;
 DROP TABLE personal_integration_connections;
 --> statement-breakpoint
 ALTER TABLE personal_integration_connections_collaboration RENAME TO personal_integration_connections;
+--> statement-breakpoint
+CREATE TABLE zoom_personal_meetings (
+  principal_id TEXT NOT NULL REFERENCES identity_principal(id) ON DELETE CASCADE,
+  resource_key TEXT NOT NULL,
+  connection_id TEXT NOT NULL REFERENCES personal_integration_connections(id),
+  nango_connection_id TEXT NOT NULL,
+  nango_integration_id TEXT NOT NULL,
+  immutable_request TEXT,
+  meeting_id TEXT,
+  join_url TEXT,
+  calendar_connection_id TEXT,
+  calendar_nango_connection_id TEXT,
+  calendar_nango_integration_id TEXT,
+  calendar_provider TEXT CHECK(calendar_provider IN ('google_calendar', 'outlook')),
+  calendar_event_id TEXT,
+  state TEXT NOT NULL CHECK(state IN ('creating', 'active', 'uncertain', 'cancelled')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (principal_id, resource_key)
+);
+--> statement-breakpoint
+INSERT INTO zoom_personal_meetings (
+  principal_id, resource_key, connection_id, nango_connection_id,
+  nango_integration_id, immutable_request, meeting_id, join_url,
+  calendar_connection_id, calendar_nango_connection_id,
+  calendar_nango_integration_id, calendar_provider, calendar_event_id,
+  state, created_at, updated_at
+)
+SELECT principal_id, resource_key, connection_id, nango_connection_id,
+  nango_integration_id, immutable_request, meeting_id, join_url,
+  calendar_connection_id, calendar_nango_connection_id,
+  calendar_nango_integration_id, calendar_provider, calendar_event_id,
+  state, created_at, updated_at
+FROM zoom_personal_meetings_collaboration_backup;
+--> statement-breakpoint
+DROP TABLE zoom_personal_meetings_collaboration_backup;
+--> statement-breakpoint
+CREATE INDEX zoom_personal_meetings_calendar_event_idx
+ON zoom_personal_meetings(principal_id, calendar_provider, calendar_event_id);
 --> statement-breakpoint
 CREATE UNIQUE INDEX personal_integration_connections_active_unique
 ON personal_integration_connections (principal_id, provider) WHERE disconnected_at IS NULL;

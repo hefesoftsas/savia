@@ -153,6 +153,10 @@
     {
       "filename": "0036_booking_zoom.sql",
       "sha256": "a7c240f7cb25d14b612c2bbd171fe65fc8b5096c0342c79c8b597dad22902251"
+    },
+    {
+      "filename": "0037_personal_collaboration_messages.sql",
+      "sha256": "bd96455c9ce671aeb47ab4daaf9c796de7e12f095de0aeffa6659b2d604bed8c"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -397,6 +401,11 @@
       "type": "index",
       "name": "pages_tenant_owner_updated",
       "table": "pages"
+    },
+    {
+      "type": "index",
+      "name": "personal_collaboration_messages_principal_created",
+      "table": "personal_collaboration_messages"
     },
     {
       "type": "index",
@@ -907,6 +916,11 @@
       "type": "table",
       "name": "pages",
       "table": "pages"
+    },
+    {
+      "type": "table",
+      "name": "personal_collaboration_messages",
+      "table": "personal_collaboration_messages"
     },
     {
       "type": "table",
@@ -6104,6 +6118,107 @@
       ],
       "seedRows": 0,
       "uniqueKeys": [
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "personal_collaboration_messages",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "request_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "request_hash",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "provider",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "message_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["principal_id", "request_id"],
+          "origin": "u"
+        },
         {
           "columns": ["id"],
           "origin": "pk"
