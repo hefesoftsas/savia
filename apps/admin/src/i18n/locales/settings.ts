@@ -632,6 +632,11 @@ export const settingsMessages = {
     "Only platform administrators can access this configuration.",
     "Somente administradores da plataforma podem acessar esta configuração.",
   ],
+  "Only platform or tenant administrators can access this configuration.": [
+    "Solo administradores de plataforma o del tenant pueden acceder a esta configuración.",
+    "Only platform or tenant administrators can access this configuration.",
+    "Somente administradores da plataforma ou do tenant podem acessar esta configuração.",
+  ],
   "Clave OpenRouter": [
     "Clave OpenRouter",
     "OpenRouter key",

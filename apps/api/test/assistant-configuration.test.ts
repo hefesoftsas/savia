@@ -192,15 +192,17 @@ describe("assistant OpenRouter configuration", () => {
   it("reports deployment fallback state without exposing the deployment key", async () => {
     const settings = repository();
 
-    await expect(settings.summary()).resolves.toEqual({
+    await expect(settings.summary()).resolves.toMatchObject({
       global: null,
       tenants: [],
       deployment: {
         keyState: "deployment_fallback",
         model: "anthropic/claude-sonnet-4",
-        transcriptionModel: "openai/whisper-large-v3",
+        transcriptionModel: "google/gemini-2.5-flash",
         summaryModel: "anthropic/claude-sonnet-4",
       },
+      canManageGlobal: true,
+      manageableTenantIds: expect.any(Array),
     });
   });
 
@@ -235,7 +237,7 @@ describe("assistant OpenRouter configuration", () => {
     });
   });
 
-  it("keeps meeting model choices global when saving a tenant assistant override", async () => {
+  it("uses tenant meeting model overrides ahead of global defaults", async () => {
     const settings = repository();
     await seedAgencyAndMember(101);
     await settings.saveGlobal({
@@ -247,6 +249,8 @@ describe("assistant OpenRouter configuration", () => {
     await settings.saveAgencyOverride(101, {
       actorId: "test-platform-admin",
       model: "openai/gpt-5",
+      transcriptionModel: "openai/whisper-large-v3-turbo",
+      summaryModel: "openai/gpt-4o-mini",
     });
 
     await expect(settings.summary()).resolves.toMatchObject({
@@ -256,10 +260,10 @@ describe("assistant OpenRouter configuration", () => {
       },
     });
     await expect(
-      settings.effectiveConfigurationFor("tenantless-user"),
+      settings.effectiveConfigurationForTenant("test-agency-member", 101),
     ).resolves.toMatchObject({
-      model: "deepseek/deepseek-v4-flash",
-      transcriptionModel: "openai/whisper-large-v3",
+      model: "openai/gpt-5",
+      transcriptionModel: "openai/whisper-large-v3-turbo",
       summaryModel: "openai/gpt-4o-mini",
     });
   });
@@ -270,7 +274,7 @@ describe("assistant OpenRouter configuration", () => {
     await settings.saveGlobal({
       actorId: "test-platform-admin",
       model: "deepseek/deepseek-v4-flash",
-      transcriptionModel: "openai/whisper-large-v3",
+      transcriptionModel: "google/gemini-2.5-flash",
     });
     await settings.saveAgencyOverride(115, {
       actorId: "test-platform-admin",
@@ -282,7 +286,7 @@ describe("assistant OpenRouter configuration", () => {
       settings.effectiveConfigurationFor("test-agency-member"),
     ).resolves.toMatchObject({
       model: "openai/gpt-5",
-      transcriptionModel: "openai/whisper-large-v3",
+      transcriptionModel: "google/gemini-2.5-flash",
       summaryModel: "openai/gpt-5",
     });
   });
@@ -315,7 +319,7 @@ describe("assistant OpenRouter configuration", () => {
     ).resolves.toEqual({
       apiKey: "not-a-real-global-key",
       model: "openai/gpt-5",
-      transcriptionModel: "openai/whisper-large-v3",
+      transcriptionModel: "google/gemini-2.5-flash",
       summaryModel: "openai/gpt-5",
       tenantId: 101,
     });

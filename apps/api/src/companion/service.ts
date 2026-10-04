@@ -242,12 +242,30 @@ async function boundedJson(response: Response): Promise<any> {
   }
 }
 
+function transcriptionInstruction(language?: string): string {
+  return (
+    `Transcribe the provided audio${language ? ` in language ${language}` : ""}. ` +
+    "Return only the transcript text, without timestamps, labels, bullets, or commentary."
+  );
+}
+
+function transcriptionText(output: any): string {
+  const text = output?.choices?.[0]?.message?.content;
+  if (typeof text !== "string" || text.length > 60000)
+    throw new CompanionError(
+      "PROVIDER_INVALID_RESPONSE",
+      "Provider returned an invalid transcript.",
+      502,
+    );
+  return text;
+}
+
 export class CompanionService {
   readonly sttModel: string;
   private send: typeof fetch;
   constructor(options: { fetch?: typeof fetch; sttModel?: string } = {}) {
     this.send = options.fetch ?? fetch;
-    this.sttModel = options.sttModel ?? "openai/whisper-large-v3";
+    this.sttModel = options.sttModel ?? "google/gemini-2.5-flash";
     if (!/^[a-z0-9._-]+\/[a-z0-9._:-]+$/i.test(this.sttModel))
       throw new Error("Invalid Companion STT model");
   }
@@ -318,21 +336,30 @@ export class CompanionService {
     const model = configuration.transcriptionModel ?? this.sttModel;
     const output = await this.request(
       configuration,
-      "audio/transcriptions",
+      "chat/completions",
       {
         model,
-        input_audio: audio,
-        language,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: transcriptionInstruction(language),
+              },
+              { type: "input_audio", input_audio: audio },
+            ],
+          },
+        ],
       },
       "transcription",
     );
-    if (typeof output?.text !== "string" || output.text.length > 60000)
-      throw new CompanionError(
-        "PROVIDER_INVALID_RESPONSE",
-        "Provider returned an invalid transcript.",
-        502,
-      );
-    return { text: output.text, source, model, durationSeconds };
+    return {
+      text: transcriptionText(output),
+      source,
+      model,
+      durationSeconds,
+    };
   }
   async transcribeRecording(
     configuration: EffectiveAssistantConfiguration,
@@ -373,8 +400,12 @@ export class CompanionService {
     }
     const model = configuration.transcriptionModel ?? this.sttModel;
     const encoder = new TextEncoder();
-    const prefix = `{"model":${JSON.stringify(model)},"input_audio":{"data":"`;
-    const suffix = `","format":${JSON.stringify(input.format)}}}`;
+    const prefix = [
+      `{"model":${JSON.stringify(model)},"messages":[{"role":"user","content":[`,
+      `{"type":"text","text":${JSON.stringify(transcriptionInstruction())}},`,
+      `{"type":"input_audio","input_audio":{"data":"`,
+    ].join("");
+    const suffix = `","format":${JSON.stringify(input.format)}}}]}]}`;
     let audioOffset = 0;
     let phase: "prefix" | "audio" | "suffix" | "done" = "prefix";
     const body = new ReadableStream<Uint8Array>({
@@ -407,18 +438,12 @@ export class CompanionService {
     });
     const output = await this.request(
       configuration,
-      "audio/transcriptions",
+      "chat/completions",
       body,
       "transcription",
     );
-    if (typeof output?.text !== "string" || output.text.length > 60000)
-      throw new CompanionError(
-        "PROVIDER_INVALID_RESPONSE",
-        "Provider returned an invalid transcript.",
-        502,
-      );
     return {
-      text: output.text,
+      text: transcriptionText(output),
       source: input.source,
       model,
       durationSeconds: input.durationSeconds,
