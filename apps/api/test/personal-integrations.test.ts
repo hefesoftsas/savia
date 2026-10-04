@@ -1684,6 +1684,432 @@ describe("personal integration providers", () => {
     );
   });
 
+  it("creates a Google Calendar event with Meet when the calendar supports it", async () => {
+    const nango = fakeNango();
+    nango.proxy
+      .mockResolvedValueOnce(
+        Response.json({
+          conferenceProperties: {
+            allowedConferenceSolutionTypes: ["hangoutsMeet"],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "google-meet-event",
+          summary: "Meet Acme",
+          start: { dateTime: "2026-01-03T15:00:00.000Z" },
+          end: { dateTime: "2026-01-03T15:30:00.000Z" },
+          conferenceData: {
+            createRequest: { status: { statusCode: "success" } },
+            conferenceSolution: { key: { type: "hangoutsMeet" } },
+            entryPoints: [
+              {
+                entryPointType: "video",
+                uri: "https://meet.google.com/abc-defg-hij",
+              },
+            ],
+          },
+        }),
+      );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-google-meet-create-connection",
+        "test-agency-member",
+        "google_calendar",
+        "nango-google-meet-create-connection",
+        "google-calendar-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "google_calendar",
+          title: "Meet Acme",
+          startsAt: "2026-01-03T15:00:00.000Z",
+          endsAt: "2026-01-03T15:30:00.000Z",
+          videoCall: true,
+        }),
+      },
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        id: "google-meet-event",
+        conference: {
+          provider: "google_meet",
+          joinUrl: "https://meet.google.com/abc-defg-hij",
+          status: "ready",
+        },
+      },
+    });
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        method: "GET",
+        path: "/calendar/v3/calendars/primary",
+      }),
+    );
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: "POST",
+        path: "/calendar/v3/calendars/primary/events?conferenceDataVersion=1",
+        body: expect.objectContaining({
+          conferenceData: expect.objectContaining({
+            createRequest: expect.objectContaining({
+              conferenceSolutionKey: { type: "hangoutsMeet" },
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("keeps a Google event and marks conference unsupported for calendars without Meet", async () => {
+    const nango = fakeNango();
+    nango.proxy
+      .mockResolvedValueOnce(
+        Response.json({
+          conferenceProperties: { allowedConferenceSolutionTypes: [] },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "google-no-meet-event",
+          summary: "Meet Acme",
+          start: { dateTime: "2026-01-03T15:00:00.000Z" },
+          end: { dateTime: "2026-01-03T15:30:00.000Z" },
+        }),
+      );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-google-no-meet-connection",
+        "test-agency-member",
+        "google_calendar",
+        "nango-google-no-meet-connection",
+        "google-calendar-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "google_calendar",
+          title: "Meet Acme",
+          startsAt: "2026-01-03T15:00:00.000Z",
+          endsAt: "2026-01-03T15:30:00.000Z",
+          videoCall: true,
+        }),
+      },
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        id: "google-no-meet-event",
+        conference: {
+          provider: null,
+          joinUrl: null,
+          status: "unsupported",
+        },
+      },
+    });
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: "POST",
+        path: "/calendar/v3/calendars/primary/events",
+        body: expect.not.objectContaining({
+          conferenceData: expect.anything(),
+        }),
+      }),
+    );
+  });
+
+  it("lists pending Google Meet requests so a later reload can resolve them", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        items: [
+          {
+            id: "google-pending-meet",
+            summary: "Meet Acme",
+            start: { dateTime: "2026-01-03T09:00:00-05:00" },
+            end: { dateTime: "2026-01-03T09:30:00-05:00" },
+            conferenceData: {
+              createRequest: {
+                conferenceSolutionKey: { type: "hangoutsMeet" },
+                status: { statusCode: "pending" },
+              },
+            },
+          },
+        ],
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-google-pending-list-connection",
+        "test-agency-member",
+        "google_calendar",
+        "nango-google-pending-list-connection",
+        "google-calendar-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events?provider=google_calendar",
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      data: [
+        {
+          id: "google-pending-meet",
+          conference: {
+            provider: "google_meet",
+            joinUrl: null,
+            status: "pending",
+          },
+        },
+      ],
+    });
+    expect(nango.proxy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: expect.stringContaining("conferenceDataVersion"),
+      }),
+    );
+  });
+
+  it("creates an Outlook event with Teams only when the calendar supports it", async () => {
+    const nango = fakeNango();
+    nango.proxy
+      .mockResolvedValueOnce(
+        Response.json({ allowedOnlineMeetingProviders: ["teamsForBusiness"] }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "outlook-teams-event",
+          subject: "Meet Acme",
+          start: { dateTime: "2026-01-03T15:00:00Z", timeZone: "UTC" },
+          end: { dateTime: "2026-01-03T15:30:00Z", timeZone: "UTC" },
+          isOnlineMeeting: true,
+          onlineMeetingProvider: "teamsForBusiness",
+          onlineMeeting: {
+            joinUrl: "https://teams.microsoft.com/l/meetup-join/abc",
+          },
+        }),
+      );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-outlook-teams-create-connection",
+        "test-agency-member",
+        "outlook",
+        "nango-outlook-teams-create-connection",
+        "outlook-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "outlook",
+          title: "Meet Acme",
+          startsAt: "2026-01-03T15:00:00.000Z",
+          endsAt: "2026-01-03T15:30:00.000Z",
+          videoCall: true,
+        }),
+      },
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        id: "outlook-teams-event",
+        conference: {
+          provider: "teams",
+          joinUrl: "https://teams.microsoft.com/l/meetup-join/abc",
+          status: "ready",
+        },
+      },
+    });
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        method: "GET",
+        path: "/v1.0/me/calendar?$select=allowedOnlineMeetingProviders",
+      }),
+    );
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: "POST",
+        path: "/v1.0/me/events",
+        body: expect.objectContaining({
+          isOnlineMeeting: true,
+          onlineMeetingProvider: "teamsForBusiness",
+        }),
+      }),
+    );
+  });
+
+  it("does not create an event when the conference capability check fails", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({ error: "consent required" }, { status: 403 }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-google-meet-capability-error-connection",
+        "test-agency-member",
+        "google_calendar",
+        "nango-google-meet-capability-error-connection",
+        "google-calendar-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "google_calendar",
+          title: "Meet Acme",
+          startsAt: "2026-01-03T15:00:00.000Z",
+          endsAt: "2026-01-03T15:30:00.000Z",
+          videoCall: true,
+        }),
+      },
+    );
+
+    expect(response.status).toBe(502);
+    expect(nango.proxy).toHaveBeenCalledTimes(1);
+    expect(nango.proxy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/calendar/v3/calendars/primary",
+      }),
+    );
+  });
+
+  it("lists pending Outlook Teams meetings without exposing an unsafe join URL", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        value: [
+          {
+            id: "outlook-pending-teams",
+            subject: "Meet Acme",
+            start: { dateTime: "2026-01-03T15:00:00Z", timeZone: "UTC" },
+            end: { dateTime: "2026-01-03T15:30:00Z", timeZone: "UTC" },
+            isOnlineMeeting: true,
+            onlineMeetingProvider: "teamsForBusiness",
+            onlineMeeting: { joinUrl: "https://attacker.example/join" },
+          },
+        ],
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-outlook-pending-teams-list-connection",
+        "test-agency-member",
+        "outlook",
+        "nango-outlook-pending-teams-list-connection",
+        "outlook-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/events?provider=outlook&from=2026-01-03T15%3A00%3A00Z&to=2026-01-03T16%3A00%3A00Z",
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      data: [
+        {
+          id: "outlook-pending-teams",
+          conference: { provider: "teams", joinUrl: null, status: "pending" },
+        },
+      ],
+    });
+    const path = nango.proxy.mock.calls[0]?.[0]?.path as string;
+    expect(
+      new URL(path, "https://graph.microsoft.com").searchParams.get("$select"),
+    ).toContain("onlineMeeting");
+  });
+
   it("sends composer mail only from a caller-owned connected account", async () => {
     const nango = fakeNango();
     nango.proxy.mockResolvedValue(Response.json({ id: "sent" }));

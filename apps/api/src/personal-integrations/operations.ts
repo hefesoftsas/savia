@@ -46,6 +46,11 @@ export type PersonalEvent = {
   webLink: string | null;
   allDay?: boolean;
   timeZone?: string | null;
+  conference?: {
+    provider: "google_meet" | "teams" | null;
+    joinUrl: string | null;
+    status: "ready" | "pending" | "unsupported" | "failed";
+  };
 };
 
 const calendarPageSize = 100;
@@ -349,6 +354,157 @@ function secureWebLink(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+type PersonalConference = NonNullable<PersonalEvent["conference"]>;
+
+function safeConferenceUrl(
+  value: unknown,
+  provider: "google_meet" | "teams",
+): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    const allowedHost =
+      provider === "google_meet"
+        ? url.hostname === "meet.google.com"
+        : [
+            "teams.microsoft.com",
+            "teams.live.com",
+            "teams.cloud.microsoft",
+            "gov.teams.microsoft.us",
+            "dod.teams.microsoft.us",
+            "teams.microsoftonline.cn",
+          ].includes(url.hostname);
+    return url.protocol === "https:" &&
+      allowedHost &&
+      !url.username &&
+      !url.password
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const unsupportedConference: PersonalConference = {
+  provider: null,
+  joinUrl: null,
+  status: "unsupported",
+};
+
+function googleConference(
+  value: unknown,
+  requested = false,
+): PersonalConference | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return requested
+      ? { provider: "google_meet", joinUrl: null, status: "pending" }
+      : undefined;
+  const event = value as Record<string, unknown>;
+  const conferenceData = event.conferenceData;
+  if (
+    !conferenceData ||
+    typeof conferenceData !== "object" ||
+    Array.isArray(conferenceData)
+  ) {
+    if (typeof event.hangoutLink === "string") {
+      const joinUrl = safeConferenceUrl(event.hangoutLink, "google_meet");
+      return {
+        provider: "google_meet",
+        joinUrl,
+        status: joinUrl ? "ready" : "pending",
+      };
+    }
+    return requested
+      ? { provider: "google_meet", joinUrl: null, status: "pending" }
+      : undefined;
+  }
+  const data = conferenceData as Record<string, unknown>;
+  const createRequest = data.createRequest;
+  const createStatus =
+    createRequest &&
+    typeof createRequest === "object" &&
+    !Array.isArray(createRequest)
+      ? (createRequest as Record<string, unknown>).status
+      : undefined;
+  const statusCode =
+    createStatus &&
+    typeof createStatus === "object" &&
+    !Array.isArray(createStatus)
+      ? (createStatus as Record<string, unknown>).statusCode
+      : undefined;
+  if (statusCode === "failure" || statusCode === "FAILURE")
+    return { provider: "google_meet", joinUrl: null, status: "failed" };
+  const solution = data.conferenceSolution;
+  const key =
+    solution && typeof solution === "object" && !Array.isArray(solution)
+      ? (solution as Record<string, unknown>).key
+      : undefined;
+  const solutionType =
+    key && typeof key === "object" && !Array.isArray(key)
+      ? (key as Record<string, unknown>).type
+      : undefined;
+  const createKey =
+    createRequest &&
+    typeof createRequest === "object" &&
+    !Array.isArray(createRequest)
+      ? (createRequest as Record<string, unknown>).conferenceSolutionKey
+      : undefined;
+  const createType =
+    createKey && typeof createKey === "object" && !Array.isArray(createKey)
+      ? (createKey as Record<string, unknown>).type
+      : undefined;
+  const isMeet =
+    solutionType === "hangoutsMeet" ||
+    createType === "hangoutsMeet" ||
+    requested;
+  if (!isMeet) return unsupportedConference;
+  const entries = Array.isArray(data.entryPoints) ? data.entryPoints : [];
+  const video = entries.find(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      !Array.isArray(entry) &&
+      (entry as Record<string, unknown>).entryPointType === "video",
+  );
+  const url =
+    video && typeof video === "object" && !Array.isArray(video)
+      ? (video as Record<string, unknown>).uri
+      : undefined;
+  const joinUrl = safeConferenceUrl(url ?? event.hangoutLink, "google_meet");
+  return joinUrl
+    ? { provider: "google_meet", joinUrl, status: "ready" }
+    : { provider: "google_meet", joinUrl: null, status: "pending" };
+}
+
+function outlookConference(
+  value: unknown,
+  requested = false,
+): PersonalConference | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return requested
+      ? { provider: "teams", joinUrl: null, status: "pending" }
+      : undefined;
+  const event = value as Record<string, unknown>;
+  const online = event.isOnlineMeeting === true;
+  const provider = event.onlineMeetingProvider;
+  if (!online && !requested) return undefined;
+  if (event.isOnlineMeeting === false && requested)
+    return { provider: "teams", joinUrl: null, status: "failed" };
+  if (provider !== "teamsForBusiness")
+    return requested
+      ? { provider: "teams", joinUrl: null, status: "pending" }
+      : unsupportedConference;
+  const meeting = event.onlineMeeting;
+  const rawUrl =
+    meeting && typeof meeting === "object" && !Array.isArray(meeting)
+      ? (meeting as Record<string, unknown>).joinUrl
+      : undefined;
+  const joinUrl = safeConferenceUrl(rawUrl, "teams");
+  return joinUrl
+    ? { provider: "teams", joinUrl, status: "ready" }
+    : { provider: "teams", joinUrl: null, status: "pending" };
 }
 
 function invalidAction(message: string): never {
@@ -940,6 +1096,7 @@ function filesFromOneDrive(payload: unknown): PersonalFile[] {
 function eventsFromGoogle(
   payload: unknown,
   includeCalendarMetadata = false,
+  requestedMeet = false,
 ): PersonalEvent[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return [];
@@ -955,6 +1112,7 @@ function eventsFromGoogle(
     const end = item.end as
       { dateTime?: unknown; date?: unknown; timeZone?: unknown } | undefined;
     if (item.status === "cancelled") return [];
+    const conference = googleConference(item, requestedMeet);
     return [
       {
         id,
@@ -969,6 +1127,7 @@ function eventsFromGoogle(
                 stringValue(start?.timeZone) ?? stringValue(end?.timeZone),
             }
           : {}),
+        ...(conference ? { conference } : {}),
       },
     ];
   });
@@ -977,6 +1136,7 @@ function eventsFromGoogle(
 function eventsFromOutlook(
   payload: unknown,
   includeCalendarMetadata = false,
+  requestedTeams = false,
 ): PersonalEvent[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return [];
@@ -1009,6 +1169,7 @@ function eventsFromOutlook(
       endsAt = outlookAllDayDate(end, originalEndTimeZone);
       timeZone = originalStartTimeZone;
     }
+    const conference = outlookConference(item, requestedTeams);
     return [
       {
         id,
@@ -1017,6 +1178,7 @@ function eventsFromOutlook(
         endsAt,
         webLink: secureWebLink(item.webLink),
         ...(includeCalendarMetadata ? { allDay, timeZone } : {}),
+        ...(conference ? { conference } : {}),
       },
     ];
   });
@@ -1716,6 +1878,7 @@ export class PersonalIntegrationOperations {
       singleEvents: "true",
       orderBy: "startTime",
       timeMin: (input.from ?? new Date()).toISOString(),
+      conferenceDataVersion: "1",
       ...(input.to ? { timeMax: input.to.toISOString() } : {}),
     });
     const outlookParameters =
@@ -1726,12 +1889,12 @@ export class PersonalIntegrationOperations {
             $top: String(calendarPageSize),
             $orderby: "start/dateTime",
             $select:
-              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone",
+              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting",
           })
         : new URLSearchParams({
             $top: String(calendarPageSize),
             $select:
-              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone",
+              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting",
           });
     const events: PersonalEvent[] = [];
     const seenGoogleTokens = new Set<string>();
@@ -1820,6 +1983,7 @@ export class PersonalIntegrationOperations {
     title: string;
     startsAt: string;
     endsAt: string;
+    videoCall?: boolean;
   }): Promise<PersonalEvent> {
     const title = requiredActionText(input, "title", 2000);
     const startsAt = eventDate(input, "startsAt");
@@ -1830,17 +1994,31 @@ export class PersonalIntegrationOperations {
       input.principalId,
       input.provider,
     );
+    const conferenceProvider = input.videoCall
+      ? await this.conferenceCapability(connection, input.provider)
+      : null;
+    const requestConference = input.videoCall && conferenceProvider !== null;
     const response = await this.write(
       connection,
       "create-event",
       input.provider === "google_calendar"
         ? {
             method: "POST",
-            path: "/calendar/v3/calendars/primary/events",
+            path: `/calendar/v3/calendars/primary/events${requestConference ? "?conferenceDataVersion=1" : ""}`,
             body: {
               summary: title,
               start: { dateTime: startsAt.toISOString() },
               end: { dateTime: endsAt.toISOString() },
+              ...(requestConference && conferenceProvider === "google_meet"
+                ? {
+                    conferenceData: {
+                      createRequest: {
+                        requestId: crypto.randomUUID(),
+                        conferenceSolutionKey: { type: "hangoutsMeet" },
+                      },
+                    },
+                  }
+                : {}),
             },
           }
         : {
@@ -1850,6 +2028,12 @@ export class PersonalIntegrationOperations {
               subject: title,
               start: graphDateTime(startsAt),
               end: graphDateTime(endsAt),
+              ...(requestConference && conferenceProvider === "teams"
+                ? {
+                    isOnlineMeeting: true,
+                    onlineMeetingProvider: "teamsForBusiness",
+                  }
+                : {}),
             },
             upstreamHeaders: outlookUtcPreference,
           },
@@ -1857,10 +2041,60 @@ export class PersonalIntegrationOperations {
     const payload = await response.json().catch(() => undefined);
     const event =
       input.provider === "google_calendar"
-        ? eventsFromGoogle({ items: [payload] })[0]
-        : eventsFromOutlook({ value: [payload] })[0];
+        ? eventsFromGoogle({ items: [payload] }, false, requestConference)[0]
+        : eventsFromOutlook({ value: [payload] }, false, requestConference)[0];
     if (!event) throw new PersonalIntegrationUpstreamError();
+    if (input.videoCall && !conferenceProvider)
+      event.conference = { ...unsupportedConference };
     return event;
+  }
+
+  private async conferenceCapability(
+    connection: ActivePersonalIntegrationConnection,
+    provider: "google_calendar" | "outlook",
+  ): Promise<"google_meet" | "teams" | null> {
+    let response: Response;
+    try {
+      response = await this.nango.proxy({
+        method: "GET",
+        path:
+          provider === "google_calendar"
+            ? "/calendar/v3/calendars/primary"
+            : "/v1.0/me/calendar?$select=allowedOnlineMeetingProviders",
+        connection,
+      });
+    } catch {
+      throw new PersonalIntegrationUpstreamError();
+    }
+    if (!response.ok) throw new PersonalIntegrationUpstreamError();
+    const payload = await response.json().catch(() => undefined);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload))
+      throw new PersonalIntegrationUpstreamError();
+    const record = payload as Record<string, unknown>;
+    if (provider === "google_calendar") {
+      const properties = record.conferenceProperties;
+      if (
+        !properties ||
+        typeof properties !== "object" ||
+        Array.isArray(properties)
+      )
+        throw new PersonalIntegrationUpstreamError();
+      const allowed = (properties as Record<string, unknown>)
+        .allowedConferenceSolutionTypes;
+      if (
+        !Array.isArray(allowed) ||
+        allowed.some((item) => typeof item !== "string")
+      )
+        throw new PersonalIntegrationUpstreamError();
+      return allowed.includes("hangoutsMeet") ? "google_meet" : null;
+    }
+    const allowed = record.allowedOnlineMeetingProviders;
+    if (
+      !Array.isArray(allowed) ||
+      allowed.some((item) => typeof item !== "string")
+    )
+      throw new PersonalIntegrationUpstreamError();
+    return allowed.includes("teamsForBusiness") ? "teams" : null;
   }
 
   async sendMail(

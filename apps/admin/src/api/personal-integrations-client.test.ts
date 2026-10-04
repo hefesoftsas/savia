@@ -86,6 +86,40 @@ it("requests the native booking agenda with range and time zone", async () => {
   );
 });
 
+it("requests a video conference only when creating a video call", async () => {
+  const created = {
+    id: "event-1",
+    title: "Planning",
+    startsAt: "2026-10-05T14:00:00.000Z",
+    endsAt: "2026-10-05T14:30:00.000Z",
+    webLink: null,
+    conference: {
+      provider: "google_meet",
+      joinUrl: "https://meet.google.com/abc-defg-hij",
+      status: "ready",
+    },
+  };
+  const post = vi.fn().mockResolvedValue({ data: created });
+  const client = new PersonalIntegrationsClient({ post } as never);
+
+  await expect(
+    client.createCalendarEvent({
+      provider: "google_calendar",
+      title: "Planning",
+      startsAt: created.startsAt,
+      endsAt: created.endsAt,
+      videoCall: true,
+    }),
+  ).resolves.toEqual(created);
+  expect(post).toHaveBeenCalledWith("/v1/personal-integrations/events", {
+    provider: "google_calendar",
+    title: "Planning",
+    startsAt: created.startsAt,
+    endsAt: created.endsAt,
+    videoCall: true,
+  });
+});
+
 it("invalidates cached connections and notifies Pages after a successful connection", async () => {
   const connection = {
     id: "jira-1",
