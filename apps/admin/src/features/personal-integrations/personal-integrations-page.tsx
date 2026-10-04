@@ -11,6 +11,8 @@ import Jira from "@thesvg/react/jira";
 import Linear from "@thesvg/react/linear";
 import Github from "@thesvg/react/github";
 import { CircleAlert, Video } from "lucide-react";
+import Slack from "@thesvg/react/slack";
+import MicrosoftTeams from "@thesvg/react/microsoft-teams";
 import type { AppServices } from "@/app-services";
 import type {
   PersonalIntegrationConnection,
@@ -109,6 +111,18 @@ const unavailableProviders: PersonalIntegrationProvider[] = [
     availability: "unavailable",
     capabilities: [],
   },
+  {
+    id: "slack",
+    displayName: "Slack",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "microsoft_teams",
+    displayName: "Microsoft Teams",
+    availability: "unavailable",
+    capabilities: [],
+  },
 ];
 
 function eventType(event: unknown): string | undefined {
@@ -144,6 +158,8 @@ function providerIcon(provider: PersonalIntegrationProviderId) {
     jira: Jira,
     linear: Linear,
     github: Github,
+    slack: Slack,
+    microsoft_teams: MicrosoftTeams,
   }[provider];
 }
 
@@ -168,8 +184,19 @@ function providerHint(
       return t(
         "Un administrador debe habilitar GitHub en Nango. Después podrás conectar tu cuenta aquí.",
       );
+    if (provider.id === "slack" || provider.id === "microsoft_teams")
+      return t(
+        "Un administrador debe habilitar %{provider} en Nango. Después podrás conectar tu cuenta aquí.",
+        { provider: provider.displayName },
+      );
     return "";
   }
+  const collaborationDescription =
+    provider.id === "slack"
+      ? t("Comparte resúmenes de registros en canales de Slack.")
+      : provider.id === "microsoft_teams"
+        ? t("Comparte resúmenes de registros en canales de Microsoft Teams.")
+        : undefined;
   const issueDescription =
     provider.id === "jira"
       ? t("Conecta Jira Cloud para previsualizar incidencias en Páginas.")
@@ -182,10 +209,12 @@ function providerHint(
           : undefined;
   if (connection?.status === "connected")
     return connection.externalAccountLabel
-      ? t("Conectado como %{label}.", {
+      ? `${t("Conectado como %{label}.", {
           label: connection.externalAccountLabel,
-        })
-      : (issueDescription ?? t("Conexión autorizada y lista para usarse."));
+        })}${collaborationDescription ? ` ${collaborationDescription}` : ""}`
+      : (collaborationDescription ??
+          issueDescription ??
+          t("Conexión autorizada y lista para usarse."));
   if (connection?.status === "reconnect_required")
     return t("La sesión expiró. Vuelve a conectar para continuar usándola.");
   if (connection?.status === "failed")
@@ -193,6 +222,7 @@ function providerHint(
   if (connection?.status === "pending")
     return t("Finalizando la autorización en segundo plano…");
   return (
+    collaborationDescription ??
     issueDescription ??
     t("Requiere tu autorización antes de que Savia pueda interactuar con ella.")
   );
@@ -225,7 +255,9 @@ function providerStatusLabel(
   if (provider.availability === "unavailable")
     return provider.id === "jira" ||
       provider.id === "linear" ||
-      provider.id === "github"
+      provider.id === "github" ||
+      provider.id === "slack" ||
+      provider.id === "microsoft_teams"
       ? t("Requiere configuración")
       : undefined;
   return connection ? connectionStatusLabel(t, connection) : undefined;
@@ -471,6 +503,14 @@ export function PersonalIntegrationsPage({
           provider.id === "github",
       ),
     },
+    {
+      id: "collaboration-integrations",
+      title: t("Colaboración"),
+      providers: providers.filter(
+        (provider) =>
+          provider.id === "slack" || provider.id === "microsoft_teams",
+      ),
+    },
   ];
 
   return (
@@ -546,7 +586,9 @@ export function PersonalIntegrationsPage({
                       provider.availability === "unavailable" &&
                       (provider.id === "jira" ||
                         provider.id === "linear" ||
-                        provider.id === "github")
+                        provider.id === "github" ||
+                        provider.id === "slack" ||
+                        provider.id === "microsoft_teams")
                         ? true
                         : !!connection &&
                           (connected ||

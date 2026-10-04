@@ -22,3 +22,8 @@ export function useAppServices(): AppServices {
   }
   return services;
 }
+
+/** Optional access for Studio surfaces that also render in isolated previews. */
+export function useOptionalAppServices(): AppServices | null {
+  return useContext(AppServicesContext);
+}

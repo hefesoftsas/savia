@@ -17,6 +17,35 @@ async function config(outputRoot, worker) {
   );
 }
 
+test("enables chat providers only with explicit backend integration IDs", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "savia-chat-config-"));
+  try {
+    const input = { authD1Id: "auth", domainD1Id: "domain", outputRoot };
+    await renderProductionConfigs({
+      ...input,
+      slackIntegrationId: " slack ",
+      microsoftTeamsIntegrationId: " microsoft-teams ",
+    });
+    const api = await config(outputRoot, "api");
+    assert.equal(api.vars.NANGO_SLACK_INTEGRATION_ID, "slack");
+    assert.equal(
+      api.vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID,
+      "microsoft-teams",
+    );
+    for (const worker of ["admin", "auth", "mcp"]) {
+      const vars = (await config(outputRoot, worker)).vars ?? {};
+      assert.equal("NANGO_SLACK_INTEGRATION_ID" in vars, false);
+      assert.equal("NANGO_MICROSOFT_TEAMS_INTEGRATION_ID" in vars, false);
+    }
+    await renderProductionConfigs({ ...input, slackIntegrationId: "   " });
+    const disabled = (await config(outputRoot, "api")).vars;
+    assert.equal("NANGO_SLACK_INTEGRATION_ID" in disabled, false);
+    assert.equal("NANGO_MICROSOFT_TEAMS_INTEGRATION_ID" in disabled, false);
+  } finally {
+    await rm(outputRoot, { recursive: true, force: true });
+  }
+});
+
 test("renders GitHub only when its integration ID is configured", async () => {
   const outputRoot = await mkdtemp(join(tmpdir(), "savia-github-config-"));
   try {

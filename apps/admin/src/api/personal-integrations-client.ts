@@ -14,6 +14,12 @@ import type {
   UpdateCalendarSourceInput,
 } from "@savia/studio-shared/calendar-contracts";
 import type { BookingAgendaEntry } from "@savia/studio-shared/booking-agenda-contracts";
+import type {
+  CollaborationChannelPage,
+  CollaborationProvider,
+  ShareRecordInput,
+  ShareRecordResult,
+} from "@savia/studio-shared/collaboration-contracts";
 
 export type CalendarSourcesClient = Pick<
   PersonalIntegrationsClient,
@@ -37,7 +43,8 @@ export type PersonalIntegrationProviderId =
   | "onedrive_business"
   | "jira"
   | "linear"
-  | "github";
+  | "github"
+  | CollaborationProvider;
 export type PersonalIntegrationAvailability = "enabled" | "unavailable";
 export type PersonalIntegrationConnectionStatus =
   "pending" | "connected" | "reconnect_required" | "disconnected" | "failed";
@@ -432,6 +439,31 @@ export class PersonalIntegrationsClient {
       await this.api.post<{ data: PersonalIssuePreview }>(
         "/v1/personal-integrations/issue-preview",
         { url },
+      )
+    ).data;
+  }
+
+  async listCollaborationChannels(input: {
+    provider: CollaborationProvider;
+    cursor?: string;
+  }): Promise<CollaborationChannelPage> {
+    const query = new URLSearchParams({ provider: input.provider });
+    if (input.cursor !== undefined) query.set("cursor", input.cursor);
+    const response = await this.api.get<{
+      data: CollaborationChannelPage["channels"];
+      pagination?: { nextCursor: string | null };
+    }>(`/v1/personal-integrations/collaboration/channels?${query}`);
+    return {
+      channels: response.data,
+      nextCursor: response.pagination?.nextCursor ?? null,
+    };
+  }
+
+  async shareRecordToChat(input: ShareRecordInput): Promise<ShareRecordResult> {
+    return (
+      await this.api.post<{ data: ShareRecordResult }>(
+        "/v1/personal-integrations/collaboration/messages",
+        input,
       )
     ).data;
   }

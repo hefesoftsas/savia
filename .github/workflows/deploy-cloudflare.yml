@@ -90,6 +90,8 @@ jobs:
           NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
           NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
           NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
 
       - name: Upload secrets using explicit environment configuration
         run: node scripts/upload-cloudflare-secrets.mjs
