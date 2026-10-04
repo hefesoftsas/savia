@@ -63,6 +63,7 @@ import {
   createReservation,
   managedBooking,
   reservationView,
+  reservationViews,
   changeReservation,
   readBooking,
   type BookingRow,
@@ -723,7 +724,7 @@ export function registerBookingRoutes(
       });
       const r = await db
         .prepare(
-          `SELECT * FROM tenant_bookings WHERE tenant_id=? AND starts_at>=? AND starts_at<? ${auth.canManage ? "" : "AND principal_id=?"} ORDER BY starts_at LIMIT 500`,
+          `SELECT b.*,g.provider AS "grantedCalendarProvider",g.connection_id AS "grantedCalendarConnectionId",c.id AS "activeCalendarConnectionId" FROM tenant_bookings b LEFT JOIN tenant_booking_calendar_grants g ON g.tenant_id=b.tenant_id AND g.principal_id=b.principal_id LEFT JOIN personal_integration_connections c ON c.id=g.connection_id AND c.principal_id=b.principal_id AND c.provider=g.provider AND c.status='connected' AND c.disconnected_at IS NULL AND c.id=(SELECT active_connection.id FROM personal_integration_connections active_connection WHERE active_connection.principal_id=b.principal_id AND active_connection.provider=g.provider AND active_connection.disconnected_at IS NULL ORDER BY active_connection.updated_at DESC LIMIT 1) WHERE b.tenant_id=? AND b.starts_at>=? AND b.starts_at<? ${auth.canManage ? "" : "AND b.principal_id=?"} ORDER BY b.starts_at LIMIT 500`,
         )
         .bind(
           id,
@@ -731,33 +732,34 @@ export function registerBookingRoutes(
           new Date(range.to).toISOString(),
           ...(auth.canManage ? [] : [actor.principal.id]),
         )
-        .all<BookingRow>();
-      const rows = await Promise.all(
-        r.results.map(async (row) => {
-          const reservation = await reservationView(db, row);
-          const grant = await readGrant(db, id, row.principal_id);
-          const connection = grant
-            ? await createPersonalIntegrationRepository(
-                db,
-              ).findActiveConnection(row.principal_id, grant.provider)
-            : null;
-          return {
-            ...reservation,
-            canGenerateConference:
-              row.status === "confirmed" &&
-              !["ready", "pending", "unsupported"].includes(
-                reservation.conference?.status ?? "",
-              ) &&
-              Boolean(
-                connection?.status === "connected" &&
-                connection.id === grant?.connection_id &&
-                (!row.calendar_provider ||
-                  (row.calendar_provider === grant?.provider &&
-                    row.calendar_connection_id === grant?.connection_id)),
-              ),
-          };
-        }),
-      );
+        .all<
+          BookingRow & {
+            grantedCalendarProvider: "google_calendar" | "outlook" | null;
+            grantedCalendarConnectionId: string | null;
+            activeCalendarConnectionId: string | null;
+          }
+        >();
+      const views = await reservationViews(db, r.results);
+      const rows = r.results.map((row, index) => {
+        const reservation = views[index]!;
+        return {
+          ...reservation,
+          canGenerateConference:
+            row.status === "confirmed" &&
+            !["ready", "pending", "unsupported"].includes(
+              reservation.conference?.status ?? "",
+            ) &&
+            Boolean(
+              row.activeCalendarConnectionId &&
+              row.activeCalendarConnectionId ===
+                row.grantedCalendarConnectionId &&
+              (!row.calendar_provider ||
+                (row.calendar_provider === row.grantedCalendarProvider &&
+                  row.calendar_connection_id ===
+                    row.grantedCalendarConnectionId)),
+            ),
+        };
+      });
       return c.json({
         data: rows,
       });

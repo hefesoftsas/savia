@@ -612,7 +612,10 @@ export function createBookingCalendarAdapter(
                 ? {
                     conferenceData: {
                       createRequest: {
-                        requestId: await bookingEventId(input.id),
+                        requestId:
+                          currentConference?.status === "failed"
+                            ? crypto.randomUUID()
+                            : await bookingEventId(input.id),
                         conferenceSolutionKey: { type: "hangoutsMeet" },
                       },
                     },
@@ -670,7 +673,17 @@ export function createBookingCalendarAdapter(
                 ...baseBody,
                 id,
                 ...(shouldRequest
-                  ? { conferenceData: eventBody.conferenceData }
+                  ? {
+                      conferenceData: {
+                        createRequest: {
+                          requestId:
+                            currentConference?.status === "failed"
+                              ? crypto.randomUUID()
+                              : id,
+                          conferenceSolutionKey: { type: "hangoutsMeet" },
+                        },
+                      },
+                    }
                   : {}),
               },
             });

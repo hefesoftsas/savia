@@ -243,6 +243,65 @@ describe("booking calendar adapter", () => {
     ).rejects.toThrow(/unavailable/i);
   });
 
+  it.each([true, false])(
+    "retries failed Meet provisioning with a new request id (saved event: %s)",
+    async (savedEvent) => {
+      await seedConnection();
+      const previousId =
+        "d7a6e686c2668884465fd3a23e4009e673b937b412fd3a4e05f50d07f3506ba3";
+      let requestId = previousId;
+      let statusCode = "failure";
+      const requests: string[] = [];
+      const nango = fakeNango(async ({ method, path, body }) => {
+        if (path === "/calendar/v3/calendars/primary")
+          return Response.json({
+            conferenceProperties: {
+              allowedConferenceSolutionTypes: ["hangoutsMeet"],
+            },
+          });
+        if (method === "POST") return new Response(null, { status: 409 });
+        if (method === "PATCH") {
+          const data = body as {
+            conferenceData?: { createRequest: { requestId: string } };
+          };
+          if (data.conferenceData) {
+            requestId = data.conferenceData.createRequest.requestId;
+            requests.push(requestId);
+            if (requestId !== previousId) statusCode = "pending";
+          }
+          return Response.json({});
+        }
+        return Response.json({
+          id: path.split("?")[0]?.split("/").at(-1),
+          conferenceData: {
+            createRequest: {
+              requestId,
+              status: { statusCode },
+              conferenceSolutionKey: { type: "hangoutsMeet" },
+            },
+          },
+        });
+      });
+      const adapter = createBookingCalendarAdapter(env.DB, nango);
+      const input = {
+        ...calendarInput,
+        id: "booking-failed-meet-retry",
+        title: "Consultation",
+        startsAt: "2026-03-01T09:00:00Z",
+        endsAt: "2026-03-01T10:00:00Z",
+        externalId: savedEvent ? previousId : null,
+        cancelled: false,
+        requestConference: true,
+      };
+      const result = await adapter.sync(input);
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).not.toBe(previousId);
+      expect(result.conference?.status).toBe("pending");
+      await adapter.sync({ ...input, externalId: result.externalId });
+      expect(requests).toHaveLength(1);
+    },
+  );
+
   it("adds Meet to a recovered Google event that has no persisted external id", async () => {
     await seedConnection();
     let patchedConference: unknown;

@@ -1161,9 +1161,10 @@ export function registerPersonalIntegrationRoutes(
             .prepare(
               `SELECT id, external_id FROM tenant_bookings
                WHERE principal_id = ? AND calendar_provider = ?
-                 AND calendar_connection_id = ?`,
+                 AND (external_id = ? OR
+                   (calendar_provider = 'google_calendar' AND external_id IS NULL))`,
             )
-            .bind(actor.principal.id, provider, connection.id)
+            .bind(actor.principal.id, provider, eventId)
             .all<{ id: string; external_id: string | null }>();
           bookings = result.results;
         } catch {

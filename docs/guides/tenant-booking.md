@@ -103,6 +103,8 @@ account with meeting support. It reuses the reservation's provider event, keeps
 the reservation confirmed, and reports pending work through the existing calendar
 status. Repeated requests while a link is ready or pending are safe; a request
 made during an active calendar job can be retried after that job finishes.
+Retrying a failed Google Meet request starts a fresh conference request on the
+same event; pending and ready conferences are preserved.
 
 Rescheduling updates the existing calendar event and preserves its call. Cancelling
 hides the join action immediately and queues deletion of the same provider event.

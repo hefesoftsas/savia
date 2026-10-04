@@ -1775,6 +1775,74 @@ describe("personal integration providers", () => {
     expect(nango.proxy).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      label: "saved provider event id",
+      bookingId: "booking-old-connection-external",
+      externalId: "reservation-event-old",
+      eventId: "reservation-event-old",
+    },
+    {
+      label: "hash recovery marker",
+      bookingId: "booking-lost-response-old",
+      eventId:
+        "8369cef5d95633fa6e1a2dd32adf776720632c88da6d7ba57f6793492f3c50f2",
+    },
+  ])(
+    "protects a booking on the same account after reconnect using its $label",
+    async ({ bookingId, externalId, eventId }) => {
+      const nango = fakeNango();
+      const oldConnectionId = `old-${crypto.randomUUID()}`;
+      const currentConnectionId = `current-${crypto.randomUUID()}`;
+      await env.DB.prepare(
+        `INSERT INTO personal_integration_connections (
+          id, principal_id, provider, nango_connection_id, nango_integration_id,
+          status, scopes, disconnected_at, created_at, updated_at
+        ) VALUES (?, ?, 'google_calendar', ?, 'google-calendar-savia', ?, '[]', '2026-10-01T00:00:00.000Z', 'now', 'now')`,
+      )
+        .bind(
+          oldConnectionId,
+          "test-agency-member",
+          `nango-${oldConnectionId}`,
+          "disconnected",
+        )
+        .run();
+      await env.DB.prepare(
+        `INSERT INTO personal_integration_connections (
+          id, principal_id, provider, nango_connection_id, nango_integration_id,
+          status, scopes, created_at, updated_at
+        ) VALUES (?, ?, 'google_calendar', ?, 'google-calendar-savia', 'connected', '[]', 'now', 'now')`,
+      )
+        .bind(
+          currentConnectionId,
+          "test-agency-member",
+          `nango-${currentConnectionId}`,
+        )
+        .run();
+      await seedGoogleBooking(oldConnectionId, {
+        id: bookingId,
+        ...(externalId ? { externalId } : {}),
+      });
+      nango.proxy.mockResolvedValueOnce(Response.json({ id: eventId }));
+      const app = configuredApp(nango);
+
+      const response = await app.request(
+        `https://savia.test/v1/personal-integrations/events/google_calendar/${eventId}`,
+        {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            confirmed: true,
+            connectionId: currentConnectionId,
+          }),
+        },
+      );
+
+      expect(response.status).toBe(400);
+      expect(nango.proxy).not.toHaveBeenCalled();
+    },
+  );
+
   it("rejects deletion when the calendar connection changed after the event was loaded", async () => {
     const nango = fakeNango();
     const connectionId = "personal-calendar-reconnect-connection";

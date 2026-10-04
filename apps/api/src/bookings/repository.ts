@@ -436,12 +436,27 @@ export async function reservationView(
 ): Promise<Reservation> {
   const jobs = await db
     .prepare(
-      "SELECT kind,status,error_code FROM tenant_booking_jobs WHERE tenant_id=? AND booking_id=? AND revision=?",
+      "SELECT revision,kind,status,error_code FROM tenant_booking_jobs WHERE tenant_id=? AND booking_id=? AND revision=?",
     )
     .bind(row.tenant_id, row.id, row.version)
-    .all<{ kind: string; status: string; error_code: string | null }>();
+    .all<BookingJobRow>();
+  return reservationFromJobs(row, jobs.results);
+}
+
+type BookingJobRow = {
+  booking_id?: string;
+  revision: number;
+  kind: string;
+  status: string;
+  error_code: string | null;
+};
+
+function reservationFromJobs(
+  row: BookingRow,
+  jobs: BookingJobRow[],
+): Reservation {
   const state = (calendar: boolean) => {
-    const relevant = jobs.results.filter(
+    const relevant = jobs.filter(
       (j) => (j.kind === "calendar") === calendar && j.kind !== "reminder",
     );
     if (!relevant.length) return "not_requested";
@@ -483,4 +498,45 @@ export async function reservationView(
     calendarStatus: state(true),
     conference: bookingConference(row, state(true)),
   };
+}
+
+/** Loads bounded reservation batches with their current-revision delivery state. */
+export async function reservationViews(
+  db: D1Database,
+  rows: BookingRow[],
+): Promise<Reservation[]> {
+  const jobsByBooking = new Map<string, BookingJobRow[]>();
+  const grouped = new Map<number, BookingRow[]>();
+  for (const row of rows) {
+    const group = grouped.get(row.tenant_id) ?? [];
+    group.push(row);
+    grouped.set(row.tenant_id, group);
+  }
+  for (const [tenantId, tenantRows] of grouped) {
+    // Two parameters per reservation plus the tenant id stay below D1's
+    // 100-parameter limit, even at the list's 500-row maximum.
+    for (let offset = 0; offset < tenantRows.length; offset += 49) {
+      const batch = tenantRows.slice(offset, offset + 49);
+      const values = batch.map(() => "(?,CAST(? AS INTEGER))").join(",");
+      const jobs = await db
+        .prepare(
+          `WITH requested(booking_id,revision) AS (VALUES ${values}) SELECT j.booking_id,j.revision,j.kind,j.status,j.error_code FROM requested r JOIN tenant_booking_jobs j ON j.booking_id=r.booking_id AND j.revision=r.revision WHERE j.tenant_id=?`,
+        )
+        .bind(...batch.flatMap((row) => [row.id, row.version]), tenantId)
+        .all<BookingJobRow>();
+      for (const job of jobs.results) {
+        if (!job.booking_id) continue;
+        const key = `${tenantId}:${job.booking_id}`;
+        const current = jobsByBooking.get(key) ?? [];
+        current.push(job);
+        jobsByBooking.set(key, current);
+      }
+    }
+  }
+  return rows.map((row) =>
+    reservationFromJobs(
+      row,
+      jobsByBooking.get(`${row.tenant_id}:${row.id}`) ?? [],
+    ),
+  );
 }

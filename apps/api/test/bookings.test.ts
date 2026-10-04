@@ -30,7 +30,10 @@ beforeAll(async () => {
     }
 });
 let sequence = 997000;
-async function fixture(captchaOptions?: Parameters<typeof createApp>[22]) {
+async function fixture(
+  captchaOptions?: Parameters<typeof createApp>[22],
+  database: D1Database = env.DB,
+) {
   const tenantId = ++sequence,
     principalId = crypto.randomUUID(),
     now = new Date().toISOString();
@@ -82,7 +85,7 @@ async function fixture(captchaOptions?: Parameters<typeof createApp>[22]) {
       },
     ],
   };
-  const args: Parameters<typeof createApp> = [env.DB];
+  const args: Parameters<typeof createApp> = [database];
   args[3] = { authenticate: async () => actor } as Authenticator;
   args[15] = {
     providers: createPersonalIntegrationProviderRegistry({}),
@@ -183,6 +186,28 @@ async function fixture(captchaOptions?: Parameters<typeof createApp>[22]) {
   };
 }
 
+function countingDatabase(
+  database: D1Database,
+  counts: Record<string, number>,
+) {
+  return new Proxy(database, {
+    get(target, property) {
+      if (property === "prepare")
+        return (sql: string) => {
+          if (/(?:FROM|JOIN)\s+tenant_booking_jobs/i.test(sql))
+            counts.jobs = (counts.jobs ?? 0) + 1;
+          if (/personal_integration_connections/i.test(sql))
+            counts.connections = (counts.connections ?? 0) + 1;
+          if (/tenant_booking_calendar_grants/i.test(sql))
+            counts.grants = (counts.grants ?? 0) + 1;
+          return target.prepare(sql);
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as D1Database;
+}
+
 it("configures only active same-tenant Savia professionals and rejects stale settings", async () => {
   const f = await fixture(),
     other = await fixture();
@@ -262,6 +287,98 @@ it("lists a professional's own confirmed agenda with interval overlap and safe f
     `/v1/personal-integrations/bookings?from=${encodeURIComponent(reservation.endsAt)}&to=${encodeURIComponent(new Date(Date.parse(reservation.endsAt) + 60000).toISOString())}&timeZone=UTC`,
   );
   expect(((await touchesOnlyAtEnd.json()) as any).data).toHaveLength(0);
+});
+
+it("loads reservation delivery and assigned-calendar eligibility with bounded queries", async () => {
+  const counts: Record<string, number> = {};
+  const f = await fixture(undefined, countingDatabase(env.DB, counts));
+  const reservation = ((await (await f.reserve()).json()) as any).data
+    .reservation;
+  const otherPrincipalId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?, 'savia:better-auth', ?, ?, 'Other professional',1,?,?)",
+  )
+    .bind(
+      otherPrincipalId,
+      otherPrincipalId,
+      `${otherPrincipalId}@example.test`,
+      now,
+      now,
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at) VALUES(?,?,?,'operator',1,?,?)",
+  )
+    .bind(crypto.randomUUID(), otherPrincipalId, f.tenantId, now, now)
+    .run();
+
+  const connectedId = crypto.randomUUID();
+  const disconnectedId = crypto.randomUUID();
+  for (const [id, principalId, provider, status] of [
+    [connectedId, f.principalId, "google_calendar", "connected"],
+    [disconnectedId, otherPrincipalId, "outlook", "disconnected"],
+  ]) {
+    await env.DB.prepare(
+      "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,external_account_label,external_account_id,scopes,last_validated_at,disconnected_at,created_at,updated_at) VALUES(?,?,?,?,?,?,NULL,NULL,'[]',?,NULL,?,?)",
+    )
+      .bind(id, principalId, provider, id, provider, status, now, now, now)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO tenant_booking_calendar_grants(tenant_id,principal_id,provider,connection_id) VALUES(?,?,?,?)",
+    )
+      .bind(f.tenantId, principalId, provider, id)
+      .run();
+  }
+
+  const extraIds: string[] = [];
+  for (let index = 0; index < 98; index++) {
+    const id = crypto.randomUUID();
+    extraIds.push(id);
+    const assignedPrincipal =
+      index % 2 === 0 ? f.principalId : otherPrincipalId;
+    await env.DB.prepare(
+      "INSERT INTO tenant_bookings(id,tenant_id,professional_id,principal_id,service_id,service_name,professional_name,starts_at,ends_at,buffer_minutes,customer_name,customer_email,manage_token,request_key,request_hash,status,version,created_at) VALUES(?,?,?,?,?,?,?,?,?,0,?,?,?, ?,?,'confirmed',1,?)",
+    )
+      .bind(
+        id,
+        f.tenantId,
+        assignedPrincipal === f.principalId
+          ? f.professionalId
+          : crypto.randomUUID(),
+        assignedPrincipal,
+        f.serviceId,
+        "Consultation",
+        assignedPrincipal === f.principalId
+          ? "Professional"
+          : "Other professional",
+        reservation.startsAt,
+        reservation.endsAt,
+        `Customer ${index}`,
+        `customer-${index}@example.test`,
+        crypto.randomUUID(),
+        crypto.randomUUID(),
+        crypto.randomUUID(),
+        now,
+      )
+      .run();
+  }
+
+  Object.keys(counts).forEach((key) => delete counts[key]);
+  const response = await f.app.request(
+    `${f.base}/reservations?from=${encodeURIComponent(new Date(Date.parse(reservation.startsAt) - 60000).toISOString())}&to=${encodeURIComponent(new Date(Date.parse(reservation.endsAt) + 60000).toISOString())}`,
+  );
+  expect(response.status).toBe(200);
+  const rows = ((await response.json()) as any).data;
+  expect(rows).toHaveLength(99);
+  expect(
+    rows.filter(
+      (row: any) => extraIds.includes(row.id) && row.canGenerateConference,
+    ),
+  ).toHaveLength(49);
+  expect(counts.jobs).toBe(3);
+  expect(counts.connections).toBeLessThanOrEqual(1);
+  expect(counts.grants).toBeLessThanOrEqual(1);
 });
 
 it("queues video-link generation once for the assigned professional and keeps the booking revision", async () => {
