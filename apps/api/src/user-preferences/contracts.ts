@@ -28,6 +28,7 @@ export const sidebarNavigationItemIds = [
   "domain-api",
   "domain-history",
   "domain-packages",
+  "plugin-studio",
   "virtual-employees",
   "tenant-branding",
 ] as const;
@@ -210,6 +211,7 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
           "domain-workflows",
           "domain-api",
           "provider-credentials",
+          "plugin-studio",
           "virtual-employees",
           "integrations",
           "domain-packages",

@@ -12,6 +12,7 @@ const saviaEnglish = {
         "domain-operations": "Operations",
         "domain-history": "Tenant history",
         "domain-packages": "Packages and extensions",
+        "plugin-studio": "Plugin Studio",
         "virtual-employees": "AI employees",
         "tenant-branding": "Workspace identity",
 
@@ -566,6 +567,7 @@ const saviaSpanish = {
         "domain-operations": "Operaciones",
         "domain-history": "Historial del tenant",
         "domain-packages": "Paquetes y extensiones",
+        "plugin-studio": "Editor de plugins",
         "virtual-employees": "Empleados IA",
         "tenant-branding": "Identidad del espacio",
 
@@ -1123,6 +1125,7 @@ const saviaPortuguese = {
         "domain-operations": "Operações",
         "domain-history": "Histórico do tenant",
         "domain-packages": "Pacotes e extensões",
+        "plugin-studio": "Editor de plugins",
         "virtual-employees": "Funcionários IA",
         "tenant-branding": "Identidade do espaço",
 

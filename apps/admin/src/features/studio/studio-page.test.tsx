@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type { AppServices } from "@/app-services";
 import { getStudioRuntime } from "@/features/studio-engine/runtime";
-import { StudioPage } from "./studio-page";
+import { PluginStudioPage, StudioPage } from "./studio-page";
 const workspaceRendered = vi.hoisted(() => vi.fn());
 
 vi.mock("ra-core", async (importOriginal) => ({
@@ -20,6 +20,13 @@ vi.mock("@/features/studio-engine/app", () => ({
     workspaceRendered(search, getStudioRuntime().apiBasePath);
     return <p>Espacio CRM {search}</p>;
   },
+}));
+vi.mock("@/features/studio-engine/plugin-project-workspace", () => ({
+  default: ({ tenantId }: { tenantId: number }) => (
+    <main aria-label="Your plugin projects">
+      Plugin projects for tenant {tenantId}
+    </main>
+  ),
 }));
 vi.mock("@/components/ui/popover", () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -65,7 +72,24 @@ function mount(services: AppServices, route = "/studio") {
     </MemoryRouter>,
   );
 }
+function mountPluginStudio(services: AppServices, route = "/plugin-studio") {
+  return render(
+    <MemoryRouter initialEntries={[route]}>
+      <div id="header-actions" />
+      <PluginStudioPage services={services} />
+    </MemoryRouter>,
+  );
+}
 describe("Studio tenant integration", () => {
+  it("loads the dedicated plugin workspace under the selected authorized tenant", async () => {
+    mountPluginStudio(
+      servicesFor([platform, tenant]),
+      "/plugin-studio?tenantId=101",
+    );
+    expect(await screen.findByLabelText("Your plugin projects")).toBeVisible();
+    expect(getStudioRuntime().apiBasePath).toBe(tenant.apiBasePath);
+    expect(getStudioRuntime().tenantId).toBe(101);
+  });
   it("selects reserved platform tenant zero and uses its Studio route", async () => {
     mount(
       servicesFor([platform, tenant]),

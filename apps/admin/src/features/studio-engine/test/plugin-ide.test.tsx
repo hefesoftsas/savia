@@ -98,9 +98,12 @@ it("publishes only a successfully previewed revision and invalidates it after ed
       screen.getByRole("button", { name: "Publicar en el store" }),
     ).toBeEnabled(),
   );
-  fireEvent.change(screen.getByLabelText("entry.tsx"), {
-    target: { value: "export function render() { return () => {}; }" },
-  });
+  fireEvent.change(
+    screen.getByLabelText("entry.tsx", { selector: "textarea" }),
+    {
+      target: { value: "export function render() { return () => {}; }" },
+    },
+  );
   expect(
     screen.getByRole("button", { name: "Publicar en el store" }),
   ).toBeDisabled();
@@ -137,17 +140,19 @@ it("keeps AI changes as a proposal until applied and supports undo", async () =>
   });
   fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
   await screen.findByRole("button", { name: "Aplicar cambios" });
-  expect(screen.getByLabelText("entry.tsx")).toHaveValue(
-    "export function render() {}",
-  );
+  expect(
+    screen.getByLabelText("entry.tsx", { selector: "textarea" }),
+  ).toHaveValue("export function render() {}");
   fireEvent.click(screen.getByRole("button", { name: "Aplicar cambios" }));
-  expect(screen.getByLabelText("entry.tsx")).toHaveValue(files["entry.tsx"]);
+  expect(
+    screen.getByLabelText("entry.tsx", { selector: "textarea" }),
+  ).toHaveValue(files["entry.tsx"]);
   fireEvent.click(
     screen.getByRole("button", { name: "Deshacer cambios de IA" }),
   );
-  expect(screen.getByLabelText("entry.tsx")).toHaveValue(
-    "export function render() {}",
-  );
+  expect(
+    screen.getByLabelText("entry.tsx", { selector: "textarea" }),
+  ).toHaveValue("export function render() {}");
 });
 
 it("preserves editable source and reports upload failures without claiming publication", async () => {
@@ -177,9 +182,9 @@ it("preserves editable source and reports upload failures without claiming publi
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Version already exists",
   );
-  expect(screen.getByLabelText("entry.tsx")).toHaveValue(
-    "export function render() {}",
-  );
+  expect(
+    screen.getByLabelText("entry.tsx", { selector: "textarea" }),
+  ).toHaveValue("export function render() {}");
 });
 
 it("ignores readiness messages from another frame and blocks publication after runtime errors", async () => {
@@ -310,18 +315,112 @@ it("switches focused views and file selection without discarding source", () => 
   expect(
     screen.getByRole("button", { name: "Código", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  fireEvent.change(screen.getByLabelText("entry.tsx"), {
-    target: { value: "export function render() { /* edited */ }" },
-  });
-  fireEvent.change(screen.getByLabelText("Archivo"), {
-    target: { value: "preview.json" },
-  });
+  fireEvent.change(
+    screen.getByLabelText("entry.tsx", { selector: "textarea" }),
+    {
+      target: { value: "export function render() { /* edited */ }" },
+    },
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Archivos", exact: true }),
+  );
+  fireEvent.click(
+    screen.getByRole("treeitem", { name: "preview.json", hidden: true }),
+  );
   fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
   fireEvent.click(screen.getByRole("button", { name: "Código", exact: true }));
-  fireEvent.change(screen.getByLabelText("Archivo"), {
-    target: { value: "entry.tsx" },
-  });
-  expect(screen.getByLabelText("entry.tsx")).toHaveValue(
-    "export function render() { /* edited */ }",
+  fireEvent.click(
+    screen.getByRole("button", { name: "Archivos", exact: true }),
   );
+  fireEvent.click(
+    screen.getByRole("treeitem", { name: "entry.tsx", hidden: true }),
+  );
+  expect(
+    screen.getByLabelText("entry.tsx", { selector: "textarea" }),
+  ).toHaveValue("export function render() { /* edited */ }");
+});
+
+it("shows the user message while generating and retries failure without duplicating history", async () => {
+  let fail!: (reason: Error) => void;
+  mocks.post.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Build a counter" },
+  });
+  fireEvent.keyDown(screen.getByLabelText("Describe tu plugin"), {
+    key: "Enter",
+  });
+  expect(screen.getByText("Build a counter")).toBeInTheDocument();
+  expect(screen.getByText("Generando propuesta…")).toBeInTheDocument();
+  expect(screen.getByLabelText("Describe tu plugin")).toHaveValue("");
+  fail(new Error("The model is temporarily unavailable"));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The model is temporarily unavailable",
+  );
+  mocks.post.mockResolvedValue({
+    message: "Ready",
+    files: {
+      "entry.tsx": "export function render() {}",
+      "savia-extension.json": "{}",
+      "store.json": "{}",
+      "preview.json": "{}",
+    },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+  await screen.findByText("Ready");
+  expect(screen.getAllByText("Build a counter")).toHaveLength(1);
+  expect(mocks.post.mock.calls[1][1]).toMatchObject({
+    prompt: "Build a counter",
+    history: [],
+  });
+});
+
+it("keeps a pending proposal when a follow-up request fails and sends its code as context", async () => {
+  const proposed = {
+    "entry.tsx": "export function render() { /* proposal */ }",
+    "savia-extension.json": "{}",
+    "store.json": "{}",
+    "preview.json": "{}",
+  };
+  mocks.post.mockResolvedValueOnce({
+    message: "First proposal",
+    files: proposed,
+  });
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Build a counter" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
+  await screen.findByRole("button", { name: "Aplicar cambios" });
+  mocks.post.mockRejectedValueOnce(new Error("Try again later"));
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Add a title" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
+  await screen.findByRole("alert");
+  expect(mocks.post.mock.calls[1][1].files).toEqual(proposed);
+  fireEvent.click(screen.getByRole("button", { name: "Aplicar cambios" }));
+  expect(
+    screen.getByLabelText("entry.tsx", { selector: "textarea" }),
+  ).toHaveValue(proposed["entry.tsx"]);
+});
+
+it("moves editor tab selection with arrow keys", () => {
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  const code = screen.getByRole("tab", { name: "entry.tsx" });
+  code.focus();
+  fireEvent.keyDown(code, { key: "ArrowRight" });
+  const preview = screen.getByRole("tab", { name: "Vista previa" });
+  expect(preview).toHaveFocus();
+  expect(preview).toHaveAttribute("aria-selected", "true");
+  fireEvent.keyDown(preview, { key: "Home" });
+  expect(code).toHaveFocus();
+  expect(code).toHaveAttribute("aria-selected", "true");
 });

@@ -2,18 +2,25 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useId,
   useState,
-  useSyncExternalStore,
+  type ReactNode,
 } from "react";
 import {
   ArrowLeft,
+  Files,
+  Check,
+  Bot,
+  ArrowUp,
+  LoaderCircle,
+  X,
+  FileCode2,
   Download,
   MoreHorizontal,
   MessageSquare,
   Code2,
   Eye,
   Play,
-  Send,
   Square,
   Undo2,
   Upload,
@@ -28,6 +35,11 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
+import { Allotment } from "allotment";
+import "allotment/dist/style.css";
+import { AssistantMarkdown } from "@/features/assistant/assistant-response-ui";
+import { PluginFileTree } from "./plugin-file-tree";
+import { PluginDiffEditor } from "./plugin-diff-editor";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { useAppServices } from "@/features/assistant/assistant-context";
@@ -50,12 +62,6 @@ import "./plugin-ide.css";
 
 import type { ProjectDraft } from "./plugin-project-session";
 
-const wideQuery = "(min-width: 1100px)";
-function subscribeWidth(notify: () => void) {
-  const query = window.matchMedia(wideQuery);
-  query.addEventListener("change", notify);
-  return () => query.removeEventListener("change", notify);
-}
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type Proposal = { message: string; files: IdeFiles };
 type Preview = {
@@ -74,8 +80,12 @@ export default function PluginIde({
   initialHistory,
   onDraftChange,
   canPublishShared = false,
+  saveStatus,
+  backLabel,
 }: {
   tenantId: number;
+  saveStatus?: ReactNode;
+  backLabel?: string;
   initialFiles?: IdeFiles;
   initialHistory?: ChatMessage[];
   onDraftChange?: (draft: ProjectDraft) => void;
@@ -84,13 +94,21 @@ export default function PluginIde({
   onPublished: () => void | Promise<unknown>;
 }) {
   const t = useMessages(pluginIdeMessages);
-  const wide = useSyncExternalStore(
-    subscribeWidth,
-    () => window.matchMedia(wideQuery).matches,
-    () => false,
+  const panelId = useId();
+  const [wide, setWide] = useState(false);
+  const [pane, setPane] = useState<"files" | "chat" | "code" | "preview">(
+    "code",
   );
-  const [pane, setPane] = useState<"chat" | "code" | "preview">("chat");
-  const visiblePane = wide && pane === "chat" ? "preview" : pane;
+  const [explorerOpen, setExplorerOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(true);
+  const [reviewFile, setReviewFile] = useState<keyof IdeFiles | null>(null);
+  const [openFiles, setOpenFiles] = useState<(keyof IdeFiles)[]>(["entry.tsx"]);
+  const [visitedFiles, setVisitedFiles] = useState<(keyof IdeFiles)[]>([
+    "entry.tsx",
+  ]);
+  const [chatError, setChatError] = useState("");
+  const [lastPrompt, setLastPrompt] = useState("");
+  const conversation = useRef<HTMLDivElement>(null);
   const locale = useAppLocale();
   const { apiClient } = useAppServices();
   const [files, setFiles] = useState<IdeFiles>(
@@ -132,6 +150,31 @@ export default function PluginIde({
   currentSnapshot.current = snapshot;
   const surface = useRef<HTMLElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    if (!surface.current) return;
+    const update = () =>
+      setWide(surface.current!.getBoundingClientRect().width >= 850);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(surface.current);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    const element = conversation.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [history, busy, proposal, chatError]);
+  function openFile(name: keyof IdeFiles) {
+    setSelected(name);
+    setOpenFiles((current) =>
+      current.includes(name) ? current : [...current, name],
+    );
+    setVisitedFiles((current) =>
+      current.includes(name) ? current : [...current, name],
+    );
+    setReviewFile(null);
+    setPane("code");
+  }
+
   useEffect(() => {
     if (!surface.current || !preview) return;
     return observePluginIdeTheme(surface.current, (theme) => {
@@ -224,24 +267,38 @@ export default function PluginIde({
     setError("");
     setLogs([]);
     setProposal(null);
+    setReviewFile(null);
   }
-  async function generate() {
-    if (!prompt.trim() || busy) return;
+  async function generate(input = prompt) {
+    if (!input.trim() || busy) return;
     const requestId = ++operation.current;
     const abort = new AbortController();
     controller.current = abort;
-    const requestPrompt = prompt.trim();
+    const requestPrompt = input.trim();
+    const priorHistory =
+      history.at(-1)?.role === "user" &&
+      history.at(-1)?.content === requestPrompt
+        ? history.slice(0, -1)
+        : history;
+    setLastPrompt(requestPrompt);
+    setChatError("");
+    setPrompt("");
+    setHistory(
+      [...priorHistory, { role: "user", content: requestPrompt }].slice(
+        -10,
+      ) as ChatMessage[],
+    );
+    setReviewFile(null);
     setBusy("generate");
     setError("");
-    setProposal(null);
     try {
       const result = await apiClient.post<Proposal>(
         "/api/assistant/plugin-authoring",
         {
           tenantId,
           prompt: requestPrompt,
-          files,
-          history: history
+          files: proposal?.files ?? files,
+          history: priorHistory
             .slice(-10)
             .map((item) => ({ ...item, content: item.content.slice(0, 4000) })),
           diagnostics: [error, ...logs].filter(Boolean).join("\n").slice(-8000),
@@ -254,12 +311,11 @@ export default function PluginIde({
       const proposedFiles = pluginAuthoringResultSchema.parse(result).files;
       setProposal({ message: result.message, files: proposedFiles });
       setHistory(
-        (value) =>
-          [
-            ...value,
-            { role: "user", content: requestPrompt },
-            { role: "assistant", content: result.message },
-          ].slice(-10) as ChatMessage[],
+        [
+          ...priorHistory,
+          { role: "user", content: requestPrompt },
+          { role: "assistant", content: result.message },
+        ].slice(-10) as ChatMessage[],
       );
       setPrompt("");
     } catch (reason) {
@@ -268,7 +324,7 @@ export default function PluginIde({
         operation.current === requestId &&
         !abort.signal.aborted
       )
-        setError(message(reason));
+        setChatError(message(reason));
     } finally {
       if (active.current && operation.current === requestId) setBusy(null);
     }
@@ -383,6 +439,19 @@ export default function PluginIde({
       if (importInput.current) importInput.current.value = "";
     }
   }
+  let projectName = "my-plugin";
+  try {
+    const manifest = JSON.parse(files["savia-extension.json"]);
+    const label = manifest.label ?? manifest.id;
+    if (typeof label === "string" && label.trim()) projectName = label;
+  } catch {
+    /* Keep the workspace usable while JSON is edited. */
+  }
+  const changedFiles = proposal
+    ? (Object.keys(files) as (keyof IdeFiles)[]).filter(
+        (name) => files[name] !== proposal.files[name],
+      )
+    : [];
   const canPublish =
     !busy &&
     preview?.state === "ready" &&
@@ -395,7 +464,7 @@ export default function PluginIde({
           <Button
             variant="ghost"
             size="icon"
-            aria-label={t("back")}
+            aria-label={backLabel ?? t("back")}
             disabled={!!busy}
             onClick={() => {
               if (
@@ -408,7 +477,11 @@ export default function PluginIde({
           >
             <ArrowLeft aria-hidden="true" />
           </Button>
-          <h2>{t("title")}</h2>
+          <h2>
+            <span className="plugin-ide-title-full">{t("title")}</span>
+            <span className="plugin-ide-title-short">{t("shortTitle")}</span>
+          </h2>
+          <span className="plugin-ide-project-name">{projectName}</span>
         </div>
         <div className="plugin-ide-actions">
           <Button
@@ -495,258 +568,501 @@ export default function PluginIde({
       <nav className="plugin-ide-navigation" aria-label={t("workspaceViews")}>
         <button
           type="button"
-          className="plugin-ide-chat-switch"
-          aria-pressed={visiblePane === "chat"}
-          aria-controls="plugin-ide-chat-panel"
-          onClick={() => setPane("chat")}
+          aria-pressed={wide ? explorerOpen : pane === "files"}
+          onClick={() =>
+            wide ? setExplorerOpen(!explorerOpen) : setPane("files")
+          }
         >
-          <MessageSquare aria-hidden="true" />
-          {t("chatTab")}
+          <Files />
+          {t("files")}
         </button>
         <button
           type="button"
-          aria-pressed={visiblePane === "code"}
-          aria-controls="plugin-ide-code-panel"
-          onClick={() => setPane("code")}
+          aria-pressed={pane === "code"}
+          onClick={() => {
+            setPane("code");
+            setReviewFile(null);
+          }}
         >
-          <Code2 aria-hidden="true" />
+          <Code2 />
           {t("codeTab")}
         </button>
         <button
           type="button"
-          aria-pressed={visiblePane === "preview"}
-          aria-controls="plugin-ide-preview-panel"
+          aria-pressed={pane === "preview"}
           onClick={() => setPane("preview")}
         >
-          <Eye aria-hidden="true" />
+          <Eye />
           {t("preview")}
+        </button>
+        <button
+          type="button"
+          className="plugin-ide-chat-toggle"
+          aria-pressed={wide ? chatOpen : pane === "chat"}
+          onClick={() => (wide ? setChatOpen(!chatOpen) : setPane("chat"))}
+        >
+          <MessageSquare />
+          {t("chatTab")}
         </button>
       </nav>
       {error && (
-        <p className="plugin-ide-notice text-destructive" role="alert">
+        <p className="plugin-ide-notice plugin-ide-error" role="alert">
           {error}
         </p>
       )}
       {published && (
         <div className="plugin-ide-notice" role="status">
-          <strong>
+          <Check />
+          <span>
             {t(
               published.destination === "shared"
                 ? "sharedPublished"
                 : "published",
             )}
-            : {published.id} · {published.version}
-          </strong>
-          <p>
-            {published.destination === "tenant" && t("installHint")}{" "}
-            {t("versionHint")}
-          </p>
+            : {published.id} · {published.version}. {t("versionHint")}
+          </span>
         </div>
       )}
-      <div className="plugin-ide-panes" data-pane={visiblePane}>
-        <aside
-          id="plugin-ide-chat-panel"
-          className="plugin-ide-chat"
-          aria-label={t("chat")}
-        >
-          <h3 className="font-semibold">{t("chat")}</h3>
-
-          <div className="plugin-ide-conversation" aria-live="polite">
-            {history.map((item, index) => (
-              <p
-                key={index}
-                className={
-                  item.role === "user"
-                    ? "plugin-ide-user-message"
-                    : "whitespace-pre-wrap text-sm"
-                }
-              >
-                {item.content}
-              </p>
-            ))}
-            {busy === "generate" && <p role="status">{t("generating")}</p>}
-          </div>
-          {proposal && (
-            <section className="plugin-ide-proposal" aria-label={t("proposed")}>
-              <h4 className="font-medium">{t("proposed")}</h4>
-              {(Object.keys(files) as (keyof IdeFiles)[])
-                .filter((name) => files[name] !== proposal.files[name])
-                .map((name) => (
-                  <details key={name}>
-                    <summary>{name}</summary>
-                    <pre>{proposal.files[name]}</pre>
-                  </details>
-                ))}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setUndo(files);
-                    replaceFiles(proposal.files);
-                  }}
-                >
-                  {t("apply")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setProposal(null)}
-                >
-                  {t("discard")}
-                </Button>
-              </div>
-            </section>
-          )}
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void generate();
-            }}
-            className="plugin-ide-prompt space-y-3"
+      <div className="plugin-ide-workbench">
+        <Allotment defaultSizes={[190, 640, 320]}>
+          <Allotment.Pane
+            preferredSize={190}
+            minSize={wide ? 150 : 0}
+            maxSize={wide ? 300 : Infinity}
+            visible={wide ? explorerOpen : pane === "files"}
           >
-            <label htmlFor="plugin-ide-prompt" className="text-sm font-medium">
-              {t("prompt")}
-            </label>
-            <Textarea
-              id="plugin-ide-prompt"
-              value={prompt}
-              maxLength={8000}
-              rows={5}
-              disabled={!!busy}
-              placeholder={t("placeholder")}
-              onChange={(event) => setPrompt(event.target.value)}
-            />
-            {busy === "generate" ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  operation.current++;
-                  controller.current?.abort();
-                  setBusy(null);
+            <aside className="plugin-ide-explorer" aria-label={t("files")}>
+              <h3 className="plugin-ide-panel-title">{t("explorer")}</h3>
+              <PluginFileTree
+                names={Object.keys(files) as (keyof IdeFiles)[]}
+                selected={selected}
+                projectName={projectName}
+                label={t("files")}
+                onSelect={openFile}
+              />
+              <p className="plugin-ide-explorer-hint">
+                {t("projectFilesHint")}
+              </p>
+            </aside>
+          </Allotment.Pane>
+          <Allotment.Pane
+            minSize={wide ? 280 : 0}
+            visible={wide || pane === "code" || pane === "preview"}
+          >
+            <div className="plugin-ide-editor-area">
+              <div
+                className="plugin-ide-editor-tabs"
+                role="tablist"
+                aria-label={t("openFiles")}
+                onKeyDown={(event) => {
+                  if (
+                    (event.target as HTMLElement).getAttribute("role") !== "tab"
+                  )
+                    return;
+                  const tabs = Array.from(
+                    event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                      '[role="tab"]',
+                    ),
+                  );
+                  const index = tabs.indexOf(event.target as HTMLButtonElement);
+                  const next =
+                    event.key === "ArrowRight"
+                      ? (index + 1) % tabs.length
+                      : event.key === "ArrowLeft"
+                        ? (index + tabs.length - 1) % tabs.length
+                        : event.key === "Home"
+                          ? 0
+                          : event.key === "End"
+                            ? tabs.length - 1
+                            : -1;
+                  if (next >= 0) {
+                    event.preventDefault();
+                    tabs[next].focus();
+                    tabs[next].click();
+                  }
                 }}
               >
-                {t("cancel")}
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!!busy || !prompt.trim()}
-              >
-                <Send aria-hidden="true" />
-                {t("send")}
-              </Button>
-            )}
-          </form>
-          <p className="plugin-ide-hint">{t("aiHint")}</p>
-        </aside>
-        <section
-          id="plugin-ide-code-panel"
-          className="plugin-ide-code"
-          aria-label={t("files")}
-        >
-          <div className="plugin-ide-file-picker">
-            <label htmlFor="plugin-ide-file">{t("file")}</label>
-            <select
-              id="plugin-ide-file"
-              value={selected}
-              onChange={(event) =>
-                setSelected(event.target.value as keyof IdeFiles)
-              }
-            >
-              {(Object.keys(files) as (keyof IdeFiles)[]).map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <MonacoCodeEditor
-            key={selected}
-            value={files[selected]}
-            onChange={(value) => {
-              setUndo(null);
-              replaceFiles({ ...files, [selected]: value });
-            }}
-            language={selected === "entry.tsx" ? "typescript" : "json"}
-            ariaLabel={selected}
-            readOnly={!!busy}
-            contextDeclarations={pluginIdeDeclarations}
-            height={520}
-          />
-          {(undo || !onDraftChange) && (
-            <footer className="flex flex-wrap items-center gap-2 border-t p-3">
-              {!onDraftChange && (
-                <p className="flex-1 text-xs text-muted-foreground">
-                  {t("draft")}
-                </p>
-              )}
-              {undo && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={!!busy}
-                  onClick={() => {
-                    replaceFiles(undo);
-                    setUndo(null);
-                  }}
+                {openFiles.map((name) => (
+                  <div
+                    role="presentation"
+                    className="plugin-ide-editor-tab"
+                    data-active={
+                      pane !== "preview" && selected === name && !reviewFile
+                    }
+                    key={name}
+                  >
+                    <button
+                      role="tab"
+                      id={`${panelId}-${name}`}
+                      aria-controls={`${panelId}-code`}
+                      tabIndex={
+                        pane !== "preview" && selected === name && !reviewFile
+                          ? 0
+                          : -1
+                      }
+                      aria-selected={
+                        pane !== "preview" && selected === name && !reviewFile
+                      }
+                      onClick={() => openFile(name)}
+                    >
+                      <FileCode2 />
+                      {name}
+                    </button>
+                    {openFiles.length > 1 && (
+                      <button
+                        className="plugin-ide-close-tab"
+                        aria-label={`${t("closeFile")} ${name}`}
+                        onClick={() => {
+                          const next = openFiles.filter(
+                            (file) => file !== name,
+                          );
+                          setOpenFiles(next);
+                          if (selected === name) openFile(next[0]);
+                        }}
+                      >
+                        <X />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {reviewFile && proposal && (
+                  <button
+                    role="tab"
+                    className="plugin-ide-special-tab"
+                    id={`${panelId}-review`}
+                    aria-controls={`${panelId}-code`}
+                    tabIndex={pane !== "preview" ? 0 : -1}
+                    aria-selected={pane !== "preview"}
+                    onClick={() => setPane("code")}
+                  >
+                    {t("review")} · {reviewFile}
+                  </button>
+                )}
+                <button
+                  role="tab"
+                  className="plugin-ide-special-tab"
+                  id={`${panelId}-preview-tab`}
+                  aria-controls={`${panelId}-preview`}
+                  tabIndex={pane === "preview" ? 0 : -1}
+                  aria-selected={pane === "preview"}
+                  onClick={() => setPane("preview")}
                 >
-                  <Undo2 aria-hidden="true" />
-                  {t("undo")}
-                </Button>
-              )}
-            </footer>
-          )}
-        </section>
-        <section
-          id="plugin-ide-preview-panel"
-          className="plugin-ide-preview"
-          aria-label={t("preview")}
-        >
-          {preview ? (
-            <iframe
-              ref={frame}
-              key={preview.session}
-              title={t("frame")}
-              sandbox="allow-scripts"
-              referrerPolicy="no-referrer"
-              onLoad={() =>
-                frame.current?.contentWindow?.postMessage(
-                  {
-                    type: "savia-plugin-ide-theme",
-                    session: preview.session,
-                    theme: readPluginIdeTheme(
-                      surface.current ?? document.documentElement,
-                    ),
-                  },
-                  "*",
-                )
-              }
-              srcDoc={preview.document}
-              className="plugin-ide-frame"
-            />
-          ) : (
-            <p className="plugin-ide-preview-empty" role="status">
-              {t(busy === "compile" ? "compiling" : "empty")}
-            </p>
-          )}
-          {preview?.state === "ready" && (
-            <p
-              role="status"
-              className="px-3 py-2 text-xs text-muted-foreground"
-            >
-              {t("ready")}
-            </p>
-          )}
-          <details className="plugin-ide-console" open={logs.length > 0}>
-            <summary>
-              {t("console")} ({logs.length})
-            </summary>
-            <pre>{logs.join("\n")}</pre>
-          </details>
-        </section>
+                  <Eye />
+                  {t("preview")}
+                </button>
+              </div>
+              <section
+                id={`${panelId}-code`}
+                role="tabpanel"
+                aria-labelledby={`${panelId}-${reviewFile ? "review" : selected}`}
+                className="plugin-ide-code"
+                hidden={pane === "preview"}
+                aria-label={t("codeTab")}
+              >
+                <div className="plugin-ide-breadcrumb">
+                  <span>{projectName}</span>
+                  <span>/</span>
+                  <span>{reviewFile ?? selected}</span>
+                  {reviewFile && <span>{t("proposed")}</span>}
+                </div>
+                <div className="plugin-ide-editors">
+                  {visitedFiles.map((name) => (
+                    <div
+                      className="plugin-ide-editor-document"
+                      key={name}
+                      hidden={selected !== name || !!reviewFile}
+                    >
+                      <MonacoCodeEditor
+                        value={files[name]}
+                        onChange={(value) => {
+                          setUndo(null);
+                          replaceFiles({ ...files, [name]: value });
+                        }}
+                        language={name === "entry.tsx" ? "typescript" : "json"}
+                        ariaLabel={name}
+                        readOnly={!!busy}
+                        contextDeclarations={pluginIdeDeclarations}
+                        height={520}
+                      />
+                    </div>
+                  ))}
+                  {reviewFile && proposal && (
+                    <PluginDiffEditor
+                      key={reviewFile}
+                      original={files[reviewFile]}
+                      modified={proposal.files[reviewFile]}
+                      filename={reviewFile}
+                      originalLabel={t("currentCode")}
+                      modifiedLabel={t("proposedCode")}
+                    />
+                  )}
+                </div>
+              </section>
+              <section
+                id={`${panelId}-preview`}
+                role="tabpanel"
+                aria-labelledby={`${panelId}-preview-tab`}
+                className="plugin-ide-preview"
+                hidden={pane !== "preview"}
+                aria-label={t("preview")}
+              >
+                {preview ? (
+                  <iframe
+                    ref={frame}
+                    key={preview.session}
+                    title={t("frame")}
+                    sandbox="allow-scripts"
+                    referrerPolicy="no-referrer"
+                    onLoad={() =>
+                      frame.current?.contentWindow?.postMessage(
+                        {
+                          type: "savia-plugin-ide-theme",
+                          session: preview.session,
+                          theme: readPluginIdeTheme(
+                            surface.current ?? document.documentElement,
+                          ),
+                        },
+                        "*",
+                      )
+                    }
+                    srcDoc={preview.document}
+                    className="plugin-ide-frame"
+                  />
+                ) : (
+                  <div className="plugin-ide-preview-empty">
+                    <Play />
+                    <h3>{t("previewTitle")}</h3>
+                    <p>{t(busy === "compile" ? "compiling" : "empty")}</p>
+                    <Button
+                      variant="outline"
+                      disabled={!!busy}
+                      onClick={() => void runPreview()}
+                    >
+                      {t("tryPreview")}
+                    </Button>
+                  </div>
+                )}
+                <details className="plugin-ide-console" open={logs.length > 0}>
+                  <summary>
+                    {t("console")} ({logs.length}){" "}
+                    <span>{preview?.state === "ready" ? t("ready") : ""}</span>
+                  </summary>
+                  <pre>{logs.join("\n") || t("noLogs")}</pre>
+                </details>
+              </section>
+            </div>
+          </Allotment.Pane>
+          <Allotment.Pane
+            preferredSize={320}
+            minSize={wide ? 270 : 0}
+            maxSize={wide ? 560 : Infinity}
+            visible={wide ? chatOpen : pane === "chat"}
+          >
+            <aside className="plugin-ide-chat" aria-label={t("chat")}>
+              <h3 className="plugin-ide-panel-title">
+                <Bot />
+                {t("chat")}
+                <span>{t("aiModel")}</span>
+              </h3>
+              <div
+                ref={conversation}
+                className="plugin-ide-conversation"
+                role="log"
+                aria-label={t("conversation")}
+                aria-live="polite"
+                aria-busy={busy === "generate"}
+              >
+                {!history.length && (
+                  <div className="plugin-ide-chat-welcome">
+                    <h4>{t("welcome")}</h4>
+                    <p>{t("welcomeHint")}</p>
+                    <div className="plugin-ide-suggestions">
+                      {["suggestTasks", "suggestDashboard"].map((key) => (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            setPrompt(t(key as "suggestTasks"));
+                            document
+                              .getElementById("plugin-ide-prompt")
+                              ?.focus();
+                          }}
+                        >
+                          {t(key as "suggestTasks")}
+                          <ArrowUp />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {history.map((item, index) => (
+                  <article
+                    key={index}
+                    className={`plugin-ide-message plugin-ide-message-${item.role}`}
+                  >
+                    <span className="plugin-ide-message-author">
+                      {item.role === "user" ? t("you") : t("assistant")}
+                    </span>
+                    {item.role === "assistant" ? (
+                      <AssistantMarkdown text={item.content} />
+                    ) : (
+                      <p>{item.content}</p>
+                    )}
+                  </article>
+                ))}
+                {busy === "generate" && (
+                  <p className="plugin-ide-generating" role="status">
+                    <LoaderCircle />
+                    {t("generating")}
+                  </p>
+                )}
+                {chatError && (
+                  <div className="plugin-ide-chat-error" role="alert">
+                    <p>{chatError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!!busy}
+                      onClick={() => void generate(lastPrompt)}
+                    >
+                      {t("retry")}
+                    </Button>
+                  </div>
+                )}
+                {proposal && (
+                  <section
+                    className="plugin-ide-proposal"
+                    aria-label={t("proposed")}
+                  >
+                    <h4>
+                      {t("proposed")} <span>{changedFiles.length}</span>
+                    </h4>
+                    {changedFiles.map((name) => (
+                      <button
+                        className="plugin-ide-change-file"
+                        key={name}
+                        onClick={() => {
+                          setReviewFile(name);
+                          setPane("code");
+                        }}
+                      >
+                        <FileCode2 />
+                        <span>{name}</span>
+                        <span>{t("review")}</span>
+                      </button>
+                    ))}
+                    <div className="plugin-ide-proposal-actions">
+                      <Button
+                        size="sm"
+                        disabled={!!busy || !changedFiles.length}
+                        onClick={() => {
+                          setUndo(files);
+                          replaceFiles(proposal.files);
+                          setPane("code");
+                        }}
+                      >
+                        {t("apply")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!!busy}
+                        onClick={() => {
+                          setProposal(null);
+                          setReviewFile(null);
+                        }}
+                      >
+                        {t("discard")}
+                      </Button>
+                    </div>
+                  </section>
+                )}
+              </div>
+              <div className="plugin-ide-compose-area">
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void generate();
+                  }}
+                  className="plugin-ide-prompt"
+                >
+                  <label htmlFor="plugin-ide-prompt" className="sr-only">
+                    {t("prompt")}
+                  </label>
+                  <Textarea
+                    id="plugin-ide-prompt"
+                    value={prompt}
+                    maxLength={8000}
+                    rows={3}
+                    disabled={!!busy}
+                    placeholder={t("placeholder")}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" &&
+                        !event.shiftKey &&
+                        !event.nativeEvent.isComposing
+                      ) {
+                        event.preventDefault();
+                        void generate();
+                      }
+                    }}
+                  />
+                  <div className="plugin-ide-compose-tools">
+                    <span>
+                      <Files />
+                      {t("projectContext")}
+                    </span>
+                    {busy === "generate" ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        aria-label={t("cancel")}
+                        onClick={() => {
+                          operation.current++;
+                          controller.current?.abort();
+                          setBusy(null);
+                          setPrompt(lastPrompt);
+                        }}
+                      >
+                        <Square />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        size="icon"
+                        disabled={!!busy || !prompt.trim()}
+                        aria-label={t("send")}
+                      >
+                        <ArrowUp />
+                      </Button>
+                    )}
+                  </div>
+                </form>
+                <p className="plugin-ide-hint">{t("aiHint")}</p>
+              </div>
+            </aside>
+          </Allotment.Pane>
+        </Allotment>
       </div>
+      <footer className="plugin-ide-statusbar">
+        <span role="status">{saveStatus ?? t("draft")}</span>
+        <span>
+          {t(selected === "entry.tsx" ? "typescriptLanguage" : "jsonLanguage")}
+        </span>
+        {undo && (
+          <button
+            disabled={!!busy}
+            onClick={() => {
+              replaceFiles(undo);
+              setUndo(null);
+            }}
+          >
+            <Undo2 />
+            {t("undo")}
+          </button>
+        )}
+      </footer>
     </section>
   );
 }

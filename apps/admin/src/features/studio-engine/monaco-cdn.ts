@@ -22,6 +22,16 @@ type MonacoModule = {
       language: string,
       uri: unknown,
     ) => { dispose: () => void };
+    createDiffEditor: (
+      dom: HTMLElement,
+      options: Record<string, unknown>,
+    ) => {
+      setModel: (model: {
+        original: { dispose: () => void };
+        modified: { dispose: () => void };
+      }) => void;
+      dispose: () => void;
+    };
     create: (
       dom: HTMLElement,
       options: Record<string, unknown>,
