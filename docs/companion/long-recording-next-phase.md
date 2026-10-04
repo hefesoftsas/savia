@@ -44,11 +44,36 @@ Companion group for exact request and response contracts.
 ## Durable transcription and summaries
 
 Generating notes requires separate provider consent and `recordings:process`.
-The existing scheduled Worker runtime processes up to eight bounded operations
-per invocation. Preview and production deployment configuration renders a
-once-per-minute cron trigger. The preview worker scans at most 1,000 queue entries
-and processes eligible entries in key order; large sustained backlogs can delay
-later jobs. It does not provide production queue fairness or a completion-time SLA.
+The scheduled Worker visits up to 32 queue entries per invocation, with at most
+four operations running concurrently in that invocation. Preview and production
+render a once-per-minute cron trigger. A conditional-write checkpoint in R2
+advances the scan after each claimed wave of at most four entries. Later invocations
+continue after its last key and wrap at the end. Only a wave that can start is
+reserved; the time budget never strands the tail of a larger reserved batch.
+This reaches entries beyond the first 1,000 and gives
+each session one operation per visit, instead of letting the first long recording
+consume every step while later sessions wait. Small queues can complete multiple
+sweeps within one invocation. Concurrent scans use compare-and-swap to advance
+the checkpoint.
+
+The checkpoint is a scan position, not a completion acknowledgment. Entries remain
+until their processing run terminates. A crash, active lease, temporary read error,
+or elapsed dispatch budget leaves the entry available on a later sweep. New entries
+inserted behind the checkpoint are also visited on the next sweep. A batch stops
+reserving new waves after its 45-second dispatch budget and completes the current
+wave; this budget does not abort a provider request. One damaged entry does not stop the batch.
+Each cron emits a `companion_session_batch` log with candidate, attempted-operation,
+and dispatch-failure counts, without owners, transcripts, or provider credentials.
+
+This provides bounded parallel processing and rotating service between sessions,
+not tenant quotas, global provider rate limiting, autoscaling, or a completion-time
+SLA. Four is a per-invocation concurrency limit; overlapping invocations can run
+more calls across distinct sessions. At the default batch size a stable queue of
+1,024 entries takes at least 32 cron invocations per sweep, and slow providers can
+make it longer. Large sustained workloads still need capacity sizing and a dedicated
+queue/consumer tier. Provider failures remain visible in session status and must
+not be inferred solely from dispatch-failure logs.
+
 Each operation acquires an R2 conditional-write lease, checks the
 owner's current active workspace membership and resolves backend provider settings.
 No bearer token or provider key is stored in a job. Lease ownership prevents
@@ -87,6 +112,12 @@ external messages automatically.
 Automated integration tests cover a synthetic hour consisting of 120 real AAC
 segments, immutable retry recovery, pagination beyond 1,000 stored objects,
 workspace isolation, durable leases, cancellation and upload-to-question routing.
+Scheduler tests exercise 1,105 persisted queue entries, checkpoint continuity across
+new repository instances, conditional concurrent claims, deleted cursor keys,
+wraparound, damaged-entry isolation, and bounded parallel dispatch. A two-session
+integration verifies concurrent transcription and persisted summaries using the
+R2 test binding and a fake provider. These are automated correctness checks, not a
+production load benchmark.
 Frontend tests exercise separate retry consent, progress and clearing stale answers.
 These checks do not substitute for microphone/loopback recordings on physical
 Windows/macOS/Android/iOS devices, Bluetooth changes, mobile force termination,

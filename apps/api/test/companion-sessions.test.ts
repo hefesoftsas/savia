@@ -391,4 +391,84 @@ describe("private Companion sessions", () => {
       await clean(owner, 90);
     }
   });
+
+  it("dispatches different sessions concurrently and persists both results", async () => {
+    const owner = crypto.randomUUID();
+    const access = ownerAccess(owner, 91);
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    const repo = new CompanionSessions(env.DOCUMENTS);
+    let calls = 0;
+    let release!: () => void;
+    const bothStarted = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const service = {
+      async transcribe() {
+        calls++;
+        if (calls === 2) release();
+        await bothStarted;
+        return {
+          text: "Session transcript",
+          source: "microphone",
+          model: "test/model",
+          durationSeconds: 0.1,
+        };
+      },
+      async summarize() {
+        return {
+          summary: "Session summary",
+          decisions: [],
+          actions: [],
+          openQuestions: [],
+        };
+      },
+    } as unknown as CompanionService;
+    const engine = new CompanionSessionJobs(
+      repo,
+      service,
+      async () => ({}) as EffectiveAssistantConfiguration,
+    );
+    try {
+      for (const id of ids) {
+        await repo.create(access, {
+          id,
+          name: "Parallel session",
+          sources: ["microphone"],
+          consent: true,
+        });
+        await repo.putChunk(access, id, chunk());
+        await repo.finalize(access, id, {
+          expectedChunks: 1,
+          durationSeconds: 1,
+        });
+        await repo.requestProcessing(access, id, { consent: true });
+      }
+      expect(await engine.processBatch({ maxCandidates: 2 })).toEqual({
+        scanned: 2,
+        processed: 2,
+        failed: 0,
+      });
+      expect(calls).toBe(2);
+      for (const id of ids)
+        expect(await repo.get(access, id)).toMatchObject({
+          job: { status: "summarizing", completedChunks: 1 },
+        });
+      expect(await engine.processBatch({ maxCandidates: 2 })).toEqual({
+        scanned: 2,
+        processed: 2,
+        failed: 0,
+      });
+      for (const id of ids)
+        expect(await repo.get(access, id)).toMatchObject({
+          job: { status: "complete", summary: { summary: "Session summary" } },
+        });
+    } finally {
+      release();
+      for (const id of ids) {
+        const session = await repo.get(access, id).catch(() => null);
+        if (session) await repo.deleteSchedule(access, id, session.job.runId);
+      }
+      await clean(owner, 91);
+    }
+  });
 });
