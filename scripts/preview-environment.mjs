@@ -34,6 +34,7 @@ export function previewNames(slug) {
     workers: {
       auth: `savia-auth-${suffix}`,
       request: `savia-request-${suffix}`,
+      hookExecutor: `savia-hook-executor-${suffix}`,
       mcp: `savia-mcp-${suffix}`,
       api: `savia-agencies-${suffix}`,
       gateway: `savia-${suffix}`,

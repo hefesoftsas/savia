@@ -1,0 +1,123 @@
+{
+  "measuredAt": "2026-10-04T06:08:04.284Z",
+  "corpus": {
+    "flowCount": 22,
+    "steps": 45,
+    "hooks": 51,
+    "uniqueScripts": 41
+  },
+  "sizes": {
+    "quickjs": {
+      "jsBytes": 56822,
+      "jsGzipBytes": 16068,
+      "wasmBytes": 518880,
+      "wasmGzipBytes": 242685
+    },
+    "dynamic": {
+      "jsBytes": 1912,
+      "jsGzipBytes": 1049
+    }
+  },
+  "checks": [
+    {
+      "name": "catalog-success-parity",
+      "count": 51,
+      "status": "passed"
+    },
+    {
+      "name": "catalog-rejection-parity",
+      "count": 51,
+      "status": "passed"
+    },
+    {
+      "name": "no-host-globals",
+      "status": "passed"
+    },
+    {
+      "name": "network",
+      "status": "passed",
+      "elapsedMs": 3.381981000000451,
+      "reason": "hook-rejected"
+    },
+    {
+      "name": "module-import",
+      "status": "passed",
+      "elapsedMs": 3.392786999999771,
+      "reason": "hook-rejected"
+    },
+    {
+      "name": "syntax",
+      "status": "passed",
+      "elapsedMs": 3.6598699999995006,
+      "reason": "evaluation-rejected"
+    },
+    {
+      "name": "throw",
+      "status": "passed",
+      "elapsedMs": 3.4322259999999005,
+      "reason": "hook-rejected"
+    },
+    {
+      "name": "infinite-loop",
+      "status": "passed",
+      "elapsedMs": 56.273526999999376,
+      "reason": "hook-rejected"
+    },
+    {
+      "name": "infinite-promise-jobs",
+      "status": "passed",
+      "elapsedMs": 9.801752999999735,
+      "reason": "job-limit"
+    },
+    {
+      "name": "unresolved-promise",
+      "status": "passed",
+      "elapsedMs": 3.641341999999895,
+      "reason": "hook-rejected"
+    },
+    {
+      "name": "stack-exhaustion",
+      "status": "passed",
+      "elapsedMs": 4.95995000000039,
+      "reason": "hook-rejected"
+    },
+    {
+      "name": "memory-exhaustion",
+      "status": "passed",
+      "elapsedMs": 13897.699196,
+      "reason": "hook-rejected"
+    },
+    {
+      "name": "input-limit",
+      "status": "passed",
+      "elapsedMs": 12.637815999998566,
+      "reason": "input-limit"
+    },
+    {
+      "name": "output-limit",
+      "status": "passed",
+      "elapsedMs": 37.84724300000016,
+      "reason": "output-limit"
+    },
+    {
+      "name": "serialization-getter-loop",
+      "status": "passed",
+      "elapsedMs": 89.54587600000013,
+      "reason": "serialization-rejected"
+    },
+    {
+      "name": "cross-request-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "concurrent-payload-isolation",
+      "count": 20,
+      "status": "passed"
+    },
+    {
+      "name": "cached-dynamic-global-state",
+      "status": "behavior-difference",
+      "finding": "get() with the same ID/code retains guest globals across invocations; load() does not. A global content-hash-only ID must not be shipped for multi-tenant hooks."
+    }
+  ]
+}
