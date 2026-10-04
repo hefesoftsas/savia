@@ -129,7 +129,6 @@ export function registerAssistantRoutes(
           const response = await app.fetch(
             new Request(target, { method: "GET", headers }),
             context.env,
-            context.executionCtx,
           );
           if (!response.ok)
             throw new Error("Authorized collection metadata lookup failed");

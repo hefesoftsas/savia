@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import {
   pluginAuthoringFilesSchema,
@@ -11,6 +11,26 @@ import { summarizePluginAuthoringCollections } from "../src/assistant/routes";
 import { createApp } from "../src/app";
 import { AuthenticationError, type Authenticator } from "../src/auth/types";
 import { agencyMemberAuthenticator } from "./auth-fixtures";
+import { createTestApp } from "./test-app";
+
+const migrations = Object.entries(
+  import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
+    eager: true,
+    import: "default",
+    query: "?raw",
+  }),
+).sort(([left], [right]) => left.localeCompare(right));
+
+beforeAll(async () => {
+  for (const [, sql] of migrations)
+    for (const statement of sql.split("--> statement-breakpoint")) {
+      const normalized = statement
+        .replace(/^--.*$/gm, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (normalized) await env.DB.exec(normalized);
+    }
+});
 
 const files = {
   "entry.tsx": "export function render(element, savia) { return () => {}; }",
@@ -576,5 +596,104 @@ describe("plugin authoring route authentication", () => {
     expect(
       configuration.effectiveConfigurationForTenant,
     ).not.toHaveBeenCalled();
+  });
+
+  it("authors a standalone plugin when the authorized Studio catalog is empty", async () => {
+    const tenantId = 987_654;
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO tenants(id,id_slug,name,kind,is_active,created_at,updated_at) VALUES(?,?,?,'commercial',1,?,?)",
+    )
+      .bind(
+        tenantId,
+        "plugin-authoring-empty",
+        "Empty workspace",
+        "2026-10-04",
+        "2026-10-04",
+      )
+      .run();
+
+    const authenticator: Authenticator = {
+      async authenticate() {
+        return {
+          principal: {
+            id: "empty-workspace-admin",
+            issuer: "savia:test",
+            subject: "empty-workspace-admin",
+            email: "admin@savia.test",
+            displayName: "Workspace Admin",
+            isActive: true,
+            createdAt: "2026-10-04",
+            updatedAt: "2026-10-04",
+          },
+          globalRoles: [],
+          memberships: [
+            {
+              id: "empty-workspace-membership",
+              principalId: "empty-workspace-admin",
+              tenantId,
+              role: "tenant_admin",
+              isActive: true,
+              createdAt: "2026-10-04",
+              updatedAt: "2026-10-04",
+            },
+          ],
+        };
+      },
+    };
+    const configuration = {
+      assertTenantAdministrator: vi.fn(async () => undefined),
+      effectiveConfigurationForTenant: vi.fn(async () => ({
+        apiKey: "server-only-key",
+        model: "openai/gpt-4o-mini",
+      })),
+    };
+    const generated = { message: "Created a standalone plugin", files };
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        id: "chatcmpl-empty-workspace",
+        object: "chat.completion",
+        created: 1,
+        model: "openai/gpt-4o-mini",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: JSON.stringify(generated),
+            },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const app = createTestApp({
+        documents: env.DOCUMENTS,
+        auth: authenticator,
+        assistantConfiguration: configuration as never,
+      });
+      const response = await app.request(
+        "http://api.test/api/assistant/plugin-authoring",
+        {
+          method: "POST",
+          headers: {
+            authorization: "Bearer test-token",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ ...body, tenantId }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(generated);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      await env.DB.prepare("DELETE FROM tenants WHERE id=?")
+        .bind(tenantId)
+        .run();
+    }
   });
 });

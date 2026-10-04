@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "./locale-test-render";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import PluginStoreManager from "../plugin-store";
 import { api } from "../api";
 
@@ -18,6 +19,24 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
+
+function CurrentRoute() {
+  const location = useLocation();
+  return (
+    <output data-testid="current-route">
+      {location.pathname + location.search}
+    </output>
+  );
+}
+
+function renderStore(props: React.ComponentProps<typeof PluginStoreManager>) {
+  return render(
+    <MemoryRouter>
+      <PluginStoreManager {...props} />
+      <CurrentRoute />
+    </MemoryRouter>,
+  );
+}
 
 const item = {
   manifest: {
@@ -45,7 +64,7 @@ it("lista, instala y muestra un plugin del store", async () => {
     throw new Error(`Unexpected API request: ${path}`);
   });
   const changed = vi.fn();
-  render(<PluginStoreManager onChanged={changed} />);
+  renderStore({ onChanged: changed });
 
   expect(await screen.findByText("Demo")).toBeInTheDocument();
   expect(screen.getByText("Disponible")).toBeInTheDocument();
@@ -71,7 +90,7 @@ it("sube un zip y desactiva un plugin activo", async () => {
     }
     throw new Error(`Unexpected API request: ${path}`);
   });
-  render(<PluginStoreManager onChanged={() => undefined} />);
+  renderStore({ onChanged: () => undefined });
 
   expect(await screen.findByText("Demo")).toBeInTheDocument();
 
@@ -116,7 +135,7 @@ it("updates an installed plugin when a newer ZIP is available", async () => {
     }
     throw new Error(`Unexpected API request: ${path}`);
   });
-  render(<PluginStoreManager onChanged={() => undefined} />);
+  renderStore({ onChanged: () => undefined });
 
   fireEvent.click(
     await screen.findByRole("button", { name: "Actualizar Demo" }),
@@ -133,7 +152,7 @@ it("updates an installed plugin when a newer ZIP is available", async () => {
 
 it("muestra el estado vacío del store", async () => {
   vi.mocked(api).mockResolvedValue({ data: [] });
-  render(<PluginStoreManager onChanged={() => undefined} />);
+  renderStore({ onChanged: () => undefined });
   expect(
     await screen.findByText("Aún no subiste plugins a este espacio."),
   ).toBeInTheDocument();
@@ -148,7 +167,7 @@ it("agrupa varias versiones del mismo plugin en una sola tarjeta", async () => {
     installed,
   }));
   vi.mocked(api).mockResolvedValue({ data: versions });
-  render(<PluginStoreManager onChanged={() => undefined} />);
+  renderStore({ onChanged: () => undefined });
 
   expect(await screen.findByText("Demo")).toBeInTheDocument();
   expect(screen.getAllByText("Demo")).toHaveLength(1);
@@ -177,9 +196,26 @@ it("omits plugins already included in application activation from the unified ca
       };
     throw new Error("Unexpected request");
   });
-  render(<PluginStoreManager hideBundledPlugins onChanged={vi.fn()} />);
+  renderStore({ hideBundledPlugins: true, onChanged: vi.fn() });
   expect(await screen.findByText("Other plugin")).toBeInTheDocument();
   expect(
     screen.queryByRole("heading", { name: "Demo" }),
   ).not.toBeInTheDocument();
+});
+
+it("opens the dedicated plugin studio for new and source-backed projects", async () => {
+  vi.mocked(api).mockResolvedValue({ data: [item] });
+  renderStore({ onChanged: vi.fn() });
+
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Editor de plugins" }),
+  );
+  expect(screen.getByTestId("current-route")).toHaveTextContent(
+    "/plugin-studio?tenantId=0",
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Editar código" }));
+  expect(screen.getByTestId("current-route")).toHaveTextContent(
+    "/plugin-studio?tenantId=0&source=custom.demo&version=1.0.0",
+  );
 });

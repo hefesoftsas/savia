@@ -19170,6 +19170,7 @@ export interface paths {
                             | "domain-api"
                             | "domain-history"
                             | "domain-packages"
+                            | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
@@ -19206,6 +19207,7 @@ export interface paths {
                             | "domain-api"
                             | "domain-history"
                             | "domain-packages"
+                            | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
@@ -19238,6 +19240,7 @@ export interface paths {
                       | "domain-api"
                       | "domain-history"
                       | "domain-packages"
+                      | "plugin-studio"
                       | "virtual-employees"
                       | "tenant-branding"
                     )
@@ -19309,6 +19312,7 @@ export interface paths {
                             | "domain-api"
                             | "domain-history"
                             | "domain-packages"
+                            | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
@@ -19345,6 +19349,7 @@ export interface paths {
                             | "domain-api"
                             | "domain-history"
                             | "domain-packages"
+                            | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
@@ -19377,6 +19382,7 @@ export interface paths {
                       | "domain-api"
                       | "domain-history"
                       | "domain-packages"
+                      | "plugin-studio"
                       | "virtual-employees"
                       | "tenant-branding"
                     )

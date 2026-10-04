@@ -28,6 +28,7 @@ export const sidebarNavigationItemIds = [
   "domain-operations",
   "domain-history",
   "domain-packages",
+  "plugin-studio",
   "virtual-employees",
   "tenant-branding",
 ] as const;
