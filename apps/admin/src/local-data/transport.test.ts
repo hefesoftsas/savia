@@ -20,7 +20,12 @@ function store() {
       syncState: { get: async () => ({ hydrated: true }) },
     },
     get: async () => document,
-    mutateWithReceipt: vi.fn().mockResolvedValue({ data: { ...document, name: "Updated" }, mutationId: "m1" }),
+    mutateWithReceipt: vi
+      .fn()
+      .mockResolvedValue({
+        data: { ...document, name: "Updated" },
+        mutationId: "m1",
+      }),
   };
 }
 describe("local CRM transport", () => {
@@ -405,6 +410,9 @@ it.each([
   ["/api/collection-bindings/external/sync", "POST"],
   ["/api/collection-bindings/external", "DELETE"],
   ["/api/crm-workspace/install", "POST"],
+  ["/api/crm-workspace/salesforce/install", "POST"],
+  ["/api/crm-workspace/zoho/install", "POST"],
+  ["/api/crm-workspace/pipedrive/install", "POST"],
   ["/api/sources/external", "PATCH"],
 ])("refreshes backend collection metadata after %s", async (path, method) => {
   const local = { ...store(), scope: `external-metadata-${path}` };
@@ -455,14 +463,30 @@ it("always refreshes deletion previews from the backend and never falls back on 
 });
 it("preserves an explicit delete version for server conflict detection", async () => {
   const local = store();
-  const transport = createLocalTransport(local as never, vi.fn(), async () => {});
-  const result = await transport('/api/records/contacts/one?version=7', { method: 'DELETE' });
+  const transport = createLocalTransport(
+    local as never,
+    vi.fn(),
+    async () => {},
+  );
+  const result = await transport("/api/records/contacts/one?version=7", {
+    method: "DELETE",
+  });
   expect(result.ok).toBe(true);
-  expect(local.mutateWithReceipt).toHaveBeenCalledWith('contacts', 'delete', 'one', undefined, 7);
+  expect(local.mutateWithReceipt).toHaveBeenCalledWith(
+    "contacts",
+    "delete",
+    "one",
+    undefined,
+    7,
+  );
 });
 it("rejects a malformed delete version without enqueueing", async () => {
   const local = store();
-  const result = await createLocalTransport(local as never, vi.fn(), async () => {})('/api/records/contacts/one?version=bad', { method: 'DELETE' });
+  const result = await createLocalTransport(
+    local as never,
+    vi.fn(),
+    async () => {},
+  )("/api/records/contacts/one?version=bad", { method: "DELETE" });
   expect(result.status).toBe(422);
   expect(local.mutateWithReceipt).not.toHaveBeenCalled();
 });

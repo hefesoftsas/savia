@@ -104,6 +104,13 @@ are rejected instead of silently targeting a different field.
 Installed collection names are prefixed with `salesforce_`, `zoho_`, or
 `pipedrive_`. The existing HubSpot collection names and routes remain compatible.
 
+Successful installation refreshes the backend collection catalog before Studio
+opens the installed screen. The new collections appear in **Screens** and the
+workspace menu without a page reload. If an installation made by an older build
+is marked installed while Screens still shows an older catalog, reload the page
+after the online catalog refresh; reinstalling or deleting the collections is
+not necessary.
+
 The API exposes discovery at `/api/crm-workspace/:provider` and installation at
 `/api/crm-workspace/:provider/install` under the authenticated Studio gateway.
 Installation requires an explicit body such as

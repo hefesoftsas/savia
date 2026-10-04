@@ -314,3 +314,58 @@ it("continues an empty filtered page to find visible recordings", async () => {
   ).toBeVisible();
   expect(client.list).toHaveBeenCalledWith("next-page");
 });
+
+it("returns keyboard focus to the mobile picker after selecting a recording", async () => {
+  const client = mockClient();
+  client.list.mockResolvedValue({
+    recordings: [
+      recording,
+      { ...recording, id: "two", name: "Second meeting" },
+    ],
+    cursor: null,
+  });
+  const user = userEvent.setup();
+  show(client);
+  const picker = await screen.findByRole("button", {
+    name: "Select a recording",
+  });
+  // jsdom has no layout; represent the mobile trigger's visible rectangle.
+  vi.spyOn(picker, "getClientRects").mockReturnValue([
+    { width: 390, height: 44 },
+  ] as unknown as DOMRectList);
+  await user.click(picker);
+  const second = screen.getByRole("button", { name: /Second meeting/ });
+  second.focus();
+  await user.keyboard("{Enter}");
+  expect(picker).toHaveAttribute("aria-expanded", "false");
+  expect(picker).toHaveFocus();
+  expect(
+    await screen.findByRole("heading", { name: "Second meeting" }),
+  ).toBeVisible();
+});
+
+it("keeps focus on the desktop list when the mobile picker trigger is hidden", async () => {
+  const client = mockClient();
+  client.list.mockResolvedValue({
+    recordings: [
+      recording,
+      { ...recording, id: "two", name: "Second meeting" },
+    ],
+    cursor: null,
+  });
+  const user = userEvent.setup();
+  show(client);
+  const picker = await screen.findByRole("button", {
+    name: "Select a recording",
+  });
+  vi.spyOn(picker, "getClientRects").mockReturnValue(
+    [] as unknown as DOMRectList,
+  );
+  const second = screen.getByRole("button", { name: /Second meeting/ });
+  second.focus();
+  await user.keyboard("{Enter}");
+  expect(second).toHaveFocus();
+  expect(
+    await screen.findByRole("heading", { name: "Second meeting" }),
+  ).toBeVisible();
+});

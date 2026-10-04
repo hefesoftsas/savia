@@ -204,12 +204,20 @@ export function createLocalTransport(
               (!existing || existing.deleted_at != null)
             )
               return response("Registro no encontrado.", 404);
-            const deleteVersion = action === "delete" ? url.searchParams.get("version") : null;
-            if (deleteVersion !== null && (!/^\d+$/.test(deleteVersion) || !Number.isSafeInteger(Number(deleteVersion)) || Number(deleteVersion) < 1))
+            const deleteVersion =
+              action === "delete" ? url.searchParams.get("version") : null;
+            if (
+              deleteVersion !== null &&
+              (!/^\d+$/.test(deleteVersion) ||
+                !Number.isSafeInteger(Number(deleteVersion)) ||
+                Number(deleteVersion) < 1)
+            )
               return response("La versión del registro no es válida.", 422);
             const input =
               action === "delete"
-                ? (deleteVersion === null ? {} : { _version: Number(deleteVersion) })
+                ? deleteVersion === null
+                  ? {}
+                  : { _version: Number(deleteVersion) }
                 : (JSON.parse(String(init.body ?? "{}")) as Record<
                     string,
                     unknown
@@ -361,7 +369,11 @@ export function createLocalTransport(
       }
       if (
         segments[1] === "objects" ||
-        (segments[1] === "crm-workspace" && segments[2] === "install") ||
+        (segments[1] === "crm-workspace" &&
+          (segments[2] === "install" ||
+            (segments.length === 4 &&
+              ["salesforce", "zoho", "pipedrive"].includes(segments[2]) &&
+              segments[3] === "install"))) ||
         solutionCatalogMutation ||
         extensionCatalogMutation ||
         (segments[1] === "record-history-settings" && method === "PUT") ||
