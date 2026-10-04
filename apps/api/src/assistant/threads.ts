@@ -255,6 +255,19 @@ export class AssistantThreadRepository {
     return saved;
   }
 
+  async deleteRecordingConversations(
+    userId: string,
+    recordingId: string,
+  ): Promise<void> {
+    await this.db
+      .prepare(
+        `DELETE FROM assistant_threads
+       WHERE user_id = ? AND context_kind = 'recording' AND context_id = ?`,
+      )
+      .bind(userId, recordingId)
+      .run();
+  }
+
   async delete(userId: string, id: string, expectedRevision: number) {
     if (!threadIdSchema.safeParse(id).success)
       throw new AssistantThreadConflictError();

@@ -20,9 +20,11 @@ Expand **How processing works** for provider routing and retry details.
 ## Delete saved audio files
 
 Select an audio file and choose **Delete recording**, then confirm with
-**Delete permanently**. Savia deletes that account's saved audio, transcript, and
-summary. The original file on your device or connected drive is preserved.
-Canceling leaves the recording unchanged. If deletion fails, the recording stays
+**Delete permanently**. Savia deletes that account's saved audio, transcript, summary, and all associated
+assistant conversations and messages, including recording chats from different
+workspaces. The original file on your device or connected drive is preserved.
+Canceling leaves the recording unchanged. If conversation cleanup fails, the audio
+is preserved so deletion can be retried. If deletion fails, the recording stays
 in the list and can be retried. Deletion is disabled during uploads or processing.
 
 ## Access and privacy

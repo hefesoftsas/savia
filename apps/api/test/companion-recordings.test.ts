@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { opusFixture } from "./fixtures/companion-tone";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CompanionRecordings } from "../src/companion/recordings";
 const bytes = opusFixture();
 const data = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
@@ -288,4 +288,26 @@ describe("private compressed Companion recordings", () => {
       }),
     ).rejects.toThrow();
   });
+});
+
+it("checks ownership before conversation cleanup and preserves audio if cleanup fails", async () => {
+  const owner = crypto.randomUUID(),
+    payload = input();
+  const cleanup = vi
+    .fn()
+    .mockRejectedValue(new Error("Conversation cleanup failed"));
+  const repo = new CompanionRecordings(env.DOCUMENTS, cleanup);
+  await repo.save(owner, payload);
+  await expect(repo.remove("another-owner", payload.id)).rejects.toThrow(
+    "not found",
+  );
+  expect(cleanup).not.toHaveBeenCalled();
+  await expect(repo.remove(owner, payload.id)).rejects.toThrow(
+    "Conversation cleanup failed",
+  );
+  expect(await repo.get(owner, payload.id)).toBeTruthy();
+  cleanup.mockResolvedValue(undefined);
+  await repo.remove(owner, payload.id);
+  expect(cleanup).toHaveBeenCalledWith(owner, payload.id);
+  await expect(repo.get(owner, payload.id)).rejects.toThrow("not found");
 });

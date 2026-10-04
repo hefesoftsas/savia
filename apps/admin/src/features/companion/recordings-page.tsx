@@ -476,7 +476,7 @@ function AudioFilesPage({
                       <DialogDescription>
                         {source(selected)}.{" "}
                         {t(
-                          "This permanently deletes the saved audio, transcript and summary from Savia. The original file stays on your device or connected drive.",
+                          "This permanently deletes the saved audio, transcript, summary and associated chats from Savia. The original file stays on your device or connected drive.",
                         )}
                       </DialogDescription>
                     </DialogHeader>

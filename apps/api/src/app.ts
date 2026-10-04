@@ -1,3 +1,4 @@
+import { AssistantThreadRepository } from "./assistant/threads";
 import { PersonalApiKeys } from "./auth/personal-api-keys";
 import { registerPagesSearchSettingsRoutes } from "./routes/pages-search-settings";
 import { registerBookingRoutes } from "./bookings/routes";
@@ -156,6 +157,11 @@ export function createApp(
     companion
       ? {
           ...companion,
+          deleteRecordingConversations: (ownerId, recordingId) =>
+            new AssistantThreadRepository(db).deleteRecordingConversations(
+              ownerId,
+              recordingId,
+            ),
           personalFiles:
             companion.personalFiles ??
             (personalIntegrations?.nango
