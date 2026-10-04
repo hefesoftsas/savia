@@ -145,3 +145,76 @@ accepts loopback requests with that credential and rejects browser Origin header
 It permits plugin upload/install into an explicitly selected existing tenant.
 Production and preview still use `apps/api/src/index.ts`, which does not mount
 this development endpoint. Never copy local runtime configurations to a deployment.
+
+## Create with AI inside Savia
+
+Open **My plugins → Create plugin** to open the on-demand editor. The IDE reuses
+Monaco, the workspace's configured AI model, and the existing plugin store. It
+loads the editor, compiler and React runtime only when authoring is opened.
+
+The file tabs contain:
+
+- `entry.tsx`: a single TypeScript/JSX module exporting `render(element, savia)`.
+  `React` and `createRoot` are available without imports. Return an unmount function
+  from `render`. The IDE bundles React into the final self-contained ESM artifact.
+- `savia-extension.json`: identity, label, dependencies and semantic release version.
+- `store.json`: the normal collections, screens, settings and action declarations.
+- `preview.json`: mock `{ collections: { collection_name: [records] }, settings: {} }`
+  data for preview; use invented test data rather than secrets or customer records.
+
+Describe the plugin in the chat. The generator uses the selected workspace's
+server-side AI configuration and requires an active tenant administrator membership
+or platform administrator access to the selected active tenant.
+The generator receives bounded collection names, labels and field types through the
+workspace’s authenticated collection-definition endpoint. It cannot execute tools,
+publish, install plugins or access live record values. A failed schema lookup stops
+generation rather than guessing the workspace schema.
+Review each changed file in the proposal, then apply or discard it. Applying can
+be undone until the next manual edit. Generation errors leave the current project
+untouched; generation can be cancelled.
+
+Run the preview after editing. It executes the same compiled module that will be
+published, inside an opaque, no-network iframe with mock collection/settings APIs.
+Preview writes are temporary and reset on every run. The console reports runtime
+errors. Actions, attachments, host panels and integrations need installed-plugin
+verification and are not simulated as successful backend operations. Preview is
+not proof of backend permissions or integration connectivity.
+
+Publication is enabled only after the current revision previews successfully.
+Any edit invalidates that preview. The preview gate is checked immediately before
+upload starts; a later runtime error does not roll back an acknowledged release.
+**Publish to store** uploads the validated ZIP
+to this workspace's store; installation is a separate store action. Existing
+permission checks, quotas and immutable versions still apply. Increment the
+manifest version for a changed release. When the deployment explicitly configures
+a separate registry publisher credential, a destination selector also offers the
+shared catalog. This forwards the validated ZIP to that namespace; other tenants
+must import and install the release. Reader credentials cannot publish.
+
+Projects are saved automatically on the server, scoped to the signed-in principal
+and workspace. **Create plugin** lists saved projects and offers a new project.
+Saved projects can be deleted from that list without deleting published releases.
+Each save uses optimistic versioning; a conflicting save leaves the draft intact
+and offers retry or saving a separate copy. A scoped browser recovery copy protects
+pending edits across reloads when local storage is available. The editor warns
+before unloading while a server save is still pending. Do not close the page until
+“Project saved” appears if browser recovery storage is unavailable.
+
+**Edit source** on a store release creates a new project from its retained source
+and increments a plain semantic patch version. Older packages without authoring
+sources return an explicit missing-source error. Runtime artifacts and sources
+are retained atomically; published source versions are immutable. **Export project**
+and **Import project** remain available for portable four-file JSON backups (chat
+history is saved in server projects but is not included in that portable export).
+
+Deployment requires database migration `0038_plugin_authoring_projects.sql` (D1
+or the matching PostgreSQL migration), the API and admin bundles, and existing
+workspace AI configuration. Shared publication additionally needs `publishToken`
+in `PLUGIN_REGISTRY_TENANTS`; see [the registry guide](plugin-registry.md).
+
+This first authoring contract supports one TSX module, built-in React, and the
+Savia host API. It does not install arbitrary npm dependencies, run Node processes,
+or grant direct network access. Use the repository SDK/build workflow for plugins
+requiring extra bundled libraries. Each authoring file is limited to 100 KB;
+preview fixtures allow up to 200 records per collection. Existing store artifact
+size and quota limits apply independently.

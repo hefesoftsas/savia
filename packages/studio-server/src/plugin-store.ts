@@ -48,11 +48,16 @@ import { type Env, fail } from "./context";
 import { audit } from "./services";
 import type { Hono } from "hono";
 import { registerPluginRegistry } from "./plugin-registry";
+import {
+  pluginStoreSourceFilesSchema,
+  type PluginStoreSourceFiles,
+} from "@savia/studio-shared/plugin-projects";
+import { registerPluginProjects } from "./plugin-projects";
 
 export type PluginStoreOptions = {
   apiBasePath?: string;
   entryGrantSecret?: string;
-  pluginRegistry?: { url: string; token: string };
+  pluginRegistry?: { url: string; token: string; publishToken?: string };
   canManageExtension?: (input: {
     tenantId: string;
     principalId: string;
@@ -92,6 +97,7 @@ export type ParsedStoreZip = {
   manifest: PluginStoreManifest;
   entryJs: string;
   store: StoreJson | null;
+  sourceFiles?: PluginStoreSourceFiles;
   sha256: string;
   sizeBytes: number;
 };
@@ -272,10 +278,34 @@ export async function parsePluginStoreZip(
       throw new Error("store.json no cumple el contrato savia.store v1.");
     }
   }
+  const sourceEntry = byName.get("src/entry.tsx");
+  const previewEntry = byName.get("src/preview.json");
+  const sourceFiles = sourceEntry
+    ? pluginStoreSourceFilesSchema.parse({
+        "entry.tsx": new TextDecoder().decode(sourceEntry.data),
+        "savia-extension.json": new TextDecoder().decode(manifestEntry.data),
+        "store.json": storeEntry
+          ? new TextDecoder().decode(storeEntry.data)
+          : JSON.stringify({
+              format: "savia.store",
+              formatVersion: 1,
+              actions: [],
+              connectors: [],
+              collections: [],
+              bundles: [],
+              widgets: [],
+              screens: [],
+            }),
+        "preview.json": previewEntry
+          ? new TextDecoder().decode(previewEntry.data)
+          : JSON.stringify({ collections: {}, settings: {} }),
+      })
+    : undefined;
   return {
     manifest,
     entryJs,
     store,
+    ...(sourceFiles ? { sourceFiles } : {}),
     sha256: await sha256Hex(bytes),
     sizeBytes: bytes.length,
   };
@@ -311,6 +341,48 @@ export async function persistParsedStoreArtifact(
         "Esta versión ya existe con otro contenido. Publica una versión nueva.",
         409,
       );
+    if (parsed.sourceFiles) {
+      const source = await db
+        .prepare(
+          "SELECT files FROM plugin_store_sources WHERE tenant_id=? AND id=? AND version=?",
+        )
+        .bind(tenant, parsed.manifest.id, parsed.manifest.version)
+        .first<{ files: string }>();
+      if (
+        source &&
+        canonicalJson(JSON.parse(source.files)) !==
+          canonicalJson(parsed.sourceFiles)
+      )
+        fail("Esta versión ya existe con otro código fuente.", 409);
+      if (!source) {
+        try {
+          await db
+            .prepare(
+              "INSERT INTO plugin_store_sources(tenant_id,id,version,files) VALUES(?,?,?,?)",
+            )
+            .bind(
+              tenant,
+              parsed.manifest.id,
+              parsed.manifest.version,
+              canonicalJson(parsed.sourceFiles),
+            )
+            .run();
+        } catch {
+          const concurrentSource = await db
+            .prepare(
+              "SELECT files FROM plugin_store_sources WHERE tenant_id=? AND id=? AND version=?",
+            )
+            .bind(tenant, parsed.manifest.id, parsed.manifest.version)
+            .first<{ files: string }>();
+          if (
+            !concurrentSource ||
+            canonicalJson(JSON.parse(concurrentSource.files)) !==
+              canonicalJson(parsed.sourceFiles)
+          )
+            fail("Esta versión ya existe con otro código fuente.", 409);
+        }
+      }
+    }
     return {
       id: parsed.manifest.id,
       version: parsed.manifest.version,
@@ -330,42 +402,53 @@ export async function persistParsedStoreArtifact(
   }
   if (parsed.store && !hasConfigColumn)
     fail("Este entorno aún no soporta store.json (migración pendiente).", 428);
-  if (hasConfigColumn) {
-    await db
-      .prepare(
-        `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,store_json,sha256,size_bytes,created_by)
+  const artifactStatement = hasConfigColumn
+    ? db
+        .prepare(
+          `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,store_json,sha256,size_bytes,created_by)
          VALUES (?,?,?,?,?,?,?,?,?)`,
-      )
-      .bind(
-        tenant,
-        parsed.manifest.id,
-        parsed.manifest.version,
-        canonicalJson(parsed.manifest),
-        parsed.entryJs,
-        parsed.store ? canonicalJson(parsed.store) : null,
-        parsed.sha256,
-        parsed.sizeBytes,
-        principalId,
-      )
-      .run();
-  } else {
-    await db
-      .prepare(
-        `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes,created_by)
+        )
+        .bind(
+          tenant,
+          parsed.manifest.id,
+          parsed.manifest.version,
+          canonicalJson(parsed.manifest),
+          parsed.entryJs,
+          parsed.store ? canonicalJson(parsed.store) : null,
+          parsed.sha256,
+          parsed.sizeBytes,
+          principalId,
+        )
+    : db
+        .prepare(
+          `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes,created_by)
          VALUES (?,?,?,?,?,?,?,?)`,
-      )
-      .bind(
-        tenant,
-        parsed.manifest.id,
-        parsed.manifest.version,
-        canonicalJson(parsed.manifest),
-        parsed.entryJs,
-        parsed.sha256,
-        parsed.sizeBytes,
-        principalId,
-      )
-      .run();
-  }
+        )
+        .bind(
+          tenant,
+          parsed.manifest.id,
+          parsed.manifest.version,
+          canonicalJson(parsed.manifest),
+          parsed.entryJs,
+          parsed.sha256,
+          parsed.sizeBytes,
+          principalId,
+        );
+  const statements = [artifactStatement];
+  if (parsed.sourceFiles)
+    statements.push(
+      db
+        .prepare(
+          "INSERT INTO plugin_store_sources(tenant_id,id,version,files) VALUES(?,?,?,?)",
+        )
+        .bind(
+          tenant,
+          parsed.manifest.id,
+          parsed.manifest.version,
+          canonicalJson(parsed.sourceFiles),
+        ),
+    );
+  await db.batch(statements);
   await audit(
     db,
     tenant,
@@ -1379,6 +1462,7 @@ export function registerPluginStore(
   options: PluginStoreOptions = {},
 ) {
   registerPluginRegistry(app, options);
+  registerPluginProjects(app, options);
 
   app.get("/api/plugin-store", async (c) => {
     const tenant = c.get("tenant");
@@ -1535,6 +1619,43 @@ export function registerPluginStore(
         "content-security-policy": "default-src 'none';",
       },
     });
+  });
+
+  app.get("/api/plugin-store/:id/source", async (c) => {
+    const tenant = c.get("tenant");
+    const principalId = c.get("principalId");
+    const id = c.req.param("id");
+    const version = c.req.query("version");
+    if (!tenant || !principalId)
+      return fail("Authentication is required.", 401);
+    if (!version) return fail("An explicit plugin version is required.", 400);
+    if (!options.canManageExtension)
+      return fail("Extension administration is not available.", 403);
+    let allowed = false;
+    try {
+      allowed = await options.canManageExtension({
+        tenantId: tenant,
+        principalId,
+        extensionId: id,
+      });
+    } catch {
+      allowed = false;
+    }
+    if (!allowed) return fail("Extension administration is required.", 403);
+    const source = await c.env.DB.prepare(
+      "SELECT files FROM plugin_store_sources WHERE tenant_id=? AND id=? AND version=?",
+    )
+      .bind(tenant, id, version)
+      .first<{ files: string }>();
+    if (!source)
+      return fail("Plugin source is not available for this version.", 404);
+    let files: PluginStoreSourceFiles;
+    try {
+      files = pluginStoreSourceFilesSchema.parse(JSON.parse(source.files));
+    } catch {
+      return fail("Plugin source is unavailable.", 404);
+    }
+    return c.json({ data: { files } });
   });
 
   app.get("/api/plugin-store/:id/shell", async (c) => {

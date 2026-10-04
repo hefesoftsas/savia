@@ -16,11 +16,13 @@ export function MonacoCodeEditor({
   placeholder,
   ariaLabel,
   readOnly = false,
+  contextDeclarations,
 }: {
   value: string;
   onChange: (value: string) => void;
   language: "html" | "javascript" | "typescript" | "json";
   readOnly?: boolean;
+  contextDeclarations?: string;
   height?: number;
   placeholder?: string;
   ariaLabel: string;
@@ -31,6 +33,11 @@ export function MonacoCodeEditor({
   const editorRef = useRef<MonacoEditorInstance | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
+  const programmaticChange = useRef(false);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -52,7 +59,8 @@ export function MonacoCodeEditor({
           });
           declarations =
             monaco.languages.typescript.typescriptDefaults.addExtraLib(
-              `
+              contextDeclarations ??
+                `
             interface ResultsProps {
               rows: { id: string; title: string; status: string; date: string; simulation: boolean; values: string[]; errors: string[]; response: unknown }[];
               columns: { label: string; pointer: string; format: "text" | "money" }[];
@@ -61,20 +69,20 @@ export function MonacoCodeEditor({
             }
             declare const React: { useState<T>(initial: T): [T, (value: T | ((current: T) => T)) => void]; Fragment: any; createElement: any };
           `,
-              "file:///savia-results-context.d.ts",
+              `file:///savia-editor-context-${crypto.randomUUID()}.d.ts`,
             );
-          model = monaco.editor.createModel(
-            value,
-            language,
-            monaco.Uri.parse(
-              `inmemory://savia/results-${crypto.randomUUID()}.tsx`,
-            ),
-          );
         }
+        model = monaco.editor.createModel(
+          valueRef.current,
+          language,
+          monaco.Uri.parse(
+            `inmemory://savia/editor-${crypto.randomUUID()}.${language === "typescript" ? "tsx" : language}`,
+          ),
+        );
         editor = monaco.editor.create(containerRef.current, {
-          ...(model ? { model } : { value, language }),
+          model,
           theme: resolveMonacoTheme(),
-          readOnly,
+          readOnly: readOnlyRef.current,
           folding: true,
           bracketPairColorization: { enabled: true },
           minimap: { enabled: false },
@@ -89,11 +97,14 @@ export function MonacoCodeEditor({
         });
         editorRef.current = editor;
         editor.onDidChangeModelContent(() => {
-          onChangeRef.current(editor!.getValue());
+          if (!programmaticChange.current)
+            onChangeRef.current(editor!.getValue());
         });
         setStatus("ready");
       })
-      .catch(() => setStatus("error"));
+      .catch(() => {
+        if (!disposed) setStatus("error");
+      });
 
     return () => {
       disposed = true;
@@ -103,12 +114,21 @@ export function MonacoCodeEditor({
       editorRef.current = null;
       setStatus("loading");
     };
-  }, [ariaLabel, language, readOnly]);
+  }, [ariaLabel, language, contextDeclarations]);
+
+  useEffect(() => {
+    editorRef.current?.updateOptions({ readOnly });
+  }, [readOnly]);
 
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || editor.getValue() === value) return;
-    editor.setValue(value);
+    programmaticChange.current = true;
+    try {
+      editor.setValue(value);
+    } finally {
+      programmaticChange.current = false;
+    }
   }, [value]);
 
   if (status === "error") {

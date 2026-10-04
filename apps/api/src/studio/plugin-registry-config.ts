@@ -1,4 +1,8 @@
-export type TenantPluginRegistry = { url: string; token: string };
+export type TenantPluginRegistry = {
+  url: string;
+  token: string;
+  publishToken?: string;
+};
 
 /** Deployment secrets explicitly map local tenant IDs to private namespaces. */
 export function pluginRegistryForTenant(
@@ -18,12 +22,19 @@ export function pluginRegistryForTenant(
         typeof value !== "object"
       )
         throw new Error();
-      const { url, token } = value as Record<string, unknown>;
+      const { url, token, publishToken } = value as Record<string, unknown>;
       if (
         typeof url !== "string" ||
         typeof token !== "string" ||
         token.length < 32 ||
         /\s/.test(token)
+      )
+        throw new Error();
+      if (
+        publishToken !== undefined &&
+        (typeof publishToken !== "string" ||
+          publishToken.length < 32 ||
+          /\s/.test(publishToken))
       )
         throw new Error();
       const endpoint = new URL(url);
@@ -42,10 +53,14 @@ export function pluginRegistryForTenant(
         throw new Error();
     }
     if (!Object.hasOwn(map, tenant)) return undefined;
-    const { url, token } = (map as Record<string, TenantPluginRegistry>)[
-      tenant
-    ];
-    return { url: new URL(url).origin, token };
+    const { url, token, publishToken } = (
+      map as Record<string, TenantPluginRegistry>
+    )[tenant];
+    return {
+      url: new URL(url).origin,
+      token,
+      ...(publishToken ? { publishToken } : {}),
+    };
   } catch {
     // Never include the secret JSON or URL in an exception.
     throw new Error("Invalid PLUGIN_REGISTRY_TENANTS configuration");
