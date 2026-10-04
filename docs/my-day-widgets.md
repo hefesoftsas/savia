@@ -60,7 +60,9 @@ weeks stack vertically and month cells show event counts; select a date/count
 to open its complete day list. Narrow cards keep the view selector and calendar
 settings in one row; settings retain their accessible name while showing only
 the icon. Mobile cards use compact spacing, a short date and touch-sized
-navigation. A failed day read offers a retry directly in the agenda. Desktop
+navigation. Day and week events use neutral cards with a small source marker,
+separate time and title, and compact copy/share controls with accessible labels.
+The join link stays visible; deletion is in event details. A failed day read offers a retry directly in the agenda. Desktop
 month cells show three events and a
 **more** action for additional events. Multi-day events appear on every
 overlapping date, with exclusive ends handled internally.
@@ -111,7 +113,7 @@ produce a source error. All-day dates retain their original calendar dates.
 Colors are accompanied by source names; selecting a feed event opens its details.
 Safe native HTTPS links open in another tab. Feed text is never rendered as HTML.
 Events from your connected Google Calendar or Outlook account can be removed from
-the agenda list or their detail view after a second confirmation. The confirmation
+their detail view after a second confirmation. The confirmation
 names the affected calendar; copies in other calendars remain separate. Savia deletes the exact event from
 the provider and refreshes the agenda; a failed provider request leaves the event
 visible and offers a retry. Imported and subscribed calendar events are read-only.
