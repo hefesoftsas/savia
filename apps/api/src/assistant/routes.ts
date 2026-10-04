@@ -115,7 +115,7 @@ export function registerAssistantRoutes(
     const pluginAuthoring = createPluginAuthoringService(
       dependencies.configuration,
       {
-        loadCollectionMetadata: async (tenantId) => {
+        loadCollectionMetadata: async (tenantId, signal) => {
           // Resolve through the same authenticated Studio route used by clients.
           // The fixed path keeps the client from selecting another source URL.
           const target = new URL(context.req.url);
@@ -127,7 +127,7 @@ export function registerAssistantRoutes(
             if (value) headers.set(name, value);
           }
           const response = await app.fetch(
-            new Request(target, { method: "GET", headers }),
+            new Request(target, { method: "GET", headers, signal }),
             context.env,
           );
           if (!response.ok)
@@ -152,7 +152,13 @@ export function registerAssistantRoutes(
     } catch (error) {
       if (error instanceof PluginAuthoringError) {
         return context.json(
-          { error: { code: error.code, message: error.message } },
+          {
+            error: {
+              code: error.code,
+              message: error.message,
+              ...(error.details ? { details: error.details } : {}),
+            },
+          },
           error.status,
         );
       }
