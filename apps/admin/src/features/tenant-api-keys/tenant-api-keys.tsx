@@ -6,7 +6,7 @@ import { KeyRound, Plus, Copy, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
-import type { RecordingScope } from "@/features/account/personal-api-keys-client";
+import type { ApiKeyScope } from "@/features/account/personal-api-keys-client";
 import {
   TenantApiKeysClient,
   type TenantApiKey,
@@ -34,7 +34,7 @@ export function TenantApiKeysPanel({
   const [member, setMember] = useState("");
   const [name, setName] = useState("");
   const [days, setDays] = useState(30);
-  const [scopes, setScopes] = useState<RecordingScope[]>([
+  const [scopes, setScopes] = useState<ApiKeyScope[]>([
     "recordings:read",
     "recordings:upload",
   ]);
@@ -102,19 +102,53 @@ export function TenantApiKeysPanel({
   };
   const date = (value: string) =>
     new Date(value).toLocaleString(intlLocale(locale));
-  const labels: Record<RecordingScope, string> = {
+  const recordingLabels: Record<
+    Extract<ApiKeyScope, `recordings:${string}`>,
+    string
+  > = {
     "recordings:read": t("Read"),
     "recordings:upload": t("Upload"),
     "recordings:process": t("Process"),
     "recordings:delete": t("Delete"),
   };
 
-  const descriptions: Record<RecordingScope, string> = {
+  const recordingDescriptions: Record<
+    Extract<ApiKeyScope, `recordings:${string}`>,
+    string
+  > = {
     "recordings:read": t("Read recordings"),
     "recordings:upload": t("Upload recordings"),
     "recordings:process": t("Process recordings"),
     "recordings:delete": t("Delete recordings"),
   };
+  const recordLabels: Record<
+    Extract<ApiKeyScope, `records:${string}`>,
+    string
+  > = {
+    "records:read": t("Read records"),
+    "records:create": t("Create records"),
+    "records:update": t("Update records"),
+  };
+  const recordDescriptions: Record<
+    Extract<ApiKeyScope, `records:${string}`>,
+    string
+  > = {
+    "records:read": t("Read records description"),
+    "records:create": t("Create records description"),
+    "records:update": t("Update records description"),
+  };
+  const scopeLabels: Record<ApiKeyScope, string> = {
+    ...recordingLabels,
+    ...recordLabels,
+  };
+  const toggleScope = (scope: ApiKeyScope, checked: boolean) =>
+    setScopes((current) =>
+      checked
+        ? current.includes(scope)
+          ? current
+          : [...current, scope]
+        : current.filter((value) => value !== scope),
+    );
 
   return (
     <section className="grid min-w-0 gap-6" aria-label={t("Tenant API keys")}>
@@ -122,7 +156,7 @@ export function TenantApiKeysPanel({
         <div className="grid gap-2">
           <h2 className="text-lg font-semibold">{t("Tenant API keys")}</h2>
           <p className="max-w-prose text-sm text-muted-foreground">
-            {t("Manage Companion API keys for tenant members.")}
+            {t("Manage API keys for tenant member integrations.")}
           </p>
         </div>
         {!loading &&
@@ -166,7 +200,7 @@ export function TenantApiKeysPanel({
             >
               <h3 className="font-semibold">{t("New key")}</h3>
               <p className="text-sm text-muted-foreground">
-                {t("Copy it into Companion. It will not be shown again.")}
+                {t("Copy the key into your app or integration")}
               </p>
               <Label htmlFor={`${id}-secret`}>{t("New key")}</Label>
               <Input
@@ -260,38 +294,83 @@ export function TenantApiKeysPanel({
                   ))}
                 </select>
               </div>
-              <fieldset className="grid gap-2 sm:grid-cols-2">
+              <fieldset className="grid gap-4">
                 <legend className="mb-1 text-sm font-medium">
                   {t("Permissions")}
                 </legend>
-                <p className="mb-2 text-sm text-muted-foreground sm:col-span-2">
-                  {t("Select permissions for this key.")}
-                </p>
-                {(Object.keys(labels) as RecordingScope[]).map((scope) => (
-                  <label
-                    key={scope}
-                    className="flex min-h-14 cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1 size-4 shrink-0 accent-primary"
-                      checked={scopes.includes(scope)}
-                      onChange={(event) =>
-                        setScopes((current) =>
-                          event.target.checked
-                            ? [...current, scope]
-                            : current.filter((value) => value !== scope),
-                        )
-                      }
-                    />
-                    <span className="grid gap-1">
-                      <span className="font-medium">{labels[scope]}</span>
-                      <span className="text-xs leading-relaxed text-muted-foreground">
-                        {descriptions[scope]}
+                <fieldset className="grid gap-2">
+                  <legend className="mb-1 text-sm font-medium">
+                    {t("Companion recordings")}
+                  </legend>
+                  <p className="text-sm text-muted-foreground">
+                    {t("Select permissions for this key.")}
+                  </p>
+                  {(
+                    Object.keys(recordingLabels) as Array<
+                      keyof typeof recordingLabels
+                    >
+                  ).map((scope) => (
+                    <label
+                      key={scope}
+                      className="flex min-h-14 cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 size-4 shrink-0 accent-primary"
+                        checked={scopes.includes(scope)}
+                        onChange={(event) =>
+                          toggleScope(scope, event.target.checked)
+                        }
+                      />
+                      <span className="grid gap-1">
+                        <span className="font-medium">
+                          {recordingLabels[scope]}
+                        </span>
+                        <span className="text-xs leading-relaxed text-muted-foreground">
+                          {recordingDescriptions[scope]}
+                        </span>
                       </span>
-                    </span>
-                  </label>
-                ))}
+                    </label>
+                  ))}
+                </fieldset>
+                <fieldset className="grid gap-2 border-t pt-3">
+                  <legend className="mb-1 text-sm font-medium">
+                    {t("Savia collection data")}
+                  </legend>
+                  <p className="text-sm text-muted-foreground">
+                    {t("Collection data description")}
+                  </p>
+                  {(
+                    Object.keys(recordLabels) as Array<
+                      keyof typeof recordLabels
+                    >
+                  ).map((scope) => (
+                    <label
+                      key={scope}
+                      className="flex min-h-14 cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 size-4 shrink-0 accent-primary"
+                        checked={scopes.includes(scope)}
+                        onChange={(event) =>
+                          toggleScope(scope, event.target.checked)
+                        }
+                      />
+                      <span className="grid gap-1">
+                        <span className="font-medium">
+                          {recordLabels[scope]}
+                        </span>
+                        <span className="text-xs leading-relaxed text-muted-foreground">
+                          {recordDescriptions[scope]}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+                <p className="text-sm text-muted-foreground">
+                  {t("Key owner access explanation")}
+                </p>
               </fieldset>
               <div className="flex flex-wrap gap-3 border-t pt-4">
                 <Button
@@ -359,7 +438,7 @@ export function TenantApiKeysPanel({
               />
               <h3 className="font-medium">{t("No keys yet.")}</h3>
               <p className="max-w-prose text-sm text-muted-foreground">
-                {t("Create your first Companion key.")}
+                {t("Create your first tenant integration key.")}
               </p>
             </div>
           ) : (
@@ -425,7 +504,7 @@ export function TenantApiKeysPanel({
                             </dt>
                             <dd>
                               {key.scopes
-                                .map((scope) => labels[scope])
+                                .map((scope) => scopeLabels[scope])
                                 .join(" · ")}
                             </dd>
                           </div>

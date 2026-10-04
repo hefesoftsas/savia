@@ -6,10 +6,10 @@ export const tenantApiKeyMessages = {
     "Tenant API keys",
     "Chaves API do tenant",
   ],
-  "Manage Companion API keys for tenant members.": [
-    "Administra las claves API de Companion de los miembros del tenant.",
-    "Manage Companion API keys for tenant members.",
-    "Gerencie as chaves API do Companion dos membros do tenant.",
+  "Manage API keys for tenant member integrations.": [
+    "Administra claves API para las aplicaciones e integraciones de los miembros del tenant.",
+    "Manage API keys for tenant member apps and integrations.",
+    "Gerencie chaves API para aplicativos e integrações dos membros do tenant.",
   ],
   "Could not complete the operation.": [
     "No se pudo completar la operación.",
@@ -22,6 +22,48 @@ export const tenantApiKeyMessages = {
     "Elige qué puede hacer Companion con las grabaciones de este miembro.",
     "Choose what Companion can do with this member’s recordings.",
     "Escolha o que o Companion pode fazer com as gravações deste membro.",
+  ],
+  "Companion recordings": [
+    "Grabaciones de Companion",
+    "Companion recordings",
+    "Gravações do Companion",
+  ],
+  "Savia collection data": [
+    "Datos de colecciones Savia",
+    "Savia collection data",
+    "Dados de coleções Savia",
+  ],
+  "Collection data description": [
+    "Elige qué operaciones puede realizar la aplicación en las colecciones Savia.",
+    "Choose which operations the app can perform on Savia collections.",
+    "Escolha quais operações o aplicativo pode realizar nas coleções Savia.",
+  ],
+  "Read records": ["Leer registros", "Read records", "Ler registros"],
+  "Create records": ["Crear registros", "Create records", "Criar registros"],
+  "Update records": [
+    "Actualizar registros",
+    "Update records",
+    "Atualizar registros",
+  ],
+  "Read records description": [
+    "Consultar registros autorizados para el titular de la clave.",
+    "View records permitted to the key owner.",
+    "Consultar registros permitidos ao titular da chave.",
+  ],
+  "Create records description": [
+    "Añadir registros en colecciones que el titular puede crear.",
+    "Add records to collections where the key owner can create.",
+    "Adicionar registros a coleções nas quais o titular pode criar.",
+  ],
+  "Update records description": [
+    "Editar registros y campos que el titular puede actualizar.",
+    "Edit records and fields the key owner can update.",
+    "Editar registros e campos que o titular pode atualizar.",
+  ],
+  "Key owner access explanation": [
+    "El acceso a datos está limitado a los permisos actuales del titular de la clave sobre colecciones, registros y campos. Solo incluye colecciones nativas de Savia.",
+    "Data access is limited to the key owner’s current collection, record, and field permissions. Only native Savia collections are available.",
+    "O acesso a dados é limitado às permissões atuais do titular da chave para coleções, registros e campos. Somente coleções nativas do Savia estão disponíveis.",
   ],
   "Read recordings": [
     "Consultar grabaciones y notas",
@@ -43,10 +85,10 @@ export const tenantApiKeyMessages = {
     "Delete recordings and notes",
     "Excluir gravações e notas",
   ],
-  "Create your first Companion key.": [
-    "Genera una clave para conectar Companion con las grabaciones de un miembro.",
-    "Generate a key to connect Companion to a member’s recordings.",
-    "Gere uma chave para conectar o Companion às gravações de um membro.",
+  "Create your first tenant integration key.": [
+    "Crea una clave de integración para una aplicación de un miembro del tenant.",
+    "Create an integration key for a tenant member’s app.",
+    "Crie uma chave de integração para um aplicativo de um membro do tenant.",
   ],
   Retry: ["Reintentar", "Retry", "Tentar novamente"],
   Loading: ["Cargando…", "Loading…", "Carregando…"],
@@ -76,10 +118,10 @@ export const tenantApiKeyMessages = {
     "Ainda não há chaves.",
   ],
   "New key": ["Nueva clave", "New key", "Nova chave"],
-  "Copy it into Companion. It will not be shown again.": [
-    "Cópiala en Companion. No volverá a mostrarse.",
-    "Copy it into Companion. It will not be shown again.",
-    "Copie no Companion. Ela não será exibida novamente.",
+  "Copy the key into your app or integration": [
+    "Copia la clave en la aplicación o integración. No volverá a mostrarse.",
+    "Copy the key into your app or integration. It will not be shown again.",
+    "Copie a chave para o aplicativo ou integração. Ela não será exibida novamente.",
   ],
   Copy: ["Copiar", "Copy", "Copiar"],
   Copied: ["Copiada", "Copied", "Copiada"],

@@ -8,8 +8,8 @@ import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { personalApiKeyMessages } from "@/i18n/locales/personal-api-keys";
 import {
   PersonalApiKeysClient,
+  type ApiKeyScope,
   type PersonalKey,
-  type RecordingScope,
 } from "./personal-api-keys-client";
 // Extend account settings with the existing neutral surfaces and explicit form labels.
 export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
@@ -21,7 +21,7 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
   const [tenant, setTenant] = useState(""),
     [name, setName] = useState(""),
     [days, setDays] = useState(30);
-  const [scopes, setScopes] = useState<RecordingScope[]>([
+  const [scopes, setScopes] = useState<ApiKeyScope[]>([
     "recordings:read",
     "recordings:upload",
   ]);
@@ -55,6 +55,12 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
   useEffect(() => {
     void load();
   }, [client]);
+  useEffect(() => {
+    if (tenant === "0")
+      setScopes((current) =>
+        current.filter((scope) => !scope.startsWith("records:")),
+      );
+  }, [tenant]);
   const run = async (action: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -70,12 +76,34 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
     }
   };
   const date = (s: string) => new Date(s).toLocaleString(intlLocale(locale));
-  const labels = {
+  const recordingLabels = {
     "recordings:read": t("Read"),
     "recordings:upload": t("Upload"),
     "recordings:process": t("Process"),
     "recordings:delete": t("Delete"),
   };
+  const recordLabels = {
+    "records:read": t("Read records"),
+    "records:create": t("Create records"),
+    "records:update": t("Update records"),
+  };
+  const recordDescriptions = {
+    "records:read": t("Read records description"),
+    "records:create": t("Create records description"),
+    "records:update": t("Update records description"),
+  };
+  const scopeLabels: Record<ApiKeyScope, string> = {
+    ...recordingLabels,
+    ...recordLabels,
+  };
+  const toggleScope = (scope: ApiKeyScope, checked: boolean) =>
+    setScopes((current) =>
+      checked
+        ? current.includes(scope)
+          ? current
+          : [...current, scope]
+        : current.filter((value) => value !== scope),
+    );
   return (
     <section className="space-y-6 py-4" aria-label={t("API keys")}>
       <header>
@@ -109,7 +137,7 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
               className="space-y-3 rounded-lg border p-4"
               aria-label={t("New key")}
             >
-              <p>{t("Copy it into Companion. It will not be shown again.")}</p>
+              <p>{t("Copy the key into your app or integration")}</p>
               <Label htmlFor="personal-key-secret">{t("New key")}</Label>
               <Input
                 id="personal-key-secret"
@@ -209,29 +237,82 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                     ))}
                   </select>
                 </div>
-                <fieldset className="grid gap-3">
-                  <legend className="mb-3 text-sm font-medium">
+                <fieldset className="grid gap-4">
+                  <legend className="mb-1 text-sm font-medium">
                     {t("Permissions")}
                   </legend>
-                  {(Object.keys(labels) as RecordingScope[]).map((scope) => (
-                    <label
-                      key={scope}
-                      className="flex items-center gap-3 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={scopes.includes(scope)}
-                        onChange={(e) =>
-                          setScopes((v) =>
-                            e.target.checked
-                              ? [...v, scope]
-                              : v.filter((s) => s !== scope),
-                          )
-                        }
-                      />
-                      {labels[scope]}
-                    </label>
-                  ))}
+                  <fieldset className="grid gap-2">
+                    <legend className="mb-1 text-sm font-medium">
+                      {t("Companion recordings")}
+                    </legend>
+                    <p className="text-sm text-muted-foreground">
+                      {t("Companion recordings description")}
+                    </p>
+                    {(Object.keys(recordingLabels) as ApiKeyScope[]).map(
+                      (scope) => (
+                        <label
+                          key={scope}
+                          className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md p-2 text-sm hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                        >
+                          <input
+                            type="checkbox"
+                            className="size-4 shrink-0 accent-primary"
+                            checked={scopes.includes(scope)}
+                            onChange={(e) =>
+                              toggleScope(scope, e.target.checked)
+                            }
+                          />
+                          {
+                            recordingLabels[
+                              scope as keyof typeof recordingLabels
+                            ]
+                          }
+                        </label>
+                      ),
+                    )}
+                  </fieldset>
+                  <fieldset
+                    className="grid gap-2 border-t pt-3"
+                    disabled={tenant === "0"}
+                  >
+                    <legend className="mb-1 text-sm font-medium">
+                      {t("Savia collection data")}
+                    </legend>
+                    <p className="text-sm text-muted-foreground">
+                      {tenant === "0"
+                        ? t("Collection data unavailable for platform")
+                        : t("Collection data description")}
+                    </p>
+                    {(Object.keys(recordLabels) as ApiKeyScope[]).map(
+                      (scope) => (
+                        <label
+                          key={scope}
+                          className="flex min-h-14 cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 size-4 shrink-0 accent-primary"
+                            checked={scopes.includes(scope)}
+                            onChange={(e) =>
+                              toggleScope(scope, e.target.checked)
+                            }
+                          />
+                          <span className="grid gap-1">
+                            <span className="font-medium">
+                              {recordLabels[scope as keyof typeof recordLabels]}
+                            </span>
+                            <span className="text-xs leading-relaxed text-muted-foreground">
+                              {
+                                recordDescriptions[
+                                  scope as keyof typeof recordDescriptions
+                                ]
+                              }
+                            </span>
+                          </span>
+                        </label>
+                      ),
+                    )}
+                  </fieldset>
                 </fieldset>
                 <Button
                   type="submit"
@@ -247,9 +328,7 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
             </form>
           )}
           <p className="max-w-prose text-sm text-muted-foreground">
-            {t(
-              "Keys only access your recordings in the selected workspace. Legacy recordings remain available on the web.",
-            )}
+            {t("Key owner access explanation")}
           </p>
           {!keys.length ? (
             <p>{t("No keys yet.")}</p>
@@ -268,7 +347,9 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                       · {key.prefix}
                     </p>
                     <p className="text-sm">
-                      {key.scopes.map((s) => labels[s]).join(" · ")}
+                      {key.scopes
+                        .map((scope) => scopeLabels[scope])
+                        .join(" · ")}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {t("Expiry")}: {date(key.expiresAt)} · {t("Last used")}:{" "}

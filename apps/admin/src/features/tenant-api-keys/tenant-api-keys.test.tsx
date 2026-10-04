@@ -297,3 +297,66 @@ it("can retry after the key and member lists fail to load", async () => {
   ).toBeInTheDocument();
   expect(screen.queryByRole("alert")).toBeNull();
 });
+
+it("opts into native collection permissions when creating a member key", async () => {
+  const user = userEvent.setup();
+  let posted: any;
+  const api = new ApiClient({
+    baseUrl: "https://preview.test",
+    tokenSource: {
+      async getAccessToken() {
+        return "jwt";
+      },
+    },
+    fetcher: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith("/members"))
+        return Response.json({
+          members: [
+            { id: "member-1", displayName: "Alex", email: "alex@example.test" },
+          ],
+        });
+      if (init?.method === "POST") {
+        posted = JSON.parse(String(init.body));
+        return Response.json(
+          {
+            key: {
+              id: "key-1",
+              name: posted.name,
+              prefix: "savia_pat_key",
+              tenantId: 12,
+              scopes: posted.scopes,
+              createdAt: "2026-10-03T00:00:00Z",
+              expiresAt: "2026-11-02T00:00:00Z",
+              revokedAt: null,
+              lastUsedAt: null,
+            },
+            secret: "savia_pat_once",
+          },
+          { status: 201 },
+        );
+      }
+      return Response.json({ keys: [] });
+    },
+  });
+
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <TenantApiKeysPanel api={api} tenantId={12} />
+    </StoreContextProvider>,
+  );
+  await user.click(await screen.findByRole("button", { name: "New key" }));
+  await screen.findByRole("option", { name: "Alex (alex@example.test)" });
+  await user.type(screen.getByLabelText("Key name"), "Records integration");
+  await user.click(screen.getByText("Read records").closest("label")!);
+  await user.click(screen.getByText("Create records").closest("label")!);
+  await user.click(screen.getByRole("button", { name: "Create key" }));
+  await screen.findByDisplayValue("savia_pat_once");
+
+  expect(posted.scopes).toEqual([
+    "recordings:read",
+    "recordings:upload",
+    "records:read",
+    "records:create",
+  ]);
+});

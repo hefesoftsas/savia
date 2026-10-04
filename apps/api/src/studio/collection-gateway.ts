@@ -184,6 +184,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
             .first();
           if (
             binding &&
+            context.actor.credential?.kind !== "personal-api-key" &&
             request.method === "GET" &&
             /^\/api\/(?:objects|records|views|record-detail|record-links|record-notes|record-activity)\//.test(
               path,
