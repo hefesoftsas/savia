@@ -49,3 +49,8 @@ principal deletion, and enforces one recording or session thread per owner and
 context. The native table and indexes are included in `manifest.json` for SQLite
 imports and baseline parity checks; the immutable `0001_initial.sql` snapshot is
 unchanged.
+
+`0034_assistant_thread_context_tenant.sql` adds the server-derived workspace ID
+to each attached recording or session context and scopes the owner/context
+uniqueness index by that workspace. Existing rows keep a null workspace binding
+and are not rebound when an account later selects a workspace.

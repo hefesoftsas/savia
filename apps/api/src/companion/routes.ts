@@ -215,6 +215,7 @@ export function createCompanionAssistantContextLoader(
   kind: "recording" | "session";
   title: string;
   content: string;
+  tenantId: number | null;
 }> {
   return async (actor, request, threadContext) => {
     requireCompanionAccess(actor);
@@ -238,10 +239,23 @@ export function createCompanionAssistantContextLoader(
       options.configuration,
     );
     if (threadContext.kind === "recording") {
-      const notes = await new CompanionRecordings(options.storage).getNotes(
-        owner,
-        threadContext.id,
-      );
+      const recordings = new CompanionRecordings(options.storage);
+      const source = await recordings.get(owner, threadContext.id);
+      await source.body.cancel().catch(() => {});
+      const tenantMetadata = source.customMetadata?.tenantId;
+      const tenantId =
+        tenantMetadata === undefined ? null : Number(tenantMetadata);
+      if (
+        (tenantMetadata !== undefined &&
+          (!Number.isSafeInteger(tenantId) || tenantId! < 0)) ||
+        (tenantId !== null && owner.tenantId !== tenantId)
+      )
+        throw new CompanionError(
+          "RECORDING_NOT_FOUND",
+          "Recording not found.",
+          404,
+        );
+      const notes = await recordings.getNotes(owner, threadContext.id);
       if (!notes.transcript?.text.trim())
         throw new CompanionError(
           "TRANSCRIPT_REQUIRED",
@@ -251,6 +265,7 @@ export function createCompanionAssistantContextLoader(
       return {
         kind: "recording",
         title: threadContext.title,
+        tenantId,
         content: JSON.stringify({
           transcript: notes.transcript,
           notes: notes.summary,
@@ -296,6 +311,7 @@ export function createCompanionAssistantContextLoader(
     return {
       kind: "session",
       title: threadContext.title,
+      tenantId: session.tenantId ?? null,
       content: JSON.stringify({
         transcripts: boundedTranscripts,
         summary: session.job.summary,
