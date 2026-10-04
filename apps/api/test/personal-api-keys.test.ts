@@ -39,6 +39,17 @@ const input = {
   scopes: ["recordings:read", "recordings:upload"] as const,
 };
 describe("personal API key lifecycle", () => {
+  it("keeps platform keys limited to recording scopes", async () => {
+    const actor = await fixture();
+    const repo = new PersonalApiKeys(env.DB, "preview");
+    await expect(
+      repo.create(actor, {
+        name: "Invalid data workspace",
+        tenantId: 0,
+        scopes: ["records:read"],
+      }),
+    ).rejects.toThrow("commercial tenant");
+  });
   it("reveals only once, stores a digest, audits metadata and revokes idempotently", async () => {
     const actor = await fixture(),
       repo = new PersonalApiKeys(env.DB, "https://preview.example", () =>

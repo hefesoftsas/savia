@@ -35,7 +35,7 @@ export type AppActor = {
         kind: "personal-api-key";
         keyId: string;
         tenantId: number;
-        scopes: import("./personal-api-keys").RecordingScope[];
+        scopes: import("./personal-api-keys").ApiKeyScope[];
       }
     | { kind: "oauth"; scopes: string[] }
     | { kind: "interactive" };

@@ -13,6 +13,7 @@ import type {
   CreateCalendarSourceInput,
   UpdateCalendarSourceInput,
 } from "@savia/studio-shared/calendar-contracts";
+import type { BookingAgendaEntry } from "@savia/studio-shared/booking-agenda-contracts";
 
 export type CalendarSourcesClient = Pick<
   PersonalIntegrationsClient,
@@ -73,6 +74,12 @@ export type PersonalCalendarEvent = {
   webLink: string | null;
   allDay?: boolean;
   timeZone?: string;
+  conference?: PersonalCalendarConference;
+};
+export type PersonalCalendarConference = {
+  provider: "google_meet" | "teams" | null;
+  joinUrl: string | null;
+  status: "ready" | "pending" | "unsupported" | "failed";
 };
 export type PersonalCalendarProvider = "google_calendar" | "outlook";
 export type PersonalIssuePreview = {
@@ -330,6 +337,19 @@ export class PersonalIntegrationsClient {
     return promise;
   }
 
+  async listBookingAgenda(input: {
+    from: string;
+    to: string;
+    timeZone: string;
+  }): Promise<BookingAgendaEntry[]> {
+    const query = new URLSearchParams(input);
+    return (
+      await this.api.get<{ data: BookingAgendaEntry[] }>(
+        `/v1/personal-integrations/bookings?${query}`,
+      )
+    ).data;
+  }
+
   async listMessages(input: {
     provider: PersonalMailProvider;
     query?: string;
@@ -374,6 +394,7 @@ export class PersonalIntegrationsClient {
     title: string;
     startsAt: string;
     endsAt: string;
+    videoCall?: boolean;
   }): Promise<PersonalCalendarEvent> {
     return (
       await this.api.post<{ data: PersonalCalendarEvent }>(

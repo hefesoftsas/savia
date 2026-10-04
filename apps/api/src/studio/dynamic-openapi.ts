@@ -948,6 +948,61 @@ export async function dynamicOpenApi(
       },
     ),
   };
+  for (const provider of ["salesforce", "zoho", "pipedrive"] as const) {
+    const screen = {
+      ...workspaceScreen,
+      properties: {
+        ...workspaceScreen.properties,
+        resource: { type: "string", enum: ["contacts", "companies", "deals"] },
+      },
+    };
+    const result = envelope({
+      type: "object",
+      properties: {
+        provider: { type: "string", const: provider },
+        connected: { type: "boolean" },
+        accountLabel: { type: ["string", "null"] },
+        objects: { type: "array", items: screen },
+      },
+    });
+    paths[`/crm-workspace/${provider}`] = {
+      get: operation(
+        `discover_${provider}_screens`,
+        "Collections",
+        `Discover available and installed ${provider} screens`,
+        result,
+      ),
+    };
+    paths[`/crm-workspace/${provider}/install`] = {
+      post: operation(
+        `install_${provider}_screens`,
+        "Collections",
+        `Install selected ${provider} screens`,
+        result,
+        {
+          body: {
+            type: "object",
+            required: ["resources"],
+            additionalProperties: false,
+            properties: {
+              resources: {
+                type: "array",
+                minItems: 1,
+                maxItems: 3,
+                uniqueItems: true,
+                items: {
+                  type: "string",
+                  enum: ["contacts", "companies", "deals"],
+                },
+              },
+            },
+          },
+          description:
+            "Tenant administrators install selected resources from their connected CRM account. Effective provider permissions control operations. Reinstallation preserves custom labels and refuses to replace another account. Records remain in the provider.",
+        },
+      ),
+    };
+  }
   paths["/objects/{name}/deletion-preview"] = {
     get: operation(
       "preview_screen_deletion",

@@ -803,6 +803,52 @@ export class CompanionSessions {
   ) {
     return this.mutate(access, id, update);
   }
+  /** Claim a bounded scan range, not the jobs themselves. R2 leases own execution. */
+  async takeJobCandidates(limit = 32): Promise<string[]> {
+    const bucket = this.storage();
+    const prefix = "companion/session-jobs/";
+    const checkpointKey = "companion/session-job-scheduler/checkpoint.json";
+    const count = Number.isFinite(limit)
+      ? Math.max(1, Math.min(128, Math.floor(limit)))
+      : 32;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const checkpoint = await bucket.get(checkpointKey);
+      let startAfter: string | undefined;
+      if (checkpoint) {
+        const saved = await checkpoint.json<{ after?: unknown }>();
+        if (typeof saved.after === "string" && saved.after.startsWith(prefix))
+          startAfter = saved.after;
+      }
+      let page = await bucket.list({ prefix, limit: count, startAfter });
+      // A lexical key survives deletion; opaque continuation tokens need not.
+      if (!page.objects.length && startAfter)
+        page = await bucket.list({ prefix, limit: count });
+      const keys = page.objects.map((object) => object.key).sort();
+      const saved = await bucket.put(
+        checkpointKey,
+        JSON.stringify({
+          after: keys.at(-1) ?? null,
+          // Prevent ABA when concurrent scans wrap to the same key.
+          revision: crypto.randomUUID(),
+        }),
+        {
+          onlyIf: checkpoint
+            ? { etagMatches: checkpoint.etag }
+            : { etagDoesNotMatch: "*" },
+          httpMetadata: {
+            contentType: "application/json; charset=utf-8",
+            cacheControl: "private, no-store",
+          },
+        },
+      );
+      if (saved) return keys;
+    }
+    throw new CompanionError(
+      "SESSION_QUEUE_BUSY",
+      "Queue scan changed concurrently; retry on the next tick.",
+      503,
+    );
+  }
   async listJobCandidates() {
     const bucket = this.storage();
     const result = await bucket.list({

@@ -89,3 +89,147 @@ it("shows an actionable loading failure without a secret", async () => {
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(screen.queryByLabelText("Nueva clave")).toBeNull();
 });
+
+it("opts into native collection permissions when creating a personal key", async () => {
+  const user = userEvent.setup();
+  let posted: any;
+  const api = new ApiClient({
+    baseUrl: "https://preview.test",
+    tokenSource: {
+      async getAccessToken() {
+        return "jwt";
+      },
+    },
+    fetcher: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith("/tenants"))
+        return Response.json({ tenants: [{ id: 1, name: "My workspace" }] });
+      if (init?.method === "POST") {
+        posted = JSON.parse(String(init.body));
+        const key = {
+          id: "key-1",
+          name: posted.name,
+          prefix: "savia_pat_prefix",
+          tenantId: 1,
+          scopes: posted.scopes,
+          createdAt: "2026-10-03",
+          expiresAt: "2026-11-02",
+          revokedAt: null,
+          lastUsedAt: null,
+        };
+        return Response.json(
+          { key, secret: "savia_pat_once" },
+          { status: 201 },
+        );
+      }
+      return Response.json({ keys: [] });
+    },
+  });
+
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <PersonalApiKeysPanel api={api} />
+    </StoreContextProvider>,
+  );
+  await screen.findByRole("option", { name: "My workspace" });
+  await user.type(screen.getByLabelText("Key name"), "Records integration");
+  await user.click(screen.getByText("Read records").closest("label")!);
+  await user.click(screen.getByText("Create records").closest("label")!);
+  await user.click(screen.getByRole("button", { name: "Create key" }));
+  await screen.findByDisplayValue("savia_pat_once");
+
+  expect(posted.scopes).toEqual([
+    "recordings:read",
+    "recordings:upload",
+    "records:read",
+    "records:create",
+  ]);
+});
+
+it("clears and disables collection permissions for the platform tenant", async () => {
+  const user = userEvent.setup();
+  const api = new ApiClient({
+    baseUrl: "https://preview.test",
+    tokenSource: {
+      async getAccessToken() {
+        return "jwt";
+      },
+    },
+    fetcher: async (url) =>
+      new URL(String(url)).pathname.endsWith("/tenants")
+        ? Response.json({
+            tenants: [
+              { id: 1, name: "My workspace" },
+              { id: 0, name: "Platform" },
+            ],
+          })
+        : Response.json({ keys: [] }),
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <PersonalApiKeysPanel api={api} />
+    </StoreContextProvider>,
+  );
+  await screen.findByRole("option", { name: "My workspace" });
+  const read = screen
+    .getByText("Read records")
+    .closest("label")!
+    .querySelector("input")!;
+  await user.click(read);
+  expect(read).toBeChecked();
+
+  await user.selectOptions(screen.getByLabelText("Workspace"), "0");
+  expect(read).not.toBeChecked();
+  expect(read).toBeDisabled();
+  expect(
+    screen.getByText("Create records").closest("label")!.querySelector("input"),
+  ).toBeDisabled();
+});
+
+it("clears collection permissions when a reload falls back to the platform tenant", async () => {
+  const user = userEvent.setup();
+  const makeApi = (eligibleTenants: { id: number; name: string }[]) =>
+    new ApiClient({
+      baseUrl: "https://preview.test",
+      tokenSource: {
+        async getAccessToken() {
+          return "jwt";
+        },
+      },
+      fetcher: async (url) =>
+        new URL(String(url)).pathname.endsWith("/tenants")
+          ? Response.json({ tenants: eligibleTenants })
+          : Response.json({ keys: [] }),
+    });
+  const { rerender } = render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <PersonalApiKeysPanel
+        api={makeApi([
+          { id: 1, name: "My workspace" },
+          { id: 0, name: "Platform" },
+        ])}
+      />
+    </StoreContextProvider>,
+  );
+  await screen.findByRole("option", { name: "My workspace" });
+  const read = screen
+    .getByText("Read records")
+    .closest("label")!
+    .querySelector("input")!;
+  await user.click(read);
+  expect(read).toBeChecked();
+
+  rerender(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <PersonalApiKeysPanel api={makeApi([{ id: 0, name: "Platform" }])} />
+    </StoreContextProvider>,
+  );
+
+  await screen.findByRole("option", { name: "Platform" });
+  const platformRead = screen
+    .getByText("Read records")
+    .closest("label")!
+    .querySelector("input")!;
+  await waitFor(() => expect(platformRead).not.toBeChecked());
+  expect(platformRead).toBeDisabled();
+});

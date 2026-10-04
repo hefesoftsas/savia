@@ -8,11 +8,15 @@ import 'capture/capture_controller.dart';
 import 'capture/native_capture.dart';
 import 'capture/document_import.dart';
 import 'capture/temp_files.dart';
+import 'capture/audio_segmenter.dart';
+import 'capture/session_uploader.dart';
 import 'session/session_controller.dart';
 import 'session/oauth_adapter.dart';
 import 'session/secure_session_store.dart';
 import 'recordings/recordings_api.dart';
 import 'recordings/recordings_controller.dart';
+import 'recordings/recording_sessions_controller.dart';
+import 'recordings/session_models.dart';
 import 'recordings/models.dart';
 import 'playback/audio_player_adapter.dart';
 import 'playback/playback_controller.dart';
@@ -21,6 +25,7 @@ import 'screens/connect_screen.dart';
 import 'screens/capture_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/recording_detail_screen.dart';
+import 'screens/recording_session_detail_screen.dart';
 import 'screens/failure_notice.dart';
 
 class CompanionBootstrap extends StatefulWidget {
@@ -74,16 +79,19 @@ class MobileServices {
     required this.api,
     required this.capture,
     required this.recordings,
+    required this.sessions,
     required this.files,
   });
   final SessionController session;
   final RecordingsApi api;
   final CaptureController capture;
   final RecordingsController recordings;
+  final RecordingSessionsController sessions;
   final TempFiles files;
   Future<void> close() async {
     session.dispose();
     recordings.dispose();
+    sessions.dispose();
     await capture.shutdown();
     capture.dispose();
   }
@@ -112,12 +120,32 @@ class MobileServices {
       generate: (id) => api.generate(id, consent: true),
       answer: (id, question) => api.answer(id, question, consent: true),
     );
+    final sessions = RecordingSessionsController(
+      list: api.listSessions,
+      get: api.getSession,
+      process: api.processSession,
+      cancel: api.cancelSession,
+      answer: api.answerSession,
+    );
+    final sessionUploader = CapturedSessionUploader(
+      api: api,
+      segmenter: const MethodChannelAudioSegmenter(),
+      files: files,
+    );
     final capture = CaptureController(
       native: MicrophoneCapture(),
       importer: importer,
       files: files,
       uploader: (draft, cancel, progress) async {
-        await api.upload(draft, cancellation: cancel, onProgress: progress);
+        if (draft.isCapture) {
+          await sessionUploader.upload(
+            draft,
+            cancellation: cancel,
+            onProgress: progress,
+          );
+        } else {
+          await api.upload(draft, cancellation: cancel, onProgress: progress);
+        }
       },
     );
     return MobileServices(
@@ -125,6 +153,7 @@ class MobileServices {
       api: api,
       capture: capture,
       recordings: recordings,
+      sessions: sessions,
       files: files,
     );
   }
@@ -142,6 +171,7 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
   bool connecting = true, signingOut = false;
   int tab = 0, generation = 0;
   Recording? selected;
+  String? selectedSessionId;
   PlaybackController? playback;
   CompanionFailure? failure;
   MobileServices get s => widget.services;
@@ -167,16 +197,18 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
     if (changed) {
       generation = s.session.generation;
       s.recordings.clear();
+      s.sessions.clear();
       selected = null;
+      selectedSessionId = null;
       unawaited(playback?.close());
       playback = null;
       unawaited(s.capture.clear());
     }
     if (mounted) setState(() {});
     if (s.session.selectedWorkspace != null &&
-        !s.recordings.loading &&
-        s.recordings.recordings.isEmpty) {
-      unawaited(s.recordings.reload());
+        ((!s.recordings.loading && s.recordings.recordings.isEmpty) ||
+            (!s.sessions.loading && s.sessions.sessions.isEmpty))) {
+      unawaited(_reload());
     }
   }
 
@@ -185,6 +217,7 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       unawaited(s.capture.onBackground());
+      unawaited(playback?.pause());
     }
   }
 
@@ -209,6 +242,7 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
     await previousPlayback?.close();
     await s.capture.clear();
     s.recordings.clear();
+    s.sessions.clear();
     if (!mounted) return;
     setState(() {
       selected = null;
@@ -224,13 +258,35 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
   }
 
   Future<void> _reload() async {
-    await s.recordings.reload();
-    await s.capture.reconcile(s.recordings.recordings.map((r) => r.id).toSet());
+    await Future.wait([s.recordings.reload(), s.sessions.reload()]);
+    await s.capture.reconcile({
+      ...s.recordings.recordings.map((r) => r.id),
+      ...s.sessions.sessions
+          .where((session) => session.state == RecordingSessionState.ready)
+          .map((session) => session.id),
+    });
+  }
+
+  void _selectSession(String id) {
+    unawaited(playback?.close());
+    setState(() {
+      selectedSessionId = id;
+      selected = null;
+      playback = PlaybackController(
+        player: NativeAudioPlayer(),
+        files: s.files,
+        download: (recordingId, path, cancel) =>
+            s.api.audio(recordingId, path, cancellation: cancel),
+      );
+    });
+    unawaited(s.sessions.select(id));
   }
 
   void _select(Recording recording) {
+    s.sessions.closeDetail();
     unawaited(playback?.close());
     setState(() {
+      selectedSessionId = null;
       selected = recording;
       playback = PlaybackController(
         player: NativeAudioPlayer(),
@@ -347,6 +403,30 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
                           padding: const EdgeInsets.all(24),
                           child: Text(l.noWorkspace),
                         )
+                      : selectedSessionId != null
+                      ? RecordingSessionDetailScreen(
+                          key: ValueKey('${workspace.id}/$selectedSessionId'),
+                          controller: s.sessions,
+                          playback: playback!,
+                          downloadChunk:
+                              (sessionId, source, sequence, path, cancel) =>
+                                  s.api.sessionChunkAudio(
+                                    sessionId,
+                                    source,
+                                    sequence,
+                                    path,
+                                    cancellation: cancel,
+                                  ),
+                          canProcess: canProcess,
+                          onClose: () {
+                            s.sessions.closeDetail();
+                            unawaited(playback?.close());
+                            setState(() {
+                              selectedSessionId = null;
+                              playback = null;
+                            });
+                          },
+                        )
                       : selected != null
                       ? RecordingDetailScreen(
                           key: ValueKey('${workspace.id}/${selected!.id}'),
@@ -365,7 +445,9 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
                       : tab == 0
                       ? LibraryScreen(
                           controller: s.recordings,
+                          sessions: s.sessions,
                           onSelect: _select,
+                          onSelectSession: _selectSession,
                           onRefresh: _reload,
                         )
                       : CaptureScreen(
@@ -382,7 +464,7 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
           ),
         ),
       ),
-      bottomNavigationBar: selected != null
+      bottomNavigationBar: selected != null || selectedSessionId != null
           ? null
           : NavigationBar(
               selectedIndex: tab,

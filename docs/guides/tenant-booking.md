@@ -16,17 +16,28 @@ Publish when booking is enabled and an enabled service has an enabled profession
 
 ### Personal and team public links
 
-New links default to a 30-day expiry and 25 admitted booking submissions per UTC day. Choose 24 hours, 7 days, 30 days, or explicitly no expiry; the daily budget can be configured from 1 to 1,000. Copy the canonical URL, use the device's share action, or show a QR code. Shortening is optional and does not grant different booking permissions.
+New links default to a 30-day expiry and 25 admitted booking submissions per UTC day. Choose 24 hours, 7 days, 30 days, or explicitly no expiry; the daily budget can be configured from 1 to 1,000. Copy the canonical URL, use the device's share action, or show a QR code. Each link also receives a Savia short URL; when Shlink is configured, the short URL action uses it and falls back to the Savia URL if the provider is unavailable. Shortening does not grant different booking permissions.
 
-Each link has independent revocation. Personal links expose only enabled services assigned to their fixed professional; optional service-scoped links expose only that service. The server enforces this scope for the catalog, challenge, availability and reservation, including caller-submitted identifiers. Disabled professionals/services, removed membership, inactive tenants, expiry and unpublishing stop new bookings. Existing tenant-wide URLs remain team links and can be revoked through the same panel; they are never silently converted into personal links.
+Each link has independent revocation and deletion. Delete permanently removes the public link from the panel and invalidates its canonical and short URLs, including legacy team links; it does not delete reservations or their private management links. Personal links expose only enabled services assigned to their fixed professional; optional service-scoped links expose only that service. The server enforces this scope for the catalog, challenge, availability and reservation, including caller-submitted identifiers. Disabled professionals/services, removed membership, inactive tenants, expiry and unpublishing stop new bookings. Existing tenant-wide URLs remain team links and can be revoked or deleted through the same panel; they are never silently converted into personal links.
 
-Expiry and revocation do not delete reservations or invalidate their distinct private management links. Management and cancellation policies below continue to apply.
+Expiry and revocation do not delete reservations or invalidate their distinct private management links. Deleting a public link has the same preservation behavior. Management and cancellation policies below continue to apply.
 
 Public booking admission also limits each hashed client IP to 20 submissions and each tenant to 1,000 submissions per UTC day. Failed admitted attempts consume the budget; retrying identical details with the same request key reuses admission and does not consume it twice. Changing the payload under that key conflicts. Persistent minute limits and CAPTCHA remain in force; browsing calendar days does not consume submission budgets. Public body size is limited to 32 KiB. A bounded range contains at most 31 dates and fetches each calendar's busy intervals once, rather than making a provider request for each day. Unknown calendar availability stops booking with a retryable error.
 
 ## Reservations and management
 
 Administrators see the tenant's reservations; other tenant members see only reservations assigned to themselves. Concurrent native bookings claim the professional's occupied intervals atomically, including the trailing buffer. Conflicting requests return a recoverable conflict and create no partial reservation. Request keys prevent duplicate reservations when a customer retries a submission.
+
+Confirmed appointments also appear in the assigned professional's **My Day**
+agenda, in day, week and month views, even without Google Calendar or Outlook.
+My Day shows only the signed-in user's assignments across their current commercial
+workspace memberships; administrators use **Bookings → Reservations** for team
+history. Appointment details link to authenticated workspace reservations where
+tenant hostnames are supported, opening the appointment date directly.
+**Show upcoming reservations** clears that date. Details never expose the customer's private
+management token. Rescheduling and cancellation are reflected when My Day
+refreshes, including **Synchronize**, focus/connectivity recovery and visible
+five-minute polling. See [My Day widgets](../my-day-widgets.md).
 
 The confirmation contains a private management link. Anyone possessing this link can view, cancel or reschedule that single reservation, so treat it as private. Customers can change a confirmed reservation before the tenant's cutoff. Cancelled reservations release their intervals. Rescheduling replaces the old occupancy atomically and keeps the old time if the new time conflicts. Changing a service's duration or buffer requires contacting the business before rescheduling an existing reservation. Administrators and assigned professionals can cancel through their authenticated agenda without the customer cutoff.
 
@@ -38,11 +49,65 @@ Unpublishing stops new public bookings. Existing management links continue to su
 
 ## Optional calendars through Nango
 
+To avoid conflicts with the rest of your My Day agenda, use **Bookings → Availability → My Day availability → Use My Day to block busy times**. Each professional grants access to their own current Google and Outlook connections and imported or subscribed calendars. Only occupied time intervals influence public availability; meeting names, attendees, links and calendar credentials remain private. Hidden calendars remain conflict sources: hiding a calendar is a display preference, not a release of its occupied time. Events explicitly marked free and cancelled events do not block slots. All-day events use the source time zone and exclusive end date; recurring events retain their exceptions.
+
+Authorization is tenant-scoped and snapshots source identities. Use **Update calendar access** after adding a calendar or reconnecting an account, or **Stop using My Day** to revoke this additional access. Administrators cannot authorize another professional's agenda. The separate calendar choice below still controls where appointment events are created.
+
+Availability and confirmation/rescheduling share the same conflict check, including appointment duration and trailing buffer. Subscriptions are refreshed again when confirming or rescheduling. A failed or stale authorized source stops booking instead of presenting unknown time as free. When another meeting or appointment occupies the requested interval, the form explains the conflict and reloads available times while preserving customer details. Reprogramming excludes only the appointment's saved event in the same connected account; another overlapping meeting still blocks the move. External providers cannot participate in the booking transaction, so changes made outside Savia after its final check can still require review.
+
 Connect a personal Google Calendar or Outlook integration first. Each professional then explicitly grants booking access to their own connected calendar. Administrators cannot grant access to someone else's personal integration. Grants are scoped to the tenant and pinned to the connection; reconnecting requires a fresh grant.
 
 Availability checks the Google primary calendar or the user's Outlook calendar. Google uses its complete free/busy response; Outlook follows pagination. Malformed responses, disconnected grants and provider failures stop new bookings instead of treating unknown availability as free. A professional may revoke the booking grant and use only the native agenda.
 
-Calendar jobs create, update or cancel a corresponding event. Google events use a deterministic identifier; Outlook events use a transaction identifier and a persistent booking marker to recover an event when a creation response is lost. Revoked grants do not authorize further external writes. A connected calendar's existing reservation event may restrict moves that overlap that event; choose a free time. External calendar providers do not participate in Savia's database transaction, so simultaneous changes made outside Savia can still conflict and require review.
+Calendar jobs create, update or cancel a corresponding event. Google events use a deterministic identifier; Outlook events use a transaction identifier and a persistent booking marker to recover an event when a creation response is lost. Revoked grants do not authorize further external writes. Rescheduling ignores only this appointment's saved event in the same connected account; other meetings still block the requested interval. External calendar providers do not participate in Savia's database transaction, so simultaneous changes made outside Savia can still conflict and require review.
+
+### Automatic video calls
+
+When a professional has granted calendar access, new appointments request a
+video call if that calendar advertises support: Google Meet for Google Calendar,
+or Teams for Outlook. Savia checks the actual calendar capabilities; connecting
+an account alone does not guarantee conferencing support. A calendar without the
+capability still receives an ordinary appointment. Zoom and Jitsi are not part of
+this booking integration.
+
+The Nango Google connection must allow calendar metadata reads in addition to
+event writes and free/busy reads. The narrowly scoped combination is
+`https://www.googleapis.com/auth/calendar.events`,
+`https://www.googleapis.com/auth/calendar.calendars.readonly`, and
+`https://www.googleapis.com/auth/calendar.events.freebusy`. Outlook uses delegated
+`Calendars.ReadWrite` for calendar metadata and event operations. Existing
+connections with narrower scopes may need reauthorization before provisioning
+can succeed; Savia does not expand consent automatically.
+
+Provisioning runs through the existing background calendar jobs after the native
+reservation is confirmed. The reservation stores the external event identifier,
+meeting provider, link, and provisioning state. Pending links reuse the same event
+on bounded retries (up to five job attempts); a provider failure never cancels the
+native reservation. Unknown calendar capabilities are retried instead of being
+silently treated as unsupported. A final failure is shown as unavailable rather
+than leaving a permanent pending indicator.
+
+Open the appointment in **Bookings → Reservations**, or use its private management
+link, to view the call status and join a ready meeting. Refresh the appointment
+after pending provisioning. Customer confirmation screens can show the returned
+status; the management page contains the latest saved result. Emails include a
+ready call link when it has already been saved; an earlier confirmation email
+still includes the private management link. No video link is exposed in public
+catalogs or availability results.
+
+Rescheduling updates the existing calendar event and preserves its call. Cancelling
+hides the join action immediately and queues deletion of the same provider event.
+Links are accepted only as HTTPS participant URLs. The existing tenant grant,
+professional membership and pinned Nango connection checks apply to every job.
+Teams link validation includes the documented [sovereign cloud client hosts](https://learn.microsoft.com/en-us/microsoftteams/platform/concepts/sovereign-cloud)
+as well as commercial Teams hosts; the connection must still be configured for
+the correct cloud. Refreshing a pending link cannot overwrite a later appointment
+cancellation or reschedule.
+
+Deploy the forward migrations `0028_booking_conferences.sql` for D1 and PostgreSQL
+before the updated API. No live provider calls are required by the automated
+fixtures; live account, policy and license compatibility still needs verification
+in the target environment.
 
 ## Email and delivery status
 
@@ -52,7 +117,7 @@ The scheduler processes a durable outbox, leases work and retries transient erro
 
 ## Deployment and verification
 
-Both SQLite/D1 and PostgreSQL have forward migrations `0022_tenant_bookings.sql` and `0026_booking_public_links.sql`. The latter adds scoped links, daily admission receipts and stored customer locale, and preserves existing tenant URLs as independently revocable team links. Preview deployment applies the D1 migration before the API is deployed. Existing tenants remain disabled until configured. API reference is generated from the Booking OpenAPI routes.
+Both SQLite/D1 and PostgreSQL have forward migrations `0022_tenant_bookings.sql`, `0026_booking_public_links.sql`, `0027_booking_public_link_short_urls.sql` and `0029_booking_agenda_grants.sql`. Migration `0026` adds scoped links, daily admission receipts and stored customer locale, and preserves existing tenant URLs as independently revocable team links. Migration `0027` adds short URL storage and deletion tombstones. Migration `0029` stores each professional's tenant-scoped My Day availability grant. Apply the D1 migration before deploying the updated API. Existing tenants remain disabled until configured. API reference is generated from the Booking OpenAPI routes.
 
 Public requests enforce body limits, per-link request throttling, no-cache and no-referrer headers, and captcha verification. ALTCHA proofs are consumed once; retrying the same confirmed request key returns the existing reservation. Captcha bypass is limited to local development origins.
 

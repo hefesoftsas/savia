@@ -14,6 +14,16 @@ export const bookingMessages = {
   ],
   Availability: ["Disponibilidad", "Availability", "Disponibilidade"],
   Reservations: ["Reservas", "Reservations", "Reservas"],
+  "Reservations for %{date}": [
+    "Reservas del %{date}",
+    "Reservations for %{date}",
+    "Reservas de %{date}",
+  ],
+  "Show upcoming reservations": [
+    "Ver próximas reservas",
+    "Show upcoming reservations",
+    "Ver próximas reservas",
+  ],
   "Loading booking settings…": [
     "Cargando configuración de citas…",
     "Loading booking settings…",
@@ -258,6 +268,59 @@ export const bookingMessages = {
   ],
   Revoked: ["Revocado", "Revoked", "Revogado"],
   Expired: ["Vencido", "Expired", "Expirado"],
+  "Full link": ["Enlace completo", "Full link", "Link completo"],
+  "Short link": ["Enlace corto", "Short link", "Link curto"],
+  "Public link address": [
+    "Dirección del enlace público",
+    "Public link address",
+    "Endereço do link público",
+  ],
+  "Short link address": [
+    "Dirección del enlace corto",
+    "Short link address",
+    "Endereço do link curto",
+  ],
+  "Copy short link": [
+    "Copiar enlace corto",
+    "Copy short link",
+    "Copiar link curto",
+  ],
+  "Shorten URL": ["Acortar URL", "Shorten URL", "Encurtar URL"],
+  "Generating short link…": [
+    "Generando enlace corto…",
+    "Generating short link…",
+    "Gerando link curto…",
+  ],
+  "Short link not generated yet.": [
+    "El enlace corto aún no se ha generado.",
+    "Short link not generated yet.",
+    "O link curto ainda não foi gerado.",
+  ],
+  "Open link": ["Abrir enlace", "Open link", "Abrir link"],
+  "Delete link": ["Eliminar enlace", "Delete link", "Excluir link"],
+  "Delete this booking link?": [
+    "¿Eliminar este enlace de reserva?",
+    "Delete this booking link?",
+    "Excluir este link de agendamento?",
+  ],
+  "Existing appointments and their private management links will remain available.":
+    [
+      "Las citas existentes y sus enlaces privados de administración seguirán disponibles.",
+      "Existing appointments and their private management links will remain available.",
+      "Os agendamentos existentes e seus links privados de gerenciamento continuarão disponíveis.",
+    ],
+  "Cancel deletion": ["Cancelar", "Cancel deletion", "Cancelar"],
+  "Confirm deletion": [
+    "Confirmar eliminación",
+    "Confirm deletion",
+    "Confirmar exclusão",
+  ],
+  "Deleting…": ["Eliminando…", "Deleting…", "Excluindo…"],
+  "Booking link deleted.": [
+    "Se eliminó el enlace de reserva.",
+    "Booking link deleted.",
+    "O link de agendamento foi excluído.",
+  ],
   "Copy link": ["Copiar enlace", "Copy link", "Copiar link"],
   Share: ["Compartir", "Share", "Compartilhar"],
   "Revoke link": ["Revocar enlace", "Revoke link", "Revogar link"],
@@ -349,6 +412,58 @@ export const bookingMessages = {
     "Calendar connection",
     "Conexão do calendário",
   ],
+  "My Day availability": [
+    "Disponibilidad de Mi día",
+    "My Day availability",
+    "Disponibilidade do My Day",
+  ],
+  "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.":
+    [
+      "Autoriza el acceso a los horarios ocupados de tu calendario actual de Google u Outlook y de los calendarios importados o suscritos. Los detalles de las reuniones son privados.",
+      "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.",
+      "Conceda acesso aos horários ocupados do seu calendário atual do Google ou Outlook e dos calendários importados ou assinados. Os detalhes das reuniões permanecem privados.",
+    ],
+  "My Day access is enabled. Calendar sources: %{count}.": [
+    "Acceso a Mi día habilitado. Fuentes de calendario: %{count}.",
+    "My Day access is enabled. Calendar sources: %{count}.",
+    "Acesso ao My Day ativado. Fontes de calendário: %{count}.",
+  ],
+  "My Day access is off.": [
+    "El acceso a Mi día está desactivado.",
+    "My Day access is off.",
+    "O acesso ao My Day está desativado.",
+  ],
+  "Use My Day to block busy times": [
+    "Usar Mi día para bloquear horarios ocupados",
+    "Use My Day to block busy times",
+    "Usar My Day para bloquear horários ocupados",
+  ],
+  "Update calendar access": [
+    "Actualizar acceso al calendario",
+    "Update calendar access",
+    "Atualizar acesso ao calendário",
+  ],
+  "Stop using My Day": [
+    "Dejar de usar Mi día",
+    "Stop using My Day",
+    "Parar de usar o My Day",
+  ],
+  "My Day availability access updated.": [
+    "Se actualizó el acceso de disponibilidad de Mi día.",
+    "My Day availability access updated.",
+    "O acesso à disponibilidade do My Day foi atualizado.",
+  ],
+  "My Day availability access stopped.": [
+    "Se detuvo el acceso de disponibilidad de Mi día.",
+    "My Day availability access stopped.",
+    "O acesso à disponibilidade do My Day foi interrompido.",
+  ],
+  "My Day availability could not be updated. Check your connection and retry.":
+    [
+      "No se pudo actualizar el acceso a la disponibilidad de Mi día. Revisa tu conexión e inténtalo de nuevo.",
+      "My Day availability could not be updated. Check your connection and retry.",
+      "Não foi possível atualizar o acesso à disponibilidade do My Day. Verifique sua conexão e tente novamente.",
+    ],
   "Google Calendar connected": [
     "Google Calendar conectado",
     "Google Calendar connected",
@@ -394,6 +509,58 @@ export const bookingMessages = {
   Status: ["Estado", "Status", "Status"],
   Delivery: ["Entrega", "Delivery", "Entrega"],
   Calendar: ["Calendario", "Calendar", "Calendário"],
+  "Join Google Meet": [
+    "Unirse a Google Meet",
+    "Join Google Meet",
+    "Entrar no Google Meet",
+  ],
+  "Join Teams": ["Unirse a Teams", "Join Teams", "Entrar no Teams"],
+  "Join video meeting": [
+    "Unirse a la videollamada",
+    "Join video meeting",
+    "Entrar na videochamada",
+  ],
+  "Video meeting link is being prepared. Refresh to check again.": [
+    "Se está preparando el enlace de videollamada. Actualiza para comprobarlo de nuevo.",
+    "Video meeting link is being prepared. Refresh to check again.",
+    "O link da videochamada está sendo preparado. Atualize para verificar novamente.",
+  ],
+  "Video meeting link is being prepared. Open appointment management to refresh the status.":
+    [
+      "Se está preparando el enlace de videollamada. Abre la administración de la cita para actualizar el estado.",
+      "Video meeting link is being prepared. Open appointment management to refresh the status.",
+      "O link da videochamada está sendo preparado. Abra o gerenciamento do agendamento para atualizar o status.",
+    ],
+  "Video meetings are not available for this appointment.": [
+    "Esta cita no admite videollamada.",
+    "Video meetings are not available for this appointment.",
+    "Este agendamento não oferece videochamada.",
+  ],
+  "The video meeting could not be created.": [
+    "No se pudo crear la videollamada.",
+    "The video meeting could not be created.",
+    "Não foi possível criar a videochamada.",
+  ],
+  "The video meeting link is unavailable.": [
+    "El enlace de videollamada no está disponible.",
+    "The video meeting link is unavailable.",
+    "O link da videochamada não está disponível.",
+  ],
+  "Refresh appointment": [
+    "Actualizar cita",
+    "Refresh appointment",
+    "Atualizar agendamento",
+  ],
+  "Refreshing appointment…": [
+    "Actualizando cita…",
+    "Refreshing appointment…",
+    "Atualizando agendamento…",
+  ],
+  "The appointment could not be refreshed. Try again.": [
+    "No se pudo actualizar la cita. Inténtalo de nuevo.",
+    "The appointment could not be refreshed. Try again.",
+    "Não foi possível atualizar o agendamento. Tente novamente.",
+  ],
   "Cancel reservation": [
     "Cancelar reserva",
     "Cancel reservation",
@@ -491,6 +658,12 @@ export const bookingMessages = {
     "Your booking could not be confirmed. Retry with the same request.",
     "Não foi possível confirmar o agendamento. Tente novamente com a mesma solicitação.",
   ],
+  "That time conflicts with another meeting or appointment. Choose another available time.":
+    [
+      "Ese horario coincide con otra reunión o cita. Elige otro horario disponible.",
+      "That time conflicts with another meeting or appointment. Choose another available time.",
+      "Esse horário conflita com outra reunião ou agendamento. Escolha outro horário disponível.",
+    ],
   "That time is no longer available. Choose another available time.": [
     "Ese horario ya no está disponible. Elige otro horario disponible.",
     "That time is no longer available. Choose another available time.",

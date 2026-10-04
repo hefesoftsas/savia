@@ -17,51 +17,84 @@ export class CompanionSessionJobs {
     private readonly options: { leaseSeconds?: number } = {},
   ) {}
 
-  /** Process one queued session operation; suitable for scheduled Worker ticks. */
+  /** Compatibility helper for callers that explicitly request a single operation. */
   async processOne(): Promise<{ processed: boolean; sessionId?: string }> {
     const candidates = await this.sessions.listJobCandidates();
     for (const key of candidates) {
-      const item = await this.sessions.readSchedule(key);
-      if (!item) continue;
-      const before = await this.sessions
-        .readInternal(item.access, item.id)
-        .catch((error) => {
-          if (error instanceof CompanionError && error.status === 404)
-            return null;
-          throw error;
-        });
-      if (before && before.job.runId !== item.runId) {
-        await this.sessions.deleteSchedule(item.access, item.id, item.runId);
-        continue;
-      }
-      if (
-        !before ||
-        !["queued", "transcribing", "summarizing"].includes(before.job.status)
-      ) {
-        if (
-          !before ||
-          [
-            "complete",
-            "cancelled",
-            "failed",
-            "idle",
-            "needs_attention",
-          ].includes(before?.job.status ?? "idle")
-        )
-          await this.sessions
-            .deleteSchedule(item.access, item.id, item.runId)
-            .catch(() => {});
-        continue;
-      }
-      if (
-        before.job.lease &&
-        Date.parse(before.job.lease.expiresAt) > Date.now()
-      )
-        continue;
-      await this.process(item.access, item.id);
-      return { processed: true, sessionId: item.id };
+      const sessionId = await this.processCandidate(key);
+      if (sessionId) return { processed: true, sessionId };
     }
     return { processed: false };
+  }
+
+  /** Rotate through candidates with bounded dispatch and parallel provider calls. */
+  async processBatch(
+    options: {
+      maxCandidates?: number;
+      concurrency?: number;
+      budgetMs?: number;
+    } = {},
+  ): Promise<{ scanned: number; processed: number; failed: number }> {
+    const bounded = (
+      value: number | undefined,
+      fallback: number,
+      max: number,
+      min = 1,
+    ) =>
+      value !== undefined && Number.isFinite(value)
+        ? Math.max(min, Math.min(max, Math.floor(value)))
+        : fallback;
+    const deadline = Date.now() + bounded(options.budgetMs, 45_000, 45_000, 0);
+    const maximum = bounded(options.maxCandidates, 32, 128);
+    const concurrency = bounded(options.concurrency, 4, 4);
+    const report = { scanned: 0, processed: 0, failed: 0 };
+    while (report.scanned < maximum && Date.now() < deadline) {
+      // Claim only a wave we can start. Advancing over undispatched entries could
+      // repeatedly starve the same tail when the time budget expires each tick.
+      const candidates = await this.sessions.takeJobCandidates(
+        Math.min(concurrency, maximum - report.scanned),
+      );
+      if (!candidates.length) break;
+      report.scanned += candidates.length;
+      await Promise.all(
+        candidates.map(async (key) => {
+          try {
+            if (await this.processCandidate(key)) report.processed++;
+          } catch {
+            // Keep the index entry for another sweep; never leak private job data.
+            report.failed++;
+          }
+        }),
+      );
+    }
+    return report;
+  }
+
+  private async processCandidate(key: string): Promise<string | null> {
+    const item = await this.sessions.readSchedule(key);
+    if (!item) return null;
+    const before = await this.sessions
+      .readInternal(item.access, item.id)
+      .catch((error) => {
+        if (error instanceof CompanionError && error.status === 404)
+          return null;
+        throw error;
+      });
+    if (before && before.job.runId !== item.runId) {
+      await this.sessions.deleteSchedule(item.access, item.id, item.runId);
+      return null;
+    }
+    if (
+      !before ||
+      !["queued", "transcribing", "summarizing"].includes(before.job.status)
+    ) {
+      await this.sessions.deleteSchedule(item.access, item.id, item.runId);
+      return null;
+    }
+    if (before.job.lease && Date.parse(before.job.lease.expiresAt) > Date.now())
+      return null;
+    await this.process(item.access, item.id);
+    return item.id;
   }
 
   /** One call persists at most one transcript or one summary reduction. */

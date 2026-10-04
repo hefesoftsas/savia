@@ -40,11 +40,58 @@
   width: 100%;
   min-width: 0;
 }
+.tenant-branding-selector select {
+  min-height: 44px;
+}
 .tenant-branding-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.85fr);
   gap: clamp(1.5rem, 4vw, 3.5rem);
   align-items: start;
+}
+.tenant-branding-tabs {
+  min-width: 0;
+}
+.tenant-branding-tabs-scroll {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+.tenant-branding-tabs [data-slot="tabs-list"] {
+  width: max-content;
+  min-width: max-content;
+}
+.tenant-branding-tabs [data-slot="tabs-trigger"] {
+  min-height: 44px;
+  min-width: 0;
+  flex: 0 0 auto;
+  padding-inline: 0.5rem;
+}
+.tenant-branding-tabs [data-slot="tabs-content"][data-state="inactive"] {
+  display: none;
+}
+.tenant-branding-tab-panel {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.tenant-branding-api-keys {
+  width: 100%;
+  min-width: 0;
+  max-width: 56rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.tenant-branding-editor[hidden],
+.tenant-branding-preview[hidden] {
+  display: none;
+}
+.tenant-branding-layout[data-active-tab="api-keys"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.tenant-branding-layout[data-active-tab="api-keys"] .tenant-branding-tabs {
+  grid-column: 1 / -1;
 }
 .tenant-branding-editor,
 .tenant-branding-editor fieldset {

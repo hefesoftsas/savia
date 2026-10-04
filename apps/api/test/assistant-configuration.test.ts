@@ -4,6 +4,7 @@ import {
   AssistantConfigurationRepository,
   AssistantConfigurationUnavailableError,
   AssistantEncryption,
+  transcriptionEndpointForModel,
 } from "../src/assistant/configuration";
 import type { AppActor } from "../src/auth/types";
 
@@ -192,15 +193,17 @@ describe("assistant OpenRouter configuration", () => {
   it("reports deployment fallback state without exposing the deployment key", async () => {
     const settings = repository();
 
-    await expect(settings.summary()).resolves.toEqual({
+    await expect(settings.summary()).resolves.toMatchObject({
       global: null,
       tenants: [],
       deployment: {
         keyState: "deployment_fallback",
         model: "anthropic/claude-sonnet-4",
-        transcriptionModel: "openai/whisper-large-v3",
+        transcriptionModel: "google/gemini-2.5-flash",
         summaryModel: "anthropic/claude-sonnet-4",
       },
+      canManageGlobal: true,
+      manageableTenantIds: expect.any(Array),
     });
   });
 
@@ -235,7 +238,7 @@ describe("assistant OpenRouter configuration", () => {
     });
   });
 
-  it("keeps meeting model choices global when saving a tenant assistant override", async () => {
+  it("uses tenant meeting model overrides ahead of global defaults", async () => {
     const settings = repository();
     await seedAgencyAndMember(101);
     await settings.saveGlobal({
@@ -247,6 +250,8 @@ describe("assistant OpenRouter configuration", () => {
     await settings.saveAgencyOverride(101, {
       actorId: "test-platform-admin",
       model: "openai/gpt-5",
+      transcriptionModel: "openai/whisper-large-v3-turbo",
+      summaryModel: "openai/gpt-4o-mini",
     });
 
     await expect(settings.summary()).resolves.toMatchObject({
@@ -256,10 +261,10 @@ describe("assistant OpenRouter configuration", () => {
       },
     });
     await expect(
-      settings.effectiveConfigurationFor("tenantless-user"),
+      settings.effectiveConfigurationForTenant("test-agency-member", 101),
     ).resolves.toMatchObject({
-      model: "deepseek/deepseek-v4-flash",
-      transcriptionModel: "openai/whisper-large-v3",
+      model: "openai/gpt-5",
+      transcriptionModel: "openai/whisper-large-v3-turbo",
       summaryModel: "openai/gpt-4o-mini",
     });
   });
@@ -270,7 +275,7 @@ describe("assistant OpenRouter configuration", () => {
     await settings.saveGlobal({
       actorId: "test-platform-admin",
       model: "deepseek/deepseek-v4-flash",
-      transcriptionModel: "openai/whisper-large-v3",
+      transcriptionModel: "google/gemini-2.5-flash",
     });
     await settings.saveAgencyOverride(115, {
       actorId: "test-platform-admin",
@@ -282,7 +287,7 @@ describe("assistant OpenRouter configuration", () => {
       settings.effectiveConfigurationFor("test-agency-member"),
     ).resolves.toMatchObject({
       model: "openai/gpt-5",
-      transcriptionModel: "openai/whisper-large-v3",
+      transcriptionModel: "google/gemini-2.5-flash",
       summaryModel: "openai/gpt-5",
     });
   });
@@ -294,6 +299,96 @@ describe("assistant OpenRouter configuration", () => {
         transcriptionModel: "invalid",
       }),
     ).rejects.toThrow("provider/model format");
+  });
+
+  it("infers native transcription only for Whisper models", () => {
+    expect(transcriptionEndpointForModel("openai/whisper-large-v3")).toBe(
+      "audio/transcriptions",
+    );
+    expect(transcriptionEndpointForModel("openai/whisper-large-v3-turbo")).toBe(
+      "audio/transcriptions",
+    );
+    expect(transcriptionEndpointForModel("google/gemini-2.5-flash")).toBe(
+      "chat/completions",
+    );
+    expect(transcriptionEndpointForModel(null)).toBe("chat/completions");
+  });
+
+  it("persists explicit endpoints, recomputes on transcription model changes, and inherits by model source", async () => {
+    const settings = repository();
+    await seedAgencyAndMember(111);
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      transcriptionModel: "openai/whisper-large-v3",
+    });
+    await expect(settings.summary()).resolves.toMatchObject({
+      global: { transcriptionEndpoint: "audio/transcriptions" },
+    });
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      transcriptionEndpoint: "chat/completions",
+    });
+    await settings.saveGlobal({ actorId: "test-platform-admin" });
+    await expect(settings.summary()).resolves.toMatchObject({
+      global: { transcriptionEndpoint: "chat/completions" },
+    });
+
+    await settings.saveAgencyOverride(111, {
+      actorId: "test-platform-admin",
+      transcriptionModel: "google/gemini-2.5-flash",
+    });
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 111),
+    ).resolves.toMatchObject({
+      transcriptionModel: "google/gemini-2.5-flash",
+      transcriptionEndpoint: "chat/completions",
+    });
+    await settings.saveAgencyOverride(111, {
+      actorId: "test-platform-admin",
+      transcriptionEndpoint: "audio/transcriptions",
+    });
+    await settings.saveAgencyOverride(111, {
+      actorId: "test-platform-admin",
+      transcriptionModel: "openai/whisper-large-v3-turbo",
+    });
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 111),
+    ).resolves.toMatchObject({
+      transcriptionEndpoint: "audio/transcriptions",
+    });
+    await settings.saveAgencyOverride(111, {
+      actorId: "test-platform-admin",
+      transcriptionModel: "google/gemini-2.5-flash",
+    });
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 111),
+    ).resolves.toMatchObject({
+      transcriptionEndpoint: "chat/completions",
+    });
+    await settings.saveAgencyOverride(111, {
+      actorId: "test-platform-admin",
+      transcriptionModel: "",
+    });
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 111),
+    ).resolves.toMatchObject({
+      transcriptionModel: "openai/whisper-large-v3",
+      transcriptionEndpoint: "chat/completions",
+    });
+  });
+
+  it("rejects an endpoint override when the setting has no transcription model", async () => {
+    const settings = repository();
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      transcriptionModel: null,
+    });
+    await expect(
+      settings.saveGlobal({
+        actorId: "test-platform-admin",
+        transcriptionEndpoint: "audio/transcriptions",
+      }),
+    ).rejects.toThrow("A transcription model is required to set an endpoint");
   });
 
   it("uses agency, global, and deployment values in field order", async () => {
@@ -315,7 +410,8 @@ describe("assistant OpenRouter configuration", () => {
     ).resolves.toEqual({
       apiKey: "not-a-real-global-key",
       model: "openai/gpt-5",
-      transcriptionModel: "openai/whisper-large-v3",
+      transcriptionModel: "google/gemini-2.5-flash",
+      transcriptionEndpoint: "chat/completions",
       summaryModel: "openai/gpt-5",
       tenantId: 101,
     });

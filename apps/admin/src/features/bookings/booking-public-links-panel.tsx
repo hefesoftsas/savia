@@ -1,10 +1,55 @@
 import type { ApiClient } from "@/api/api-client";
+import {
+  Ban,
+  Check,
+  Copy,
+  ExternalLink,
+  Link2,
+  QrCode,
+  Share2,
+  Trash2,
+} from "lucide-react";
+import type { ComponentProps, ReactNode } from "react";
+import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
+import { PwaSpinner } from "@/pwa/pwa-splash";
 import { Button } from "@/components/ui/button";
 import { intlLocale, useAppLocale, useMessages } from "@/i18n/core";
 import QRCode from "react-qr-code";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { bookingMessages } from "./booking-messages";
 import type { BookingLinkScope, BookingPublicLink } from "./booking-types";
+
+function LinkAction({
+  label,
+  children,
+  ...props
+}: Omit<ComponentProps<typeof Button>, "children"> & {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="size-11 shrink-0"
+          aria-label={label}
+          {...props}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 type ServiceOption = { id: string; name: string };
 type Expiry = "24h" | "7d" | "30d" | "never";
@@ -48,6 +93,10 @@ export function BookingPublicLinksPanel({
   const [dailyLimit, setDailyLimit] = useState(25);
   const [busy, setBusy] = useState(false);
   const [activeOperation, setActiveOperation] = useState("");
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [shorteningId, setShorteningId] = useState("");
+  const [qrVisible, setQrVisible] = useState<Record<string, boolean>>({});
+  const [copied, setCopied] = useState("");
 
   const endpoint = `/v1/tenants/${encodeURIComponent(tenantId)}/booking/public-links`;
   const loadLinks = useCallback(async () => {
@@ -107,6 +156,7 @@ export function BookingPublicLinksPanel({
 
   async function revoke(link: BookingPublicLink) {
     setActiveOperation(link.id);
+    setConfirming(null);
     setError(false);
     setNotice("");
     try {
@@ -125,9 +175,52 @@ export function BookingPublicLinksPanel({
     }
   }
 
-  async function copy(link: BookingPublicLink) {
+  async function remove(link: BookingPublicLink) {
+    setActiveOperation(link.id);
+    setError(false);
+    setNotice("");
     try {
-      await navigator.clipboard.writeText(link.publicUrl);
+      await apiClient.delete(`${endpoint}/${encodeURIComponent(link.id)}`, {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: link.version }),
+      });
+      setLinks((current) => current.filter((item) => item.id !== link.id));
+      setConfirming(null);
+      setNotice(t("Booking link deleted."));
+    } catch {
+      setError(true);
+    } finally {
+      setActiveOperation("");
+    }
+  }
+
+  async function shorten(link: BookingPublicLink) {
+    setShorteningId(link.id);
+    setError(false);
+    try {
+      const response = await apiClient.post<{ data: { shortUrl: string } }>(
+        `${endpoint}/${encodeURIComponent(link.id)}/short-url`,
+      );
+      setLinks((current) =>
+        current.map((item) =>
+          item.id === link.id
+            ? { ...item, shortUrl: response.data.shortUrl }
+            : item,
+        ),
+      );
+    } catch {
+      setError(true);
+    } finally {
+      setShorteningId("");
+    }
+  }
+
+  async function copy(link: BookingPublicLink, short = false) {
+    try {
+      await navigator.clipboard.writeText(
+        short ? link.shortUrl! : link.publicUrl,
+      );
+      setCopied(`${link.id}:${short ? "short" : "full"}`);
       setNotice(t("Link copied."));
     } catch {
       setError(true);
@@ -137,7 +230,10 @@ export function BookingPublicLinksPanel({
   async function share(link: BookingPublicLink) {
     if (!navigator.share) return;
     try {
-      await navigator.share({ title: t("Appointments"), url: link.publicUrl });
+      await navigator.share({
+        title: t("Appointments"),
+        url: link.shortUrl || link.publicUrl,
+      });
       setNotice(t("Booking link shared."));
     } catch (shareError) {
       if (!(
@@ -224,7 +320,7 @@ export function BookingPublicLinksPanel({
           <Button
             type="button"
             className="min-h-11"
-            disabled={busy || !currentProfessionalId}
+            disabled={loading || busy || !currentProfessionalId}
             onClick={() =>
               currentProfessionalId &&
               void create({
@@ -240,7 +336,7 @@ export function BookingPublicLinksPanel({
               type="button"
               variant="outline"
               className="min-h-11"
-              disabled={busy}
+              disabled={loading || busy}
               onClick={() => void create({ kind: "team" })}
             >
               {t("Create team agenda link")}
@@ -266,24 +362,38 @@ export function BookingPublicLinksPanel({
         </p>
       )}
       {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {t(
-            "Booking links could not be updated. Check your connection and retry.",
-          )}
-        </p>
+        <div className="grid justify-items-start gap-2">
+          <p role="alert" className="text-sm text-destructive">
+            {t(
+              "Booking links could not be updated. Check your connection and retry.",
+            )}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading || busy || !!activeOperation || !!shorteningId}
+            onClick={() => void loadLinks()}
+          >
+            {t("Retry")}
+          </Button>
+        </div>
       )}
       {loading && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {t("Loading booking links…")}
-        </p>
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
+        >
+          <PwaSpinner size="sm" />
+          <span>{t("Loading booking links…")}</span>
+        </div>
       )}
       {!loading && !error && !links.length && (
         <p className="text-sm text-muted-foreground">
           {t("No booking links yet. Create a personal link to get started.")}
         </p>
       )}
-      {!!links.length && (
-        <ul className="grid gap-4">
+      {!loading && !!links.length && (
+        <ul className="m-0 grid min-w-0 list-none gap-4 p-0">
           {links.map((link) => {
             const active = linkIsActive(link);
             const service = services.find((item) => item.id === link.serviceId);
@@ -301,68 +411,195 @@ export function BookingPublicLinksPanel({
                     {expiryLabel(link)} ·{" "}
                     {t("%{count} bookings per day", { count: link.dailyLimit })}
                   </p>
-                  <a
-                    className="w-fit max-w-full break-all text-sm underline underline-offset-4"
-                    href={link.publicUrl}
-                  >
-                    {link.publicUrl}
-                  </a>
                   {!active && (
                     <p className="text-sm text-muted-foreground">
                       {link.revokedAt ? t("Revoked") : t("Expired")}
                     </p>
                   )}
+                  <div className="mt-2 grid min-w-0 gap-3">
+                    <div className="grid min-w-0 gap-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {t("Full link")}
+                      </span>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Input
+                          aria-label={t("Public link address")}
+                          className="min-w-0 font-mono text-xs"
+                          value={link.publicUrl}
+                          readOnly
+                          onFocus={(event) => event.target.select()}
+                        />
+                        <LinkAction
+                          label={t("Copy link")}
+                          onClick={() => void copy(link)}
+                          disabled={!active}
+                        >
+                          {copied === `${link.id}:full` ? (
+                            <Check className="size-4" aria-hidden="true" />
+                          ) : (
+                            <Copy className="size-4" aria-hidden="true" />
+                          )}
+                        </LinkAction>
+                      </div>
+                    </div>
+                    <div className="grid min-w-0 gap-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {t("Short link")}
+                      </span>
+                      <div className="flex min-w-0 items-center gap-2">
+                        {link.shortUrl ? (
+                          <Input
+                            aria-label={t("Short link address")}
+                            className="min-w-0 font-mono text-xs"
+                            value={link.shortUrl}
+                            readOnly
+                            onFocus={(event) => event.target.select()}
+                          />
+                        ) : (
+                          <span className="flex min-h-9 min-w-0 flex-1 items-center rounded-md border border-dashed px-3 text-xs text-muted-foreground">
+                            {shorteningId === link.id
+                              ? t("Generating short link…")
+                              : t("Short link not generated yet.")}
+                          </span>
+                        )}
+                        <LinkAction
+                          label={t("Copy short link")}
+                          onClick={() => void copy(link, true)}
+                          disabled={!active || !link.shortUrl}
+                        >
+                          {copied === `${link.id}:short` ? (
+                            <Check className="size-4" aria-hidden="true" />
+                          ) : (
+                            <Copy className="size-4" aria-hidden="true" />
+                          )}
+                        </LinkAction>
+                        {!link.shortUrl && active && (
+                          <LinkAction
+                            label={t("Shorten URL")}
+                            onClick={() => void shorten(link)}
+                            disabled={!!shorteningId || !!activeOperation}
+                          >
+                            {shorteningId === link.id ? (
+                              <PwaSpinner size="xs" />
+                            ) : (
+                              <Link2 className="size-4" aria-hidden="true" />
+                            )}
+                          </LinkAction>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-start gap-2">
+                  {typeof navigator !== "undefined" &&
+                    typeof navigator.share === "function" && (
+                      <LinkAction
+                        label={t("Share")}
+                        onClick={() => void share(link)}
+                        disabled={!active}
+                      >
+                        <Share2 className="size-4" aria-hidden="true" />
+                      </LinkAction>
+                    )}
                   {active && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="min-h-11"
-                        onClick={() => void copy(link)}
+                    <LinkAction label={t("Open link")} asChild>
+                      <a
+                        href={link.shortUrl || link.publicUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
-                        {t("Copy link")}
-                      </Button>
-                      {typeof navigator !== "undefined" &&
-                        "share" in navigator && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="min-h-11"
-                            onClick={() => void share(link)}
-                          >
-                            {t("Share")}
-                          </Button>
-                        )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="min-h-11"
-                        disabled={activeOperation === link.id}
-                        onClick={() => void revoke(link)}
-                      >
-                        {activeOperation === link.id
-                          ? t("Revoking…")
-                          : t("Revoke link")}
-                      </Button>
-                    </>
+                        <ExternalLink className="size-4" aria-hidden="true" />
+                      </a>
+                    </LinkAction>
                   )}
-                  <details className="w-full sm:w-auto">
-                    <summary className="flex min-h-11 cursor-pointer items-center rounded-md border px-3 text-sm font-medium">
-                      {t("QR code")}
-                    </summary>
-                    <div className="mt-2 w-fit rounded-md border bg-white p-3">
-                      <QRCode
-                        value={link.publicUrl}
-                        size={144}
-                        title={t("QR code for %{name}", {
-                          name: scopeName(link.scope),
-                        })}
-                      />
-                    </div>
-                  </details>
+                  <LinkAction
+                    label={t("QR code")}
+                    disabled={!active}
+                    aria-expanded={active && !!qrVisible[link.id]}
+                    onClick={() =>
+                      setQrVisible((current) => ({
+                        ...current,
+                        [link.id]: !current[link.id],
+                      }))
+                    }
+                  >
+                    <QrCode className="size-4" aria-hidden="true" />
+                  </LinkAction>
+                  <LinkAction
+                    label={
+                      activeOperation === link.id && confirming !== link.id
+                        ? t("Revoking…")
+                        : t("Revoke link")
+                    }
+                    disabled={!active || !!activeOperation || !!shorteningId}
+                    onClick={() => void revoke(link)}
+                  >
+                    {activeOperation === link.id && confirming !== link.id ? (
+                      <PwaSpinner size="xs" />
+                    ) : (
+                      <Ban className="size-4" aria-hidden="true" />
+                    )}
+                  </LinkAction>
+                  <LinkAction
+                    label={t("Delete link")}
+                    variant="ghost"
+                    className="size-11 shrink-0 text-destructive hover:bg-destructive/10"
+                    disabled={!!activeOperation || !!shorteningId}
+                    onClick={() => setConfirming(link.id)}
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </LinkAction>
                 </div>
+                {confirming === link.id && (
+                  <div
+                    role="group"
+                    aria-label={t("Delete link")}
+                    className="grid gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm sm:col-span-2"
+                  >
+                    <p className="font-medium">
+                      {t("Delete this booking link?")}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {t(
+                        "Existing appointments and their private management links will remain available.",
+                      )}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={!!activeOperation}
+                        onClick={() => void remove(link)}
+                      >
+                        {activeOperation === link.id && (
+                          <PwaSpinner size="xs" />
+                        )}
+                        {activeOperation === link.id
+                          ? t("Deleting…")
+                          : t("Confirm deletion")}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!!activeOperation}
+                        onClick={() => setConfirming(null)}
+                      >
+                        {t("Cancel deletion")}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {active && qrVisible[link.id] && (
+                  <div className="w-fit rounded-md border bg-white p-3 sm:col-span-2">
+                    <QRCode
+                      value={link.shortUrl || link.publicUrl}
+                      size={144}
+                      title={t("QR code for %{name}", {
+                        name: scopeName(link.scope),
+                      })}
+                    />
+                  </div>
+                )}
               </li>
             );
           })}

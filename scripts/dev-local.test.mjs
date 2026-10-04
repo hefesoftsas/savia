@@ -71,9 +71,9 @@ exit 1
       PATH: `${directory}:${process.env.PATH}`,
       SAVIA_SECRETS_DIR: secrets,
       SAVIA_DEV_HOST: devHost,
+      SAVIA_ADMIN_PORT: adminPort ?? "",
       NANGO_JIRA_REPORTING_CONNECTION_ID: "jira-owner-local",
       TMPDIR: directory,
-      ...(adminPort === null ? {} : { SAVIA_ADMIN_PORT: adminPort }),
     },
   });
   return readFile(output, "utf8");
@@ -98,6 +98,10 @@ test("starts the application locally with the private Savia request Worker", asy
   assert.match(
     commands,
     /http\|127\.0\.0\.1\|http:\/\/127\.0\.0\.1:8787\|\|\|test-mcp-secret\|--filter @savia\/mcp start/,
+  );
+  assert.match(
+    commands,
+    /--filter @savia\/hook-executor exec wrangler dev --local --ip 127\.0\.0\.1 --port 8798 --inspector-port 9233 --config wrangler\.jsonc/,
   );
   assert.match(
     commands,

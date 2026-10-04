@@ -1,5 +1,7 @@
 .recording-session-container {
   container-type: inline-size;
+  min-width: 0;
+  width: 100%;
 }
 .recording-session-layout {
   display: grid;

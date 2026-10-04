@@ -115,6 +115,59 @@ export const agendaMessages = {
     "Confirm creation",
     "Confirmar criação",
   ],
+  "Crear una videollamada": [
+    "Crear una videollamada",
+    "Create a video call",
+    "Criar uma videochamada",
+  ],
+  "Calendario para la videollamada": [
+    "Calendario para la videollamada",
+    "Calendar for the video call",
+    "Calendário da videochamada",
+  ],
+  "Fecha de la videollamada": [
+    "Fecha de la videollamada",
+    "Video call date",
+    "Data da videochamada",
+  ],
+  "Fecha: %{date}": ["Fecha: %{date}", "Date: %{date}", "Data: %{date}"],
+  "Crearás esta videollamada en %{calendar} con %{provider}.": [
+    "Crearás esta videollamada en %{calendar} con %{provider}.",
+    "This video call will be created in %{calendar} with %{provider}.",
+    "Esta videochamada será criada em %{calendar} com %{provider}.",
+  ],
+  "Google Meet": ["Google Meet", "Google Meet", "Google Meet"],
+  "Microsoft Teams": ["Microsoft Teams", "Microsoft Teams", "Microsoft Teams"],
+  "Unirse a %{provider}": [
+    "Unirse a %{provider}",
+    "Join %{provider}",
+    "Participar de %{provider}",
+  ],
+  "El enlace de la reunión se está preparando.": [
+    "El enlace de la reunión se está preparando.",
+    "Meeting link is being prepared.",
+    "O link da reunião está sendo preparado.",
+  ],
+  "Las videollamadas no son compatibles con esta cuenta de calendario.": [
+    "Las videollamadas no son compatibles con esta cuenta de calendario.",
+    "Video calls are not supported by this calendar account.",
+    "Esta conta de calendário não oferece suporte a videochamadas.",
+  ],
+  "No se pudo crear el enlace de la reunión.": [
+    "No se pudo crear el enlace de la reunión.",
+    "The meeting link could not be created.",
+    "Não foi possível criar o link da reunião.",
+  ],
+  "El enlace de la reunión no está disponible.": [
+    "El enlace de la reunión no está disponible.",
+    "Meeting link is unavailable.",
+    "O link da reunião não está disponível.",
+  ],
+  "El calendario seleccionado ya no está conectado.": [
+    "El calendario seleccionado ya no está conectado.",
+    "The selected calendar is no longer connected.",
+    "O calendário selecionado não está mais conectado.",
+  ],
   "Conecta Google Calendar u Outlook desde Mi cuenta → Mis conexiones.": [
     "Conecta Google Calendar u Outlook desde Mi cuenta → Mis conexiones.",
     "Connect Google Calendar or Outlook from My account → My connections.",

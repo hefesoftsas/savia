@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   customType,
   foreignKey,
@@ -195,6 +196,12 @@ export const tenantCrmConnections = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
+    uniqueIndex("tenant_crm_connections_nango_active_unique")
+      .on(table.nangoIntegrationId, table.nangoConnectionId)
+      .where(sql`${table.disconnectedAt} IS NULL`),
+    uniqueIndex("tenant_crm_connections_organization_active_unique")
+      .on(table.tenantId)
+      .where(sql`${table.disconnectedAt} IS NULL`),
     index("tenant_crm_connections_owner_index").on(
       table.createdByPrincipalId,
       table.tenantId,
@@ -422,6 +429,7 @@ export const assistantOpenRouterSettings = sqliteTable(
     apiKeyIv: text("api_key_iv"),
     model: text("model"),
     transcriptionModel: text("transcription_model"),
+    transcriptionEndpoint: text("transcription_endpoint"),
     summaryModel: text("summary_model"),
     updatedAt: text("updated_at").notNull(),
     updatedBy: text("updated_by").notNull(),

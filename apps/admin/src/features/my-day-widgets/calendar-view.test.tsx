@@ -2,7 +2,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "../studio-engine/test/locale-test-render";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AgendaWidgetBody,
   useMyDayAgenda,
@@ -13,6 +13,7 @@ import type {
   CalendarOccurrence,
   CalendarSource,
 } from "@savia/studio-shared/calendar-contracts";
+import { tenantBookingsLink } from "./calendar-view";
 
 const source: CalendarSource = {
   id: "team",
@@ -74,12 +75,37 @@ function Harness({
   useEffect(() => agenda.setSelectedDay(new Date(2026, 9, 3)), []);
   return <AgendaWidgetBody agenda={agenda} />;
 }
+beforeEach(() => {
+  // The fixture selects October 3; keep "today" independent of the CI clock.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 3, 12));
+});
 afterEach(() => {
   cleanup();
   window.dispatchEvent(new Event("savia:session-cleared"));
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 describe("My Day calendar views", () => {
+  it("links to a confirmed canonical tenant booking route and omits unknown hosts", () => {
+    expect(
+      tenantBookingsLink(
+        "centro-medico",
+        "2026-10-03T14:00:00.000Z",
+        "savia.app.hefesoft.com",
+      ),
+    ).toBe(
+      "https://centro-medico.savia.app.hefesoft.com/#/bookings?tab=reservations&date=2026-10-03",
+    );
+    expect(
+      tenantBookingsLink(
+        "centro-medico",
+        "2026-10-03T14:00:00.000Z",
+        "localhost",
+      ),
+    ).toBeNull();
+  });
+
   it("adds a WebCal subscription with its name and source time zone", async () => {
     const user = userEvent.setup(),
       client = service();

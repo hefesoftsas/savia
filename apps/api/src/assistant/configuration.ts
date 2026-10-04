@@ -11,9 +11,13 @@ export type EffectiveAssistantConfiguration = {
   apiKey?: string;
   model: string;
   transcriptionModel?: string;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint;
   summaryModel?: string;
   tenantId?: number;
 };
+
+export type AssistantTranscriptionEndpoint =
+  "audio/transcriptions" | "chat/completions";
 
 export type AssistantModelModalities = {
   text: boolean;
@@ -30,6 +34,7 @@ export type AssistantModel = {
   outputPricePerMillion: number | null;
   modalities?: AssistantModelModalities;
   supportsTools?: boolean;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint;
 };
 
 export type AssistantModelCatalog = {
@@ -44,6 +49,7 @@ export type AssistantConfigurationWrite = {
   clearApiKey?: boolean;
   model?: string | null;
   transcriptionModel?: string | null;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
   summaryModel?: string | null;
 };
 
@@ -55,6 +61,7 @@ type AssistantSettingRow = {
   api_key_iv: string | null;
   model: string | null;
   transcription_model: string | null;
+  transcription_endpoint: AssistantTranscriptionEndpoint | null;
   summary_model: string | null;
   updated_at: string;
   updated_by: string;
@@ -67,6 +74,8 @@ export type AssistantConfigurationSummary = {
   global: AssistantConfigurationSettingSummary | null;
   tenants: AssistantConfigurationSettingSummary[];
   deployment: AssistantConfigurationDeploymentSummary;
+  canManageGlobal: boolean;
+  manageableTenantIds: number[];
 };
 
 export type AssistantConfigurationKeyState =
@@ -78,17 +87,27 @@ export type AssistantConfigurationSettingSummary = {
   keyState: AssistantConfigurationKeyState;
   model: string | null;
   transcriptionModel?: string | null;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
   summaryModel?: string | null;
-  updatedAt: string;
-  updatedBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
 };
 
 export type AssistantConfigurationDeploymentSummary = {
   keyState: "deployment_fallback" | "not_configured";
   model: string;
   transcriptionModel: string;
+  transcriptionEndpoint: AssistantTranscriptionEndpoint;
   summaryModel: string;
 };
+
+export function transcriptionEndpointForModel(
+  model: string | null | undefined,
+): AssistantTranscriptionEndpoint {
+  return model && /(?:^|[/:_-])whisper(?:$|[/:_-])/i.test(model)
+    ? "audio/transcriptions"
+    : "chat/completions";
+}
 
 export class AssistantConfigurationUnavailableError extends Error {
   readonly code = "ASSISTANT_CONFIGURATION_UNAVAILABLE" as const;
@@ -137,7 +156,8 @@ export function normalizeAssistantModel(
 ): string | null | undefined {
   if (candidate === undefined || candidate === null) return candidate;
   const model = candidate.trim();
-  if (!model || !modelIdentifier.test(model)) {
+  if (!model) return null;
+  if (!modelIdentifier.test(model)) {
     throw new TypeError("An OpenRouter model must use provider/model format");
   }
   return model;
@@ -152,12 +172,13 @@ function summary(
     ...(row.agency_id === null ? {} : { tenantId: row.agency_id }),
     keyState,
     model: row.model,
-    ...(row.scope === "global"
-      ? {
-          transcriptionModel: row.transcription_model,
-          summaryModel: row.summary_model,
-        }
-      : {}),
+    transcriptionModel: row.transcription_model,
+    transcriptionEndpoint:
+      row.transcription_endpoint ??
+      (row.transcription_model
+        ? transcriptionEndpointForModel(row.transcription_model)
+        : null),
+    summaryModel: row.summary_model,
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
   };
@@ -292,9 +313,9 @@ export class AssistantConfigurationRepository {
     try {
       this.deploymentTranscriptionModel =
         normalizeAssistantModel(options.deploymentTranscriptionModel) ??
-        "openai/whisper-large-v3";
+        "google/gemini-2.5-flash";
     } catch {
-      this.deploymentTranscriptionModel = "openai/whisper-large-v3";
+      this.deploymentTranscriptionModel = "google/gemini-2.5-flash";
     }
   }
 
@@ -333,7 +354,7 @@ export class AssistantConfigurationRepository {
   async summary(): Promise<AssistantConfigurationSummary> {
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
          FROM assistant_openrouter_settings
          ORDER BY CASE scope WHEN 'global' THEN 0 ELSE 1 END, agency_id`,
       )
@@ -345,6 +366,9 @@ export class AssistantConfigurationRepository {
         : "not_configured",
       model: this.deploymentModel,
       transcriptionModel: this.deploymentTranscriptionModel,
+      transcriptionEndpoint: transcriptionEndpointForModel(
+        this.deploymentTranscriptionModel,
+      ),
       summaryModel: this.deploymentModel,
     } as const;
     const globalKeyState = global?.api_key_ciphertext
@@ -362,10 +386,82 @@ export class AssistantConfigurationRepository {
               : globalKeyState,
         ),
       );
+    const tenants = await this.database
+      .prepare(
+        "SELECT id FROM tenants WHERE kind='commercial' AND is_active = 1 ORDER BY id",
+      )
+      .all<{ id: number }>();
     return {
       global: global ? summary(global, globalKeyState) : null,
       tenants: tenantSettings,
       deployment,
+      canManageGlobal: true,
+      manageableTenantIds: tenants.results.map((tenant) => tenant.id),
+    };
+  }
+
+  async manageableTenantIds(principalId: string): Promise<number[]> {
+    const tenants = await this.database
+      .prepare(
+        `SELECT tenants.id FROM identity_principal AS principal
+         INNER JOIN identity_tenant_membership AS membership
+           ON membership.principal_id = principal.id
+         INNER JOIN tenants ON tenants.id = membership.tenant_id
+         WHERE principal.id = ? AND principal.is_active = 1
+           AND membership.is_active = 1
+           AND membership.role IN ('tenant_admin', 'agency_admin')
+           AND tenants.kind = 'commercial' AND tenants.is_active = 1
+         ORDER BY tenants.id`,
+      )
+      .bind(principalId)
+      .all<{ id: number }>();
+    return tenants.results.map((tenant) => tenant.id);
+  }
+
+  async assertTenantAdministrator(
+    principalId: string,
+    tenantId: number,
+  ): Promise<void> {
+    if (!(await this.manageableTenantIds(principalId)).includes(tenantId)) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "An active tenant administrator membership is required",
+      );
+    }
+  }
+
+  async summaryForTenantAdministrator(
+    principalId: string,
+  ): Promise<AssistantConfigurationSummary> {
+    const manageableTenantIds = await this.manageableTenantIds(principalId);
+    if (!manageableTenantIds.length) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "An active tenant administrator membership is required",
+      );
+    }
+    const fullSummary = await this.summary();
+    const global = fullSummary.global
+      ? {
+          scope: "global" as const,
+          keyState: fullSummary.global.keyState,
+          model: fullSummary.global.model,
+          transcriptionModel: fullSummary.global.transcriptionModel ?? null,
+          transcriptionEndpoint:
+            fullSummary.global.transcriptionEndpoint ?? null,
+          summaryModel: fullSummary.global.summaryModel ?? null,
+        }
+      : null;
+    return {
+      global,
+      tenants: fullSummary.tenants.filter(
+        (setting) =>
+          setting.tenantId !== undefined &&
+          manageableTenantIds.includes(setting.tenantId),
+      ),
+      deployment: fullSummary.deployment,
+      canManageGlobal: false,
+      manageableTenantIds,
     };
   }
 
@@ -495,6 +591,28 @@ export class AssistantConfigurationRepository {
     return this.configurationForTenant(agencyId);
   }
 
+  async effectiveGlobalConfiguration(): Promise<EffectiveAssistantConfiguration> {
+    return this.configurationForTenant(undefined);
+  }
+
+  async effectiveConfigurationForPlatformTenant(
+    tenantId: number,
+  ): Promise<EffectiveAssistantConfiguration> {
+    const tenant = await this.database
+      .prepare(
+        "SELECT id FROM tenants WHERE id = ? AND kind='commercial' AND is_active = 1",
+      )
+      .bind(tenantId)
+      .first<{ id: number }>();
+    if (!tenant) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "The selected tenant is not available",
+      );
+    }
+    return this.configurationForTenant(tenantId);
+  }
+
   async effectiveConfigurationForTenant(
     principalId: string,
     tenantId: number,
@@ -522,7 +640,7 @@ export class AssistantConfigurationRepository {
   ): Promise<EffectiveAssistantConfiguration> {
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
          FROM assistant_openrouter_settings
          WHERE id = ? OR id = 'global'`,
       )
@@ -543,12 +661,23 @@ export class AssistantConfigurationRepository {
       ? await this.decryptKey(keyRow)
       : this.deploymentApiKey;
     const model = agency?.model ?? global?.model ?? this.deploymentModel;
+    const transcriptionModel =
+      agency?.transcription_model ??
+      global?.transcription_model ??
+      this.deploymentTranscriptionModel;
+    const transcriptionSource = agency?.transcription_model
+      ? agency
+      : global?.transcription_model
+        ? global
+        : undefined;
     return {
       ...(apiKey ? { apiKey } : {}),
       model,
-      transcriptionModel:
-        global?.transcription_model ?? this.deploymentTranscriptionModel,
-      summaryModel: global?.summary_model ?? model,
+      transcriptionModel,
+      transcriptionEndpoint:
+        transcriptionSource?.transcription_endpoint ??
+        transcriptionEndpointForModel(transcriptionModel),
+      summaryModel: agency?.summary_model ?? global?.summary_model ?? model,
       ...(agencyId === undefined ? {} : { tenantId: agencyId }),
     };
   }
@@ -561,7 +690,7 @@ export class AssistantConfigurationRepository {
     const id = settingId(scope, agencyId);
     const existing = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
          FROM assistant_openrouter_settings WHERE id = ?`,
       )
       .bind(id)
@@ -591,22 +720,43 @@ export class AssistantConfigurationRepository {
         ? (existing?.model ?? null)
         : normalizeAssistantModel(input.model);
     const transcriptionModel =
-      scope !== "global"
+      input.transcriptionModel === undefined
         ? (existing?.transcription_model ?? null)
-        : input.transcriptionModel === undefined
-          ? (existing?.transcription_model ?? null)
-          : (normalizeAssistantModel(input.transcriptionModel) ?? null);
+        : (normalizeAssistantModel(input.transcriptionModel) ?? null);
+    if (
+      input.transcriptionEndpoint != null &&
+      transcriptionModel === null &&
+      input.transcriptionModel === undefined
+    ) {
+      throw new TypeError(
+        "A transcription model is required to set an endpoint",
+      );
+    }
+    const transcriptionModelChanged =
+      input.transcriptionModel !== undefined &&
+      transcriptionModel !== existing?.transcription_model;
+    const transcriptionEndpoint =
+      transcriptionModel === null && input.transcriptionModel !== undefined
+        ? null
+        : input.transcriptionEndpoint === null
+          ? transcriptionModelChanged && transcriptionModel
+            ? transcriptionEndpointForModel(transcriptionModel)
+            : null
+          : input.transcriptionEndpoint !== undefined
+            ? input.transcriptionEndpoint
+            : transcriptionModelChanged && transcriptionModel
+              ? transcriptionEndpointForModel(transcriptionModel)
+              : (existing?.transcription_endpoint ?? null);
     const summaryModel =
-      scope !== "global"
+      input.summaryModel === undefined
         ? (existing?.summary_model ?? null)
-        : input.summaryModel === undefined
-          ? (existing?.summary_model ?? null)
-          : (normalizeAssistantModel(input.summaryModel) ?? null);
+        : (normalizeAssistantModel(input.summaryModel) ?? null);
     if (
       scope === "agency" &&
       ciphertext === null &&
       model === null &&
       transcriptionModel === null &&
+      transcriptionEndpoint === null &&
       summaryModel === null
     ) {
       await this.clearAgencyOverride(agencyId!);
@@ -615,13 +765,14 @@ export class AssistantConfigurationRepository {
     await this.database
       .prepare(
         `INSERT INTO assistant_openrouter_settings (
-          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           api_key_ciphertext = excluded.api_key_ciphertext,
           api_key_iv = excluded.api_key_iv,
           model = excluded.model,
           transcription_model = excluded.transcription_model,
+          transcription_endpoint = excluded.transcription_endpoint,
           summary_model = excluded.summary_model,
           updated_at = excluded.updated_at,
           updated_by = excluded.updated_by`,
@@ -634,6 +785,7 @@ export class AssistantConfigurationRepository {
         iv,
         model ?? null,
         transcriptionModel,
+        transcriptionEndpoint,
         summaryModel,
         this.now().toISOString(),
         input.actorId,
@@ -664,7 +816,7 @@ export function openRouterModelCatalog(
         headers.authorization = `Bearer ${configuration.apiKey}`;
       }
       const response = await fetcher(
-        "https://openrouter.ai/api/v1/models?output_modalities=text&supported_parameters=tools&sort=most-popular",
+        "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
         Object.keys(headers).length ? { headers } : undefined,
       );
       if (!response.ok) throw new Error("OpenRouter models request failed");
@@ -677,100 +829,116 @@ export function openRouterModelCatalog(
       ) {
         throw new Error("OpenRouter model response is invalid");
       }
-      return decoded.data
-        .flatMap((candidate): AssistantModel[] => {
-          if (
-            typeof candidate !== "object" ||
-            candidate === null ||
-            !("id" in candidate) ||
-            typeof candidate.id !== "string"
-          ) {
-            return [];
-          }
-          try {
-            const id = normalizeAssistantModel(candidate.id);
-            if (!id) return [];
-            const name =
-              "name" in candidate && typeof candidate.name === "string"
-                ? candidate.name.slice(0, 240)
-                : id;
-            const pricing =
-              "pricing" in candidate &&
-              typeof candidate.pricing === "object" &&
-              candidate.pricing !== null
-                ? candidate.pricing
-                : undefined;
-            const pricePerMillion = (value: unknown): number | null => {
-              const perToken =
-                typeof value === "string" || typeof value === "number"
-                  ? Number(value)
-                  : NaN;
-              const perMillion = perToken * 1_000_000;
-              return Number.isFinite(perMillion) && perMillion >= 0
-                ? perMillion
-                : null;
-            };
-            const contextLength =
-              "context_length" in candidate &&
-              typeof candidate.context_length === "number" &&
-              Number.isSafeInteger(candidate.context_length) &&
-              candidate.context_length > 0
-                ? candidate.context_length
-                : null;
-            const architecture =
-              "architecture" in candidate &&
-              typeof candidate.architecture === "object" &&
-              candidate.architecture !== null
-                ? (candidate.architecture as Record<string, unknown>)
-                : undefined;
+      return decoded.data.flatMap((candidate): AssistantModel[] => {
+        if (
+          typeof candidate !== "object" ||
+          candidate === null ||
+          !("id" in candidate) ||
+          typeof candidate.id !== "string"
+        ) {
+          return [];
+        }
+        try {
+          const id = normalizeAssistantModel(candidate.id);
+          if (!id) return [];
+          const name =
+            "name" in candidate && typeof candidate.name === "string"
+              ? candidate.name.slice(0, 240)
+              : id;
+          const pricing =
+            "pricing" in candidate &&
+            typeof candidate.pricing === "object" &&
+            candidate.pricing !== null
+              ? candidate.pricing
+              : undefined;
+          const pricePerMillion = (value: unknown): number | null => {
+            const perToken =
+              typeof value === "string" || typeof value === "number"
+                ? Number(value)
+                : NaN;
+            const perMillion = perToken * 1_000_000;
+            return Number.isFinite(perMillion) && perMillion >= 0
+              ? perMillion
+              : null;
+          };
+          const contextLength =
+            "context_length" in candidate &&
+            typeof candidate.context_length === "number" &&
+            Number.isSafeInteger(candidate.context_length) &&
+            candidate.context_length > 0
+              ? candidate.context_length
+              : null;
+          const architecture =
+            "architecture" in candidate &&
+            typeof candidate.architecture === "object" &&
+            candidate.architecture !== null
+              ? (candidate.architecture as Record<string, unknown>)
+              : undefined;
 
-            const inputModalities = Array.isArray(
-              architecture?.input_modalities,
-            )
-              ? (architecture.input_modalities as string[])
-              : typeof architecture?.modality === "string"
-                ? (architecture.modality as string).split("->")[0].split("+")
-                : ["text"];
-
-            const supportedParams = Array.isArray(
-              (candidate as Record<string, unknown>).supported_parameters,
-            )
-              ? ((candidate as Record<string, unknown>)
-                  .supported_parameters as string[])
+          const inputModalities = Array.isArray(architecture?.input_modalities)
+            ? (architecture.input_modalities as string[])
+            : typeof architecture?.modality === "string"
+              ? (architecture.modality as string).split("->")[0].split("+")
               : [];
 
-            const modalities: AssistantModelModalities = {
-              text: true,
-              image: inputModalities.includes("image"),
-              audio: inputModalities.includes("audio"),
-              file:
-                inputModalities.includes("file") ||
-                inputModalities.includes("image"),
-            };
-            const supportsTools = supportedParams.includes("tools");
+          const outputModalities = Array.isArray(
+            architecture?.output_modalities,
+          )
+            ? (architecture.output_modalities as string[])
+            : typeof architecture?.modality === "string"
+              ? ((architecture.modality as string)
+                  .split("->")
+                  .at(-1)
+                  ?.split("+") ?? [])
+              : [];
 
-            return [
-              {
-                id,
-                name,
-                contextLength,
-                inputPricePerMillion: pricePerMillion(
-                  pricing && "prompt" in pricing ? pricing.prompt : undefined,
-                ),
-                outputPricePerMillion: pricePerMillion(
-                  pricing && "completion" in pricing
-                    ? pricing.completion
-                    : undefined,
-                ),
-                modalities,
-                supportsTools,
-              },
-            ];
-          } catch {
-            return [];
-          }
-        })
-        .slice(0, 200);
+          const supportedParams = Array.isArray(
+            (candidate as Record<string, unknown>).supported_parameters,
+          )
+            ? ((candidate as Record<string, unknown>)
+                .supported_parameters as string[])
+            : [];
+
+          const modalities: AssistantModelModalities = {
+            text: outputModalities.includes("text"),
+            image: inputModalities.includes("image"),
+            audio: inputModalities.includes("audio"),
+            file:
+              inputModalities.includes("file") ||
+              inputModalities.includes("image"),
+          };
+          const supportsTools = supportedParams.includes("tools");
+          const transcriptionEndpoint = outputModalities.includes(
+            "transcription",
+          )
+            ? "audio/transcriptions"
+            : inputModalities.includes("audio") &&
+                outputModalities.includes("text")
+              ? "chat/completions"
+              : undefined;
+
+          return [
+            {
+              id,
+              name,
+              contextLength,
+              inputPricePerMillion: pricePerMillion(
+                pricing && "prompt" in pricing ? pricing.prompt : undefined,
+              ),
+              outputPricePerMillion: pricePerMillion(
+                pricing && "completion" in pricing
+                  ? pricing.completion
+                  : undefined,
+              ),
+              modalities,
+              supportsTools,
+              ...(transcriptionEndpoint ? { transcriptionEndpoint } : {}),
+            },
+          ];
+        } catch {
+          return [];
+        }
+      });
     },
   };
 }

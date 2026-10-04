@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -18,10 +18,11 @@ import {
 
 const execFileAsync = promisify(execFile);
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const APPS = ["auth", "request", "mcp", "api", "gateway"];
+const APPS = ["auth", "hookExecutor", "request", "mcp", "api", "gateway"];
 const WORKER_APP = {
   auth: "auth",
   request: "savia-request",
+  hookExecutor: "hook-executor",
   mcp: "mcp",
   api: "api",
   gateway: "admin",
@@ -72,12 +73,33 @@ export function workerConfig(
       ...base,
       name: names.workers.request,
       main: resolve(workspaceRoot, "apps/savia-request/src/server/index.ts"),
-      worker_loaders: [{ binding: "LOADER" }],
+      workers_dev: false,
+      preview_urls: false,
+      services: [
+        { binding: "HOOK_SERVICE", service: names.workers.hookExecutor },
+      ],
       d1_databases: [
         {
           binding: "DB",
           database_name: names.databases.domain,
           database_id: ids.domain,
+        },
+      ],
+    };
+  if (kind === "hookExecutor")
+    return {
+      ...base,
+      name: names.workers.hookExecutor,
+      main: resolve(workspaceRoot, "apps/hook-executor/src/index.ts"),
+      compatibility_date: "2026-09-04",
+      workers_dev: false,
+      preview_urls: false,
+      limits: { cpu_ms: 30000 },
+      rules: [
+        {
+          type: "CompiledWasm",
+          globs: ["**/*.wasm"],
+          fallthrough: true,
         },
       ],
     };
@@ -130,6 +152,7 @@ export function workerConfig(
         "/public/bookings/*",
         "/api/*",
         "/v1/*",
+        "/s/*",
         "/.well-known/*",
         "/health",
         "/docs",
@@ -139,8 +162,55 @@ export function workerConfig(
   };
 }
 
+export function execFileWithInput(
+  executable,
+  args,
+  { cwd, env, input } = {},
+  spawnImpl = spawn,
+) {
+  return new Promise((resolve, reject) => {
+    const child = spawnImpl(executable, args, {
+      cwd,
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
+    child.stdin.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
+    child.on("close", (code, signal) => {
+      if (settled) return;
+      settled = true;
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      const error = new Error(
+        `${executable} exited with ${code === null ? signal : `code ${code}`}`,
+      );
+      Object.assign(error, { code, signal, stdout, stderr });
+      reject(error);
+    });
+    child.stdin.end(input);
+  });
+}
+
 const WORKER_SECRETS = {
   auth: ["BETTER_AUTH_SECRET", "SAVIA_INTERNAL_BRIDGE_KEY"],
+  hookExecutor: [],
   request: ["ENCRYPTION_KEY"],
   mcp: ["SAVIA_MCP_SHARED_SECRET"],
   api: [
@@ -154,14 +224,10 @@ const WORKER_SECRETS = {
 
 async function runWrangler(args, { cwd, input } = {}) {
   try {
-    const { stdout } = await execFileAsync(
+    const { stdout } = await execFileWithInput(
       "pnpm",
       ["--filter", "@savia/api", "exec", "wrangler", ...args],
-      {
-        cwd: cwd ?? workspaceRoot,
-        input,
-        maxBuffer: 32 * 1024 * 1024,
-      },
+      { cwd: cwd ?? workspaceRoot, input },
     );
     return stdout;
   } catch (error) {
@@ -207,9 +273,19 @@ async function putSecrets(kind, names, configPath, values) {
   }
 }
 
-function parseWorkersDevUrl(output) {
+export function parseWorkersDevUrl(output) {
   return (
-    String(output).match(/https:\/\/[a-z0-9-]+\.workers\.dev/)?.[0] ?? null
+    String(output).match(
+      /https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)?\.workers\.dev/,
+    )?.[0] ?? null
+  );
+}
+
+export function requireGatewayOrigin(gateway, dryRun) {
+  if (gateway?.url) return gateway.url;
+  if (dryRun) return null;
+  throw new Error(
+    "Could not determine preview origin from deployed gateway URL.",
   );
 }
 
@@ -298,7 +374,7 @@ async function main() {
     }
   };
 
-  for (const kind of ["auth", "request", "mcp", "api"]) {
+  for (const kind of ["auth", "hookExecutor", "request", "mcp", "api"]) {
     if (kinds.includes(kind)) results.push(await deploy(kind));
   }
   const apiDeployment = results.find((result) => result.kind === "api");
@@ -317,9 +393,18 @@ async function main() {
         { cwd: workspaceRoot },
       );
     }
-    const gateway = await deploy("gateway");
+    let gateway = await deploy("gateway");
+    let gatewayUrl;
+    try {
+      gatewayUrl = requireGatewayOrigin(gateway, dryRun);
+    } catch (error) {
+      gateway = {
+        ...gateway,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
     results.push(gateway);
-    const gatewayUrl = gateway.url;
     if (gatewayUrl && !dryRun) {
       origin = gatewayUrl;
       for (const kind of ["auth", "api"]) {

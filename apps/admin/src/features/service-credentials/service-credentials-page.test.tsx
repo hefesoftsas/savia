@@ -6,7 +6,11 @@ import { ServiceCredentialsPage } from "./service-credentials-page";
 
 const permissionState = vi.hoisted(() => ({
   permissions: { canManageIdentity: true } as
-    { canManageIdentity: boolean } | undefined,
+    | {
+        canManageIdentity: boolean;
+        memberships?: Array<{ tenantId: number; role: string }>;
+      }
+    | undefined,
   isPending: false,
 }));
 
@@ -23,10 +27,17 @@ beforeEach(() => {
 vi.mock("./studio-tenant-credentials-section", () => ({
   StudioTenantCredentialsSection: ({
     globalCredentials,
+    tenantCredentials,
   }: {
     globalCredentials?: React.ReactNode;
+    tenantCredentials?: (tenantId: number) => React.ReactNode;
   }) => (
-    <section aria-label="CRM credentials mock">{globalCredentials}</section>
+    <section aria-label="CRM credentials mock">
+      {globalCredentials}
+      {tenantCredentials?.(
+        permissionState.permissions?.canManageIdentity ? 0 : 101,
+      )}
+    </section>
   ),
 }));
 
@@ -74,6 +85,25 @@ describe("ServiceCredentialsPage", () => {
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     },
   );
+
+  it("shows tenant AI and recording settings to the tenant administrator", async () => {
+    permissionState.permissions = {
+      canManageIdentity: false,
+      memberships: [{ tenantId: 101, role: "tenant_admin" }],
+    };
+    const services = servicesWithSummary();
+    services.assistantConfiguration.summary = vi.fn().mockResolvedValue({
+      canManageGlobal: false,
+      manageableTenantIds: [101],
+      global: null,
+      tenants: [],
+      deployment: { keyState: "not_configured", model: "test/chat" },
+    });
+    render(<ServiceCredentialsPage services={services} />);
+    expect(await screen.findByLabelText("Clave de organización")).toBeVisible();
+    expect(screen.getByLabelText("Modelo de transcripción")).toBeVisible();
+    expect(screen.queryByLabelText("Clave OpenRouter")).toBeNull();
+  });
 
   it("shows global AI credentials inside the unified credentials screen", async () => {
     render(<ServiceCredentialsPage services={servicesWithSummary()} />);

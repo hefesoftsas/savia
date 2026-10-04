@@ -118,6 +118,7 @@ function AudioFilesPage({
     [uploading, setUploading] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
   const [recordingPickerOpen, setRecordingPickerOpen] = useState(false);
+  const recordingPickerTrigger = useRef<HTMLButtonElement>(null);
   const mounted = useRef(true),
     inFlight = useRef(false);
   const source = (r: Recording) =>
@@ -257,15 +258,19 @@ function AudioFilesPage({
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={loading || processing || uploading}
             onClick={() => setUploadOpen(true)}
           >
             <Upload className="size-4" aria-hidden="true" />
-            {t("Upload recording")}
+            <span className="sr-only sm:not-sr-only">
+              {t("Upload recording")}
+            </span>
           </Button>
           <Button
             variant="ghost"
             size="icon"
+            className="max-sm:size-11"
             aria-label={t("Refresh")}
             title={t("Refresh")}
             disabled={loading || processing || uploading}
@@ -340,7 +345,8 @@ function AudioFilesPage({
           >
             <Button
               variant="outline"
-              className="w-full justify-between md:hidden"
+              ref={recordingPickerTrigger}
+              className="w-full justify-between max-sm:h-11 md:hidden"
               aria-expanded={recordingPickerOpen}
               aria-controls="recordings-list"
               onClick={() => setRecordingPickerOpen((open) => !open)}
@@ -361,6 +367,8 @@ function AudioFilesPage({
                       aria-current={selected?.id === r.id ? "true" : undefined}
                       onClick={() => {
                         setSelected(r);
+                        const trigger = recordingPickerTrigger.current;
+                        if (trigger?.getClientRects().length) trigger.focus();
                         setRecordingPickerOpen(false);
                       }}
                     >
@@ -391,7 +399,7 @@ function AudioFilesPage({
               </ul>
               {cursor && (
                 <Button
-                  className="mt-3 w-full"
+                  className="mt-3 w-full max-sm:h-11"
                   variant="ghost"
                   size="sm"
                   disabled={loading || processing || uploading}
@@ -416,7 +424,7 @@ function AudioFilesPage({
                       download={
                         selected.name ?? `${selected.id}.${selected.format}`
                       }
-                      className="inline-flex min-h-9 items-center gap-1.5 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
+                      className="inline-flex min-h-9 items-center gap-1.5 max-sm:min-h-11 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
                     >
                       <Download className="size-3.5" aria-hidden="true" />
                       {t("Download audio")}

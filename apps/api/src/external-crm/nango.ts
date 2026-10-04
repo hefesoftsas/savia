@@ -14,6 +14,9 @@ export type NangoConfiguration = {
   connectUrl?: string;
   apiKey?: string;
   hubspotIntegrationId?: string;
+  salesforceIntegrationId?: string;
+  zohoIntegrationId?: string;
+  pipedriveIntegrationId?: string;
   googleDriveIntegrationId?: string;
   gmailIntegrationId?: string;
   googleCalendarIntegrationId?: string;
@@ -30,7 +33,9 @@ type ConfiguredNango = {
   baseUrl: string;
   connectUrl: string;
   apiKey: string;
-  hubspotIntegrationId: string;
+  integrationIds: Partial<
+    Record<"hubspot" | "salesforce" | "zoho" | "pipedrive", string>
+  >;
 };
 
 function normalizedUrl(value: string | undefined): string | undefined {
@@ -47,22 +52,46 @@ function configuredValue(value: string | undefined): string | undefined {
   return trimmed || undefined;
 }
 
-function requireConfiguredNango(
+function configuredNango(
   configuration: NangoConfiguration,
-): ConfiguredNango {
+): Omit<ConfiguredNango, "integrationIds"> {
   const baseUrl = normalizedUrl(configuration.baseUrl);
   const apiKey = configuredValue(configuration.apiKey);
-  const hubspotIntegrationId = configuredValue(
-    configuration.hubspotIntegrationId,
-  );
-  if (!baseUrl || !apiKey || !hubspotIntegrationId)
-    throw new CrmUnavailableError();
+  if (!baseUrl || !apiKey) throw new CrmUnavailableError();
   return {
     baseUrl,
     connectUrl: normalizedUrl(configuration.connectUrl) ?? baseUrl,
     apiKey,
-    hubspotIntegrationId,
   };
+}
+
+function configuredIntegrationIds(
+  configuration: NangoConfiguration,
+): ConfiguredNango["integrationIds"] {
+  return {
+    hubspot: configuredValue(configuration.hubspotIntegrationId),
+    salesforce: configuredValue(configuration.salesforceIntegrationId),
+    zoho: configuredValue(configuration.zohoIntegrationId),
+    pipedrive: configuredValue(configuration.pipedriveIntegrationId),
+  };
+}
+
+function requireConfiguredNango(
+  configuration: NangoConfiguration,
+): ConfiguredNango {
+  return {
+    ...configuredNango(configuration),
+    integrationIds: configuredIntegrationIds(configuration),
+  };
+}
+
+function integrationIdFor(
+  configuration: NangoConfiguration,
+  provider: keyof ConfiguredNango["integrationIds"],
+): string {
+  const id = configuredIntegrationIds(configuration)[provider];
+  if (!id) throw new CrmUnavailableError();
+  return id;
 }
 
 function nangoUrl(baseUrl: string, path: string): URL {
@@ -90,6 +119,25 @@ function safeMetadata(value: unknown): Record<string, string | string[]> {
       result[key] = item;
   }
   return result;
+}
+
+function safeConnectionConfig(
+  value: unknown,
+): NangoConnectionSummary["connectionConfig"] {
+  const source = recordFrom(value);
+  if (!source) return undefined;
+  const result: NonNullable<NangoConnectionSummary["connectionConfig"]> = {};
+  const instanceUrl = readString(source.instance_url);
+  const apiDomain = readString(source.api_domain);
+  const extension = readString(source.extension);
+  if (instanceUrl) result.instanceUrl = instanceUrl;
+  if (apiDomain) result.apiDomain = apiDomain;
+  if (
+    extension &&
+    ["com", "eu", "in", "com.au", "com.cn", "jp"].includes(extension)
+  )
+    result.extension = extension;
+  return Object.keys(result).length ? result : undefined;
 }
 
 function recordFrom(value: unknown): Record<string, unknown> | undefined {
@@ -210,6 +258,79 @@ function allowedHubSpotProxyPath(path: string): boolean {
   );
 }
 
+function allowedNativeProxyRequest(request: NangoProxyRequest): boolean {
+  let url: URL;
+  try {
+    url = new URL(request.path, "https://savia.invalid");
+  } catch {
+    return false;
+  }
+  if (url.origin !== "https://savia.invalid" || !url.pathname.startsWith("/"))
+    return false;
+  const path = url.pathname;
+  if (request.connection.provider === "salesforce") {
+    const root = /^\/services\/data\/v\d+(?:\.\d+)?\//.test(path);
+    if (!root) return false;
+    if (/^\/services\/data\/v\d+(?:\.\d+)?\/query$/.test(path))
+      return request.method === "GET";
+    const resource =
+      /^\/services\/data\/v\d+(?:\.\d+)?\/sobjects\/(Contact|Account|Opportunity)(?:\/([^/]+))?$/.exec(
+        path,
+      );
+    if (!resource) return false;
+    const [, , id] = resource;
+    if (!id) return ["GET", "POST"].includes(request.method);
+    if (id === "describe") return request.method === "GET";
+    if (!/^(?:[a-zA-Z0-9]{15}|[a-zA-Z0-9]{18})$/.test(id)) return false;
+    return ["GET", "PATCH"].includes(request.method);
+  }
+  if (request.connection.provider === "zoho") {
+    if (/^\/crm\/v\d+\/org$/.test(path)) return request.method === "GET";
+    if (/^\/crm\/v\d+\/settings\/modules$/.test(path))
+      return request.method === "GET";
+    const search = /^\/crm\/v\d+\/(Contacts|Accounts|Deals)\/search$/.exec(
+      path,
+    );
+    if (search) return request.method === "GET";
+    const collection =
+      /^\/crm\/v\d+\/(Contacts|Accounts|Deals)(?:\/([^/]+))?$/.exec(path);
+    if (collection) {
+      const [, , id] = collection;
+      if (!id) return ["GET", "POST", "PUT"].includes(request.method);
+      return /^[0-9]+$/.test(id) && ["GET", "PUT"].includes(request.method);
+    }
+    return (
+      /^\/crm\/v\d+\/settings\/fields$/.test(path) && request.method === "GET"
+    );
+  }
+  if (request.connection.provider === "pipedrive") {
+    if (path === "/v1/users/me") return request.method === "GET";
+    if (
+      /^\/v1\/(?:organizations\/[0-9]+\/(?:persons|deals)|persons\/[0-9]+\/deals)$/.test(
+        path,
+      )
+    )
+      return request.method === "GET";
+    const search = /^\/v1\/(persons|organizations|deals)\/search$/.exec(path);
+    if (search) return request.method === "GET";
+    const endpoint = /^\/v1\/(persons|organizations|deals)(?:\/([^/]+))?$/.exec(
+      path,
+    );
+    if (endpoint) {
+      const [, , id] = endpoint;
+      if (!id) return ["GET", "POST"].includes(request.method);
+      return (
+        /^[0-9]+$/.test(id) && ["GET", "PUT", "PATCH"].includes(request.method)
+      );
+    }
+    return (
+      /^\/v1\/(personFields|organizationFields|dealFields)$/.test(path) &&
+      request.method === "GET"
+    );
+  }
+  return false;
+}
+
 function proxyHeaders(apiKey: string, request: NangoProxyRequest): Headers {
   const headers = authorizationHeaders(apiKey);
   headers.set("connection-id", request.connection.nangoConnectionId);
@@ -226,8 +347,8 @@ export function createNangoClient(
   return {
     async createConnectSession({ actor, agencyId, provider }) {
       requireCrmProviderId(provider);
-      if (provider !== "hubspot") throw new CrmUnavailableError();
       const nango = requireConfiguredNango(configuration);
+      const integrationId = integrationIdFor(configuration, provider);
       const response = await fetcher(
         nangoUrl(nango.baseUrl, "/connect/sessions"),
         {
@@ -243,7 +364,7 @@ export function createNangoClient(
               display_name: actor.principal.displayName,
             },
             organization: { id: `user:${actor.principal.id}` },
-            allowed_integrations: [nango.hubspotIntegrationId],
+            allowed_integrations: [integrationId],
             tags: {
               organization_id: `user:${actor.principal.id}`,
               agency_id: String(agencyId),
@@ -266,7 +387,7 @@ export function createNangoClient(
     },
 
     async getConnection(connectionId, integrationId) {
-      const nango = requireConfiguredNango(configuration);
+      const nango = configuredNango(configuration);
       const url = nangoUrl(
         nango.baseUrl,
         `/connections/${encodeURIComponent(connectionId)}`,
@@ -314,11 +435,22 @@ export function createNangoClient(
           readString(data.provider_config_key) ?? integrationId,
         organizationId,
         metadata: safeMetadata(data.metadata),
+        ...(safeConnectionConfig(data.connection_config)
+          ? { connectionConfig: safeConnectionConfig(data.connection_config) }
+          : {}),
         ...scopes,
       };
       console.info({
         event: "crm.nango.connection_scopes",
-        provider: "hubspot",
+        provider:
+          data.provider_config_key === configuration.salesforceIntegrationId
+            ? "salesforce"
+            : data.provider_config_key === configuration.zohoIntegrationId
+              ? "zoho"
+              : data.provider_config_key ===
+                  configuration.pipedriveIntegrationId
+                ? "pipedrive"
+                : "hubspot",
         scopeSource: summary.scopeSource,
         scopeCount: summary.scopes.length,
       });
@@ -326,7 +458,7 @@ export function createNangoClient(
     },
 
     async deleteConnection(connectionId, integrationId) {
-      const nango = requireConfiguredNango(configuration);
+      const nango = configuredNango(configuration);
       const url = nangoUrl(
         nango.baseUrl,
         `/connections/${encodeURIComponent(connectionId)}`,
@@ -340,7 +472,20 @@ export function createNangoClient(
     },
 
     async proxy(request) {
-      if (!allowedHubSpotProxyPath(request.path))
+      const provider = request.connection.provider;
+      const configuredId = configuredIntegrationIds(configuration)[provider];
+      if (
+        !configuredId ||
+        configuredId !== request.connection.nangoIntegrationId
+      )
+        throw new CrmUnavailableError(
+          "The requested CRM operation is unavailable",
+        );
+      const allowed =
+        provider === "hubspot"
+          ? allowedHubSpotProxyPath(request.path)
+          : allowedNativeProxyRequest(request);
+      if (!allowed)
         throw new CrmUnavailableError(
           "The requested CRM operation is unavailable",
         );

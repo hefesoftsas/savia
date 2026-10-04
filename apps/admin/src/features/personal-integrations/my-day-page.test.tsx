@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import { render } from "../studio-engine/test/locale-test-render";
 import userEvent from "@testing-library/user-event";
 import {
@@ -81,6 +81,155 @@ function createServices(
 }
 
 describe("MyDayPage", () => {
+  const booking = {
+    id: "00000000-0000-4000-8000-000000000001",
+    tenantId: 23,
+    tenantSlug: "centro-medico",
+    tenantName: "Centro Médico",
+    serviceName: "Consulta general",
+    professionalName: "Dra. Luna",
+    customerName: "Ana Pérez",
+    customerEmail: "ana@example.test",
+    startsAt: "2026-01-03T14:00:00.000Z",
+    endsAt: "2026-01-03T14:30:00.000Z",
+    timeZone: "America/Bogota",
+    status: "confirmed" as const,
+    version: 2,
+    externalEvent: null,
+  };
+
+  it("shows native bookings without OAuth and opens their customer details", async () => {
+    const services = createServices([]);
+    const client = services.personalIntegrations as unknown as {
+      listBookingAgenda: Mock;
+    };
+    client.listBookingAgenda = vi.fn().mockResolvedValue([booking]);
+
+    render(<MyDayPage services={services} />);
+
+    const event = await screen.findByRole("button", {
+      name: /Consulta general · Ana Pérez/,
+    });
+    expect(event).toHaveTextContent("Centro Médico");
+    await userEvent.setup().click(event);
+    expect(await screen.findByRole("dialog")).toHaveTextContent(
+      "ana@example.test",
+    );
+    expect(screen.getByRole("dialog")).toHaveTextContent("Dra. Luna");
+    expect(
+      within(screen.getByRole("dialog")).queryByRole("link", {
+        name: "Abrir reservas en la organización",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps a native booking visible in day, week, and month calendar views", async () => {
+    const user = userEvent.setup();
+    const services = createServices([]);
+    const client = services.personalIntegrations as unknown as {
+      listBookingAgenda: Mock;
+    };
+    client.listBookingAgenda = vi.fn().mockResolvedValue([booking]);
+    render(<MyDayPage services={services} />);
+
+    expect(
+      await screen.findByRole("button", {
+        name: /Consulta general · Ana Pérez/,
+      }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Semana" }));
+    expect(
+      await screen.findByRole("button", {
+        name: /Consulta general · Ana Pérez/,
+      }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Mes" }));
+    expect(
+      await screen.findByRole("button", {
+        name: /Consulta general · Ana Pérez/,
+      }),
+    ).toBeVisible();
+  });
+
+  it("deduplicates only an exact provider event and keeps unrelated matching rows", async () => {
+    const services = createServices(["google_calendar"]);
+    const client = services.personalIntegrations as unknown as {
+      listBookingAgenda: Mock;
+      listEvents: Mock;
+    };
+    client.listBookingAgenda = vi.fn().mockResolvedValue([
+      {
+        ...booking,
+        externalEvent: { provider: "google_calendar", id: "linked" },
+      },
+    ]);
+    client.listEvents.mockResolvedValue([
+      {
+        id: "linked",
+        title: "OAuth linked",
+        startsAt: booking.startsAt,
+        endsAt: booking.endsAt,
+        webLink: null,
+      },
+      {
+        id: "independent",
+        title: "Consulta general · Ana Pérez",
+        startsAt: booking.startsAt,
+        endsAt: booking.endsAt,
+        webLink: null,
+      },
+    ]);
+
+    render(<MyDayPage services={services} />);
+
+    expect(
+      await screen.findAllByRole("button", {
+        name: /Consulta general · Ana Pérez/,
+      }),
+    ).toHaveLength(2);
+    expect(screen.queryByText("OAuth linked")).not.toBeInTheDocument();
+  });
+
+  it("updates open booking details after refresh and closes them after cancellation", async () => {
+    const user = userEvent.setup();
+    const services = createServices([]);
+    const client = services.personalIntegrations as unknown as {
+      listBookingAgenda: Mock;
+    };
+    client.listBookingAgenda = vi
+      .fn()
+      .mockResolvedValueOnce([booking])
+      .mockResolvedValueOnce([
+        {
+          ...booking,
+          customerEmail: "updated@example.test",
+          startsAt: "2026-01-03T16:00:00.000Z",
+          endsAt: "2026-01-03T16:45:00.000Z",
+          version: 3,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    render(<MyDayPage services={services} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Consulta general · Ana Pérez/,
+      }),
+    );
+    expect(await screen.findByText(/ana@example.test/)).toBeVisible();
+
+    act(() => window.dispatchEvent(new Event("focus")));
+    expect(await screen.findByText(/updated@example.test/)).toBeVisible();
+    const updatedStartsAt = new Date("2026-01-03T16:00:00.000Z");
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      updatedStartsAt.toLocaleString("es-CO"),
+    );
+
+    act(() => window.dispatchEvent(new Event("focus")));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
   it("shows events from every connected calendar", async () => {
     const services = createServices(["google_calendar", "outlook"]);
 

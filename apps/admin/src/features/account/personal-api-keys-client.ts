@@ -4,12 +4,14 @@ export type RecordingScope =
   | "recordings:upload"
   | "recordings:process"
   | "recordings:delete";
+export type ApiKeyScope =
+  RecordingScope | "records:read" | "records:create" | "records:update";
 export type PersonalKey = {
   id: string;
   name: string;
   prefix: string;
   tenantId: number;
-  scopes: RecordingScope[];
+  scopes: ApiKeyScope[];
   createdAt: string;
   expiresAt: string;
   revokedAt: string | null;
@@ -28,7 +30,7 @@ export class PersonalApiKeysClient {
   create(input: {
     name: string;
     tenantId: number;
-    scopes: RecordingScope[];
+    scopes: ApiKeyScope[];
     lifetimeDays: number;
   }) {
     return this.api.post<{ key: PersonalKey; secret: string }>(

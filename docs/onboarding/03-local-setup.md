@@ -6,25 +6,33 @@ machine. Both use `scripts/dev-local.sh` and the same local Worker topology.
 ## One-command container environment
 
 Install Docker Desktop, or Docker Engine with the Compose plugin, and start
-Docker. Recommended: allocate 8 GB of memory to Docker for the parallel Worker
+Docker. Recommended: allocate 4 CPUs and 8 GB of memory to Docker for the parallel Worker
 runtimes and Vite dependency optimization. A 4 GB Docker VM showed a transient
 Wrangler exit during the initial smoke test; a runtime retry restored the API. From a fresh checkout, run:
 
 ```sh
-docker compose up --build
+docker compose up --build --wait --wait-timeout 600
 ```
 
 The first start downloads Node 22 and pnpm 11.24.0, installs dependencies with
 the frozen lockfile, applies local migrations, and starts Admin, API, Auth,
-Savia Request, the connector gateway, and the CRM scheduler. Subsequent starts
+Savia Request, the connector gateway, and the Studio scheduler. Subsequent starts
 reuse the dependency cache. External integrations and MCP require the optional
 secrets documented below; the core app starts without them.
 
 Open **http://127.0.0.1:5173/** (use this exact hostname for local OAuth).
 The API and Scalar reference are at **http://127.0.0.1:8787/docs**.
-Only ports 5173 and 8787 are published, bound to the host loopback interface.
+Admin and API ports 5173 and 8787 are bound to the host loopback interface.
 Auth, MCP, Savia Request, and inspector ports remain private to the container.
 PostgreSQL remains opt-in for legacy imports.
+
+Mailpit starts automatically and receives development email, including account
+verification and password recovery. Open its inbox at **http://127.0.0.1:8025/**.
+Its SMTP port 1025 and inbox port 8025 are also bound to host loopback. Inside
+the development container, Auth connects to `mailpit:1025`, using plain SMTP
+for local development. Override `SAVIA_SMTP_*` through your environment or
+`infra/secrets/auth.dev.env` to use another SMTP server; configure the matching
+port, security mode, and credentials together.
 
 The initial local administrator is `savia.admin@example.test`, with password
 `TestUser321!`, as configured by `BETTER_AUTH_BOOTSTRAP_*` in the local Auth
@@ -36,7 +44,15 @@ are local development credentials only.
 In VS Code with the Dev Containers extension, choose **Dev Containers: Reopen
 in Container**. The checked-in `devcontainer.json` starts the same Compose
 service automatically, with the editor and terminal running as the `node` user.
+Dev Containers adjusts this user's UID/GID to match the host on Linux and
+forwards Admin, API, and the Mailpit inbox. Automatic forwarding of other ports
+is disabled so the private Workers stay private. The post-start command waits
+up to five minutes for the application, local database, Auth, private Request
+Worker, and Mailpit to respond; it prints the local URLs when ready.
 Do not run a second `pnpm dev` inside that terminal.
+
+After updating the Dockerfile or Compose volumes, choose **Dev Containers:
+Rebuild and Reopen in Container** so the new image and mounts take effect.
 
 Source files are bind-mounted, so edits reload immediately. Dependencies for
 all workspace packages and the pnpm store live in Docker volumes, separate from
@@ -47,6 +63,8 @@ Existing host Miniflare data is not imported into the container.
 
 ```sh
 docker compose logs -f dev                 # startup and runtime output
+docker compose exec dev node .devcontainer/verify.mjs # check all required services
+docker compose exec dev node scripts/verify-better-auth-api.mjs # login and MFA checks
 docker compose exec dev pnpm test          # tests with container dependencies
 docker compose exec dev pnpm typecheck
 docker compose restart dev                 # reinstall after dependency changes
@@ -73,7 +91,18 @@ build context contains only `.devcontainer`, so it does not copy those secrets.
   with your UID/GID and matching writable volume permissions. Do not recursively
   change ownership of the host checkout from inside the container.
 - When adding a workspace package, add its `node_modules` volume to Compose and
-  its writable directory to `.devcontainer/Dockerfile`.
+  its writable directory to `.devcontainer/Dockerfile`. Run
+  `node --test scripts/docker-compose.test.mjs scripts/devcontainer.test.mjs`
+  to detect missing volumes and verify the readiness checks.
+- On a corporate or managed network with a custom CA, keep TLS verification
+  enabled. The Dockerfile accepts an optional BuildKit secret named `proxy_ca`
+  for npm during the build. Mount that CA read-only and set
+  `NODE_EXTRA_CA_CERTS` in the running container as well, using a local Compose
+  override; do not commit network credentials or machine-specific certificates.
+
+This environment runs the web platform and the JavaScript/TypeScript workspace.
+Native Companion desktop/mobile builds still require the platform-specific
+Rust/Tauri or Flutter toolchains described in their respective guides.
 
 ## Native development
 

@@ -97,11 +97,13 @@ function CredentialTab({
 function GlobalCredentialsPanel({
   globalCredentials,
   geoapifyEntry,
+  tenantCredentials,
   freeServicesEntry,
   loadingMessage,
 }: {
   globalCredentials?: ReactNode;
   geoapifyEntry?: ReactNode;
+  tenantCredentials?: ReactNode;
   freeServicesEntry: ReactNode;
   loadingMessage?: ReactNode;
 }) {
@@ -117,6 +119,7 @@ function GlobalCredentialsPanel({
         descriptionAsTooltip
       >
         {loadingMessage}
+        {tenantCredentials}
         {geoapifyEntry}
         {freeServicesEntry}
       </CredentialGroup>
@@ -172,9 +175,11 @@ function integrationStatus(item: IntegrationSummary): {
 export function StudioTenantCredentialsSection({
   services,
   globalCredentials,
+  tenantCredentials,
 }: {
   services: Pick<AppServices, "apiClient">;
   globalCredentials?: ReactNode;
+  tenantCredentials?: (tenantId: number) => ReactNode;
 }) {
   const t = useMessages(settingsMessages);
   const officeT = useMessages(officeSuiteMessages);
@@ -575,6 +580,7 @@ export function StudioTenantCredentialsSection({
         <div className="credentials-entry-actions">
           <Button
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             onClick={() =>
               navigate(
                 studioHref({
@@ -586,7 +592,9 @@ export function StudioTenantCredentialsSection({
               )
             }
           >
-            {t("Administrar integraciones")}
+            <span className="sr-only sm:not-sr-only">
+              {t("Administrar integraciones")}
+            </span>
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </div>
@@ -611,6 +619,7 @@ export function StudioTenantCredentialsSection({
         <div className="credentials-entry-actions">
           <Button
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             onClick={() =>
               navigate(
                 studioHref({
@@ -621,7 +630,9 @@ export function StudioTenantCredentialsSection({
               )
             }
           >
-            {t("Administrar fuentes de datos")}
+            <span className="sr-only sm:not-sr-only">
+              {t("Administrar fuentes de datos")}
+            </span>
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </div>
@@ -738,6 +749,7 @@ export function StudioTenantCredentialsSection({
         <TabsContent value="global" className="credentials-tabs-panel">
           <GlobalCredentialsPanel
             globalCredentials={globalCredentials}
+            tenantCredentials={tenantCredentials?.(tenant.tenantId)}
             geoapifyEntry={geoapifyEntry}
             freeServicesEntry={<FreeServicesEntry />}
           />

@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { Link } from "react-router-dom";
-import { KeyRound, ArrowRight } from "lucide-react";
+import { ArrowRight, KeyRound, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMessages } from "@/i18n/core";
 import { tenantSignInMessages } from "./tenant-sign-in-messages";
@@ -8,10 +8,14 @@ import { tenantSignInMessages } from "./tenant-sign-in-messages";
 export function TenantSignInSettingsLink({ tenantId }: { tenantId: number }) {
   const t = useMessages(tenantSignInMessages);
   return (
-    <Button variant="outline" asChild>
+    <Button
+      variant="outline"
+      asChild
+      className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+    >
       <Link to={`/service-credentials?tenantId=${tenantId}&tab=sso`}>
         <KeyRound className="size-4" aria-hidden="true" />
-        {t("Sign-in settings")}
+        <span className="sr-only sm:not-sr-only">{t("Sign-in settings")}</span>
       </Link>
     </Button>
   );
@@ -33,16 +37,27 @@ export function TenantSignInLinks({ tenantId }: { tenantId: number }) {
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" asChild>
+        <Button
+          variant="outline"
+          asChild
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+        >
           <Link to={`/service-credentials?tenantId=${tenantId}&tab=sso`}>
-            {t("Configure SSO")}
-            <ArrowRight className="size-4" aria-hidden="true" />
+            <KeyRound className="size-4" aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">{t("Configure SSO")}</span>
           </Link>
         </Button>
-        <Button variant="outline" asChild>
+        <Button
+          variant="outline"
+          asChild
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+        >
           <Link to={`/service-credentials?tenantId=${tenantId}&tab=social`}>
-            {t("Configure Google / Microsoft")}
-            <ArrowRight className="size-4" aria-hidden="true" />
+            <UsersRound className="size-4" aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">
+              {t("Configure Google / Microsoft")}
+            </span>
+            <ArrowRight className="size-4 max-sm:hidden" aria-hidden="true" />
           </Link>
         </Button>
       </div>

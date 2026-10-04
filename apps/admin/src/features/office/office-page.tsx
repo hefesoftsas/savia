@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Download, Save } from "lucide-react";
 import {
   OfficeApi,
   type OfficeMetadata,
@@ -224,16 +225,23 @@ export function OfficePage({
           </p>
         </div>
         <div className="office-actions">
-          <button onClick={() => void recovery()} disabled={!ready || saving}>
-            Descargar copia
+          <button
+            aria-label="Descargar copia"
+            onClick={() => void recovery()}
+            disabled={!ready || saving}
+          >
+            <Download className="office-action-icon" aria-hidden="true" />
+            <span className="office-action-label">Descargar copia</span>
           </button>
           {!meta?.readOnly ? (
             <button
               className="office-save"
+              aria-label="Guardar"
               onClick={() => void save()}
               disabled={!ready || !dirty || saving}
             >
-              Guardar
+              <Save className="office-action-icon" aria-hidden="true" />
+              <span className="office-action-label">Guardar</span>
             </button>
           ) : null}
         </div>
@@ -296,8 +304,14 @@ export function OfficePage({
                   Versión {r.version} ·{" "}
                   {new Date(r.created_at).toLocaleString("es-CO")}
                 </span>
-                <button onClick={() => void versionDownload(r.version)}>
-                  Descargar versión {r.version}
+                <button
+                  aria-label={`Descargar versión ${r.version}`}
+                  onClick={() => void versionDownload(r.version)}
+                >
+                  <Download className="office-action-icon" aria-hidden="true" />
+                  <span className="office-action-label">
+                    Descargar versión {r.version}
+                  </span>
                 </button>
               </li>
             ))}

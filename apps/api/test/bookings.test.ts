@@ -1,7 +1,14 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
 import { createApp } from "../src/app";
-import type { AppActor, Authenticator } from "../src/auth/types";
+import { PersonalCalendarService } from "../src/personal-calendars/service";
+import { createPersonalIntegrationProviderRegistry } from "../src/personal-integrations/providers";
+import { bootstrapSchema } from "../src/bookings/contracts";
+import {
+  AuthenticationError,
+  type AppActor,
+  type Authenticator,
+} from "../src/auth/types";
 
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
@@ -77,6 +84,10 @@ async function fixture(captchaOptions?: Parameters<typeof createApp>[22]) {
   };
   const args: Parameters<typeof createApp> = [env.DB];
   args[3] = { authenticate: async () => actor } as Authenticator;
+  args[15] = {
+    providers: createPersonalIntegrationProviderRegistry({}),
+    calendarSecret: "booking agenda test secret",
+  };
   args[22] = captchaOptions ?? {
     publicOrigin: "http://localhost:5173",
     disableCaptcha: true,
@@ -86,6 +97,7 @@ async function fixture(captchaOptions?: Parameters<typeof createApp>[22]) {
   const response = await app.request(base);
   expect(response.status).toBe(200);
   const boot = ((await response.json()) as any).data;
+  expect(bootstrapSchema.parse(boot)).toHaveProperty("agenda", boot.agenda);
   const professionalId = crypto.randomUUID(),
     serviceId = crypto.randomUUID();
   const settings = {
@@ -192,6 +204,545 @@ it("configures only active same-tenant Savia professionals and rejects stale set
   ).toBe(422);
   expect((await save({ ...f.settings, version: 0 })).status).toBe(409);
   expect((await f.app.request(other.base)).status).toBe(403);
+});
+
+it("lists a professional's own confirmed agenda with interval overlap and safe fields", async () => {
+  const f = await fixture();
+  const reservation = ((await (await f.reserve()).json()) as any).data
+    .reservation;
+  const disabled = {
+    ...f.settings,
+    enabled: false,
+    published: false,
+    professionals: f.settings.professionals.map((professional: any) => ({
+      ...professional,
+      enabled: false,
+    })),
+    services: f.settings.services.map((service: any) => ({
+      ...service,
+      enabled: false,
+    })),
+  };
+  await env.DB.prepare(
+    "UPDATE tenant_booking_settings SET config=? WHERE tenant_id=?",
+  )
+    .bind(JSON.stringify(disabled), f.tenantId)
+    .run();
+  const from = new Date(
+    Date.parse(reservation.startsAt) + 5 * 60000,
+  ).toISOString();
+  const to = new Date(Date.parse(reservation.endsAt) + 5 * 60000).toISOString();
+  const response = await f.app.request(
+    `/v1/personal-integrations/bookings?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&timeZone=UTC`,
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  const body = (await response.json()) as any;
+  expect(body.data).toHaveLength(1);
+  expect(body.data[0]).toMatchObject({
+    id: reservation.id,
+    tenantId: f.tenantId,
+    tenantSlug: `booking-${f.tenantId}`,
+    tenantName: "Booking tenant",
+    serviceName: "Consultation",
+    professionalName: "Professional",
+    customerName: "Customer",
+    customerEmail: "customer@example.test",
+    startsAt: reservation.startsAt,
+    endsAt: reservation.endsAt,
+    timeZone: "UTC",
+    status: "confirmed",
+    version: 1,
+    externalEvent: null,
+  });
+  expect(JSON.stringify(body)).not.toMatch(
+    /manage_token|request_hash|request_key|connection_id|access_token/i,
+  );
+  const touchesOnlyAtEnd = await f.app.request(
+    `/v1/personal-integrations/bookings?from=${encodeURIComponent(reservation.endsAt)}&to=${encodeURIComponent(new Date(Date.parse(reservation.endsAt) + 60000).toISOString())}&timeZone=UTC`,
+  );
+  expect(((await touchesOnlyAtEnd.json()) as any).data).toHaveLength(0);
+});
+
+it("keeps an administrator's agenda limited to their own current membership", async () => {
+  const f = await fixture();
+  const own = ((await (await f.reserve()).json()) as any).data.reservation;
+  const otherPrincipalId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?)",
+  )
+    .bind(
+      otherPrincipalId,
+      "savia:better-auth",
+      otherPrincipalId,
+      `${otherPrincipalId}@example.test`,
+      "Other professional",
+      now,
+      now,
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at) VALUES(?,?,?,'operator',1,?,?)",
+  )
+    .bind(crypto.randomUUID(), otherPrincipalId, f.tenantId, now, now)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO tenant_bookings(id,tenant_id,professional_id,principal_id,service_id,service_name,professional_name,starts_at,ends_at,buffer_minutes,customer_name,customer_email,manage_token,request_key,request_hash,status,version,calendar_provider,calendar_connection_id,external_id,created_at,customer_locale) VALUES(?,?,?,?,?,?,?,?,?,0,?,?,?, ?,?,'confirmed',1,NULL,NULL,NULL,?,'en')",
+  )
+    .bind(
+      crypto.randomUUID(),
+      f.tenantId,
+      crypto.randomUUID(),
+      otherPrincipalId,
+      crypto.randomUUID(),
+      "Other service",
+      "Other professional",
+      own.startsAt,
+      own.endsAt,
+      "Private customer",
+      "private@example.test",
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+      now,
+    )
+    .run();
+  const from = new Date(Date.parse(own.startsAt) - 60000).toISOString();
+  const to = new Date(Date.parse(own.endsAt) + 60000).toISOString();
+  const url = `/v1/personal-integrations/bookings?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&timeZone=UTC`;
+  const first = ((await (await f.app.request(url)).json()) as any).data;
+  expect(first.map((entry: any) => entry.customerName)).toEqual(["Customer"]);
+  f.actor.credential = { kind: "oauth", scopes: ["savia.api.read"] };
+  const oauthResponse = await f.app.request(url);
+  expect(oauthResponse.status).toBe(200);
+  expect(((await oauthResponse.json()) as any).data).toEqual(first);
+  f.actor.credential = { kind: "oauth", scopes: [] };
+  expect((await f.app.request(url)).status).toBe(403);
+  f.actor.credential = {
+    kind: "personal-api-key",
+    keyId: crypto.randomUUID(),
+    tenantId: f.tenantId,
+    scopes: ["recordings:read"],
+  };
+  expect((await f.app.request(url)).status).toBe(403);
+  delete f.actor.credential;
+  await env.DB.prepare(
+    "UPDATE identity_tenant_membership SET is_active=0 WHERE principal_id=?",
+  )
+    .bind(f.principalId)
+    .run();
+  expect(((await (await f.app.request(url)).json()) as any).data).toEqual([]);
+});
+
+it("validates agenda ranges and follows only the current saved calendar connection", async () => {
+  const f = await fixture();
+  const booking = ((await (await f.reserve()).json()) as any).data;
+  const from = new Date(
+    Date.parse(booking.reservation.startsAt) - 60000,
+  ).toISOString();
+  const to = new Date(
+    Date.parse(booking.reservation.endsAt) + 60000,
+  ).toISOString();
+  const url = (query: string) => `/v1/personal-integrations/bookings?${query}`;
+  const valid = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&timeZone=UTC`;
+  expect(
+    (
+      await f.app.request(
+        url(valid.replace("timeZone=UTC", "timeZone=Invalid%2FZone")),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await f.app.request(
+        url(
+          `from=${encodeURIComponent(to)}&to=${encodeURIComponent(from)}&timeZone=UTC`,
+        ),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await f.app.request(
+        url(
+          `from=${encodeURIComponent(from)}&to=${encodeURIComponent(new Date(Date.parse(from) + 63 * 86400000).toISOString())}&timeZone=UTC`,
+        ),
+      )
+    ).status,
+  ).toBe(422);
+
+  const connectionId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,external_account_label,external_account_id,scopes,last_validated_at,disconnected_at,created_at,updated_at) VALUES(?,?, 'google_calendar', ?, 'calendar', 'connected', NULL, NULL, '[]', ?, NULL, ?, ?)",
+  )
+    .bind(
+      connectionId,
+      f.principalId,
+      connectionId,
+      timestamp,
+      timestamp,
+      timestamp,
+    )
+    .run();
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET calendar_provider='google_calendar',calendar_connection_id=?,external_id='saved-event' WHERE id=?",
+  )
+    .bind(connectionId, booking.reservation.id)
+    .run();
+  const first = ((await (await f.app.request(url(valid))).json()) as any)
+    .data[0];
+  expect(first.externalEvent).toEqual({
+    provider: "google_calendar",
+    id: "saved-event",
+  });
+
+  await env.DB.prepare(
+    "UPDATE personal_integration_connections SET status='disconnected',disconnected_at=?,updated_at=? WHERE id=?",
+  )
+    .bind(timestamp, timestamp, connectionId)
+    .run();
+  const replacementId = crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,external_account_label,external_account_id,scopes,last_validated_at,disconnected_at,created_at,updated_at) VALUES(?,?, 'google_calendar', ?, 'calendar', 'connected', NULL, NULL, '[]', ?, NULL, ?, ?)",
+  )
+    .bind(
+      replacementId,
+      f.principalId,
+      replacementId,
+      timestamp,
+      timestamp,
+      timestamp,
+    )
+    .run();
+  const stale = ((await (await f.app.request(url(valid))).json()) as any)
+    .data[0];
+  expect(stale.externalEvent).toBeNull();
+
+  const move = new Date(
+    Date.parse(booking.reservation.startsAt) + 60 * 60000,
+  ).toISOString();
+  const manageToken = new URL(booking.managementUrl).pathname.split("/").at(-1);
+  const rescheduled = await f.app.request(
+    `/api/public/bookings/manage/${manageToken}/reschedule`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: 1, startsAt: move }),
+    },
+  );
+  expect(rescheduled.status).toBe(200);
+  expect(
+    ((await (await f.app.request(url(valid))).json()) as any).data,
+  ).toEqual([]);
+  const newRange = `from=${encodeURIComponent(move)}&to=${encodeURIComponent(new Date(Date.parse(move) + 31 * 60000).toISOString())}&timeZone=UTC`;
+  expect(
+    ((await (await f.app.request(url(newRange))).json()) as any).data[0]
+      .startsAt,
+  ).toBe(move);
+  const cancelled = await f.app.request(
+    `/api/public/bookings/manage/${manageToken}/cancel`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: 2 }),
+    },
+  );
+  expect(cancelled.status).toBe(200);
+  expect(
+    ((await (await f.app.request(url(newRange))).json()) as any).data,
+  ).toEqual([]);
+});
+
+it("requires an authenticated session for the personal booking feed", async () => {
+  const app = createApp(env.DB, undefined, undefined, {
+    authenticate: async () => {
+      throw new AuthenticationError(
+        "AUTHENTICATION_REQUIRED",
+        "An active session is required",
+      );
+    },
+  });
+  const response = await app.request(
+    "/v1/personal-integrations/bookings?from=2026-10-03T00%3A00%3A00.000Z&to=2026-10-04T00%3A00%3A00.000Z&timeZone=UTC",
+  );
+  expect(response.status).toBe(401);
+});
+
+it("blocks recurring My Day meetings only after the professional grants agenda access", async () => {
+  const f = await fixture();
+  const calendars = new PersonalCalendarService(env.DB, {
+    secret: "booking agenda test secret",
+  });
+  const compact = (instant: string) =>
+    new Date(instant)
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}/, "");
+  const meetingEnd = new Date(
+    Date.parse(f.payload.startsAt) + 30 * 60000,
+  ).toISOString();
+  await calendars.create(f.principalId, {
+    kind: "import",
+    name: "Private calendar",
+    timeZone: "UTC",
+    color: "blue",
+    content: [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      "UID:private-meeting",
+      `DTSTART:${compact(f.payload.startsAt)}`,
+      `DTEND:${compact(meetingEnd)}`,
+      "RRULE:FREQ=DAILY;COUNT=2",
+      "SUMMARY:Confidential meeting",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n"),
+  });
+  const url = `${f.publicBase}/slots?serviceId=${f.serviceId}&professionalId=${f.professionalId}&date=${f.payload.startsAt.slice(0, 10)}`;
+  const before = ((await (await f.app.request(url)).json()) as any).data.slots;
+  expect(before.some((slot: any) => slot.startsAt === f.payload.startsAt)).toBe(
+    true,
+  );
+  const grant = await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true }),
+  });
+  expect(grant.status).toBe(200);
+  expect(((await grant.json()) as any).data.agenda).toEqual({
+    enabled: true,
+    sourceCount: 1,
+  });
+  const blockedResponse = await f.app.request(url);
+  const blocked = await blockedResponse.text();
+  expect(blocked).not.toContain("Confidential meeting");
+  expect(
+    JSON.parse(blocked).data.slots.some(
+      (slot: any) => slot.startsAt === f.payload.startsAt,
+    ),
+  ).toBe(false);
+  const conflict = await f.reserve();
+  expect(conflict.status).toBe(409);
+  expect((await conflict.json()) as any).toMatchObject({
+    error: { code: "BOOKING_TIME_CONFLICT" },
+  });
+  const nextDay = new Date(
+    Date.parse(f.payload.startsAt) + 86400000,
+  ).toISOString();
+  const recurring = (
+    (await (
+      await f.app.request(
+        url.replace(f.payload.startsAt.slice(0, 10), nextDay.slice(0, 10)),
+      )
+    ).json()) as any
+  ).data.slots;
+  expect(recurring.some((slot: any) => slot.startsAt === nextDay)).toBe(false);
+  await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: false }),
+  });
+  expect((await f.reserve()).status).toBe(201);
+});
+
+it("uses the source timezone for all-day meetings and keeps transparent events bookable", async () => {
+  const f = await fixture();
+  await f.app.request(f.base, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...f.settings,
+      professionals: f.settings.professionals.map((p: any) => ({
+        ...p,
+        weekly: p.weekly.map((period: any) => ({ ...period, start: "00:00" })),
+      })),
+    }),
+  });
+  const date = f.payload.startsAt.slice(0, 10);
+  const nextDate = new Date(Date.parse(f.payload.startsAt) + 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const endDate = new Date(Date.parse(f.payload.startsAt) + 2 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  await new PersonalCalendarService(env.DB, {
+    secret: "booking agenda test secret",
+  }).create(f.principalId, {
+    kind: "import",
+    name: "Private days",
+    timeZone: "America/Bogota",
+    color: "blue",
+    content: [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      "UID:busy-day",
+      `DTSTART;VALUE=DATE:${date.replaceAll("-", "")}`,
+      `DTEND;VALUE=DATE:${nextDate.replaceAll("-", "")}`,
+      "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:free-day",
+      `DTSTART;VALUE=DATE:${nextDate.replaceAll("-", "")}`,
+      `DTEND;VALUE=DATE:${endDate.replaceAll("-", "")}`,
+      "TRANSP:TRANSPARENT",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n"),
+  });
+  const enabled = await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true }),
+  });
+  expect(enabled.status).toBe(200);
+  const slots = async (day: string) =>
+    (
+      (await (
+        await f.app.request(
+          `${f.publicBase}/slots?serviceId=${f.serviceId}&professionalId=${f.professionalId}&date=${day}`,
+        )
+      ).json()) as any
+    ).data.slots;
+  const first = await slots(date);
+  expect(
+    first.some((slot: any) => slot.startsAt === `${date}T00:00:00.000Z`),
+  ).toBe(true);
+  expect(
+    first.some((slot: any) => slot.startsAt === `${date}T10:00:00.000Z`),
+  ).toBe(false);
+  expect(
+    (await slots(nextDate)).some(
+      (slot: any) => slot.startsAt === `${nextDate}T10:00:00.000Z`,
+    ),
+  ).toBe(true);
+});
+
+it("does not let an administrator grant another professional's private agenda", async () => {
+  const f = await fixture();
+  const response = await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true, principalId: crypto.randomUUID() }),
+  });
+  expect(response.status).toBe(422);
+  f.actor.principal.id = crypto.randomUUID();
+  const ownResponse = await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true }),
+  });
+  expect(ownResponse.status).toBe(403);
+});
+
+it("rejects a newly occupied reschedule without moving the existing appointment", async () => {
+  const f = await fixture();
+  const confirmed = ((await (await f.reserve()).json()) as any).data;
+  const slotUrl = `${f.publicBase}/slots?serviceId=${f.serviceId}&professionalId=${f.professionalId}&date=${f.payload.startsAt.slice(0, 10)}`;
+  const nextSlot = ((await (await f.app.request(slotUrl)).json()) as any).data
+    .slots[0];
+  const compact = (instant: string) =>
+    new Date(instant)
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}/, "");
+  await new PersonalCalendarService(env.DB, {
+    secret: "booking agenda test secret",
+  }).create(f.principalId, {
+    kind: "import",
+    name: "Private conflict",
+    color: "blue",
+    timeZone: "UTC",
+    content: [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      "UID:late-meeting",
+      `DTSTART:${compact(nextSlot.startsAt)}`,
+      `DTEND:${compact(nextSlot.endsAt)}`,
+      "SUMMARY:Private title",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n"),
+  });
+  await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true }),
+  });
+  const management = new URL(confirmed.managementUrl).pathname.replace(
+    "/public/",
+    "/api/public/",
+  );
+  const response = await f.app.request(`${management}/reschedule`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: 1, startsAt: nextSlot.startsAt }),
+  });
+  expect(response.status).toBe(409);
+  const body = await response.text();
+  expect(JSON.parse(body).error.code).toBe("BOOKING_TIME_CONFLICT");
+  expect(body).not.toContain("Private title");
+  const existing = await env.DB.prepare(
+    "SELECT starts_at,version,status FROM tenant_bookings WHERE id=?",
+  )
+    .bind(confirmed.reservation.id)
+    .first();
+  expect(existing).toMatchObject({
+    starts_at: confirmed.reservation.startsAt,
+    version: 1,
+    status: "confirmed",
+  });
+});
+
+it("loads the personal booking feed through the browser's OAuth authentication path", async () => {
+  const f = await fixture();
+  const reservation = ((await (await f.reserve()).json()) as any).data
+    .reservation;
+  const scopes = new Set(["savia.api.read"]);
+  const args: Parameters<typeof createApp> = [env.DB];
+  args[7] = {
+    configuration: {
+      issuer: "https://auth.savia.test",
+      resource: "https://api.savia.test",
+    },
+    authenticate: async () => ({
+      subject: f.principalId,
+      email: f.actor.principal.email,
+      displayName: f.actor.principal.displayName,
+      roles: [],
+      scopes,
+      twoFactorEnabled: false,
+    }),
+  };
+  const app = createApp(...args);
+  const query = new URLSearchParams({
+    from: new Date(Date.parse(reservation.startsAt) - 60000).toISOString(),
+    to: new Date(Date.parse(reservation.endsAt) + 60000).toISOString(),
+    timeZone: "America/Bogota",
+  });
+  const request = () =>
+    app.request(`/v1/personal-integrations/bookings?${query}`, {
+      headers: { authorization: "Bearer test.browser.token" },
+    });
+  const response = await request();
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  expect(((await response.json()) as any).data).toMatchObject([
+    { id: reservation.id, customerName: "Customer" },
+  ]);
+
+  scopes.clear();
+  expect((await request()).status).toBe(403);
+  scopes.add("savia.api.read");
+  await env.DB.prepare(
+    "UPDATE identity_tenant_membership SET is_active=0 WHERE principal_id=?",
+  )
+    .bind(f.principalId)
+    .run();
+  expect(((await (await request()).json()) as any).data).toEqual([]);
 });
 
 it("publishes only safe catalog data and reserves without exposing principal or customer lists", async () => {
@@ -578,6 +1129,213 @@ it("legacy URLs remain team-scoped and have independent revocation controls", as
     body: JSON.stringify({ version: legacy.version }),
   });
   expect((await f.app.request(f.publicBase)).status).toBe(404);
+});
+it("creates a stable local short URL for a booking link", async () => {
+  const f = await fixture(),
+    link = await personalLink(f);
+  const endpoint = `${f.base}/public-links/${link.id}/short-url`;
+  const first = await f.app.request(endpoint, { method: "POST" });
+  expect(first.status).toBe(200);
+  const shortUrl = ((await first.json()) as any).data.shortUrl as string;
+  expect(shortUrl).toMatch(/^http:\/\/localhost:5173\/s\/b\/[a-f0-9]{16}$/);
+  const second = await f.app.request(endpoint, { method: "POST" });
+  expect(((await second.json()) as any).data.shortUrl).toBe(shortUrl);
+  const redirect = await f.app.request(new URL(shortUrl).pathname);
+  expect(redirect.status).toBe(302);
+  expect(redirect.headers.get("location")).toBe(link.publicUrl);
+});
+it("uses the configured Shlink provider when creating a booking link", async () => {
+  const destinations: string[] = [],
+    f = await fixture({
+      publicOrigin: "https://booking.savia.test",
+      disableCaptcha: true,
+      shortener: {
+        shorten: async (destination) => {
+          destinations.push(destination);
+          return "https://go.savia.test/booking";
+        },
+      },
+    }),
+    link = await personalLink(f);
+  expect(destinations).toEqual([link.publicUrl]);
+  expect(link.shortUrl).toBe("https://go.savia.test/booking");
+  const listed = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  expect(listed.find((item: any) => item.id === link.id)?.shortUrl).toBe(
+    "https://go.savia.test/booking",
+  );
+});
+it("only shortens active links the caller can manage", async () => {
+  const f = await fixture(),
+    foreign = await personalLink(await fixture()),
+    personal = await personalLink(f),
+    teamResponse = await f.app.request(`${f.base}/public-links`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        scope: { kind: "team" },
+        serviceId: null,
+        expiresAt: null,
+        dailyLimit: 25,
+      }),
+    });
+  expect(teamResponse.status).toBe(201);
+  const team = ((await teamResponse.json()) as any).data;
+  f.actor.memberships[0].role = "viewer";
+  const endpoint = (id: string) => `${f.base}/public-links/${id}/short-url`;
+  expect(
+    (await f.app.request(endpoint(personal.id), { method: "POST" })).status,
+  ).toBe(200);
+  expect(
+    (await f.app.request(endpoint(team.id), { method: "POST" })).status,
+  ).toBe(404);
+  expect(
+    (await f.app.request(endpoint(foreign.id), { method: "POST" })).status,
+  ).toBe(404);
+});
+it("rejects short URLs for revoked or expired links and invalidates redirects", async () => {
+  const f = await fixture(),
+    revoked = await personalLink(f),
+    revokedPath = new URL(revoked.shortUrl).pathname;
+  await f.app.request(`${f.base}/public-links/${revoked.id}/revoke`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: revoked.version }),
+  });
+  expect((await f.app.request(revokedPath)).status).toBe(404);
+  expect(
+    (
+      await f.app.request(`${f.base}/public-links/${revoked.id}/short-url`, {
+        method: "POST",
+      })
+    ).status,
+  ).toBe(404);
+  const expired = await personalLink(f),
+    expiredPath = new URL(expired.shortUrl).pathname;
+  await env.DB.prepare(
+    "UPDATE tenant_booking_public_links SET expires_at=? WHERE id=?",
+  )
+    .bind("2000-01-01T00:00:00.000Z", expired.id)
+    .run();
+  expect((await f.app.request(expiredPath)).status).toBe(404);
+  expect(
+    (
+      await f.app.request(`${f.base}/public-links/${expired.id}/short-url`, {
+        method: "POST",
+      })
+    ).status,
+  ).toBe(404);
+});
+it("deletes inactive links and never recreates a deleted legacy link", async () => {
+  const f = await fixture();
+  const listed = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  const legacy = listed.find(
+    (item: any) => item.id === f.publicBase.split("/").at(-1),
+  );
+  expect(legacy).toBeTruthy();
+  await f.app.request(`${f.base}/public-links/${legacy.id}/revoke`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: legacy.version }),
+  });
+  const deletion = await f.app.request(`${f.base}/public-links/${legacy.id}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: legacy.version + 1 }),
+  });
+  expect(deletion.status).toBe(200);
+  await f.app.request(`${f.base}/public-links`);
+  expect((await f.app.request(f.publicBase)).status).toBe(404);
+  const after = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  expect(after.some((item: any) => item.id === legacy.id)).toBe(false);
+});
+it("does not let another tenant or a nonmanager delete a booking link", async () => {
+  const f = await fixture(),
+    foreign = await personalLink(await fixture()),
+    teamResponse = await f.app.request(`${f.base}/public-links`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        scope: { kind: "team" },
+        serviceId: null,
+        expiresAt: null,
+        dailyLimit: 25,
+      }),
+    });
+  expect(teamResponse.status).toBe(201);
+  const team = ((await teamResponse.json()) as any).data;
+  f.actor.memberships[0].role = "viewer";
+  const deleteLink = (id: string, version: number) =>
+    f.app.request(`${f.base}/public-links/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version }),
+    });
+  expect((await deleteLink(foreign.id, foreign.version)).status).toBe(404);
+  expect((await deleteLink(team.id, team.version)).status).toBe(404);
+});
+it("deletes a booking link with a revision while preserving appointment management", async () => {
+  const f = await fixture(),
+    link = await personalLink(f);
+  const reservation = await f.app.request(`${link.base}/reservations`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify(f.payload),
+  });
+  expect(reservation.status).toBe(201);
+  const managementUrl = ((await reservation.json()) as any).data.managementUrl;
+  const deletion = await f.app.request(`${f.base}/public-links/${link.id}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: link.version }),
+  });
+  expect(deletion.status).toBe(200);
+  expect((await f.app.request(link.base)).status).toBe(404);
+  const listed = (
+    (await (await f.app.request(`${f.base}/public-links`)).json()) as any
+  ).data.links;
+  expect(listed.some((item: any) => item.id === link.id)).toBe(false);
+  expect(
+    (
+      await f.app.request(
+        new URL(managementUrl).pathname.replace("/public/", "/api/public/"),
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) AS count FROM tenant_bookings WHERE tenant_id=?",
+    )
+      .bind(f.tenantId)
+      .first<{ count: number }>(),
+  ).toMatchObject({ count: 1 });
+  expect(
+    (
+      await f.app.request(`${f.base}/public-links/${link.id}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: link.version }),
+      })
+    ).status,
+  ).toBe(404);
+});
+it("rejects stale booking link deletion revisions", async () => {
+  const f = await fixture(),
+    link = await personalLink(f);
+  const response = await f.app.request(`${f.base}/public-links/${link.id}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: link.version + 1 }),
+  });
+  expect(response.status).toBe(409);
 });
 it("link daily admission counts failed attempts once and preserves identical reservation retries", async () => {
   const f = await fixture(),

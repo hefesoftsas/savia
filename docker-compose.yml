@@ -4,10 +4,20 @@ services:
       context: .devcontainer
     init: true
     working_dir: /workspace
+    depends_on:
+      mailpit:
+        condition: service_healthy
     environment:
       PLUGIN_REGISTRY_TENANTS: ${PLUGIN_REGISTRY_TENANTS:-}
       SAVIA_DEV_HOST: 0.0.0.0
       SAVIA_ADMIN_PORT: "5173"
+      SAVIA_SMTP_HOST: ${SAVIA_SMTP_HOST:-mailpit}
+      SAVIA_SMTP_PORT: ${SAVIA_SMTP_PORT:-1025}
+      SAVIA_SMTP_FROM: ${SAVIA_SMTP_FROM:-no-reply@savia.test}
+      SAVIA_SMTP_SECURITY: ${SAVIA_SMTP_SECURITY:-plain}
+      SAVIA_SMTP_ALLOW_INSECURE: ${SAVIA_SMTP_ALLOW_INSECURE:-true}
+      SAVIA_SMTP_USERNAME: ${SAVIA_SMTP_USERNAME:-}
+      SAVIA_SMTP_PASSWORD: ${SAVIA_SMTP_PASSWORD:-}
       SAVIA_CHATGPT_CLIENT_ID: ${SAVIA_CHATGPT_CLIENT_ID:-}
       SAVIA_CHATGPT_CLIENT_SECRET: ${SAVIA_CHATGPT_CLIENT_SECRET:-}
       SAVIA_CHATGPT_TOKEN_AUTH_METHOD: ${SAVIA_CHATGPT_TOKEN_AUTH_METHOD:-none}
@@ -26,28 +36,56 @@ services:
       - apps_admin_modules:/workspace/apps/admin/node_modules
       - apps_api_modules:/workspace/apps/api/node_modules
       - apps_auth_modules:/workspace/apps/auth/node_modules
+      - apps_companion_modules:/workspace/apps/companion/node_modules
       - apps_connector_gateway_modules:/workspace/apps/connector-gateway/node_modules
       - apps_db_bridge_modules:/workspace/apps/db-bridge/node_modules
       - apps_legacy_exporter_modules:/workspace/apps/legacy-exporter/node_modules
       - apps_mcp_modules:/workspace/apps/mcp/node_modules
+      - apps_plugin_registry_modules:/workspace/apps/plugin-registry/node_modules
+      - apps_hook_executor_modules:/workspace/apps/hook-executor/node_modules
       - apps_savia_request_modules:/workspace/apps/savia-request/node_modules
-      - packages_studio_server_modules:/workspace/packages/studio-server/node_modules
-      - packages_studio_shared_modules:/workspace/packages/studio-shared/node_modules
+      - apps_self_hosted_modules:/workspace/apps/self-hosted/node_modules
       - packages_db_modules:/workspace/packages/db/node_modules
+      - packages_insurance_accounting_modules:/workspace/packages/insurance-accounting/node_modules
+      - packages_insurance_activities_modules:/workspace/packages/insurance-activities/node_modules
+      - packages_insurance_automation_modules:/workspace/packages/insurance-automation/node_modules
+      - packages_insurance_calendar_modules:/workspace/packages/insurance-calendar/node_modules
+      - packages_insurance_campaigns_modules:/workspace/packages/insurance-campaigns/node_modules
+      - packages_insurance_carriers_modules:/workspace/packages/insurance-carriers/node_modules
+      - packages_insurance_claims_modules:/workspace/packages/insurance-claims/node_modules
+      - packages_insurance_collections_modules:/workspace/packages/insurance-collections/node_modules
+      - packages_insurance_commissions_modules:/workspace/packages/insurance-commissions/node_modules
+      - packages_insurance_communications_modules:/workspace/packages/insurance-communications/node_modules
+      - packages_insurance_compliance_modules:/workspace/packages/insurance-compliance/node_modules
+      - packages_insurance_customer_portal_modules:/workspace/packages/insurance-customer-portal/node_modules
+      - packages_insurance_data_quality_modules:/workspace/packages/insurance-data-quality/node_modules
+      - packages_insurance_document_generation_modules:/workspace/packages/insurance-document-generation/node_modules
+      - packages_insurance_documents_modules:/workspace/packages/insurance-documents/node_modules
+      - packages_insurance_endorsements_modules:/workspace/packages/insurance-endorsements/node_modules
+      - packages_insurance_issuance_modules:/workspace/packages/insurance-issuance/node_modules
+      - packages_insurance_opportunities_modules:/workspace/packages/insurance-opportunities/node_modules
+      - packages_insurance_payments_modules:/workspace/packages/insurance-payments/node_modules
       - packages_insurance_portfolio_dashboard_modules:/workspace/packages/insurance-portfolio-dashboard/node_modules
       - packages_insurance_quotes_modules:/workspace/packages/insurance-quotes/node_modules
+      - packages_insurance_renewals_modules:/workspace/packages/insurance-renewals/node_modules
+      - packages_insurance_reports_modules:/workspace/packages/insurance-reports/node_modules
+      - packages_insurance_service_modules:/workspace/packages/insurance-service/node_modules
+      - packages_insurance_settlements_modules:/workspace/packages/insurance-settlements/node_modules
+      - packages_insurance_workbench_modules:/workspace/packages/insurance-workbench/node_modules
+      - packages_plugin_example_tasks_modules:/workspace/packages/plugin-example-tasks/node_modules
+      - packages_plugin_sdk_modules:/workspace/packages/plugin-sdk/node_modules
+      - packages_plugin_ui_modules:/workspace/packages/plugin-ui/node_modules
       - packages_provider_contracts_modules:/workspace/packages/provider-contracts/node_modules
       - packages_release_catalog_modules:/workspace/packages/release-catalog/node_modules
+      - packages_studio_server_modules:/workspace/packages/studio-server/node_modules
+      - packages_studio_shared_modules:/workspace/packages/studio-shared/node_modules
       - packages_tenant_host_modules:/workspace/packages/tenant-host/node_modules
       - api_state:/workspace/apps/api/.wrangler
       - auth_state:/workspace/apps/auth/.wrangler
+      - hook-executor_state:/workspace/apps/hook-executor/.wrangler
       - savia-request_state:/workspace/apps/savia-request/.wrangler
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl --fail --silent http://127.0.0.1:8787/health >/dev/null && curl --fail --silent http://127.0.0.1:5173/ >/dev/null",
-        ]
+      test: ["CMD", "node", ".devcontainer/verify.mjs"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -96,19 +134,51 @@ volumes:
   apps_admin_modules:
   apps_api_modules:
   apps_auth_modules:
+  apps_companion_modules:
   apps_connector_gateway_modules:
   apps_db_bridge_modules:
   apps_legacy_exporter_modules:
   apps_mcp_modules:
+  apps_plugin_registry_modules:
+  apps_hook_executor_modules:
   apps_savia_request_modules:
-  packages_studio_server_modules:
-  packages_studio_shared_modules:
+  apps_self_hosted_modules:
   packages_db_modules:
+  packages_insurance_accounting_modules:
+  packages_insurance_activities_modules:
+  packages_insurance_automation_modules:
+  packages_insurance_calendar_modules:
+  packages_insurance_campaigns_modules:
+  packages_insurance_carriers_modules:
+  packages_insurance_claims_modules:
+  packages_insurance_collections_modules:
+  packages_insurance_commissions_modules:
+  packages_insurance_communications_modules:
+  packages_insurance_compliance_modules:
+  packages_insurance_customer_portal_modules:
+  packages_insurance_data_quality_modules:
+  packages_insurance_document_generation_modules:
+  packages_insurance_documents_modules:
+  packages_insurance_endorsements_modules:
+  packages_insurance_issuance_modules:
+  packages_insurance_opportunities_modules:
+  packages_insurance_payments_modules:
   packages_insurance_portfolio_dashboard_modules:
   packages_insurance_quotes_modules:
+  packages_insurance_renewals_modules:
+  packages_insurance_reports_modules:
+  packages_insurance_service_modules:
+  packages_insurance_settlements_modules:
+  packages_insurance_workbench_modules:
+  packages_plugin_example_tasks_modules:
+  packages_plugin_sdk_modules:
+  packages_plugin_ui_modules:
   packages_provider_contracts_modules:
   packages_release_catalog_modules:
+  packages_studio_server_modules:
+  packages_studio_shared_modules:
   packages_tenant_host_modules:
   api_state:
   auth_state:
+  hook-executor_state:
   savia-request_state:

@@ -27,6 +27,7 @@ function workerOrder(names) {
     names.workers.api,
     names.workers.mcp,
     names.workers.request,
+    names.workers.hookExecutor,
     names.workers.auth,
   ];
 }

@@ -6,7 +6,6 @@ export default defineConfig({
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
       miniflare: {
-        workerLoaders: { LOADER: {} },
         serviceBindings: {
           SAVIA_REQUEST: () =>
             Response.json({ error: "Not configured" }, { status: 503 }),

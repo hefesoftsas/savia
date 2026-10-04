@@ -1,5 +1,11 @@
 # Operación: Nango + HubSpot para CRM de agencias
 
+> Superseded for connection ownership, provider availability, and runtime behavior.
+> See [Connected CRM workspace](connected-crm-workspace.md), including the
+> one-connection-per-organization policy and migration instructions. The historical
+> agency-scoped Nango identity and HubSpot-only provider assumptions below no longer
+> describe the current implementation.
+
 ## Alcance y propiedad
 
 - Una conexión pertenece a una agencia. Sólo un `agency_admin` con membresía

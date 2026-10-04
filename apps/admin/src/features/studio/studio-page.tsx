@@ -17,6 +17,7 @@ import type { AppServices } from "@/app-services";
 import { createEmbeddedTransport } from "@/api/embedded-transport";
 import { Label } from "@/components/ui/label";
 import { RouteLoading } from "@/components/admin/route-loading";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { studioTenantSearch, studioItems } from "./studio-navigation";
 import {
   STUDIO_TENANTS_CHANGED,
@@ -40,6 +41,7 @@ const StudioRoot = lazy(() => import("@/features/studio-engine/app"));
 
 export function StudioPage({ services }: { services: AppServices }) {
   const t = useMessages(automationMessages);
+  const isMobile = useIsMobile();
   const { canAccess, isPending } = useCanAccess({
     resource: "studio",
     action: "list",
@@ -135,11 +137,11 @@ export function StudioPage({ services }: { services: AppServices }) {
       : document.getElementById("header-actions");
   const tenantContext =
     selected && tenants.length > 1 ? (
-      <label className="flex items-center gap-2">
+      <label className="flex min-w-0 max-w-full items-center gap-2">
         <span className="sr-only">{t("Tenant")}</span>
         <select
           aria-label={t("Tenant")}
-          className="h-8 max-w-64 rounded-md border bg-background px-2 text-sm"
+          className="h-8 min-w-0 max-w-full rounded-md border bg-background px-2 text-sm max-sm:h-11 sm:max-w-64"
           value={String(selected.tenantId)}
           onChange={(event) =>
             setParams(studioTenantSearch(params, Number(event.target.value)))
@@ -156,9 +158,13 @@ export function StudioPage({ services }: { services: AppServices }) {
 
   return (
     <section className="@container min-w-0 w-full">
-      {selected && headerActions && params.get("view") !== "audit"
-        ? createPortal(tenantContext, headerActions)
-        : null}
+      {selected && headerActions && params.get("view") !== "audit" ? (
+        isMobile ? (
+          <div className="mb-3 flex min-w-0 justify-end">{tenantContext}</div>
+        ) : (
+          createPortal(tenantContext, headerActions)
+        )
+      ) : null}
       {!selected && (
         <header className="mb-2 grid max-w-md gap-1.5">
           <h1 className="sr-only">{t("Studio")}</h1>

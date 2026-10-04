@@ -167,11 +167,12 @@ const settings = {
 function mount(
   apiClient: Record<string, ReturnType<typeof vi.fn>>,
   tenantId = 42,
+  initialEntry = "/bookings",
 ) {
   return render(
     <StoreContextProvider value={memoryStore({ locale: "en" })}>
       <AppLocaleProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <BookingPage services={{ apiClient } as never} tenantId={tenantId} />
         </MemoryRouter>
       </AppLocaleProvider>
@@ -214,6 +215,65 @@ it("loads booking settings and candidates, then saves the edited configuration",
     "/v1/tenants/42/booking",
     expect.objectContaining({ version: 3, title: "Savia visits" }),
   );
+});
+
+it("grants My Day busy-time access and reports the authorized calendar sources", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+    agenda: { enabled: false, sourceCount: 0 },
+  };
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({ data: bootstrap }),
+    put: vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: { ...bootstrap, agenda: { enabled: true, sourceCount: 3 } },
+      })
+      .mockResolvedValueOnce({
+        data: { ...bootstrap, agenda: { enabled: true, sourceCount: 4 } },
+      })
+      .mockResolvedValueOnce({
+        data: { ...bootstrap, agenda: { enabled: false, sourceCount: 0 } },
+      }),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getAllByRole("button", { name: "Availability" })[0]);
+  await screen.findByRole("heading", { name: "My Day availability" });
+  expect(
+    screen.getByText(
+      "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.",
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Use My Day to block busy times" }),
+  );
+  await screen.findByText("My Day access is enabled. Calendar sources: 3.");
+  expect(apiClient.put).toHaveBeenCalledWith("/v1/tenants/42/booking/agenda", {
+    enabled: true,
+  });
+  expect(
+    screen.getByRole("button", { name: "Update calendar access" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Stop using My Day" }),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Update calendar access" }),
+  );
+  await screen.findByText("My Day access is enabled. Calendar sources: 4.");
+  fireEvent.click(screen.getByRole("button", { name: "Stop using My Day" }));
+  await screen.findByText("My Day access is off.");
+  expect(apiClient.put.mock.calls).toEqual([
+    ["/v1/tenants/42/booking/agenda", { enabled: true }],
+    ["/v1/tenants/42/booking/agenda", { enabled: true }],
+    ["/v1/tenants/42/booking/agenda", { enabled: false }],
+  ]);
 });
 
 it("gives a recovery action after a failed bootstrap and reports version conflicts", async () => {
@@ -415,6 +475,67 @@ it("shows tenant-zone reservation details and reports failed delivery before can
   expect(apiClient.get.mock.calls[1][0]).toContain("&to=");
 });
 
+it("refreshes reservation conference state for the current tenant", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+  };
+  const reservation = {
+    id: "reservation-2",
+    serviceId: "consult",
+    professionalId: "professional-1",
+    serviceName: "Consultation",
+    professionalName: "Ari",
+    startsAt: "2026-10-05T14:00:00Z",
+    endsAt: "2026-10-05T14:30:00Z",
+    customerName: "Casey Customer",
+    customerEmail: "casey@example.test",
+    status: "confirmed" as const,
+    version: 1,
+    deliveryStatus: "sent",
+    calendarStatus: "created",
+    conference: { provider: "google_meet", joinUrl: null, status: "pending" },
+  };
+  const apiClient = {
+    get: vi
+      .fn()
+      .mockResolvedValueOnce({ data: bootstrap })
+      .mockResolvedValueOnce({ data: [reservation] })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            ...reservation,
+            conference: {
+              provider: "google_meet",
+              joinUrl: "https://meet.google.com/abc-defg-hij",
+              status: "ready",
+            },
+          },
+        ],
+      }),
+    put: vi.fn(),
+    post: vi.fn(),
+  };
+  mount(apiClient, 42);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
+  expect(
+    await screen.findByText(/link is being prepared/i),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(
+    await screen.findByRole("link", { name: "Join Google Meet" }),
+  ).toHaveAttribute("href", "https://meet.google.com/abc-defg-hij");
+  expect(apiClient.get.mock.calls[2][0]).toMatch(
+    /^\/v1\/tenants\/42\/booking\/reservations\?from=/,
+  );
+});
+
 it("edits multiple weekly periods with time controls and saves each interval", async () => {
   const bootstrap = {
     settings,
@@ -604,4 +725,92 @@ it("restores a removed service when discarding unsaved changes", async () => {
   );
   fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
   expect(screen.getByLabelText("Service name")).toHaveValue("Consultation");
+});
+
+it("opens authenticated reservations for the appointment date from My Day", async () => {
+  const apiClient = {
+    get: vi.fn(async (path: string) => ({
+      data: path.includes("/reservations?")
+        ? []
+        : {
+            settings,
+            candidates: [],
+            canManage: true,
+            principalId: "principal-1",
+            publicUrl: null,
+            calendar: { provider: null, status: "not_connected" },
+          },
+    })),
+  };
+  mount(apiClient, 42, "/bookings?tab=reservations&date=2025-03-09");
+  await screen.findByText("No reservations in this period.");
+  await waitFor(() =>
+    expect(apiClient.get).toHaveBeenCalledWith(
+      expect.stringContaining("/reservations?"),
+    ),
+  );
+  expect(screen.getByRole("button", { name: "Reservations" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  const path = apiClient.get.mock.calls.find(([path]) =>
+    path.includes("/reservations?"),
+  )![0];
+  const query = new URL(path, "https://example.test").searchParams;
+  expect(query.get("from")).toBe(new Date("2025-03-09T00:00:00").toISOString());
+  expect(query.get("to")).toBe(new Date("2025-03-10T00:00:00").toISOString());
+  expect(screen.getByText("Reservations for March 9, 2025")).toBeVisible();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Show upcoming reservations" }),
+  );
+  await waitFor(() =>
+    expect(
+      apiClient.get.mock.calls.filter(([path]) =>
+        path.includes("/reservations?"),
+      ).length,
+    ).toBe(2),
+  );
+  expect(
+    screen.queryByText("Reservations for March 9, 2025"),
+  ).not.toBeInTheDocument();
+});
+
+it("ignores an invalid appointment date without sending an invalid range", async () => {
+  const apiClient = {
+    get: vi.fn(async (path: string) => ({
+      data: path.includes("/reservations?")
+        ? []
+        : {
+            settings,
+            candidates: [],
+            canManage: true,
+            principalId: "principal-1",
+            publicUrl: null,
+            calendar: { provider: null, status: "not_connected" },
+          },
+    })),
+  };
+  mount(apiClient, 42, "/bookings?tab=reservations&date=2025-02-30");
+  await screen.findByText("No reservations in this period.");
+  await waitFor(() =>
+    expect(apiClient.get).toHaveBeenCalledWith(
+      expect.stringContaining("/reservations?"),
+    ),
+  );
+  const path = apiClient.get.mock.calls.find(([path]) =>
+    path.includes("/reservations?"),
+  )![0];
+  const query = new URL(path, "https://example.test").searchParams;
+  expect(Number.isFinite(Date.parse(query.get("from")!))).toBe(true);
+  expect(query.get("from")).not.toBe("2025-03-02T00:00:00.000Z");
+});
+
+it("uses the shared route loading layout while booking settings are fetched", () => {
+  mount({ get: vi.fn(() => new Promise(() => {})), put: vi.fn() });
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Loading booking settings…",
+  );
+  expect(
+    screen.getByRole("status").querySelector('[data-slot="skeleton"]'),
+  ).toBeInTheDocument();
 });

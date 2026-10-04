@@ -2861,6 +2861,11 @@ export const studioMessages = {
     "Configure %{v1}",
     "Configurar %{v1}",
   ],
+  "Acciones de %{v1}": [
+    "Acciones de %{v1}",
+    "Actions for %{v1}",
+    "Ações de %{v1}",
+  ],
   "Reordenar %{v1}": ["Reordenar %{v1}", "Reorder %{v1}", "Reordenar %{v1}"],
   "Desactivar %{v1}": [
     "Desactivar %{v1}",

@@ -49,11 +49,79 @@ Browser secure-context features (PWA, WebCrypto, clipboard) require HTTPS outsid
 Core operation requires no Cloudflare connectivity. JSON:API and OpenAPI integrations use the local operating-system DNS resolver; outbound connections recheck every resolved address to reject private destinations and DNS rebinding. External business integrations still need their providers:
 
 - SMTP: `SAVIA_SMTP_HOST`, `SAVIA_SMTP_PORT` (465 by default; TLS), `SAVIA_SMTP_FROM`, and optional username/password. Needed for password-reset and verification email delivery.
-- AI: existing `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` or administrator configuration. The existing SQL text-retrieval fallback is available; Cloudflare Vectorize/Workers AI semantic embeddings are not provisioned in this Compose stack.
+- AI: existing `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` or administrator configuration. The existing SQL text-retrieval fallback is available. For Pages semantic search, enable the local stack below; Cloudflare Vectorize/Workers AI are not required by that stack. Assistant RAG is separate and retains its existing fallback.
 - Nango: existing `NANGO_API_KEY`, `NANGO_BASE_URL`, `NANGO_CONNECT_URL` and provider integration ID variables. It is optional and can point at a separately hosted Nango installation.
 - External databases: enable `--profile external-databases`, set `SQL_BRIDGE_URL=http://db-bridge:8791`, and set `SQL_BRIDGE_SECRET` and `DB_BRIDGE_SHARED_SECRET` to the same generated secret. Set `DB_BRIDGE_ALLOWED_HOSTS` explicitly to your database hosts. The bridge is internal to Compose and has no published port.
 
 ALTCHA is a proof-of-work challenge, not a human-identity guarantee. Public submissions retain the shared quota, validation, expiry, idempotency and submission-only permissions. Cloudflare deployments keep Turnstile by default.
+
+### Local Pages semantic search
+
+Add the search override to run Ollama with the 1024-dimensional `bge-m3` model
+and a persistent Qdrant vector store on the internal Compose network:
+
+```sh
+docker compose -f docker-compose.self-hosted.yml -f docker-compose.self-hosted.search.yml up --build -d
+```
+
+For PostgreSQL, include both overrides:
+
+```sh
+docker compose --env-file infra/secrets/self-hosted.env -f docker-compose.self-hosted.yml -f docker-compose.self-hosted.postgres.yml -f docker-compose.self-hosted.search.yml up --build -d
+```
+
+The first startup downloads the embedding model and waits for that download to
+finish. Internet access is needed for image/model downloads; page content and
+queries are then embedded locally. Allow several GB of free RAM and disk space
+in addition to Savia's normal requirements. CPU speed affects indexing latency;
+no GPU is required. Ollama and Qdrant have no published ports.
+Embedding requests allow 60 seconds per batch, including initial model loading.
+`SAVIA_PAGES_EMBEDDING_TIMEOUT_MS` can reduce this limit (1000–60000 ms).
+An overloaded or slower host can still require **Retry indexing**. Savia cancels
+in-flight search-provider requests during graceful shutdown and waits for
+background indexing to release its database leases before closing the stores.
+An abrupt process kill can retain an indexing lease for up to 90 seconds;
+retry after that lease expires.
+
+The override sets `SAVIA_PAGES_SEARCH_ENABLED=true`,
+`SAVIA_PAGES_OLLAMA_URL=http://ollama:11434` and
+`SAVIA_PAGES_QDRANT_URL=http://qdrant:6333`. For separately hosted services, put
+these variables in the self-hosted environment file instead. URLs must be
+HTTP(S) origins without paths, query strings or credentials. Optional
+`SAVIA_PAGES_QDRANT_API_KEY` stays on the backend. The collection defaults to
+`savia-pages-bge-m3-v1`; `SAVIA_PAGES_QDRANT_COLLECTION` can select a different
+collection. The adapter creates missing collections and rejects incompatible
+dimensions or distance metrics. Use the dedicated `bge-m3` model and collection
+for Pages; do not mix embeddings from other models.
+
+Runtime configuration does not grant tenant access. A platform administrator
+must grant the existing Pages semantic-search capability, and a tenant
+administrator must activate it in **Page search**. Existing UI controls may
+still refer to this capability as Cloudflare search; Docker executes it through
+the configured local services. Saved/restored pages are submitted for background
+indexing; opening Pages catches up older versions. Search preserves tenant
+namespaces, current page permissions and version checks, and limits semantic
+queries to 30 per minute per tenant. If a provider fails, semantic endpoints
+return `SEARCH_UNAVAILABLE` and ordinary text search remains available.
+
+Use both Compose files for later lifecycle commands. Back up the `pages-vectors`
+volume alongside the application database: the database records which page
+versions are already indexed. Restoring only one can leave missing vectors or
+stale indexing manifests. Preserve the `pages-models` volume to avoid downloading
+the model again. Removing only the vector collection requires resetting the
+matching database indexing manifests before rebuilding it. Do not change the
+collection on an existing installation without coordinating that reset.
+
+```sh
+docker compose -f docker-compose.self-hosted.yml -f docker-compose.self-hosted.search.yml logs --tail=100 pages-model-init ollama qdrant savia
+```
+
+Adapter tests run in the ordinary self-hosted test suite. To additionally verify
+tenant isolation, permissions, version filtering and automatic indexing against
+a disposable Qdrant server, set `SAVIA_TEST_QDRANT_URL` to its HTTP origin and
+run `pnpm --filter @savia/self-hosted test`. These tests use unique temporary
+collections and delete them afterward; embedding responses are test fixtures,
+so they do not download or validate an actual Ollama model.
 
 ## Backup, upgrade and recovery
 

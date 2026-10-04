@@ -174,7 +174,11 @@ describe("imported recording audio inspection", () => {
         return Response.json({ text: "Imported transcript" });
       },
     }).transcribeRecording(
-      { apiKey: "test-key", model: "test/summary" },
+      {
+        apiKey: "test-key",
+        model: "test/summary",
+        transcriptionModel: "openai/whisper-large-v3",
+      },
       { bytes, format: "wav", source: "upload", durationSeconds: 75 },
     );
     expect(result).toMatchObject({
@@ -185,6 +189,12 @@ describe("imported recording audio inspection", () => {
     expect(requestUrl).toBe(
       "https://openrouter.ai/api/v1/audio/transcriptions",
     );
-    expect(requestBody.input_audio.format).toBe("wav");
+    expect(requestBody).toMatchObject({
+      model: "openai/whisper-large-v3",
+      input_audio: { format: "wav" },
+    });
+    expect(requestBody.input_audio.data).toHaveLength(
+      Math.ceil(bytes.length / 3) * 4,
+    );
   });
 });

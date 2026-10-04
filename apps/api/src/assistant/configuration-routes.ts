@@ -5,7 +5,7 @@ import {
   actorFromContext,
   requirePlatformAdministrator,
 } from "../auth/middleware";
-import type { AppActor } from "../auth/types";
+import { AuthenticationError, type AppActor } from "../auth/types";
 import {
   AssistantConfigurationRepository,
   AssistantConfigurationUnavailableError,
@@ -13,12 +13,17 @@ import {
   type AssistantModelCatalog,
 } from "./configuration";
 
+const transcriptionEndpointSchema = z
+  .enum(["audio/transcriptions", "chat/completions"])
+  .nullable();
+
 const configurationWriteSchema = z
   .object({
     apiKey: z.string().trim().min(1).max(512).optional(),
     clearApiKey: z.boolean().optional(),
     model: z.string().trim().max(160).nullable().optional(),
     transcriptionModel: z.string().trim().max(160).nullable().optional(),
+    transcriptionEndpoint: transcriptionEndpointSchema.optional(),
     summaryModel: z.string().trim().max(160).nullable().optional(),
   })
   .superRefine((value, context) => {
@@ -33,6 +38,7 @@ const configurationWriteSchema = z
       value.clearApiKey === undefined &&
       value.model === undefined &&
       value.transcriptionModel === undefined &&
+      value.transcriptionEndpoint === undefined &&
       value.summaryModel === undefined
     ) {
       context.addIssue({ code: "custom", message: "A change is required" });
@@ -99,6 +105,19 @@ function requireConfigurationAdministrator(context: Context): AppActor {
   return actor;
 }
 
+function isPlatformAdministrator(actor: AppActor): boolean {
+  return actor.globalRoles.includes("platform_admin");
+}
+
+async function configurationSummaryForActor(
+  repository: AssistantConfigurationRepository,
+  actor: AppActor,
+) {
+  return isPlatformAdministrator(actor)
+    ? repository.summary()
+    : repository.summaryForTenantAdministrator(actor.principal.id);
+}
+
 async function activeTenantSummary(
   database: D1Database,
   repository: AssistantConfigurationRepository,
@@ -137,9 +156,9 @@ export function registerAssistantConfigurationRoutes(
   modelCatalog: AssistantModelCatalog = openRouterModelCatalog(),
 ): void {
   app.get("/v1/assistant/configuration", async (context) => {
-    requireConfigurationAdministrator(context);
+    const actor = actorFromContext(context);
     if (!repository) return unavailableResponse();
-    return context.json(await repository.summary());
+    return context.json(await configurationSummaryForActor(repository, actor));
   });
 
   app.put("/v1/assistant/configuration/global", async (context) => {
@@ -161,25 +180,27 @@ export function registerAssistantConfigurationRoutes(
   });
 
   const handlePutTenantOverride = async (context: Context) => {
-    const actor = requireConfigurationAdministrator(context);
+    const actor = actorFromContext(context);
     if (!repository) return unavailableResponse();
     const idParam = context.req.param("tenantId");
     const tenantId = Number(idParam);
     if (!Number.isInteger(tenantId) || tenantId <= 0) return invalidResponse();
     const parsed = await parseWrite(context);
     if (!parsed.success) return invalidResponse();
-    if (
-      parsed.data.transcriptionModel !== undefined ||
-      parsed.data.summaryModel !== undefined
-    ) {
-      return invalidResponse();
-    }
     try {
+      if (!isPlatformAdministrator(actor)) {
+        await repository.assertTenantAdministrator(
+          actor.principal.id,
+          tenantId,
+        );
+      }
       await repository.saveAgencyOverride(tenantId, {
         actorId: actor.principal.id,
         ...parsed.data,
       });
-      return context.json(await repository.summary());
+      return context.json(
+        await configurationSummaryForActor(repository, actor),
+      );
     } catch (error) {
       const response = configurationFailureResponse(error);
       if (response) return response;
@@ -192,11 +213,14 @@ export function registerAssistantConfigurationRoutes(
   );
 
   const handleDeleteTenantOverride = async (context: Context) => {
-    requireConfigurationAdministrator(context);
+    const actor = actorFromContext(context);
     if (!repository) return unavailableResponse();
     const idParam = context.req.param("tenantId");
     const tenantId = Number(idParam);
     if (!Number.isInteger(tenantId) || tenantId <= 0) return invalidResponse();
+    if (!isPlatformAdministrator(actor)) {
+      await repository.assertTenantAdministrator(actor.principal.id, tenantId);
+    }
     await repository.clearAgencyOverride(tenantId);
     return new Response(null, { status: 204 });
   };
@@ -206,17 +230,60 @@ export function registerAssistantConfigurationRoutes(
   );
 
   app.get("/v1/assistant/models", async (context) => {
-    const actor = requireConfigurationAdministrator(context);
+    const actor = actorFromContext(context);
     if (!repository) return unavailableResponse();
     try {
-      const configuration = await repository.effectiveConfigurationFor(
-        actor.principal.id,
-      );
+      const requestedTenant = context.req.query("tenantId");
+      let configuration;
+      if (requestedTenant !== undefined) {
+        const tenantId = Number(requestedTenant);
+        if (!Number.isInteger(tenantId) || tenantId <= 0)
+          return invalidResponse();
+        if (!isPlatformAdministrator(actor)) {
+          await repository.assertTenantAdministrator(
+            actor.principal.id,
+            tenantId,
+          );
+        }
+        configuration = isPlatformAdministrator(actor)
+          ? await repository.effectiveConfigurationForPlatformTenant(tenantId)
+          : await repository.effectiveConfigurationForTenant(
+              actor.principal.id,
+              tenantId,
+            );
+      } else if (isPlatformAdministrator(actor)) {
+        configuration = await repository.effectiveGlobalConfiguration();
+      } else {
+        const manageableTenantIds = await repository.manageableTenantIds(
+          actor.principal.id,
+        );
+        if (!manageableTenantIds.length) {
+          throw new AuthenticationError(
+            "AUTHORIZATION_FORBIDDEN",
+            "An active tenant administrator membership is required",
+          );
+        }
+        const activeTenant = await repository.activeTenantFor(
+          actor.principal.id,
+        );
+        const tenantId =
+          activeTenant && manageableTenantIds.includes(activeTenant)
+            ? activeTenant
+            : manageableTenantIds.length === 1
+              ? manageableTenantIds[0]
+              : undefined;
+        if (!tenantId) return invalidResponse();
+        configuration = await repository.effectiveConfigurationForTenant(
+          actor.principal.id,
+          tenantId,
+        );
+      }
       return context.json({ models: await modelCatalog.list(configuration) });
     } catch (error) {
       if (error instanceof AssistantConfigurationUnavailableError) {
         return unavailableResponse();
       }
+      if (error instanceof AuthenticationError) throw error;
       return modelCatalogUnavailableResponse();
     }
   });

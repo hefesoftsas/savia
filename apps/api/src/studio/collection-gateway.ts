@@ -1,3 +1,7 @@
+import {
+  createRemoteWorkspaceApp,
+  handlesRemoteWorkspace,
+} from "../external-crm/remote-workspace";
 import type { DocumentDeliveryBridge } from "@savia/studio-server/document-delivery";
 import { dialectFor } from "@savia/db/dialect";
 import { historyDatabase } from "@savia/studio-server/record-history-storage";
@@ -180,6 +184,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
             .first();
           if (
             binding &&
+            context.actor.credential?.kind !== "personal-api-key" &&
             request.method === "GET" &&
             /^\/api\/(?:objects|records|views|record-detail|record-links|record-notes|record-activity)\//.test(
               path,
@@ -191,7 +196,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
                   dialectFor(db).jsonValue("config", "$.kind") +
                   "='crm' AND " +
                   dialectFor(db).jsonValue("config", "$.provider") +
-                  "='hubspot' AND " +
+                  " IN ('hubspot','salesforce','zoho','pipedrive') AND " +
                   dialectFor(db).jsonValue("config", "$.accessScope") +
                   "='tenant'",
               )
@@ -292,6 +297,8 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
           );
         return context.externalCollections.fetch(request);
       }
+      if (await handlesRemoteWorkspace(context, path))
+        return createRemoteWorkspaceApp(context).fetch(request);
       if (await handlesHubspotWorkspace(context, path))
         return createHubspotWorkspaceApp(context).fetch(request);
       if (handlesCollectionRelationsPath(path)) {

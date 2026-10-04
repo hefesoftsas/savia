@@ -23,6 +23,11 @@ import {
 } from "lucide-react";
 import { FieldHelp } from "./field-help";
 import { getListObjectsQueryKey } from "./generated/studio";
+import {
+  CrmProviderIcon,
+  crmProviderLabel,
+  type StudioCrmProvider,
+} from "./crm-provider";
 
 type WorkspaceObject = {
   name: string;
@@ -31,8 +36,18 @@ type WorkspaceObject = {
   available: boolean;
   installed?: boolean;
   reason?: string;
+  capabilities?: {
+    list?: boolean;
+    read?: boolean;
+    create?: boolean;
+    update?: boolean;
+    delete?: boolean;
+    schema?: boolean;
+    customFields?: boolean;
+  };
 };
 type Workspace = {
+  provider?: StudioCrmProvider;
   connected: boolean;
   accountLabel?: string;
   objects: WorkspaceObject[];
@@ -45,10 +60,12 @@ type Request = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
 
 export default function StudioWorkspacePanel({
   scope,
+  provider = "hubspot",
   request,
   onInstalled,
 }: {
   scope: string | undefined;
+  provider?: StudioCrmProvider;
   request: Request;
   onInstalled: (
     object: Pick<WorkspaceObject, "name" | "label">,
@@ -57,9 +74,20 @@ export default function StudioWorkspacePanel({
   const t = useMessages(automationMessages);
 
   const client = useQueryClient();
+  const providerLabel = crmProviderLabel(provider);
+  const workspaceQueryKey =
+    provider === "hubspot"
+      ? ["crm-workspace", scope]
+      : ["crm-workspace", provider, scope];
+  const discoveryPath =
+    provider === "hubspot" ? "/crm-workspace" : `/crm-workspace/${provider}`;
+  const installationPath =
+    provider === "hubspot"
+      ? "/crm-workspace/install"
+      : `/crm-workspace/${provider}/install`;
   const workspace = useQuery({
-    queryKey: ["crm-workspace", scope],
-    queryFn: () => request<Workspace>("/crm-workspace"),
+    queryKey: workspaceQueryKey,
+    queryFn: () => request<Workspace>(discoveryPath),
     retry: false,
   });
   const [busy, setBusy] = useState(false);
@@ -73,6 +101,7 @@ export default function StudioWorkspacePanel({
   const inFlight = useRef(false);
   const uninstallInFlight = useRef(false);
   const selectionScope = JSON.stringify([
+    provider,
     scope,
     workspace.data?.connected,
     workspace.data?.accountLabel,
@@ -125,25 +154,26 @@ export default function StudioWorkspacePanel({
     setNotice("");
     try {
       const installed = await request<InstalledWorkspace>(
-        "/crm-workspace/install",
+        installationPath,
         "POST",
         { resources },
       );
       if (!installed.objects?.length)
         throw new Error(
           t(
-            "No se instaló ninguna pantalla. Revisa los permisos de la conexión HubSpot y vuelve a consultar la disponibilidad.",
+            "No se instaló ninguna pantalla. Revisa los permisos de la conexión %{value0} y vuelve a consultar la disponibilidad.",
+            { value0: providerLabel },
           ),
         );
       setSelectedResources(new Set());
       await client.cancelQueries({
-        queryKey: ["crm-workspace", scope],
+        queryKey: workspaceQueryKey,
         exact: true,
       });
       const installedNames = new Set(
         installed.objects.map((object) => object.name),
       );
-      client.setQueryData<Workspace>(["crm-workspace", scope], (previous) =>
+      client.setQueryData<Workspace>(workspaceQueryKey, (previous) =>
         previous
           ? {
               ...previous,
@@ -164,8 +194,9 @@ export default function StudioWorkspacePanel({
       const first = installed.objects[0];
       await onInstalled(first);
       setNotice(
-        t("%{value0} pantallas de HubSpot listas.%{value1}", {
+        t("%{value0} pantallas de %{value2} listas.%{value1}", {
           value0: installed.objects.length,
+          value2: providerLabel,
           value1: installed.unavailable?.length
             ? t(" %{value0} no disponibles con esta conexión.", {
                 value0: installed.unavailable.length,
@@ -198,10 +229,10 @@ export default function StudioWorkspacePanel({
         "DELETE",
       );
       await client.cancelQueries({
-        queryKey: ["crm-workspace", scope],
+        queryKey: workspaceQueryKey,
         exact: true,
       });
-      client.setQueryData<Workspace>(["crm-workspace", scope], (previous) =>
+      client.setQueryData<Workspace>(workspaceQueryKey, (previous) =>
         previous
           ? {
               ...previous,
@@ -214,7 +245,9 @@ export default function StudioWorkspacePanel({
           : previous,
       );
       setUninstallTarget(null);
-      setNotice(t("Pantalla desvinculada de HubSpot."));
+      setNotice(
+        t("Pantalla desvinculada de %{value0}.", { value0: providerLabel }),
+      );
       void client
         .invalidateQueries({ queryKey: getListObjectsQueryKey(), exact: true })
         .catch(() => undefined);
@@ -238,20 +271,20 @@ export default function StudioWorkspacePanel({
 
   return (
     <Card
-      aria-labelledby="connected-crm-title"
+      aria-labelledby={`connected-crm-${provider}-title`}
       className="overflow-hidden rounded-2xl border-border/60 shadow-sm"
     >
       <CardHeader className="flex flex-row items-start justify-between gap-4 border-b border-border/60 bg-muted/30 pb-4">
         <div className="space-y-1">
           <div className="flex items-center gap-1.5">
             <CardTitle
-              id="connected-crm-title"
+              id={`connected-crm-${provider}-title`}
               className="text-base font-semibold"
             >
-              {t("CRM conectado · HubSpot")}
+              {t("CRM conectado · %{value0}", { value0: providerLabel })}
             </CardTitle>
             <FieldHelp
-              label={`${t("CRM conectado · HubSpot")} (${t("Ayuda")})`}
+              label={`${t("CRM conectado · %{value0}", { value0: providerLabel })} (${t("Ayuda")})`}
             >
               {t(
                 "Crea las pantallas de Studio para trabajar con los registros y sus relaciones desde Savia.",
@@ -287,7 +320,8 @@ export default function StudioWorkspacePanel({
           <Alert variant="destructive" className="rounded-2xl py-3">
             <AlertCircle className="size-4" />
             <AlertDescription className="text-xs">
-              {t("No se pudo consultar HubSpot:")} {workspace.error.message}
+              {t("No se pudo consultar %{value0}:", { value0: providerLabel })}{" "}
+              {workspace.error.message}
             </AlertDescription>
           </Alert>
         )}
@@ -297,7 +331,8 @@ export default function StudioWorkspacePanel({
             <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             <p>
               {t(
-                "No hay una conexión HubSpot activa en este tenant. Configúrala en las integraciones de Savia y actualiza la disponibilidad.",
+                "No hay una conexión %{value0} activa en este tenant. Configúrala en las integraciones de Savia y actualiza la disponibilidad.",
+                { value0: providerLabel },
               )}
             </p>
           </div>
@@ -306,16 +341,21 @@ export default function StudioWorkspacePanel({
         {workspace.data?.connected && (
           <div className="space-y-3">
             <div className="flex items-center gap-1.5">
+              <CrmProviderIcon
+                provider={provider}
+                className="size-4 shrink-0"
+              />
               <p className="text-xs font-medium text-foreground">
-                {workspace.data.accountLabel || "HubSpot"} · {selectable.length}{" "}
-                {t("por instalar")} · {workspace.data.objects.length}{" "}
-                {t("en catálogo")}
+                {workspace.data.accountLabel || providerLabel} ·{" "}
+                {selectable.length} {t("por instalar")} ·{" "}
+                {workspace.data.objects.length} {t("en catálogo")}
               </p>
               <FieldHelp
                 label={`${t("pantallas disponibles")} (${t("Ayuda")})`}
               >
                 {t(
-                  "Las operaciones disponibles dependen de los permisos de HubSpot. Puedes repetir la instalación sin duplicar pantallas.",
+                  "Las operaciones disponibles dependen de los permisos de %{value0}. Puedes repetir la instalación sin duplicar pantallas.",
+                  { value0: providerLabel },
                 )}
               </FieldHelp>
             </div>
@@ -406,7 +446,9 @@ export default function StudioWorkspacePanel({
                               value0: object.label,
                             })}{" "}
                             <strong>
-                              {t("Los registros de HubSpot se conservarán.")}
+                              {provider === "hubspot"
+                                ? t("Los registros de HubSpot se conservarán.")
+                                : t("Los registros remotos se conservarán.")}
                             </strong>
                           </p>
                           <div className="flex flex-wrap gap-2">
@@ -513,7 +555,8 @@ export default function StudioWorkspacePanel({
           })} (${t("Ayuda")})`}
         >
           {t(
-            "Al instalar, todos los miembros activos de este tenant podrán consultar estas colecciones usando tu conexión. Solo los administradores podrán modificar registros, según los permisos de HubSpot.",
+            "Al instalar, todos los miembros activos de este tenant podrán consultar estas colecciones usando tu conexión. Solo los administradores podrán modificar registros, según los permisos de %{value0}.",
+            { value0: providerLabel },
           )}
         </FieldHelp>
         <Button

@@ -16,6 +16,12 @@ import {
   KeyRound,
   LoaderCircle,
   Bot,
+  Pencil,
+  RotateCcw,
+  Save,
+  Trash2,
+  Undo2,
+  X,
 } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import { ApiClientError } from "@/api/api-client";
@@ -64,7 +70,7 @@ import { SettingsPanelSkeleton } from "@/components/admin/page-skeletons";
 type ConfigurationServices = Pick<AppServices, "assistantConfiguration">;
 type ConfigurationTab = "global" | "tenant";
 const defaultMeetingModels = {
-  transcription: "openai/whisper-large-v3",
+  transcription: "google/gemini-2.5-flash",
   summary: "deepseek/deepseek-v4-flash",
 };
 
@@ -107,10 +113,12 @@ export function AssistantConfigurationPanel({
   services,
   embedded = false,
   globalOnly = false,
+  tenantId: fixedTenantId,
 }: {
   services: ConfigurationServices;
   embedded?: boolean;
   globalOnly?: boolean;
+  tenantId?: number;
 }) {
   const t = useMessages(settingsMessages);
   const locale = intlLocale(useAppLocale());
@@ -139,16 +147,20 @@ export function AssistantConfigurationPanel({
   );
   const [meetingModelNotice, setMeetingModelNotice] = useState(false);
   const [confirmGlobalKeyClear, setConfirmGlobalKeyClear] = useState(false);
-  const [selectedTenantId, setSelectedTenantId] = useState<
-    number | undefined
-  >();
+  const [selectedTenantId, setSelectedTenantId] = useState<number | undefined>(
+    fixedTenantId,
+  );
   const [tenantKey, setTenantKey] = useState("");
   const [clearTenantKey, setClearTenantKey] = useState(false);
   const [tenantModel, setTenantModel] = useState("");
+  const [tenantTranscriptionModel, setTenantTranscriptionModel] = useState("");
+  const [tenantSummaryModel, setTenantSummaryModel] = useState("");
   const [savingTenant, setSavingTenant] = useState(false);
   const [pendingDeletion, setPendingDeletion] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [activeTab, setActiveTab] = useState<ConfigurationTab>("global");
+  const [activeTab, setActiveTab] = useState<ConfigurationTab>(
+    fixedTenantId === undefined ? "global" : "tenant",
+  );
 
   const selectedOverride = useMemo(
     () =>
@@ -166,6 +178,8 @@ export function AssistantConfigurationPanel({
     summaryModel,
     tenantKey,
     tenantModel,
+    tenantTranscriptionModel,
+    tenantSummaryModel,
     clearTenantKey,
     selectedTenantId,
   ]);
@@ -177,11 +191,20 @@ export function AssistantConfigurationPanel({
     try {
       const [nextSummary, activeTenant] = await Promise.all([
         client.summary(),
-        globalOnly ? Promise.resolve({ tenants: [] }) : client.activeTenant(),
+        globalOnly || fixedTenantId !== undefined
+          ? Promise.resolve({ tenants: [] })
+          : client.activeTenant(),
       ]);
       if (draftSnapshot.current !== snapshot) return;
       setSummary(nextSummary);
-      setTenants(activeTenant.tenants);
+      const accessibleTenants = nextSummary.manageableTenantIds
+        ? activeTenant.tenants.filter((tenant) =>
+            nextSummary.manageableTenantIds!.includes(tenant.id),
+          )
+        : activeTenant.tenants;
+      setTenants(accessibleTenants);
+      if (nextSummary.canManageGlobal === false || fixedTenantId !== undefined)
+        setActiveTab("tenant");
       setGlobalModel(nextSummary.global?.model ?? "");
       setTranscriptionModel(nextSummary.global?.transcriptionModel ?? "");
       setSummaryModel(nextSummary.global?.summaryModel ?? "");
@@ -193,7 +216,7 @@ export function AssistantConfigurationPanel({
         );
       }
       const soleAccessibleTenant =
-        activeTenant.tenants.length === 1 ? activeTenant.tenants[0] : undefined;
+        accessibleTenants.length === 1 ? accessibleTenants[0] : undefined;
       if (selectedTenantId === undefined && soleAccessibleTenant) {
         const setting = nextSummary.tenants.find(
           (entry) => entry.tenantId === soleAccessibleTenant.id,
@@ -202,10 +225,14 @@ export function AssistantConfigurationPanel({
         setTenantModel(setting?.model ?? "");
       } else if (
         selectedTenantId === undefined &&
-        nextSummary.tenants[0]?.tenantId !== undefined
+        accessibleTenants[0] !== undefined
       ) {
-        setSelectedTenantId(nextSummary.tenants[0].tenantId);
-        setTenantModel(nextSummary.tenants[0].model ?? "");
+        setSelectedTenantId(accessibleTenants[0].id);
+        setTenantModel(
+          nextSummary.tenants.find(
+            (entry) => entry.tenantId === accessibleTenants[0].id,
+          )?.model ?? "",
+        );
       }
     } catch (exception) {
       if (exception instanceof ApiClientError && exception.status === 403) {
@@ -221,12 +248,6 @@ export function AssistantConfigurationPanel({
     } finally {
       setLoading(false);
     }
-    try {
-      setModels(await client.models());
-      setCatalogError(null);
-    } catch {
-      setCatalogError("No se pudo cargar el catálogo de modelos.");
-    }
   };
 
   useEffect(() => {
@@ -240,7 +261,9 @@ export function AssistantConfigurationPanel({
     transcriptionModel !== (summary?.global?.transcriptionModel ?? "") ||
     summaryModel !== (summary?.global?.summaryModel ?? "") ||
     globalModel !== (summary?.global?.model ?? "") ||
-    tenantModel !== (selectedOverride?.model ?? ""),
+    tenantModel !== (selectedOverride?.model ?? "") ||
+    tenantTranscriptionModel !== (selectedOverride?.transcriptionModel ?? "") ||
+    tenantSummaryModel !== (selectedOverride?.summaryModel ?? ""),
   );
   const remoteGlobal = useRealtimeRefresh({
     topics: ["settings"],
@@ -255,6 +278,36 @@ export function AssistantConfigurationPanel({
     blocked: draftDirty || savingGlobal || savingTenant || savingMeetingModels,
     refresh: load,
   });
+
+  useEffect(() => {
+    setTenantTranscriptionModel(selectedOverride?.transcriptionModel ?? "");
+    setTenantSummaryModel(selectedOverride?.summaryModel ?? "");
+  }, [
+    selectedTenantId,
+    selectedOverride?.transcriptionModel,
+    selectedOverride?.summaryModel,
+  ]);
+
+  useEffect(() => {
+    let current = true;
+    if (activeTab === "tenant" && selectedTenantId === undefined) return;
+    setModels([]);
+    void client
+      .models(activeTab === "tenant" ? selectedTenantId : undefined)
+      .then((next) => {
+        if (current) {
+          setModels(next);
+          setCatalogError(null);
+        }
+      })
+      .catch(() => {
+        if (current)
+          setCatalogError("No se pudo cargar el catálogo de modelos.");
+      });
+    return () => {
+      current = false;
+    };
+  }, [client, activeTab, selectedTenantId]);
 
   const selectTenant = (tenantId: number) => {
     const override = summary?.tenants.find(
@@ -301,6 +354,19 @@ export function AssistantConfigurationPanel({
     }
   };
 
+  const transcriptionRouting = (
+    selected: string,
+    saved?: AssistantConfigurationSetting | null,
+  ) => {
+    const id = selected.trim();
+    const endpoint =
+      models.find((model) => model.id === id)?.transcriptionEndpoint ??
+      (id && id === saved?.transcriptionModel
+        ? saved.transcriptionEndpoint
+        : undefined);
+    return endpoint ? { transcriptionEndpoint: endpoint } : {};
+  };
+
   const saveMeetingModels = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!summary) return;
@@ -310,6 +376,7 @@ export function AssistantConfigurationPanel({
     try {
       const next = await client.saveGlobal({
         transcriptionModel: transcriptionModel.trim() || null,
+        ...transcriptionRouting(transcriptionModel, summary.global),
         summaryModel: summaryModel.trim() || null,
       });
       setSummary(next);
@@ -352,7 +419,7 @@ export function AssistantConfigurationPanel({
 
   const saveTenant = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (selectedTenantId === undefined) return;
+    if (selectedTenantId === undefined || !summary) return;
     setSavingTenant(true);
     setError(null);
     setNotice(null);
@@ -364,10 +431,19 @@ export function AssistantConfigurationPanel({
             ? { apiKey: tenantKey.trim() }
             : {}),
         model: tenantModel.trim() || null,
+        transcriptionModel: tenantTranscriptionModel.trim() || null,
+        ...transcriptionRouting(tenantTranscriptionModel, selectedOverride),
+        summaryModel: tenantSummaryModel.trim() || null,
       });
       setSummary(next);
       setTenantKey("");
       setClearTenantKey(false);
+      try {
+        setModels(await client.models(selectedTenantId));
+        setCatalogError(null);
+      } catch {
+        setCatalogError("No se pudo cargar el catálogo de modelos.");
+      }
       setNotice(
         t("Configuración de %{tenant} guardada.", {
           tenant: tenantName(selectedTenantId, tenants, t),
@@ -393,6 +469,8 @@ export function AssistantConfigurationPanel({
       setTenantKey("");
       setClearTenantKey(false);
       setTenantModel("");
+      setTenantTranscriptionModel("");
+      setTenantSummaryModel("");
       setNotice(
         t("%{tenant} vuelve a heredar la configuración global.", {
           tenant: tenantName(pendingDeletion, tenants, t),
@@ -425,7 +503,7 @@ export function AssistantConfigurationPanel({
         <CircleAlert />
         <AlertDescription>
           {t(
-            "Solo administradores de plataforma pueden acceder a esta configuración.",
+            "Only platform or tenant administrators can access this configuration.",
           )}
         </AlertDescription>
       </Alert>
@@ -434,7 +512,13 @@ export function AssistantConfigurationPanel({
     return <main className="mx-auto w-full max-w-3xl py-10">{denied}</main>;
   }
 
-  const showTenantConfiguration = !embedded && !globalOnly;
+  const canManageGlobal =
+    summary?.canManageGlobal !== false && fixedTenantId === undefined;
+  const showTenantConfiguration = !globalOnly;
+  const visibleTenantSettings = (summary?.tenants ?? []).filter(
+    (setting) =>
+      fixedTenantId === undefined || setting.tenantId === fixedTenantId,
+  );
   const globalKeyState = summary?.global?.keyState ?? "not_configured";
   const isCustomGlobalKeyConfigured =
     summary?.global?.keyState === "configured";
@@ -451,14 +535,14 @@ export function AssistantConfigurationPanel({
             </span>
           ) : null}
         </div>
-        <div className="relative">
+        <div className="relative min-w-0">
           <Input
             id="assistant-global-key"
             type={showGlobalKey ? "text" : "password"}
             autoComplete="new-password"
             value={globalKey}
             onChange={(event) => setGlobalKey(event.target.value)}
-            className="pr-10"
+            className="h-11 pr-12"
             placeholder={
               isCustomGlobalKeyConfigured
                 ? t("•••••••••••••••• (dejar en blanco para conservar)")
@@ -468,7 +552,7 @@ export function AssistantConfigurationPanel({
           <button
             type="button"
             onClick={() => setShowGlobalKey(!showGlobalKey)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="absolute right-0 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={showGlobalKey ? t("Ocultar clave") : t("Mostrar clave")}
           >
             {showGlobalKey ? (
@@ -508,53 +592,34 @@ export function AssistantConfigurationPanel({
         label={t("Modelo global")}
         value={globalModel}
         onChange={setGlobalModel}
-        models={models}
+        models={models.filter((model) => model.supportsTools !== false)}
         fallbackModel={
           summary?.deployment?.model || "deepseek/deepseek-v4-flash"
         }
         fallbackLabel={t("Modelo predeterminado")}
       />
-      {catalogError ? (
-        <p className="text-sm text-muted-foreground">
-          {Object.hasOwn(settingsMessages, catalogError)
-            ? t(catalogError as keyof typeof settingsMessages)
-            : catalogError}
-        </p>
-      ) : null}
-      {error ? (
-        <Alert variant="destructive">
-          <CircleAlert />
-          <AlertDescription>
-            {Object.hasOwn(settingsMessages, error)
-              ? t(error as keyof typeof settingsMessages)
-              : error}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      {notice ? (
-        <p
-          className="flex items-center gap-2 text-sm text-primary"
-          role="status"
-        >
-          <CheckCircle2 className="size-4" />{" "}
-          {Object.hasOwn(settingsMessages, notice)
-            ? t(notice as keyof typeof settingsMessages)
-            : notice}
-        </p>
-      ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={savingGlobal || savingMeetingModels}>
+        <Button
+          type="submit"
+          disabled={savingGlobal || savingMeetingModels}
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+        >
           {savingGlobal ? <LoaderCircle className="animate-spin" /> : null}
-          {t("Guardar")}
+          {!savingGlobal ? <Save aria-hidden="true" /> : null}
+          <span className="sr-only sm:not-sr-only">{t("Guardar")}</span>
         </Button>
         {isCustomGlobalKeyConfigured ? (
           <Button
             type="button"
             variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={savingGlobal || savingMeetingModels}
             onClick={() => setConfirmGlobalKeyClear(true)}
           >
-            {t("Eliminar clave")}
+            <Trash2 aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">
+              {t("Eliminar clave")}
+            </span>
           </Button>
         ) : null}
       </div>
@@ -570,24 +635,27 @@ export function AssistantConfigurationPanel({
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid min-w-0 gap-2">
-          <Label htmlFor="meeting-transcription-model">
-            {t("Transcription model")}
-          </Label>
-          <Input
+          <ModelInput
             id="meeting-transcription-model"
+            label={t("Transcription model")}
             value={transcriptionModel}
-            onChange={(event) => {
-              setTranscriptionModel(event.target.value);
+            onChange={(value) => {
+              setTranscriptionModel(value);
               setMeetingModelNotice(false);
             }}
-            placeholder={
+            models={models.filter(
+              (model) =>
+                model.transcriptionEndpoint ||
+                (model.modalities?.audio && model.modalities?.text),
+            )}
+            disabled={savingMeetingModels}
+            fallbackModel={
               summary?.deployment?.transcriptionModel ??
               defaultMeetingModels.transcription
             }
-            aria-describedby="meeting-transcription-help"
-            disabled={savingMeetingModels}
-            maxLength={160}
-            pattern="[a-zA-Z0-9][a-zA-Z0-9._-]*/[a-zA-Z0-9][a-zA-Z0-9._:-]*"
+            catalogDescription={t(
+              "Use a model compatible with OpenRouter audio transcription (provider/model).",
+            )}
           />
           <p
             id="meeting-transcription-help"
@@ -599,24 +667,25 @@ export function AssistantConfigurationPanel({
           </p>
         </div>
         <div className="grid min-w-0 gap-2">
-          <Label htmlFor="meeting-summary-model">{t("Summary model")}</Label>
-          <Input
+          <ModelInput
             id="meeting-summary-model"
+            label={t("Summary model")}
             value={summaryModel}
-            onChange={(event) => {
-              setSummaryModel(event.target.value);
+            onChange={(value) => {
+              setSummaryModel(value);
               setMeetingModelNotice(false);
             }}
-            placeholder={
+            models={models.filter((model) => model.modalities?.text !== false)}
+            disabled={savingMeetingModels}
+            fallbackModel={
               summary?.global?.model ??
               summary?.deployment?.summaryModel ??
               summary?.deployment?.model ??
               defaultMeetingModels.summary
             }
-            aria-describedby="meeting-summary-help"
-            disabled={savingMeetingModels}
-            maxLength={160}
-            pattern="[a-zA-Z0-9][a-zA-Z0-9._-]*/[a-zA-Z0-9][a-zA-Z0-9._:-]*"
+            catalogDescription={t(
+              "Use a text model for meeting notes. Default: the effective assistant model.",
+            )}
           />
           <p
             id="meeting-summary-help"
@@ -643,11 +712,13 @@ export function AssistantConfigurationPanel({
         <Button
           type="submit"
           disabled={savingMeetingModels || savingGlobal || summary === null}
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
         >
           {savingMeetingModels ? (
             <LoaderCircle className="animate-spin" />
           ) : null}
-          {t("Save models")}
+          {!savingMeetingModels ? <Save aria-hidden="true" /> : null}
+          <span className="sr-only sm:not-sr-only">{t("Save models")}</span>
         </Button>
       </div>
     </form>
@@ -655,6 +726,35 @@ export function AssistantConfigurationPanel({
 
   const panel = (
     <>
+      {catalogError ? (
+        <Alert>
+          <CircleAlert />
+          <AlertDescription>
+            {t("No se pudo cargar el catálogo de modelos.")}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {error ? (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertDescription>
+            {Object.hasOwn(settingsMessages, error)
+              ? t(error as keyof typeof settingsMessages)
+              : error}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {notice ? (
+        <p
+          className="flex items-center gap-2 text-sm text-primary"
+          role="status"
+        >
+          <CheckCircle2 className="size-4" />{" "}
+          {Object.hasOwn(settingsMessages, notice)
+            ? t(notice as keyof typeof settingsMessages)
+            : notice}
+        </p>
+      ) : null}
       <RemoteChangesNotice
         changed={remoteGlobal.changed || remoteTenant.changed}
         reload={async () => {
@@ -699,62 +799,70 @@ export function AssistantConfigurationPanel({
           onValueChange={(value) => setActiveTab(value as ConfigurationTab)}
           value={activeTab}
         >
-          <TabsList>
-            <TabsTrigger value="global">{t("Global")}</TabsTrigger>
+          <TabsList className="[&>[role=tab]]:min-h-11">
+            {canManageGlobal ? (
+              <TabsTrigger value="global">{t("Global")}</TabsTrigger>
+            ) : null}
             {showTenantConfiguration ? (
               <TabsTrigger value="tenant">
                 {t("Por organización")}
-                {(summary?.tenants.length ?? 0) > 0 ? (
+                {visibleTenantSettings.length > 0 ? (
                   <Badge className="ml-1.5" variant="outline">
-                    {summary?.tenants.length}
+                    {visibleTenantSettings.length}
                   </Badge>
                 ) : null}
               </TabsTrigger>
             ) : null}
           </TabsList>
 
-          <TabsContent value="global">
-            <Card>
-              <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
-                <div>
-                  <CardTitle>{t("Global")}</CardTitle>
-                  {isCustomGlobalKeyConfigured && summary?.global?.updatedAt ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("Configurada el")}{" "}
-                      {formatConfiguredDate(summary.global.updatedAt, locale)}
-                    </p>
-                  ) : null}
-                </div>
-                <Badge
-                  variant={
-                    globalKeyState === "configured"
-                      ? "default"
-                      : globalKeyState === "deployment_fallback"
-                        ? "secondary"
-                        : "outline"
-                  }
+          {canManageGlobal ? (
+            <TabsContent value="global">
+              <Card>
+                <CardHeader className="flex-col items-start gap-3 space-y-0 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-6">
+                  <div>
+                    <CardTitle>{t("Global")}</CardTitle>
+                    {isCustomGlobalKeyConfigured &&
+                    summary?.global?.updatedAt ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t("Configurada el")}{" "}
+                        {formatConfiguredDate(summary.global.updatedAt, locale)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Badge
+                    variant={
+                      globalKeyState === "configured"
+                        ? "default"
+                        : globalKeyState === "deployment_fallback"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    {t(keyState(globalKeyState))}
+                  </Badge>
+                </CardHeader>
+                <CardContent className="space-y-4">{globalForm}</CardContent>
+              </Card>
+              <section
+                className="mt-6 space-y-4"
+                aria-labelledby="meeting-models-heading"
+              >
+                <h2
+                  id="meeting-models-heading"
+                  className="text-lg font-semibold"
                 >
-                  {t(keyState(globalKeyState))}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-4">{globalForm}</CardContent>
-            </Card>
-            <section
-              className="mt-6 space-y-4"
-              aria-labelledby="meeting-models-heading"
-            >
-              <h2 id="meeting-models-heading" className="text-lg font-semibold">
-                {t("Meeting recordings")}
-              </h2>
-              {meetingModelsForm}
-            </section>
-          </TabsContent>
+                  {t("Meeting recordings")}
+                </h2>
+                {meetingModelsForm}
+              </section>
+            </TabsContent>
+          ) : null}
 
           {showTenantConfiguration ? (
             <TabsContent value="tenant">
-              {summary?.tenants.length ? (
-                <div className="overflow-hidden rounded-xl border bg-card">
-                  <Table>
+              {visibleTenantSettings.length ? (
+                <div className="overflow-x-auto rounded-xl border bg-card">
+                  <Table className="min-w-[36rem]">
                     <TableHeader className="bg-muted/40">
                       <TableRow>
                         <TableHead>{t("Organización")}</TableHead>
@@ -766,7 +874,7 @@ export function AssistantConfigurationPanel({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {summary.tenants.map((setting) => {
+                      {visibleTenantSettings.map((setting) => {
                         const tenantId = setting.tenantId!;
                         return (
                           <TableRow key={tenantId}>
@@ -797,20 +905,28 @@ export function AssistantConfigurationPanel({
                                   type="button"
                                   size="sm"
                                   variant="outline"
+                                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                                   onClick={() => selectTenant(tenantId)}
                                 >
-                                  {t("Editar")}
+                                  <Pencil aria-hidden="true" />
+                                  <span className="sr-only sm:not-sr-only">
+                                    {t("Editar")}
+                                  </span>
                                 </Button>
                                 <Button
                                   type="button"
                                   size="sm"
                                   variant="ghost"
+                                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                                   onClick={() => {
                                     setActiveTab("tenant");
                                     setPendingDeletion(tenantId);
                                   }}
                                 >
-                                  {t("Volver a heredar")}
+                                  <RotateCcw aria-hidden="true" />
+                                  <span className="sr-only sm:not-sr-only">
+                                    {t("Volver a heredar")}
+                                  </span>
                                 </Button>
                               </div>
                             </TableCell>
@@ -830,7 +946,7 @@ export function AssistantConfigurationPanel({
                 className="mt-5 grid max-w-3xl gap-4 rounded-xl border bg-card p-5 sm:p-6"
                 onSubmit={saveTenant}
               >
-                {tenants.length !== 1 ? (
+                {fixedTenantId === undefined && tenants.length !== 1 ? (
                   <div className="grid gap-2">
                     <Label htmlFor="assistant-tenant">{t("Tenant")}</Label>
                     <select
@@ -921,7 +1037,9 @@ export function AssistantConfigurationPanel({
                   label={t("Modelo del tenant")}
                   value={tenantModel}
                   onChange={setTenantModel}
-                  models={models}
+                  models={models.filter(
+                    (model) => model.supportsTools !== false,
+                  )}
                   fallbackModel={
                     summary?.global?.model || summary?.deployment?.model
                   }
@@ -932,15 +1050,75 @@ export function AssistantConfigurationPanel({
                   }
                   disabled={selectedTenantId === undefined}
                 />
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    "Uses the configured OpenRouter key. Leave a model blank to use its default.",
+                  )}
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <ModelInput
+                    id="tenant-transcription-model"
+                    label={t("Transcription model")}
+                    value={tenantTranscriptionModel}
+                    onChange={setTenantTranscriptionModel}
+                    models={models.filter(
+                      (model) =>
+                        model.transcriptionEndpoint ||
+                        (model.modalities?.audio && model.modalities?.text),
+                    )}
+                    fallbackModel={
+                      summary?.global?.transcriptionModel ??
+                      summary?.deployment?.transcriptionModel
+                    }
+                    catalogDescription={t(
+                      "Use a model compatible with OpenRouter audio transcription (provider/model).",
+                    )}
+                    disabled={
+                      selectedTenantId === undefined ||
+                      savingTenant ||
+                      summary === null
+                    }
+                  />
+                  <ModelInput
+                    id="tenant-summary-model"
+                    label={t("Summary model")}
+                    value={tenantSummaryModel}
+                    onChange={setTenantSummaryModel}
+                    models={models.filter(
+                      (model) => model.modalities?.text !== false,
+                    )}
+                    fallbackModel={
+                      (summary?.global?.summaryModel ?? tenantModel) ||
+                      summary?.global?.model ||
+                      summary?.deployment?.model
+                    }
+                    catalogDescription={t(
+                      "Use a text model for meeting notes. Default: the effective assistant model.",
+                    )}
+                    disabled={
+                      selectedTenantId === undefined ||
+                      savingTenant ||
+                      summary === null
+                    }
+                  />
+                </div>
                 <div>
                   <Button
                     type="submit"
-                    disabled={selectedTenantId === undefined || savingTenant}
+                    disabled={
+                      selectedTenantId === undefined ||
+                      savingTenant ||
+                      summary === null
+                    }
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                   >
                     {savingTenant ? (
                       <LoaderCircle className="animate-spin" />
                     ) : null}
-                    {t("Guardar")}
+                    {!savingTenant ? <Save aria-hidden="true" /> : null}
+                    <span className="sr-only sm:not-sr-only">
+                      {t("Guardar")}
+                    </span>
                   </Button>
                 </div>
               </form>
@@ -968,19 +1146,23 @@ export function AssistantConfigurationPanel({
             <Button
               type="button"
               variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => setPendingDeletion(null)}
               disabled={deleting}
             >
-              {t("Cancelar")}
+              <X aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t("Cancelar")}</span>
             </Button>
             <Button
               type="button"
               variant="destructive"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => void clearOverride()}
               disabled={deleting}
             >
               {deleting ? <LoaderCircle className="animate-spin" /> : null}
-              {t("Confirmar")}
+              {!deleting ? <RotateCcw aria-hidden="true" /> : null}
+              <span className="sr-only sm:not-sr-only">{t("Confirmar")}</span>
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1003,19 +1185,25 @@ export function AssistantConfigurationPanel({
             <Button
               type="button"
               variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => setConfirmGlobalKeyClear(false)}
               disabled={savingGlobal}
             >
-              {t("Cancelar")}
+              <X aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t("Cancelar")}</span>
             </Button>
             <Button
               type="button"
               variant="destructive"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => void clearGlobalKey()}
               disabled={savingGlobal}
             >
               {savingGlobal ? <LoaderCircle className="animate-spin" /> : null}
-              {t("Confirmar eliminación")}
+              {!savingGlobal ? <Trash2 aria-hidden="true" /> : null}
+              <span className="sr-only sm:not-sr-only">
+                {t("Confirmar eliminación")}
+              </span>
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1057,6 +1245,7 @@ export function ModelInput({
   fallbackModel,
   fallbackLabel: configuredFallbackLabel,
   disabled = false,
+  catalogDescription,
 }: {
   id: string;
   label: string;
@@ -1066,6 +1255,7 @@ export function ModelInput({
   fallbackModel?: string;
   fallbackLabel?: string;
   disabled?: boolean;
+  catalogDescription?: string;
 }) {
   const t = useMessages(settingsMessages);
   const locale = intlLocale(useAppLocale());
@@ -1077,6 +1267,7 @@ export function ModelInput({
   const query = value.trim().toLocaleLowerCase();
   const options = models
     .filter((model) => {
+      if (!catalogDescription && model.supportsTools === false) return false;
       if (!query) return true;
       return `${model.id} ${model.name}`.toLocaleLowerCase().includes(query);
     })
@@ -1152,9 +1343,10 @@ export function ModelInput({
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
           <div className="px-3 py-2 text-xs text-muted-foreground">
-            {t(
-              "Modelos compatibles con herramientas · precios estimados en USD por 1M tokens",
-            )}
+            {catalogDescription ??
+              t(
+                "Modelos compatibles con herramientas · precios estimados en USD por 1M tokens",
+              )}
           </div>
           <div
             id={listId}
@@ -1171,7 +1363,7 @@ export function ModelInput({
                   aria-selected={selected?.id === model.id}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => choose(model)}
-                  className={`flex w-full items-start gap-2 rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent ${
+                  className={`flex min-h-11 w-full items-start gap-2 rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent ${
                     activeOptionIndex === index ? "bg-accent" : ""
                   }`}
                 >
@@ -1246,7 +1438,9 @@ export function ModelInput({
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px]">{effectiveModelId}</span>
+              <span className="break-all font-mono text-[11px]">
+                {effectiveModelId}
+              </span>
               <ModelCapabilityBadges model={selected} size="xs" />
             </div>
             {selected ? (
@@ -1273,18 +1467,21 @@ export function ModelInput({
               )}
             </p>
           ) : isCustom && fallbackModel ? (
-            <div className="mt-1 flex items-center justify-between border-t border-border/40 pt-1">
-              <span className="text-[11px] text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-1">
+              <span className="min-w-0 break-words text-[11px] text-muted-foreground">
                 {t("Sobreescribe el modelo predeterminado (%{model})", {
                   model: fallbackModel,
                 })}
               </span>
               <button
                 type="button"
-                className="text-[11px] font-medium text-primary hover:underline"
+                className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0 text-[11px] font-medium text-primary hover:underline"
                 onClick={() => onChange("")}
               >
-                {t("Volver al predeterminado")}
+                <Undo2 aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">
+                  {t("Volver al predeterminado")}
+                </span>
               </button>
             </div>
           ) : null}

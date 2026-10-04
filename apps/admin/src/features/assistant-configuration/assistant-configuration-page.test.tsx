@@ -16,7 +16,10 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "@/app-services";
-import { AssistantConfigurationPage } from "./assistant-configuration-page";
+import {
+  AssistantConfigurationPage,
+  AssistantConfigurationPanel,
+} from "./assistant-configuration-page";
 
 afterEach(cleanup);
 
@@ -61,6 +64,168 @@ function servicesWithSummary(
 }
 
 describe("AssistantConfigurationPage", () => {
+  it("offers dedicated transcription models and saves their endpoint", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    services.assistantConfiguration.models = vi.fn().mockResolvedValue([
+      {
+        id: "openai/whisper-large-v3",
+        name: "Whisper",
+        modalities: { audio: true, text: false },
+        transcriptionEndpoint: "audio/transcriptions",
+        supportsTools: false,
+      },
+    ]);
+    services.assistantConfiguration.saveGlobal = vi
+      .fn()
+      .mockResolvedValue(await services.assistantConfiguration.summary());
+    render(<AssistantConfigurationPage services={services} />);
+    await user.click(await screen.findByLabelText("Modelo de transcripción"));
+    await user.click(await screen.findByRole("option", { name: /Whisper/ }));
+    await user.click(screen.getByRole("button", { name: "Guardar modelos" }));
+    await waitFor(() =>
+      expect(services.assistantConfiguration.saveGlobal).toHaveBeenCalledWith({
+        transcriptionModel: "openai/whisper-large-v3",
+        transcriptionEndpoint: "audio/transcriptions",
+        summaryModel: null,
+      }),
+    );
+    await user.click(screen.getByLabelText("Modelo de resumen"));
+    expect(screen.queryByRole("option", { name: /Whisper/ })).toBeNull();
+  });
+
+  it("offers only audio models for transcription, including models without tools", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    services.assistantConfiguration.models = vi.fn().mockResolvedValue([
+      {
+        id: "test/audio",
+        name: "Audio model",
+        modalities: { audio: true, text: true },
+        supportsTools: false,
+      },
+      {
+        id: "test/text",
+        name: "Text model",
+        modalities: { audio: false, text: true },
+        supportsTools: true,
+      },
+    ]);
+    render(<AssistantConfigurationPage services={services} />);
+    const input = await screen.findByRole("combobox", {
+      name: "Modelo de transcripción",
+    });
+    await user.click(input);
+    expect(
+      await screen.findByRole("option", { name: /Audio model/ }),
+    ).toBeVisible();
+    expect(screen.queryByRole("option", { name: /Text model/ })).toBeNull();
+    await user.click(screen.getByRole("option", { name: /Audio model/ }));
+    expect(input).toHaveValue("test/audio");
+  });
+
+  it("retains a saved dedicated route when the catalog cannot load", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    const initial = await services.assistantConfiguration.summary();
+    const saved = {
+      ...initial,
+      global: {
+        ...initial.global,
+        transcriptionModel: "test/native-stt",
+        transcriptionEndpoint: "audio/transcriptions",
+      },
+    };
+    services.assistantConfiguration.summary = vi.fn().mockResolvedValue(saved);
+    services.assistantConfiguration.models = vi
+      .fn()
+      .mockRejectedValue(new Error("Offline"));
+    services.assistantConfiguration.saveGlobal = vi
+      .fn()
+      .mockResolvedValue(saved);
+    render(<AssistantConfigurationPage services={services} />);
+    await user.type(
+      await screen.findByLabelText("Modelo de resumen"),
+      "test/summary",
+    );
+    await user.click(screen.getByRole("button", { name: "Guardar modelos" }));
+    await waitFor(() =>
+      expect(services.assistantConfiguration.saveGlobal).toHaveBeenCalledWith({
+        transcriptionModel: "test/native-stt",
+        transcriptionEndpoint: "audio/transcriptions",
+        summaryModel: "test/summary",
+      }),
+    );
+  });
+
+  it("allows a tenant administrator to save their key and recording models without global controls", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary([
+      { tenantId: 101, model: "test/chat" },
+    ]);
+    const summary = {
+      ...(await services.assistantConfiguration.summary()),
+      canManageGlobal: false,
+      manageableTenantIds: [101],
+    };
+    services.assistantConfiguration.summary = vi
+      .fn()
+      .mockResolvedValue(summary);
+    services.assistantConfiguration.saveTenantOverride = vi
+      .fn()
+      .mockResolvedValue(summary);
+    services.assistantConfiguration.models = vi.fn().mockResolvedValue([
+      {
+        id: "test/audio",
+        name: "Dedicated transcription",
+        modalities: { audio: true, text: false },
+        transcriptionEndpoint: "audio/transcriptions",
+      },
+    ]);
+    render(<AssistantConfigurationPage services={services} />);
+    await screen.findByLabelText("Clave de organización");
+    expect(screen.queryByRole("tab", { name: "Global" })).toBeNull();
+    await user.type(screen.getByLabelText("Clave de organización"), "test-key");
+    await user.click(screen.getByLabelText("Modelo de transcripción"));
+    await user.click(
+      await screen.findByRole("option", { name: /Dedicated transcription/ }),
+    );
+    await user.type(screen.getByLabelText("Modelo de resumen"), "test/summary");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() =>
+      expect(
+        services.assistantConfiguration.saveTenantOverride,
+      ).toHaveBeenCalledWith(101, {
+        apiKey: "test-key",
+        model: "test/chat",
+        transcriptionModel: "test/audio",
+        transcriptionEndpoint: "audio/transcriptions",
+        summaryModel: "test/summary",
+      }),
+    );
+    expect(services.assistantConfiguration.saveGlobal).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Clave de organización")).toHaveValue("");
+  });
+
+  it("prevents tenant overrides from being saved when their configuration cannot load", async () => {
+    const services = servicesWithSummary();
+    services.assistantConfiguration.summary = vi
+      .fn()
+      .mockRejectedValue(new Error("Configuration unavailable"));
+    render(
+      <AssistantConfigurationPanel
+        services={services}
+        embedded
+        tenantId={101}
+      />,
+    );
+    await screen.findByText("Configuration unavailable");
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
+    expect(
+      services.assistantConfiguration.saveTenantOverride,
+    ).not.toHaveBeenCalled();
+  });
+
   it("prevents blank meeting overrides from being saved when configuration loading fails", async () => {
     const services = servicesWithSummary();
     services.assistantConfiguration.summary = vi
@@ -365,6 +530,8 @@ describe("AssistantConfigurationPage", () => {
       ).toHaveBeenCalledWith(101, {
         clearApiKey: true,
         model: "openai/gpt-5",
+        transcriptionModel: null,
+        summaryModel: null,
       }),
     );
   });

@@ -105,9 +105,11 @@ it("removes applied colors immediately on host change and null branding", async 
     </TenantBrandingProvider>,
   );
   await screen.findByText("Agencia Uno");
-  expect(
-    getComputedStyle(document.documentElement).getPropertyValue("--primary"),
-  ).toBe("#125633");
+  await waitFor(() =>
+    expect(
+      getComputedStyle(document.documentElement).getPropertyValue("--primary"),
+    ).toBe("#125633"),
+  );
   view.rerender(
     <TenantBrandingProvider hostname="second.savia.app.hefesoft.com">
       <Name />
@@ -204,8 +206,10 @@ it.each([false, true])(
       );
       await screen.findByText("Agencia Uno");
       const root = document.documentElement;
-      expect(getComputedStyle(root).getPropertyValue("--primary")).toBe(
-        savedPalette ? "blue" : "#125633",
+      await waitFor(() =>
+        expect(getComputedStyle(root).getPropertyValue("--primary")).toBe(
+          savedPalette ? "blue" : "#125633",
+        ),
       );
       root.dataset.colorTheme = "blue";
       expect(getComputedStyle(root).getPropertyValue("--primary")).toBe("blue");

@@ -1,6 +1,6 @@
 # Tenant branding
 
-Owner: Savia platform team. Last reviewed: 2026-10-02.
+Owner: Savia platform team. Last reviewed: 2026-10-03.
 
 Commercial tenants can customize their public identity without changing authentication
 or access to application data. Open **Administración → Identidad del espacio** from the sidebar.
@@ -11,8 +11,14 @@ When no commercial organization is available, platform administrators can start 
 creation from this page; other users are directed to request access from a platform
 administrator.
 
-The page shows the selected organization's assigned Savia URL in a selectable,
-read-only field above the editor. **Open in new window** opens the assigned URL
+The page groups settings into **Identity**, **Login screen**, and **API keys**
+tabs. Identity contains the display name, colors, and logo. Login screen contains
+the title, welcome message, animation, cover image, and the selected organization's
+assigned Savia URL in a selectable, read-only field. API keys are available only
+to administrators who can manage the tenant's branding. Switching tabs keeps
+branding drafts and local upload previews in place.
+
+**Open in new window** opens the assigned URL
 in a separate browsing context without replacing the admin page. **Copy link** copies the URL with confirmation;
 **Share link** uses the device's native share sheet, falling back to copying when
 native sharing is unavailable. Clipboard failures explain how to copy manually.
@@ -20,6 +26,12 @@ These actions are also available to read-only members and never save branding or
 change the tenant slug. Switching organizations updates the URL and clears feedback.
 Preview and production use their respective canonical hosts. If the saved slug or
 a recognized Savia hostname is unavailable, no URL is fabricated.
+
+Below 640 px, the URL actions and the standard Save, Cancel, and Delete controls
+show only icons with accessible names and 44 px touch targets. Their labels
+remain visible on larger screens.
+The branding editor follows the same pattern for saving, discarding, reloading,
+removing images, restoring the default animation, and session recovery.
 
 New tenant URLs are generated from the tenant name: accents are removed, letters
 are lowercased, and runs of characters outside `a-z` and `0-9` become hyphens.
