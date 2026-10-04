@@ -36,6 +36,7 @@ export type TestAppOptions = {
   realtime?: Param<21>;
   publicForms?: Param<22>;
   identityBridgeKey?: Param<24>;
+  companion?: Param<25>;
   pagesSearch?: Param<26>;
 };
 
@@ -72,7 +73,7 @@ export function createTestApp(options: TestAppOptions = {}) {
     options.publicForms,
     undefined,
     options.identityBridgeKey,
-    undefined,
+    options.companion,
     options.pagesSearch,
   );
 }
