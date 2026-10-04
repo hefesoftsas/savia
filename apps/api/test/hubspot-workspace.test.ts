@@ -14,6 +14,22 @@ let conn: any = {
 };
 vi.mock("../src/external-crm/repository", () => ({
   createCrmRepository: () => ({
+    findActiveConnection: async (
+      tenantId: number,
+      _provider: string,
+      principal: string,
+    ) =>
+      tenantId === 99007
+        ? undefined
+        : principal === "owner"
+          ? conn
+          : principal === "member"
+            ? {
+                ...conn,
+                id: "unrelated-connection",
+                externalAccountId: "456",
+              }
+            : undefined,
     findActiveConnectionForPrincipal: async (_: string, principal: string) =>
       principal === "owner"
         ? conn

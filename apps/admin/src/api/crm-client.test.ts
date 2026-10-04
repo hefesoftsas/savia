@@ -15,6 +15,8 @@ describe("CrmClient", () => {
                 displayName: "HubSpot",
                 availability: "enabled",
                 capabilities: ["contacts:read"],
+                connectionBlocked: false,
+                activeProvider: "hubspot",
               },
             },
           ],
@@ -56,6 +58,8 @@ describe("CrmClient", () => {
         displayName: "HubSpot",
         availability: "enabled",
         capabilities: ["contacts:read"],
+        connectionBlocked: false,
+        activeProvider: "hubspot",
       },
     ]);
     await expect(client.listConnections(101)).resolves.toEqual([]);

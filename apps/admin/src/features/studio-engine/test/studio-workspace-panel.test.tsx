@@ -305,6 +305,105 @@ it("keeps uninstall confirmation after a failure so the user can retry", async (
   expect(deleteCalls).toBe(2);
 });
 
+it("uses provider-qualified discovery and installation with an isolated cache for Salesforce", async () => {
+  const salesforce = {
+    provider: "salesforce",
+    connected: true,
+    accountLabel: "Acme Salesforce",
+    objects: [
+      {
+        name: "salesforce_contacts",
+        label: "Contactos",
+        resource: "contacts",
+        available: true,
+        installed: false,
+        capabilities: {
+          list: true,
+          read: true,
+          create: true,
+          update: true,
+          delete: false,
+        },
+      },
+    ],
+  };
+  const request = vi.fn(async (path: string) =>
+    path.endsWith("/install")
+      ? { objects: [{ name: "salesforce_contacts", label: "Contactos" }] }
+      : salesforce,
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const view = render(
+    <QueryClientProvider client={client}>
+      <StudioWorkspacePanel
+        scope="sales"
+        provider="salesforce"
+        request={request}
+        onInstalled={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  await screen.findByText("Acme Salesforce · 1 por instalar · 1 en catálogo");
+  expect(request).toHaveBeenCalledWith("/crm-workspace/salesforce");
+  expect(screen.getByText("CRM conectado · Salesforce")).toBeVisible();
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "Seleccionar Contactos" }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Instalar seleccionadas (1)" }),
+  );
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith(
+      "/crm-workspace/salesforce/install",
+      "POST",
+      {
+        resources: ["contacts"],
+      },
+    ),
+  );
+  expect(
+    client.getQueryData(["crm-workspace", "salesforce", "sales"]),
+  ).toBeDefined();
+  expect(client.getQueryData(["crm-workspace", "sales"])).toBeUndefined();
+  view.unmount();
+});
+
+it("keeps provider workspace catalogs in separate query cache entries", async () => {
+  const providers = ["salesforce", "zoho", "pipedrive"] as const;
+  const request = vi.fn(async (path: string) => {
+    const provider = path.split("/").at(-1) ?? "hubspot";
+    return { provider, connected: false, objects: [] };
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      {providers.map((provider) => (
+        <StudioWorkspacePanel
+          key={provider}
+          scope="sales"
+          provider={provider}
+          request={request}
+          onInstalled={vi.fn()}
+        />
+      ))}
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(providers.length));
+  for (const provider of providers) {
+    expect(request).toHaveBeenCalledWith(`/crm-workspace/${provider}`);
+    expect(client.getQueryData(["crm-workspace", provider, "sales"])).toEqual({
+      provider,
+      connected: false,
+      objects: [],
+    });
+  }
+  expect(client.getQueryData(["crm-workspace", "sales"])).toBeUndefined();
+});
+
 it("supports canceling uninstall and reinstalling the screen later", async () => {
   const calls: Array<[string, string | undefined, unknown]> = [];
   const request = vi.fn(

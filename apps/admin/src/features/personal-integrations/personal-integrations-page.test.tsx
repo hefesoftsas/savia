@@ -228,10 +228,10 @@ describe("PersonalIntegrationsPage", () => {
     await screen.findByRole("heading", { name: "Integraciones" });
     await user.click(screen.getByRole("tab", { name: "CRM" }));
     await waitFor(() =>
-      expect(services.crm.listProviders).toHaveBeenCalledWith(),
+      expect(services.crm.listProviders).toHaveBeenCalledWith(undefined),
     );
     await waitFor(() =>
-      expect(services.crm.listConnections).toHaveBeenCalledWith(),
+      expect(services.crm.listConnections).toHaveBeenCalledWith(undefined),
     );
   });
 

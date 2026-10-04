@@ -23,6 +23,7 @@ import {
   collectionCapabilities,
   supportsLocalRecordTools,
 } from "./collection-capabilities";
+import { isHubspotArchive } from "./crm-provider";
 import React, {
   Fragment,
   Suspense,
@@ -1777,7 +1778,10 @@ function DeleteRecord({
 }) {
   const t = useMessages(automationMessages);
 
-  const hubspotArchive = object.config.studio?.collection?.kind === "crm";
+  const hubspotArchive = isHubspotArchive(
+    object.config.studio?.collection?.sourceId,
+    object.config.studio?.collection?.kind,
+  );
   const permanent = !supportsLocalRecordTools(object);
   const [confirm, setConfirm] = useState(false),
     [busy, setBusy] = useState(false);

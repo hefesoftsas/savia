@@ -515,6 +515,45 @@ it("identifies HubSpot bindings and hides unsupported operation configuration", 
     screen.queryByRole("button", { name: "Operaciones", exact: true }),
   ).not.toBeInTheDocument();
 });
+it("loads one workspace discovery route for each CRM while preserving HubSpot's alias", async () => {
+  const transport = vi.fn(async (path: string) =>
+    Response.json({
+      data: path.startsWith("/api/crm-workspace")
+        ? { provider: path.split("/").at(-1), connected: false, objects: [] }
+        : [],
+    }),
+  );
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
+  mount(<CollectionSourcesPanel onBound={vi.fn()} />);
+  await waitFor(() => {
+    const crmPaths = transport.mock.calls
+      .map(([path]) => path)
+      .filter((path) => path.startsWith("/api/crm-workspace"));
+    expect(crmPaths).toEqual(
+      expect.arrayContaining([
+        "/api/crm-workspace",
+        "/api/crm-workspace/salesforce",
+        "/api/crm-workspace/zoho",
+        "/api/crm-workspace/pipedrive",
+      ]),
+    );
+  });
+});
+it("labels CRM bindings with their provider", async () => {
+  const transport = mockTransport([
+    {
+      name: "salesforce_contacts",
+      label: "Contactos",
+      kind: "crm",
+      resource: "contacts",
+      sourceId: "salesforce",
+    } as any,
+  ]);
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
+  mount(<CollectionSourcesPanel onBound={vi.fn()} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
+  expect(await screen.findByText("Salesforce · contacts")).toBeVisible();
+});
 const pgSource = {
   id: "erp",
   label: "ERP Postgres",

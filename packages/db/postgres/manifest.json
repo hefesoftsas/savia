@@ -127,7 +127,11 @@
       "sha256": "cc3224ce334f5b722f1ff292e6eb34508052fbe5f533561da317302e13b35414"
     },
     {
-      "filename": "0030_assistant_transcription_endpoint.sql",
+      "filename": "0030_crm_organization_connection.sql",
+      "sha256": "64d9e8b78f820f36e17e9a0352bab1be9f301fd12eea3c75bcf36292a1f57d65"
+    },
+    {
+      "filename": "0031_assistant_transcription_endpoint.sql",
       "sha256": "f21bd8af168c258c3b993970aceeaf3fca210dadd7f5308da4019c9eb823c8e3"
     }
   ],
@@ -517,6 +521,16 @@
     {
       "type": "index",
       "name": "tenant_crm_connections_active_unique",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_nango_active_unique",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_organization_active_unique",
       "table": "tenant_crm_connections"
     },
     {
@@ -10095,6 +10109,14 @@
       "uniqueKeys": [
         {
           "columns": ["created_by_principal_id", "tenant_id", "provider"],
+          "origin": "c"
+        },
+        {
+          "columns": ["nango_integration_id", "nango_connection_id"],
+          "origin": "c"
+        },
+        {
+          "columns": ["tenant_id"],
           "origin": "c"
         },
         {

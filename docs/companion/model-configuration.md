@@ -42,7 +42,7 @@ summary failure, so changing the transcription model does not replace that
 already saved transcript automatically.
 
 Existing installations require `0014_assistant_meeting_models.sql` for SQLite/D1
-and `0030_assistant_transcription_endpoint.sql` for SQLite/D1,
+and `0031_assistant_transcription_endpoint.sql` for SQLite/D1,
 or the corresponding PostgreSQL migrations. This change does not enable Companion, publish
 audio or start paid provider calls. Existing Whisper model IDs use the dedicated route when no route was saved;
 other legacy IDs retain chat completions. Select a model from the catalog to save

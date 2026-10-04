@@ -1,5 +1,45 @@
 import React from "react";
-import Hubspot from "@thesvg/react/hubspot";
+import {
+  CrmProviderIcon,
+  isStudioCrmProvider,
+  type StudioCrmProvider,
+} from "./crm-provider";
+
+function safeOrigin(provider: string, value: string): URL | null {
+  if (!isStudioCrmProvider(provider)) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.port || url.username || url.password)
+      return null;
+    const allowed = {
+      hubspot:
+        url.hostname === "app.hubspot.com" &&
+        /^\/contacts\/\d+\/record\/0-(?:1|2|3|5|7|8|14|27|46|47|48|49)\/\d+$/.test(
+          url.pathname,
+        ),
+      salesforce:
+        /^[a-z0-9-]+(?:\.sandbox)?\.lightning\.force\.com$/.test(
+          url.hostname,
+        ) &&
+        /^\/lightning\/r\/(?:Contact|Account|Opportunity)\/[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?\/view$/.test(
+          url.pathname,
+        ),
+      zoho:
+        /^crm\.zoho\.(?:com|eu|in|jp|com\.au|com\.cn|sa|ca)$/.test(
+          url.hostname,
+        ) &&
+        /^\/crm\/org\d+\/tab\/(?:Contacts|Accounts|Deals)\/\d+$/.test(
+          url.pathname,
+        ),
+      pipedrive:
+        /^(?:[a-z0-9-]+\.)?pipedrive\.com$/.test(url.hostname) &&
+        /^\/(?:person|organization|deal)\/\d+$/.test(url.pathname),
+    } satisfies Record<StudioCrmProvider, boolean>;
+    return allowed[provider] ? url : null;
+  } catch {
+    return null;
+  }
+}
 
 export function RecordOriginLinks({
   record,
@@ -11,21 +51,11 @@ export function RecordOriginLinks({
   if (!Array.isArray(record._crmLinks)) return null;
   const links = record._crmLinks.filter(
     (link): link is { provider: string; label: string; url: string } => {
-      if (!link || link.provider !== "hubspot" || typeof link.url !== "string")
-        return false;
-      try {
-        const url = new URL(link.url);
-        return (
-          url.protocol === "https:" &&
-          url.hostname === "app.hubspot.com" &&
-          !url.port &&
-          !url.username &&
-          !url.password &&
-          /^\/contacts\/\d+\/record\/0-(?:1|2|3|5|7|8|14|27|46|47|48|49)\/\d+$/.test(url.pathname)
-        );
-      } catch {
-        return false;
-      }
+      return Boolean(
+        link &&
+        typeof link.url === "string" &&
+        safeOrigin(link.provider, link.url),
+      );
     },
   );
   if (!links.length) return null;
@@ -43,7 +73,12 @@ export function RecordOriginLinks({
           onClick={(event) => event.stopPropagation()}
         >
           {!iconOnly && <span className="min-w-0 truncate">{link.label}</span>}
-          <Hubspot className="size-4 shrink-0" aria-hidden="true" />
+          {isStudioCrmProvider(link.provider) ? (
+            <CrmProviderIcon
+              provider={link.provider}
+              className="size-4 shrink-0"
+            />
+          ) : null}
         </a>
       ))}
     </span>
