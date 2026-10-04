@@ -8,40 +8,61 @@ export async function hook(
   if (!code.trim())
     return { body: payload.body, variables: {} as Record<string, string> };
   if (env.HOOK_EXECUTOR) return env.HOOK_EXECUTOR.execute(code, payload);
-  if (!env.LOADER) throw new Error("Hook executor is not configured.");
-  const module = `export default { async fetch(request) {
- const data=await request.json();
- try { return Response.json(await (async()=>{${hookExecutionSource(code)}})()); }
- catch {return Response.json({error:'El hook rechazó los datos o la respuesta. Revisa los campos y el script.'},{status:422});}
- }};`;
-  const worker = env.LOADER.load({
-    compatibilityDate: "2026-09-04",
-    mainModule: "hook.js",
-    modules: { "hook.js": module },
-    globalOutbound: null,
-    limits: { cpuMs: 100, subRequests: 0 },
+  if (!env.HOOK_SERVICE) throw new Error("Hook executor is not configured.");
+  const controller = new AbortController();
+  const failure =
+    "El hook falló o superó el tiempo permitido. Revisa el script.";
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(failure));
+    }, 35_000);
   });
-  const response = await worker.getEntrypoint().fetch(
-    new Request("https://hook.local/", {
-      method: "POST",
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(5000),
-    }),
+  try {
+    const result: unknown = await Promise.race([
+      (async () => {
+        let response: Response;
+        try {
+          response = await env.HOOK_SERVICE!.fetch(
+            new Request("https://savia-hook-executor.internal/execute", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ code, payload }),
+              signal: controller.signal,
+            }),
+          );
+        } catch {
+          throw new Error(failure);
+        }
+        if (!response.ok) throw new Error(failure);
+        try {
+          return await response.json();
+        } catch {
+          throw new Error("Salida del hook inválida.");
+        }
+      })(),
+      timeout,
+    ]);
+    if (!isHookResult(result)) throw new Error("Salida del hook inválida.");
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function isHookResult(
+  value: unknown,
+): value is { body: string; variables: Record<string, string> } {
+  if (!value || typeof value !== "object") return false;
+  const result = value as Record<string, unknown>;
+  return (
+    typeof result.body === "string" &&
+    !!result.variables &&
+    typeof result.variables === "object" &&
+    !Array.isArray(result.variables) &&
+    Object.values(result.variables).every((value) => typeof value === "string")
   );
-  const result = (await response.json()) as {
-    body: string;
-    variables: Record<string, string>;
-    error?: string;
-  };
-  if (!response.ok || result.error)
-    throw new Error(result.error || "Falló el hook.");
-  if (
-    typeof result.body !== "string" ||
-    !result.variables ||
-    typeof result.variables !== "object"
-  )
-    throw new Error("Salida del hook inválida.");
-  return result;
 }
 
 /** Shared guest contract. The caller supplies only serialized data. */

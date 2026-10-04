@@ -54,6 +54,8 @@ test("production deployment is limited to main and has ordered Worker stages", a
   assert.match(deploy, /savia-auth/);
   assert.match(deploy, /- name: Deploy private Savia FastMCP/);
   assert.match(deploy, /workingDirectory: apps\/mcp/);
+  assert.match(deploy, /name: Deploy private QuickJS hook executor/);
+  assert.match(deploy, /workingDirectory: apps\/hook-executor/);
   assert.match(deploy, /SAVIA_MCP_SHARED_SECRET/);
   assert.match(
     deploy,
@@ -66,7 +68,7 @@ test("production deployment is limited to main and has ordered Worker stages", a
   );
   assert.match(
     deploy,
-    /Apply Savia domain migrations[\s\S]*?Deploy private Savia request[\s\S]*?Deploy savia-agencies/,
+    /Apply Savia domain migrations[\s\S]*?Deploy private QuickJS hook executor[\s\S]*?Deploy private Savia request[\s\S]*?Deploy savia-agencies/,
   );
   assert.match(deploy, /upload-cloudflare-secrets\.mjs/);
   assert.doesNotMatch(deploy, /\n\s+secrets:/);
@@ -81,6 +83,27 @@ test("production deployment is limited to main and has ordered Worker stages", a
   );
   assert.doesNotMatch(deploy, /branches:\s*\["\*"\]/);
   assert.doesNotMatch(deploy, /curl[^\n]*savia\.app\.hefesoft\.com\/health/);
+});
+
+test("QuickJS PR previews require an explicit label on same-repository main PRs", async () => {
+  const preview = await workflow("preview-quickjs.yml");
+  assert.match(preview, /pull_request:/);
+  assert.match(preview, /branches: \[main\]/);
+  assert.match(preview, /types: \[labeled\]/);
+  assert.match(preview, /github\.event\.label\.name == 'quickjs-preview'/);
+  assert.match(preview, /head\.repo\.full_name == github\.repository/);
+  assert.match(preview, /base\.ref == 'main'/);
+  assert.match(preview, /environment: preview/);
+  assert.match(preview, /PREVIEW_BRANCH: \$\{\{ github\.head_ref \}\}/);
+  assert.match(preview, /node scripts\/preview-deploy\.mjs --branch "\$PREVIEW_BRANCH"/);
+  assert.match(preview, /name: Verify QuickJS preview through authenticated service/);
+  assert.match(preview, /node scripts\/verify-quickjs-preview\.mjs --branch "\$PREVIEW_BRANCH"/);
+  assert.ok(
+    preview.indexOf("Deploy explicitly labeled QuickJS branch preview") <
+      preview.indexOf("Verify QuickJS preview through authenticated service"),
+  );
+  assert.doesNotMatch(preview, /synchronize|opened|reopened/);
+  assert.doesNotMatch(preview, /cleanup:|preview-destroy\.mjs/);
 });
 
 test("production import is disabled unless explicitly enabled", async () => {
