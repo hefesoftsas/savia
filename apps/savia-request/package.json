@@ -7,7 +7,7 @@
     "dev": "wrangler dev --local --ip 127.0.0.1 --port 8797",
     "migrate:local": "wrangler d1 migrations apply flow-lab-local --local",
     "setup:local": "node scripts/setup-local.mjs",
-    "test": "vitest run"
+    "test": "vitest run --maxWorkers=1"
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",
