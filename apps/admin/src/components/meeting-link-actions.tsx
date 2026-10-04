@@ -31,12 +31,18 @@ const messages = {
 } satisfies MessageCatalog;
 
 /** Receives only participant URLs already validated by the conference renderer. */
-export function MeetingLinkActions({ url }: { url: string }) {
+export function MeetingLinkActions({
+  url,
+  compact = false,
+}: {
+  url: string;
+  compact?: boolean;
+}) {
   // Changing meetings discards pending feedback from the previous link.
-  return <LinkActions key={url} url={url} />;
+  return <LinkActions key={url} url={url} compact={compact} />;
 }
 
-function LinkActions({ url }: { url: string }) {
+function LinkActions({ url, compact }: { url: string; compact: boolean }) {
   const t = useMessages(messages);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<keyof typeof messages>();
@@ -77,23 +83,29 @@ function LinkActions({ url }: { url: string }) {
       <div className="flex flex-wrap gap-1">
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant={compact ? "ghost" : "outline"}
+          size={compact ? "icon" : "sm"}
+          className={compact ? "size-11" : undefined}
           disabled={pending}
           onClick={() => void act(false)}
+          aria-label={compact ? t("Copy meeting link") : undefined}
+          title={compact ? t("Copy meeting link") : undefined}
         >
           <Copy aria-hidden="true" className="size-4" />
-          {t("Copy meeting link")}
+          {!compact && t("Copy meeting link")}
         </Button>
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant={compact ? "ghost" : "outline"}
+          size={compact ? "icon" : "sm"}
+          className={compact ? "size-11" : undefined}
           disabled={pending}
           onClick={() => void act(true)}
+          aria-label={compact ? t("Share meeting link") : undefined}
+          title={compact ? t("Share meeting link") : undefined}
         >
           <Share2 aria-hidden="true" className="size-4" />
-          {t("Share meeting link")}
+          {!compact && t("Share meeting link")}
         </Button>
       </div>
       {notice && (

@@ -8,6 +8,8 @@ import {
   RefreshCw,
   Settings2,
 } from "lucide-react";
+import GoogleCalendar from "@thesvg/react/google-calendar";
+import MicrosoftOutlook from "@thesvg/react/microsoft-outlook";
 import type {
   CalendarColor,
   CalendarOccurrence,
@@ -311,6 +313,12 @@ export function CalendarView({
           "slate");
   }
   function eventRow(event: AgendaOccurrence, compact = false) {
+    const ProviderIcon =
+      event.sourceId === "google_calendar"
+        ? GoogleCalendar
+        : event.sourceId === "outlook"
+          ? MicrosoftOutlook
+          : null;
     const conference = event.conference;
     const joinUrl = safeEventConferenceLink(conference);
     const meetingProvider =
@@ -321,19 +329,19 @@ export function CalendarView({
           : conference?.provider === "google_meet"
             ? agendaText("Google Meet")
             : agendaText("Microsoft Teams");
-    const personalCalendarStatus = event.personalEventProvider
-      ? agendaText("Agendada en %{providers}", {
-          providers: sourceName(event.personalEventProvider),
+    const personalCalendarStatus = event.booking?.externalEvent
+      ? agendaText("Vinculado a %{provider}", {
+          provider: sourceName(event.booking.externalEvent.provider),
         })
-      : event.booking?.externalEvent
-        ? agendaText("Vinculado a %{provider}", {
-            provider: sourceName(event.booking.externalEvent.provider),
-          })
-        : null;
+      : null;
     return (
       <div
         key={`${event.sourceId}:${event.id}`}
-        className={`min-w-0 rounded-md px-2 py-1.5 ${sourceColors[sourceColor(event.sourceId)]}`}
+        className={
+          compact
+            ? `min-w-0 rounded-md px-2 py-1.5 ${sourceColors[sourceColor(event.sourceId)]}`
+            : "min-w-0 rounded-lg border border-border/60 bg-card px-3 py-2 text-card-foreground"
+        }
       >
         <button
           type="button"
@@ -341,22 +349,60 @@ export function CalendarView({
             setDeleteConfirmation(false);
             setDetail(event);
           }}
-          className="w-full min-w-0 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="w-full min-w-0 rounded-sm text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`${event.title || t("Untitled event")}, ${eventTime(event, locale, t("All day"))}, ${sourceName(event.sourceId)}`}
         >
-          <span
-            className={
-              compact
-                ? "block truncate font-medium"
-                : "block break-words text-sm font-medium"
-            }
-          >
-            {event.allDay ? "" : `${eventTime(event, locale, t("All day"))} · `}
-            {event.title || t("Untitled event")}
-          </span>
-          <span className="mt-0.5 block truncate text-[11px]">
-            {event.allDay ? `${t("All day")} · ` : ""}
-            {sourceName(event.sourceId)}
+          {compact ? (
+            <span className="block truncate font-medium">
+              {event.allDay
+                ? ""
+                : `${eventTime(event, locale, t("All day"))} · `}
+              {event.title || t("Untitled event")}
+            </span>
+          ) : (
+            <>
+              <span className="block text-xs font-medium tabular-nums text-muted-foreground">
+                {eventTime(event, locale, t("All day"))}
+              </span>
+              <span className="mt-1 block break-words text-base font-semibold leading-snug">
+                {event.title || t("Untitled event")}
+              </span>
+            </>
+          )}
+          <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {ProviderIcon ? (
+              <>
+                {compact && event.allDay ? <span>{t("All day")}</span> : null}
+                <span
+                  role="img"
+                  aria-label={sourceName(event.sourceId)}
+                  title={sourceName(event.sourceId)}
+                  className="inline-flex shrink-0"
+                >
+                  <ProviderIcon aria-hidden="true" className="size-4" />
+                </span>
+              </>
+            ) : (
+              <>
+                <span
+                  aria-hidden="true"
+                  className={`size-1.5 shrink-0 rounded-full ${
+                    {
+                      blue: "bg-blue-500",
+                      emerald: "bg-emerald-500",
+                      violet: "bg-violet-500",
+                      amber: "bg-amber-500",
+                      rose: "bg-rose-500",
+                      slate: "bg-slate-500",
+                    }[sourceColor(event.sourceId)]
+                  }`}
+                />
+                <span className="truncate">
+                  {compact && event.allDay ? `${t("All day")} · ` : ""}
+                  {sourceName(event.sourceId)}
+                </span>
+              </>
+            )}
           </span>
           {personalCalendarStatus ? (
             <span className="mt-0.5 block text-[11px] font-medium">
@@ -365,9 +411,9 @@ export function CalendarView({
           ) : null}
         </button>
         {conference ? (
-          <div className="mt-1 text-[11px]">
+          <div className="mt-1 text-xs text-muted-foreground">
             {conference.status === "ready" && joinUrl ? (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                 <a
                   href={joinUrl}
                   target="_blank"
@@ -375,14 +421,14 @@ export function CalendarView({
                   aria-label={agendaText("Unirse a %{provider}", {
                     provider: meetingProvider,
                   })}
-                  className="inline-flex items-center gap-1 font-medium underline"
+                  className={`inline-flex items-center gap-1.5 rounded-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? "text-[11px]" : "min-h-11 text-sm"}`}
                 >
                   {agendaText("Unirse a %{provider}", {
                     provider: meetingProvider,
                   })}
                   <ExternalLink className="size-3" />
                 </a>
-                {!compact ? <MeetingLinkActions url={joinUrl} /> : null}
+                {!compact ? <MeetingLinkActions url={joinUrl} compact /> : null}
               </div>
             ) : (
               <span>
@@ -400,29 +446,6 @@ export function CalendarView({
               </span>
             )}
           </div>
-        ) : null}
-        {!compact &&
-        event.personalEventProvider &&
-        event.personalEventId &&
-        event.personalConnectionId &&
-        agenda.calendarProviders.includes(event.personalEventProvider) &&
-        agenda.personalIntegrations?.deleteCalendarEvent ? (
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            className="mt-1 h-7 px-2 text-[11px]"
-            aria-label={agendaText("Delete event from %{provider} · %{title}", {
-              provider: sourceName(event.personalEventProvider),
-              title: event.title || agendaText("Evento sin título"),
-            })}
-            onClick={() => {
-              setDetail(event);
-              setDeleteConfirmation(true);
-            }}
-          >
-            {t("Delete event")}
-          </Button>
         ) : null}
       </div>
     );
@@ -500,18 +523,18 @@ export function CalendarView({
   }
   return (
     <div className="@container/calendar min-w-0 space-y-3 sm:space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
         <div
-          className="flex min-w-0 flex-1 rounded-lg bg-muted p-1 @min-[28rem]/calendar:flex-none"
+          className="flex min-w-0 flex-1 rounded-lg border border-border/60 bg-card p-0.5 @min-[28rem]/calendar:flex-none"
           aria-label={t("Calendar view")}
         >
           {(["day", "week", "month"] as const).map((mode) => (
             <Button
               key={mode}
               type="button"
-              variant={view === mode ? "secondary" : "ghost"}
+              variant="ghost"
               size="sm"
-              className="h-11 min-w-0 flex-1 px-2 @min-[28rem]/calendar:h-8 @min-[28rem]/calendar:px-3"
+              className={`h-11 min-w-0 flex-1 px-2 @min-[28rem]/calendar:h-8 @min-[28rem]/calendar:px-3 ${view === mode ? "bg-muted font-semibold text-foreground" : "text-muted-foreground"}`}
               aria-pressed={view === mode}
               onClick={() => setView(mode)}
             >
@@ -534,7 +557,7 @@ export function CalendarView({
           type="button"
           variant="outline"
           size="sm"
-          className="size-11 @min-[28rem]/calendar:h-8 @min-[28rem]/calendar:w-auto"
+          className="size-11 @min-[28rem]/calendar:ml-auto @min-[28rem]/calendar:h-8 @min-[28rem]/calendar:w-auto"
           aria-label={t("Manage calendars")}
           title={t("Manage calendars")}
           onClick={() => setManagerOpen(true)}
@@ -678,15 +701,15 @@ export function CalendarView({
               <section
                 key={dateKey(day)}
                 data-testid="calendar-week-day"
-                className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-2 bg-card p-2 md:block md:min-h-64"
+                className="min-w-0 space-y-2 bg-card p-2 md:min-h-64"
               >
                 <button
                   type="button"
                   onClick={() => showDay(day)}
                   className={`min-h-11 w-full rounded-md py-1.5 text-left text-sm font-medium capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:mb-3 md:min-h-0 ${dateKey(day) === today ? "bg-primary/10 text-primary" : ""}`}
                 >
-                  {day.toLocaleDateString(locale, { weekday: "long" })}
-                  <span className="block tabular-nums">
+                  {day.toLocaleDateString(locale, { weekday: "long" })}{" "}
+                  <span className="ml-2 inline tabular-nums md:ml-0 md:block">
                     {day.toLocaleDateString(locale, {
                       day: "numeric",
                       month: "short",

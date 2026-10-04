@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PersonalCalendarEvent } from "@/api/personal-integrations-client";
@@ -235,9 +236,10 @@ describe("My Day video calls", () => {
 
     await user.click(
       await screen.findByRole("button", {
-        name: "Delete event from Outlook · Planning",
+        name: /^Planning,.*Outlook$/,
       }),
     );
+    await user.click(screen.getByRole("button", { name: "Delete event" }));
     await user.click(screen.getByRole("button", { name: "Confirm delete" }));
 
     await waitFor(() =>
@@ -319,7 +321,7 @@ describe("My Day video calls", () => {
     expect(join).toHaveAttribute("rel", "noreferrer");
   });
 
-  it("shows provider names as text for a grouped event", async () => {
+  it("identifies each calendar copy with its accessible provider icon", async () => {
     const event: PersonalCalendarEvent = {
       id: "shared-event",
       title: "Planning",
@@ -333,10 +335,21 @@ describe("My Day video calls", () => {
     );
     renderApp(client);
 
+    const googleEvent = await screen.findByRole("button", {
+      name: /^Planning,.*Google Calendar$/,
+    });
+    const outlookEvent = await screen.findByRole("button", {
+      name: /^Planning,.*Outlook$/,
+    });
     expect(
-      await screen.findAllByText("Scheduled in Google Calendar"),
-    ).toHaveLength(1);
-    expect(await screen.findAllByText("Scheduled in Outlook")).toHaveLength(1);
+      within(googleEvent).getByRole("img", { name: "Google Calendar" }),
+    ).toHaveAttribute("title", "Google Calendar");
+    expect(
+      within(outlookEvent).getByRole("img", { name: "Outlook" }),
+    ).toHaveAttribute("title", "Outlook");
+    expect(
+      screen.queryByText("Scheduled in Google Calendar"),
+    ).not.toBeInTheDocument();
   });
 
   it("deletes only the selected calendar copy from a grouped event", async () => {
@@ -354,12 +367,13 @@ describe("My Day video calls", () => {
 
     await user.click(
       await screen.findByRole("button", {
-        name: "Delete event from Google Calendar · Planning",
+        name: /^Planning,.*Google Calendar$/,
       }),
     );
     expect(await screen.findByRole("dialog")).toHaveTextContent(
       "Google Calendar",
     );
+    await user.click(screen.getByRole("button", { name: "Delete event" }));
     await user.click(screen.getByRole("button", { name: "Confirm delete" }));
 
     await waitFor(() =>
@@ -389,9 +403,10 @@ describe("My Day video calls", () => {
 
     await user.click(
       await screen.findByRole("button", {
-        name: "Delete event from Google Calendar · Planning",
+        name: /^Planning,.*Google Calendar$/,
       }),
     );
+    await user.click(screen.getByRole("button", { name: "Delete event" }));
     await user.click(screen.getByRole("button", { name: "Confirm delete" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Could not delete this event. Try again.",

@@ -1,0 +1,98 @@
+import { useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import { GripVertical } from "lucide-react";
+import { StoreContextProvider, memoryStore } from "ra-core";
+import { AppLocaleProvider } from "@/i18n/app-locale-provider";
+import { WidgetCard } from "../../widgets";
+import {
+  useMyDayAgenda,
+  type PersonalIntegrationsLike,
+} from "../../agenda-widget";
+import "@/styles/globals.css";
+
+// This fixture exercises the real widget using synthetic events and no provider writes.
+const events = [
+  {
+    id: "synthetic-meet",
+    title: "Planificación del equipo",
+    startsAt: "2026-10-04T07:30:00Z",
+    endsAt: "2026-10-04T08:00:00Z",
+    webLink: null,
+    conference: {
+      provider: "google_meet",
+      status: "ready",
+      joinUrl: "https://meet.google.com/abc-defg-hij",
+    },
+  },
+  {
+    id: "synthetic-zoom",
+    title: "Revisión de la propuesta con el equipo de producto",
+    startsAt: "2026-10-04T18:00:00Z",
+    endsAt: "2026-10-04T19:00:00Z",
+    webLink: null,
+    conference: {
+      provider: "zoom",
+      status: "ready",
+      joinUrl: "https://zoom.us/j/123456789",
+    },
+  },
+];
+let deleted = new Set<string>();
+const client = {
+  listConnections: async () => [
+    {
+      id: "synthetic-google",
+      provider: "google_calendar",
+      status: "connected",
+    },
+  ],
+  listEvents: async () => events.filter((event) => !deleted.has(event.id)),
+  listBookingAgenda: async () => [],
+  createCalendarEvent: async () => {
+    throw new Error("Synthetic preview only");
+  },
+  deleteCalendarEvent: async ({ eventId }: { eventId: string }) => {
+    deleted.add(eventId);
+  },
+} as unknown as PersonalIntegrationsLike;
+const params = new URLSearchParams(location.search);
+document.documentElement.classList.toggle(
+  "dark",
+  params.get("theme") !== "light",
+);
+function Preview() {
+  const agenda = useMyDayAgenda(client);
+  useEffect(() => {
+    agenda.setSelectedDay(new Date(2026, 9, 4));
+  }, []);
+  return (
+    <main className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-8">
+      <div className="mx-auto max-w-5xl space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Vista local · datos de prueba
+        </p>
+        <WidgetCard
+          apiClient={undefined}
+          widget={{ id: "agenda", kind: "agenda", title: "Agenda" }}
+          collectionLabel="Mi día"
+          agenda={{ agenda }}
+          onRemove={() => {}}
+          onMove={() => {}}
+          isFirst
+          isLast
+          disabled={false}
+          dragHandle={
+            <GripVertical className="mt-0.5 size-4 text-muted-foreground" />
+          }
+        />
+      </div>
+    </main>
+  );
+}
+createRoot(document.getElementById("root")!).render(
+  <StoreContextProvider value={memoryStore({ locale: "es" })}>
+    <AppLocaleProvider>
+      <Preview />
+    </AppLocaleProvider>
+  </StoreContextProvider>,
+);
