@@ -13,7 +13,9 @@ capabilities and estimated token prices. Transcription suggestions include dedic
 (such as Whisper when returned by OpenRouter) and chat models accepting audio
 input and producing text; summary suggestions produce text. Assistant suggestions
 support tools. Transcription models do not need tool support. The catalog requests
-both `text` and `transcription` output modalities. The catalog uses the saved
+both `text` and `transcription` output modalities and preserves all returned
+models before filtering suggestions; popularity does not exclude lower-ranked
+transcription models. The catalog uses the saved
 key for the selected tenant, falling back to the shared key when inherited.
 If the catalog cannot load, the panel reports it and retains saved model IDs.
 Model IDs are syntax-validated; provider availability and format support can

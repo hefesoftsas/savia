@@ -862,6 +862,39 @@ describe("assistant routes", () => {
     );
   });
 
+  it("retains transcription models beyond the first 200 popular catalog entries", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        data: [
+          ...Array.from({ length: 200 }, (_, index) => ({
+            id: `test/text-${index}`,
+            architecture: {
+              input_modalities: ["text"],
+              output_modalities: ["text"],
+            },
+          })),
+          {
+            id: "openai/whisper-large-v3",
+            architecture: {
+              input_modalities: ["audio"],
+              output_modalities: ["transcription"],
+            },
+          },
+        ],
+      }),
+    );
+    const models = await openRouterModelCatalog(fetcher).list({
+      model: "test/chat",
+    });
+    expect(models).toContainEqual(
+      expect.objectContaining({
+        id: "openai/whisper-large-v3",
+        transcriptionEndpoint: "audio/transcriptions",
+      }),
+    );
+    expect(models).toHaveLength(201);
+  });
+
   it("fetches the public model catalog when no API key is configured", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       Response.json({
