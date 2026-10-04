@@ -9,6 +9,129 @@ const conn = (provider: string) =>
   }) as any;
 const nango = (proxy: (request: any) => Promise<Response>) =>
   ({ proxy }) as any;
+const zohoPicklistFields = (choiceCount: number, required = false) => [
+  {
+    api_name: "Last_Name",
+    field_label: "Last name",
+    data_type: "text",
+    system_mandatory: true,
+    read_only: false,
+    operation_type: { api_create: true, api_update: true },
+  },
+  {
+    api_name: "Mailing_Country",
+    field_label: "Mailing country",
+    data_type: "picklist",
+    system_mandatory: required,
+    read_only: false,
+    operation_type: { api_create: true, api_update: true },
+    pick_list_values: Array.from({ length: choiceCount }, (_, index) => ({
+      actual_value: `Country_${index}`,
+      display_value: `Country ${index}`,
+      active: true,
+    })),
+  },
+];
+const zohoPicklistAdapter = (
+  fields: ReturnType<typeof zohoPicklistFields>,
+  proxy = vi.fn(async ({ path }: any) =>
+    path.includes("/settings/modules")
+      ? Response.json({
+          modules: [
+            {
+              api_name: "Contacts",
+              viewable: true,
+              creatable: true,
+              editable: true,
+            },
+          ],
+        })
+      : path.includes("/settings/fields")
+        ? Response.json({ fields })
+        : Response.json({
+            data: [{ id: "123", Mailing_Country: "Country_0" }],
+          }),
+  ),
+) => ({ adapter: createRemoteWorkspaceAdapter("zoho", nango(proxy)), proxy });
+
+it.each([201, 3937])(
+  "keeps an optional Zoho picklist with %i choices visible as a read-only textbox",
+  async (choiceCount) => {
+    const { adapter } = zohoPicklistAdapter(zohoPicklistFields(choiceCount));
+    const description = await adapter.describe(conn("zoho"), "contacts");
+
+    expect(description.fields.Mailing_Country).toMatchObject({
+      type: "Textbox",
+      label: "Mailing country",
+      readOnly: true,
+      required: false,
+    });
+    expect(description.fields.Mailing_Country).not.toHaveProperty("options");
+    expect(description.title).toBe("Last_Name");
+    expect(description.capabilities).toMatchObject({
+      list: true,
+      read: true,
+      create: true,
+      update: true,
+    });
+    await expect(
+      adapter.list(conn("zoho"), "contacts", {
+        page: 1,
+        perPage: 20,
+        fields: ["Last_Name", "Mailing_Country"],
+      }),
+    ).resolves.toMatchObject({ records: [{ Mailing_Country: "Country_0" }] });
+  },
+);
+
+it.each([
+  ["create", "POST"],
+  ["update", "PUT"],
+] as const)(
+  "rejects an oversized Zoho picklist on %s before sending a mutation",
+  async (operation, mutationMethod) => {
+    const { adapter, proxy } = zohoPicklistAdapter(zohoPicklistFields(201));
+    if (operation === "create")
+      await expect(
+        adapter.create(conn("zoho"), "contacts", {
+          Last_Name: "Ada",
+          Mailing_Country: "Country_0",
+        }),
+      ).rejects.toThrow("cannot be created");
+    else
+      await expect(
+        adapter.update(conn("zoho"), "contacts", "123", {
+          Mailing_Country: "Country_0",
+        }),
+      ).rejects.toThrow("cannot be updated");
+    expect(
+      proxy.mock.calls.some(([request]) => request.method === mutationMethod),
+    ).toBe(false);
+  },
+);
+
+it("continues rejecting required editable Zoho picklists with more than 200 choices", async () => {
+  const { adapter } = zohoPicklistAdapter(zohoPicklistFields(201, true));
+  await expect(adapter.describe(conn("zoho"), "contacts")).rejects.toThrow(
+    "CRM field Mailing_Country has too many choices to edit safely",
+  );
+});
+
+it("keeps Zoho picklists with 200 choices writable and preserves every option", async () => {
+  const { adapter } = zohoPicklistAdapter(zohoPicklistFields(200));
+  const description = await adapter.describe(conn("zoho"), "contacts");
+
+  expect(description.fields.Mailing_Country).toMatchObject({
+    type: "Dropdown",
+    readOnly: false,
+  });
+  expect(description.fields.Mailing_Country.options).toHaveLength(200);
+  expect(description.fields.Mailing_Country.options?.[199]).toEqual({
+    label: "Country 199",
+    value: "Country_199",
+  });
+});
+
 it("preserves Salesforce picklist values, system defaults, and datetime semantics", async () => {
   const adapter = createRemoteWorkspaceAdapter(
     "salesforce",
@@ -114,6 +237,70 @@ it("does not turn a malformed successful list response into an empty CRM", async
     adapter.list(conn("pipedrive"), "contacts", {
       page: 1,
       perPage: 25,
+      fields: ["name"],
+    }),
+  ).rejects.toThrow();
+});
+it("treats Pipedrive's explicit terminal null list as an empty page", async () => {
+  const adapter = createRemoteWorkspaceAdapter(
+    "pipedrive",
+    nango(async () =>
+      Response.json({
+        success: true,
+        data: null,
+        additional_data: {
+          pagination: {
+            start: 0,
+            limit: 1,
+            more_items_in_collection: false,
+          },
+        },
+      }),
+    ),
+  );
+
+  await expect(
+    adapter.list(conn("pipedrive"), "contacts", {
+      page: 1,
+      perPage: 1,
+      fields: ["name"],
+    }),
+  ).resolves.toEqual({ records: [], hasNextPage: false });
+});
+it.each([
+  [
+    "nonterminal null data",
+    {
+      success: true,
+      data: null,
+      additional_data: { pagination: { more_items_in_collection: true } },
+    },
+  ],
+  [
+    "missing data",
+    {
+      success: true,
+      additional_data: { pagination: { more_items_in_collection: false } },
+    },
+  ],
+  [
+    "unsuccessful response",
+    {
+      success: false,
+      data: null,
+      additional_data: { pagination: { more_items_in_collection: false } },
+    },
+  ],
+] as const)("rejects Pipedrive %s list responses", async (_case, body) => {
+  const adapter = createRemoteWorkspaceAdapter(
+    "pipedrive",
+    nango(async () => Response.json(body)),
+  );
+
+  await expect(
+    adapter.list(conn("pipedrive"), "contacts", {
+      page: 1,
+      perPage: 1,
       fields: ["name"],
     }),
   ).rejects.toThrow();

@@ -96,10 +96,10 @@ async function setup() {
     deleteConnection: vi.fn(async () => {}),
     proxy: vi.fn(),
   };
-  const validate = vi.fn(async () => ({
+  const validate = vi.fn(async (connection: { scopes: string[] }) => ({
     externalAccountId: "account",
     externalAccountLabel: "Account",
-    scopes: [],
+    scopes: connection.scopes,
   }));
   const providers = createCrmProviderRegistry({
     baseUrl: "https://nango.test",
@@ -266,6 +266,53 @@ it("permits owner reconnection and refuses an unauthorized organization", async 
       })
     ).status,
   ).toBe(403);
+});
+
+it("persists Nango-granted scopes when connecting Pipedrive", async () => {
+  const s = await setup();
+  const grantedScopes = ["base", "contacts:full", "deals:full"];
+  const connectionId = `pipedrive-connection-${s.tenant}`;
+  s.nango.getConnection.mockImplementation(async (connectionId, provider) => ({
+    connectionId,
+    providerConfigKey: provider,
+    organizationId: `user:${s.actors[0].principal.id}`,
+    scopes: grantedScopes,
+  }));
+
+  const response = await post(s.app(), "pipedrive", "complete", {
+    agencyId: s.tenant,
+    connectionId,
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    data: { attributes: { provider: "pipedrive", scopes: grantedScopes } },
+  });
+});
+
+it("replaces stale CRM scopes with the scopes granted by Nango on reconnect", async () => {
+  const s = await setup();
+  const connectionId = `pipedrive-reconnect-${s.tenant}`;
+  await s.repository.saveConnection({
+    ...s.completion(s.actors[0], "pipedrive"),
+    scopes: ["contacts:full", "deals:full"],
+  });
+  s.nango.getConnection.mockImplementation(async (connectionId, provider) => ({
+    connectionId,
+    providerConfigKey: provider,
+    organizationId: `user:${s.actors[0].principal.id}`,
+    scopes: [],
+  }));
+
+  const response = await post(s.app(), "pipedrive", "complete", {
+    agencyId: s.tenant,
+    connectionId,
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    data: { attributes: { provider: "pipedrive", scopes: [] } },
+  });
 });
 
 it("returns a conflict when two completions finish OAuth concurrently", async () => {
