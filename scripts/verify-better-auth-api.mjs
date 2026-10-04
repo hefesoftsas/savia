@@ -6,8 +6,7 @@ const apiUrl = (process.env.API_URL ?? "http://127.0.0.1:8787").replace(
 );
 const email =
   process.env.BETTER_AUTH_BOOTSTRAP_EMAIL ?? "savia.admin@example.test";
-const password =
-  process.env.BETTER_AUTH_BOOTSTRAP_PASSWORD ?? "TestUser321!";
+const password = process.env.BETTER_AUTH_BOOTSTRAP_PASSWORD ?? "TestUser321!";
 
 function cookie(response, name) {
   const cookies = response.headers.getSetCookie?.() ?? [];
@@ -79,7 +78,7 @@ if (isMfaChallenge) {
       "Better Auth did not issue a bearer session token after MFA completion",
     );
     await verifyIdentity(apiUrl, sessionCookie, bearerToken);
-    console.log("MFA-protected Better Auth-to-API session verified");
+    console.log("MFA-protected Better Auth-to-API cookie session verified");
   }
 } else {
   const sessionCookie = requiredCookie(
@@ -103,8 +102,8 @@ if (isMfaChallenge) {
   );
   assert.equal(
     bearerIdentity.status,
-    403,
-    "Unenrolled bearer session was unexpectedly authorized",
+    401,
+    "Opaque session token was unexpectedly accepted as an API access token",
   );
   console.log("MFA enrollment requirement verified");
 }
@@ -123,7 +122,7 @@ async function verifyIdentity(url, sessionCookie, bearerToken) {
   );
   assert.equal(
     bearerIdentity.status,
-    200,
-    "Bearer session was rejected by the API",
+    401,
+    "Opaque session token was unexpectedly accepted as an API access token",
   );
 }

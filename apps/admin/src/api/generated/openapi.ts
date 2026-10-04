@@ -591,6 +591,1503 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/companion/sessions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List owned session metadata; read an individual session for transcripts and notes */
+    get: {
+      parameters: {
+        query?: {
+          cursor?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Session page */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              sessions: {
+                /** Format: uuid */
+                id: string;
+                tenantId?: number;
+                name: string;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                updatedAt: string;
+                sources: ("microphone" | "system")[];
+                /** @enum {string} */
+                state: "uploading" | "ready";
+                durationSeconds: number | null;
+                chunks: {
+                  /**
+                   * @default ogg
+                   * @enum {string}
+                   */
+                  format: "ogg" | "m4a";
+                  /** @enum {string} */
+                  source: "microphone" | "system";
+                  sequence: number;
+                  startSeconds: number;
+                  durationSeconds: number;
+                  bytes: number;
+                  sha256: string;
+                }[];
+                job: {
+                  /**
+                   * Format: uuid
+                   * @default null
+                   */
+                  runId: string | null;
+                  /** @enum {string} */
+                  status:
+                    | "idle"
+                    | "queued"
+                    | "transcribing"
+                    | "summarizing"
+                    | "complete"
+                    | "needs_attention"
+                    | "cancelled"
+                    | "failed";
+                  completedChunks: number;
+                  totalChunks: number;
+                  error?: string;
+                  /** @default {} */
+                  transcripts: {
+                    [key: string]: {
+                      text: string;
+                      /** @enum {string} */
+                      source: "microphone" | "system" | "upload";
+                      model: string;
+                      durationSeconds: number | null;
+                    };
+                  };
+                  /** @default null */
+                  summary: {
+                    summary: string;
+                    decisions: string[];
+                    actions: {
+                      description: string;
+                      owner: string | null;
+                      dueDate: string | null;
+                    }[];
+                    openQuestions: string[];
+                  } | null;
+                };
+              }[];
+              cursor: string | null;
+            };
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Create an idempotent consented recording session */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            sources: ("microphone" | "system")[];
+            /** @enum {boolean} */
+            consent: true;
+          };
+        };
+      };
+      responses: {
+        /** @description Uploaded session metadata */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              tenantId?: number;
+              name: string;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+              sources: ("microphone" | "system")[];
+              /** @enum {string} */
+              state: "uploading" | "ready";
+              durationSeconds: number | null;
+              chunks: {
+                /**
+                 * @default ogg
+                 * @enum {string}
+                 */
+                format: "ogg" | "m4a";
+                /** @enum {string} */
+                source: "microphone" | "system";
+                sequence: number;
+                startSeconds: number;
+                durationSeconds: number;
+                bytes: number;
+                sha256: string;
+              }[];
+            };
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/sessions/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read recording progress, transcripts and notes */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Recording session */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              tenantId?: number;
+              name: string;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+              sources: ("microphone" | "system")[];
+              /** @enum {string} */
+              state: "uploading" | "ready";
+              durationSeconds: number | null;
+              chunks: {
+                /**
+                 * @default ogg
+                 * @enum {string}
+                 */
+                format: "ogg" | "m4a";
+                /** @enum {string} */
+                source: "microphone" | "system";
+                sequence: number;
+                startSeconds: number;
+                durationSeconds: number;
+                bytes: number;
+                sha256: string;
+              }[];
+              job: {
+                /**
+                 * Format: uuid
+                 * @default null
+                 */
+                runId: string | null;
+                /** @enum {string} */
+                status:
+                  | "idle"
+                  | "queued"
+                  | "transcribing"
+                  | "summarizing"
+                  | "complete"
+                  | "needs_attention"
+                  | "cancelled"
+                  | "failed";
+                completedChunks: number;
+                totalChunks: number;
+                error?: string;
+                /** @default {} */
+                transcripts: {
+                  [key: string]: {
+                    text: string;
+                    /** @enum {string} */
+                    source: "microphone" | "system" | "upload";
+                    model: string;
+                    durationSeconds: number | null;
+                  };
+                };
+                /** @default null */
+                summary: {
+                  summary: string;
+                  decisions: string[];
+                  actions: {
+                    description: string;
+                    owner: string | null;
+                    dueDate: string | null;
+                  }[];
+                  openQuestions: string[];
+                } | null;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/sessions/{id}/chunks": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Upload an immutable independently decodable audio segment */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            source: "microphone" | "system";
+            sequence: number;
+            startSeconds: number;
+            audio: {
+              data: string;
+              /** @enum {string} */
+              format: "ogg" | "m4a";
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description Uploaded session metadata */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              tenantId?: number;
+              name: string;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+              sources: ("microphone" | "system")[];
+              /** @enum {string} */
+              state: "uploading" | "ready";
+              durationSeconds: number | null;
+              chunks: {
+                /**
+                 * @default ogg
+                 * @enum {string}
+                 */
+                format: "ogg" | "m4a";
+                /** @enum {string} */
+                source: "microphone" | "system";
+                sequence: number;
+                startSeconds: number;
+                durationSeconds: number;
+                bytes: number;
+                sha256: string;
+              }[];
+            };
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/sessions/{id}/finalize": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Finalize a complete recording timeline of up to one hour */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            expectedChunks: number;
+            durationSeconds: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Uploaded session metadata */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              tenantId?: number;
+              name: string;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+              sources: ("microphone" | "system")[];
+              /** @enum {string} */
+              state: "uploading" | "ready";
+              durationSeconds: number | null;
+              chunks: {
+                /**
+                 * @default ogg
+                 * @enum {string}
+                 */
+                format: "ogg" | "m4a";
+                /** @enum {string} */
+                source: "microphone" | "system";
+                sequence: number;
+                startSeconds: number;
+                durationSeconds: number;
+                bytes: number;
+                sha256: string;
+              }[];
+            };
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/sessions/{id}/chunks/{source}/{sequence}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Play an owned audio segment */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+          source: "microphone" | "system";
+          sequence: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Ogg Opus or M4A audio */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "audio/ogg": string;
+            "audio/mp4": string;
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/sessions/{id}/notes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queue durable transcription and summary processing with provider consent */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** @enum {boolean} */
+            consent: true;
+            retryAmbiguous?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Recording session */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              tenantId?: number;
+              name: string;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+              sources: ("microphone" | "system")[];
+              /** @enum {string} */
+              state: "uploading" | "ready";
+              durationSeconds: number | null;
+              chunks: {
+                /**
+                 * @default ogg
+                 * @enum {string}
+                 */
+                format: "ogg" | "m4a";
+                /** @enum {string} */
+                source: "microphone" | "system";
+                sequence: number;
+                startSeconds: number;
+                durationSeconds: number;
+                bytes: number;
+                sha256: string;
+              }[];
+              job: {
+                /**
+                 * Format: uuid
+                 * @default null
+                 */
+                runId: string | null;
+                /** @enum {string} */
+                status:
+                  | "idle"
+                  | "queued"
+                  | "transcribing"
+                  | "summarizing"
+                  | "complete"
+                  | "needs_attention"
+                  | "cancelled"
+                  | "failed";
+                completedChunks: number;
+                totalChunks: number;
+                error?: string;
+                /** @default {} */
+                transcripts: {
+                  [key: string]: {
+                    text: string;
+                    /** @enum {string} */
+                    source: "microphone" | "system" | "upload";
+                    model: string;
+                    durationSeconds: number | null;
+                  };
+                };
+                /** @default null */
+                summary: {
+                  summary: string;
+                  decisions: string[];
+                  actions: {
+                    description: string;
+                    owner: string | null;
+                    dueDate: string | null;
+                  }[];
+                  openQuestions: string[];
+                } | null;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/sessions/{id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Cancel pending provider work while preserving saved results */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Recording session */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              tenantId?: number;
+              name: string;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+              sources: ("microphone" | "system")[];
+              /** @enum {string} */
+              state: "uploading" | "ready";
+              durationSeconds: number | null;
+              chunks: {
+                /**
+                 * @default ogg
+                 * @enum {string}
+                 */
+                format: "ogg" | "m4a";
+                /** @enum {string} */
+                source: "microphone" | "system";
+                sequence: number;
+                startSeconds: number;
+                durationSeconds: number;
+                bytes: number;
+                sha256: string;
+              }[];
+              job: {
+                /**
+                 * Format: uuid
+                 * @default null
+                 */
+                runId: string | null;
+                /** @enum {string} */
+                status:
+                  | "idle"
+                  | "queued"
+                  | "transcribing"
+                  | "summarizing"
+                  | "complete"
+                  | "needs_attention"
+                  | "cancelled"
+                  | "failed";
+                completedChunks: number;
+                totalChunks: number;
+                error?: string;
+                /** @default {} */
+                transcripts: {
+                  [key: string]: {
+                    text: string;
+                    /** @enum {string} */
+                    source: "microphone" | "system" | "upload";
+                    model: string;
+                    durationSeconds: number | null;
+                  };
+                };
+                /** @default null */
+                summary: {
+                  summary: string;
+                  decisions: string[];
+                  actions: {
+                    description: string;
+                    owner: string | null;
+                    dueDate: string | null;
+                  }[];
+                  openQuestions: string[];
+                } | null;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/sessions/{id}/questions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Answer using bounded transcript evidence and return its timeline references */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            question: string;
+            /** @enum {boolean} */
+            consent: true;
+          };
+        };
+      };
+      responses: {
+        /** @description Grounded answer */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              answer: string;
+              insufficientEvidence: boolean;
+              partial: boolean;
+              evidence: {
+                source: string;
+                sequence: number;
+                startSeconds: number;
+                durationSeconds: number;
+              }[];
+            };
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/companion/capabilities": {
     parameters: {
       query?: never;
@@ -618,6 +2115,11 @@ export interface paths {
               sttModel: string;
               summaryModel: string;
               maxDurationSeconds: number;
+              /** @enum {number} */
+              maxSessionDurationSeconds: 3600;
+              /** @enum {number} */
+              maxSessionChunksPerSource: 120;
+              sessionAudioFormats: ("ogg" | "m4a")[];
               maxAudioBytes: number;
               maxCompressedAudioBytes: number;
               audioFormats: ("wav" | "ogg")[];
@@ -3212,6 +4714,120 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/personal-integrations/bookings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          from: string;
+          to: string;
+          timeZone: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** Format: uuid */
+                id: string;
+                tenantId: number;
+                tenantSlug: string;
+                tenantName: string;
+                serviceName: string;
+                professionalName: string;
+                customerName: string;
+                /** Format: email */
+                customerEmail: string;
+                /** Format: date-time */
+                startsAt: string;
+                /** Format: date-time */
+                endsAt: string;
+                timeZone: string;
+                /** @enum {string} */
+                status: "confirmed";
+                version: number;
+                externalEvent: {
+                  /** @enum {string} */
+                  provider: "google_calendar" | "outlook";
+                  id: string;
+                } | null;
+              }[];
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/tenants/{tenantId}/booking": {
     parameters: {
       query?: never;
@@ -4349,6 +5965,236 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/tenants/{tenantId}/booking/public-links/{id}/short-url": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                [key: string]: unknown;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/booking/public-links/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            version: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                [key: string]: unknown;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/s/b/{code}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          code: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Redirect to the public booking page */
+        302: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable link */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/public/bookings/{token}": {
     parameters: {
       query?: never;
@@ -4915,7 +6761,135 @@ export interface paths {
           content: {
             "application/json": {
               data: {
-                [key: string]: unknown;
+                reservation: {
+                  /** Format: uuid */
+                  id: string;
+                  /** Format: uuid */
+                  serviceId: string;
+                  /** Format: uuid */
+                  professionalId: string;
+                  serviceName: string;
+                  professionalName: string;
+                  startsAt: string;
+                  endsAt: string;
+                  customerName: string;
+                  customerEmail: string;
+                  /** @enum {string} */
+                  status: "confirmed" | "cancelled";
+                  version: number;
+                  deliveryStatus: string;
+                  calendarStatus: string;
+                };
+                publicUrl: string | null;
+                timeZone: string;
+                cancellationMinutes: number;
+                horizonDays: number;
+                leadMinutes: number;
+                canReschedule: boolean;
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/bookings/manage/{token}/availability": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          serviceId: string;
+          professionalId?: string;
+          from: string;
+          to: string;
+          displayTimeZone?: string;
+        };
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                displayTimeZone: string;
+                businessTimeZone: string;
+                days: {
+                  date: string;
+                  slots: {
+                    startsAt: string;
+                    endsAt: string;
+                  }[];
+                }[];
               };
             };
           };

@@ -1,3 +1,5 @@
+import { useSearchParams } from "react-router-dom";
+import { RecordingSessions } from "./recording-sessions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
@@ -26,10 +28,65 @@ import {
   type ProviderFailure,
 } from "./provider-error";
 
+export function CompanionRecordingsPage(props: {
+  services?: Pick<AppServices, "apiClient">;
+  client?: CompanionRecordingsClient;
+}) {
+  return props.services ? (
+    <RecordingsTabs {...props} />
+  ) : (
+    <AudioFilesPage {...props} />
+  );
+}
+
+function RecordingsTabs(props: {
+  services?: Pick<AppServices, "apiClient">;
+  client?: CompanionRecordingsClient;
+}) {
+  const t = useMessages(companionMessages);
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") === "sessions" ? "sessions" : "files";
+  const setTab = (value: string) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set("tab", value);
+      return next;
+    });
+  if (!props.services) return <AudioFilesPage {...props} />;
+  return (
+    <>
+      <nav
+        className="mx-auto flex max-w-6xl gap-2 border-b px-4 pt-6 md:px-8"
+        aria-label={t("Recordings")}
+      >
+        <Button
+          variant={tab === "files" ? "secondary" : "ghost"}
+          aria-pressed={tab === "files"}
+          onClick={() => setTab("files")}
+        >
+          {t("Audio files")}
+        </Button>
+        <Button
+          variant={tab === "sessions" ? "secondary" : "ghost"}
+          aria-pressed={tab === "sessions"}
+          onClick={() => setTab("sessions")}
+        >
+          {t("Recording sessions")}
+        </Button>
+      </nav>
+      {tab === "files" ? (
+        <AudioFilesPage {...props} />
+      ) : (
+        <RecordingSessions api={props.services.apiClient} />
+      )}
+    </>
+  );
+}
+
 // Operate: an owner-private audio inbox, using Savia's neutral surfaces and
 // emerald actions. The list leads to one listening/review workspace; generated
 // notes are the content, with consent immediately beside the processing action.
-export function CompanionRecordingsPage({
+function AudioFilesPage({
   services,
   client: supplied,
 }: {
@@ -197,20 +254,24 @@ export function CompanionRecordingsPage({
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={loading || processing || uploading}
             onClick={() => setUploadOpen(true)}
           >
             <Upload className="size-4" aria-hidden="true" />
-            {t("Upload recording")}
+            <span className="sr-only sm:not-sr-only">
+              {t("Upload recording")}
+            </span>
           </Button>
           <Button
             variant="outline"
             size="sm"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={loading || processing || uploading}
             onClick={() => void load()}
           >
             <RefreshCw className="size-4" aria-hidden="true" />
-            {t("Refresh")}
+            <span className="sr-only sm:not-sr-only">{t("Refresh")}</span>
           </Button>
         </div>
       </header>
@@ -310,9 +371,10 @@ export function CompanionRecordingsPage({
             </ul>
             {cursor && (
               <Button
-                className="mt-3 w-full"
+                className="mt-3 w-full max-sm:h-11"
                 variant="ghost"
                 size="sm"
+                aria-label={t("Load more")}
                 disabled={loading || processing || uploading}
                 onClick={() => void load(cursor)}
               >
@@ -359,7 +421,7 @@ export function CompanionRecordingsPage({
                       download={
                         selected.name ?? `${selected.id}.${selected.format}`
                       }
-                      className="mt-2 inline-block text-xs text-muted-foreground underline underline-offset-4"
+                      className="mt-2 inline-flex items-center text-xs text-muted-foreground underline underline-offset-4 max-sm:min-h-11"
                     >
                       {t("Download audio")}
                     </a>

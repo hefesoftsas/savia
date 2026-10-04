@@ -15,6 +15,7 @@ type AvailabilityResult = {
 };
 type Props = {
   token: string;
+  mode?: "booking" | "management";
   catalog: {
     id: string;
     timeZone: string;
@@ -30,6 +31,7 @@ type Props = {
   onLoadingChange?(loading: boolean): void;
   refreshKey?: number;
   hideHeading?: boolean;
+  excludedStartsAt?: string[];
 };
 
 const dayString = (date: Date) =>
@@ -133,6 +135,7 @@ async function fetchAvailability(path: string, signal: AbortSignal) {
 
 export function PublicBookingAvailability({
   token,
+  mode = "booking",
   catalog,
   serviceId,
   professionalId,
@@ -143,6 +146,7 @@ export function PublicBookingAvailability({
   onLoadingChange,
   refreshKey = 0,
   hideHeading = false,
+  excludedStartsAt = [],
 }: Props) {
   const t = useMessages(bookingMessages);
   const wt = useMessages(publicBookingWizardMessages);
@@ -195,10 +199,11 @@ export function PublicBookingAvailability({
       to: range.to,
       displayTimeZone,
     });
-    void fetchAvailability(
-      `/api/public/bookings/${encodeURIComponent(token)}/availability?${query}`,
-      controller.signal,
-    )
+    const endpoint =
+      mode === "management"
+        ? `/api/public/bookings/manage/${encodeURIComponent(token)}/availability`
+        : `/api/public/bookings/${encodeURIComponent(token)}/availability`;
+    void fetchAvailability(`${endpoint}?${query}`, controller.signal)
       .then((result) => {
         if (controller.signal.aborted || requestId.current !== id) return;
         setDays(result.days);
@@ -238,6 +243,7 @@ export function PublicBookingAvailability({
     return () => controller.abort();
   }, [
     token,
+    mode,
     serviceId,
     professionalId,
     displayTimeZone,
@@ -473,12 +479,14 @@ export function PublicBookingAvailability({
             >
               {selectedSlots.map((slot) => {
                 const chosen = value?.slot.startsAt === slot.startsAt;
+                const excluded = excludedStartsAt.includes(slot.startsAt);
                 return (
                   <Button
                     key={slot.startsAt}
                     type="button"
                     variant={chosen ? "default" : "outline"}
                     aria-pressed={chosen}
+                    disabled={excluded}
                     className="min-h-11 px-2 tabular-nums"
                     onClick={() =>
                       onChange({

@@ -2,10 +2,7 @@ import { useState } from "react";
 import { useTranslate } from "ra-core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import {
-  notificationClient,
-  type NotificationClient,
-} from "./client";
+import { notificationClient, type NotificationClient } from "./client";
 
 export function CollectionFollow({
   collection,
@@ -30,7 +27,9 @@ export function CollectionFollow({
     try {
       if (following) await client.unfollow(collection);
       else await client.follow(collection);
-      await queryClient.invalidateQueries({ queryKey: ["notifications", "follows"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["notifications", "follows"],
+      });
     } catch {
       setError(translate("savia.notificationInbox.actionError"));
     } finally {
@@ -44,6 +43,7 @@ export function CollectionFollow({
         type="button"
         variant="ghost"
         size="sm"
+        className="max-sm:h-11"
         disabled={busy || follows.isPending}
         aria-pressed={following}
         onClick={() => void toggle()}

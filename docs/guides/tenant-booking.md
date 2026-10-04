@@ -16,11 +16,11 @@ Publish when booking is enabled and an enabled service has an enabled profession
 
 ### Personal and team public links
 
-New links default to a 30-day expiry and 25 admitted booking submissions per UTC day. Choose 24 hours, 7 days, 30 days, or explicitly no expiry; the daily budget can be configured from 1 to 1,000. Copy the canonical URL, use the device's share action, or show a QR code. Shortening is optional and does not grant different booking permissions.
+New links default to a 30-day expiry and 25 admitted booking submissions per UTC day. Choose 24 hours, 7 days, 30 days, or explicitly no expiry; the daily budget can be configured from 1 to 1,000. Copy the canonical URL, use the device's share action, or show a QR code. Each link also receives a Savia short URL; when Shlink is configured, the short URL action uses it and falls back to the Savia URL if the provider is unavailable. Shortening does not grant different booking permissions.
 
-Each link has independent revocation. Personal links expose only enabled services assigned to their fixed professional; optional service-scoped links expose only that service. The server enforces this scope for the catalog, challenge, availability and reservation, including caller-submitted identifiers. Disabled professionals/services, removed membership, inactive tenants, expiry and unpublishing stop new bookings. Existing tenant-wide URLs remain team links and can be revoked through the same panel; they are never silently converted into personal links.
+Each link has independent revocation and deletion. Delete permanently removes the public link from the panel and invalidates its canonical and short URLs, including legacy team links; it does not delete reservations or their private management links. Personal links expose only enabled services assigned to their fixed professional; optional service-scoped links expose only that service. The server enforces this scope for the catalog, challenge, availability and reservation, including caller-submitted identifiers. Disabled professionals/services, removed membership, inactive tenants, expiry and unpublishing stop new bookings. Existing tenant-wide URLs remain team links and can be revoked or deleted through the same panel; they are never silently converted into personal links.
 
-Expiry and revocation do not delete reservations or invalidate their distinct private management links. Management and cancellation policies below continue to apply.
+Expiry and revocation do not delete reservations or invalidate their distinct private management links. Deleting a public link has the same preservation behavior. Management and cancellation policies below continue to apply.
 
 Public booking admission also limits each hashed client IP to 20 submissions and each tenant to 1,000 submissions per UTC day. Failed admitted attempts consume the budget; retrying identical details with the same request key reuses admission and does not consume it twice. Changing the payload under that key conflicts. Persistent minute limits and CAPTCHA remain in force; browsing calendar days does not consume submission budgets. Public body size is limited to 32 KiB. A bounded range contains at most 31 dates and fetches each calendar's busy intervals once, rather than making a provider request for each day. Unknown calendar availability stops booking with a retryable error.
 
@@ -28,7 +28,22 @@ Public booking admission also limits each hashed client IP to 20 submissions and
 
 Administrators see the tenant's reservations; other tenant members see only reservations assigned to themselves. Concurrent native bookings claim the professional's occupied intervals atomically, including the trailing buffer. Conflicting requests return a recoverable conflict and create no partial reservation. Request keys prevent duplicate reservations when a customer retries a submission.
 
+Confirmed appointments also appear in the assigned professional's **My Day**
+agenda, in day, week and month views, even without Google Calendar or Outlook.
+My Day shows only the signed-in user's assignments across their current commercial
+workspace memberships; administrators use **Bookings → Reservations** for team
+history. Appointment details link to authenticated workspace reservations where
+tenant hostnames are supported, opening the appointment date directly.
+**Show upcoming reservations** clears that date. Details never expose the customer's private
+management token. Rescheduling and cancellation are reflected when My Day
+refreshes, including **Synchronize**, focus/connectivity recovery and visible
+five-minute polling. See [My Day widgets](../my-day-widgets.md).
+
 The confirmation contains a private management link. Anyone possessing this link can view, cancel or reschedule that single reservation, so treat it as private. Customers can change a confirmed reservation before the tenant's cutoff. Cancelled reservations release their intervals. Rescheduling replaces the old occupancy atomically and keeps the old time if the new time conflicts. Changing a service's duration or buffer requires contacting the business before rescheduling an existing reservation. Administrators and assigned professionals can cancel through their authenticated agenda without the customer cutoff.
+
+Choose **Reschedule** from the private management page to use the same inline calendar, time buttons and display time zone as a new booking. The service and professional remain fixed to the reservation. Choose a different time, review the existing and proposed appointment, then confirm the change; navigating back or leaving the editor does not change the appointment. Successful changes refresh the reservation's revision and retain its private management link. A stale slot returns to refreshed availability; an identical retry after a lost success response checks the current appointment before claiming success.
+
+Private calendar availability is scoped to the reservation's token and is independent of public sharing-link expiry or revocation. It excludes that reservation's native occupied intervals while retaining all other appointments and external calendar busy periods. Rescheduling is unavailable after the cutoff or when the tenant, professional, service or original duration/buffer no longer permits it; the page explains how to contact the business. Viewing and eligible cancellation remain available under their existing rules. The link to book another appointment appears only when the tenant-wide public link remains available.
 
 Unpublishing stops new public bookings. Existing management links continue to support viewing and cancellation; rescheduling requires published booking settings. Removing or disabling a professional does not erase historical reservations. Deactivated tenants retain existing private management links and authorized reservation history and cancellation; public booking and rescheduling stay blocked. Delivery jobs stop while the tenant is inactive.
 
@@ -48,7 +63,7 @@ The scheduler processes a durable outbox, leases work and retries transient erro
 
 ## Deployment and verification
 
-Both SQLite/D1 and PostgreSQL have forward migrations `0022_tenant_bookings.sql` and `0026_booking_public_links.sql`. The latter adds scoped links, daily admission receipts and stored customer locale, and preserves existing tenant URLs as independently revocable team links. Preview deployment applies the D1 migration before the API is deployed. Existing tenants remain disabled until configured. API reference is generated from the Booking OpenAPI routes.
+Both SQLite/D1 and PostgreSQL have forward migrations `0022_tenant_bookings.sql`, `0026_booking_public_links.sql` and `0027_booking_public_link_short_urls.sql`. Migration `0026` adds scoped links, daily admission receipts and stored customer locale, and preserves existing tenant URLs as independently revocable team links. Migration `0027` adds short URL storage and deletion tombstones. Apply the D1 migration before deploying the updated API. Existing tenants remain disabled until configured. API reference is generated from the Booking OpenAPI routes.
 
 Public requests enforce body limits, per-link request throttling, no-cache and no-referrer headers, and captcha verification. ALTCHA proofs are consumed once; retrying the same confirmed request key returns the existing reservation. Captcha bypass is limited to local development origins.
 

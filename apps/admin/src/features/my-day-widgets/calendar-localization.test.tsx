@@ -35,6 +35,12 @@ function Harness() {
       savePreferences: async () => {},
     },
     events: [],
+    bookings: {
+      entries: [],
+      loading: false,
+      error: false,
+      refresh: async () => {},
+    },
     calendarProviders: [],
     loading: false,
     syncError: null,

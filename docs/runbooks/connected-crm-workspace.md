@@ -196,7 +196,7 @@ the selected organization; they cannot borrow a connection from another one.
 Requests that omit `agencyId` use the default authorized organization, so
 clients should send the selected organization explicitly.
 
-Apply migration `0027_crm_organization_connection.sql` in SQLite/D1 and native
+Apply migration `0028_crm_organization_connection.sql` in SQLite/D1 and native
 PostgreSQL before deploying the updated application. It does not delete data or
 choose which CRM to retain. If existing organizations have multiple live rows,
 the migration fails and must be retried after their owners explicitly disconnect

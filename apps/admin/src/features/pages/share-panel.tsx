@@ -132,7 +132,7 @@ export function SharePanel({
         <button
           role="tab"
           aria-selected={tab === "members"}
-          className={`px-3 py-2 text-sm ${tab === "members" ? "border-b-2 border-primary font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          className={`min-h-11 px-3 py-2 text-sm ${tab === "members" ? "border-b-2 border-primary font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
           onClick={() => setTab("members")}
         >
           {t("Share with members")}
@@ -140,7 +140,7 @@ export function SharePanel({
         <button
           role="tab"
           aria-selected={tab === "public"}
-          className={`px-3 py-2 text-sm ${tab === "public" ? "border-b-2 border-primary font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          className={`min-h-11 px-3 py-2 text-sm ${tab === "public" ? "border-b-2 border-primary font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
           onClick={() => setTab("public")}
         >
           {t("Public link")}

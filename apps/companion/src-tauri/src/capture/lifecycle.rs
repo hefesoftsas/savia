@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-pub const MAX_CAPTURE_DURATION: Duration = Duration::from_secs(60);
+pub const MAX_CAPTURE_DURATION: Duration = Duration::from_secs(3_600);
 pub const MAX_PCM_BYTES: usize = 8 * 1024 * 1024;
 pub const WAV_HEADER_BYTES: usize = 44;
 pub const MAX_WAV_BYTES: usize = MAX_PCM_BYTES + WAV_HEADER_BYTES;

@@ -85,3 +85,13 @@ test("routes preview download catalogs through the worker before SPA fallback", 
     config.assets.run_worker_first.includes("/companion-downloads.json"),
   );
 });
+
+test("routes preview short booking URLs through the API before SPA fallback", () => {
+  const config = workerConfig(
+    "gateway",
+    previewNames("booking-links"),
+    {},
+    "https://preview.example.test",
+  );
+  assert.ok(config.assets.run_worker_first.includes("/s/*"));
+});

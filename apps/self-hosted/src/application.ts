@@ -20,6 +20,7 @@ import { createNodeHookExecutor } from "./hooks";
 import { createNodeRealtimeHub } from "./realtime";
 import { createRateLimiter } from "./rate-limit";
 import type { Configuration } from "./config";
+import { createPagesSearchBindings } from "./pages-search";
 
 const repositoryRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -121,6 +122,13 @@ export async function createApplication(
   config: Configuration,
   env: Record<string, string | undefined> = process.env,
 ) {
+  const searchShutdown = new AbortController();
+  const pagesSearch = createPagesSearchBindings(
+    env,
+    fetch,
+    searchShutdown.signal,
+  );
+  const backgroundTasks = new Set<Promise<unknown>>();
   mkdirSync(config.dataDirectory, { recursive: true, mode: 0o700 });
   const stores = openDatabases(config, repositoryRoot);
   const {
@@ -283,6 +291,7 @@ export async function createApplication(
       optional.SAVIA_INTERNAL_BRIDGE_KEY = internalBridgeKey;
     const environment: RuntimeEnvironment = {
       ...optional,
+      ...pagesSearch,
       DB: database,
       DOCUMENTS: objects as unknown as R2Bucket,
       AUTH: auth,
@@ -300,6 +309,14 @@ export async function createApplication(
       PUBLIC_FORMS_RATE_LIMITER: createRateLimiter({ limit: 30 }),
     };
     const api = createApiRuntime(environment, {
+      pagesSearchSchedule(task) {
+        const tracked = task
+          .catch(() => {
+            console.warn(JSON.stringify({ event: "pages_auto_index_failed" }));
+          })
+          .finally(() => backgroundTasks.delete(tracked));
+        backgroundTasks.add(tracked);
+      },
       realtime,
       workflowFetch: outbound.fetch,
       collectionGatewayFactory: (context) =>
@@ -336,7 +353,9 @@ export async function createApplication(
         return scheduled;
       },
       async close() {
+        searchShutdown.abort();
         await scheduled?.catch(() => undefined);
+        await Promise.allSettled(backgroundTasks);
         realtime.close();
         await outbound.close();
         objects.close();

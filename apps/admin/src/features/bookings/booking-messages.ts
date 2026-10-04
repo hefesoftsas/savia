@@ -14,6 +14,16 @@ export const bookingMessages = {
   ],
   Availability: ["Disponibilidad", "Availability", "Disponibilidade"],
   Reservations: ["Reservas", "Reservations", "Reservas"],
+  "Reservations for %{date}": [
+    "Reservas del %{date}",
+    "Reservations for %{date}",
+    "Reservas de %{date}",
+  ],
+  "Show upcoming reservations": [
+    "Ver próximas reservas",
+    "Show upcoming reservations",
+    "Ver próximas reservas",
+  ],
   "Loading booking settings…": [
     "Cargando configuración de citas…",
     "Loading booking settings…",
@@ -258,6 +268,59 @@ export const bookingMessages = {
   ],
   Revoked: ["Revocado", "Revoked", "Revogado"],
   Expired: ["Vencido", "Expired", "Expirado"],
+  "Full link": ["Enlace completo", "Full link", "Link completo"],
+  "Short link": ["Enlace corto", "Short link", "Link curto"],
+  "Public link address": [
+    "Dirección del enlace público",
+    "Public link address",
+    "Endereço do link público",
+  ],
+  "Short link address": [
+    "Dirección del enlace corto",
+    "Short link address",
+    "Endereço do link curto",
+  ],
+  "Copy short link": [
+    "Copiar enlace corto",
+    "Copy short link",
+    "Copiar link curto",
+  ],
+  "Shorten URL": ["Acortar URL", "Shorten URL", "Encurtar URL"],
+  "Generating short link…": [
+    "Generando enlace corto…",
+    "Generating short link…",
+    "Gerando link curto…",
+  ],
+  "Short link not generated yet.": [
+    "El enlace corto aún no se ha generado.",
+    "Short link not generated yet.",
+    "O link curto ainda não foi gerado.",
+  ],
+  "Open link": ["Abrir enlace", "Open link", "Abrir link"],
+  "Delete link": ["Eliminar enlace", "Delete link", "Excluir link"],
+  "Delete this booking link?": [
+    "¿Eliminar este enlace de reserva?",
+    "Delete this booking link?",
+    "Excluir este link de agendamento?",
+  ],
+  "Existing appointments and their private management links will remain available.":
+    [
+      "Las citas existentes y sus enlaces privados de administración seguirán disponibles.",
+      "Existing appointments and their private management links will remain available.",
+      "Os agendamentos existentes e seus links privados de gerenciamento continuarão disponíveis.",
+    ],
+  "Cancel deletion": ["Cancelar", "Cancel deletion", "Cancelar"],
+  "Confirm deletion": [
+    "Confirmar eliminación",
+    "Confirm deletion",
+    "Confirmar exclusão",
+  ],
+  "Deleting…": ["Eliminando…", "Deleting…", "Excluindo…"],
+  "Booking link deleted.": [
+    "Se eliminó el enlace de reserva.",
+    "Booking link deleted.",
+    "O link de agendamento foi excluído.",
+  ],
   "Copy link": ["Copiar enlace", "Copy link", "Copiar link"],
   Share: ["Compartir", "Share", "Compartilhar"],
   "Revoke link": ["Revocar enlace", "Revoke link", "Revogar link"],
@@ -537,6 +600,49 @@ export const bookingMessages = {
     "No se pudo cambiar el horario. Actualiza los horarios e inténtalo de nuevo.",
     "This booking could not be rescheduled. Refresh the times and retry.",
     "Não foi possível remarcar. Atualize os horários e tente novamente.",
+  ],
+  "Choose a new time": [
+    "Elige un nuevo horario",
+    "Choose a new time",
+    "Escolha um novo horário",
+  ],
+  "Review your change": [
+    "Revisa el cambio",
+    "Review your change",
+    "Revise a alteração",
+  ],
+  "Current appointment": [
+    "Cita actual",
+    "Current appointment",
+    "Agendamento atual",
+  ],
+  "Updated appointment": [
+    "Cita actualizada",
+    "Updated appointment",
+    "Agendamento atualizado",
+  ],
+  "Your appointment has been updated.": [
+    "Tu cita se actualizó.",
+    "Your appointment has been updated.",
+    "Seu agendamento foi atualizado.",
+  ],
+  "Stop rescheduling": [
+    "Dejar de cambiar la cita",
+    "Stop rescheduling",
+    "Parar de remarcar",
+  ],
+  Continue: ["Continuar", "Continue", "Continuar"],
+  Back: ["Atrás", "Back", "Voltar"],
+  "Confirm reschedule": [
+    "Confirmar el cambio",
+    "Confirm reschedule",
+    "Confirmar alteração",
+  ],
+  "Saving…": ["Guardando…", "Saving…", "Salvando…"],
+  "To change this appointment, contact the booking business.": [
+    "Para cambiar esta cita, contacta al negocio que la reservó.",
+    "To change this appointment, contact the booking business.",
+    "Para alterar este agendamento, entre em contato com a empresa.",
   ],
   "Calendar needs reconnection": [
     "Se debe volver a conectar el calendario",

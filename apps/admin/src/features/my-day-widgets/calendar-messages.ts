@@ -8,6 +8,37 @@ export const calendarMessages = {
   ],
   "Google Calendar": ["Google Calendar", "Google Calendar", "Google Calendar"],
   Outlook: ["Outlook", "Outlook", "Outlook"],
+  "Savia bookings": ["Reservas de Savia", "Savia bookings", "Reservas Savia"],
+  "Could not load Savia bookings.": [
+    "No pudimos cargar las reservas de Savia.",
+    "Could not load Savia bookings.",
+    "Não foi possível carregar as reservas da Savia.",
+  ],
+  "Customer: %{name}": [
+    "Cliente: %{name}",
+    "Customer: %{name}",
+    "Cliente: %{name}",
+  ],
+  "Customer email: %{email}": [
+    "Correo del cliente: %{email}",
+    "Customer email: %{email}",
+    "E-mail do cliente: %{email}",
+  ],
+  "Professional: %{name}": [
+    "Profesional: %{name}",
+    "Professional: %{name}",
+    "Profissional: %{name}",
+  ],
+  "Tenant: %{name}": [
+    "Organización: %{name}",
+    "Tenant: %{name}",
+    "Organização: %{name}",
+  ],
+  "Open bookings in tenant": [
+    "Abrir reservas en la organización",
+    "Open bookings in tenant",
+    "Abrir reservas na organização",
+  ],
   Day: ["Día", "Day", "Dia"],
   Week: ["Semana", "Week", "Semana"],
   Month: ["Mes", "Month", "Mês"],

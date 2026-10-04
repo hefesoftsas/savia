@@ -239,12 +239,20 @@ const SaveButton = <RecordType extends RaRecord = RaRecord>(
       onClick={handleClick}
       className={cn(
         disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+        icon && "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
         className,
       )}
+      title={displayedLabel || undefined}
       {...rest}
     >
-      {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : icon}
-      {displayedLabel}
+      {isSubmitting ? (
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      ) : (
+        icon
+      )}
+      <span className={icon ? "sr-only sm:not-sr-only" : undefined}>
+        {displayedLabel}
+      </span>
     </Button>
   );
 };

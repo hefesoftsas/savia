@@ -1,3 +1,4 @@
+import { requiredSessionRecordingScope } from "./recording-scope-policy";
 import { AuthenticationError } from "./types";
 import type { RecordingScope } from "./personal-api-keys";
 export function authorizePersonalApiKeyRequest(
@@ -6,7 +7,8 @@ export function authorizePersonalApiKeyRequest(
 ): void {
   const path = new URL(request.url).pathname,
     method = request.method;
-  let scope: RecordingScope | undefined;
+  let scope: RecordingScope | undefined =
+    requiredSessionRecordingScope(request) ?? undefined;
   if (
     method === "GET" &&
     path === "/v1/companion/capabilities" &&

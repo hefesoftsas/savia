@@ -1,8 +1,19 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 export type Source = "microphone" | "system";
 export type CaptureStatus = {
-  state: "idle" | "recording" | "ready" | "error";
+  state: "idle" | "recording" | "ready" | "interrupted" | "error";
   elapsedSeconds: number;
+  sessionId?: string | null;
+  recovered?: boolean;
+  interrupted?: boolean;
+  chunks?: {
+    source: Source;
+    sequence: number;
+    startSeconds: number;
+    durationSeconds: number;
+    bytes: number;
+    sampleRate: number;
+  }[];
   tracks: {
     source: Source;
     durationSeconds: number;
@@ -67,7 +78,14 @@ export async function companionRequest<T = unknown>(
   origin: string,
   token: string,
   operation:
-    "capabilities" | "transcribe" | "summarize" | "save" | "recordings",
+    | "capabilities"
+    | "transcribe"
+    | "summarize"
+    | "save"
+    | "recordings"
+    | "sessioncreate"
+    | "sessionchunk"
+    | "sessionfinalize",
   body?: unknown,
   send?: typeof fetch,
 ): Promise<T> {
@@ -86,20 +104,35 @@ export async function companionRequest<T = unknown>(
       operation,
       body: body ?? null,
     });
+  let path: string =
+    operation === "save"
+      ? "recordings"
+      : operation === "sessioncreate"
+        ? "sessions"
+        : operation;
+  if (operation === "sessionchunk" || operation === "sessionfinalize") {
+    const envelope = body as { sessionId?: string; payload?: unknown };
+    if (
+      !envelope?.sessionId ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
+        envelope.sessionId,
+      )
+    )
+      throw new Error("Invalid recording session identifier.");
+    path = `sessions/${envelope.sessionId}/${operation === "sessionchunk" ? "chunks" : "finalize"}`;
+    body = envelope.payload;
+  }
   // Browser preview supports layout/tests; deployed desktop calls through the native boundary.
-  const response = await (send ?? fetch)(
-    `${base}/v1/companion/${operation === "save" ? "recordings" : operation}`,
-    {
-      method: body === undefined ? "GET" : "POST",
-      headers: {
-        authorization: `Bearer ${token.trim()}`,
-        "content-type": "application/json",
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      redirect: "error",
-      signal: AbortSignal.timeout(75000),
+  const response = await (send ?? fetch)(`${base}/v1/companion/${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers: {
+      authorization: `Bearer ${token.trim()}`,
+      "content-type": "application/json",
     },
-  );
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    redirect: "error",
+    signal: AbortSignal.timeout(75000),
+  });
   const result = await response.json().catch(() => null);
   if (!response.ok)
     throw new Error(

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Copy, RotateCcw, Save, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useMessages } from "@/i18n/core";
 import { ApiClientError, type ApiClient } from "@/api/api-client";
@@ -220,9 +221,11 @@ export function TenantSocialSettingsPanel({
             <Button
               type="button"
               variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => setAttempt((value) => value + 1)}
             >
-              {t("Retry")}
+              <RotateCcw aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t("Retry")}</span>
             </Button>
           </div>
         ) : (
@@ -354,7 +357,7 @@ export function TenantSocialSettingsPanel({
                         )}
                   </p>
                   {current.chatgptAvailable && current.chatgptCallbackUrl ? (
-                    <div className="grid gap-1.5 pl-6 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <div className="grid min-w-0 gap-1.5 pl-6 sm:grid-cols-[minmax(0,1fr)_auto]">
                       <Input
                         aria-label={t("ChatGPT callback URL")}
                         value={current.chatgptCallbackUrl}
@@ -365,13 +368,17 @@ export function TenantSocialSettingsPanel({
                         type="button"
                         variant="outline"
                         disabled={busy}
+                        className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                         onClick={() =>
                           void navigator.clipboard?.writeText(
                             current.chatgptCallbackUrl ?? "",
                           )
                         }
                       >
-                        {t("Copy ChatGPT callback URL")}
+                        <Copy aria-hidden="true" />
+                        <span className="sr-only sm:not-sr-only">
+                          {t("Copy ChatGPT callback URL")}
+                        </span>
                       </Button>
                     </div>
                   ) : null}
@@ -462,6 +469,7 @@ export function TenantSocialSettingsPanel({
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="submit"
+                  className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                   disabled={
                     busy ||
                     loading ||
@@ -472,16 +480,23 @@ export function TenantSocialSettingsPanel({
                       !allowRegistration)
                   }
                 >
-                  {t("Save social sign-in settings")}
+                  <Save aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">
+                    {t("Save social sign-in settings")}
+                  </span>
                 </Button>
                 {configured ? (
                   <Button
                     type="button"
                     variant="outline"
                     disabled={busy}
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                     onClick={() => void remove()}
                   >
-                    {t("Remove social sign-in settings")}
+                    <Trash2 aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">
+                      {t("Remove social sign-in settings")}
+                    </span>
                   </Button>
                 ) : null}
               </div>

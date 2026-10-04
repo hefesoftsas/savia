@@ -8,6 +8,7 @@ import {
 } from "ra-core";
 
 import { Button } from "../ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * Export the selected rows
@@ -38,6 +39,7 @@ export const BulkExportButton = <T extends RaRecord>({
   icon = defaultIcon,
   label: labelProp,
   onClick,
+  className,
   ...props
 }: BulkExportButtonProps<T>) => {
   const bulkExport = useBulkExport(props);
@@ -65,12 +67,19 @@ export const BulkExportButton = <T extends RaRecord>({
       role="button"
       variant="outline"
       size="sm"
-      className="flex items-center gap-2 h-9"
+      className={cn(
+        "flex items-center gap-2 h-9",
+        icon && "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
+        className,
+      )}
       aria-label={typeof label === "string" ? label : undefined}
+      title={typeof label === "string" ? label : undefined}
       {...sanitizeRestProps(props)}
     >
       {icon}
-      {label}
+      <span className={icon ? "sr-only sm:not-sr-only" : undefined}>
+        {label}
+      </span>
     </Button>
   );
 };

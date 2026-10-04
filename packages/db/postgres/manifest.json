@@ -115,7 +115,11 @@
       "sha256": "6ffa216872a2caae9e5dc9530886de1208f633d5057ca0bdc0967f77355d67fa"
     },
     {
-      "filename": "0027_crm_organization_connection.sql",
+      "filename": "0027_booking_public_link_short_urls.sql",
+      "sha256": "01c1957c5a7975f796235a16c2304084734c2ec1f013227c8e71fc39d3474153"
+    },
+    {
+      "filename": "0028_crm_organization_connection.sql",
       "sha256": "64d9e8b78f820f36e17e9a0352bab1be9f301fd12eea3c75bcf36292a1f57d65"
     }
   ],
@@ -1545,6 +1549,11 @@
     {
       "type": "index",
       "name": "tenant_booking_public_links_tenant",
+      "table": "tenant_booking_public_links"
+    },
+    {
+      "type": "index",
+      "name": "tenant_booking_public_links_short_code",
       "table": "tenant_booking_public_links"
     },
     {
@@ -13535,6 +13544,30 @@
           "type": "INTEGER",
           "notnull": 1,
           "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "deleted_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "short_code",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "short_url",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
           "pk": 0
         }
       ],

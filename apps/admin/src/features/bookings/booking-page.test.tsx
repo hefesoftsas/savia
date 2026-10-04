@@ -167,11 +167,12 @@ const settings = {
 function mount(
   apiClient: Record<string, ReturnType<typeof vi.fn>>,
   tenantId = 42,
+  initialEntry = "/bookings",
 ) {
   return render(
     <StoreContextProvider value={memoryStore({ locale: "en" })}>
       <AppLocaleProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <BookingPage services={{ apiClient } as never} tenantId={tenantId} />
         </MemoryRouter>
       </AppLocaleProvider>
@@ -604,4 +605,92 @@ it("restores a removed service when discarding unsaved changes", async () => {
   );
   fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
   expect(screen.getByLabelText("Service name")).toHaveValue("Consultation");
+});
+
+it("opens authenticated reservations for the appointment date from My Day", async () => {
+  const apiClient = {
+    get: vi.fn(async (path: string) => ({
+      data: path.includes("/reservations?")
+        ? []
+        : {
+            settings,
+            candidates: [],
+            canManage: true,
+            principalId: "principal-1",
+            publicUrl: null,
+            calendar: { provider: null, status: "not_connected" },
+          },
+    })),
+  };
+  mount(apiClient, 42, "/bookings?tab=reservations&date=2025-03-09");
+  await screen.findByText("No reservations in this period.");
+  await waitFor(() =>
+    expect(apiClient.get).toHaveBeenCalledWith(
+      expect.stringContaining("/reservations?"),
+    ),
+  );
+  expect(screen.getByRole("button", { name: "Reservations" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  const path = apiClient.get.mock.calls.find(([path]) =>
+    path.includes("/reservations?"),
+  )![0];
+  const query = new URL(path, "https://example.test").searchParams;
+  expect(query.get("from")).toBe(new Date("2025-03-09T00:00:00").toISOString());
+  expect(query.get("to")).toBe(new Date("2025-03-10T00:00:00").toISOString());
+  expect(screen.getByText("Reservations for March 9, 2025")).toBeVisible();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Show upcoming reservations" }),
+  );
+  await waitFor(() =>
+    expect(
+      apiClient.get.mock.calls.filter(([path]) =>
+        path.includes("/reservations?"),
+      ).length,
+    ).toBe(2),
+  );
+  expect(
+    screen.queryByText("Reservations for March 9, 2025"),
+  ).not.toBeInTheDocument();
+});
+
+it("ignores an invalid appointment date without sending an invalid range", async () => {
+  const apiClient = {
+    get: vi.fn(async (path: string) => ({
+      data: path.includes("/reservations?")
+        ? []
+        : {
+            settings,
+            candidates: [],
+            canManage: true,
+            principalId: "principal-1",
+            publicUrl: null,
+            calendar: { provider: null, status: "not_connected" },
+          },
+    })),
+  };
+  mount(apiClient, 42, "/bookings?tab=reservations&date=2025-02-30");
+  await screen.findByText("No reservations in this period.");
+  await waitFor(() =>
+    expect(apiClient.get).toHaveBeenCalledWith(
+      expect.stringContaining("/reservations?"),
+    ),
+  );
+  const path = apiClient.get.mock.calls.find(([path]) =>
+    path.includes("/reservations?"),
+  )![0];
+  const query = new URL(path, "https://example.test").searchParams;
+  expect(Number.isFinite(Date.parse(query.get("from")!))).toBe(true);
+  expect(query.get("from")).not.toBe("2025-03-02T00:00:00.000Z");
+});
+
+it("uses the shared route loading layout while booking settings are fetched", () => {
+  mount({ get: vi.fn(() => new Promise(() => {})), put: vi.fn() });
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Loading booking settings…",
+  );
+  expect(
+    screen.getByRole("status").querySelector('[data-slot="skeleton"]'),
+  ).toBeInTheDocument();
 });

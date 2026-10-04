@@ -11,7 +11,10 @@ created or verified in this session. Nothing has been deployed or merged.
 
 The latest instruction was to open a PR and leave this handoff for another chat.
 Continue on branch `codex/multi-crm-organization-policy` in `hefesoftsas/savia`;
-the PR targets `main`. Preserve its implementation instead of starting over.
+the PR targets `main`: https://github.com/hefesoftsas/savia/pull/162 (draft).
+Preserve its implementation instead of starting over. The branch incorporates
+`main` through `da0d381`; the CRM migration was renumbered to `0028` because
+`0027_booking_public_link_short_urls.sql` landed meanwhile.
 
 ## Confirmed product rule
 
@@ -41,7 +44,7 @@ revoke the owner's OAuth connection.
 
 ## Migration and operational cautions
 
-Apply both dialects' `0027_crm_organization_connection.sql` before deploying the
+Apply both dialects' `0028_crm_organization_connection.sql` before deploying the
 new application. It adds partial unique indexes for the organization and the
 Nango integration/connection pair where `disconnected_at IS NULL`. It intentionally
 fails on existing duplicates without deleting rows or choosing an account. Run
@@ -124,6 +127,15 @@ All checks below ran locally before the PR; they do not verify real OAuth grants
 The earlier 107-test and final 92-test API selections overlap; do not add them
 as distinct test counts. Temporary logs in `/tmp` may not survive a new workspace.
 
+## PR preparation checks after merging current main
+
+The three merge conflicts were resolved while preserving responsive action
+styling, self-hosted search settings, and both migration manifest entries.
+Post-merge checks passed: 51 affected API tests, 16 admin CRM tests, and 3
+self-hosted/manifest tests. Twelve live PostgreSQL/search-dependent tests were
+skipped in this environment. Type checks passed for API, admin, MCP, and
+self-hosted. These selections overlap with the earlier verification counts.
+
 ## Key files
 
 - `apps/api/src/external-crm/workspace-adapter.ts`: native provider API behavior.
@@ -133,7 +145,7 @@ as distinct test counts. Temporary logs in `/tmp` may not survive a new workspac
 - `apps/api/src/routes/crm.ts`: tenant-scoped connection lifecycle and conflicts.
 - `apps/admin/src/features/crm/crm-connections-page.tsx`: connection UI.
 - `apps/api/test/crm-organization-policy.test.ts`: persistence and route regressions.
-- `packages/db/{migrations,postgres}/0027_crm_organization_connection.sql`.
+- `packages/db/{migrations,postgres}/0028_crm_organization_connection.sql`.
 - `docs/runbooks/connected-crm-workspace.md`: authoritative setup/runbook.
 - `docs/superpowers/specs/2026-10-03-multi-crm-workspace-design.md` and matching plan.
 

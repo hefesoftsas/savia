@@ -16,6 +16,9 @@ pub enum Operation {
     Summarize,
     Save,
     Recordings,
+    Sessioncreate,
+    Sessionchunk,
+    Sessionfinalize,
 }
 
 impl Operation {
@@ -26,13 +29,19 @@ impl Operation {
             Self::Summarize => "summarize",
             Self::Save => "recordings",
             Self::Recordings => "recordings",
+            Self::Sessioncreate | Self::Sessionchunk | Self::Sessionfinalize => "sessions",
         }
     }
 
     fn method(self) -> Method {
         match self {
             Self::Capabilities | Self::Recordings => Method::GET,
-            Self::Transcribe | Self::Summarize | Self::Save => Method::POST,
+            Self::Transcribe
+            | Self::Summarize
+            | Self::Save
+            | Self::Sessioncreate
+            | Self::Sessionchunk
+            | Self::Sessionfinalize => Method::POST,
         }
     }
 }
@@ -80,10 +89,50 @@ fn build_url(origin: &str, operation: Operation) -> Result<Url, String> {
     Ok(url)
 }
 
+fn request_target(origin: &str, operation: Operation, body: Value) -> Result<(Url, Value), String> {
+    let mut url = build_url(origin, operation)?;
+    if matches!(
+        operation,
+        Operation::Sessionchunk | Operation::Sessionfinalize
+    ) {
+        let id = body
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let valid = id.len() == 36
+            && id.bytes().enumerate().all(|(index, byte)| {
+                if matches!(index, 8 | 13 | 18 | 23) {
+                    byte == b'-'
+                } else {
+                    byte.is_ascii_hexdigit()
+                }
+            });
+        if !valid {
+            return Err("Invalid recording session identifier.".into());
+        }
+        let suffix = if matches!(operation, Operation::Sessionchunk) {
+            "chunks"
+        } else {
+            "finalize"
+        };
+        url.set_path(&format!("/v1/companion/sessions/{id}/{suffix}"));
+        return Ok((
+            url,
+            body.get("payload")
+                .cloned()
+                .ok_or("Missing session request data.")?,
+        ));
+    }
+    Ok((url, body))
+}
+
 pub async fn request(request: CompanionRequest) -> Result<Value, String> {
     validate_token(&request.token)?;
-    let url = build_url(&request.origin, request.operation)?;
-    let body = request.body.unwrap_or(Value::Null);
+    let (url, body) = request_target(
+        &request.origin,
+        request.operation,
+        request.body.unwrap_or(Value::Null),
+    )?;
     let body_bytes =
         serde_json::to_vec(&body).map_err(|_| "Request data must be JSON.".to_string())?;
     if request.operation.method() != Method::GET && body_bytes.len() > MAX_REQUEST_BYTES {
@@ -183,7 +232,7 @@ fn safe_error_message(candidate: &str, token: &str, fallback: &str) -> String {
 
 fn savia_page_url(origin: &str) -> Result<Url, String> {
     let mut url = validate_origin(origin)?;
-    url.set_fragment(Some("/companion-recordings"));
+    url.set_fragment(Some("/companion-recordings?tab=sessions"));
     Ok(url)
 }
 
@@ -211,7 +260,7 @@ mod tests {
     fn review_links_are_fixed_to_the_savia_recording_page() {
         assert_eq!(
             savia_page_url("https://savia.example").unwrap().as_str(),
-            "https://savia.example/#/companion-recordings"
+            "https://savia.example/#/companion-recordings?tab=sessions"
         );
         assert!(savia_page_url("https://savia.example/?token=secret").is_err());
         assert!(savia_page_url("file:///tmp/sample").is_err());
@@ -261,6 +310,34 @@ mod tests {
                 .as_str(),
             "https://savia.example/v1/companion/transcribe"
         );
+    }
+
+    #[test]
+    fn session_routes_validate_identifiers_and_strip_the_native_envelope() {
+        let id = "03ab1d80-c9ed-48bf-8cf6-3148372200f0";
+        let (url, body) = request_target(
+            "https://savia.example",
+            Operation::Sessionchunk,
+            serde_json::json!({"sessionId": id, "payload": {"sequence": 0}}),
+        )
+        .unwrap();
+        assert_eq!(
+            url.as_str(),
+            format!("https://savia.example/v1/companion/sessions/{id}/chunks")
+        );
+        assert_eq!(body, serde_json::json!({"sequence": 0}));
+        assert!(request_target(
+            "https://savia.example",
+            Operation::Sessionfinalize,
+            serde_json::json!({"sessionId": "../other", "payload": {}})
+        )
+        .is_err());
+        assert!(request_target(
+            "https://savia.example",
+            Operation::Sessionchunk,
+            serde_json::json!({"sessionId": id})
+        )
+        .is_err());
     }
 
     #[test]

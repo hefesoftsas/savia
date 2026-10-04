@@ -8,6 +8,22 @@ import 'package:companion_mobile/capture/native_capture.dart';
 import 'package:companion_mobile/capture/document_import.dart';
 import 'package:companion_mobile/capture/temp_files.dart';
 
+class ManualTimer implements Timer {
+  ManualTimer(this.callback);
+  final void Function() callback;
+  @override
+  bool isActive = true;
+  @override
+  int tick = 0;
+  @override
+  void cancel() => isActive = false;
+  void fire() {
+    if (!isActive) return;
+    isActive = false;
+    callback();
+  }
+}
+
 class FakeCapture implements NativeCapture {
   int starts = 0, stops = 0;
   int cancels = 0, disposals = 0;
@@ -90,6 +106,32 @@ void main() {
     await capture.shutdown();
     capture.dispose();
     await root.delete(recursive: true);
+  });
+  test('one-hour foreground timer stops capture once', () async {
+    ManualTimer? timer;
+    final hourlyCapture = CaptureController(
+      native: mic,
+      importer: picker,
+      files: files,
+      uploader: (draft, cancel, progress) async {},
+      timerFactory: (duration, callback) {
+        expect(duration, const Duration(hours: 1));
+        return timer = ManualTimer(callback);
+      },
+    );
+    await hourlyCapture.start();
+
+    timer!.fire();
+    expect(hourlyCapture.busy, isTrue);
+    while (hourlyCapture.busy) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    timer!.fire();
+
+    expect(mic.stops, 1);
+    expect(hourlyCapture.phase, CapturePhase.ready);
+    await hourlyCapture.shutdown();
+    hourlyCapture.dispose();
   });
   test(
     'duplicate start ignored; foreground limit stops once and retains a draft',

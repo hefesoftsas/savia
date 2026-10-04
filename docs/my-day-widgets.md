@@ -2,27 +2,27 @@
 
 Owner: Platform UI team. Reviewed: 2026-10-03.
 
-My Day combines personal calendar events, personal mail, and quick views of
+My Day combines assigned Savia appointments, personal calendar events, personal mail, and quick views of
 collections. Each collection widget links to its full screen. Layout changes
 save automatically to the backend and support drag, keyboard, and menu ordering.
 
 ## Widget types
 
-| Kind                      | Content                                                                                                  |
-| ------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `agenda`                  | Day, week and month views of Google Calendar, Outlook and shared iCalendar sources.                      |
-| `quick_task`              | Create a time block in a connected calendar.                                                             |
-| `mail`                    | Recent inbox messages from connected Gmail and Outlook accounts, with an editable mail composer.         |
-| `office_documents`        | Up to five recent private Savia and connected-drive documents, shown only while Office suite is enabled. |
-| `summary`                 | Record total, counts by status, and optional amount sum.                                                 |
-| `items`                   | Recent records with title, status, and date.                                                             |
-| `chart`                   | Counts and optional sums grouped by status.                                                              |
-| `actions`                 | Overdue records and records due today or in the next seven days.                                         |
-| `plugin:<extension>:<id>` | An enabled extension's collection widget.                                                                |
+| Kind                      | Content                                                                                                          |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `agenda`                  | Day, week and month views of assigned Savia appointments, Google Calendar, Outlook and shared iCalendar sources. |
+| `quick_task`              | Create a time block in a connected calendar.                                                                     |
+| `mail`                    | Recent inbox messages from connected Gmail and Outlook accounts, with an editable mail composer.                 |
+| `office_documents`        | Up to five recent private Savia and connected-drive documents, shown only while Office suite is enabled.         |
+| `summary`                 | Record total, counts by status, and optional amount sum.                                                         |
+| `items`                   | Recent records with title, status, and date.                                                                     |
+| `chart`                   | Counts and optional sums grouped by status.                                                                      |
+| `actions`                 | Overdue records and records due today or in the next seven days.                                                 |
+| `plugin:<extension>:<id>` | An enabled extension's collection widget.                                                                        |
 
 New layouts include agenda, quick task, and mail. Mail is visible only when a
 personal Gmail or Outlook connection is connected. Existing saved layouts are
-preserved; use **Show mail** or **Add widget → Personal → Mail inbox** to restore
+preserved; use **Add widget → Personal → Mail inbox** to restore
 mail when connected. Removing or disconnecting a provider does not rewrite the
 saved layout. Hidden mail still counts toward the twelve-widget limit.
 
@@ -65,6 +65,30 @@ month cells show three events and a
 **more** action for additional events. Multi-day events appear on every
 overlapping date, with exclusive ends handled internally.
 
+Confirmed Savia appointments assigned to your signed-in user appear in all three
+views, without connecting an external calendar. The agenda includes your
+appointments across commercial workspaces where you still have active
+membership. Administrators see their own assigned appointments here; use the
+workspace **Bookings → Reservations** page to review the team. Unpublishing a
+booking page or disabling a service does not hide existing confirmed appointments.
+Cancelled appointments disappear, and rescheduled appointments move to the new
+time on the next refresh.
+
+The native appointment feed accepts the browser's authenticated OAuth access
+token with `savia.api.read`, as well as an authenticated cookie session. Tokens
+without the read scope and personal API keys cannot access the feed. In either
+case, results stay limited to the user's own appointments and current memberships.
+
+Select a Savia appointment to see its service, customer, professional, workspace
+and business time zone. Where the current deployment supports tenant hostnames,
+**Open bookings in tenant** opens that workspace's authenticated reservations
+page for the appointment date. **Show upcoming reservations** returns to the
+usual upcoming list.
+Private customer management links are never included in this personal feed.
+When Savia has the exact event identity for the currently connected Google or
+Outlook account, its calendar copy is omitted from the agenda; unrelated events
+with similar names or times remain visible.
+
 **Manage calendars** accepts public HTTPS and `webcal://` iCalendar subscriptions
 or UTF-8 `.ics` files. A subscription updates from its feed; an imported copy
 persists the file's events and does not receive later upstream changes. Re-import
@@ -89,7 +113,7 @@ offer upstream refresh. Subscriptions show their last successful update time.
 The full subscription URL is not returned by the source list or displayed after
 saving, because feed URL tokens may grant access to private calendars.
 
-**Synchronize** refreshes all connected providers and visible added sources.
+**Synchronize** refreshes assigned Savia appointments, connected providers and visible added sources.
 While visible and online, calendars refresh every five minutes; focus and online
 recovery trigger reads. Hidden/offline pages pause periodic reads. Feed bodies
 younger than five minutes are reused on ordinary reads; manual synchronization
@@ -97,7 +121,7 @@ bypasses freshness. Last successful rows remain visible with a source-specific
 notice after transient failures. Errors do not mean that a calendar is empty.
 
 Limits are 20 added sources per principal, 1 MiB per file/feed, 62 days per query,
-2,000 occurrences per source/range and 20 upstream pages per provider read.
+2,000 occurrences per source/range, 2,000 assigned appointments per range, and 20 upstream pages per provider read.
 Exceeded limits produce errors instead of silently truncated calendars. No
 background scheduler runs after My Day closes. Quick tasks continue to create
 today's event in connected OAuth calendars, and show that date explicitly even
@@ -110,6 +134,11 @@ the key unavailable, private feed storage fails closed. Permit the configured
 public feed destinations and `cloudflare-dns.com` under the runtime's outbound
 network policy for subscriptions. Local verification uses controlled feeds and
 does not establish live connectivity to arbitrary calendar hosts.
+
+On phones (below 640 px), the page synchronization button, dashboard toolbar,
+and empty-agenda actions show only icons with accessible names and 44 px touch
+targets. Their text labels remain visible on larger screens. There is no
+separate **Show mail** action; add the inbox through the Personal tab.
 
 ## Personal inbox
 

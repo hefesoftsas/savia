@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -113,11 +114,17 @@ export const DeleteButton = (props: DeleteButtonProps) => {
       onClick={handleDelete}
       disabled={isPending}
       aria-label={typeof label === "string" ? label : undefined}
+      title={typeof label === "string" ? label : undefined}
       size={iconOnly ? "icon" : size}
-      className={className}
+      className={cn(
+        "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
+        className,
+      )}
     >
-      <Trash />
-      {!iconOnly ? label : null}
+      <Trash aria-hidden="true" />
+      {!iconOnly ? (
+        <span className="sr-only sm:not-sr-only">{label}</span>
+      ) : null}
     </Button>
   );
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ShieldOff } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,7 +90,12 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
           className="flex flex-wrap items-center gap-3 text-sm text-destructive"
         >
           <p>{t("Could not complete the operation.")}</p>
-          <Button variant="outline" disabled={busy} onClick={() => void load()}>
+          <Button
+            className="max-sm:h-11"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void load()}
+          >
             {t("Retry")}
           </Button>
         </div>
@@ -115,6 +121,7 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
+                  className="max-sm:h-11"
                   onClick={() =>
                     void navigator.clipboard.writeText(secret).then(
                       () => setCopied(true),
@@ -125,6 +132,7 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                   {copied ? t("Copied") : t("Copy")}
                 </Button>
                 <Button
+                  className="max-sm:h-11"
                   onClick={() => {
                     setSecret("");
                     setCopied(false);
@@ -173,7 +181,7 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                     <Label htmlFor="personal-key-tenant">{t("Tenant")}</Label>
                     <select
                       id="personal-key-tenant"
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                      className="h-11 w-full rounded-md border bg-background px-3 text-sm sm:h-10"
                       value={tenant}
                       onChange={(e) => setTenant(e.target.value)}
                       required
@@ -190,7 +198,7 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                   <Label htmlFor="personal-key-expiry">{t("Expiry")}</Label>
                   <select
                     id="personal-key-expiry"
-                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                    className="h-11 rounded-md border bg-background px-3 text-sm sm:h-10"
                     value={days}
                     onChange={(e) => setDays(Number(e.target.value))}
                   >
@@ -227,6 +235,7 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                 </fieldset>
                 <Button
                   type="submit"
+                  className="max-sm:h-11"
                   disabled={
                     busy || !name.trim() || !scopes.length || tenant === ""
                   }
@@ -275,6 +284,7 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                       )}
                       <Button
                         variant="outline"
+                        className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
                         disabled={busy}
                         aria-label={`${t("Revoke")} ${key.name}`}
                         onClick={() =>
@@ -284,7 +294,10 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                           })
                         }
                       >
-                        {t("Revoke")}
+                        <ShieldOff className="size-4" aria-hidden="true" />
+                        <span className="sr-only sm:not-sr-only">
+                          {t("Revoke")}
+                        </span>
                       </Button>
                     </div>
                   )}

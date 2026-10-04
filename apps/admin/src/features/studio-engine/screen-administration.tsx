@@ -375,6 +375,58 @@ export default function ScreenAdministration({
   const openScreenConfig = (item: StudioObject) => {
     onNavigate(item.name, "admin-screen");
   };
+  const renderCompactScreenActions = (
+    item: StudioObject,
+    inactive: boolean,
+  ) => {
+    const isPending = pendingScreen === item.name;
+    const hasSource = Boolean(item.config.studio?.collection);
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="screen-admin-row-mobile-actions"
+            disabled={isPending}
+            aria-label={t("Acciones de %{v1}", { v1: item.label })}
+          >
+            <MoreHorizontal aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => openScreenConfig(item)}>
+            <Settings aria-hidden="true" />
+            {t("Configurar")}
+          </DropdownMenuItem>
+          {inactive ? (
+            <DropdownMenuItem
+              onSelect={() => void setScreenVisibility(item, true)}
+            >
+              <Undo2 aria-hidden="true" />
+              {t("Recuperar en el menú")}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onSelect={() => setRemovingScreen(item.name)}>
+              <Trash2 aria-hidden="true" />
+              {t("Eliminar del menú")}
+            </DropdownMenuItem>
+          )}
+          {inactive ? (
+            <DropdownMenuItem
+              disabled={hasSource}
+              variant="destructive"
+              onSelect={() => openPermanentDelete(item)}
+            >
+              <Trash2 aria-hidden="true" />
+              {t("Eliminar permanentemente")}
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
   const renderScreenRowOpen = (item: StudioObject, hasSource: boolean) => {
     const fromPlugin =
       isPluginScreen(item.name) || isStorePluginScreen(item.name, extensions);
@@ -478,6 +530,7 @@ export default function ScreenAdministration({
               />
               <span>{t("Activa")}</span>
             </span>
+            {renderCompactScreenActions(item, false)}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -586,6 +639,7 @@ export default function ScreenAdministration({
               />
               <span>{t("Inactiva")}</span>
             </span>
+            {renderCompactScreenActions(item, true)}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -981,7 +1035,7 @@ export default function ScreenAdministration({
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="size-8"
+                    className="size-8 max-sm:size-11"
                     aria-label={t("Ordenar pantallas de A a Z")}
                     disabled={pendingScreen === "__menu__"}
                     onClick={sortMenuAlphabetically}

@@ -1,5 +1,10 @@
 # Companion implementation status
 
+> Phase 2 update (2026-10-03): see [recording sessions](long-recording-next-phase.md)
+> for one-hour capture, native draft recovery and durable processing. Short-sample
+> limits and earlier verification results below describe the preceding increment.
+
+
 Owner: Savia platform maintainers. Reviewed: 2026-10-03.
 
 ## Mobile increment

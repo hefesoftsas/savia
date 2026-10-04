@@ -13,6 +13,7 @@ import type {
   CreateCalendarSourceInput,
   UpdateCalendarSourceInput,
 } from "@savia/studio-shared/calendar-contracts";
+import type { BookingAgendaEntry } from "@savia/studio-shared/booking-agenda-contracts";
 
 export type CalendarSourcesClient = Pick<
   PersonalIntegrationsClient,
@@ -328,6 +329,19 @@ export class PersonalIntegrationsClient {
       });
     this.eventsInflight.set(path, promise);
     return promise;
+  }
+
+  async listBookingAgenda(input: {
+    from: string;
+    to: string;
+    timeZone: string;
+  }): Promise<BookingAgendaEntry[]> {
+    const query = new URLSearchParams(input);
+    return (
+      await this.api.get<{ data: BookingAgendaEntry[] }>(
+        `/v1/personal-integrations/bookings?${query}`,
+      )
+    ).data;
   }
 
   async listMessages(input: {

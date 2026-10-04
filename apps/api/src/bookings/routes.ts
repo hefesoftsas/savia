@@ -2,7 +2,12 @@ import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import { bodyLimit } from "hono/body-limit";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import {
+  bookingAgendaEntrySchema,
+  bookingAgendaRangeSchema,
+} from "@savia/studio-shared/booking-agenda-contracts";
 import { actorFromContext } from "../auth/middleware";
+import { SAVIA_READ_SCOPE } from "../auth/oauth-resource";
 import { authorizeBranding } from "../tenant-branding/service";
 import {
   captchaConfiguration,
@@ -18,6 +23,7 @@ import {
   bootstrapSchema,
   settingsSchema,
   reservationSchema,
+  managementBootstrapSchema,
   revisionSchema,
   ownAvailabilitySchema,
   calendarGrantSchema,
@@ -35,9 +41,13 @@ import {
   ensureLegacyBookingLink,
   bookingLinkView,
   bookingLinkToken,
+  bookingShortCode,
   type BookingLinkRow,
 } from "./public-links";
-import { getPublicAvailability } from "./public-availability";
+import {
+  getPublicAvailability,
+  getBookingAvailability,
+} from "./public-availability";
 import { admitBookingRequest, findBookingAdmission } from "./public-policy";
 import { digest, dateInZone, slotsForDate } from "./domain";
 import {
@@ -59,6 +69,7 @@ import {
 export type BookingOptions = {
   captcha?: CaptchaOptions;
   nango?: PersonalIntegrationNangoClient;
+  shortener?: { shorten(url: string): Promise<string> };
   now?: () => number;
 };
 const unavailable = () =>
@@ -165,7 +176,7 @@ export function registerBookingRoutes(
     await next();
   });
   function route(
-    method: "get" | "put" | "post",
+    method: "get" | "put" | "post" | "delete",
     path: string,
     handler: (c: Context) => Promise<Response>,
     input?: z.ZodType,
@@ -228,6 +239,145 @@ export function registerBookingRoutes(
   }
   const tenant = (c: Context) =>
     parsed(params, { tenantId: c.req.param("tenantId") }).tenantId;
+  route(
+    "get",
+    "/v1/personal-integrations/bookings",
+    async (c) => {
+      c.header("Cache-Control", "no-store");
+      const actor = actorFromContext(c);
+      if (
+        !actor.principal.isActive ||
+        actor.credential?.kind === "personal-api-key" ||
+        (actor.credential?.kind === "oauth" &&
+          !actor.credential.scopes.includes(SAVIA_READ_SCOPE))
+      )
+        throw new HTTPException(403, {
+          message: "Booking agenda access denied.",
+        });
+      const range = parsed(bookingAgendaRangeSchema, c.req.query());
+      const from = new Date(range.from).toISOString();
+      const to = new Date(range.to).toISOString();
+      const result = await db
+        .prepare(
+          `SELECT
+             b.id,
+             b.tenant_id AS "tenantId",
+             t.id_slug AS "tenantSlug",
+             t.name AS "tenantName",
+             b.service_name AS "serviceName",
+             b.professional_name AS "professionalName",
+             b.customer_name AS "customerName",
+             b.customer_email AS "customerEmail",
+             b.starts_at AS "startsAt",
+             b.ends_at AS "endsAt",
+             b.status,
+             b.version,
+             b.calendar_provider AS "calendarProvider",
+             b.external_id AS "externalId",
+             b.calendar_connection_id AS "savedConnectionId",
+             c.id AS "activeConnectionId",
+             s.config AS "settingsConfig"
+           FROM tenant_bookings b
+           JOIN tenants t ON t.id = b.tenant_id
+           LEFT JOIN tenant_booking_settings s ON s.tenant_id = b.tenant_id
+           LEFT JOIN personal_integration_connections c
+             ON c.id = b.calendar_connection_id
+            AND c.principal_id = b.principal_id
+            AND c.provider = b.calendar_provider
+            AND c.disconnected_at IS NULL
+            AND c.id = (
+              SELECT active_connection.id
+              FROM personal_integration_connections active_connection
+              WHERE active_connection.principal_id = b.principal_id
+                AND active_connection.provider = b.calendar_provider
+                AND active_connection.disconnected_at IS NULL
+              ORDER BY active_connection.updated_at DESC
+              LIMIT 1
+            )
+           WHERE b.principal_id = ?
+             AND b.tenant_id IN (
+               SELECT m.tenant_id
+               FROM identity_tenant_membership m
+               JOIN identity_principal p ON p.id = m.principal_id
+               WHERE m.principal_id = ?
+                 AND m.is_active = 1
+                 AND p.is_active = 1
+             )
+             AND b.status = 'confirmed'
+             AND t.kind = 'commercial'
+             AND b.starts_at < ?
+             AND b.ends_at > ?
+           ORDER BY b.starts_at, b.id
+           LIMIT 2001`,
+        )
+        .bind(actor.principal.id, actor.principal.id, to, from)
+        .all<{
+          id: string;
+          tenantId: number;
+          tenantSlug: string;
+          tenantName: string;
+          serviceName: string;
+          professionalName: string;
+          customerName: string;
+          customerEmail: string;
+          startsAt: string;
+          endsAt: string;
+          status: "confirmed";
+          version: number;
+          calendarProvider: "google_calendar" | "outlook" | null;
+          externalId: string | null;
+          savedConnectionId: string | null;
+          activeConnectionId: string | null;
+          settingsConfig: string | null;
+        }>();
+      if (result.results.length > 2000)
+        throw new HTTPException(422, {
+          message:
+            "The booking agenda is too large. Request a shorter date range.",
+        });
+      const data = result.results.map((row) => {
+        let timeZone = "UTC";
+        if (row.settingsConfig) {
+          try {
+            const configured = JSON.parse(row.settingsConfig).timeZone;
+            if (typeof configured === "string") {
+              const valid =
+                bookingAgendaEntrySchema.shape.timeZone.safeParse(configured);
+              if (valid.success) timeZone = valid.data;
+            }
+          } catch {
+            // Keep the safe UTC fallback when persisted settings are malformed.
+          }
+        }
+        return {
+          id: row.id,
+          tenantId: row.tenantId,
+          tenantSlug: row.tenantSlug,
+          tenantName: row.tenantName,
+          serviceName: row.serviceName,
+          professionalName: row.professionalName,
+          customerName: row.customerName,
+          customerEmail: row.customerEmail,
+          startsAt: row.startsAt,
+          endsAt: row.endsAt,
+          timeZone,
+          status: row.status,
+          version: row.version,
+          externalEvent:
+            row.savedConnectionId &&
+            row.activeConnectionId === row.savedConnectionId &&
+            row.calendarProvider &&
+            row.externalId
+              ? { provider: row.calendarProvider, id: row.externalId }
+              : null,
+        };
+      });
+      return c.json({ data });
+    },
+    undefined,
+    bookingAgendaRangeSchema,
+    z.array(bookingAgendaEntrySchema),
+  );
   async function authorizeHistory(c: Context, id: number) {
     const actor = actorFromContext(c),
       platform = actor.globalRoles.includes("platform_admin"),
@@ -302,6 +452,40 @@ export function registerBookingRoutes(
       },
     };
   }
+  async function loadBusy(
+    tenantId: number,
+    principalId: string,
+    from: string,
+    to: string,
+    exceptId?: string,
+  ) {
+    const busy = await nativeBusy(
+      db,
+      tenantId,
+      principalId,
+      from,
+      to,
+      exceptId,
+    );
+    const grant = await readGrant(db, tenantId, principalId);
+    if (grant) {
+      if (!calendar) throw unavailable();
+      try {
+        busy.push(
+          ...(await calendar.busy({
+            principalId,
+            provider: grant.provider,
+            connectionId: grant.connection_id,
+            from,
+            to,
+          })),
+        );
+      } catch {
+        throw unavailable();
+      }
+    }
+    return { busy, grant };
+  }
   async function slots(
     state: { tenantId: number; settings: BookingSettings },
     query: z.infer<typeof slotQuerySchema>,
@@ -330,31 +514,13 @@ export function registerBookingRoutes(
       });
     const from = new Date(center - 36 * 3600000).toISOString(),
       to = new Date(center + 36 * 3600000).toISOString();
-    const busy = await nativeBusy(
-        db,
-        state.tenantId,
-        professional.principalId,
-        from,
-        to,
-        exceptId,
-      ),
-      grant = await readGrant(db, state.tenantId, professional.principalId);
-    if (grant) {
-      if (!calendar) throw unavailable();
-      try {
-        busy.push(
-          ...(await calendar.busy({
-            principalId: professional.principalId,
-            provider: grant.provider,
-            connectionId: grant.connection_id,
-            from,
-            to,
-          })),
-        );
-      } catch {
-        throw unavailable();
-      }
-    }
+    const { busy, grant } = await loadBusy(
+      state.tenantId,
+      professional.principalId,
+      from,
+      to,
+      exceptId,
+    );
     return {
       professional,
       service,
@@ -542,12 +708,31 @@ export function registerBookingRoutes(
   route("get", linkRoot, async (c) => {
     const { id, auth, own } = await linkAccess(c);
     await ensureLegacyBookingLink(db, id);
-    const rows = await db
+    let rows = await db
       .prepare(
-        "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? ORDER BY legacy DESC,id",
+        "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND deleted_at IS NULL AND (?=1 OR (scope_kind='professional' AND professional_id=?)) ORDER BY legacy DESC,id",
       )
-      .bind(id)
+      .bind(id, auth.canManage ? 1 : 0, own?.id ?? "")
       .all<BookingLinkRow>();
+    let assignedCode = false;
+    for (const link of rows.results) {
+      if (link.short_code) continue;
+      const code = bookingShortCode();
+      const update = await db
+        .prepare(
+          "UPDATE tenant_booking_public_links SET short_code=? WHERE tenant_id=? AND id=? AND short_code IS NULL AND deleted_at IS NULL",
+        )
+        .bind(code, id, link.id)
+        .run();
+      assignedCode ||= update.meta.changes > 0;
+    }
+    if (assignedCode)
+      rows = await db
+        .prepare(
+          "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND deleted_at IS NULL AND (?=1 OR (scope_kind='professional' AND professional_id=?)) ORDER BY legacy DESC,id",
+        )
+        .bind(id, auth.canManage ? 1 : 0, own?.id ?? "")
+        .all<BookingLinkRow>();
     return c.json({
       data: {
         links: rows.results
@@ -636,10 +821,11 @@ export function registerBookingRoutes(
         daily_limit: input.dailyLimit,
         version: 1,
         legacy: 0,
+        short_code: bookingShortCode(),
       };
       await db
         .prepare(
-          "INSERT INTO tenant_booking_public_links(id,tenant_id,created_by,token,scope_kind,professional_id,service_id,expires_at,revoked_at,daily_limit,version,legacy) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO tenant_booking_public_links(id,tenant_id,created_by,token,scope_kind,professional_id,service_id,expires_at,revoked_at,daily_limit,version,legacy,short_code) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(
           row.id,
@@ -654,8 +840,25 @@ export function registerBookingRoutes(
           row.daily_limit,
           1,
           0,
+          row.short_code!,
         )
         .run();
+      if (options.shortener) {
+        try {
+          const shortUrl = await options.shortener.shorten(
+            pageUrl(options, row.token),
+          );
+          await db
+            .prepare(
+              "UPDATE tenant_booking_public_links SET short_url=? WHERE tenant_id=? AND id=? AND deleted_at IS NULL AND short_url IS NULL",
+            )
+            .bind(shortUrl, id, row.id)
+            .run();
+          row.short_url = shortUrl;
+        } catch {
+          // The persisted Savia-hosted short code remains available.
+        }
+      }
       return c.json({ data: bookingLinkView(row, origin(options)) }, 201);
     },
     bookingPublicLinkInputSchema,
@@ -671,7 +874,7 @@ export function registerBookingRoutes(
         input = await body(c, revisionSchema);
       const link = await db
         .prepare(
-          "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=?",
+          "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL",
         )
         .bind(id, c.req.param("id"))
         .first<BookingLinkRow>();
@@ -684,7 +887,7 @@ export function registerBookingRoutes(
         throw new HTTPException(404, { message: "Booking link unavailable." });
       const changed = await db
         .prepare(
-          "UPDATE tenant_booking_public_links SET revoked_at=?,version=version+1 WHERE tenant_id=? AND id=? AND version=? RETURNING *",
+          "UPDATE tenant_booking_public_links SET revoked_at=?,version=version+1 WHERE tenant_id=? AND id=? AND version=? AND deleted_at IS NULL RETURNING *",
         )
         .bind(new Date(now()).toISOString(), id, link.id, input.version)
         .first<BookingLinkRow>();
@@ -695,6 +898,132 @@ export function registerBookingRoutes(
       return c.json({ data: bookingLinkView(changed, origin(options)) });
     },
     revisionSchema,
+  );
+  route("post", `${linkRoot}/{id}/short-url`, async (c) => {
+    const { id, auth, own } = await linkAccess(c);
+    const link = await db
+      .prepare(
+        "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)",
+      )
+      .bind(id, c.req.param("id"), new Date(now()).toISOString())
+      .first<BookingLinkRow>();
+    if (
+      !link ||
+      (!auth.canManage &&
+        (link.scope_kind !== "professional" ||
+          link.professional_id !== own?.id))
+    )
+      throw new HTTPException(404, { message: "Booking link unavailable." });
+    if (link.short_url) return c.json({ data: { shortUrl: link.short_url } });
+    if (options.shortener) {
+      try {
+        const shortUrl = await options.shortener.shorten(
+          pageUrl(options, link.token),
+        );
+        await db
+          .prepare(
+            "UPDATE tenant_booking_public_links SET short_url=? WHERE tenant_id=? AND id=? AND deleted_at IS NULL AND short_url IS NULL",
+          )
+          .bind(shortUrl, id, link.id)
+          .run();
+        const saved = await db
+          .prepare(
+            "SELECT short_url FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL",
+          )
+          .bind(id, link.id)
+          .first<{ short_url: string | null }>();
+        if (saved?.short_url)
+          return c.json({ data: { shortUrl: saved.short_url } });
+      } catch {
+        // Keep the Savia-hosted URL available when Shlink is unreachable.
+      }
+    }
+    if (!link.short_code) {
+      const code = bookingShortCode();
+      await db
+        .prepare(
+          "UPDATE tenant_booking_public_links SET short_code=? WHERE tenant_id=? AND id=? AND short_code IS NULL AND deleted_at IS NULL",
+        )
+        .bind(code, id, link.id)
+        .run();
+    }
+    const current = await db
+      .prepare(
+        "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL",
+      )
+      .bind(id, link.id)
+      .first<BookingLinkRow>();
+    if (!current)
+      throw new HTTPException(404, { message: "Booking link unavailable." });
+    return c.json({
+      data: {
+        shortUrl: bookingLinkView(current, origin(options)).shortUrl,
+      },
+    });
+  });
+  route(
+    "delete",
+    `${linkRoot}/{id}`,
+    async (c) => {
+      const { id, auth, own } = await linkAccess(c),
+        input = await body(c, revisionSchema),
+        link = await db
+          .prepare(
+            "SELECT * FROM tenant_booking_public_links WHERE tenant_id=? AND id=? AND deleted_at IS NULL",
+          )
+          .bind(id, c.req.param("id"))
+          .first<BookingLinkRow>();
+      if (
+        !link ||
+        (!auth.canManage &&
+          (link.scope_kind !== "professional" ||
+            link.professional_id !== own?.id))
+      )
+        throw new HTTPException(404, { message: "Booking link unavailable." });
+      const changed = await db
+        .prepare(
+          "UPDATE tenant_booking_public_links SET deleted_at=?,version=version+1 WHERE tenant_id=? AND id=? AND version=? AND deleted_at IS NULL RETURNING id",
+        )
+        .bind(new Date(now()).toISOString(), id, link.id, input.version)
+        .first();
+      if (!changed)
+        throw new HTTPException(409, {
+          message: "The link changed. Refresh and try again.",
+        });
+      return c.json({ data: { deleted: true } });
+    },
+    revisionSchema,
+  );
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/s/b/{code}",
+      security: [],
+      tags: ["Booking"],
+      request: {
+        params: z.object({ code: z.string().regex(/^[a-f0-9]{16}$/) }),
+      },
+      responses: {
+        302: { description: "Redirect to the public booking page" },
+        404: { description: "Unavailable link" },
+      },
+    }),
+    async (c) => {
+      c.header("Cache-Control", "no-store");
+      c.header("X-Robots-Tag", "noindex, nofollow");
+      c.header("Referrer-Policy", "no-referrer");
+      const { code } = c.req.valid("param");
+      const link = await db
+        .prepare(
+          "SELECT token FROM tenant_booking_public_links WHERE short_code=? AND deleted_at IS NULL AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)",
+        )
+        .bind(code, new Date(now()).toISOString())
+        .first<{ token: string }>();
+      if (!link)
+        throw new HTTPException(404, { message: "Booking page unavailable." });
+      await resolveBookingLink(db, link.token, now());
+      return c.redirect(pageUrl(options, link.token), 302);
+    },
   );
   const publicRoot = "/api/public/bookings/{token}";
   route("get", publicRoot, async (c) => {
@@ -784,33 +1113,8 @@ export function registerBookingRoutes(
         parsed(availabilityRangeQuerySchema, c.req.query()),
         {
           now,
-          loadBusy: async (principalId, from, to) => {
-            const busy = await nativeBusy(
-                db,
-                link.tenantId,
-                principalId,
-                from,
-                to,
-              ),
-              grant = await readGrant(db, link.tenantId, principalId);
-            if (grant) {
-              if (!calendar) throw unavailable();
-              try {
-                busy.push(
-                  ...(await calendar.busy({
-                    principalId,
-                    provider: grant.provider,
-                    connectionId: grant.connection_id,
-                    from,
-                    to,
-                  })),
-                );
-              } catch {
-                throw unavailable();
-              }
-            }
-            return busy;
-          },
+          loadBusy: async (principalId, from, to) =>
+            (await loadBusy(link.tenantId, principalId, from, to)).busy,
         },
       );
       return c.json({ data: result });
@@ -946,34 +1250,136 @@ export function registerBookingRoutes(
     z.object({ reservation: reservationSchema, managementUrl: z.string() }),
     true,
   );
+  const cutoff = (row: BookingRow, settings: BookingSettings) => {
+    if (
+      Date.parse(row.starts_at) - now() <
+      settings.cancellationMinutes * 60000
+    )
+      throw new HTTPException(409, {
+        message:
+          "The cancellation or rescheduling deadline has passed. Contact the business.",
+      });
+  };
+  async function reschedulingContext(
+    row: BookingRow,
+    state: Awaited<ReturnType<typeof readSettings>>,
+  ) {
+    cutoff(row, state.settings);
+    if (row.status !== "confirmed") throw conflict();
+    // The private capability remains independent of public sharing-link lifecycle.
+    await publishedSettings(db, state.publicToken ?? "");
+    const professional = state.settings.professionals.find(
+      (p) => p.id === row.professional_id && p.enabled,
+    );
+    const service = state.settings.services.find(
+      (s) =>
+        s.id === row.service_id &&
+        s.enabled &&
+        s.professionalIds.includes(row.professional_id),
+    );
+    if (
+      !professional ||
+      professional.principalId !== row.principal_id ||
+      !service
+    )
+      throw new HTTPException(404, {
+        message: "Service or professional unavailable.",
+      });
+    if (
+      !(await candidates(db, row.tenant_id)).some(
+        (p) => p.principalId === professional.principalId,
+      )
+    )
+      throw conflict();
+    if (
+      service.durationMinutes !==
+        (Date.parse(row.ends_at) - Date.parse(row.starts_at)) / 60000 ||
+      service.bufferMinutes !== row.buffer_minutes
+    )
+      throw new HTTPException(409, {
+        message:
+          "The service changed. Contact the business to update this reservation.",
+      });
+    return { settings: state.settings, professional, service };
+  }
   const management = "/api/public/bookings/manage/{token}";
-  route("get", management, async (c) => {
-    const row = await managedBooking(db, c.req.param("token")!),
-      state = await readSettings(db, row.tenant_id);
-    return c.json({
-      data: {
-        reservation: await reservationView(db, row),
-        publicUrl: state.publicToken
-          ? pageUrl(options, state.publicToken)
-          : null,
-        timeZone: state.settings.timeZone,
-        cancellationMinutes: state.settings.cancellationMinutes,
-      },
-    });
-  });
+  route(
+    "get",
+    management,
+    async (c) => {
+      const row = await managedBooking(db, c.req.param("token")!),
+        state = await readSettings(db, row.tenant_id);
+      let canReschedule = false;
+      try {
+        await reschedulingContext(row, state);
+        canReschedule = true;
+      } catch (error) {
+        if (
+          !(error instanceof HTTPException) ||
+          ![404, 409].includes(error.status)
+        )
+          throw error;
+      }
+      let publicUrl: string | null = null;
+      if (state.publicToken) {
+        try {
+          await resolveBookingLink(db, state.publicToken, now());
+          publicUrl = pageUrl(options, state.publicToken);
+        } catch (error) {
+          if (!(error instanceof HTTPException) || error.status !== 404)
+            throw error;
+        }
+      }
+      return c.json({
+        data: {
+          reservation: await reservationView(db, row),
+          publicUrl,
+          timeZone: state.settings.timeZone,
+          cancellationMinutes: state.settings.cancellationMinutes,
+          horizonDays: state.settings.horizonDays,
+          leadMinutes: state.settings.leadMinutes,
+          canReschedule,
+        },
+      });
+    },
+    undefined,
+    undefined,
+    managementBootstrapSchema,
+  );
+  route(
+    "get",
+    `${management}/availability`,
+    async (c) => {
+      const row = await managedBooking(db, c.req.param("token")!);
+      const state = await readSettings(db, row.tenant_id);
+      const context = await reschedulingContext(row, state);
+      const query = parsed(availabilityRangeQuerySchema, c.req.query());
+      if (
+        query.serviceId !== row.service_id ||
+        (query.professionalId && query.professionalId !== row.professional_id)
+      )
+        throw new HTTPException(404, {
+          message: "Service or professional unavailable.",
+        });
+      return c.json({
+        data: await getBookingAvailability(context, query, {
+          now,
+          loadBusy: async (principalId, from, to) =>
+            (await loadBusy(row.tenant_id, principalId, from, to, row.id)).busy,
+        }),
+      });
+    },
+    undefined,
+    availabilityRangeQuerySchema,
+    availabilityRangeSchema,
+  );
   route(
     "get",
     `${management}/slots`,
     async (c) => {
       const row = await managedBooking(db, c.req.param("token")!),
         state = await readSettings(db, row.tenant_id);
-      if (
-        !state.settings.enabled ||
-        !state.settings.published ||
-        row.status !== "confirmed"
-      )
-        throw conflict();
-      await publishedSettings(db, state.publicToken ?? "");
+      await reschedulingContext(row, state);
       const date = parsed(z.string().date(), c.req.query("date"));
       const result = await slots(
         { tenantId: row.tenant_id, settings: state.settings },
@@ -991,16 +1397,7 @@ export function registerBookingRoutes(
     undefined,
     z.object({ date: z.string() }),
   );
-  const cutoff = (row: BookingRow, settings: BookingSettings) => {
-    if (
-      Date.parse(row.starts_at) - now() <
-      settings.cancellationMinutes * 60000
-    )
-      throw new HTTPException(409, {
-        message:
-          "The cancellation or rescheduling deadline has passed. Contact the business.",
-      });
-  };
+
   route(
     "post",
     `${management}/cancel`,
@@ -1045,6 +1442,16 @@ export function registerBookingRoutes(
         row.status !== "confirmed"
       )
         throw conflict();
+      if (
+        !state.settings.professionals.some(
+          (professional) =>
+            professional.id === row.professional_id &&
+            professional.principalId === row.principal_id,
+        )
+      )
+        throw new HTTPException(404, {
+          message: "Service or professional unavailable.",
+        });
       const startsAt = new Date(input.startsAt).toISOString();
       if (startsAt === row.starts_at)
         return c.json({ data: await reservationView(db, row) });

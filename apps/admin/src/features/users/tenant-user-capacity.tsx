@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslate } from "ra-core";
+import { RotateCcw, Save } from "lucide-react";
 import {
   MAX_ACTIVE_USER_LIMIT,
   TenantUserCapacityClient,
@@ -100,9 +101,13 @@ export function TenantUserCapacity({
               type="button"
               variant="outline"
               size="sm"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={() => void capacity.refetch()}
             >
-              {t("savia.users.capacity.retry", "Retry")}
+              <RotateCcw aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">
+                {t("savia.users.capacity.retry", "Retry")}
+              </span>
             </Button>
           </div>
         ) : (
@@ -147,14 +152,18 @@ export function TenantUserCapacity({
             </div>
             <Button
               type="button"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
               onClick={submit}
               disabled={
                 save.isPending || capacity.isPending || Boolean(capacity.error)
               }
             >
-              {save.isPending
-                ? t("savia.users.capacity.saving", "Saving…")
-                : t("savia.users.capacity.save", "Save limit")}
+              <Save aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">
+                {save.isPending
+                  ? t("savia.users.capacity.saving", "Saving…")
+                  : t("savia.users.capacity.save", "Save limit")}
+              </span>
             </Button>
           </div>
           <p id={helpId} className="text-xs text-muted-foreground">

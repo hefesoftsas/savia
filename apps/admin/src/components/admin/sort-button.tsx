@@ -10,6 +10,7 @@ import {
 } from "ra-core";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +55,7 @@ const SortButtonComponent = (props: SortButtonProps) => {
     label = "ra.sort.sort_by",
     icon = defaultIcon,
     resource: _resource,
+    className,
     ...rest
   } = props;
   const resource = useResourceContext(props);
@@ -98,6 +100,7 @@ const SortButtonComponent = (props: SortButtonProps) => {
                 <Button
                   variant="outline"
                   size="icon"
+                  className={cn("size-11", className)}
                   aria-label={buttonLabel}
                   {...rest}
                 >
@@ -112,7 +115,12 @@ const SortButtonComponent = (props: SortButtonProps) => {
         </TooltipProvider>
       ) : (
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9" {...rest}>
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn("h-9", className)}
+            {...rest}
+          >
             {icon}
             <span className="ml-2">{buttonLabel}</span>
             <ChevronDown className="ml-2 h-4 w-4" />

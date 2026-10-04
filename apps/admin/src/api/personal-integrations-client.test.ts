@@ -69,6 +69,23 @@ it("requests an issue preview without retaining the returned metadata", async ()
   });
 });
 
+it("requests the native booking agenda with range and time zone", async () => {
+  const booking = { id: "booking-1", tenantId: 7 };
+  const get = vi.fn().mockResolvedValue({ data: [booking] });
+  const client = new PersonalIntegrationsClient({ get } as never);
+
+  await expect(
+    client.listBookingAgenda({
+      from: "2026-01-03T00:00:00.000Z",
+      to: "2026-01-04T00:00:00.000Z",
+      timeZone: "America/Bogota",
+    }),
+  ).resolves.toEqual([booking]);
+  expect(get).toHaveBeenCalledWith(
+    "/v1/personal-integrations/bookings?from=2026-01-03T00%3A00%3A00.000Z&to=2026-01-04T00%3A00%3A00.000Z&timeZone=America%2FBogota",
+  );
+});
+
 it("invalidates cached connections and notifies Pages after a successful connection", async () => {
   const connection = {
     id: "jira-1",
