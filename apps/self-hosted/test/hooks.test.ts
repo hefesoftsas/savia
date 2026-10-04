@@ -19,28 +19,17 @@ describe("isolated hooks", () => {
       variables: { answer: "42" },
     });
   });
-  it("keeps the Cloudflare loader path and isolation options as the default", async () => {
+  it("uses the private hook service on Cloudflare", async () => {
     const fetch = vi.fn(async () =>
       Response.json({ body: "done", variables: { x: "1" } }),
     );
-    const load = vi.fn((_options: { modules: Record<string, string> }) => ({
-      getEntrypoint: () => ({ fetch }),
-    }));
     expect(
-      await hook({ LOADER: { load } } as never, 'bru.setVar("x",1)', {
+      await hook({ HOOK_SERVICE: { fetch } } as never, 'bru.setVar("x",1)', {
         body: "",
         values: {},
       }),
     ).toEqual({ body: "done", variables: { x: "1" } });
-    expect(load).toHaveBeenCalledWith(
-      expect.objectContaining({
-        globalOutbound: null,
-        limits: { cpuMs: 100, subRequests: 0 },
-      }),
-    );
-    expect(load.mock.calls[0][0].modules["hook.js"]).toContain(
-      'bru.setVar("x",1)',
-    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
   it("limits concurrent workers and releases capacity on completion", async () => {
     const single = createNodeHookExecutor({ maxConcurrent: 1 });
