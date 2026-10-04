@@ -11,14 +11,24 @@ export const recordingScopeSchema = z.enum([
   "recordings:delete",
 ]);
 export type RecordingScope = z.infer<typeof recordingScopeSchema>;
+export const apiKeyScopeSchema = z.enum([
+  ...recordingScopeSchema.options,
+  "records:read",
+  "records:create",
+  "records:update",
+]);
+export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;
+export function isRecordingScope(scope: ApiKeyScope): scope is RecordingScope {
+  return recordingScopeSchema.safeParse(scope).success;
+}
 export const createPersonalApiKeySchema = z
   .object({
     name: z.string().trim().min(1).max(80),
     tenantId: z.number().int().nonnegative(),
     scopes: z
-      .array(recordingScopeSchema)
+      .array(apiKeyScopeSchema)
       .min(1)
-      .max(4)
+      .max(7)
       .refine((s) => new Set(s).size === s.length),
     lifetimeDays: z
       .union([z.literal(7), z.literal(30), z.literal(90)])
@@ -30,7 +40,7 @@ export const personalApiKeySummarySchema = z.object({
   name: z.string(),
   prefix: z.string(),
   tenantId: z.number().int(),
-  scopes: z.array(recordingScopeSchema),
+  scopes: z.array(apiKeyScopeSchema),
   createdAt: z.string(),
   expiresAt: z.string(),
   revokedAt: z.string().nullable(),
@@ -161,6 +171,14 @@ export class PersonalApiKeys {
   ): Promise<{ key: PersonalApiKeySummary; secret: string }> {
     this.requireDeployment();
     const parsed = createPersonalApiKeySchema.parse(input);
+    if (
+      parsed.tenantId === 0 &&
+      parsed.scopes.some((scope) => !isRecordingScope(scope))
+    )
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "Data scopes require a commercial tenant",
+      );
     await this.eligibleActor(ownerId, parsed.tenantId);
     const id = crypto.randomUUID();
     const bytes = crypto.getRandomValues(new Uint8Array(32));

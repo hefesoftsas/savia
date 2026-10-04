@@ -5,7 +5,10 @@ import {
   DEFAULT_CANONICAL_HOST,
   parseTenantSlugFromHostname,
 } from "@savia/tenant-host/tenant-host";
-import { recordingScopeSchema } from "../auth/personal-api-keys";
+import {
+  recordingScopeSchema,
+  isRecordingScope,
+} from "../auth/personal-api-keys";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { actorFromContext } from "../auth/middleware";
 import { AuthenticationError, type AppActor } from "../auth/types";
@@ -461,9 +464,9 @@ export function registerCompanionRoutes(
           ? {
               grantedRecordingScopes: (
                 actorFromContext(c).credential as {
-                  scopes: import("../auth/personal-api-keys").RecordingScope[];
+                  scopes: import("../auth/personal-api-keys").ApiKeyScope[];
                 }
-              ).scopes,
+              ).scopes.filter(isRecordingScope),
             }
           : {}),
         privacyRouting: "unverified" as const,

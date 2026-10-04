@@ -401,6 +401,9 @@ export interface paths {
                   | "recordings:upload"
                   | "recordings:process"
                   | "recordings:delete"
+                  | "records:read"
+                  | "records:create"
+                  | "records:update"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -431,6 +434,9 @@ export interface paths {
               | "recordings:upload"
               | "recordings:process"
               | "recordings:delete"
+              | "records:read"
+              | "records:create"
+              | "records:update"
             )[];
             /** @default 30 */
             lifetimeDays?: 7 | 30 | 90;
@@ -456,6 +462,9 @@ export interface paths {
                   | "recordings:upload"
                   | "recordings:process"
                   | "recordings:delete"
+                  | "records:read"
+                  | "records:create"
+                  | "records:update"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -588,6 +597,9 @@ export interface paths {
                   | "recordings:upload"
                   | "recordings:process"
                   | "recordings:delete"
+                  | "records:read"
+                  | "records:create"
+                  | "records:update"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -622,6 +634,9 @@ export interface paths {
               | "recordings:upload"
               | "recordings:process"
               | "recordings:delete"
+              | "records:read"
+              | "records:create"
+              | "records:update"
             )[];
             /** @default 30 */
             lifetimeDays?: 7 | 30 | 90;
@@ -648,6 +663,9 @@ export interface paths {
                   | "recordings:upload"
                   | "recordings:process"
                   | "recordings:delete"
+                  | "records:read"
+                  | "records:create"
+                  | "records:update"
                 )[];
                 createdAt: string;
                 expiresAt: string;
