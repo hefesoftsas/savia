@@ -1,5 +1,5 @@
 import { opusFixtureBase64 } from "./fixtures/companion-tone";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CompanionService,
   validateAudio,
@@ -30,6 +30,27 @@ function audio(seconds = 0.1) {
 }
 const config = { apiKey: "test-key", model: "test/summary" };
 describe("Companion bounded provider adapter", () => {
+  it("preserves the Cloudflare fetch receiver when using the default transport", async () => {
+    const platformFetch = vi.fn(function (this: typeof globalThis) {
+      if (this !== globalThis) throw new TypeError("Illegal invocation");
+      return Promise.resolve(
+        Response.json({ choices: [{ message: { content: "Hola" } }] }),
+      );
+    });
+    vi.stubGlobal("fetch", platformFetch);
+    try {
+      const service = new CompanionService();
+      const result = await service.transcribe(config, {
+        source: "microphone",
+        audio: { data: audio(), format: "wav" },
+        consent: true,
+      });
+      expect(result.text).toBe("Hola");
+      expect(platformFetch).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it("validates a real PCM container and rejects long or malformed audio", () => {
     expect(validateAudio(audio()).durationSeconds).toBe(0.1);
     for (const input of ["bad!!", btoa("not wav"), audio(60.1)])

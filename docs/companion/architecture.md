@@ -160,6 +160,11 @@ validated compressed bytes with `input_audio.format: "ogg"`, a format listed in
 [OpenRouter's STT guide](https://openrouter.ai/blog/tutorials/transcription-on-openrouter/).
 Live selected-model compatibility, billing and quality remain unverified.
 
+The server provider adapter binds its default `fetch` transport to `globalThis`.
+Cloudflare requires that receiver; invoking a detached fetch as an adapter method
+throws an illegal-invocation error before contacting OpenRouter and is reported
+as `PROVIDER_UNAVAILABLE`. Injected test transports are supplied explicitly.
+
 R2 uses a hashed principal prefix plus client-generated UUID. Conditional writes
 prevent replacement; content hashes distinguish idempotent retries from conflicts.
 List/download/delete derive the same prefix from the authenticated principal.
