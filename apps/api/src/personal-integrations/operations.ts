@@ -57,6 +57,10 @@ const calendarPageSize = 100;
 const calendarPageLimit = 20;
 const calendarEventLimit = 2000;
 const calendarRangeMaxMilliseconds = 62 * 24 * 60 * 60 * 1000;
+const googleVideoCallProperty = "saviaVideoCall";
+const outlookVideoCallPropertyId =
+  "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaVideoCall";
+const outlookVideoCallExpand = `singleValueExtendedProperties($filter=id eq '${outlookVideoCallPropertyId}')`;
 
 // Microsoft Graph returns Windows timezone IDs. Keep this small, explicit map
 // for common mailbox zones; unknown IDs fail closed instead of shifting dates.
@@ -357,6 +361,7 @@ function secureWebLink(value: unknown): string | null {
 }
 
 type PersonalConference = NonNullable<PersonalEvent["conference"]>;
+type VideoCallMarker = "requested" | "unsupported";
 
 function safeConferenceUrl(
   value: unknown,
@@ -395,12 +400,15 @@ const unsupportedConference: PersonalConference = {
 
 function googleConference(
   value: unknown,
-  requested = false,
+  marker: VideoCallMarker | null = null,
 ): PersonalConference | undefined {
+  const requested = marker === "requested";
   if (!value || typeof value !== "object" || Array.isArray(value))
-    return requested
-      ? { provider: "google_meet", joinUrl: null, status: "pending" }
-      : undefined;
+    return marker === "unsupported"
+      ? { ...unsupportedConference }
+      : requested
+        ? { provider: "google_meet", joinUrl: null, status: "pending" }
+        : undefined;
   const event = value as Record<string, unknown>;
   const conferenceData = event.conferenceData;
   if (
@@ -410,15 +418,15 @@ function googleConference(
   ) {
     if (typeof event.hangoutLink === "string") {
       const joinUrl = safeConferenceUrl(event.hangoutLink, "google_meet");
-      return {
-        provider: "google_meet",
-        joinUrl,
-        status: joinUrl ? "ready" : "pending",
-      };
+      if (joinUrl) return { provider: "google_meet", joinUrl, status: "ready" };
+      if (requested)
+        return { provider: "google_meet", joinUrl: null, status: "pending" };
     }
-    return requested
-      ? { provider: "google_meet", joinUrl: null, status: "pending" }
-      : undefined;
+    return marker === "unsupported"
+      ? { ...unsupportedConference }
+      : requested
+        ? { provider: "google_meet", joinUrl: null, status: "pending" }
+        : undefined;
   }
   const data = conferenceData as Record<string, unknown>;
   const createRequest = data.createRequest;
@@ -434,8 +442,6 @@ function googleConference(
     !Array.isArray(createStatus)
       ? (createStatus as Record<string, unknown>).statusCode
       : undefined;
-  if (statusCode === "failure" || statusCode === "FAILURE")
-    return { provider: "google_meet", joinUrl: null, status: "failed" };
   const solution = data.conferenceSolution;
   const key =
     solution && typeof solution === "object" && !Array.isArray(solution)
@@ -456,10 +462,25 @@ function googleConference(
       ? (createKey as Record<string, unknown>).type
       : undefined;
   const isMeet =
-    solutionType === "hangoutsMeet" ||
-    createType === "hangoutsMeet" ||
-    requested;
-  if (!isMeet) return unsupportedConference;
+    solutionType === "hangoutsMeet" || createType === "hangoutsMeet";
+  if (!isMeet) {
+    const hasOtherSolution =
+      (typeof solutionType === "string" && solutionType.length > 0) ||
+      (typeof createType === "string" && createType.length > 0);
+    if (
+      requested &&
+      !hasOtherSolution &&
+      (statusCode === "failure" || statusCode === "FAILURE")
+    )
+      return { provider: "google_meet", joinUrl: null, status: "failed" };
+    return marker === "unsupported"
+      ? { ...unsupportedConference }
+      : requested
+        ? { provider: "google_meet", joinUrl: null, status: "pending" }
+        : undefined;
+  }
+  if (statusCode === "failure" || statusCode === "FAILURE")
+    return { provider: "google_meet", joinUrl: null, status: "failed" };
   const entries = Array.isArray(data.entryPoints) ? data.entryPoints : [];
   const video = entries.find(
     (entry) =>
@@ -480,22 +501,27 @@ function googleConference(
 
 function outlookConference(
   value: unknown,
-  requested = false,
+  marker: VideoCallMarker | null = null,
 ): PersonalConference | undefined {
+  const requested = marker === "requested";
   if (!value || typeof value !== "object" || Array.isArray(value))
-    return requested
-      ? { provider: "teams", joinUrl: null, status: "pending" }
-      : undefined;
+    return marker === "unsupported"
+      ? { ...unsupportedConference }
+      : requested
+        ? { provider: "teams", joinUrl: null, status: "pending" }
+        : undefined;
   const event = value as Record<string, unknown>;
-  const online = event.isOnlineMeeting === true;
   const provider = event.onlineMeetingProvider;
-  if (!online && !requested) return undefined;
-  if (event.isOnlineMeeting === false && requested)
-    return { provider: "teams", joinUrl: null, status: "failed" };
   if (provider !== "teamsForBusiness")
-    return requested
-      ? { provider: "teams", joinUrl: null, status: "pending" }
-      : unsupportedConference;
+    return marker === "unsupported"
+      ? { ...unsupportedConference }
+      : requested
+        ? event.isOnlineMeeting === false
+          ? { provider: "teams", joinUrl: null, status: "failed" }
+          : { provider: "teams", joinUrl: null, status: "pending" }
+        : undefined;
+  if (event.isOnlineMeeting === false)
+    return { provider: "teams", joinUrl: null, status: "failed" };
   const meeting = event.onlineMeeting;
   const rawUrl =
     meeting && typeof meeting === "object" && !Array.isArray(meeting)
@@ -505,6 +531,47 @@ function outlookConference(
   return joinUrl
     ? { provider: "teams", joinUrl, status: "ready" }
     : { provider: "teams", joinUrl: null, status: "pending" };
+}
+
+function googleVideoCallMarker(
+  event: Record<string, unknown>,
+): VideoCallMarker | null {
+  const extendedProperties = event.extendedProperties;
+  if (
+    !extendedProperties ||
+    typeof extendedProperties !== "object" ||
+    Array.isArray(extendedProperties)
+  )
+    return null;
+  const privateProperties = (extendedProperties as Record<string, unknown>)
+    .private;
+  if (
+    !privateProperties ||
+    typeof privateProperties !== "object" ||
+    Array.isArray(privateProperties)
+  )
+    return null;
+  const value = (privateProperties as Record<string, unknown>)[
+    googleVideoCallProperty
+  ];
+  return value === "requested" || value === "unsupported" ? value : null;
+}
+
+function outlookVideoCallMarker(
+  event: Record<string, unknown>,
+): VideoCallMarker | null {
+  if (!Array.isArray(event.singleValueExtendedProperties)) return null;
+  const marker = event.singleValueExtendedProperties.find((property) => {
+    if (!property || typeof property !== "object" || Array.isArray(property))
+      return false;
+    return (
+      (property as Record<string, unknown>).id === outlookVideoCallPropertyId
+    );
+  });
+  if (!marker || typeof marker !== "object" || Array.isArray(marker))
+    return null;
+  const value = (marker as Record<string, unknown>).value;
+  return value === "requested" || value === "unsupported" ? value : null;
 }
 
 function invalidAction(message: string): never {
@@ -1096,7 +1163,7 @@ function filesFromOneDrive(payload: unknown): PersonalFile[] {
 function eventsFromGoogle(
   payload: unknown,
   includeCalendarMetadata = false,
-  requestedMeet = false,
+  requestedMeet: VideoCallMarker | null = null,
 ): PersonalEvent[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return [];
@@ -1112,7 +1179,10 @@ function eventsFromGoogle(
     const end = item.end as
       { dateTime?: unknown; date?: unknown; timeZone?: unknown } | undefined;
     if (item.status === "cancelled") return [];
-    const conference = googleConference(item, requestedMeet);
+    const conference = googleConference(
+      item,
+      googleVideoCallMarker(item) ?? requestedMeet,
+    );
     return [
       {
         id,
@@ -1136,7 +1206,7 @@ function eventsFromGoogle(
 function eventsFromOutlook(
   payload: unknown,
   includeCalendarMetadata = false,
-  requestedTeams = false,
+  requestedTeams: VideoCallMarker | null = null,
 ): PersonalEvent[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return [];
@@ -1169,7 +1239,10 @@ function eventsFromOutlook(
       endsAt = outlookAllDayDate(end, originalEndTimeZone);
       timeZone = originalStartTimeZone;
     }
-    const conference = outlookConference(item, requestedTeams);
+    const conference = outlookConference(
+      item,
+      outlookVideoCallMarker(item) ?? requestedTeams,
+    );
     return [
       {
         id,
@@ -1888,11 +1961,13 @@ export class PersonalIntegrationOperations {
             endDateTime: input.to.toISOString(),
             $top: String(calendarPageSize),
             $orderby: "start/dateTime",
+            $expand: outlookVideoCallExpand,
             $select:
               "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting",
           })
         : new URLSearchParams({
             $top: String(calendarPageSize),
+            $expand: outlookVideoCallExpand,
             $select:
               "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting",
           });
@@ -1998,6 +2073,11 @@ export class PersonalIntegrationOperations {
       ? await this.conferenceCapability(connection, input.provider)
       : null;
     const requestConference = input.videoCall && conferenceProvider !== null;
+    const videoCallMarker: VideoCallMarker | null = input.videoCall
+      ? requestConference
+        ? "requested"
+        : "unsupported"
+      : null;
     const response = await this.write(
       connection,
       "create-event",
@@ -2019,6 +2099,15 @@ export class PersonalIntegrationOperations {
                     },
                   }
                 : {}),
+              ...(videoCallMarker
+                ? {
+                    extendedProperties: {
+                      private: {
+                        [googleVideoCallProperty]: videoCallMarker,
+                      },
+                    },
+                  }
+                : {}),
             },
           }
         : {
@@ -2034,6 +2123,16 @@ export class PersonalIntegrationOperations {
                     onlineMeetingProvider: "teamsForBusiness",
                   }
                 : {}),
+              ...(videoCallMarker
+                ? {
+                    singleValueExtendedProperties: [
+                      {
+                        id: outlookVideoCallPropertyId,
+                        value: videoCallMarker,
+                      },
+                    ],
+                  }
+                : {}),
             },
             upstreamHeaders: outlookUtcPreference,
           },
@@ -2041,11 +2140,9 @@ export class PersonalIntegrationOperations {
     const payload = await response.json().catch(() => undefined);
     const event =
       input.provider === "google_calendar"
-        ? eventsFromGoogle({ items: [payload] }, false, requestConference)[0]
-        : eventsFromOutlook({ value: [payload] }, false, requestConference)[0];
+        ? eventsFromGoogle({ items: [payload] }, false, videoCallMarker)[0]
+        : eventsFromOutlook({ value: [payload] }, false, videoCallMarker)[0];
     if (!event) throw new PersonalIntegrationUpstreamError();
-    if (input.videoCall && !conferenceProvider)
-      event.conference = { ...unsupportedConference };
     return event;
   }
 

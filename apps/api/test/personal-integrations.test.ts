@@ -1796,6 +1796,21 @@ describe("personal integration providers", () => {
           start: { dateTime: "2026-01-03T15:00:00.000Z" },
           end: { dateTime: "2026-01-03T15:30:00.000Z" },
         }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [
+            {
+              id: "google-no-meet-event",
+              summary: "Meet Acme",
+              start: { dateTime: "2026-01-03T15:00:00.000Z" },
+              end: { dateTime: "2026-01-03T15:30:00.000Z" },
+              extendedProperties: {
+                private: { saviaVideoCall: "unsupported" },
+              },
+            },
+          ],
+        }),
       );
     await env.DB.prepare(
       `INSERT INTO personal_integration_connections (
@@ -1848,11 +1863,25 @@ describe("personal integration providers", () => {
       expect.objectContaining({
         method: "POST",
         path: "/calendar/v3/calendars/primary/events",
-        body: expect.not.objectContaining({
-          conferenceData: expect.anything(),
+        body: expect.objectContaining({
+          extendedProperties: {
+            private: { saviaVideoCall: "unsupported" },
+          },
         }),
       }),
     );
+    const listed = await app.request(
+      "https://savia.test/v1/personal-integrations/events?provider=google_calendar",
+    );
+    expect(listed.status).toBe(200);
+    await expect(listed.json()).resolves.toMatchObject({
+      data: [
+        {
+          id: "google-no-meet-event",
+          conference: { provider: null, joinUrl: null, status: "unsupported" },
+        },
+      ],
+    });
   });
 
   it("lists pending Google Meet requests so a later reload can resolve them", async () => {
@@ -1870,6 +1899,44 @@ describe("personal integration providers", () => {
                 conferenceSolutionKey: { type: "hangoutsMeet" },
                 status: { statusCode: "pending" },
               },
+            },
+          },
+          {
+            id: "google-pending-marker-only",
+            summary: "Meet Acme 2",
+            start: { dateTime: "2026-01-03T10:00:00-05:00" },
+            end: { dateTime: "2026-01-03T10:30:00-05:00" },
+            extendedProperties: {
+              private: { saviaVideoCall: "requested" },
+            },
+          },
+          {
+            id: "google-failed-marker-only",
+            summary: "Meet Acme failed",
+            start: { dateTime: "2026-01-03T10:30:00-05:00" },
+            end: { dateTime: "2026-01-03T11:00:00-05:00" },
+            extendedProperties: {
+              private: { saviaVideoCall: "requested" },
+            },
+            conferenceData: {
+              createRequest: { status: { statusCode: "failure" } },
+            },
+          },
+          {
+            id: "google-meet-hangout-link",
+            summary: "Meet Acme with link",
+            start: { dateTime: "2026-01-03T11:00:00-05:00" },
+            end: { dateTime: "2026-01-03T11:30:00-05:00" },
+            hangoutLink: "https://meet.google.com/abc-defg-hij",
+          },
+          {
+            id: "google-classic-hangout",
+            summary: "Classic hangout",
+            start: { dateTime: "2026-01-03T11:00:00-05:00" },
+            end: { dateTime: "2026-01-03T11:30:00-05:00" },
+            conferenceData: {
+              createRequest: { status: { statusCode: "failure" } },
+              conferenceSolution: { key: { type: "eventHangout" } },
             },
           },
         ],
@@ -1900,18 +1967,54 @@ describe("personal integration providers", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      data: [
+    const body = (await response.json()) as {
+      data: Array<{ id: string; conference?: unknown }>;
+    };
+    expect(body.data).toEqual(
+      expect.arrayContaining([
         {
           id: "google-pending-meet",
+          title: "Meet Acme",
+          startsAt: "2026-01-03T09:00:00-05:00",
+          endsAt: "2026-01-03T09:30:00-05:00",
+          webLink: null,
+          allDay: false,
+          timeZone: null,
           conference: {
             provider: "google_meet",
             joinUrl: null,
             status: "pending",
           },
         },
-      ],
-    });
+        expect.objectContaining({
+          id: "google-pending-marker-only",
+          conference: {
+            provider: "google_meet",
+            joinUrl: null,
+            status: "pending",
+          },
+        }),
+        expect.objectContaining({
+          id: "google-failed-marker-only",
+          conference: {
+            provider: "google_meet",
+            joinUrl: null,
+            status: "failed",
+          },
+        }),
+        expect.objectContaining({
+          id: "google-meet-hangout-link",
+          conference: {
+            provider: "google_meet",
+            joinUrl: "https://meet.google.com/abc-defg-hij",
+            status: "ready",
+          },
+        }),
+      ]),
+    );
+    expect(
+      body.data.find((event) => event.id === "google-classic-hangout"),
+    ).not.toHaveProperty("conference");
     expect(nango.proxy).toHaveBeenCalledWith(
       expect.objectContaining({
         path: expect.stringContaining("conferenceDataVersion"),
@@ -2004,6 +2107,109 @@ describe("personal integration providers", () => {
     );
   });
 
+  it("retains the unsupported video call marker on Outlook events", async () => {
+    const nango = fakeNango();
+    nango.proxy
+      .mockResolvedValueOnce(
+        Response.json({ allowedOnlineMeetingProviders: ["skypeForBusiness"] }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "outlook-no-teams-event",
+          subject: "Meet Acme",
+          start: { dateTime: "2026-01-03T15:00:00Z", timeZone: "UTC" },
+          end: { dateTime: "2026-01-03T15:30:00Z", timeZone: "UTC" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          value: [
+            {
+              id: "outlook-no-teams-event",
+              subject: "Meet Acme",
+              start: { dateTime: "2026-01-03T15:00:00Z", timeZone: "UTC" },
+              end: { dateTime: "2026-01-03T15:30:00Z", timeZone: "UTC" },
+              singleValueExtendedProperties: [
+                {
+                  id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaVideoCall",
+                  value: "unsupported",
+                },
+              ],
+            },
+          ],
+        }),
+      );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-outlook-no-teams-create-connection",
+        "test-agency-member",
+        "outlook",
+        "nango-outlook-no-teams-create-connection",
+        "outlook-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const created = await app.request(
+      "https://savia.test/v1/personal-integrations/events",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "outlook",
+          title: "Meet Acme",
+          startsAt: "2026-01-03T15:00:00.000Z",
+          endsAt: "2026-01-03T15:30:00.000Z",
+          videoCall: true,
+        }),
+      },
+    );
+
+    expect(created.status).toBe(201);
+    await expect(created.json()).resolves.toMatchObject({
+      data: {
+        id: "outlook-no-teams-event",
+        conference: { provider: null, joinUrl: null, status: "unsupported" },
+      },
+    });
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: "POST",
+        body: expect.objectContaining({
+          singleValueExtendedProperties: [
+            {
+              id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaVideoCall",
+              value: "unsupported",
+            },
+          ],
+        }),
+      }),
+    );
+
+    const listed = await app.request(
+      "https://savia.test/v1/personal-integrations/events?provider=outlook",
+    );
+    expect(listed.status).toBe(200);
+    await expect(listed.json()).resolves.toMatchObject({
+      data: [
+        {
+          id: "outlook-no-teams-event",
+          conference: { provider: null, joinUrl: null, status: "unsupported" },
+        },
+      ],
+    });
+  });
+
   it("does not create an event when the conference capability check fails", async () => {
     const nango = fakeNango();
     nango.proxy.mockResolvedValueOnce(
@@ -2068,6 +2274,27 @@ describe("personal integration providers", () => {
             onlineMeetingProvider: "teamsForBusiness",
             onlineMeeting: { joinUrl: "https://attacker.example/join" },
           },
+          {
+            id: "outlook-pending-marker-only",
+            subject: "Meet Acme 2",
+            start: { dateTime: "2026-01-03T16:00:00Z", timeZone: "UTC" },
+            end: { dateTime: "2026-01-03T16:30:00Z", timeZone: "UTC" },
+            singleValueExtendedProperties: [
+              {
+                id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaVideoCall",
+                value: "requested",
+              },
+            ],
+          },
+          {
+            id: "outlook-skype-event",
+            subject: "Skype call",
+            start: { dateTime: "2026-01-03T17:00:00Z", timeZone: "UTC" },
+            end: { dateTime: "2026-01-03T17:30:00Z", timeZone: "UTC" },
+            isOnlineMeeting: true,
+            onlineMeetingProvider: "skypeForBusiness",
+            onlineMeeting: { joinUrl: "https://teams.microsoft.com/legacy" },
+          },
         ],
       }),
     );
@@ -2096,18 +2323,31 @@ describe("personal integration providers", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      data: [
-        {
+    const body = (await response.json()) as {
+      data: Array<{ id: string; conference?: unknown }>;
+    };
+    expect(body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
           id: "outlook-pending-teams",
           conference: { provider: "teams", joinUrl: null, status: "pending" },
-        },
-      ],
-    });
+        }),
+        expect.objectContaining({
+          id: "outlook-pending-marker-only",
+          conference: { provider: "teams", joinUrl: null, status: "pending" },
+        }),
+      ]),
+    );
+    expect(
+      body.data.find((event) => event.id === "outlook-skype-event"),
+    ).not.toHaveProperty("conference");
     const path = nango.proxy.mock.calls[0]?.[0]?.path as string;
     expect(
       new URL(path, "https://graph.microsoft.com").searchParams.get("$select"),
     ).toContain("onlineMeeting");
+    expect(
+      new URL(path, "https://graph.microsoft.com").searchParams.get("$expand"),
+    ).toContain("SaviaVideoCall");
   });
 
   it("sends composer mail only from a caller-owned connected account", async () => {

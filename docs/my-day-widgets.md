@@ -146,7 +146,10 @@ requesting a call. An unsupported calendar receives an ordinary event with an
 explicit unavailable status. A ready meeting displays **Join** in the agenda;
 pending or failed provisioning is shown separately from event creation. Refresh
 the agenda to retrieve the provider's latest link without creating another event.
-Meeting links remain stored with the provider's calendar event.
+Meeting links remain stored with the provider's calendar event. Savia also stores
+a conference-request marker on that event so pending or unsupported
+results survive later agenda reloads. Events with unrelated conference providers
+are not labeled as account capability failures.
 
 Google's Nango integration needs `calendar.events`, `calendar.calendars.readonly`
 and `calendar.events.freebusy` (each prefixed with
