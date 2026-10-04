@@ -1,5 +1,5 @@
 import { opusFixtureBase64 } from "./fixtures/companion-tone";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CompanionService,
   validateAudio,
@@ -30,6 +30,30 @@ function audio(seconds = 0.1) {
 }
 const config = { apiKey: "test-key", model: "test/summary" };
 describe("Companion bounded provider adapter", () => {
+  it("calls the default runtime fetch with its global receiver", async () => {
+    // Workers rejects native fetch when invoked as a CompanionService method.
+    const runtimeFetch = vi.fn(function (this: unknown) {
+      if (this !== globalThis) throw new TypeError("Illegal invocation");
+      return Promise.resolve(Response.json({ text: "Runtime transcript" }));
+    });
+    vi.stubGlobal("fetch", runtimeFetch);
+    try {
+      const service = new CompanionService();
+      await expect(
+        service.transcribe(
+          { ...config, transcriptionModel: "openai/whisper-large-v3-turbo" },
+          {
+            source: "microphone",
+            audio: { data: audio(), format: "wav" },
+            consent: true,
+          },
+        ),
+      ).resolves.toMatchObject({ text: "Runtime transcript" });
+      expect(runtimeFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it("validates a real PCM container and rejects long or malformed audio", () => {
     expect(validateAudio(audio()).durationSeconds).toBe(0.1);
     for (const input of ["bad!!", btoa("not wav"), audio(60.1)])

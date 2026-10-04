@@ -16,6 +16,12 @@ A passing unit test with generated WAV data only verifies the inspector. It does
 not prove actual recording, permission behavior or transcription accuracy. Real
 OS capture gates require native binaries and listening to produced files.
 
+Provider validation must also exercise `CompanionService` without an injected
+fetch adapter in the Workers runtime. Calling the native runtime fetch with the
+service as its receiver throws `Illegal invocation` before any provider request;
+adapter-only tests do not detect this failure. Keep the default transport bound
+to the global runtime and verify an authorized synthetic upload through preview.
+
 ## Platform and device coverage
 
 | Target                   | Minimum initial test cases                                                                                                         | Current status                                 |
