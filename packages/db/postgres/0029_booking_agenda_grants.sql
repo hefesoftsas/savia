@@ -1,0 +1,1 @@
+CREATE TABLE savia_core.tenant_booking_agenda_grants (tenant_id BIGINT NOT NULL REFERENCES savia_core.tenants(id) ON DELETE CASCADE, principal_id TEXT NOT NULL REFERENCES savia_core.identity_principal(id) ON DELETE CASCADE, config TEXT NOT NULL CHECK(savia_json_valid(config) AND jsonb_typeof(config::jsonb)='object'), PRIMARY KEY(tenant_id,principal_id));

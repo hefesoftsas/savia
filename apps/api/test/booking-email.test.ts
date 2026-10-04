@@ -60,3 +60,29 @@ it.each([
   });
   expect(email.subject).toContain(subject);
 });
+
+it("includes a ready video link in appointment notices but never cancellation emails", () => {
+  const withMeeting = {
+    ...booking,
+    conference_status: "ready" as const,
+    conference_url: "https://meet.google.com/abc-defg-hij",
+  };
+  const input = {
+    booking: withMeeting,
+    timeZone: "UTC",
+    managementUrl: "https://example.test/manage/token",
+  };
+  expect(formatBookingEmail({ ...input, kind: "reminder" }).text).toContain(
+    "https://meet.google.com/abc-defg-hij",
+  );
+  expect(
+    formatBookingEmail({ ...input, kind: "cancellation" }).text,
+  ).not.toContain("https://meet.google.com/abc-defg-hij");
+  expect(
+    formatBookingEmail({
+      ...input,
+      kind: "confirmation",
+      booking: { ...withMeeting, conference_url: "javascript:alert(1)" },
+    }).text,
+  ).not.toContain("javascript:");
+});

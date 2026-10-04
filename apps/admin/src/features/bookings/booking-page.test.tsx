@@ -217,6 +217,65 @@ it("loads booking settings and candidates, then saves the edited configuration",
   );
 });
 
+it("grants My Day busy-time access and reports the authorized calendar sources", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+    agenda: { enabled: false, sourceCount: 0 },
+  };
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({ data: bootstrap }),
+    put: vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: { ...bootstrap, agenda: { enabled: true, sourceCount: 3 } },
+      })
+      .mockResolvedValueOnce({
+        data: { ...bootstrap, agenda: { enabled: true, sourceCount: 4 } },
+      })
+      .mockResolvedValueOnce({
+        data: { ...bootstrap, agenda: { enabled: false, sourceCount: 0 } },
+      }),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getAllByRole("button", { name: "Availability" })[0]);
+  await screen.findByRole("heading", { name: "My Day availability" });
+  expect(
+    screen.getByText(
+      "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.",
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Use My Day to block busy times" }),
+  );
+  await screen.findByText("My Day access is enabled. Calendar sources: 3.");
+  expect(apiClient.put).toHaveBeenCalledWith("/v1/tenants/42/booking/agenda", {
+    enabled: true,
+  });
+  expect(
+    screen.getByRole("button", { name: "Update calendar access" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Stop using My Day" }),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Update calendar access" }),
+  );
+  await screen.findByText("My Day access is enabled. Calendar sources: 4.");
+  fireEvent.click(screen.getByRole("button", { name: "Stop using My Day" }));
+  await screen.findByText("My Day access is off.");
+  expect(apiClient.put.mock.calls).toEqual([
+    ["/v1/tenants/42/booking/agenda", { enabled: true }],
+    ["/v1/tenants/42/booking/agenda", { enabled: true }],
+    ["/v1/tenants/42/booking/agenda", { enabled: false }],
+  ]);
+});
+
 it("gives a recovery action after a failed bootstrap and reports version conflicts", async () => {
   const apiClient = {
     get: vi
@@ -414,6 +473,67 @@ it("shows tenant-zone reservation details and reports failed delivery before can
     /^\/v1\/tenants\/42\/booking\/reservations\?from=/,
   );
   expect(apiClient.get.mock.calls[1][0]).toContain("&to=");
+});
+
+it("refreshes reservation conference state for the current tenant", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+  };
+  const reservation = {
+    id: "reservation-2",
+    serviceId: "consult",
+    professionalId: "professional-1",
+    serviceName: "Consultation",
+    professionalName: "Ari",
+    startsAt: "2026-10-05T14:00:00Z",
+    endsAt: "2026-10-05T14:30:00Z",
+    customerName: "Casey Customer",
+    customerEmail: "casey@example.test",
+    status: "confirmed" as const,
+    version: 1,
+    deliveryStatus: "sent",
+    calendarStatus: "created",
+    conference: { provider: "google_meet", joinUrl: null, status: "pending" },
+  };
+  const apiClient = {
+    get: vi
+      .fn()
+      .mockResolvedValueOnce({ data: bootstrap })
+      .mockResolvedValueOnce({ data: [reservation] })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            ...reservation,
+            conference: {
+              provider: "google_meet",
+              joinUrl: "https://meet.google.com/abc-defg-hij",
+              status: "ready",
+            },
+          },
+        ],
+      }),
+    put: vi.fn(),
+    post: vi.fn(),
+  };
+  mount(apiClient, 42);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
+  expect(
+    await screen.findByText(/link is being prepared/i),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(
+    await screen.findByRole("link", { name: "Join Google Meet" }),
+  ).toHaveAttribute("href", "https://meet.google.com/abc-defg-hij");
+  expect(apiClient.get.mock.calls[2][0]).toMatch(
+    /^\/v1\/tenants\/42\/booking\/reservations\?from=/,
+  );
 });
 
 it("edits multiple weekly periods with time controls and saves each interval", async () => {

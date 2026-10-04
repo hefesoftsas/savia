@@ -240,10 +240,18 @@ describe("saved Companion recording notes", () => {
     const providerSecret = "provider-response-private-detail";
     let providerCalls = 0;
     const service = new CompanionService({
-      fetch: async (input) => {
+      fetch: async (input, init) => {
         providerCalls++;
-        if (String(input).includes("audio/transcriptions"))
-          return Response.json({ text: "Persist this transcript." });
+        const body = JSON.parse(init!.body as string);
+        if (
+          Array.isArray(body.messages?.[0]?.content) &&
+          body.messages[0].content.some(
+            (part: { type?: string }) => part.type === "input_audio",
+          )
+        )
+          return Response.json({
+            choices: [{ message: { content: "Persist this transcript." } }],
+          });
         return new Response(
           JSON.stringify({
             error: { code: "private_provider_code", message: providerSecret },

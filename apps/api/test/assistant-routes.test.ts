@@ -145,6 +145,37 @@ async function seedAssistantAgencyMember(agencyId: number) {
       now,
     )
     .run();
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO identity_principal (
+      id, issuer, subject, email, display_name, is_active, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      "test-agency-administrator",
+      "savia:better-auth",
+      "test-agency-administrator",
+      "administrator@savia.test",
+      "Savia Test Agency Administrator",
+      1,
+      now,
+      now,
+    )
+    .run();
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO identity_tenant_membership (
+      id, principal_id, tenant_id, role, is_active, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      `assistant-route-admin-membership-${agencyId}`,
+      "test-agency-administrator",
+      agencyId,
+      "tenant_admin",
+      1,
+      now,
+      now,
+    )
+    .run();
 }
 
 function createReadScopedAssistantApp(service: AssistantService) {
@@ -337,7 +368,8 @@ describe("assistant routes", () => {
     ).resolves.toMatchObject({ apiKey: "not-a-real-global-key" });
   });
 
-  it("rejects meeting model fields on tenant assistant configuration writes", async () => {
+  it("allows meeting model fields on tenant assistant configuration writes", async () => {
+    await seedAssistantAgencyMember(101);
     const response = await createConfigurationApp().request(
       "http://api.savia.test/v1/assistant/configuration/tenants/101",
       {
@@ -346,15 +378,108 @@ describe("assistant routes", () => {
         body: JSON.stringify({ transcriptionModel: "openai/whisper-large-v3" }),
       },
     );
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
   });
 
   it("rejects an agency administrator from provider configuration", async () => {
+    await seedAssistantAgencyMember(101);
     const response = await createConfigurationApp(
       agencyAdministratorAuthenticator(),
     ).request("http://api.savia.test/v1/assistant/configuration");
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      canManageGlobal: false,
+      manageableTenantIds: [101],
+    });
+  });
+
+  it("returns only administered tenant settings and sanitized global defaults", async () => {
+    await seedAssistantAgencyMember(101);
+    await seedAssistantAgencyMember(202);
+    await env.DB.prepare(
+      "UPDATE identity_tenant_membership SET role='viewer' WHERE id = ?",
+    )
+      .bind("assistant-route-admin-membership-202")
+      .run();
+    const repository = configurationRepository();
+    await repository.saveGlobal({
+      actorId: "test-platform-admin",
+      apiKey: "global-secret-key",
+      model: "openai/gpt-5",
+      transcriptionModel: "openai/whisper-large-v3",
+      summaryModel: "openai/gpt-4o-mini",
+    });
+    await repository.saveAgencyOverride(101, {
+      actorId: "test-platform-admin",
+      model: "deepseek/deepseek-v4-flash",
+    });
+    await repository.saveAgencyOverride(202, {
+      actorId: "test-platform-admin",
+      apiKey: "other-tenant-secret-key",
+      model: "other/model",
+    });
+    const adminActor = agencyAdministratorAuthenticator();
+    const response = await createConfigurationApp(
+      adminActor,
+      repository,
+    ).request("http://api.savia.test/v1/assistant/configuration");
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload).toMatchObject({
+      canManageGlobal: false,
+      manageableTenantIds: [101],
+      global: {
+        scope: "global",
+        keyState: "configured",
+        model: "openai/gpt-5",
+        transcriptionModel: "openai/whisper-large-v3",
+        summaryModel: "openai/gpt-4o-mini",
+      },
+      tenants: [expect.objectContaining({ tenantId: 101 })],
+    });
+    expect(payload.global).not.toHaveProperty("updatedAt");
+    expect(payload.global).not.toHaveProperty("updatedBy");
+    expect(JSON.stringify(payload)).not.toContain("other/model");
+    expect(JSON.stringify(payload)).not.toContain("other-tenant-secret-key");
+    expect(JSON.stringify(payload)).not.toContain("global-secret-key");
+  });
+
+  it("allows tenant admins to save meeting model overrides only for their active tenant", async () => {
+    await seedAssistantAgencyMember(101);
+    const app = createConfigurationApp(agencyAdministratorAuthenticator());
+    const saved = await app.request(
+      "http://api.savia.test/v1/assistant/configuration/tenants/101",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transcriptionModel: "openai/whisper-large-v3-turbo",
+          summaryModel: "openai/gpt-4o-mini",
+        }),
+      },
+    );
+    expect(saved.status).toBe(200);
+    await expect(saved.json()).resolves.toMatchObject({
+      tenants: [
+        expect.objectContaining({
+          tenantId: 101,
+          transcriptionModel: "openai/whisper-large-v3-turbo",
+          summaryModel: "openai/gpt-4o-mini",
+        }),
+      ],
+    });
+
+    const denied = await app.request(
+      "http://api.savia.test/v1/assistant/configuration/tenants/202",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "openai/gpt-5" }),
+      },
+    );
+    expect(denied.status).toBe(403);
   });
 
   it("allows a member to select only an eligible active agency", async () => {
@@ -387,9 +512,9 @@ describe("assistant routes", () => {
 
     expect(saved.status).toBe(200);
     await expect(saved.json()).resolves.toMatchObject({
-      tenants: [
+      tenants: expect.arrayContaining([
         expect.objectContaining({ tenantId: 101, model: "openai/gpt-5" }),
-      ],
+      ]),
     });
 
     const deleted = await app.request(
@@ -441,9 +566,9 @@ describe("assistant routes", () => {
 
     expect(saved.status).toBe(200);
     await expect(saved.json()).resolves.toMatchObject({
-      tenants: [
+      tenants: expect.arrayContaining([
         expect.objectContaining({ tenantId: 101, model: "openai/gpt-5" }),
-      ],
+      ]),
     });
 
     const deleted = await app.request(
@@ -491,6 +616,85 @@ describe("assistant routes", () => {
     expect(JSON.stringify(payload)).not.toContain("not-a-real-catalog-key");
   });
 
+  it("uses the requested tenant's key for a tenant admin's model catalog", async () => {
+    await seedAssistantAgencyMember(101);
+    const repository = configurationRepository();
+    await repository.saveAgencyOverride(101, {
+      actorId: "test-platform-admin",
+      apiKey: "tenant-catalog-key",
+      model: "openai/gpt-5",
+    });
+    const list = vi.fn(async () => []);
+    const response = await createConfigurationApp(
+      agencyAdministratorAuthenticator(),
+      repository,
+      { list },
+    ).request("http://api.savia.test/v1/assistant/models?tenantId=101");
+
+    expect(response.status).toBe(200);
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: "tenant-catalog-key",
+        model: "openai/gpt-5",
+        tenantId: 101,
+      }),
+    );
+  });
+
+  it("uses tenant credentials for platform tenant catalog requests and global credentials by default", async () => {
+    await seedAssistantAgencyMember(101);
+    const repository = configurationRepository();
+    await repository.saveGlobal({
+      actorId: "test-platform-admin",
+      apiKey: "global-catalog-key",
+      model: "openai/gpt-5",
+    });
+    await repository.saveAgencyOverride(101, {
+      actorId: "test-platform-admin",
+      apiKey: "tenant-catalog-key",
+      model: "other/model",
+    });
+    const list = vi.fn(async () => []);
+    const app = createConfigurationApp(
+      platformAdministratorAuthenticator(),
+      repository,
+      { list },
+    );
+
+    expect(
+      (await app.request("http://api.savia.test/v1/assistant/models")).status,
+    ).toBe(200);
+    expect(list).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        apiKey: "global-catalog-key",
+        model: "openai/gpt-5",
+      }),
+    );
+
+    expect(
+      (
+        await app.request(
+          "http://api.savia.test/v1/assistant/models?tenantId=101",
+        )
+      ).status,
+    ).toBe(200);
+    expect(list).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        apiKey: "tenant-catalog-key",
+        model: "other/model",
+        tenantId: 101,
+      }),
+    );
+  });
+
+  it("denies configuration reads to non-admin tenant members", async () => {
+    await seedAssistantAgencyMember(101);
+    const response = await createConfigurationApp(
+      agencyMemberAuthenticator(),
+    ).request("http://api.savia.test/v1/assistant/configuration");
+    expect(response.status).toBe(403);
+  });
+
   it("returns the server-persisted active agency after reload", async () => {
     await seedAssistantAgencyMember(101);
     const app = createConfigurationApp(agencyMemberAuthenticator());
@@ -525,6 +729,15 @@ describe("assistant routes", () => {
             },
             supported_parameters: ["tools"],
           },
+          {
+            id: "audio/model",
+            name: "Audio Model",
+            architecture: {
+              input_modalities: ["audio"],
+              modality: "audio->text",
+            },
+            supported_parameters: [],
+          },
           { id: "invalid model", name: "Invalid" },
         ],
       }),
@@ -550,9 +763,23 @@ describe("assistant routes", () => {
         },
         supportsTools: true,
       },
+      {
+        id: "audio/model",
+        name: "Audio Model",
+        contextLength: null,
+        inputPricePerMillion: null,
+        outputPricePerMillion: null,
+        modalities: {
+          text: true,
+          image: false,
+          audio: true,
+          file: false,
+        },
+        supportsTools: false,
+      },
     ]);
     expect(fetcher).toHaveBeenCalledWith(
-      "https://openrouter.ai/api/v1/models?output_modalities=text&supported_parameters=tools&sort=most-popular",
+      "https://openrouter.ai/api/v1/models?output_modalities=text&sort=most-popular",
       expect.objectContaining({
         headers: { authorization: "Bearer not-a-real-catalog-key" },
       }),
@@ -585,7 +812,7 @@ describe("assistant routes", () => {
         inputPricePerMillion: 1,
         outputPricePerMillion: 2,
         modalities: {
-          text: true,
+          text: false,
           image: false,
           audio: false,
           file: false,
@@ -594,7 +821,7 @@ describe("assistant routes", () => {
       },
     ]);
     expect(fetcher).toHaveBeenCalledWith(
-      "https://openrouter.ai/api/v1/models?output_modalities=text&supported_parameters=tools&sort=most-popular",
+      "https://openrouter.ai/api/v1/models?output_modalities=text&sort=most-popular",
       undefined,
     );
   });

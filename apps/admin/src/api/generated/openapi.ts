@@ -551,6 +551,202 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/tenants/{tenantId}/api-keys": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List personal API key metadata for a tenant */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Metadata with owners, without secrets */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              keys: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                prefix: string;
+                tenantId: number;
+                scopes: (
+                  | "recordings:read"
+                  | "recordings:upload"
+                  | "recordings:process"
+                  | "recordings:delete"
+                )[];
+                createdAt: string;
+                expiresAt: string;
+                revokedAt: string | null;
+                lastUsedAt: string | null;
+                principalId: string;
+                ownerName: string;
+                ownerEmail: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Create a personal key for an active tenant member; reveal its secret once */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            name: string;
+            scopes: (
+              | "recordings:read"
+              | "recordings:upload"
+              | "recordings:process"
+              | "recordings:delete"
+            )[];
+            /** @default 30 */
+            lifetimeDays?: 7 | 30 | 90;
+            principalId: string;
+          };
+        };
+      };
+      responses: {
+        /** @description One-time credential */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              key: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                prefix: string;
+                tenantId: number;
+                scopes: (
+                  | "recordings:read"
+                  | "recordings:upload"
+                  | "recordings:process"
+                  | "recordings:delete"
+                )[];
+                createdAt: string;
+                expiresAt: string;
+                revokedAt: string | null;
+                lastUsedAt: string | null;
+              };
+              secret: string;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/api-keys/members": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List eligible active tenant members for key creation */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Active tenant members */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              members: {
+                id: string;
+                displayName: string;
+                email: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/api-keys/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Revoke a personal key in this tenant */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Revoked or already absent */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -4828,6 +5024,157 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/tenants/{tenantId}/booking/agenda": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            enabled: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
+                settings: {
+                  version: number;
+                  enabled: boolean;
+                  published: boolean;
+                  title: string;
+                  description: string;
+                  timeZone: string;
+                  leadMinutes: number;
+                  horizonDays: number;
+                  cancellationMinutes: number;
+                  reminderMinutes: number;
+                  services: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    description: string;
+                    durationMinutes: number;
+                    bufferMinutes: number;
+                    enabled: boolean;
+                    professionalIds: string[];
+                  }[];
+                  professionals: {
+                    /** Format: uuid */
+                    id: string;
+                    principalId: string;
+                    enabled: boolean;
+                    weekly: {
+                      day: number;
+                      start: string;
+                      end: string;
+                    }[];
+                    exceptions: {
+                      date: string;
+                      periods: {
+                        start: string;
+                        end: string;
+                      }[];
+                    }[];
+                  }[];
+                };
+                candidates: {
+                  principalId: string;
+                  displayName: string;
+                }[];
+                canManage: boolean;
+                principalId: string;
+                publicUrl: string | null;
+                calendar: {
+                  /** @enum {string|null} */
+                  provider: "google_calendar" | "outlook" | null;
+                  status: string;
+                };
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/tenants/{tenantId}/booking": {
     parameters: {
       query?: never;
@@ -4854,6 +5201,10 @@ export interface paths {
           content: {
             "application/json": {
               data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
                 settings: {
                   version: number;
                   enabled: boolean;
@@ -5023,6 +5374,10 @@ export interface paths {
           content: {
             "application/json": {
               data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
                 settings: {
                   version: number;
                   enabled: boolean;
@@ -5182,6 +5537,10 @@ export interface paths {
           content: {
             "application/json": {
               data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
                 settings: {
                   version: number;
                   enabled: boolean;
@@ -5330,6 +5689,10 @@ export interface paths {
           content: {
             "application/json": {
               data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
                 settings: {
                   version: number;
                   enabled: boolean;
@@ -5490,6 +5853,14 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
               }[];
             };
           };
@@ -5605,6 +5976,14 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
               };
             };
           };
@@ -6640,6 +7019,14 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  conference?: {
+                    /** @enum {string|null} */
+                    provider: "google_meet" | "teams" | null;
+                    /** Format: uri */
+                    joinUrl: string | null;
+                    /** @enum {string} */
+                    status: "ready" | "pending" | "unsupported" | "failed";
+                  } | null;
                 };
                 managementUrl: string;
               };
@@ -6672,6 +7059,14 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  conference?: {
+                    /** @enum {string|null} */
+                    provider: "google_meet" | "teams" | null;
+                    /** Format: uri */
+                    joinUrl: string | null;
+                    /** @enum {string} */
+                    status: "ready" | "pending" | "unsupported" | "failed";
+                  } | null;
                 };
                 managementUrl: string;
               };
@@ -6779,6 +7174,14 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  conference?: {
+                    /** @enum {string|null} */
+                    provider: "google_meet" | "teams" | null;
+                    /** Format: uri */
+                    joinUrl: string | null;
+                    /** @enum {string} */
+                    status: "ready" | "pending" | "unsupported" | "failed";
+                  } | null;
                 };
                 publicUrl: string | null;
                 timeZone: string;
@@ -7096,6 +7499,14 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
               };
             };
           };
@@ -7210,6 +7621,14 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
               };
             };
           };
@@ -13561,6 +13980,7 @@ export interface paths {
                 startsAt: string;
                 endsAt: string;
                 allDay: boolean;
+                busy?: boolean;
                 webLink: string | null;
                 timeZone: string;
               }[];

@@ -95,6 +95,33 @@ code before verifying the new CRM flows from Savia. No application code was
 changed, merged, or deployed in this UI configuration continuation. No new local
 application tests were run; `git diff --check` passed for the handoff update.
 
+## Conflict resolution and rollout preflight (2026-10-04)
+
+Merged current main (`efa2ff99`) into the CRM branch. The only Git conflict was
+in the PostgreSQL manifest. Booking migrations `0028` and `0029` are retained;
+the CRM uniqueness migration is now `0030` in both dialects. The manifest retains
+its CRM index inventory and matching unique-key metadata.
+
+Local verification: 98 CRM API tests, 16 CRM admin tests, 22 personal-integration
+and calendar tests, and 88 self-hosted tests passed. Self-hosted skipped 54 tests
+requiring optional/live services. API, admin, MCP and self-hosted type checks
+passed. The prior CI personal-integrations failure was a stale mock expectation:
+CRM requests now pass an optional tenant argument; the test now checks
+`undefined` in the unscoped fixture. The previous calendar failure no longer
+reproduces after merging current main.
+
+The preview D1 duplicate preflight found one affected tenant (`0`): two connected
+HubSpot rows created on September 17. There are no shared Nango references.
+The owner must choose which connection to retain before applying `0030`:
+
+- Nango `af1cce6a-b96f-41fd-8747-19706effb59a`, Savia row
+  `d33eb745-1823-46da-93b8-7e4b9ca79222`, created `05:21:11.187Z`.
+- Nango `47f3daf5-cdc3-4312-9b68-2f5c752d949a`, Savia row
+  `85cbd113-82c6-4bee-8668-43c38f587226`, created `23:34:42.792Z`.
+
+No CRM row or provider credential has been deleted, disconnected, or selected
+automatically. Production preflight and deployment remain pending.
+
 ## Goal and current status
 
 The user wants working Salesforce, Zoho CRM, and Pipedrive integrations alongside
@@ -110,8 +137,9 @@ local continuation was then authorized to configure the open platforms and email
 Continue on branch `codex/multi-crm-organization-policy` in `hefesoftsas/savia`;
 the PR targets `main`: https://github.com/hefesoftsas/savia/pull/162 (draft).
 Preserve its implementation instead of starting over. The branch incorporates
-`main` through `da0d381`; the CRM migration was renumbered to `0028` because
-`0027_booking_public_link_short_urls.sql` landed meanwhile.
+`main` through `efa2ff99`; the CRM migration was renumbered to `0030` because
+main now includes `0028_booking_conferences.sql` and
+`0029_booking_agenda_grants.sql`.
 
 ## Confirmed product rule
 
@@ -141,7 +169,7 @@ revoke the owner's OAuth connection.
 
 ## Migration and operational cautions
 
-Apply both dialects' `0028_crm_organization_connection.sql` before deploying the
+Apply both dialects' `0030_crm_organization_connection.sql` before deploying the
 new application. It adds partial unique indexes for the organization and the
 Nango integration/connection pair where `disconnected_at IS NULL`. It intentionally
 fails on existing duplicates without deleting rows or choosing an account. Run
@@ -243,7 +271,7 @@ self-hosted. These selections overlap with the earlier verification counts.
 - `apps/api/src/routes/crm.ts`: tenant-scoped connection lifecycle and conflicts.
 - `apps/admin/src/features/crm/crm-connections-page.tsx`: connection UI.
 - `apps/api/test/crm-organization-policy.test.ts`: persistence and route regressions.
-- `packages/db/{migrations,postgres}/0028_crm_organization_connection.sql`.
+- `packages/db/{migrations,postgres}/0030_crm_organization_connection.sql`.
 - `docs/runbooks/connected-crm-workspace.md`: authoritative setup/runbook.
 - `docs/superpowers/specs/2026-10-03-multi-crm-workspace-design.md` and matching plan.
 

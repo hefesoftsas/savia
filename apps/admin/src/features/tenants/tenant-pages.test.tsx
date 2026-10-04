@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/app";
 import type { AppServices } from "@/app-services";
+import { invalidateTenantWorkspaces } from "@/api/tenant-workspaces-client";
 
 const originalElementScrollTo = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
@@ -101,6 +102,7 @@ function open(path: string) {
   window.location.hash = `#${path}`;
 }
 beforeEach(() => {
+  invalidateTenantWorkspaces();
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const path = new URL(String(input), window.location.origin).pathname;
     if (path !== "/api/public/tenant-branding")
@@ -113,6 +115,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  invalidateTenantWorkspaces();
   if (originalElementScrollTo) {
     Object.defineProperty(
       HTMLElement.prototype,
@@ -368,8 +371,34 @@ describe("generic tenant pages", () => {
     open("/tenants/101");
     const appServices = services(),
       user = userEvent.setup();
+    Object.assign(appServices, {
+      apiClient: {
+        get: vi.fn((path: string) => {
+          if (path === "/v1/tenant-workspaces")
+            return Promise.resolve({ data: [] });
+          if (path.endsWith("/api-keys/members"))
+            return Promise.resolve({
+              members: [
+                {
+                  id: "member-1",
+                  displayName: "Alex",
+                  email: "alex@example.test",
+                },
+              ],
+            });
+          if (path.endsWith("/api-keys")) return Promise.resolve({ keys: [] });
+          return Promise.reject(new Error(`Unexpected API request: ${path}`));
+        }),
+        post: vi.fn(),
+        delete: vi.fn(),
+      },
+    });
     await renderApp(appServices);
     const name = await screen.findByDisplayValue("Comunidad");
+    const keyName = await screen.findByLabelText("Nombre de la clave");
+    expect(keyName.closest("form")).toBeNull();
+    await user.type(keyName, "Companion{Enter}");
+    expect(appServices.dataProvider.update).not.toHaveBeenCalled();
     expect(
       screen.getByRole("link", { name: "Configurar SSO" }),
     ).toHaveAttribute("href", "#/service-credentials?tenantId=101&tab=sso");

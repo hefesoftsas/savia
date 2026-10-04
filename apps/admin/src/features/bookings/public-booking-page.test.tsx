@@ -168,7 +168,14 @@ it("keeps the exact idempotency key and customer locale on an identical retry", 
         }
         return Response.json({
           data: {
-            reservation: slot,
+            reservation: {
+              ...slot,
+              conference: {
+                provider: "google_meet",
+                joinUrl: "https://meet.google.com/abc-defg-hij",
+                status: "ready",
+              },
+            },
             managementUrl: "https://savia.test/manage/private-token",
           },
         });
@@ -193,6 +200,9 @@ it("keeps the exact idempotency key and customer locale on an identical retry", 
   );
   fireEvent.click(screen.getByRole("button", { name: "Retry booking" }));
   await screen.findByText("Appointment confirmed");
+  expect(
+    screen.getByRole("link", { name: "Join Google Meet" }),
+  ).toHaveAttribute("href", "https://meet.google.com/abc-defg-hij");
 
   expect(posts).toHaveLength(2);
   expect(posts[0].headers.get("Idempotency-Key")).toBeTruthy();
@@ -236,7 +246,12 @@ it("preserves contact details and reloads availability after a slot conflict", a
         posts.push(JSON.parse(String(init?.body)));
         if (posts.length === 1)
           return Response.json(
-            { error: { message: "Slot changed" } },
+            {
+              error: {
+                code: "BOOKING_TIME_CONFLICT",
+                message: "Slot conflicts with a meeting",
+              },
+            },
             { status: 409 },
           );
         return Response.json({
@@ -269,7 +284,7 @@ it("preserves contact details and reloads availability after a slot conflict", a
   );
   fireEvent.click(screen.getByRole("button", { name: "Book appointment" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "That time is no longer available. Choose another available time.",
+    "That time conflicts with another meeting or appointment. Choose another available time.",
   );
   await waitFor(() => expect(rangeRequests).toBeGreaterThan(1));
   expect(window.turnstile.remove).toHaveBeenCalledWith("widget-1");

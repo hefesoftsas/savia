@@ -15,6 +15,10 @@ import { bookingMessages } from "./booking-messages";
 import type { Period, Exception, Settings } from "./booking-types";
 import { BookingSetupWizard, WeeklyHoursEditor } from "./booking-setup-wizard";
 import { BookingPublicLinksPanel } from "./booking-public-links-panel";
+import {
+  BookingConference,
+  type BookingConferenceState,
+} from "./booking-conference";
 type Bootstrap = {
   settings: Settings;
   candidates: Array<{ principalId: string; displayName: string }>;
@@ -22,6 +26,7 @@ type Bootstrap = {
   principalId: string;
   publicUrl: string | null;
   calendar: { provider: null | "google_calendar" | "outlook"; status: string };
+  agenda?: { enabled: boolean; sourceCount: number };
 };
 type Reservation = {
   id: string;
@@ -37,6 +42,7 @@ type Reservation = {
   version: number;
   deliveryStatus: string;
   calendarStatus: string;
+  conference?: BookingConferenceState;
 };
 type Tab = "settings" | "availability" | "reservations" | "sharing";
 
@@ -376,6 +382,36 @@ export function BookingPage({
       setNotice(t("Availability saved."));
     } catch {
       setError(t("Availability could not be saved. Reload and retry."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function changeMyDayAccess(enabled: boolean) {
+    if (!bootstrap) return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await services.apiClient.put<{ data: Bootstrap }>(
+        `/v1/tenants/${tenantId}/booking/agenda`,
+        { enabled },
+      );
+      setBootstrap(result.data);
+      setSettings(result.data.settings);
+      setNotice(
+        t(
+          enabled
+            ? "My Day availability access updated."
+            : "My Day availability access stopped.",
+        ),
+      );
+    } catch {
+      setError(
+        t(
+          "My Day availability could not be updated. Check your connection and retry.",
+        ),
+      );
     } finally {
       setSaving(false);
     }
@@ -813,6 +849,54 @@ export function BookingPage({
               </div>
             </section>
           )}
+          {currentProfessional && (
+            <section
+              className="grid gap-3 rounded-lg border p-4"
+              aria-labelledby="my-day-heading"
+            >
+              <h3 id="my-day-heading" className="font-semibold">
+                {t("My Day availability")}
+              </h3>
+              <p className="max-w-3xl text-sm text-muted-foreground">
+                {t(
+                  "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.",
+                )}
+              </p>
+              <p className="text-sm" role="status">
+                {bootstrap.agenda?.enabled
+                  ? t("My Day access is enabled. Calendar sources: %{count}.", {
+                      count: bootstrap.agenda.sourceCount,
+                    })
+                  : t("My Day access is off.")}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void changeMyDayAccess(true)}
+                  className="h-auto min-h-11 max-w-full whitespace-normal text-left"
+                >
+                  {saving
+                    ? t("Loading booking settings…")
+                    : bootstrap.agenda?.enabled
+                      ? t("Update calendar access")
+                      : t("Use My Day to block busy times")}
+                </Button>
+                {bootstrap.agenda?.enabled && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={saving}
+                    onClick={() => void changeMyDayAccess(false)}
+                    className="h-auto min-h-11 max-w-full whitespace-normal text-left"
+                  >
+                    {t("Stop using My Day")}
+                  </Button>
+                )}
+              </div>
+            </section>
+          )}
         </section>
       )}
 
@@ -898,6 +982,14 @@ export function BookingPage({
                         <span className="text-muted-foreground">
                           {displayTime(reservation.endsAt, tZone, locale)}
                         </span>
+                        {reservation.conference && (
+                          <div className="mt-2 whitespace-normal">
+                            <BookingConference
+                              conference={reservation.conference}
+                              status={reservation.status}
+                            />
+                          </div>
+                        )}
                       </td>
                       <td className="p-3">{reservation.serviceName}</td>
                       <td className="p-3">{reservation.professionalName}</td>

@@ -7,6 +7,7 @@ import {
   type BookingSettings,
   type Reservation,
 } from "./contracts";
+import { bookingConference } from "./conference";
 import { occupancyMinutes } from "./domain";
 export type BookingRow = {
   id: string;
@@ -30,6 +31,9 @@ export type BookingRow = {
   calendar_provider: "google_calendar" | "outlook" | null;
   calendar_connection_id: string | null;
   external_id: string | null;
+  conference_provider?: "google_meet" | "teams" | null;
+  conference_url?: string | null;
+  conference_status?: "ready" | "pending" | "unsupported" | "failed" | null;
   created_at: string;
 };
 export type CalendarGrant = {
@@ -432,18 +436,31 @@ export async function reservationView(
 ): Promise<Reservation> {
   const jobs = await db
     .prepare(
-      "SELECT kind,status FROM tenant_booking_jobs WHERE tenant_id=? AND booking_id=? AND revision=?",
+      "SELECT kind,status,error_code FROM tenant_booking_jobs WHERE tenant_id=? AND booking_id=? AND revision=?",
     )
     .bind(row.tenant_id, row.id, row.version)
-    .all<{ kind: string; status: string }>();
+    .all<{ kind: string; status: string; error_code: string | null }>();
   const state = (calendar: boolean) => {
     const relevant = jobs.results.filter(
       (j) => (j.kind === "calendar") === calendar && j.kind !== "reminder",
     );
     if (!relevant.length) return "not_requested";
-    if (relevant.some((j) => j.status === "failed")) return "failed";
     if (
-      relevant.some((j) => j.status === "pending" || j.status === "processing")
+      relevant.some(
+        (j) =>
+          j.status === "failed" &&
+          j.error_code !== "BOOKING_CONFERENCE_PENDING",
+      )
+    )
+      return "failed";
+    if (
+      relevant.some(
+        (j) =>
+          j.status === "pending" ||
+          j.status === "processing" ||
+          (j.status === "failed" &&
+            j.error_code === "BOOKING_CONFERENCE_PENDING"),
+      )
     )
       return "pending";
     return relevant.every((j) => j.status === "skipped")
@@ -464,5 +481,6 @@ export async function reservationView(
     version: row.version,
     deliveryStatus: state(false),
     calendarStatus: state(true),
+    conference: bookingConference(row, state(true)),
   };
 }

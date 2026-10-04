@@ -6,7 +6,11 @@ import { settingsMessages } from "@/i18n/locales/settings";
 import type { AppServices } from "@/app-services";
 import { AssistantConfigurationPanel } from "@/features/assistant-configuration/assistant-configuration-page";
 import { StudioTenantCredentialsSection } from "./studio-tenant-credentials-section";
-import { CredentialGroup, CredentialsHelpTooltip } from "./credential-registry";
+import {
+  CredentialEntry,
+  CredentialGroup,
+  CredentialsHelpTooltip,
+} from "./credential-registry";
 import "./service-credentials.css";
 
 export function ServiceCredentialsPage({
@@ -42,6 +46,31 @@ export function ServiceCredentialsPage({
 
       <StudioTenantCredentialsSection
         services={services}
+        tenantCredentials={(tenantId) =>
+          !isPending &&
+          tenantId > 0 &&
+          (permissions?.canManageIdentity ||
+            permissions?.memberships?.some(
+              (membership) =>
+                (membership.tenantId ?? membership.agencyId) === tenantId &&
+                ["tenant_admin", "agency_admin"].includes(membership.role),
+            )) ? (
+            <CredentialEntry
+              title="OpenRouter"
+              description={t(
+                "OpenRouter models for transcription and meeting summaries.",
+              )}
+              requirement="optional"
+            >
+              <AssistantConfigurationPanel
+                key={tenantId}
+                services={services}
+                embedded
+                tenantId={tenantId}
+              />
+            </CredentialEntry>
+          ) : null
+        }
         globalCredentials={
           !isPending && permissions?.canManageIdentity ? (
             <CredentialGroup

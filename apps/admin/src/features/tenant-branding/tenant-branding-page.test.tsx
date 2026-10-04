@@ -33,13 +33,25 @@ const lottie = JSON.stringify({
   layers: [],
 });
 function service(
-  get: ReturnType<typeof vi.fn>,
+  get: (path: string, ...args: unknown[]) => unknown,
   put = vi.fn(),
   requestResponse = vi.fn(),
   authSession = { login: vi.fn() },
 ) {
+  const apiGet = vi.fn((path: string, ...args: unknown[]) => {
+    if (path.endsWith("/api-keys")) return Promise.resolve({ keys: [] });
+    if (path.endsWith("/api-keys/members"))
+      return Promise.resolve({ members: [] });
+    return get(path, ...args);
+  });
   return {
-    apiClient: { get, put, requestResponse },
+    apiClient: {
+      get: apiGet,
+      put,
+      post: vi.fn(),
+      delete: vi.fn(),
+      requestResponse,
+    },
     authSession,
   } as unknown as AppServices;
 }
@@ -56,6 +68,9 @@ it("previews edits locally, saves explicitly with the loaded version and resets 
     data: { ...branding, displayName: "Nueva marca", version: 2 },
   });
   render(<TenantBrandingPage services={service(get, put)} />);
+  expect(
+    await screen.findByRole("region", { name: "Claves API del tenant" }),
+  ).toBeInTheDocument();
   fireEvent.change(await screen.findByLabelText("Nombre visible"), {
     target: { value: "Nueva marca" },
   });
@@ -151,6 +166,9 @@ it("ignores an older tenant response after selection changes", async () => {
   expect(
     screen.getByRole("button", { name: "Guardar cambios" }),
   ).toBeDisabled();
+  expect(
+    screen.queryByRole("region", { name: "Claves API del tenant" }),
+  ).not.toBeInTheDocument();
 });
 it("rejects unsafe image types without uploading or saving", async () => {
   const get = vi

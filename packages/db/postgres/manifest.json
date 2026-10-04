@@ -119,7 +119,15 @@
       "sha256": "01c1957c5a7975f796235a16c2304084734c2ec1f013227c8e71fc39d3474153"
     },
     {
-      "filename": "0028_crm_organization_connection.sql",
+      "filename": "0028_booking_conferences.sql",
+      "sha256": "1d901032ff247b358db5bfda640919c5431b0ff852ac229a1f40dd36940f7aa3"
+    },
+    {
+      "filename": "0029_booking_agenda_grants.sql",
+      "sha256": "cc3224ce334f5b722f1ff292e6eb34508052fbe5f533561da317302e13b35414"
+    },
+    {
+      "filename": "0030_crm_organization_connection.sql",
       "sha256": "64d9e8b78f820f36e17e9a0352bab1be9f301fd12eea3c75bcf36292a1f57d65"
     }
   ],
@@ -1580,6 +1588,11 @@
       "type": "index",
       "name": "tenant_booking_receipts_created_at",
       "table": "tenant_booking_request_receipts"
+    },
+    {
+      "type": "table",
+      "name": "tenant_booking_agenda_grants",
+      "table": "tenant_booking_agenda_grants"
     }
   ],
   "tables": [
@@ -10087,6 +10100,14 @@
           "origin": "c"
         },
         {
+          "columns": ["nango_integration_id", "nango_connection_id"],
+          "origin": "c"
+        },
+        {
+          "columns": ["tenant_id"],
+          "origin": "c"
+        },
+        {
           "columns": ["id"],
           "origin": "pk"
         }
@@ -13226,6 +13247,30 @@
           "notnull": 1,
           "dflt_value": "'en'",
           "pk": 0
+        },
+        {
+          "cid": 22,
+          "name": "conference_provider",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 23,
+          "name": "conference_url",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 24,
+          "name": "conference_status",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -13259,7 +13304,7 @@
           "origin": "pk"
         }
       ],
-      "checkCount": 2
+      "checkCount": 4
     },
     {
       "name": "personal_calendar_sources",
@@ -13710,6 +13755,65 @@
         }
       ],
       "checkCount": 0
+    },
+    {
+      "name": "tenant_booking_agenda_grants",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "config",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id", "principal_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
     }
   ],
   "mappingNotes": [

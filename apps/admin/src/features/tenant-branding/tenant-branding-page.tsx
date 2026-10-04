@@ -39,6 +39,7 @@ import { useTenantBranding } from "./tenant-branding-provider";
 import "./tenant-branding.css";
 import { LottiePreview } from "./lottie-preview";
 import { loginAnimationMessages } from "./login-animation-messages";
+import { TenantApiKeysPanel } from "@/features/tenant-api-keys/tenant-api-keys";
 
 type Tenant = {
   id: number;
@@ -862,6 +863,15 @@ function BrandingEditor({
           <span>{t("Mi organización")}</span>
         </div>
       </aside>
+      {canManage ? (
+        <div className="md:col-span-2 mt-8 max-w-4xl border-t pt-6">
+          <TenantApiKeysPanel
+            key={tenantId}
+            api={services.apiClient}
+            tenantId={Number(tenantId)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

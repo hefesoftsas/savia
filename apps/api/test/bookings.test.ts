@@ -1,6 +1,9 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
 import { createApp } from "../src/app";
+import { PersonalCalendarService } from "../src/personal-calendars/service";
+import { createPersonalIntegrationProviderRegistry } from "../src/personal-integrations/providers";
+import { bootstrapSchema } from "../src/bookings/contracts";
 import {
   AuthenticationError,
   type AppActor,
@@ -81,6 +84,10 @@ async function fixture(captchaOptions?: Parameters<typeof createApp>[22]) {
   };
   const args: Parameters<typeof createApp> = [env.DB];
   args[3] = { authenticate: async () => actor } as Authenticator;
+  args[15] = {
+    providers: createPersonalIntegrationProviderRegistry({}),
+    calendarSecret: "booking agenda test secret",
+  };
   args[22] = captchaOptions ?? {
     publicOrigin: "http://localhost:5173",
     disableCaptcha: true,
@@ -90,6 +97,7 @@ async function fixture(captchaOptions?: Parameters<typeof createApp>[22]) {
   const response = await app.request(base);
   expect(response.status).toBe(200);
   const boot = ((await response.json()) as any).data;
+  expect(bootstrapSchema.parse(boot)).toHaveProperty("agenda", boot.agenda);
   const professionalId = crypto.randomUUID(),
     serviceId = crypto.randomUUID();
   const settings = {
@@ -460,6 +468,233 @@ it("requires an authenticated session for the personal booking feed", async () =
     "/v1/personal-integrations/bookings?from=2026-10-03T00%3A00%3A00.000Z&to=2026-10-04T00%3A00%3A00.000Z&timeZone=UTC",
   );
   expect(response.status).toBe(401);
+});
+
+it("blocks recurring My Day meetings only after the professional grants agenda access", async () => {
+  const f = await fixture();
+  const calendars = new PersonalCalendarService(env.DB, {
+    secret: "booking agenda test secret",
+  });
+  const compact = (instant: string) =>
+    new Date(instant)
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}/, "");
+  const meetingEnd = new Date(
+    Date.parse(f.payload.startsAt) + 30 * 60000,
+  ).toISOString();
+  await calendars.create(f.principalId, {
+    kind: "import",
+    name: "Private calendar",
+    timeZone: "UTC",
+    color: "blue",
+    content: [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      "UID:private-meeting",
+      `DTSTART:${compact(f.payload.startsAt)}`,
+      `DTEND:${compact(meetingEnd)}`,
+      "RRULE:FREQ=DAILY;COUNT=2",
+      "SUMMARY:Confidential meeting",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n"),
+  });
+  const url = `${f.publicBase}/slots?serviceId=${f.serviceId}&professionalId=${f.professionalId}&date=${f.payload.startsAt.slice(0, 10)}`;
+  const before = ((await (await f.app.request(url)).json()) as any).data.slots;
+  expect(before.some((slot: any) => slot.startsAt === f.payload.startsAt)).toBe(
+    true,
+  );
+  const grant = await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true }),
+  });
+  expect(grant.status).toBe(200);
+  expect(((await grant.json()) as any).data.agenda).toEqual({
+    enabled: true,
+    sourceCount: 1,
+  });
+  const blockedResponse = await f.app.request(url);
+  const blocked = await blockedResponse.text();
+  expect(blocked).not.toContain("Confidential meeting");
+  expect(
+    JSON.parse(blocked).data.slots.some(
+      (slot: any) => slot.startsAt === f.payload.startsAt,
+    ),
+  ).toBe(false);
+  const conflict = await f.reserve();
+  expect(conflict.status).toBe(409);
+  expect((await conflict.json()) as any).toMatchObject({
+    error: { code: "BOOKING_TIME_CONFLICT" },
+  });
+  const nextDay = new Date(
+    Date.parse(f.payload.startsAt) + 86400000,
+  ).toISOString();
+  const recurring = (
+    (await (
+      await f.app.request(
+        url.replace(f.payload.startsAt.slice(0, 10), nextDay.slice(0, 10)),
+      )
+    ).json()) as any
+  ).data.slots;
+  expect(recurring.some((slot: any) => slot.startsAt === nextDay)).toBe(false);
+  await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: false }),
+  });
+  expect((await f.reserve()).status).toBe(201);
+});
+
+it("uses the source timezone for all-day meetings and keeps transparent events bookable", async () => {
+  const f = await fixture();
+  await f.app.request(f.base, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...f.settings,
+      professionals: f.settings.professionals.map((p: any) => ({
+        ...p,
+        weekly: p.weekly.map((period: any) => ({ ...period, start: "00:00" })),
+      })),
+    }),
+  });
+  const date = f.payload.startsAt.slice(0, 10);
+  const nextDate = new Date(Date.parse(f.payload.startsAt) + 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const endDate = new Date(Date.parse(f.payload.startsAt) + 2 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  await new PersonalCalendarService(env.DB, {
+    secret: "booking agenda test secret",
+  }).create(f.principalId, {
+    kind: "import",
+    name: "Private days",
+    timeZone: "America/Bogota",
+    color: "blue",
+    content: [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      "UID:busy-day",
+      `DTSTART;VALUE=DATE:${date.replaceAll("-", "")}`,
+      `DTEND;VALUE=DATE:${nextDate.replaceAll("-", "")}`,
+      "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:free-day",
+      `DTSTART;VALUE=DATE:${nextDate.replaceAll("-", "")}`,
+      `DTEND;VALUE=DATE:${endDate.replaceAll("-", "")}`,
+      "TRANSP:TRANSPARENT",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n"),
+  });
+  const enabled = await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true }),
+  });
+  expect(enabled.status).toBe(200);
+  const slots = async (day: string) =>
+    (
+      (await (
+        await f.app.request(
+          `${f.publicBase}/slots?serviceId=${f.serviceId}&professionalId=${f.professionalId}&date=${day}`,
+        )
+      ).json()) as any
+    ).data.slots;
+  const first = await slots(date);
+  expect(
+    first.some((slot: any) => slot.startsAt === `${date}T00:00:00.000Z`),
+  ).toBe(true);
+  expect(
+    first.some((slot: any) => slot.startsAt === `${date}T10:00:00.000Z`),
+  ).toBe(false);
+  expect(
+    (await slots(nextDate)).some(
+      (slot: any) => slot.startsAt === `${nextDate}T10:00:00.000Z`,
+    ),
+  ).toBe(true);
+});
+
+it("does not let an administrator grant another professional's private agenda", async () => {
+  const f = await fixture();
+  const response = await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true, principalId: crypto.randomUUID() }),
+  });
+  expect(response.status).toBe(422);
+  f.actor.principal.id = crypto.randomUUID();
+  const ownResponse = await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true }),
+  });
+  expect(ownResponse.status).toBe(403);
+});
+
+it("rejects a newly occupied reschedule without moving the existing appointment", async () => {
+  const f = await fixture();
+  const confirmed = ((await (await f.reserve()).json()) as any).data;
+  const slotUrl = `${f.publicBase}/slots?serviceId=${f.serviceId}&professionalId=${f.professionalId}&date=${f.payload.startsAt.slice(0, 10)}`;
+  const nextSlot = ((await (await f.app.request(slotUrl)).json()) as any).data
+    .slots[0];
+  const compact = (instant: string) =>
+    new Date(instant)
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}/, "");
+  await new PersonalCalendarService(env.DB, {
+    secret: "booking agenda test secret",
+  }).create(f.principalId, {
+    kind: "import",
+    name: "Private conflict",
+    color: "blue",
+    timeZone: "UTC",
+    content: [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      "UID:late-meeting",
+      `DTSTART:${compact(nextSlot.startsAt)}`,
+      `DTEND:${compact(nextSlot.endsAt)}`,
+      "SUMMARY:Private title",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n"),
+  });
+  await f.app.request(`${f.base}/agenda`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true }),
+  });
+  const management = new URL(confirmed.managementUrl).pathname.replace(
+    "/public/",
+    "/api/public/",
+  );
+  const response = await f.app.request(`${management}/reschedule`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: 1, startsAt: nextSlot.startsAt }),
+  });
+  expect(response.status).toBe(409);
+  const body = await response.text();
+  expect(JSON.parse(body).error.code).toBe("BOOKING_TIME_CONFLICT");
+  expect(body).not.toContain("Private title");
+  const existing = await env.DB.prepare(
+    "SELECT starts_at,version,status FROM tenant_bookings WHERE id=?",
+  )
+    .bind(confirmed.reservation.id)
+    .first();
+  expect(existing).toMatchObject({
+    starts_at: confirmed.reservation.startsAt,
+    version: 1,
+    status: "confirmed",
+  });
 });
 
 it("loads the personal booking feed through the browser's OAuth authentication path", async () => {

@@ -5,6 +5,21 @@ const calendar = (events: string) =>
   `BEGIN:VCALENDAR\r\nVERSION:2.0\r\n${events}\r\nEND:VCALENDAR`;
 
 describe("iCalendar expansion", () => {
+  it("inherits a recurring event's free status unless an exception overrides it", () => {
+    const result = expandCalendar(
+      calendar(
+        `BEGIN:VEVENT\r\nUID:free\r\nDTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nRRULE:FREQ=DAILY;COUNT=2\r\nTRANSP:TRANSPARENT\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:free\r\nRECURRENCE-ID:20261006T090000Z\r\nDTSTART:20261006T110000Z\r\nDTEND:20261006T120000Z\r\nEND:VEVENT`,
+      ),
+      {
+        sourceId: "source",
+        from: "2026-10-05T00:00:00Z",
+        to: "2026-10-07T00:00:00Z",
+        timeZone: "UTC",
+      },
+    );
+    expect(result).toHaveLength(2);
+    expect(result.map((event) => event.busy)).toEqual([false, false]);
+  });
   it("expands recurring occurrences with exclusions and stable original identities", () => {
     const result = expandCalendar(
       calendar(

@@ -10,11 +10,13 @@ export type AssistantConfigurationSetting = {
   model: string | null;
   transcriptionModel?: string | null;
   summaryModel?: string | null;
-  updatedAt: string;
-  updatedBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
 };
 
 export type AssistantConfigurationSummary = {
+  canManageGlobal?: boolean;
+  manageableTenantIds?: number[];
   global: AssistantConfigurationSetting | null;
   tenants: AssistantConfigurationSetting[];
   deployment: {
@@ -84,9 +86,11 @@ export class AssistantConfigurationClient {
     );
   }
 
-  async models(): Promise<AssistantModel[]> {
+  async models(tenantId?: number): Promise<AssistantModel[]> {
     const response = await this.apiClient.get<{ models: AssistantModel[] }>(
-      "/v1/assistant/models",
+      tenantId === undefined
+        ? "/v1/assistant/models"
+        : `/v1/assistant/models?tenantId=${tenantId}`,
     );
     return response.models;
   }

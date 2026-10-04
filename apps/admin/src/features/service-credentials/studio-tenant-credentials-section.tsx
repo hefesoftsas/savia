@@ -97,11 +97,13 @@ function CredentialTab({
 function GlobalCredentialsPanel({
   globalCredentials,
   geoapifyEntry,
+  tenantCredentials,
   freeServicesEntry,
   loadingMessage,
 }: {
   globalCredentials?: ReactNode;
   geoapifyEntry?: ReactNode;
+  tenantCredentials?: ReactNode;
   freeServicesEntry: ReactNode;
   loadingMessage?: ReactNode;
 }) {
@@ -117,6 +119,7 @@ function GlobalCredentialsPanel({
         descriptionAsTooltip
       >
         {loadingMessage}
+        {tenantCredentials}
         {geoapifyEntry}
         {freeServicesEntry}
       </CredentialGroup>
@@ -172,9 +175,11 @@ function integrationStatus(item: IntegrationSummary): {
 export function StudioTenantCredentialsSection({
   services,
   globalCredentials,
+  tenantCredentials,
 }: {
   services: Pick<AppServices, "apiClient">;
   globalCredentials?: ReactNode;
+  tenantCredentials?: (tenantId: number) => ReactNode;
 }) {
   const t = useMessages(settingsMessages);
   const officeT = useMessages(officeSuiteMessages);
@@ -744,6 +749,7 @@ export function StudioTenantCredentialsSection({
         <TabsContent value="global" className="credentials-tabs-panel">
           <GlobalCredentialsPanel
             globalCredentials={globalCredentials}
+            tenantCredentials={tenantCredentials?.(tenant.tenantId)}
             geoapifyEntry={geoapifyEntry}
             freeServicesEntry={<FreeServicesEntry />}
           />

@@ -1,3 +1,4 @@
+import { safeConferenceUrl } from "./conference";
 import type { BookingRow } from "./repository";
 
 type BookingEmailKind = "confirmation" | "change" | "cancellation" | "reminder";
@@ -8,7 +9,11 @@ type EmailBooking = Pick<
   | "professional_name"
   | "starts_at"
   | "ends_at"
-> & { customer_locale?: string | null };
+> & {
+  customer_locale?: string | null;
+  conference_status?: string | null;
+  conference_url?: string | null;
+};
 
 const copy = {
   en: {
@@ -34,6 +39,7 @@ const copy = {
     minutes: "minutes",
     timeZone: "Time zone",
     manage: "Manage your appointment",
+    join: "Join video call",
   },
   es: {
     subject: {
@@ -58,6 +64,7 @@ const copy = {
     minutes: "minutos",
     timeZone: "Zona horaria",
     manage: "Gestiona tu cita",
+    join: "Unirse a la videollamada",
   },
   pt: {
     subject: {
@@ -82,6 +89,7 @@ const copy = {
     minutes: "minutos",
     timeZone: "Fuso horário",
     manage: "Gerencie seu agendamento",
+    join: "Entrar na videochamada",
   },
 } as const;
 
@@ -115,6 +123,10 @@ export function formatBookingEmail(input: {
     (Date.parse(input.booking.ends_at) - Date.parse(input.booking.starts_at)) /
       60000,
   );
+  const joinUrl =
+    input.kind !== "cancellation" && input.booking.conference_status === "ready"
+      ? safeConferenceUrl(input.booking.conference_url)
+      : null;
   const durationText = `${duration} ${messages.minutes}`;
   return {
     subject: `${messages.subject[input.kind]}: ${input.booking.service_name}`
@@ -133,6 +145,7 @@ export function formatBookingEmail(input: {
       `${messages.duration}: ${durationText}`,
       `${messages.timeZone}: ${zoneName ? `${zoneName} (${input.timeZone})` : input.timeZone}`,
       "",
+      ...(joinUrl ? [`${messages.join}: ${joinUrl}`, ""] : []),
       `${messages.manage}: ${input.managementUrl}`,
     ].join("\n"),
   };
