@@ -152,7 +152,19 @@ Open **My plugins → Create plugin** to open the on-demand editor. The IDE reus
 Monaco, the workspace's configured AI model, and the existing plugin store. It
 loads the editor, compiler and React runtime only when authoring is opened.
 
-The file tabs contain:
+On phones, **Chat**, **Code** and **Preview** show one workspace area at a time;
+switching views preserves the code and running preview. Desktop keeps chat beside
+the selected code or preview view. **Run** validates and opens preview, **Publish**
+releases the validated revision, and the project options menu contains portable
+import/export and the optional publication destination. Select a source file from
+the file picker in Code.
+
+Monaco and the preview follow the workspace palette and update when the theme
+changes. The isolated preview receives validated color/font values, not access to
+the parent document or its stylesheets. Explicit styles written by a plugin still
+take precedence; new starter projects inherit the preview font.
+
+The project contains:
 
 - `entry.tsx`: a single TypeScript/JSX module exporting `render(element, savia)`.
   `React` and `createRoot` are available without imports. Return an unmount function

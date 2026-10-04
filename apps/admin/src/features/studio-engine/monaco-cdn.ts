@@ -1,5 +1,8 @@
+import type { PluginIdeTheme } from "./plugin-ide-theme";
+
 const MONACO_VERSION = "0.52.2";
 const MONACO_BASE = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/min/vs`;
+const SAVIA_THEME_NAME = "savia-plugin-ide-theme";
 
 type MonacoModule = {
   Uri: { parse: (value: string) => unknown };
@@ -12,6 +15,8 @@ type MonacoModule = {
     };
   };
   editor: {
+    defineTheme: (themeName: string, data: Record<string, unknown>) => void;
+    setTheme: (themeName: string) => void;
     createModel: (
       value: string,
       language: string,
@@ -64,8 +69,31 @@ function loadScript(src: string) {
   });
 }
 
-export function resolveMonacoTheme() {
+export function resolveMonacoTheme(theme?: PluginIdeTheme) {
+  if (theme) return SAVIA_THEME_NAME;
   return document.documentElement.classList.contains("dark") ? "vs-dark" : "vs";
+}
+
+export function applyMonacoTheme(monaco: MonacoModule, theme: PluginIdeTheme) {
+  monaco.editor.defineTheme(SAVIA_THEME_NAME, {
+    base: theme.isDark ? "vs-dark" : "vs",
+    inherit: true,
+    rules: [],
+    colors: {
+      "editor.background": theme.background,
+      "editor.foreground": theme.foreground,
+      "editorLineNumber.foreground": theme.mutedForeground,
+      "editorLineNumber.activeForeground": theme.foreground,
+      "editorCursor.foreground": theme.primary,
+      "editor.selectionBackground": `${theme.primary}55`,
+      "editor.inactiveSelectionBackground": `${theme.primary}33`,
+      "editor.lineHighlightBackground": `${theme.muted}80`,
+      "editorGutter.background": theme.background,
+      "editorWidget.background": theme.muted,
+      "editorWidget.border": theme.border,
+    },
+  });
+  monaco.editor.setTheme(SAVIA_THEME_NAME);
 }
 
 export function loadMonacoFromCdn() {

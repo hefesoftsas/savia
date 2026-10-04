@@ -10,10 +10,12 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   options: vi.fn(),
   model: vi.fn(),
+  applyTheme: vi.fn(),
 }));
 vi.mock("../monaco-cdn", () => ({
   loadMonacoFromCdn: mocks.load,
   resolveMonacoTheme: () => "vs",
+  applyMonacoTheme: mocks.applyTheme,
 }));
 afterEach(() => {
   cleanup();
@@ -24,6 +26,8 @@ function monaco() {
   return {
     Uri: { parse: (value: string) => value },
     editor: {
+      defineTheme: vi.fn(),
+      setTheme: vi.fn(),
       createModel: mocks.model.mockImplementation((value: string) => ({
         value,
         dispose: vi.fn(),
@@ -128,4 +132,82 @@ it("changes read-only mode without discarding the editor and its undo history", 
   await act(async () => {});
   expect(mocks.create).toHaveBeenCalledTimes(1);
   expect(mocks.options).toHaveBeenCalledWith({ readOnly: true });
+});
+
+it("refreshes the global editor palette and font without recreating Monaco", async () => {
+  mocks.load.mockResolvedValue(monaco());
+  document.documentElement.style.setProperty("--primary", "#123456");
+  document.documentElement.style.setProperty(
+    "--font-mono",
+    "Test Mono, monospace",
+  );
+  const view = render(
+    <div style={{ "--primary": "#ff0000" } as React.CSSProperties}>
+      <MonacoCodeEditor
+        value="source"
+        language="json"
+        ariaLabel="code"
+        onChange={vi.fn()}
+      />
+    </div>,
+  );
+  await waitFor(() => expect(mocks.create).toHaveBeenCalled());
+  document.documentElement.style.setProperty("--primary", "#abcdef");
+  document.documentElement.style.setProperty(
+    "--font-mono",
+    "Changed Mono, monospace",
+  );
+
+  await waitFor(() =>
+    expect(
+      mocks.applyTheme.mock.calls.some((call) => call[1].primary === "#abcdef"),
+    ).toBe(true),
+  );
+
+  expect(mocks.create).toHaveBeenCalledTimes(1);
+  expect(mocks.applyTheme.mock.calls.at(-1)?.[1].primary).toBe("#abcdef");
+  expect(mocks.options).toHaveBeenCalledWith({
+    fontFamily: "Changed Mono, monospace",
+  });
+});
+
+it("keeps multiple Monaco instances on the same root palette and observes its theme key", async () => {
+  mocks.load.mockResolvedValue(monaco());
+  document.documentElement.style.setProperty("--primary", "#123456");
+  const view = render(
+    <>
+      <div style={{ "--primary": "#ff0000" } as React.CSSProperties}>
+        <MonacoCodeEditor
+          value="one"
+          language="json"
+          ariaLabel="first editor"
+          onChange={vi.fn()}
+        />
+      </div>
+      <div style={{ "--primary": "#00ff00" } as React.CSSProperties}>
+        <MonacoCodeEditor
+          value="two"
+          language="json"
+          ariaLabel="second editor"
+          onChange={vi.fn()}
+        />
+      </div>
+    </>,
+  );
+  await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(mocks.applyTheme).toHaveBeenCalledTimes(4));
+  expect(
+    mocks.applyTheme.mock.calls.every((call) => call[1].primary === "#123456"),
+  ).toBe(true);
+
+  document.documentElement.dataset.colorTheme = "violet";
+  await waitFor(() => expect(mocks.applyTheme).toHaveBeenCalledTimes(6));
+
+  expect(mocks.create).toHaveBeenCalledTimes(2);
+  expect(
+    mocks.applyTheme.mock.calls
+      .slice(4)
+      .every((call) => call[1].primary === "#123456"),
+  ).toBe(true);
+  view.unmount();
 });
