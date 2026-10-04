@@ -113,7 +113,7 @@ export function createPluginProject(): IdeFiles {
     screens: [],
   };
   return {
-    "entry.tsx": `export function render(element: HTMLElement, savia: any) {\n  const root = createRoot(element);\n  let count = 0;\n\n  function Counter() {\n    const [value, setValue] = React.useState(count);\n    return (\n      <section style={{ fontFamily: "sans-serif", padding: 20 }}>\n        <h2>Savia plugin</h2>\n        <p>Counter: {value}</p>\n        <button onClick={() => { count += 1; setValue(count); }}>Add one</button>\n      </section>\n    );\n  }\n\n  root.render(<Counter />);\n  return () => root.unmount();\n}\n`,
+    "entry.tsx": `export function render(element: HTMLElement, savia: any) {\n  const root = createRoot(element);\n  let count = 0;\n\n  function Counter() {\n    const [value, setValue] = React.useState(count);\n    return (\n      <section style={{ padding: 20 }}>\n        <h2>Savia plugin</h2>\n        <p>Counter: {value}</p>\n        <button onClick={() => { count += 1; setValue(count); }}>Add one</button>\n      </section>\n    );\n  }\n\n  root.render(<Counter />);\n  return () => root.unmount();\n}\n`,
     "savia-extension.json": json(manifest),
     "store.json": json(store),
     "preview.json": json({ collections: {}, settings: {} }),

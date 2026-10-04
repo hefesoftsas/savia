@@ -303,3 +303,25 @@ it("does not upload if preview fails while the package is being prepared", async
   );
   expect(mocks.publish).not.toHaveBeenCalled();
 });
+
+it("switches focused views and file selection without discarding source", () => {
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Código", exact: true }));
+  expect(
+    screen.getByRole("button", { name: "Código", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  fireEvent.change(screen.getByLabelText("entry.tsx"), {
+    target: { value: "export function render() { /* edited */ }" },
+  });
+  fireEvent.change(screen.getByLabelText("Archivo"), {
+    target: { value: "preview.json" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Código", exact: true }));
+  fireEvent.change(screen.getByLabelText("Archivo"), {
+    target: { value: "entry.tsx" },
+  });
+  expect(screen.getByLabelText("entry.tsx")).toHaveValue(
+    "export function render() { /* edited */ }",
+  );
+});

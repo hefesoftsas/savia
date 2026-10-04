@@ -3,10 +3,32 @@ import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  applyMonacoTheme,
   loadMonacoFromCdn,
   resolveMonacoTheme,
   type MonacoEditorInstance,
 } from "./monaco-cdn";
+import { observePluginIdeTheme, readPluginIdeTheme } from "./plugin-ide-theme";
+
+function readMonacoFontFamily(element: Element) {
+  let configured = "";
+  for (
+    let current: Element | null = element;
+    current;
+    current = current.parentElement
+  ) {
+    configured = window
+      .getComputedStyle(current)
+      .getPropertyValue("--font-mono")
+      .trim();
+    if (configured) break;
+  }
+  return configured &&
+    configured.length <= 160 &&
+    /^[\w\s,'"-]+$/.test(configured)
+    ? configured
+    : "monospace";
+}
 
 export function MonacoCodeEditor({
   value,
@@ -45,6 +67,7 @@ export function MonacoCodeEditor({
   useEffect(() => {
     let disposed = false;
     let editor: MonacoEditorInstance | null = null;
+    let stopThemeObservation: (() => void) | undefined;
     let model: { dispose: () => void } | undefined;
     let declarations: { dispose: () => void } | undefined;
 
@@ -79,14 +102,18 @@ export function MonacoCodeEditor({
             `inmemory://savia/editor-${crypto.randomUUID()}.${language === "typescript" ? "tsx" : language}`,
           ),
         );
+        const themeRoot = containerRef.current.ownerDocument.documentElement;
+        const initialTheme = readPluginIdeTheme(themeRoot);
+        applyMonacoTheme(monaco, initialTheme);
         editor = monaco.editor.create(containerRef.current, {
           model,
-          theme: resolveMonacoTheme(),
+          theme: resolveMonacoTheme(initialTheme),
           readOnly: readOnlyRef.current,
           folding: true,
           bracketPairColorization: { enabled: true },
           minimap: { enabled: false },
           fontSize: 13,
+          fontFamily: readMonacoFontFamily(containerRef.current),
           lineNumbers: "on",
           wordWrap: "on",
           scrollBeyondLastLine: false,
@@ -94,6 +121,12 @@ export function MonacoCodeEditor({
           tabSize: 2,
           padding: { top: 8, bottom: 8 },
           ariaLabel,
+        });
+        stopThemeObservation = observePluginIdeTheme(themeRoot, (nextTheme) => {
+          applyMonacoTheme(monaco, nextTheme);
+          editor?.updateOptions({
+            fontFamily: readMonacoFontFamily(containerRef.current!),
+          });
         });
         editorRef.current = editor;
         editor.onDidChangeModelContent(() => {
@@ -108,6 +141,7 @@ export function MonacoCodeEditor({
 
     return () => {
       disposed = true;
+      stopThemeObservation?.();
       editor?.dispose();
       model?.dispose();
       declarations?.dispose();
