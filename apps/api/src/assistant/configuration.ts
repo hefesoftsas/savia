@@ -67,6 +67,8 @@ export type AssistantConfigurationSummary = {
   global: AssistantConfigurationSettingSummary | null;
   tenants: AssistantConfigurationSettingSummary[];
   deployment: AssistantConfigurationDeploymentSummary;
+  canManageGlobal: boolean;
+  manageableTenantIds: number[];
 };
 
 export type AssistantConfigurationKeyState =
@@ -79,8 +81,8 @@ export type AssistantConfigurationSettingSummary = {
   model: string | null;
   transcriptionModel?: string | null;
   summaryModel?: string | null;
-  updatedAt: string;
-  updatedBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
 };
 
 export type AssistantConfigurationDeploymentSummary = {
@@ -152,12 +154,8 @@ function summary(
     ...(row.agency_id === null ? {} : { tenantId: row.agency_id }),
     keyState,
     model: row.model,
-    ...(row.scope === "global"
-      ? {
-          transcriptionModel: row.transcription_model,
-          summaryModel: row.summary_model,
-        }
-      : {}),
+    transcriptionModel: row.transcription_model,
+    summaryModel: row.summary_model,
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
   };
@@ -292,9 +290,9 @@ export class AssistantConfigurationRepository {
     try {
       this.deploymentTranscriptionModel =
         normalizeAssistantModel(options.deploymentTranscriptionModel) ??
-        "openai/whisper-large-v3";
+        "google/gemini-2.5-flash";
     } catch {
-      this.deploymentTranscriptionModel = "openai/whisper-large-v3";
+      this.deploymentTranscriptionModel = "google/gemini-2.5-flash";
     }
   }
 
@@ -362,10 +360,80 @@ export class AssistantConfigurationRepository {
               : globalKeyState,
         ),
       );
+    const tenants = await this.database
+      .prepare(
+        "SELECT id FROM tenants WHERE kind='commercial' AND is_active = 1 ORDER BY id",
+      )
+      .all<{ id: number }>();
     return {
       global: global ? summary(global, globalKeyState) : null,
       tenants: tenantSettings,
       deployment,
+      canManageGlobal: true,
+      manageableTenantIds: tenants.results.map((tenant) => tenant.id),
+    };
+  }
+
+  async manageableTenantIds(principalId: string): Promise<number[]> {
+    const tenants = await this.database
+      .prepare(
+        `SELECT tenants.id FROM identity_principal AS principal
+         INNER JOIN identity_tenant_membership AS membership
+           ON membership.principal_id = principal.id
+         INNER JOIN tenants ON tenants.id = membership.tenant_id
+         WHERE principal.id = ? AND principal.is_active = 1
+           AND membership.is_active = 1
+           AND membership.role IN ('tenant_admin', 'agency_admin')
+           AND tenants.kind = 'commercial' AND tenants.is_active = 1
+         ORDER BY tenants.id`,
+      )
+      .bind(principalId)
+      .all<{ id: number }>();
+    return tenants.results.map((tenant) => tenant.id);
+  }
+
+  async assertTenantAdministrator(
+    principalId: string,
+    tenantId: number,
+  ): Promise<void> {
+    if (!(await this.manageableTenantIds(principalId)).includes(tenantId)) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "An active tenant administrator membership is required",
+      );
+    }
+  }
+
+  async summaryForTenantAdministrator(
+    principalId: string,
+  ): Promise<AssistantConfigurationSummary> {
+    const manageableTenantIds = await this.manageableTenantIds(principalId);
+    if (!manageableTenantIds.length) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "An active tenant administrator membership is required",
+      );
+    }
+    const fullSummary = await this.summary();
+    const global = fullSummary.global
+      ? {
+          scope: "global" as const,
+          keyState: fullSummary.global.keyState,
+          model: fullSummary.global.model,
+          transcriptionModel: fullSummary.global.transcriptionModel ?? null,
+          summaryModel: fullSummary.global.summaryModel ?? null,
+        }
+      : null;
+    return {
+      global,
+      tenants: fullSummary.tenants.filter(
+        (setting) =>
+          setting.tenantId !== undefined &&
+          manageableTenantIds.includes(setting.tenantId),
+      ),
+      deployment: fullSummary.deployment,
+      canManageGlobal: false,
+      manageableTenantIds,
     };
   }
 
@@ -495,6 +563,28 @@ export class AssistantConfigurationRepository {
     return this.configurationForTenant(agencyId);
   }
 
+  async effectiveGlobalConfiguration(): Promise<EffectiveAssistantConfiguration> {
+    return this.configurationForTenant(undefined);
+  }
+
+  async effectiveConfigurationForPlatformTenant(
+    tenantId: number,
+  ): Promise<EffectiveAssistantConfiguration> {
+    const tenant = await this.database
+      .prepare(
+        "SELECT id FROM tenants WHERE id = ? AND kind='commercial' AND is_active = 1",
+      )
+      .bind(tenantId)
+      .first<{ id: number }>();
+    if (!tenant) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "The selected tenant is not available",
+      );
+    }
+    return this.configurationForTenant(tenantId);
+  }
+
   async effectiveConfigurationForTenant(
     principalId: string,
     tenantId: number,
@@ -547,8 +637,10 @@ export class AssistantConfigurationRepository {
       ...(apiKey ? { apiKey } : {}),
       model,
       transcriptionModel:
-        global?.transcription_model ?? this.deploymentTranscriptionModel,
-      summaryModel: global?.summary_model ?? model,
+        agency?.transcription_model ??
+        global?.transcription_model ??
+        this.deploymentTranscriptionModel,
+      summaryModel: agency?.summary_model ?? global?.summary_model ?? model,
       ...(agencyId === undefined ? {} : { tenantId: agencyId }),
     };
   }
@@ -591,17 +683,13 @@ export class AssistantConfigurationRepository {
         ? (existing?.model ?? null)
         : normalizeAssistantModel(input.model);
     const transcriptionModel =
-      scope !== "global"
+      input.transcriptionModel === undefined
         ? (existing?.transcription_model ?? null)
-        : input.transcriptionModel === undefined
-          ? (existing?.transcription_model ?? null)
-          : (normalizeAssistantModel(input.transcriptionModel) ?? null);
+        : (normalizeAssistantModel(input.transcriptionModel) ?? null);
     const summaryModel =
-      scope !== "global"
+      input.summaryModel === undefined
         ? (existing?.summary_model ?? null)
-        : input.summaryModel === undefined
-          ? (existing?.summary_model ?? null)
-          : (normalizeAssistantModel(input.summaryModel) ?? null);
+        : (normalizeAssistantModel(input.summaryModel) ?? null);
     if (
       scope === "agency" &&
       ciphertext === null &&
@@ -664,7 +752,7 @@ export function openRouterModelCatalog(
         headers.authorization = `Bearer ${configuration.apiKey}`;
       }
       const response = await fetcher(
-        "https://openrouter.ai/api/v1/models?output_modalities=text&supported_parameters=tools&sort=most-popular",
+        "https://openrouter.ai/api/v1/models?output_modalities=text&sort=most-popular",
         Object.keys(headers).length ? { headers } : undefined,
       );
       if (!response.ok) throw new Error("OpenRouter models request failed");
@@ -730,7 +818,18 @@ export function openRouterModelCatalog(
               ? (architecture.input_modalities as string[])
               : typeof architecture?.modality === "string"
                 ? (architecture.modality as string).split("->")[0].split("+")
-                : ["text"];
+                : [];
+
+            const outputModalities = Array.isArray(
+              architecture?.output_modalities,
+            )
+              ? (architecture.output_modalities as string[])
+              : typeof architecture?.modality === "string"
+                ? ((architecture.modality as string)
+                    .split("->")
+                    .at(-1)
+                    ?.split("+") ?? [])
+                : [];
 
             const supportedParams = Array.isArray(
               (candidate as Record<string, unknown>).supported_parameters,
@@ -740,7 +839,7 @@ export function openRouterModelCatalog(
               : [];
 
             const modalities: AssistantModelModalities = {
-              text: true,
+              text: outputModalities.includes("text"),
               image: inputModalities.includes("image"),
               audio: inputModalities.includes("audio"),
               file:

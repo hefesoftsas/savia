@@ -79,3 +79,19 @@ it("refreshes tenant policy only after the active tenant change commits", async 
     window.removeEventListener("savia:active-tenant-changed", listener);
   }
 });
+
+it("loads the catalog with the selected tenant context", async () => {
+  let requestedUrl = "";
+  const client = new AssistantConfigurationClient(
+    new ApiClient({
+      baseUrl: "https://savia.test",
+      tokenSource: { getAccessToken: async () => null },
+      fetcher: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({ models: [] });
+      },
+    }),
+  );
+  await client.models(101);
+  expect(new URL(requestedUrl).searchParams.get("tenantId")).toBe("101");
+});

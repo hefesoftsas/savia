@@ -318,5 +318,10 @@
     "file": "../features/my-day-widgets/mail-composer.tsx",
     "text": "name@example.com",
     "reason": "Technical example of an email address; not translated into locale-specific data."
+  },
+  {
+    "file": "../features/service-credentials/service-credentials-page.tsx",
+    "text": "OpenRouter",
+    "reason": "Product name or technical acronym shared by supported languages."
   }
 ]

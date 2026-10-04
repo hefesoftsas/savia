@@ -38,12 +38,15 @@ describe("Companion bounded provider adapter", () => {
   it("accepts a full 60-second WAV within the validation limit", () => {
     expect(validateAudio(audio(60)).durationSeconds).toBe(60);
   });
-  it("sends transcription to its dedicated endpoint and preserves source identity", async () => {
+  it("sends transcription through chat completions and preserves source identity", async () => {
     let request: Request | undefined;
     const service = new CompanionService({
       fetch: async (input, init) => {
         request = new Request(input, init);
-        return Response.json({ text: "Hola", usage: { cost: 0.001 } });
+        return Response.json({
+          choices: [{ message: { content: "Hola" } }],
+          usage: { cost: 0.001 },
+        });
       },
       sttModel: "test/transcription",
     });
@@ -58,10 +61,16 @@ describe("Companion bounded provider adapter", () => {
       source: "system",
       model: "test/transcription",
     });
-    expect(request!.url).toBe(
-      "https://openrouter.ai/api/v1/audio/transcriptions",
-    );
-    expect(((await request!.json()) as any).model).toBe("test/transcription");
+    expect(request!.url).toBe("https://openrouter.ai/api/v1/chat/completions");
+    const body = (await request!.json()) as any;
+    expect(body.model).toBe("test/transcription");
+    expect(body.messages[0].content).toEqual([
+      {
+        type: "text",
+        text: expect.stringContaining("language es"),
+      },
+      { type: "input_audio", input_audio: { data: audio(), format: "wav" } },
+    ]);
   });
   it("forwards saved meeting transcription and summary models", async () => {
     const requests: Array<{ url: string; body: any }> = [];
@@ -71,8 +80,10 @@ describe("Companion bounded provider adapter", () => {
           url: String(input),
           body: JSON.parse(init!.body as string),
         });
-        return String(input).includes("transcriptions")
-          ? Response.json({ text: "Hola" })
+        const content = JSON.parse(init!.body as string).messages?.[0]?.content;
+        return Array.isArray(content) &&
+          content.some((part: any) => part.type === "input_audio")
+          ? Response.json({ choices: [{ message: { content: "Hola" } }] })
           : Response.json({
               choices: [
                 {
@@ -109,13 +120,16 @@ describe("Companion bounded provider adapter", () => {
       "openai/whisper-large-v3-turbo",
       "openai/gpt-4o-mini",
     ]);
+    expect(requests[0].url).toBe(
+      "https://openrouter.ai/api/v1/chat/completions",
+    );
   });
   it("forwards validated Opus audio without expanding it to WAV", async () => {
     let body: any;
     const service = new CompanionService({
       fetch: async (_url, init) => {
         body = JSON.parse(init!.body as string);
-        return Response.json({ text: "Tone" });
+        return Response.json({ choices: [{ message: { content: "Tone" } }] });
       },
     });
     const result = await service.transcribe(config, {
@@ -124,7 +138,7 @@ describe("Companion bounded provider adapter", () => {
       consent: true,
     });
     expect(result.durationSeconds).toBe(0.1);
-    expect(body.input_audio).toEqual({
+    expect(body.messages[0].content[1].input_audio).toEqual({
       data: opusFixtureBase64,
       format: "ogg",
     });
@@ -147,6 +161,24 @@ describe("Companion bounded provider adapter", () => {
       }),
     ).rejects.toThrow("Provider request failed");
     expect(attempts).toBe(1);
+  });
+  it("rejects a missing or oversized chat transcription response", async () => {
+    for (const content of [null, "x".repeat(60001)]) {
+      const service = new CompanionService({
+        fetch: async () =>
+          Response.json({ choices: [{ message: { content } }] }),
+      });
+      await expect(
+        service.transcribe(config, {
+          source: "microphone",
+          audio: { data: audio(), format: "wav" },
+          consent: true,
+        }),
+      ).rejects.toMatchObject({
+        code: "PROVIDER_INVALID_RESPONSE",
+        status: 502,
+      });
+    }
   });
   it("requires explicit consent and configured credentials", async () => {
     const service = new CompanionService({
