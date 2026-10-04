@@ -10,7 +10,8 @@ import MicrosoftOutlook from "@thesvg/react/microsoft-outlook";
 import Jira from "@thesvg/react/jira";
 import Linear from "@thesvg/react/linear";
 import Github from "@thesvg/react/github";
-import { CircleAlert, Video } from "lucide-react";
+import { CircleAlert } from "lucide-react";
+import Zoom from "@thesvg/react/zoom";
 import Slack from "@thesvg/react/slack";
 import MicrosoftTeams from "@thesvg/react/microsoft-teams";
 import type { AppServices } from "@/app-services";
@@ -148,7 +149,7 @@ function connectionIdFromEvent(event: unknown): string | undefined {
 
 function providerIcon(provider: PersonalIntegrationProviderId) {
   return {
-    zoom: Video,
+    zoom: Zoom,
     google_drive: GoogleDrive,
     gmail: Gmail,
     google_calendar: GoogleCalendar,
