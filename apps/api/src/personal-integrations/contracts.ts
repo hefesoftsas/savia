@@ -133,7 +133,7 @@ export type PersonalIntegrationRepository = {
   markReconnectRequired(connectionId: string, now?: string): Promise<boolean>;
   appendAuditEvent(input: {
     connection: ActivePersonalIntegrationConnection;
-    eventType: "send-email" | "create-event" | "upload-file";
+    eventType: "send-email" | "create-event" | "delete-event" | "upload-file";
     outcome: "succeeded" | "failed";
     errorCode?: string;
   }): Promise<void>;

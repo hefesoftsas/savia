@@ -536,6 +536,112 @@ it("refreshes reservation conference state for the current tenant", async () => 
   );
 });
 
+it("generates a video link for a confirmed reservation with an eligible calendar", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+  };
+  const reservation = {
+    id: "reservation-3",
+    serviceId: "consult",
+    professionalId: "professional-1",
+    serviceName: "Consultation",
+    professionalName: "Ari",
+    startsAt: "2026-10-05T14:00:00Z",
+    endsAt: "2026-10-05T14:30:00Z",
+    customerName: "Casey Customer",
+    customerEmail: "casey@example.test",
+    status: "confirmed" as const,
+    version: 2,
+    deliveryStatus: "sent",
+    calendarStatus: "completed",
+    canGenerateConference: true,
+    conference: null,
+  };
+  const apiClient = {
+    get: vi
+      .fn()
+      .mockResolvedValueOnce({ data: bootstrap })
+      .mockResolvedValueOnce({ data: [reservation] }),
+    put: vi.fn(),
+    post: vi.fn().mockResolvedValue({
+      data: {
+        ...reservation,
+        calendarStatus: "pending",
+        conference: {
+          provider: "google_meet",
+          joinUrl: null,
+          status: "pending",
+        },
+      },
+    }),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Generate video link" }),
+  );
+  expect(await screen.findAllByText(/link is being prepared/i)).toHaveLength(2);
+  expect(apiClient.post).toHaveBeenCalledWith(
+    "/v1/tenants/42/booking/reservations/reservation-3/conference",
+    { version: 2 },
+  );
+});
+
+it("explains why video-link generation is disabled without an eligible calendar", async () => {
+  const reservation = {
+    id: "reservation-4",
+    serviceId: "consult",
+    professionalId: "professional-1",
+    serviceName: "Consultation",
+    professionalName: "Ari",
+    startsAt: "2026-10-05T14:00:00Z",
+    endsAt: "2026-10-05T14:30:00Z",
+    customerName: "Casey Customer",
+    customerEmail: "casey@example.test",
+    status: "confirmed" as const,
+    version: 1,
+    deliveryStatus: "sent",
+    calendarStatus: "not_requested",
+    canGenerateConference: false,
+    conference: null,
+  };
+  const apiClient = {
+    get: vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: {
+          settings,
+          candidates: [],
+          canManage: true,
+          principalId: "principal-1",
+          publicUrl: null,
+          calendar: { provider: null, status: "not_connected" },
+        },
+      })
+      .mockResolvedValueOnce({ data: [reservation] }),
+    put: vi.fn(),
+    post: vi.fn(),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
+  expect(
+    await screen.findByText(
+      /connect an eligible Google Calendar or Outlook calendar/i,
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Generate video link" }),
+  ).toBeDisabled();
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
+
 it("edits multiple weekly periods with time controls and saves each interval", async () => {
   const bootstrap = {
     settings,

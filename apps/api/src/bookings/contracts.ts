@@ -155,6 +155,7 @@ export const reservationSchema = z.object({
   version: z.number(),
   deliveryStatus: z.string(),
   calendarStatus: z.string(),
+  canGenerateConference: z.boolean().optional(),
   conference: bookingConferenceSchema.nullable().optional(),
 });
 export const managementBootstrapSchema = z.object({

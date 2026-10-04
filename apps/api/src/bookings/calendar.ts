@@ -22,6 +22,7 @@ type SyncInput = BookingCalendarInput & {
   externalId: string | null;
   cancelled: boolean;
   conferenceProvider?: "google_meet" | "teams";
+  requestConference?: boolean;
 };
 type BusyPeriod = { start: string; end: string };
 
@@ -334,6 +335,7 @@ export function createBookingCalendarAdapter(
     provider: BookingProvider,
     id: string,
     conferenceProvider?: "google_meet" | "teams",
+    strictAbsent = false,
   ): Promise<BookingCalendarSyncResult["conference"]> {
     const response = await proxy(connection, {
       method: "GET",
@@ -349,9 +351,23 @@ export function createBookingCalendarAdapter(
     });
     const event = record(await response.json().catch(() => undefined));
     if (!event || event.id !== id) throw unavailable();
-    return provider === "google_calendar"
-      ? googleConference(event, conferenceProvider === "google_meet")
-      : outlookConference(event, conferenceProvider === "teams");
+    if (provider === "google_calendar") {
+      if (
+        strictAbsent &&
+        !record(event.conferenceData) &&
+        typeof event.hangoutLink !== "string"
+      )
+        return unsupportedConference;
+      return googleConference(event, conferenceProvider === "google_meet");
+    }
+    if (
+      strictAbsent &&
+      event.isOnlineMeeting !== false &&
+      (event.isOnlineMeeting !== true ||
+        event.onlineMeetingProvider !== "teamsForBusiness")
+    )
+      return unsupportedConference;
+    return outlookConference(event, conferenceProvider === "teams");
   }
 
   return {
@@ -535,9 +551,10 @@ export function createBookingCalendarAdapter(
         }
       }
 
-      const conferenceProvider = input.externalId
-        ? null
-        : await conferenceCapability(connection, input.provider);
+      const conferenceProvider =
+        input.requestConference || !input.externalId
+          ? await conferenceCapability(connection, input.provider)
+          : null;
       const baseBody =
         input.provider === "google_calendar"
           ? {
@@ -578,14 +595,45 @@ export function createBookingCalendarAdapter(
             connection,
             input.provider,
             id,
-            input.conferenceProvider,
+            input.conferenceProvider ?? conferenceProvider ?? undefined,
+            input.requestConference === true,
           );
+          const shouldRequest =
+            input.requestConference &&
+            conferenceProvider === "google_meet" &&
+            currentConference?.status !== "ready" &&
+            currentConference?.status !== "pending";
           await proxy(connection, {
             method: "PATCH",
             path: `${eventPath(input.provider, id)}${query}`,
-            body: eventBody,
+            body: {
+              ...eventBody,
+              ...(shouldRequest
+                ? {
+                    conferenceData: {
+                      createRequest: {
+                        requestId:
+                          currentConference?.status === "failed"
+                            ? crypto.randomUUID()
+                            : await bookingEventId(input.id),
+                        conferenceSolutionKey: { type: "hangoutsMeet" },
+                      },
+                    },
+                  }
+                : {}),
+            },
           });
-          return { externalId: id, conference: currentConference };
+          return {
+            externalId: id,
+            conference: shouldRequest
+              ? await eventConference(
+                  connection,
+                  input.provider,
+                  id,
+                  "google_meet",
+                )
+              : (currentConference ?? unsupportedConference),
+          };
         }
         try {
           const response = await nango.proxy({
@@ -611,13 +659,45 @@ export function createBookingCalendarAdapter(
               input.provider,
               id,
               conferenceProvider ?? undefined,
+              input.requestConference === true,
             );
+            const shouldRequest =
+              input.requestConference &&
+              conferenceProvider === "google_meet" &&
+              currentConference?.status !== "ready" &&
+              currentConference?.status !== "pending";
             await proxy(connection, {
               method: "PATCH",
               path: `${eventPath(input.provider, id)}${query}`,
-              body: { ...baseBody, id },
+              body: {
+                ...baseBody,
+                id,
+                ...(shouldRequest
+                  ? {
+                      conferenceData: {
+                        createRequest: {
+                          requestId:
+                            currentConference?.status === "failed"
+                              ? crypto.randomUUID()
+                              : id,
+                          conferenceSolutionKey: { type: "hangoutsMeet" },
+                        },
+                      },
+                    }
+                  : {}),
+              },
             });
-            return { externalId: id, conference: currentConference };
+            return {
+              externalId: id,
+              conference: shouldRequest
+                ? await eventConference(
+                    connection,
+                    input.provider,
+                    id,
+                    "google_meet",
+                  )
+                : currentConference,
+            };
           }
           throw unavailable();
         } catch {
@@ -633,14 +713,34 @@ export function createBookingCalendarAdapter(
           input.provider,
           existingId,
           input.conferenceProvider ?? conferenceProvider ?? undefined,
+          input.requestConference === true,
         );
-        await proxy(connection, {
+        const shouldRequest =
+          input.requestConference &&
+          conferenceProvider === "teams" &&
+          currentConference?.status !== "ready" &&
+          currentConference?.status !== "pending";
+        const response = await proxy(connection, {
           method: "PATCH",
           path: eventPath(input.provider, existingId),
-          body: baseBody,
+          body: {
+            ...baseBody,
+            ...(shouldRequest
+              ? {
+                  isOnlineMeeting: true,
+                  onlineMeetingProvider: "teamsForBusiness",
+                }
+              : {}),
+          },
           upstreamHeaders: outlookUtcPreference,
         });
-        return { externalId: existingId, conference: currentConference };
+        const patched = record(await response.json().catch(() => undefined));
+        return {
+          externalId: existingId,
+          conference: shouldRequest
+            ? outlookConference(patched, true)
+            : (currentConference ?? unsupportedConference),
+        };
       }
       const transactionId = await bookingEventId(input.id);
       const response = await proxy(connection, {

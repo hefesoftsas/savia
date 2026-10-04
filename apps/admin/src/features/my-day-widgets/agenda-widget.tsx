@@ -66,6 +66,7 @@ import {
 export type CalendarProvider = "google_calendar" | "outlook";
 export type CalendarEvent = PersonalCalendarEvent & {
   provider: CalendarProvider;
+  connectionId?: string;
 };
 export type CalendarEventGroup = {
   id: string;
@@ -87,7 +88,7 @@ type PendingCalendarTask = {
 export type PersonalIntegrationsLike = {
   listConnections: (
     refresh?: boolean,
-  ) => Promise<Array<{ status: string; provider: string }>>;
+  ) => Promise<Array<{ id?: string; status: string; provider: string }>>;
   listEvents: (args: {
     provider: CalendarProvider;
     from: string;
@@ -100,6 +101,11 @@ export type PersonalIntegrationsLike = {
     endsAt: string;
     videoCall?: boolean;
   }) => Promise<PersonalCalendarEvent>;
+  deleteCalendarEvent?: (args: {
+    provider: CalendarProvider;
+    eventId: string;
+    connectionId: string;
+  }) => Promise<void>;
 } & BookingAgendaClient;
 
 const calendarProviderOrder: CalendarProvider[] = [
@@ -571,7 +577,13 @@ export function useMyDayAgenda(
                   !startedWithEventIds.has(`${event.provider}:${event.id}`),
               );
               const refreshedEvents = [
-                ...providerEvents.map((event) => ({ ...event, provider })),
+                ...providerEvents.map((event) => ({
+                  ...event,
+                  provider,
+                  connectionId: connections.find(
+                    (connection) => connection.provider === provider,
+                  )?.id,
+                })),
                 ...addedWhilePending,
               ];
               const uniqueRefreshedEvents = refreshedEvents.filter(
