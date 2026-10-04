@@ -48,6 +48,16 @@ In an empty paragraph, `#`, `##` or `###` followed by Space creates a heading; `
 
 Jira, Linear, and GitHub block commands appear only when that provider is enabled on the server and the current reader has a connected account. Configure the personal account from **Integrations → Accounts & Connections → Issue management**. An unavailable, disconnected, pending, failed or expired connection is not offered in the editor. Each reader uses their own connection, so sharing a page never grants access to the author's issue tracker. Existing issue blocks render as regular clickable links when the reader has no active connection; they do not request a preview or show connection prompts inside the document. Ordinary pasted links remain clickable without an integration. See [Jira, Linear, and GitHub issue links](issue-links.md) for Nango setup.
 
+### Personal ticket summaries
+
+With a personal Jira connection, type `/mis-tickets` (or search **My tickets** / `/my-tickets`) in an empty paragraph. The command inserts a live summary of tickets assigned to the current viewer. It loads when the page opens; **Refresh** reads the latest provider data without changing the document.
+
+Default status names are **To Do**, **In Code Review**, **Code Review**, **Ready for QA**, **QA**, and **QA / Acceptance**. Configure a project key and custom status names in the block when a Jira workflow uses different labels. Configuration changes follow the page's edit permissions; readers can refresh their own results but cannot change the saved filters.
+
+Tickets are grouped by status and include Jira comment counts and the latest comment excerpt, author, date, and source link. Connected GitHub accounts add discovered pull requests, open/draft/closed/merged state, review decisions, unresolved review-thread counts when complete, and discussion excerpts. A missing connection, inaccessible PR, or partial provider result is explicitly marked; it does not mean that no comments or PRs exist.
+
+Only the block configuration is stored in Page content, autosave, history, and exports. Provider results stay transient and are requested with the viewer's own connections. Sharing a Page does not share the author's Jira or GitHub results. Anonymous public pages show a private-content placeholder. No scheduled background refresh is created by inserting this block.
+
 ### Rich blocks
 
 - **Code** preserves indentation and multiline source. Choose a language, copy the source, use Enter for a newline and Tab for indentation, or Ctrl/Cmd+Enter to continue in a paragraph. Pasted source remains plain text instead of becoming links or separate blocks. Source is displayed, never executed. Inline code is also available in contextual formatting.
@@ -271,7 +281,10 @@ professional but friendly translation**. Choose one with the radio controls. The
 preview shows all three headings and translations; replace, insert, and copy use
 only the selected translation, without its heading or extra commentary. If the
 source is too ambiguous to translate reliably, the employee asks one brief
-clarifying question before returning the translations.
+clarifying question before returning the translations. Clarifications and unrecognized
+translation formats remain visible without replace, insert, or copy actions;
+adjust the instruction and generate again. An inactive existing translator must
+be reactivated in AI employees.
 If no employee uses the `traductor` handle, choose **Create translator** to add
 the active text-only employee and select it for the request. This action creates
 the employee; management's translator template instead opens a draft for review

@@ -36,6 +36,21 @@ function visibleText(node: any): string {
 }
 
 describe("rich block normalization", () => {
+  it("preserves the reader-only ticket summary node and its configuration", () => {
+    const editor = editorWith([
+      {
+        type: "ticket_summary",
+        ticketSummaryConfig: { project: "OPS", statuses: ["Review"] },
+        children: [{ text: "" }],
+      },
+    ]);
+    normalizeRootChildren(editor);
+    expect(editor.children[0]).toMatchObject({
+      type: "ticket_summary",
+      ticketSummaryConfig: { project: "OPS", statuses: ["Review"] },
+      children: [{ text: "" }],
+    });
+  });
   it("repairs a row after a cross-cell deletion without losing the remaining cells", () => {
     const editor = editorWith([
       {

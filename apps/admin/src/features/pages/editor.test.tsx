@@ -1032,3 +1032,57 @@ it("targets a deeply positioned block in a large document without enumerating DO
   expect(screen.getByText("Large document block 899")).toBeInTheDocument();
   expect(screen.getByText("Large document block 901")).toBeInTheDocument();
 });
+
+it("inserts My tickets from the Jira slash command without persisting ticket data", async () => {
+  const changed = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <PageEditor
+      pageId="tickets"
+      api={api}
+      pages={new PagesClient(api)}
+      readOnly={false}
+      initialValue={[{ type: "p", children: [{ text: "" }] }]}
+      issueProviders={["jira"]}
+      onChange={changed}
+    />,
+  );
+  const editable = screen.getByRole("textbox", { name: "Page content" });
+  await user.click(editable);
+  await user.keyboard("/");
+  await user.type(
+    screen.getByRole("textbox", { name: "Search blocks and inserts…" }),
+    "mis-tickets",
+  );
+  await user.click(await screen.findByRole("option", { name: "My tickets" }));
+  await waitFor(() => expect(changed).toHaveBeenCalled());
+  const value = changed.mock.calls.at(-1)?.[0] as Array<
+    Record<string, unknown>
+  >;
+  expect(value[0]).toMatchObject({
+    type: "ticket_summary",
+    ticketSummaryConfig: {},
+  });
+  expect(value[1]).toMatchObject({ type: "p", children: [{ text: "" }] });
+  expect(JSON.stringify(value)).not.toContain("tickets");
+  await waitFor(() => expect(editable).toHaveFocus());
+});
+
+it("hides My tickets command when Jira is disconnected", async () => {
+  const user = userEvent.setup();
+  render(
+    <PageEditor
+      pageId="tickets-disconnected"
+      api={api}
+      pages={new PagesClient(api)}
+      readOnly={false}
+      initialValue={[{ type: "p", children: [{ text: "" }] }]}
+      onChange={() => {}}
+    />,
+  );
+  await user.click(screen.getByRole("textbox", { name: "Page content" }));
+  await user.keyboard("/");
+  expect(
+    screen.queryByRole("option", { name: "My tickets" }),
+  ).not.toBeInTheDocument();
+});

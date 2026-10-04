@@ -47,6 +47,8 @@ type Reservation = {
   version: number;
   deliveryStatus: string;
   calendarStatus: string;
+  calendarProvider?: "google_calendar" | "outlook" | null;
+  calendarEventIdPresent?: boolean;
   canGenerateConference?: boolean;
   availableConferenceProviders?: Array<"auto" | "zoom">;
   conference?: BookingConferenceState;
@@ -431,6 +433,20 @@ export function BookingPage({
   }
 
   async function cancelReservation(reservation: Reservation) {
+    const provider = reservation.calendarProvider
+      ? calendarProviderName(reservation.calendarProvider)
+      : null;
+    if (
+      !window.confirm(
+        t(
+          provider
+            ? "Confirm reservation cancellation with calendar"
+            : "Confirm reservation cancellation without calendar",
+          provider ? { calendar: provider } : undefined,
+        ),
+      )
+    )
+      return;
     setCancellingId(reservation.id);
     setError("");
     setNotice("");
@@ -450,6 +466,56 @@ export function BookingPage({
     } finally {
       setCancellingId("");
     }
+  }
+
+  function calendarProviderName(provider: "google_calendar" | "outlook") {
+    return provider === "google_calendar" ? "Google Calendar" : "Outlook";
+  }
+
+  function calendarStatusLabel(reservation: Reservation) {
+    const provider = reservation.calendarProvider;
+    if (!provider || reservation.calendarStatus === "not_requested")
+      return t("Not requested");
+    const calendar = calendarProviderName(provider);
+    if (reservation.status === "cancelled") {
+      if (reservation.calendarStatus === "pending")
+        return t("Calendar cancellation pending for %{calendar}", {
+          calendar,
+        });
+      if (reservation.calendarStatus === "failed")
+        return t("Could not cancel in %{calendar}", { calendar });
+      if (reservation.calendarStatus === "completed")
+        return reservation.calendarEventIdPresent
+          ? t("Cancelled in %{calendar}", { calendar })
+          : t("Calendar cancellation processed for %{calendar}", {
+              calendar,
+            });
+    }
+    if (
+      reservation.calendarStatus === "pending" &&
+      reservation.calendarEventIdPresent
+    )
+      return t("Event saved in %{calendar}; synchronization pending", {
+        calendar,
+      });
+    if (reservation.calendarStatus === "pending")
+      return t("Saving to %{calendar}…", { calendar });
+    if (
+      reservation.calendarStatus === "failed" &&
+      reservation.calendarEventIdPresent
+    )
+      return t("Event saved in %{calendar}; synchronization failed", {
+        calendar,
+      });
+    if (reservation.calendarStatus === "failed")
+      return t("Could not save to %{calendar}", { calendar });
+    if (reservation.calendarStatus === "completed")
+      return reservation.calendarEventIdPresent
+        ? t("Saved in %{calendar}", { calendar })
+        : t("No event saved to %{calendar}", { calendar });
+    if (reservation.calendarStatus === "skipped")
+      return t("Calendar sync skipped for %{calendar}", { calendar });
+    return reservation.calendarStatus;
   }
 
   function selectedConferenceProvider(
@@ -1133,7 +1199,7 @@ export function BookingPage({
                             : "p-3"
                         }
                       >
-                        {reservation.calendarStatus}
+                        {calendarStatusLabel(reservation)}
                       </td>
                       <td className="p-3">
                         {reservation.status === "confirmed" &&

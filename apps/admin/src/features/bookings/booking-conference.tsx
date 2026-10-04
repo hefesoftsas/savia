@@ -1,6 +1,7 @@
 import { useMessages } from "@/i18n/core";
 import { Button } from "@/components/ui/button";
 import { bookingMessages } from "./booking-messages";
+import { MeetingLinkActions } from "@/components/meeting-link-actions";
 
 type ConferenceProvider = "google_meet" | "teams" | "jitsi" | "zoom" | null;
 export type BookingConferenceState = {
@@ -104,10 +105,13 @@ export function BookingConference({
             : "Join video meeting";
 
   return (
-    <Button asChild variant="outline" className="w-fit">
-      <a href={href} target="_blank" rel="noreferrer">
-        {t(label)}
-      </a>
-    </Button>
+    <div className="flex flex-wrap items-start gap-2">
+      <Button asChild variant="outline" className="w-fit">
+        <a href={href} target="_blank" rel="noreferrer">
+          {t(label)}
+        </a>
+      </Button>
+      <MeetingLinkActions url={href} />
+    </div>
   );
 }

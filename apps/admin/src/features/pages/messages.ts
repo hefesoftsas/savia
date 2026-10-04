@@ -1,6 +1,11 @@
 import type { MessageCatalog } from "@/i18n/core";
 export const pagesMessages = {
   "Save link": ["Guardar enlace", "Save link", "Salvar link"],
+  "Ticket summary private placeholder": [
+    "El resumen de tickets solo está disponible para lectores conectados.",
+    "Ticket summary is available only to connected readers.",
+    "O resumo de tickets está disponível apenas para leitores conectados.",
+  ],
   "Create short link": [
     "Crear enlace corto",
     "Create short link",

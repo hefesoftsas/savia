@@ -20,6 +20,7 @@ import {
   parseTenantSlugFromHostname,
 } from "@savia/tenant-host";
 import { Button } from "@/components/ui/button";
+import { MeetingLinkActions } from "@/components/meeting-link-actions";
 import {
   Dialog,
   DialogContent,
@@ -182,7 +183,6 @@ export function CalendarView({
     deleteGeneration.current += 1;
   }, [agenda.personalIntegrations]);
   useEffect(() => {
-    setDeleteConfirmation(false);
     setDeleteError(null);
   }, [detail?.id]);
   useEffect(() => {
@@ -321,6 +321,15 @@ export function CalendarView({
           : conference?.provider === "google_meet"
             ? agendaText("Google Meet")
             : agendaText("Microsoft Teams");
+    const personalCalendarStatus = event.personalEventProvider
+      ? agendaText("Agendada en %{providers}", {
+          providers: sourceName(event.personalEventProvider),
+        })
+      : event.booking?.externalEvent
+        ? agendaText("Vinculado a %{provider}", {
+            provider: sourceName(event.booking.externalEvent.provider),
+          })
+        : null;
     return (
       <div
         key={`${event.sourceId}:${event.id}`}
@@ -328,7 +337,10 @@ export function CalendarView({
       >
         <button
           type="button"
-          onClick={() => setDetail(event)}
+          onClick={() => {
+            setDeleteConfirmation(false);
+            setDetail(event);
+          }}
           className="w-full min-w-0 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`${event.title || t("Untitled event")}, ${eventTime(event, locale, t("All day"))}, ${sourceName(event.sourceId)}`}
         >
@@ -346,24 +358,32 @@ export function CalendarView({
             {event.allDay ? `${t("All day")} · ` : ""}
             {sourceName(event.sourceId)}
           </span>
+          {personalCalendarStatus ? (
+            <span className="mt-0.5 block text-[11px] font-medium">
+              {personalCalendarStatus}
+            </span>
+          ) : null}
         </button>
         {conference ? (
           <div className="mt-1 text-[11px]">
             {conference.status === "ready" && joinUrl ? (
-              <a
-                href={joinUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={agendaText("Unirse a %{provider}", {
-                  provider: meetingProvider,
-                })}
-                className="inline-flex items-center gap-1 font-medium underline"
-              >
-                {agendaText("Unirse a %{provider}", {
-                  provider: meetingProvider,
-                })}
-                <ExternalLink className="size-3" />
-              </a>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={joinUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={agendaText("Unirse a %{provider}", {
+                    provider: meetingProvider,
+                  })}
+                  className="inline-flex items-center gap-1 font-medium underline"
+                >
+                  {agendaText("Unirse a %{provider}", {
+                    provider: meetingProvider,
+                  })}
+                  <ExternalLink className="size-3" />
+                </a>
+                {!compact ? <MeetingLinkActions url={joinUrl} /> : null}
+              </div>
             ) : (
               <span>
                 {conference.status === "pending"
@@ -380,6 +400,29 @@ export function CalendarView({
               </span>
             )}
           </div>
+        ) : null}
+        {!compact &&
+        event.personalEventProvider &&
+        event.personalEventId &&
+        event.personalConnectionId &&
+        agenda.calendarProviders.includes(event.personalEventProvider) &&
+        agenda.personalIntegrations?.deleteCalendarEvent ? (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="mt-1 h-7 px-2 text-[11px]"
+            aria-label={agendaText("Delete event from %{provider} · %{title}", {
+              provider: sourceName(event.personalEventProvider),
+              title: event.title || agendaText("Evento sin título"),
+            })}
+            onClick={() => {
+              setDetail(event);
+              setDeleteConfirmation(true);
+            }}
+          >
+            {t("Delete event")}
+          </Button>
         ) : null}
       </div>
     );
@@ -437,10 +480,13 @@ export function CalendarView({
     if (generation !== deleteGeneration.current) return;
     const deletedProvider = deletableProvider;
     const deletedEventId = detailOccurrence.personalEventId;
+    const deletedConnectionId = detailOccurrence.personalConnectionId;
     agenda.setEvents((current) =>
       current.filter(
         (event) =>
-          event.provider !== deletedProvider || event.id !== deletedEventId,
+          event.provider !== deletedProvider ||
+          event.id !== deletedEventId ||
+          event.connectionId !== deletedConnectionId,
       ),
     );
     setDeleteConfirmation(false);
@@ -811,21 +857,24 @@ export function CalendarView({
                             ? agendaText("Google Meet")
                             : agendaText("Microsoft Teams");
                     return joinUrl ? (
-                      <Button asChild variant="outline">
-                        <a
-                          href={joinUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label={agendaText("Unirse a %{provider}", {
-                            provider: providerName,
-                          })}
-                        >
-                          {agendaText("Unirse a %{provider}", {
-                            provider: providerName,
-                          })}
-                          <ExternalLink className="size-4" />
-                        </a>
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button asChild variant="outline">
+                          <a
+                            href={joinUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={agendaText("Unirse a %{provider}", {
+                              provider: providerName,
+                            })}
+                          >
+                            {agendaText("Unirse a %{provider}", {
+                              provider: providerName,
+                            })}
+                            <ExternalLink className="size-4" />
+                          </a>
+                        </Button>
+                        <MeetingLinkActions url={joinUrl} />
+                      </div>
                     ) : (
                       <p className="text-muted-foreground">
                         {conference.status === "pending"

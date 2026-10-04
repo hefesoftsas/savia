@@ -101,11 +101,17 @@ export const selectionAIMessages = {
     "Could not create the translator. Check your permissions or retry.",
     "Não foi possível criar o tradutor. Verifique suas permissões ou tente novamente.",
   ],
-  "Response ready": [
-    "Respuesta lista para aplicar.",
-    "Response ready to apply.",
-    "Resposta pronta para aplicar.",
+  "Translator inactive": [
+    "El traductor está inactivo. Actívalo en Empleados IA para usarlo aquí.",
+    "The translator is inactive. Activate it in AI employees to use it here.",
+    "O tradutor está inativo. Ative-o em Funcionários IA para usá-lo aqui.",
   ],
+  "Translation needs clarification": [
+    "El asistente pidió una aclaración o respondió en otro formato. Ajusta la instrucción y genera de nuevo antes de aplicar una traducción.",
+    "The assistant requested clarification or used a different format. Adjust the instruction and generate again before applying a translation.",
+    "O assistente pediu esclarecimento ou usou outro formato. Ajuste a instrução e gere novamente antes de aplicar uma tradução.",
+  ],
+  "Response ready": ["Respuesta lista.", "Response ready.", "Resposta pronta."],
   "Choose translation": [
     "Elige la versión que quieres aplicar",
     "Choose the version to apply",

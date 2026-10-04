@@ -37,6 +37,7 @@ export function SelectionAIPanel({
   const id = useId();
   const [employees, setEmployees] = useState<VirtualEmployee[]>([]);
   const [creatingTranslator, setCreatingTranslator] = useState(false);
+  const [translatorResponse, setTranslatorResponse] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState(0);
   const [employeeId, setEmployeeId] = useState("");
   const [employeesError, setEmployeesError] = useState(false);
@@ -100,6 +101,10 @@ export function SelectionAIPanel({
     setError(null);
     setCopied(false);
     setSelectedVariant(0);
+    setTranslatorResponse(
+      employees.find((employee) => employee.id === employeeId)?.handle ===
+        "traductor",
+    );
     try {
       const result = await requestSelectionAI(api, {
         text,
@@ -127,7 +132,7 @@ export function SelectionAIPanel({
     }
   }
   function apply(mode: "replace" | "insert") {
-    if (!complete || running) return;
+    if (!canApplyResponse || running) return;
     if (onApply(appliedText, mode)) onClose();
     else setError("Selection changed");
   }
@@ -143,6 +148,8 @@ export function SelectionAIPanel({
 
   const variants = complete ? translationVariants(response) : null;
   const appliedText = variants?.[selectedVariant] ?? response;
+  const canApplyResponse =
+    complete && (!translatorResponse || variants !== null);
   async function createTranslator() {
     if (creatingTranslator) return;
     setCreatingTranslator(true);
@@ -231,6 +238,15 @@ export function SelectionAIPanel({
                   )}
                 </Button>
               )}
+            {employees.some(
+              (employee) =>
+                employee.handle === "traductor" &&
+                employee.status === "inactive",
+            ) && (
+              <p className="text-sm text-muted-foreground">
+                {t("Translator inactive")}
+              </p>
+            )}
             {employeesError && (
               <div className="text-muted-foreground text-sm">
                 <p role="status">{t("Employees failed")}</p>
@@ -360,7 +376,12 @@ export function SelectionAIPanel({
                   {response}
                 </div>
               )}
-              {complete && (
+              {complete && !canApplyResponse && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {t("Translation needs clarification")}
+                </p>
+              )}
+              {canApplyResponse && (
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={() => apply("replace")}>
                     {t("Replace selection")}

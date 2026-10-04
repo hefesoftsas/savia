@@ -5951,6 +5951,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
@@ -6081,6 +6084,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
@@ -6204,6 +6210,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
@@ -7249,6 +7258,9 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  /** @enum {string|null} */
+                  calendarProvider?: "google_calendar" | "outlook" | null;
+                  calendarEventIdPresent?: boolean;
                   canGenerateConference?: boolean;
                   availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
@@ -7291,6 +7303,9 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  /** @enum {string|null} */
+                  calendarProvider?: "google_calendar" | "outlook" | null;
+                  calendarEventIdPresent?: boolean;
                   canGenerateConference?: boolean;
                   availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
@@ -7408,6 +7423,9 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  /** @enum {string|null} */
+                  calendarProvider?: "google_calendar" | "outlook" | null;
+                  calendarEventIdPresent?: boolean;
                   canGenerateConference?: boolean;
                   availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
@@ -7735,6 +7753,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
@@ -7859,6 +7880,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
@@ -13584,6 +13608,131 @@ export interface paths {
           content?: never;
         };
         /** @description Issue provider connection is unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/personal-integrations/ticket-summary": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Summarize the caller's Jira tickets and GitHub reviews
+     * @description Reads assigned tickets through the current caller's personal connections. Results are transient and never stored in shared Pages.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            project?: string;
+            statuses?: string[];
+          };
+        };
+      };
+      responses: {
+        /** @description Personal ticket summary, with explicit partial-result indicators */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                updatedAt: string;
+                tickets: {
+                  key: string;
+                  title: string;
+                  url: string;
+                  status: string;
+                  comments: {
+                    total: number | null;
+                    latest: {
+                      author: string;
+                      body: string;
+                      createdAt: string;
+                      url: string;
+                    } | null;
+                  };
+                  pullRequests: {
+                    url: string;
+                    title: string;
+                    /** @enum {string} */
+                    state: "open" | "draft" | "closed" | "merged" | "unknown";
+                    /** @enum {string} */
+                    reviewDecision:
+                      | "approved"
+                      | "changes_requested"
+                      | "review_required"
+                      | "unknown";
+                    comments: {
+                      total: number | null;
+                      latest: {
+                        author: string;
+                        body: string;
+                        createdAt: string;
+                        url: string;
+                      } | null;
+                    };
+                    unresolvedThreads: number | null;
+                    available: boolean;
+                  }[];
+                  /** @enum {string} */
+                  prLookup: "complete" | "partial" | "unavailable";
+                }[];
+                partial: boolean;
+                warnings: (
+                  | "jira_partial"
+                  | "github_unavailable"
+                  | "github_partial"
+                  | "limit_reached"
+                )[];
+              };
+            };
+          };
+        };
+        /** @description Invalid summary filters */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The connected account cannot access Jira */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Jira request failed */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Jira provider or personal connection is unavailable */
         503: {
           headers: {
             [name: string]: unknown;

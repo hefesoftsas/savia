@@ -111,7 +111,8 @@ produce a source error. All-day dates retain their original calendar dates.
 Colors are accompanied by source names; selecting a feed event opens its details.
 Safe native HTTPS links open in another tab. Feed text is never rendered as HTML.
 Events from your connected Google Calendar or Outlook account can be removed from
-their detail view after a second confirmation. Savia deletes the exact event from
+the agenda list or their detail view after a second confirmation. The confirmation
+names the affected calendar; copies in other calendars remain separate. Savia deletes the exact event from
 the provider and refreshes the agenda; a failed provider request leaves the event
 visible and offers a retry. Imported and subscribed calendar events are read-only.
 Savia appointments linked to provider events stay under the **Bookings**
@@ -153,6 +154,12 @@ requesting a call. An unsupported calendar receives an ordinary event with an
 explicit unavailable status. A ready meeting displays **Join** in the agenda;
 pending or failed provisioning is shown separately from event creation. Refresh
 the agenda to retrieve the provider's latest link without creating another event.
+Ready participant links also offer **Copy meeting link** and **Share meeting link**
+in the agenda and event details. Sharing uses the device's share sheet when
+available and otherwise copies the link. If clipboard access fails, a selectable
+URL is shown for manual copying. Pending, cancelled and invalid links cannot be
+shared. These controls never share a Zoom host/start URL.
+
 Meeting links remain stored with the provider's calendar event. Savia also stores
 a conference-request marker on that event so pending or unsupported
 results survive later agenda reloads. Events with unrelated conference providers

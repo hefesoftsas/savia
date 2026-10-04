@@ -29,6 +29,19 @@ Jitsi setting continues to use Jitsi for new reservations.
    Zoom under **Connections**, choose Zoom in **My Day**, or authorize it for
    **Bookings**. Reconnect when OAuth scopes or the connected account change.
 
+## Participant links and calendar state
+
+Ready calls in Bookings and My Day provide **Copy meeting link** and **Share
+meeting link** beside the join action. The share sheet is opened by a user action;
+when the browser does not support it, Savia copies the participant URL instead.
+Copy failures keep the URL available for manual selection. These actions do not
+send invitations automatically or expose the host's start URL.
+
+The calendar destination is separate from the call platform: a Zoom link can be
+saved in Google Calendar or Outlook. Check the appointment's calendar status to
+confirm synchronization; a confirmed Savia appointment or a ready Zoom link alone
+does not prove that the external calendar event has been saved.
+
 ## Verification and recovery
 
 Create a test meeting in an authorized account, confirm the attendee link appears

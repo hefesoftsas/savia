@@ -352,3 +352,78 @@ it("does not offer a duplicate translator when its handle already exists", async
     within(dialog).queryByRole("button", { name: "Create translator" }),
   ).not.toBeInTheDocument();
 });
+
+it.each([
+  "Which meaning of banco did you intend?",
+  "Here are the translations:\n1. Regular translation\nHello\n2. Professional but friendly translation\nHello there\n3. Concise professional but friendly translation\nHi",
+])(
+  "keeps translator clarification or unrecognized output visible without apply controls: %s",
+  async (result) => {
+    request.mockResolvedValue(result);
+    const { content } = await openAI(false, [
+      {
+        id: "translator",
+        handle: "traductor",
+        name: "Translator",
+        status: "active",
+      },
+    ]);
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() =>
+      expect(within(dialog).getByLabelText("Assistant")).toBeEnabled(),
+    );
+    fireEvent.change(within(dialog).getByLabelText("Assistant"), {
+      target: { value: "translator" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+    expect(
+      (await within(dialog).findByRole("region", { name: "Response" }))
+        .textContent,
+    ).toContain(result);
+    expect(
+      within(dialog).queryByRole("button", { name: "Replace selection" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "Insert below" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "Copy" }),
+    ).not.toBeInTheDocument();
+    expect(content.textContent).toBe("Keep this selection");
+  },
+);
+
+it("explains how to reactivate an existing inactive translator", async () => {
+  await openAI(false, [
+    {
+      id: "existing",
+      handle: "traductor",
+      name: "Translator",
+      status: "inactive",
+    },
+  ]);
+  const dialog = await screen.findByRole("dialog");
+  expect(
+    await within(dialog).findByText(
+      "The translator is inactive. Activate it in AI employees to use it here.",
+    ),
+  ).toBeVisible();
+});
+
+it("keeps ordinary responses about translation styles applicable", async () => {
+  request.mockResolvedValue(
+    "A Regular translation preserves the original meaning.",
+  );
+  const { content } = await openAI();
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Explain" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+  fireEvent.click(
+    await within(dialog).findByRole("button", { name: "Replace selection" }),
+  );
+  await waitFor(() =>
+    expect(content.textContent).toBe(
+      "Keep A Regular translation preserves the original meaning. selection",
+    ),
+  );
+});

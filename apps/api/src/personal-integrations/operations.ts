@@ -23,6 +23,8 @@ import {
 } from "./contracts";
 import { parseIssueLink } from "@savia/studio-shared/issue-links";
 import { createZoomMeetingService } from "./zoom";
+import type { TicketSummaryConfig } from "@savia/studio-shared/ticket-summary";
+import { fetchTicketSummary } from "./ticket-summary";
 
 export type PersonalFile = {
   id: string;
@@ -1372,6 +1374,28 @@ export class PersonalIntegrationOperations {
     if (issueLink.provider === "github")
       return this.previewGitHubIssue(connection, issueLink);
     return this.previewLinearIssue(connection, issueLink);
+  }
+
+  async summarizeTickets(input: {
+    principalId: string;
+    config: TicketSummaryConfig;
+    githubEnabled?: boolean;
+  }): Promise<import("@savia/studio-shared/ticket-summary").TicketSummary> {
+    const jira = await this.connectedConnection(input.principalId, "jira");
+    const github =
+      input.githubEnabled === false
+        ? null
+        : await this.repository.findActiveConnection(
+            input.principalId,
+            "github",
+          );
+    const activeGithub =
+      github?.principalId === input.principalId &&
+      github.provider === "github" &&
+      github.status === "connected"
+        ? github
+        : null;
+    return fetchTicketSummary(this.nango, jira, activeGithub, input.config);
   }
 
   private async previewGitHubIssue(
