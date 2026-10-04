@@ -1,4 +1,27 @@
 export const companionMessages = {
+  "Delete recording": [
+    "Eliminar grabación",
+    "Delete recording",
+    "Excluir gravação",
+  ],
+  "Delete permanently": [
+    "Eliminar definitivamente",
+    "Delete permanently",
+    "Excluir permanentemente",
+  ],
+  "Deleting…": ["Eliminando…", "Deleting…", "Excluindo…"],
+  Cancel: ["Cancelar", "Cancel", "Cancelar"],
+  "Unable to delete this recording. Try again.": [
+    "No se pudo eliminar esta grabación. Inténtalo de nuevo.",
+    "Unable to delete this recording. Try again.",
+    "Não foi possível excluir esta gravação. Tente novamente.",
+  ],
+  "This permanently deletes the saved audio, transcript and summary from Savia. The original file stays on your device or connected drive.":
+    [
+      "Esto elimina definitivamente el audio, la transcripción y el resumen guardados en Savia. El archivo original se conserva en tu dispositivo o unidad conectada.",
+      "This permanently deletes the saved audio, transcript and summary from Savia. The original file stays on your device or connected drive.",
+      "Isso exclui permanentemente o áudio, a transcrição e o resumo salvos no Savia. O arquivo original permanece no seu dispositivo ou unidade conectada.",
+    ],
   "Private to your account.": [
     "Solo tú puedes verlas.",
     "Private to your account.",

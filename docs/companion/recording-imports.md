@@ -17,6 +17,14 @@ use **Select a recording** to switch; desktop keeps the list beside the player.
 Consent and the possible processing charge remain visible beside **Generate summary**.
 Expand **How processing works** for provider routing and retry details.
 
+## Delete saved audio files
+
+Select an audio file and choose **Delete recording**, then confirm with
+**Delete permanently**. Savia deletes that account's saved audio, transcript, and
+summary. The original file on your device or connected drive is preserved.
+Canceling leaves the recording unchanged. If deletion fails, the recording stays
+in the list and can be retried. Deletion is disabled during uploads or processing.
+
 ## Access and privacy
 
 All active tenant members can use **Recordings**, regardless of role. Platform

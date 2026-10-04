@@ -42,6 +42,7 @@ const mockClient = () => ({
   audio: vi.fn().mockResolvedValue(new Blob(["ogg"], { type: "audio/ogg" })),
   notes: vi.fn().mockResolvedValue({ transcript: null, summary: null }),
   generate: vi.fn().mockResolvedValue(result),
+  remove: vi.fn().mockResolvedValue(undefined),
 });
 beforeEach(() => {
   URL.createObjectURL = vi.fn().mockReturnValue("blob:private-audio");
@@ -368,4 +369,82 @@ it("keeps focus on the desktop list when the mobile picker trigger is hidden", a
   expect(
     await screen.findByRole("heading", { name: "Second meeting" }),
   ).toBeVisible();
+});
+
+it("confirms deletion, supports cancellation, and clears the last recording", async () => {
+  const client = mockClient(),
+    user = userEvent.setup();
+  show(client);
+  await user.click(
+    await screen.findByRole("button", { name: "Delete recording" }),
+  );
+  expect(screen.getByRole("dialog")).toBeVisible();
+  expect(client.remove).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(client.remove).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Delete recording" }));
+  await user.click(screen.getByRole("button", { name: "Delete permanently" }));
+  expect(client.remove).toHaveBeenCalledWith("one");
+  expect(await screen.findByText("No recordings yet")).toBeVisible();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:private-audio");
+});
+
+it("preserves the recording when deletion fails", async () => {
+  const client = mockClient(),
+    user = userEvent.setup();
+  client.remove.mockRejectedValue(new Error("Network failed"));
+  show(client);
+  await user.click(
+    await screen.findByRole("button", { name: "Delete recording" }),
+  );
+  await user.click(screen.getByRole("button", { name: "Delete permanently" }));
+  expect(
+    await screen.findByText("Unable to delete this recording. Try again."),
+  ).toBeVisible();
+  expect(screen.queryByText("No recordings yet")).not.toBeInTheDocument();
+});
+
+it("selects the next recording and blocks duplicate deletion while pending", async () => {
+  const client = mockClient(),
+    user = userEvent.setup();
+  client.list.mockResolvedValue({
+    recordings: [recording, { ...recording, id: "two", name: "Next audio" }],
+    cursor: null,
+  });
+  let finish!: () => void;
+  client.remove.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  show(client);
+  await user.click(
+    await screen.findByRole("button", { name: "Delete recording" }),
+  );
+  await user.click(screen.getByRole("button", { name: "Delete permanently" }));
+  expect(screen.getByRole("button", { name: "Deleting…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  expect(client.remove).toHaveBeenCalledTimes(1);
+  finish();
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  await waitFor(() =>
+    expect(client.audio).toHaveBeenCalledWith("two", expect.any(AbortSignal)),
+  );
+  expect(screen.getByRole("heading", { name: "Next audio" })).toBeVisible();
+});
+
+it("translates the deletion confirmation into Spanish", async () => {
+  const client = mockClient(),
+    user = userEvent.setup();
+  show(client);
+  await screen.findByRole("button", { name: "Delete recording" });
+  await user.click(screen.getByRole("button", { name: "Español" }));
+  await user.click(screen.getByRole("button", { name: "Eliminar grabación" }));
+  expect(
+    screen.getByRole("button", { name: "Eliminar definitivamente" }),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Cancelar" })).toBeVisible();
 });
