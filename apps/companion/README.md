@@ -65,7 +65,8 @@ or settings.
    `COMPANION_STT_MODEL` selects the deployment audio-input model; the default is
    `google/gemini-2.5-flash`. Platform and tenant administrators can override the
    transcription and summary models in **Keys and services**. Audio is sent through
-   OpenRouter chat completions. See [model configuration](../../docs/companion/model-configuration.md). Do not put provider keys in any frontend `VITE_*` variable.
+   OpenRouter dedicated transcription or chat completions according to the selected
+   model. Whisper uses the dedicated transcription route. See [model configuration](../../docs/companion/model-configuration.md). Do not put provider keys in any frontend `VITE_*` variable.
    For the native local stack, run `COMPANION_ENABLED=true pnpm dev` from the
    monorepo root; restart an already-running stack to apply the flag. The local
    launcher also reads these settings from `infra/secrets/assistant-api.dev.env`.

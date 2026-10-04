@@ -1,6 +1,9 @@
 import { z } from "@hono/zod-openapi";
 import { inspectOggOpus, MAX_OPUS_BYTES } from "./ogg";
-import type { EffectiveAssistantConfiguration } from "../assistant/configuration";
+import {
+  transcriptionEndpointForModel,
+  type EffectiveAssistantConfiguration,
+} from "../assistant/configuration";
 import {
   importedAudioFormatSchema,
   inspectImportedAudio,
@@ -260,6 +263,17 @@ function transcriptionText(output: any): string {
   return text;
 }
 
+function nativeTranscriptionText(output: any): string {
+  const text = output?.text;
+  if (typeof text !== "string" || text.length > 60000)
+    throw new CompanionError(
+      "PROVIDER_INVALID_RESPONSE",
+      "Provider returned an invalid transcript.",
+      502,
+    );
+  return text;
+}
+
 export class CompanionService {
   readonly sttModel: string;
   private send: typeof fetch;
@@ -334,9 +348,26 @@ export class CompanionService {
     const { audio, source, language } = parsed.data;
     const { durationSeconds } = validateAudio(audio.data, audio.format);
     const model = configuration.transcriptionModel ?? this.sttModel;
+    const endpoint =
+      configuration.transcriptionEndpoint ??
+      transcriptionEndpointForModel(model);
+    if (endpoint === "audio/transcriptions") {
+      const output = await this.request(
+        configuration,
+        endpoint,
+        { model, input_audio: audio, language },
+        "transcription",
+      );
+      return {
+        text: nativeTranscriptionText(output),
+        source,
+        model,
+        durationSeconds,
+      };
+    }
     const output = await this.request(
       configuration,
-      "chat/completions",
+      endpoint,
       {
         model,
         messages: [
@@ -399,13 +430,22 @@ export class CompanionService {
       );
     }
     const model = configuration.transcriptionModel ?? this.sttModel;
+    const endpoint =
+      configuration.transcriptionEndpoint ??
+      transcriptionEndpointForModel(model);
     const encoder = new TextEncoder();
-    const prefix = [
-      `{"model":${JSON.stringify(model)},"messages":[{"role":"user","content":[`,
-      `{"type":"text","text":${JSON.stringify(transcriptionInstruction())}},`,
-      `{"type":"input_audio","input_audio":{"data":"`,
-    ].join("");
-    const suffix = `","format":${JSON.stringify(input.format)}}}]}]}`;
+    const prefix =
+      endpoint === "audio/transcriptions"
+        ? `{"model":${JSON.stringify(model)},"input_audio":{"data":"`
+        : [
+            `{"model":${JSON.stringify(model)},"messages":[{"role":"user","content":[`,
+            `{"type":"text","text":${JSON.stringify(transcriptionInstruction())}},`,
+            `{"type":"input_audio","input_audio":{"data":"`,
+          ].join("");
+    const suffix =
+      endpoint === "audio/transcriptions"
+        ? `","format":${JSON.stringify(input.format)}}}`
+        : `","format":${JSON.stringify(input.format)}}}]}]}`;
     let audioOffset = 0;
     let phase: "prefix" | "audio" | "suffix" | "done" = "prefix";
     const body = new ReadableStream<Uint8Array>({
@@ -438,12 +478,15 @@ export class CompanionService {
     });
     const output = await this.request(
       configuration,
-      "chat/completions",
+      endpoint,
       body,
       "transcription",
     );
     return {
-      text: transcriptionText(output),
+      text:
+        endpoint === "audio/transcriptions"
+          ? nativeTranscriptionText(output)
+          : transcriptionText(output),
       source: input.source,
       model,
       durationSeconds: input.durationSeconds,
