@@ -29,6 +29,14 @@ export type PagePublicLink = {
   expiresAt: string | null;
   revokedAt: string | null;
 };
+export type CaptureLinkInput = {
+  captureId: string;
+  title: string;
+  url: string;
+  note?: string;
+  parentId?: string;
+  folderTitle?: string;
+};
 export class PagesClient {
   constructor(readonly api: ApiClient) {}
   private path(id = "") {
@@ -93,6 +101,27 @@ export class PagesClient {
   }
   async resolveBinding(input: { title: string; binding: RecordBinding }) {
     return this.create(input);
+  }
+  async capture(input: CaptureLinkInput) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    try {
+      const page = (
+        await this.api.post<{ data: PageDocument }>(
+          `${this.path()}/capture`,
+          input,
+          { signal: controller.signal },
+        )
+      ).data;
+      const cache = pagesReadCache(this.api);
+      // The capture may also have created the private destination folder.
+      cache.invalidate();
+      cache.changed(page);
+      publishPageChange({ api: this.api });
+      return page;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
   async save(
     id: string,

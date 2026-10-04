@@ -235,6 +235,46 @@ live("Pages on native PostgreSQL", () => {
         content: [],
         binding: null,
       });
+
+      const captureInput = {
+        captureId: "b1b58f9e-1eac-4a10-a795-fc71e5c85a21",
+        title: "PostgreSQL capture",
+        url: "https://example.test/postgres",
+        note: "Atomic capture",
+      };
+      const captures = await Promise.all([
+        owner.capture(captureInput),
+        owner.capture(captureInput),
+      ]);
+      expect(captures[0].id).toBe(captures[1].id);
+      expect(captures[0]).toMatchObject({
+        title: captureInput.title,
+        kind: "page",
+        version: 1,
+        content: [
+          {
+            type: "p",
+            children: [
+              {
+                type: "a",
+                url: captureInput.url,
+                children: [{ text: captureInput.url }],
+              },
+            ],
+          },
+          { type: "p", children: [{ text: captureInput.note }] },
+        ],
+      });
+      const capturePageRevisions = await db
+        .prepare("SELECT count(*) AS count FROM page_revisions WHERE page_id=?")
+        .bind(captures[0].id)
+        .first("count");
+      expect(capturePageRevisions).toBe(1);
+      const captureFolderRevisions = await db
+        .prepare("SELECT count(*) AS count FROM page_revisions WHERE page_id=?")
+        .bind(captures[0].parentId)
+        .first("count");
+      expect(captureFolderRevisions).toBe(1);
       expect(
         await db
           .prepare("SELECT kind FROM pages WHERE id=?")

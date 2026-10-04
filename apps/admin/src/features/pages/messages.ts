@@ -1,5 +1,6 @@
 import type { MessageCatalog } from "@/i18n/core";
 export const pagesMessages = {
+  "Save link": ["Guardar enlace", "Save link", "Salvar link"],
   "Create short link": [
     "Crear enlace corto",
     "Create short link",

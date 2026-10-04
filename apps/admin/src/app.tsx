@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { RouteLoading } from "@/components/admin/route-loading";
 import { TenantHostMismatchError } from "@/components/admin/tenant-mismatch-error";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
+import { sharedLinkRouteAfterAuth } from "@/pwa/share-target";
 import { bookingMessages } from "@/features/bookings/booking-messages";
 
 const RolePages = lazy(async () => ({
@@ -90,6 +91,11 @@ const OfficeSuitePage = lazy(() =>
 const PagesPage = lazy(() =>
   import("@/features/pages/pages-page").then((module) => ({
     default: module.PagesPage,
+  })),
+);
+const SaveLinkPage = lazy(() =>
+  import("@/features/pages/save-link-page").then((module) => ({
+    default: module.SaveLinkPage,
   })),
 );
 const BookingPage = lazy(() =>
@@ -329,14 +335,19 @@ function AppContent({ services }: { services?: AppServices } = {}) {
       try {
         const target = new URL(returnOrigin);
         if (target.origin !== window.location.origin) {
-          window.location.replace(`${target.origin}/#/my-day`);
+          // Only a resume marker crosses origins; the draft stays on its host.
+          window.location.replace(`${target.origin}/?resume-share=1#/my-day`);
           return;
         }
       } catch {
         // Fall back to same-host routing
       }
     }
-    window.history.replaceState({}, "", "/#/my-day");
+    window.history.replaceState(
+      {},
+      "",
+      `/${sharedLinkRouteAfterAuth() ?? "#/my-day"}`,
+    );
     setHandlingCallback(false);
   }, []);
 
@@ -424,6 +435,14 @@ function AppContent({ services }: { services?: AppServices } = {}) {
                 element={
                   <Suspense fallback={<RouteLoading />}>
                     <PagesPage services={appServices} />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/save-link"
+                element={
+                  <Suspense fallback={<RouteLoading />}>
+                    <SaveLinkPage services={appServices} />
                   </Suspense>
                 }
               />
