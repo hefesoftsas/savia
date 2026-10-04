@@ -80,6 +80,17 @@ it("publishes individual typed paths from current agency metadata and refreshes 
   expect(response.headers.get("cache-control")).toBe("no-store");
   const spec: any = await response.json();
   expect(spec.openapi).toBe("3.1.0");
+  for (const provider of ["salesforce", "zoho", "pipedrive"]) {
+    expect(spec.paths[`/crm-workspace/${provider}`].get.operationId).toBe(
+      `discover_${provider}_screens`,
+    );
+    expect(
+      spec.paths[`/crm-workspace/${provider}/install`].post.requestBody.content[
+        "application/json"
+      ].schema.properties.resources.items.enum,
+    ).toEqual(["contacts", "companies", "deals"]);
+  }
+
   const selection =
     spec.paths["/crm-workspace/install"].post.requestBody.content[
       "application/json"

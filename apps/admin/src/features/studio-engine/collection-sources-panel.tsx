@@ -7,6 +7,12 @@ import {
 } from "@savia/studio-shared/database-sources";
 import { DatabaseSourceFields } from "./database-source-fields";
 import StudioWorkspacePanel from "./studio-workspace-panel";
+import {
+  CrmProviderIcon,
+  crmProviderLabel,
+  isStudioCrmProvider,
+  type StudioCrmProvider,
+} from "./crm-provider";
 import CollectionOperationsPanel from "./collection-operations-panel";
 import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -638,11 +644,17 @@ export default function CollectionSourcesPanel({
           </Alert>
         ))}
 
-      <StudioWorkspacePanel
-        scope={scope}
-        request={request}
-        onInstalled={onBound}
-      />
+      {(["hubspot", "salesforce", "zoho", "pipedrive"] as const).map(
+        (provider: StudioCrmProvider) => (
+          <StudioWorkspacePanel
+            key={provider}
+            scope={scope}
+            provider={provider}
+            request={request}
+            onInstalled={onBound}
+          />
+        ),
+      )}
 
       <Tabs
         value={activeSection}
@@ -1698,20 +1710,31 @@ export default function CollectionSourcesPanel({
                               }
                               className="text-xs font-normal"
                             >
-                              {binding.kind === "domain"
-                                ? t("Dominio")
-                                : binding.kind === "crm"
-                                  ? "HubSpot"
-                                  : isDatabaseKind(binding.kind)
-                                    ? databaseKinds[binding.kind].label
-                                    : binding.sourceId}
+                              {binding.kind === "crm" &&
+                              isStudioCrmProvider(binding.sourceId) ? (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <CrmProviderIcon
+                                    provider={binding.sourceId}
+                                    className="size-3.5"
+                                  />
+                                  {crmProviderLabel(binding.sourceId)}
+                                </span>
+                              ) : binding.kind === "domain" ? (
+                                t("Dominio")
+                              ) : binding.kind === "crm" ? (
+                                crmProviderLabel(binding.sourceId)
+                              ) : isDatabaseKind(binding.kind) ? (
+                                databaseKinds[binding.kind].label
+                              ) : (
+                                binding.sourceId
+                              )}
                             </Badge>
                           </div>
                           <span className="block break-all font-mono text-xs text-muted-foreground">
                             {binding.kind === "domain"
                               ? t("Colección del dominio")
                               : binding.kind === "crm"
-                                ? "HubSpot"
+                                ? crmProviderLabel(binding.sourceId)
                                 : isDatabaseKind(binding.kind)
                                   ? `${databaseKinds[binding.kind].label} · ${binding.sourceId}`
                                   : binding.sourceId}{" "}

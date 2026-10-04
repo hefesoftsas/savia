@@ -69,6 +69,7 @@ import { recordsCsvFilename } from "@savia/studio-shared/records-csv-export";
 import { getScrollParent, syncScrollButtonPosition } from "./table-scroll";
 import "./records.css";
 import { RecordsCommandToolbar } from "./records-command-toolbar";
+import { crmProviderLabel, isHubspotArchive } from "./crm-provider";
 type Condition = { field: string; op: string; value?: unknown };
 type Settings = {
   q: string;
@@ -96,7 +97,10 @@ function hasCrmIntegrationColumn(object: StudioObject) {
   const collection = object.config.studio?.collection;
   return (
     collection?.kind === "crm" ||
-    collection?.sourceId === "hubspot" ||
+    (collection?.sourceId !== undefined &&
+      ["hubspot", "salesforce", "zoho", "pipedrive"].includes(
+        collection.sourceId,
+      )) ||
     object.name.toLowerCase().includes("hubspot") ||
     object.config.studio?.business === "managed-customer"
   );
@@ -551,7 +555,10 @@ export default function Records({
   const showCrmIntegrationColumn =
     crmIntegrationColumnAvailable &&
     (!normalizedColumnQuery ||
-      [CRM_INTEGRATION_COLUMN_LABEL, "HubSpot"].some((value) =>
+      [
+        CRM_INTEGRATION_COLUMN_LABEL,
+        crmProviderLabel(object.config.studio?.collection?.sourceId ?? "CRM"),
+      ].some((value) =>
         value.toLocaleLowerCase(uiLocale).includes(normalizedColumnQuery),
       ));
   const tableFields = orderedColumnKeys
@@ -1789,7 +1796,10 @@ function RecordsBulkActionsToolbar({ object }: { object: StudioObject }) {
     useListContext<StudioRecord>();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const hubspotArchive = object.config.studio?.collection?.kind === "crm";
+  const hubspotArchive = isHubspotArchive(
+    object.config.studio?.collection?.sourceId,
+    object.config.studio?.collection?.kind,
+  );
   const permanent = !supportsLocalRecordTools(object);
   const count = selectedIds?.length ?? 0;
   const runDelete = async () => {
@@ -1909,7 +1919,10 @@ function RecordRowAction({
   const record = useRecordContext<StudioRecord>();
   const { refetch } = useListContext<StudioRecord>();
   if (!record) return null;
-  const hubspotArchive = object.config.studio?.collection?.kind === "crm";
+  const hubspotArchive = isHubspotArchive(
+    object.config.studio?.collection?.sourceId,
+    object.config.studio?.collection?.kind,
+  );
   const permanent = !supportsLocalRecordTools(object);
   const [pending, setPending] = useState<"delete" | "restore" | null>(null);
   const [busy, setBusy] = useState(false);

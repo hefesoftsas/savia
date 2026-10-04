@@ -1,12 +1,12 @@
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
-import { useEffect, useMemo, useState, type ElementType } from "react";
+import { useEffect, useMemo, useRef, useState, type ElementType } from "react";
 import Nango from "@nangohq/frontend";
 import Hubspot from "@thesvg/react/hubspot";
 import Pipedrive from "@thesvg/react/pipedrive";
 import Salesforce from "@thesvg/react/salesforce";
 import Zoho from "@thesvg/react/zoho";
-import { CircleAlert, RotateCcw } from "lucide-react";
+import { CircleAlert, RotateCcw, Unplug } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import type {
   CrmConnection,
@@ -93,6 +93,8 @@ function providerHint(
   provider: CrmProvider,
   connection: CrmConnection | undefined,
 ): string {
+  if (provider.connectionBlocked)
+    return "Desconecta el CRM actual de la organización antes de conectar otro.";
   if (connection?.externalAccountLabel) return connection.externalAccountLabel;
   if (provider.availability === "coming_soon") return "Disponible próximamente";
   if (provider.availability !== "enabled") return "Configuración pendiente";
@@ -124,9 +126,11 @@ function CrmIntegrationRows({
   connectionsByProvider,
   actionProvider,
   onAction,
+  onDisconnect,
   onReconnect,
 }: {
   onReconnect: (provider: CrmProvider, connection: CrmConnection) => void;
+  onDisconnect: (provider: CrmProvider) => void;
   providers: CrmProvider[];
   connectionsByProvider: Map<CrmProviderId, CrmConnection>;
   actionProvider?: CrmProviderId;
@@ -139,7 +143,8 @@ function CrmIntegrationRows({
     const Icon = providerIcon(provider.id) as ElementType;
     const connection = connectionsByProvider.get(provider.id);
     const enabled = provider.availability === "enabled";
-    const busy = actionProvider === provider.id;
+    const blocked = provider.connectionBlocked === true;
+    const busy = actionProvider !== undefined;
     const connected = connection?.status === "connected";
     const showStatus =
       !!connection &&
@@ -158,8 +163,8 @@ function CrmIntegrationRows({
         actionLabel={actionLabel(provider, connection)}
         actionVariant={connected ? "outline" : "default"}
         busy={busy}
-        disabled={!enabled}
-        muted={!enabled}
+        disabled={!enabled || blocked}
+        muted={!enabled || blocked}
         onAction={() => onAction(provider, connection)}
         secondaryAction={
           connected && connection ? (
@@ -167,11 +172,25 @@ function CrmIntegrationRows({
               size="sm"
               variant="outline"
               className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-              disabled={busy || !enabled}
+              disabled={busy || !enabled || blocked}
               onClick={() => onReconnect(provider, connection)}
             >
               <RotateCcw aria-hidden="true" />
               <span className="sr-only sm:not-sr-only">Reconectar</span>
+            </Button>
+          ) : connection &&
+            (connection.status === "pending" ||
+              connection.status === "reconnect_required" ||
+              connection.status === "failed") ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+              disabled={busy || !enabled || blocked}
+              onClick={() => onDisconnect(provider)}
+            >
+              <Unplug aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">Desconectar</span>
             </Button>
           ) : undefined
         }
@@ -201,29 +220,71 @@ export function CrmConnectionsPage({
   const [loading, setLoading] = useState(true);
   const [actionProvider, setActionProvider] = useState<CrmProviderId>();
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [loadedTenantId, setLoadedTenantId] = useState<number | null>();
+  const refreshRequestId = useRef(0);
+  const latestTenant = useRef(currentTenant);
+  latestTenant.current = currentTenant;
 
   async function refresh() {
+    if (latestTenant.current.id !== currentTenant.id) return;
+    if (currentTenant.isLoading || latestTenant.current.isLoading) {
+      setLoading(true);
+      setProviders([]);
+      setConnections([]);
+      setLoadedTenantId(undefined);
+      return;
+    }
+
+    const requestId = ++refreshRequestId.current;
+    const requestTenantId = currentTenant.id;
     setLoading(true);
     setFeedback(null);
     try {
       const [nextProviders, nextConnections] = await Promise.all([
-        services.crm.listProviders(),
-        services.crm.listConnections(),
+        services.crm.listProviders(requestTenantId ?? undefined),
+        services.crm.listConnections(requestTenantId ?? undefined),
       ]);
+      if (
+        requestId !== refreshRequestId.current ||
+        requestTenantId !== latestTenant.current.id
+      )
+        return;
       setProviders(nextProviders ?? []);
       setConnections(nextConnections ?? []);
+      setLoadedTenantId(requestTenantId);
     } catch (exception) {
+      if (
+        requestId !== refreshRequestId.current ||
+        requestTenantId !== latestTenant.current.id
+      )
+        return;
       setFeedback(feedbackFrom(exception));
       setProviders([]);
       setConnections([]);
+      setLoadedTenantId(requestTenantId);
     } finally {
-      setLoading(false);
+      if (
+        requestId === refreshRequestId.current &&
+        requestTenantId === latestTenant.current.id
+      )
+        setLoading(false);
     }
   }
 
   useEffect(() => {
+    if (currentTenant.isLoading) {
+      refreshRequestId.current += 1;
+      setLoading(true);
+      setProviders([]);
+      setConnections([]);
+      setLoadedTenantId(undefined);
+      return;
+    }
     void refresh();
-  }, [services]);
+    return () => {
+      refreshRequestId.current += 1;
+    };
+  }, [services, currentTenant.id, currentTenant.isLoading]);
 
   useRealtimeRefresh({
     topics: ["integrations"],
@@ -234,24 +295,39 @@ export function CrmConnectionsPage({
     refresh,
   });
 
+  const tenantDataIsCurrent =
+    !currentTenant.isLoading && loadedTenantId === currentTenant.id;
+  const providersForCurrentTenant = tenantDataIsCurrent ? providers : [];
+  const connectionsForCurrentTenant = tenantDataIsCurrent ? connections : [];
+
   const connectionsByProvider = useMemo(
     () =>
       new Map(
-        connections.map((connection) => [connection.provider, connection]),
+        connectionsForCurrentTenant.map((connection) => [
+          connection.provider,
+          connection,
+        ]),
       ),
-    [connections],
+    [connectionsForCurrentTenant],
   );
 
   async function completeConnection(
     provider: CrmProviderId,
     connectionId: string,
   ) {
+    const requestTenantId = currentTenant.id;
     try {
-      await services.crm.complete(provider, connectionId);
-      setFeedback("La conexión CRM quedó validada.");
+      await services.crm.complete(
+        provider,
+        connectionId,
+        requestTenantId ?? undefined,
+      );
+      if (latestTenant.current.id === requestTenantId)
+        setFeedback("La conexión CRM quedó validada.");
       await refresh();
     } catch (exception) {
-      setFeedback(feedbackFrom(exception));
+      if (latestTenant.current.id === requestTenantId)
+        setFeedback(feedbackFrom(exception));
     } finally {
       setActionProvider(undefined);
     }
@@ -262,12 +338,20 @@ export function CrmConnectionsPage({
     connection: CrmConnection | undefined,
     reconnect = false,
   ) {
-    if (provider.availability !== "enabled") return;
+    if (
+      provider.availability !== "enabled" ||
+      provider.connectionBlocked === true ||
+      actionProvider !== undefined
+    )
+      return;
 
     if (connection?.status === "connected" && !reconnect) {
       setActionProvider(provider.id);
       try {
-        await services.crm.disconnect(provider.id);
+        await services.crm.disconnect(
+          provider.id,
+          currentTenant.id ?? undefined,
+        );
         setFeedback("La conexión CRM se desconectó.");
         await refresh();
       } catch (exception) {
@@ -286,6 +370,7 @@ export function CrmConnectionsPage({
         reconnect ||
           connection?.status === "reconnect_required" ||
           connection?.status === "failed",
+        currentTenant.id ?? undefined,
       );
       let terminalEventReceived = false;
       nangoFactory().openConnectUI({
@@ -324,14 +409,34 @@ export function CrmConnectionsPage({
     }
   }
 
+  async function disconnectConnection(provider: CrmProvider) {
+    if (
+      provider.availability !== "enabled" ||
+      provider.connectionBlocked === true ||
+      actionProvider !== undefined
+    )
+      return;
+    setActionProvider(provider.id);
+    try {
+      await services.crm.disconnect(provider.id, currentTenant.id ?? undefined);
+      setFeedback("La conexión CRM se desconectó.");
+      await refresh();
+    } catch (exception) {
+      setFeedback(feedbackFrom(exception));
+    } finally {
+      setActionProvider(undefined);
+    }
+  }
+
   const rows = (
     <CrmIntegrationRows
-      providers={providers}
+      providers={providersForCurrentTenant}
       connectionsByProvider={connectionsByProvider}
       actionProvider={actionProvider}
       onReconnect={(provider, connection) =>
         void beginConnection(provider, connection, true)
       }
+      onDisconnect={(provider) => void disconnectConnection(provider)}
       onAction={(provider, connection) =>
         void beginConnection(provider, connection)
       }
@@ -341,7 +446,7 @@ export function CrmConnectionsPage({
   if (embedded) {
     return (
       <>
-        {feedback ? (
+        {tenantDataIsCurrent && feedback ? (
           <div
             className="integrations-feedback flex items-start gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
             role="status"
@@ -350,7 +455,7 @@ export function CrmConnectionsPage({
             <p className="leading-6">{feedback}</p>
           </div>
         ) : null}
-        {loading ? (
+        {loading || !tenantDataIsCurrent ? (
           <IntegrationGroup title="CRM" headingId="crm-integrations-heading">
             {Array.from({ length: 4 }, (_, index) => (
               <li key={index} className="px-5 py-4">
@@ -361,7 +466,7 @@ export function CrmConnectionsPage({
         ) : (
           <IntegrationGroup title="CRM" headingId="crm-integrations-heading">
             {rows}
-            {providers.length === 0 ? (
+            {providersForCurrentTenant.length === 0 ? (
               <IntegrationGroupEmpty message="No hay integraciones CRM disponibles." />
             ) : null}
           </IntegrationGroup>
@@ -374,7 +479,7 @@ export function CrmConnectionsPage({
     <IntegrationsPageShell>
       <IntegrationsPageHeader title="Conexiones CRM" />
 
-      {feedback ? (
+      {tenantDataIsCurrent && feedback ? (
         <div
           className="integrations-feedback flex items-start gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
           role="status"
@@ -384,7 +489,7 @@ export function CrmConnectionsPage({
         </div>
       ) : null}
 
-      {loading ? (
+      {loading || !tenantDataIsCurrent ? (
         <IntegrationGroup title="CRM">
           {Array.from({ length: 4 }, (_, index) => (
             <li key={index} className="px-5 py-4">
@@ -395,7 +500,7 @@ export function CrmConnectionsPage({
       ) : (
         <IntegrationGroup title="CRM">
           {rows}
-          {providers.length === 0 ? (
+          {providersForCurrentTenant.length === 0 ? (
             <IntegrationGroupEmpty message="No hay integraciones CRM disponibles." />
           ) : null}
         </IntegrationGroup>

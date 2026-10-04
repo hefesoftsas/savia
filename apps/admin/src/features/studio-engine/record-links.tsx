@@ -16,10 +16,16 @@ import { getStudioRuntime } from "./runtime";
 import type { StudioObject, StudioRecord } from "@savia/studio-shared/metadata";
 import type { RecordRelationGroup } from "@savia/studio-shared/relations";
 import { getScrollParent, syncScrollButtonPosition } from "./table-scroll";
+import { crmProviderLabel } from "./crm-provider";
 
 const enc = encodeURIComponent;
-const relationKey = (group: RecordRelationGroup) =>
-  `${group.definition.id}:${group.direction}`;
+type PagedRelationGroup = Omit<RecordRelationGroup, "total"> & {
+  total?: number;
+  hasNextPage?: boolean;
+};
+const relationKey = (
+  group: Pick<RecordRelationGroup, "definition" | "direction">,
+) => `${group.definition.id}:${group.direction}`;
 function recordLabel(record: StudioRecord) {
   const contactName = [record.firstname, record.lastname]
     .filter((value) => typeof value === "string" && value.trim())
@@ -212,7 +218,7 @@ function RelatedRecordsTable({
   onUnlink,
   busy,
 }: {
-  group: RecordRelationGroup;
+  group: PagedRelationGroup;
   onNavigate: (object: string, id: string) => void;
   onUnlink: (id: string) => void;
   busy: boolean;
@@ -328,7 +334,7 @@ function LinkGroup({
   base,
   onNavigate,
 }: {
-  group: RecordRelationGroup;
+  group: PagedRelationGroup;
   base: string;
   onNavigate: (object: string, id: string) => void;
 }) {
@@ -581,7 +587,7 @@ function RecordLinksContent({
       showGroupTabs ? "all" : activeGroupKey,
     ],
     queryFn: () =>
-      api<{ data: RecordRelationGroup[] }>(
+      api<{ data: PagedRelationGroup[] }>(
         `${base}?page=${page}&perPage=20&includeRecords=true${
           !showGroupTabs && selectedRelation
             ? `&relationId=${enc(selectedRelation)}&direction=${enc(selectedDirection ?? "")}`
@@ -593,7 +599,7 @@ function RecordLinksContent({
     object.config.studio?.collection?.kind === "crm"
       ? [...(query.data?.data ?? [])].sort(
           (a, b) =>
-            Number(b.total > 0) - Number(a.total > 0) ||
+            Number((b.total ?? 0) > 0) - Number((a.total ?? 0) > 0) ||
             a.label.localeCompare(b.label, locale),
         )
       : query.data?.data;
@@ -655,7 +661,11 @@ function RecordLinksContent({
       {query.data?.data.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {object.config.studio?.collection?.kind === "crm"
-            ? t("No hay registros relacionados en HubSpot.")
+            ? t("No hay registros relacionados en %{value0}.", {
+                value0: crmProviderLabel(
+                  object.config.studio.collection.sourceId,
+                ),
+              })
             : t(
                 "Esta colección aún no tiene relaciones. Puedes definirlas en Administración → Datos → Relaciones.",
               )}
@@ -671,8 +681,7 @@ function RecordLinksContent({
           >
             {groups.map((group) => {
               const key = relationKey(group);
-              const selected =
-                key === relationKey(activeGroup as RecordRelationGroup);
+              const selected = key === relationKey(activeGroup!);
               return (
                 <button
                   key={key}
@@ -684,7 +693,11 @@ function RecordLinksContent({
                   onClick={() => setInternalActiveGroupKey(key)}
                 >
                   <span>{group.label}</span>
-                  <span className="record-links-tab-count">{group.total}</span>
+                  {group.total !== undefined ? (
+                    <span className="record-links-tab-count">
+                      {group.total}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -711,7 +724,10 @@ function RecordLinksContent({
           />
         </div>
       ) : null}
-      {(page > 1 || query.data?.data.some((g) => g.total > 20)) && (
+      {(page > 1 ||
+        query.data?.data.some(
+          (group) => group.hasNextPage === true || (group.total ?? 0) > 20,
+        )) && (
         <nav
           aria-label={t("Páginas de registros relacionados")}
           className="flex items-center gap-2"
@@ -732,7 +748,11 @@ function RecordLinksContent({
             variant="outline"
             disabled={
               query.isFetching ||
-              !query.data?.data.some((g) => g.total > page * 20)
+              !query.data?.data.some(
+                (group) =>
+                  group.hasNextPage ??
+                  (group.total !== undefined && group.total > page * 20),
+              )
             }
             onClick={() => setPage(page + 1)}
           >

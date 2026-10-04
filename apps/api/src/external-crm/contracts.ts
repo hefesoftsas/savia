@@ -113,6 +113,11 @@ export type NangoConnectionSummary = {
   metadata: Record<string, string | string[]>;
   scopes: string[];
   scopeSource: "credentials.raw" | "metadata" | "none";
+  connectionConfig?: {
+    instanceUrl?: string;
+    apiDomain?: string;
+    extension?: string;
+  };
 };
 
 export type NangoProxyRequest = {
@@ -141,12 +146,14 @@ export type NangoClient = {
   proxy(request: NangoProxyRequest): Promise<Response>;
 };
 
+export type CrmProviderValidation = {
+  externalAccountId: string | null;
+  externalAccountLabel: string | null;
+  scopes: string[];
+};
+
 export type CrmProviderAdapter = {
-  validate(connection: ActiveCrmConnection): Promise<{
-    externalAccountId: string | null;
-    externalAccountLabel: string | null;
-    scopes: string[];
-  }>;
+  validate(connection: ActiveCrmConnection): Promise<CrmProviderValidation>;
   listContacts(
     connection: ActiveCrmConnection,
     query: CrmListQuery,
@@ -220,7 +227,41 @@ export type CrmAuditEvent = {
   errorCode?: string;
 };
 
+export type CrmOrganizationPolicy = {
+  activeProvider?: CrmProviderId;
+  ownedByCurrentUser: boolean;
+};
+
+export class CrmOrganizationConnectionExistsError extends Error {
+  readonly code = "CRM_ORGANIZATION_CONNECTION_EXISTS" as const;
+  constructor() {
+    super(
+      "This organization already has a CRM connection. Disconnect it before connecting another CRM.",
+    );
+    this.name = "CrmOrganizationConnectionExistsError";
+  }
+}
+
+export class CrmConnectionAlreadyAssignedError extends Error {
+  readonly code = "CRM_CONNECTION_ALREADY_ASSIGNED" as const;
+  constructor() {
+    super(
+      "This Nango connection is already assigned to an organization. Authorize a separate connection for this organization.",
+    );
+    this.name = "CrmConnectionAlreadyAssignedError";
+  }
+}
+
 export type CrmRepository = {
+  organizationPolicy(
+    agencyId: number,
+    principalId: string,
+  ): Promise<CrmOrganizationPolicy>;
+  assertConnectionAvailable(
+    agencyId: number,
+    provider: CrmProviderId,
+    principalId: string,
+  ): Promise<void>;
   listConnections(
     agencyId: number,
     principalId: string,

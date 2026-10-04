@@ -1,12 +1,16 @@
 import { createNangoClient, type NangoConfiguration } from "./nango";
 import { createCrmProviderRegistry } from "./providers";
 import { createHubSpotAdapter } from "./hubspot";
+import { createRemoteCrmAdapter } from "./remote-crm";
 import type { CrmRouteDependencies } from "../routes/crm";
 export type CrmSecrets = {
   NANGO_BASE_URL?: string;
   NANGO_CONNECT_URL?: string;
   NANGO_API_KEY?: string;
   NANGO_HUBSPOT_INTEGRATION_ID?: string;
+  NANGO_SALESFORCE_INTEGRATION_ID?: string;
+  NANGO_ZOHO_INTEGRATION_ID?: string;
+  NANGO_PIPEDRIVE_INTEGRATION_ID?: string;
   NANGO_GOOGLE_DRIVE_INTEGRATION_ID?: string;
   NANGO_GMAIL_INTEGRATION_ID?: string;
   NANGO_GOOGLE_CALENDAR_INTEGRATION_ID?: string;
@@ -27,6 +31,9 @@ export function nangoConfigurationFromEnvironment(
     connectUrl: environment.NANGO_CONNECT_URL,
     apiKey: environment.NANGO_API_KEY,
     hubspotIntegrationId: environment.NANGO_HUBSPOT_INTEGRATION_ID,
+    salesforceIntegrationId: environment.NANGO_SALESFORCE_INTEGRATION_ID,
+    zohoIntegrationId: environment.NANGO_ZOHO_INTEGRATION_ID,
+    pipedriveIntegrationId: environment.NANGO_PIPEDRIVE_INTEGRATION_ID,
     googleDriveIntegrationId: environment.NANGO_GOOGLE_DRIVE_INTEGRATION_ID,
     gmailIntegrationId: environment.NANGO_GMAIL_INTEGRATION_ID,
     googleCalendarIntegrationId:
@@ -55,6 +62,11 @@ export function crmRoutesFromEnvironment(
   return {
     nango,
     providers: createCrmProviderRegistry(configuration),
-    adapters: { hubspot: createHubSpotAdapter(nango) },
+    adapters: {
+      hubspot: createHubSpotAdapter(nango),
+      salesforce: createRemoteCrmAdapter("salesforce", nango),
+      zoho: createRemoteCrmAdapter("zoho", nango),
+      pipedrive: createRemoteCrmAdapter("pipedrive", nango),
+    },
   };
 }
