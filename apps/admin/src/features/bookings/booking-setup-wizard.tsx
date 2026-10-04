@@ -439,7 +439,7 @@ export function BookingSetupWizard({
                   <option value="automatic">
                     {t("Automatic (Google Meet or Teams)")}
                   </option>
-                  <option value="jitsi">Jitsi</option>
+                  <option value="jitsi">{t("Jitsi")}</option>
                 </select>
                 <span
                   id="booking-conference-help"

@@ -140,7 +140,7 @@
     },
     {
       "filename": "0033_booking_jitsi_conference.sql",
-      "sha256": "1bf51ab9492cf40d924d5e4cc78b56ede8507f6bf532fd1d5bc9f1cc6f88fb0a"
+      "sha256": "4bd4aeea413cd3657e292da4eaba5293e8157165971f8837e68a65b1a634055d"
     }
   ],
   "sqliteOnlyDerivedTables": [

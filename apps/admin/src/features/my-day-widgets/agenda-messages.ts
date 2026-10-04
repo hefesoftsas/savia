@@ -1,4 +1,10 @@
 export const agendaMessages = {
+  "ana@example.com, bob@example.com": [
+    "ana@example.com, bob@example.com",
+    "ana@example.com, bob@example.com",
+    "ana@example.com, bob@example.com",
+  ],
+  Jitsi: ["Jitsi", "Jitsi", "Jitsi"],
   "Proveedor de videollamada": [
     "Proveedor de videollamada",
     "Video meeting provider",

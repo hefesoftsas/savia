@@ -1371,7 +1371,7 @@ export function QuickTaskWidgetBody({
                 <option value="automatic">
                   {t("Automático (Google Meet o Teams)")}
                 </option>
-                <option value="jitsi">Jitsi</option>
+                <option value="jitsi">{t("Jitsi")}</option>
               </select>
               <Label htmlFor="my-day-guests">
                 {t("Correos de los invitados")}
@@ -1384,7 +1384,7 @@ export function QuickTaskWidgetBody({
                 onChange={(event) => setGuestEmails(event.target.value)}
                 maxLength={13000}
                 aria-describedby="my-day-guests-help"
-                placeholder="ana@example.com, bob@example.com"
+                placeholder={t("ana@example.com, bob@example.com")}
               />
               <p
                 id="my-day-guests-help"

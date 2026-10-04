@@ -1,6 +1,7 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const bookingMessages = {
+  Jitsi: ["Jitsi", "Jitsi", "Jitsi"],
   "Join Jitsi": ["Unirse a Jitsi", "Join Jitsi", "Entrar no Jitsi"],
   "Video meeting provider": [
     "Proveedor de videollamada",
