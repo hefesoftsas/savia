@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { KeyRound, Plus, Copy, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
@@ -38,6 +40,7 @@ export function TenantApiKeysPanel({
   ]);
   const [secret, setSecret] = useState<RevealedSecret | null>(null);
   const [copied, setCopied] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -55,6 +58,7 @@ export function TenantApiKeysPanel({
     setMembers([]);
     setMember("");
     setName("");
+    setCreating(false);
     setSecret(null);
     setCopied(false);
     setBusy(false);
@@ -105,13 +109,35 @@ export function TenantApiKeysPanel({
     "recordings:delete": t("Delete"),
   };
 
+  const descriptions: Record<RecordingScope, string> = {
+    "recordings:read": t("Read recordings"),
+    "recordings:upload": t("Upload recordings"),
+    "recordings:process": t("Process recordings"),
+    "recordings:delete": t("Delete recordings"),
+  };
+
   return (
-    <section className="grid min-w-0 gap-5" aria-label={t("Tenant API keys")}>
-      <header className="grid gap-1">
-        <h2 className="text-base font-semibold">{t("Tenant API keys")}</h2>
-        <p className="text-sm text-muted-foreground">
-          {t("Manage Companion API keys for tenant members.")}
-        </p>
+    <section className="grid min-w-0 gap-6" aria-label={t("Tenant API keys")}>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="grid gap-2">
+          <h2 className="text-lg font-semibold">{t("Tenant API keys")}</h2>
+          <p className="max-w-prose text-sm text-muted-foreground">
+            {t("Manage Companion API keys for tenant members.")}
+          </p>
+        </div>
+        {!loading &&
+        loadedContext === context &&
+        !creating &&
+        !visibleSecret ? (
+          <Button
+            type="button"
+            disabled={busy || !visibleMembers.length}
+            onClick={() => setCreating(true)}
+          >
+            <Plus aria-hidden="true" />
+            {t("New key")}
+          </Button>
+        ) : null}
       </header>
       {error ? (
         <div
@@ -135,10 +161,11 @@ export function TenantApiKeysPanel({
         <>
           {visibleSecret ? (
             <section
-              className="grid max-w-2xl gap-3 rounded-lg border p-4"
+              className="grid gap-4 border-y bg-muted/30 p-5 sm:p-6"
               aria-label={t("New key")}
             >
-              <p className="text-sm">
+              <h3 className="font-semibold">{t("New key")}</h3>
+              <p className="text-sm text-muted-foreground">
                 {t("Copy it into Companion. It will not be shown again.")}
               </p>
               <Label htmlFor={`${id}-secret`}>{t("New key")}</Label>
@@ -148,6 +175,8 @@ export function TenantApiKeysPanel({
                 value={visibleSecret}
                 autoComplete="off"
                 spellCheck={false}
+                className="font-mono"
+                onFocus={(event) => event.target.select()}
               />
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -164,6 +193,11 @@ export function TenantApiKeysPanel({
                     )
                   }
                 >
+                  {copied ? (
+                    <Check aria-hidden="true" />
+                  ) : (
+                    <Copy aria-hidden="true" />
+                  )}
                   {copied ? t("Copied") : t("Copy")}
                 </Button>
                 <Button
@@ -177,8 +211,12 @@ export function TenantApiKeysPanel({
                 </Button>
               </div>
             </section>
-          ) : (
-            <div className="grid max-w-2xl gap-4" aria-label={t("Create key")}>
+          ) : creating ? (
+            <section
+              className="grid gap-5 border-y bg-muted/30 p-5 sm:p-6"
+              aria-label={t("Create key")}
+            >
+              <h3 className="font-semibold">{t("Create key")}</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor={`${id}-name`}>{t("Key name")}</Label>
@@ -194,7 +232,7 @@ export function TenantApiKeysPanel({
                   <Label htmlFor={`${id}-member`}>{t("Member")}</Label>
                   <select
                     id={`${id}-member`}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    className="h-11 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
                     value={member}
                     onChange={(event) => setMember(event.target.value)}
                   >
@@ -211,7 +249,7 @@ export function TenantApiKeysPanel({
                 <Label htmlFor={`${id}-expiry`}>{t("Expiry")}</Label>
                 <select
                   id={`${id}-expiry`}
-                  className="h-10 w-fit rounded-md border bg-background px-3 text-sm"
+                  className="h-11 w-full max-w-xs rounded-md border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
                   value={days}
                   onChange={(event) => setDays(Number(event.target.value))}
                 >
@@ -222,17 +260,21 @@ export function TenantApiKeysPanel({
                   ))}
                 </select>
               </div>
-              <fieldset className="grid gap-3">
+              <fieldset className="grid gap-2 sm:grid-cols-2">
                 <legend className="mb-1 text-sm font-medium">
                   {t("Permissions")}
                 </legend>
+                <p className="mb-2 text-sm text-muted-foreground sm:col-span-2">
+                  {t("Select permissions for this key.")}
+                </p>
                 {(Object.keys(labels) as RecordingScope[]).map((scope) => (
                   <label
                     key={scope}
-                    className="flex items-center gap-3 text-sm"
+                    className="flex min-h-14 cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
                   >
                     <input
                       type="checkbox"
+                      className="mt-1 size-4 shrink-0 accent-primary"
                       checked={scopes.includes(scope)}
                       onChange={(event) =>
                         setScopes((current) =>
@@ -242,11 +284,16 @@ export function TenantApiKeysPanel({
                         )
                       }
                     />
-                    {labels[scope]}
+                    <span className="grid gap-1">
+                      <span className="font-medium">{labels[scope]}</span>
+                      <span className="text-xs leading-relaxed text-muted-foreground">
+                        {descriptions[scope]}
+                      </span>
+                    </span>
                   </label>
                 ))}
               </fieldset>
-              <div>
+              <div className="flex flex-wrap gap-3 border-t pt-4">
                 <Button
                   type="button"
                   disabled={busy || !name.trim() || !member || !scopes.length}
@@ -274,10 +321,22 @@ export function TenantApiKeysPanel({
                         ...current,
                       ]);
                       setName("");
+                      setCreating(false);
                     })
                   }
                 >
                   {busy ? t("Loading") : t("Create key")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    setCreating(false);
+                    setName("");
+                  }}
+                >
+                  {t("Cancel")}
                 </Button>
               </div>
               {!visibleMembers.length ? (
@@ -285,10 +344,24 @@ export function TenantApiKeysPanel({
                   {t("No active members are available.")}
                 </p>
               ) : null}
-            </div>
-          )}
+            </section>
+          ) : null}
+          {!visibleMembers.length && !creating && !visibleSecret ? (
+            <p className="text-sm text-muted-foreground">
+              {t("No active members are available.")}
+            </p>
+          ) : null}
           {!visibleKeys.length ? (
-            <p className="text-sm text-muted-foreground">{t("No keys yet.")}</p>
+            <div className="grid justify-items-center gap-2 border-y py-12 text-center">
+              <KeyRound
+                className="mb-2 size-6 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <h3 className="font-medium">{t("No keys yet.")}</h3>
+              <p className="max-w-prose text-sm text-muted-foreground">
+                {t("Create your first Companion key.")}
+              </p>
+            </div>
           ) : (
             <ul className="divide-y">
               {visibleKeys.map((key) => {
@@ -302,25 +375,80 @@ export function TenantApiKeysPanel({
                 return (
                   <li
                     key={key.id}
-                    className="flex flex-wrap items-start justify-between gap-3 py-4"
+                    className="flex flex-wrap items-start justify-between gap-4 py-5 sm:flex-nowrap"
                   >
-                    <div className="min-w-0 space-y-1">
-                      <h3 className="break-words font-medium">{key.name}</h3>
-                      <p className="break-all text-sm text-muted-foreground">
-                        {key.prefix}
-                      </p>
-                      <p className="break-all text-sm">
-                        {t("Owner")}: {key.ownerName} ({key.ownerEmail})
-                      </p>
-                      <p className="text-sm">
-                        {key.scopes.map((scope) => labels[scope]).join(" · ")}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {t("Created")}: {date(key.createdAt)} · {t("Expiry")}:{" "}
-                        {date(key.expiresAt)} · {t("Last used")}:{" "}
-                        {key.lastUsedAt ? date(key.lastUsedAt) : t("Never")}
-                      </p>
-                      <p className="text-sm">{status}</p>
+                    <div className="grid min-w-0 flex-1 gap-4 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="break-words font-medium">
+                            {key.name}
+                          </h3>
+                          <Badge
+                            variant={
+                              revoked || expired ? "outline" : "secondary"
+                            }
+                          >
+                            {status}
+                          </Badge>
+                        </div>
+                        <p className="break-all font-mono text-xs text-muted-foreground">
+                          {key.prefix}
+                        </p>
+                      </div>
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          {t("Owner")}
+                        </p>
+                        <p className="break-words text-sm font-medium">
+                          {key.ownerName}
+                        </p>
+                        <p className="break-all text-xs text-muted-foreground">
+                          {key.ownerEmail}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          {t("Expiry")}
+                        </p>
+                        <p className="text-sm tabular-nums">
+                          {date(key.expiresAt)}
+                        </p>
+                      </div>
+                      <details className="sm:col-span-3">
+                        <summary className="w-fit cursor-pointer rounded-sm py-2 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+                          {t("Key details")}
+                        </summary>
+                        <dl className="grid gap-3 py-3 text-sm sm:grid-cols-3">
+                          <div>
+                            <dt className="mb-1 text-xs text-muted-foreground">
+                              {t("Permissions")}
+                            </dt>
+                            <dd>
+                              {key.scopes
+                                .map((scope) => labels[scope])
+                                .join(" · ")}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="mb-1 text-xs text-muted-foreground">
+                              {t("Created")}
+                            </dt>
+                            <dd className="tabular-nums">
+                              {date(key.createdAt)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="mb-1 text-xs text-muted-foreground">
+                              {t("Last used")}
+                            </dt>
+                            <dd className="tabular-nums">
+                              {key.lastUsedAt
+                                ? date(key.lastUsedAt)
+                                : t("Never")}
+                            </dd>
+                          </div>
+                        </dl>
+                      </details>
                     </div>
                     {!revoked ? (
                       <Button

@@ -1,6 +1,7 @@
 import { I18nContextProvider } from "ra-core";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactElement } from "react";
+import userEvent from "@testing-library/user-event";
 import {
   act,
   cleanup,
@@ -68,9 +69,7 @@ it("previews edits locally, saves explicitly with the loaded version and resets 
     data: { ...branding, displayName: "Nueva marca", version: 2 },
   });
   render(<TenantBrandingPage services={service(get, put)} />);
-  expect(
-    await screen.findByRole("region", { name: "Claves API del tenant" }),
-  ).toBeInTheDocument();
+  await screen.findByLabelText("Nombre visible");
   fireEvent.change(await screen.findByLabelText("Nombre visible"), {
     target: { value: "Nueva marca" },
   });
@@ -99,6 +98,7 @@ it("saves the login animation repeat preference with tenant branding", async () 
     data: { ...branding, loginAnimationRepeat: false, version: 2 },
   });
   render(<TenantBrandingPage services={service(get, put)} />);
+  await selectTab("Pantalla de acceso");
   const repeat = await screen.findByLabelText("Repetir animación");
   expect(repeat).toBeChecked();
   fireEvent.click(repeat);
@@ -238,6 +238,7 @@ it("rejects invalid Lottie files without uploading", async () => {
     .mockResolvedValueOnce({ data: branding, canManage: true });
   const upload = vi.fn();
   render(<TenantBrandingPage services={service(get, vi.fn(), upload)} />);
+  await selectTab("Pantalla de acceso");
   fireEvent.change(await screen.findByLabelText("Subir animación Lottie"), {
     target: { files: [new File(["<svg/>"], "anim.json", { type: "" })] },
   });
@@ -255,6 +256,7 @@ it("uploads a Lottie animation and restores the default without images", async (
     .fn()
     .mockResolvedValue(new Response(JSON.stringify({ data: { url: asset } })));
   render(<TenantBrandingPage services={service(get, vi.fn(), upload)} />);
+  await selectTab("Pantalla de acceso");
   fireEvent.change(await screen.findByLabelText("Subir animación Lottie"), {
     target: { files: [new File([lottie], "login.json", { type: "" })] },
   });
@@ -323,6 +325,108 @@ it("offers only active commercial tenants", async () => {
   );
 });
 
+it("keeps branding drafts when switching between identity and login tabs", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true });
+  render(<TenantBrandingPage services={service(get)} />);
+  fireEvent.change(await screen.findByLabelText("Nombre visible"), {
+    target: { value: "Marca en borrador" },
+  });
+  await selectTab("Pantalla de acceso");
+  fireEvent.change(screen.getByLabelText("Título de acceso"), {
+    target: { value: "Acceso en borrador" },
+  });
+  expect(screen.getByText(/Cambios sin guardar/)).toBeInTheDocument();
+  await selectTab("Identidad");
+  expect(screen.getByLabelText("Nombre visible")).toHaveValue(
+    "Marca en borrador",
+  );
+  await selectTab("Pantalla de acceso");
+  expect(screen.getByLabelText("Título de acceso")).toHaveValue(
+    "Acceso en borrador",
+  );
+});
+
+it("saves from the login tab when the required identity name is valid", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true });
+  const put = vi.fn().mockResolvedValue({ data: { ...branding, version: 2 } });
+  render(<TenantBrandingPage services={service(get, put)} />);
+  await selectTab("Pantalla de acceso");
+  fireEvent.change(await screen.findByLabelText("Título de acceso"), {
+    target: { value: "Acceso nuevo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+  await screen.findByText("Marca guardada.");
+  expect(put).toHaveBeenCalledWith(
+    "/v1/tenants/1/branding",
+    expect.objectContaining({
+      displayName: "Agencia Uno",
+      loginTitle: "Acceso nuevo",
+    }),
+  );
+});
+
+it("rejects saving from the login tab when the hidden identity name is invalid", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true });
+  const put = vi.fn();
+  render(<TenantBrandingPage services={service(get, put)} />);
+  fireEvent.change(await screen.findByLabelText("Nombre visible"), {
+    target: { value: "" },
+  });
+  await selectTab("Pantalla de acceso");
+  expect(screen.getByLabelText("Nombre visible")).not.toBeRequired();
+  fireEvent.change(screen.getByLabelText("Título de acceso"), {
+    target: { value: "Acceso nuevo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Revisa los textos, los colores, las imágenes y la animación antes de guardar.",
+  );
+  expect(put).not.toHaveBeenCalled();
+});
+
+it("hides the API keys tab from read-only tenant members", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: false });
+  render(<TenantBrandingPage services={service(get)} />);
+  await screen.findByLabelText("Nombre visible");
+  expect(
+    screen.queryByRole("tab", { name: "Claves API" }),
+  ).not.toBeInTheDocument();
+});
+
+it("loads API keys only after opening the tab and hides branding controls there", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true });
+  render(<TenantBrandingPage services={service(get)} />);
+  await screen.findByLabelText("Nombre visible");
+  expect(
+    get.mock.calls.every(([path]) => !String(path).includes("api-keys")),
+  ).toBe(true);
+  await selectTab("Claves API");
+  expect(
+    screen.queryByRole("button", { name: "Guardar cambios" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("region", { name: "Vista previa de marca" }),
+  ).not.toBeInTheDocument();
+  expect(
+    await screen.findByRole("region", { name: "Claves API del tenant" }),
+  ).toBeInTheDocument();
+});
+
 function render(ui: ReactElement) {
   return testingRender(
     <MemoryRouter>
@@ -337,6 +441,10 @@ function render(ui: ReactElement) {
       </I18nContextProvider>
     </MemoryRouter>,
   );
+}
+
+async function selectTab(name: string) {
+  await userEvent.setup().click(await screen.findByRole("tab", { name }));
 }
 
 it("offers tenant creation to platform administrators without commercial organizations", async () => {
