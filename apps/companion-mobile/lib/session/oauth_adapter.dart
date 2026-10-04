@@ -80,8 +80,17 @@ class AppAuthOAuthAdapter implements OAuthAdapter {
         ),
       );
       return _toTokenSet(response);
+    } on FlutterAppAuthPlatformException catch (error) {
+      if (error.platformErrorDetails.error ==
+          FlutterAppAuthOAuthError.invalidGrant) {
+        throw const OAuthFailure(
+          'Your session expired. Sign in again.',
+          requiresSignIn: true,
+        );
+      }
+      throw const OAuthFailure('Session renewal is temporarily unavailable.');
     } catch (_) {
-      throw const OAuthFailure('Your session expired. Sign in again.');
+      throw const OAuthFailure('Session renewal is temporarily unavailable.');
     }
   }
 
@@ -148,9 +157,10 @@ class AppAuthOAuthAdapter implements OAuthAdapter {
 }
 
 class OAuthFailure implements Exception {
-  const OAuthFailure(this.message);
+  const OAuthFailure(this.message, {this.requiresSignIn = false});
 
   final String message;
+  final bool requiresSignIn;
 
   @override
   String toString() => 'OAuthFailure: $message';

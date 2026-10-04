@@ -100,9 +100,13 @@ class SessionController extends ChangeNotifier {
   DateTime? _expiresAt;
   String? _refreshToken;
   Future<String>? _refreshInFlight;
+  Future<void>? _restoreInFlight;
+  bool _canRestore = false;
+  bool get canRestore => _canRestore;
   Future<void> _storageTail = Future<void>.value();
 
   Future<void> signIn() async {
+    _restoreInFlight = null;
     _generation++;
     final operationGeneration = ++_credentialGeneration;
     _clearMemory();
@@ -125,8 +129,8 @@ class SessionController extends ChangeNotifier {
       );
     }
 
-    final discovered = await _discoverSafely(result.accessToken);
-    if (operationGeneration != _credentialGeneration) return;
+    _refreshToken = refreshToken;
+    _canRestore = true;
     try {
       await _queueStore(() {
         if (operationGeneration != _credentialGeneration) {
@@ -144,22 +148,47 @@ class SessionController extends ChangeNotifier {
       throw const SessionFailure('Session could not be saved securely.');
     }
     if (operationGeneration != _credentialGeneration) return;
+    final discovered = await _discoverSafely(result.accessToken);
+    if (operationGeneration != _credentialGeneration) return;
     _accessToken = result.accessToken;
     _expiresAt = result.expiresAt;
     _refreshToken = refreshToken;
+    _canRestore = true;
     _session = discovered;
     notifyListeners();
   }
 
-  Future<void> restore() async {
+  Future<void> restore() {
+    if (_session != null) return accessToken().then((_) {});
+    final existing = _restoreInFlight;
+    if (existing != null) return existing;
+    final operation = _restoreSavedSession();
+    late final Future<void> pending;
+    pending = operation.whenComplete(() {
+      if (identical(_restoreInFlight, pending)) _restoreInFlight = null;
+    });
+    _restoreInFlight = pending;
+    return pending;
+  }
+
+  Future<void> _restoreSavedSession() async {
+    // Prefer a rotation retained in memory when a secure-storage write failed.
+    final retainedRefresh = _refreshToken;
     _generation++;
     final operationGeneration = ++_credentialGeneration;
     _clearMemory();
     notifyListeners();
     StoredSession? stored;
     try {
-      stored = await store.read();
+      stored = retainedRefresh == null
+          ? await store.read()
+          : StoredSession(
+              refreshToken: retainedRefresh,
+              issuer: config.issuer.toString(),
+              clientId: config.clientId,
+            );
     } catch (_) {
+      if (operationGeneration == _credentialGeneration) _canRestore = true;
       throw const SessionFailure('Saved session could not be read.');
     }
     if (operationGeneration != _credentialGeneration) return;
@@ -175,13 +204,20 @@ class SessionController extends ChangeNotifier {
       }
       return;
     }
+    _refreshToken = stored.refreshToken;
+    _canRestore = true;
     try {
       final tokenSet = await oauth.refresh(stored.refreshToken);
       if (operationGeneration != _credentialGeneration) return;
-      if (tokenSet.accessToken.isEmpty) throw const SessionRequired();
-      final discovered = await _discoverSafely(tokenSet.accessToken);
-      if (operationGeneration != _credentialGeneration) return;
+      if (tokenSet.accessToken.isEmpty) {
+        throw const SessionFailure(
+          'Session renewal is temporarily unavailable.',
+        );
+      }
       final rotatedRefresh = tokenSet.refreshToken ?? stored.refreshToken;
+      _refreshToken = rotatedRefresh;
+      // Persist rotation before discovery: a network failure must never leave
+      // the revoked predecessor as the only credential available on restart.
       await _queueStore(() {
         if (operationGeneration != _credentialGeneration) {
           return Future<void>.value();
@@ -195,21 +231,30 @@ class SessionController extends ChangeNotifier {
         );
       });
       if (operationGeneration != _credentialGeneration) return;
+      final discovered = await _discoverSafely(tokenSet.accessToken);
+      if (operationGeneration != _credentialGeneration) return;
       _accessToken = tokenSet.accessToken;
       _expiresAt = tokenSet.expiresAt;
-      _refreshToken = rotatedRefresh;
       _session = discovered;
       notifyListeners();
-    } catch (_) {
-      if (operationGeneration == _credentialGeneration) {
-        _generation++;
-        _credentialGeneration++;
-        _clearMemory();
-        notifyListeners();
-        await _clearStoreSafely();
+    } on OAuthFailure catch (error) {
+      if (error.requiresSignIn) {
+        await _invalidateSession(operationGeneration);
+        throw const SessionRequired();
       }
-      throw const SessionRequired();
+      throw const SessionFailure('Session renewal is temporarily unavailable.');
+    } catch (_) {
+      throw const SessionFailure('Session renewal is temporarily unavailable.');
     }
+  }
+
+  Future<void> _invalidateSession(int operationGeneration) async {
+    if (operationGeneration != _credentialGeneration) return;
+    _generation++;
+    _credentialGeneration++;
+    _clearMemory();
+    notifyListeners();
+    await _clearStoreSafely();
   }
 
   Future<String> accessToken() async {
@@ -239,8 +284,13 @@ class SessionController extends ChangeNotifier {
       if (operationGeneration != _credentialGeneration || _session == null) {
         throw const SessionRequired();
       }
-      if (tokenSet.accessToken.isEmpty) throw const SessionRequired();
+      if (tokenSet.accessToken.isEmpty) {
+        throw const SessionFailure(
+          'Session renewal is temporarily unavailable.',
+        );
+      }
       final rotatedRefresh = tokenSet.refreshToken ?? oldRefreshToken;
+      _refreshToken = rotatedRefresh;
       await _queueStore(() {
         if (operationGeneration != _credentialGeneration) {
           return Future<void>.value();
@@ -262,23 +312,15 @@ class SessionController extends ChangeNotifier {
       notifyListeners();
       return tokenSet.accessToken;
     } on SessionRequired {
-      if (operationGeneration == _credentialGeneration) {
-        _generation++;
-        _credentialGeneration++;
-        _clearMemory();
-        notifyListeners();
-        await _clearStoreSafely();
-      }
       rethrow;
-    } catch (_) {
-      if (operationGeneration == _credentialGeneration) {
-        _generation++;
-        _credentialGeneration++;
-        _clearMemory();
-        notifyListeners();
-        await _clearStoreSafely();
+    } on OAuthFailure catch (error) {
+      if (error.requiresSignIn) {
+        await _invalidateSession(operationGeneration);
+        throw const SessionRequired();
       }
-      throw const SessionRequired();
+      throw const SessionFailure('Session renewal is temporarily unavailable.');
+    } catch (_) {
+      throw const SessionFailure('Session renewal is temporarily unavailable.');
     }
   }
 
@@ -295,6 +337,7 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<SignOutOutcome> signOut() async {
+    _restoreInFlight = null;
     final refreshToken = _refreshToken;
     _generation++;
     _credentialGeneration++;
@@ -344,6 +387,7 @@ class SessionController extends ChangeNotifier {
   }
 
   void _clearMemory() {
+    _canRestore = false;
     _session = null;
     _selectedWorkspace = null;
     _accessToken = null;
@@ -354,6 +398,7 @@ class SessionController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _restoreInFlight = null;
     _generation++;
     _credentialGeneration++;
     _clearMemory();

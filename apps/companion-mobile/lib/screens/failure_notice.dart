@@ -4,14 +4,22 @@ import '../l10n/app_localizations.dart';
 import '../recordings/models.dart';
 
 class FailureNotice extends StatelessWidget {
-  const FailureNotice(this.failure, {super.key});
+  const FailureNotice(
+    this.failure, {
+    super.key,
+    this.actionLabel,
+    this.onAction,
+  });
   final CompanionFailure failure;
+  final String? actionLabel;
+  final VoidCallback? onAction;
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final message = switch (failure.code) {
       'MICROPHONE_PERMISSION' => l.errorPermission,
       'SESSION_REQUIRED' => l.errorAuth,
+      'SESSION_UNAVAILABLE' => l.errorSessionUnavailable,
       'INVALID_AUDIO' ||
       'RECORDING_TOO_LARGE' ||
       'UNSUPPORTED_FORMAT' => l.errorFormat,
@@ -36,23 +44,39 @@ class FailureNotice extends StatelessWidget {
           color: Theme.of(context).colorScheme.errorContainer,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 20,
-              color: Theme.of(context).colorScheme.onErrorContainer,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                '$message${stage == null ? '' : ' · $stage'}${failure.providerStatus == null ? '' : ' (HTTP ${failure.providerStatus})'}',
-                style: TextStyle(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 20,
                   color: Theme.of(context).colorScheme.onErrorContainer,
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '$message${stage == null ? '' : ' · $stage'}${failure.providerStatus == null ? '' : ' (HTTP ${failure.providerStatus})'}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+              ],
             ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: onAction,
+                  icon: const Icon(Icons.refresh),
+                  label: Text(actionLabel!),
+                ),
+              ),
+            ],
           ],
         ),
       ),

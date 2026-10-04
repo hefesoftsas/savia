@@ -26,7 +26,6 @@ import 'screens/capture_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/recording_detail_screen.dart';
 import 'screens/recording_session_detail_screen.dart';
-import 'screens/failure_notice.dart';
 
 class CompanionBootstrap extends StatefulWidget {
   const CompanionBootstrap({super.key, required this.config});
@@ -185,11 +184,26 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
 
   Future<void> _restore() async {
     try {
-      if (widget.config.isConfigured) await s.session.restore();
-    } catch (_) {
+      if (widget.config.isConfigured) {
+        await s.session.restore();
+        failure = null;
+      }
+    } on SessionRequired {
       failure = const CompanionFailure('SESSION_REQUIRED', status: 401);
+    } on SessionFailure {
+      failure = const CompanionFailure('SESSION_UNAVAILABLE');
+    } catch (_) {
+      failure = const CompanionFailure('SESSION_UNAVAILABLE');
     }
     if (mounted) setState(() => connecting = false);
+  }
+
+  Future<void> _retryRestore() async {
+    setState(() {
+      connecting = true;
+      failure = null;
+    });
+    await _restore();
   }
 
   void _sessionChanged() {
@@ -311,21 +325,13 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     if (s.session.session == null) {
-      return Column(
-        children: [
-          Expanded(
-            child: ConnectScreen(
-              config: widget.config,
-              onConnect: _connect,
-              busy: connecting,
-            ),
-          ),
-          if (failure != null)
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: FailureNotice(failure!),
-            ),
-        ],
+      return ConnectScreen(
+        config: widget.config,
+        onConnect: _connect,
+        onRestore: _retryRestore,
+        failure: failure,
+        canRestore: s.session.canRestore,
+        busy: connecting,
       );
     }
     final account = s.session.session!;

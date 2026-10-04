@@ -571,7 +571,7 @@ class RecordingsApi implements RecordingSessionUploadApi {
     } on SessionRequired {
       throw const CompanionFailure('SESSION_REQUIRED');
     } catch (_) {
-      throw const CompanionFailure('SESSION_REQUIRED');
+      throw const CompanionFailure('SESSION_UNAVAILABLE');
     }
   }
 

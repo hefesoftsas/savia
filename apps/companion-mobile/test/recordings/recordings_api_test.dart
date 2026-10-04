@@ -6,6 +6,7 @@ import 'package:companion_mobile/capture/draft.dart';
 import 'package:companion_mobile/recordings/models.dart';
 import 'package:companion_mobile/recordings/recordings_api.dart';
 import 'package:dio/dio.dart';
+import 'package:companion_mobile/session/session_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -33,6 +34,34 @@ void main() {
     dio.close(force: true);
     await temp.delete(recursive: true);
   });
+
+  for (final entry in <Object, String>{
+    const SessionRequired(): 'SESSION_REQUIRED',
+    const SessionFailure('temporary outage'): 'SESSION_UNAVAILABLE',
+  }.entries) {
+    test(
+      'reports ${entry.value} without sending an unauthenticated request',
+      () async {
+        final client = RecordingsApi(
+          dio: dio,
+          apiOrigin: Uri.parse('https://savia-preview.hefesoft.com'),
+          tokenProvider: () async => throw entry.key,
+          workspaceIdProvider: () => workspaceId,
+        );
+        await expectLater(
+          client.list(),
+          throwsA(
+            isA<CompanionFailure>().having(
+              (error) => error.code,
+              'code',
+              entry.value,
+            ),
+          ),
+        );
+        expect(adapter.requests, isEmpty);
+      },
+    );
+  }
 
   test(
     'sends bearer and selected tenant context on workspace API calls',
