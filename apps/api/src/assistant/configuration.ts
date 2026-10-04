@@ -829,120 +829,116 @@ export function openRouterModelCatalog(
       ) {
         throw new Error("OpenRouter model response is invalid");
       }
-      return decoded.data
-        .flatMap((candidate): AssistantModel[] => {
-          if (
-            typeof candidate !== "object" ||
-            candidate === null ||
-            !("id" in candidate) ||
-            typeof candidate.id !== "string"
-          ) {
-            return [];
-          }
-          try {
-            const id = normalizeAssistantModel(candidate.id);
-            if (!id) return [];
-            const name =
-              "name" in candidate && typeof candidate.name === "string"
-                ? candidate.name.slice(0, 240)
-                : id;
-            const pricing =
-              "pricing" in candidate &&
-              typeof candidate.pricing === "object" &&
-              candidate.pricing !== null
-                ? candidate.pricing
-                : undefined;
-            const pricePerMillion = (value: unknown): number | null => {
-              const perToken =
-                typeof value === "string" || typeof value === "number"
-                  ? Number(value)
-                  : NaN;
-              const perMillion = perToken * 1_000_000;
-              return Number.isFinite(perMillion) && perMillion >= 0
-                ? perMillion
-                : null;
-            };
-            const contextLength =
-              "context_length" in candidate &&
-              typeof candidate.context_length === "number" &&
-              Number.isSafeInteger(candidate.context_length) &&
-              candidate.context_length > 0
-                ? candidate.context_length
-                : null;
-            const architecture =
-              "architecture" in candidate &&
-              typeof candidate.architecture === "object" &&
-              candidate.architecture !== null
-                ? (candidate.architecture as Record<string, unknown>)
-                : undefined;
+      return decoded.data.flatMap((candidate): AssistantModel[] => {
+        if (
+          typeof candidate !== "object" ||
+          candidate === null ||
+          !("id" in candidate) ||
+          typeof candidate.id !== "string"
+        ) {
+          return [];
+        }
+        try {
+          const id = normalizeAssistantModel(candidate.id);
+          if (!id) return [];
+          const name =
+            "name" in candidate && typeof candidate.name === "string"
+              ? candidate.name.slice(0, 240)
+              : id;
+          const pricing =
+            "pricing" in candidate &&
+            typeof candidate.pricing === "object" &&
+            candidate.pricing !== null
+              ? candidate.pricing
+              : undefined;
+          const pricePerMillion = (value: unknown): number | null => {
+            const perToken =
+              typeof value === "string" || typeof value === "number"
+                ? Number(value)
+                : NaN;
+            const perMillion = perToken * 1_000_000;
+            return Number.isFinite(perMillion) && perMillion >= 0
+              ? perMillion
+              : null;
+          };
+          const contextLength =
+            "context_length" in candidate &&
+            typeof candidate.context_length === "number" &&
+            Number.isSafeInteger(candidate.context_length) &&
+            candidate.context_length > 0
+              ? candidate.context_length
+              : null;
+          const architecture =
+            "architecture" in candidate &&
+            typeof candidate.architecture === "object" &&
+            candidate.architecture !== null
+              ? (candidate.architecture as Record<string, unknown>)
+              : undefined;
 
-            const inputModalities = Array.isArray(
-              architecture?.input_modalities,
-            )
-              ? (architecture.input_modalities as string[])
-              : typeof architecture?.modality === "string"
-                ? (architecture.modality as string).split("->")[0].split("+")
-                : [];
-
-            const outputModalities = Array.isArray(
-              architecture?.output_modalities,
-            )
-              ? (architecture.output_modalities as string[])
-              : typeof architecture?.modality === "string"
-                ? ((architecture.modality as string)
-                    .split("->")
-                    .at(-1)
-                    ?.split("+") ?? [])
-                : [];
-
-            const supportedParams = Array.isArray(
-              (candidate as Record<string, unknown>).supported_parameters,
-            )
-              ? ((candidate as Record<string, unknown>)
-                  .supported_parameters as string[])
+          const inputModalities = Array.isArray(architecture?.input_modalities)
+            ? (architecture.input_modalities as string[])
+            : typeof architecture?.modality === "string"
+              ? (architecture.modality as string).split("->")[0].split("+")
               : [];
 
-            const modalities: AssistantModelModalities = {
-              text: outputModalities.includes("text"),
-              image: inputModalities.includes("image"),
-              audio: inputModalities.includes("audio"),
-              file:
-                inputModalities.includes("file") ||
-                inputModalities.includes("image"),
-            };
-            const supportsTools = supportedParams.includes("tools");
-            const transcriptionEndpoint = outputModalities.includes(
-              "transcription",
-            )
-              ? "audio/transcriptions"
-              : inputModalities.includes("audio") &&
-                  outputModalities.includes("text")
-                ? "chat/completions"
-                : undefined;
+          const outputModalities = Array.isArray(
+            architecture?.output_modalities,
+          )
+            ? (architecture.output_modalities as string[])
+            : typeof architecture?.modality === "string"
+              ? ((architecture.modality as string)
+                  .split("->")
+                  .at(-1)
+                  ?.split("+") ?? [])
+              : [];
 
-            return [
-              {
-                id,
-                name,
-                contextLength,
-                inputPricePerMillion: pricePerMillion(
-                  pricing && "prompt" in pricing ? pricing.prompt : undefined,
-                ),
-                outputPricePerMillion: pricePerMillion(
-                  pricing && "completion" in pricing
-                    ? pricing.completion
-                    : undefined,
-                ),
-                modalities,
-                supportsTools,
-                ...(transcriptionEndpoint ? { transcriptionEndpoint } : {}),
-              },
-            ];
-          } catch {
-            return [];
-          }
-        })
-        .slice(0, 200);
+          const supportedParams = Array.isArray(
+            (candidate as Record<string, unknown>).supported_parameters,
+          )
+            ? ((candidate as Record<string, unknown>)
+                .supported_parameters as string[])
+            : [];
+
+          const modalities: AssistantModelModalities = {
+            text: outputModalities.includes("text"),
+            image: inputModalities.includes("image"),
+            audio: inputModalities.includes("audio"),
+            file:
+              inputModalities.includes("file") ||
+              inputModalities.includes("image"),
+          };
+          const supportsTools = supportedParams.includes("tools");
+          const transcriptionEndpoint = outputModalities.includes(
+            "transcription",
+          )
+            ? "audio/transcriptions"
+            : inputModalities.includes("audio") &&
+                outputModalities.includes("text")
+              ? "chat/completions"
+              : undefined;
+
+          return [
+            {
+              id,
+              name,
+              contextLength,
+              inputPricePerMillion: pricePerMillion(
+                pricing && "prompt" in pricing ? pricing.prompt : undefined,
+              ),
+              outputPricePerMillion: pricePerMillion(
+                pricing && "completion" in pricing
+                  ? pricing.completion
+                  : undefined,
+              ),
+              modalities,
+              supportsTools,
+              ...(transcriptionEndpoint ? { transcriptionEndpoint } : {}),
+            },
+          ];
+        } catch {
+          return [];
+        }
+      });
     },
   };
 }
