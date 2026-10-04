@@ -8,6 +8,8 @@ import {
   RefreshCw,
   Settings2,
 } from "lucide-react";
+import GoogleCalendar from "@thesvg/react/google-calendar";
+import MicrosoftOutlook from "@thesvg/react/microsoft-outlook";
 import type {
   CalendarColor,
   CalendarOccurrence,
@@ -311,6 +313,12 @@ export function CalendarView({
           "slate");
   }
   function eventRow(event: AgendaOccurrence, compact = false) {
+    const ProviderIcon =
+      event.sourceId === "google_calendar"
+        ? GoogleCalendar
+        : event.sourceId === "outlook"
+          ? MicrosoftOutlook
+          : null;
     const conference = event.conference;
     const joinUrl = safeEventConferenceLink(conference);
     const meetingProvider =
@@ -362,23 +370,39 @@ export function CalendarView({
             </>
           )}
           <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <span
-              aria-hidden="true"
-              className={`size-1.5 shrink-0 rounded-full ${
-                {
-                  blue: "bg-blue-500",
-                  emerald: "bg-emerald-500",
-                  violet: "bg-violet-500",
-                  amber: "bg-amber-500",
-                  rose: "bg-rose-500",
-                  slate: "bg-slate-500",
-                }[sourceColor(event.sourceId)]
-              }`}
-            />
-            <span className="truncate">
-              {compact && event.allDay ? `${t("All day")} · ` : ""}
-              {sourceName(event.sourceId)}
-            </span>
+            {ProviderIcon ? (
+              <>
+                {compact && event.allDay ? <span>{t("All day")}</span> : null}
+                <span
+                  role="img"
+                  aria-label={sourceName(event.sourceId)}
+                  title={sourceName(event.sourceId)}
+                  className="inline-flex shrink-0"
+                >
+                  <ProviderIcon aria-hidden="true" className="size-4" />
+                </span>
+              </>
+            ) : (
+              <>
+                <span
+                  aria-hidden="true"
+                  className={`size-1.5 shrink-0 rounded-full ${
+                    {
+                      blue: "bg-blue-500",
+                      emerald: "bg-emerald-500",
+                      violet: "bg-violet-500",
+                      amber: "bg-amber-500",
+                      rose: "bg-rose-500",
+                      slate: "bg-slate-500",
+                    }[sourceColor(event.sourceId)]
+                  }`}
+                />
+                <span className="truncate">
+                  {compact && event.allDay ? `${t("All day")} · ` : ""}
+                  {sourceName(event.sourceId)}
+                </span>
+              </>
+            )}
           </span>
           {personalCalendarStatus ? (
             <span className="mt-0.5 block text-[11px] font-medium">

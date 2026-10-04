@@ -62,6 +62,8 @@ settings in one row; settings retain their accessible name while showing only
 the icon. Mobile cards use compact spacing, a short date and touch-sized
 navigation. Day and week events use neutral cards with a small source marker,
 separate time and title, and compact copy/share controls with accessible labels.
+Google Calendar and Outlook use their provider icons with accessible names and
+hover titles; added calendar sources retain their visible names and color markers.
 The join link stays visible; deletion is in event details. A failed day read offers a retry directly in the agenda. Desktop
 month cells show three events and a
 **more** action for additional events. Multi-day events appear on every

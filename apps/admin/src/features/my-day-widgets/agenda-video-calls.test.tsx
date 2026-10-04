@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PersonalCalendarEvent } from "@/api/personal-integrations-client";
@@ -320,7 +321,7 @@ describe("My Day video calls", () => {
     expect(join).toHaveAttribute("rel", "noreferrer");
   });
 
-  it("shows provider names as text for a grouped event", async () => {
+  it("identifies each calendar copy with its accessible provider icon", async () => {
     const event: PersonalCalendarEvent = {
       id: "shared-event",
       title: "Planning",
@@ -334,14 +335,18 @@ describe("My Day video calls", () => {
     );
     renderApp(client);
 
+    const googleEvent = await screen.findByRole("button", {
+      name: /^Planning,.*Google Calendar$/,
+    });
+    const outlookEvent = await screen.findByRole("button", {
+      name: /^Planning,.*Outlook$/,
+    });
     expect(
-      await screen.findByRole("button", {
-        name: /^Planning,.*Google Calendar$/,
-      }),
-    ).toHaveTextContent("Google Calendar");
+      within(googleEvent).getByRole("img", { name: "Google Calendar" }),
+    ).toHaveAttribute("title", "Google Calendar");
     expect(
-      await screen.findByRole("button", { name: /^Planning,.*Outlook$/ }),
-    ).toHaveTextContent("Outlook");
+      within(outlookEvent).getByRole("img", { name: "Outlook" }),
+    ).toHaveAttribute("title", "Outlook");
     expect(
       screen.queryByText("Scheduled in Google Calendar"),
     ).not.toBeInTheDocument();
