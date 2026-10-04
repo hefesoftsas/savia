@@ -10,9 +10,18 @@ import {
   LoaderCircle,
   RefreshCw,
   Upload,
+  Trash2,
 } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { companionMessages } from "@/i18n/locales/companion";
 import {
@@ -120,6 +129,8 @@ function AudioFilesPage({
     [processing, setProcessing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false),
     [uploading, setUploading] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false),
+    [deleting, setDeleting] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
   const [recordingPickerOpen, setRecordingPickerOpen] = useState(false);
   const recordingPickerTrigger = useRef<HTMLButtonElement>(null);
@@ -227,6 +238,29 @@ function AudioFilesPage({
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [client, selected?.id, detailRevision]);
+  const remove = async () => {
+    if (!selected || inFlight.current) return;
+    const id = selected.id;
+    inFlight.current = true;
+    setDeleting(true);
+    setError(null);
+    try {
+      await client.remove(id);
+      if (!mounted.current) return;
+      const remaining = recordings.filter((recording) => recording.id !== id);
+      setRecordings(remaining);
+      setSelected(remaining[0] ?? null);
+      setDeleteOpen(false);
+    } catch {
+      if (mounted.current) {
+        setDeleteOpen(false);
+        setError(t("Unable to delete this recording. Try again."));
+      }
+    } finally {
+      inFlight.current = false;
+      if (mounted.current) setDeleting(false);
+    }
+  };
   const generate = async () => {
     if (!selected || inFlight.current) return;
     inFlight.current = true;
@@ -262,7 +296,7 @@ function AudioFilesPage({
           <Button
             size="sm"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-            disabled={loading || processing || uploading}
+            disabled={loading || processing || uploading || deleting}
             onClick={() => setUploadOpen(true)}
           >
             <Upload className="size-4" aria-hidden="true" />
@@ -276,7 +310,7 @@ function AudioFilesPage({
             className="max-sm:size-11"
             aria-label={t("Refresh")}
             title={t("Refresh")}
-            disabled={loading || processing || uploading}
+            disabled={loading || processing || uploading || deleting}
             onClick={() => void load()}
           >
             <RefreshCw className="size-4" aria-hidden="true" />
@@ -366,7 +400,7 @@ function AudioFilesPage({
                   <li key={r.id}>
                     <button
                       className={`flex w-full items-center justify-between gap-2 rounded-lg p-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring ${selected?.id === r.id ? "bg-muted" : ""}`}
-                      disabled={processing || uploading}
+                      disabled={processing || uploading || deleting}
                       aria-current={selected?.id === r.id ? "true" : undefined}
                       onClick={() => {
                         setSelected(r);
@@ -405,7 +439,7 @@ function AudioFilesPage({
                   className="mt-3 w-full max-sm:h-11"
                   variant="ghost"
                   size="sm"
-                  disabled={loading || processing || uploading}
+                  disabled={loading || processing || uploading || deleting}
                   onClick={() => void load(cursor)}
                 >
                   {t("Load more")}
@@ -416,9 +450,56 @@ function AudioFilesPage({
           <section className="min-w-0" aria-label={t("Meeting notes")}>
             {selected && (
               <>
-                <h2 className="break-words text-lg font-medium">
-                  {source(selected)}
-                </h2>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="break-words text-lg font-medium">
+                    {source(selected)}
+                  </h2>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={loading || processing || uploading || deleting}
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                    {t("Delete recording")}
+                  </Button>
+                </div>
+                <Dialog
+                  open={deleteOpen}
+                  onOpenChange={(open) => {
+                    if (!deleting) setDeleteOpen(open);
+                  }}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>{t("Delete recording")}</DialogTitle>
+                      <DialogDescription>
+                        {source(selected)}.{" "}
+                        {t(
+                          "This permanently deletes the saved audio, transcript and summary from Savia. The original file stays on your device or connected drive.",
+                        )}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        disabled={deleting}
+                        onClick={() => setDeleteOpen(false)}
+                        autoFocus
+                      >
+                        {t("Cancel")}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        disabled={deleting}
+                        onClick={() => void remove()}
+                      >
+                        {deleting ? t("Deleting…") : t("Delete permanently")}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
                 <div className="mb-4 mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                   <time dateTime={selected.createdAt}>{date(selected)}</time>
                   {audio && (
@@ -468,7 +549,11 @@ function AudioFilesPage({
                         <Button
                           className="max-sm:h-11 max-sm:w-full"
                           disabled={
-                            loadingDetail || processing || uploading || !audio
+                            loadingDetail ||
+                            processing ||
+                            uploading ||
+                            deleting ||
+                            !audio
                           }
                           onClick={() => void generate()}
                         >
