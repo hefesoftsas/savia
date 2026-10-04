@@ -53,6 +53,7 @@ const providerDocumentSchema = z.object({
     "jira",
     "linear",
     "github",
+    "zoom",
   ]),
   kind: z.literal("personal-integration-provider"),
   attributes: z.object({
@@ -96,6 +97,7 @@ const connectionAttributesSchema = z.object({
     "jira",
     "linear",
     "github",
+    "zoom",
   ]),
   status: z.enum([
     "pending",
@@ -411,7 +413,9 @@ const eventListRoute = createRoute({
                 timeZone: z.string().nullable().optional(),
                 conference: z
                   .object({
-                    provider: z.enum(["google_meet", "teams"]).nullable(),
+                    provider: z
+                      .enum(["google_meet", "teams", "zoom"])
+                      .nullable(),
                     joinUrl: z.string().url().nullable(),
                     status: z.enum([
                       "ready",
@@ -452,6 +456,8 @@ const createCalendarEventRoute = createRoute({
             startsAt: z.string().trim().min(1).max(64),
             endsAt: z.string().trim().min(1).max(64),
             videoCall: z.boolean().optional(),
+            conferenceProvider: z.enum(["zoom"]).optional(),
+            requestId: z.uuid().optional(),
           }),
         },
       },
@@ -472,7 +478,7 @@ const createCalendarEventRoute = createRoute({
               webLink: z.string().url().nullable(),
               conference: z
                 .object({
-                  provider: z.enum(["google_meet", "teams"]).nullable(),
+                  provider: z.enum(["google_meet", "teams", "zoom"]).nullable(),
                   joinUrl: z.string().url().nullable(),
                   status: z.enum(["ready", "pending", "unsupported", "failed"]),
                 })
@@ -693,7 +699,7 @@ export function registerPersonalIntegrationRoutes(
   const nango = dependencies?.nango;
   const personalActionPayloadCipher = dependencies?.personalActionPayloadCipher;
   const operations = nango
-    ? new PersonalIntegrationOperations(repository, nango)
+    ? new PersonalIntegrationOperations(repository, nango, database)
     : undefined;
 
   app.openapi(providerListRoute, (context) => {
@@ -1229,6 +1235,8 @@ export function registerPersonalIntegrationRoutes(
             startsAt: input.startsAt,
             endsAt: input.endsAt,
             videoCall: input.videoCall,
+            conferenceProvider: input.conferenceProvider,
+            requestId: input.requestId,
           }),
         },
         201,

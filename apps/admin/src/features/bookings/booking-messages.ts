@@ -1,6 +1,40 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const bookingMessages = {
+  Zoom: ["Zoom", "Zoom", "Zoom"],
+  "Zoom needs reconnection": [
+    "Zoom necesita reconexión",
+    "Zoom needs reconnection",
+    "O Zoom precisa ser reconectado",
+  ],
+  "Join Zoom": ["Unirse a Zoom", "Join Zoom", "Entrar no Zoom"],
+  "Video call platform": [
+    "Plataforma de videollamada",
+    "Video call platform",
+    "Plataforma de videochamada",
+  ],
+  "Calendar default (Meet or Teams)": [
+    "Según el calendario (Meet o Teams)",
+    "Calendar default (Meet or Teams)",
+    "Conforme o calendário (Meet ou Teams)",
+  ],
+  "Use Zoom for appointments": [
+    "Usar Zoom para las citas",
+    "Use Zoom for appointments",
+    "Usar Zoom para agendamentos",
+  ],
+  "Connect Zoom first. Only you can authorize your Zoom account for appointments.":
+    [
+      "Conecta Zoom primero. Solo tú puedes autorizar tu cuenta de Zoom para las citas.",
+      "Connect Zoom first. Only you can authorize your Zoom account for appointments.",
+      "Conecte o Zoom primeiro. Só você pode autorizar sua conta do Zoom para agendamentos.",
+    ],
+  "Zoom authorized for appointments": [
+    "Zoom autorizado para las citas",
+    "Zoom authorized for appointments",
+    "Zoom autorizado para agendamentos",
+  ],
+
   Appointments: ["Citas", "Appointments", "Agendamentos"],
   "Manage appointments and your availability.": [
     "Administra las citas y tu disponibilidad.",

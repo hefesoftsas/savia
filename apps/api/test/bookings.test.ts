@@ -33,6 +33,7 @@ let sequence = 997000;
 async function fixture(
   captchaOptions?: Parameters<typeof createApp>[22],
   database: D1Database = env.DB,
+  nango?: NonNullable<Parameters<typeof createApp>[15]>["nango"],
 ) {
   const tenantId = ++sequence,
     principalId = crypto.randomUUID(),
@@ -90,6 +91,7 @@ async function fixture(
   args[15] = {
     providers: createPersonalIntegrationProviderRegistry({}),
     calendarSecret: "booking agenda test secret",
+    nango,
   };
   args[22] = captchaOptions ?? {
     publicOrigin: "http://localhost:5173",
@@ -459,6 +461,95 @@ it("queues video-link generation once for the assigned professional and keeps th
       .bind(f.tenantId, reservation.id, reservation.version)
       .first(),
   ).toEqual({ count: 1 });
+});
+
+it("queues Zoom conference generation only from the assigned professional's pinned account", async () => {
+  const f = await fixture();
+  const reservation = ((await (await f.reserve()).json()) as any).data
+    .reservation;
+  const now = new Date().toISOString();
+  const calendarConnectionId = crypto.randomUUID();
+  const zoomConnectionId = crypto.randomUUID();
+  for (const [connectionId, provider] of [
+    [calendarConnectionId, "google_calendar"],
+    [zoomConnectionId, "zoom"],
+  ] as const) {
+    await env.DB.prepare(
+      "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,external_account_label,external_account_id,scopes,last_validated_at,disconnected_at,created_at,updated_at) VALUES(?,?,?,?,?,'connected',NULL,NULL,'[]',?,NULL,?,?)",
+    )
+      .bind(
+        connectionId,
+        f.principalId,
+        provider,
+        connectionId,
+        provider,
+        now,
+        now,
+        now,
+      )
+      .run();
+  }
+  await env.DB.prepare(
+    "INSERT INTO tenant_booking_calendar_grants(tenant_id,principal_id,provider,connection_id,conference_provider,zoom_connection_id) VALUES(?,?,'google_calendar',?,'auto',?)",
+  )
+    .bind(f.tenantId, f.principalId, calendarConnectionId, zoomConnectionId)
+    .run();
+
+  const response = await f.app.request(
+    `${f.base}/reservations/${reservation.id}/conference`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: reservation.version, provider: "zoom" }),
+    },
+  );
+  expect(response.status).toBe(200);
+  expect(((await response.json()) as any).data.conference).toEqual({
+    provider: "zoom",
+    joinUrl: null,
+    status: "pending",
+  });
+  expect(
+    await env.DB.prepare(
+      "SELECT zoom_connection_id,conference_provider,conference_status FROM tenant_bookings WHERE tenant_id=? AND id=?",
+    )
+      .bind(f.tenantId, reservation.id)
+      .first(),
+  ).toEqual({
+    zoom_connection_id: zoomConnectionId,
+    conference_provider: null,
+    conference_status: "pending",
+  });
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET conference_status='failed' WHERE id=?",
+  )
+    .bind(reservation.id)
+    .run();
+  const list = async () =>
+    (
+      (await (
+        await f.app.request(
+          `${f.base}/reservations?from=2026-10-01T00:00:00Z&to=2026-11-01T00:00:00Z`,
+        )
+      ).json()) as any
+    ).data;
+  expect(
+    (await list()).find((item: any) => item.id === reservation.id),
+  ).toMatchObject({
+    availableConferenceProviders: ["zoom"],
+    canGenerateConference: true,
+  });
+  await env.DB.prepare(
+    "UPDATE tenant_booking_calendar_grants SET zoom_connection_id=NULL WHERE tenant_id=?",
+  )
+    .bind(f.tenantId)
+    .run();
+  expect(
+    (await list()).find((item: any) => item.id === reservation.id),
+  ).toMatchObject({
+    availableConferenceProviders: [],
+    canGenerateConference: false,
+  });
 });
 
 it("rejects video-link generation for another professional and cancelled reservations", async () => {
@@ -1943,4 +2034,57 @@ it("never moves a private reservation after its professional profile is reassign
     }),
   });
   expect(update.status).toBe(404);
+});
+
+it("snapshots an explicitly authorized Zoom default on new public reservations", async () => {
+  const f = await fixture(undefined, env.DB, {
+    proxy: async () => Response.json({ calendars: { primary: { busy: [] } } }),
+  } as NonNullable<NonNullable<Parameters<typeof createApp>[15]>["nango"]>);
+  const zoomId = crypto.randomUUID();
+  for (const [id, provider] of [
+    [crypto.randomUUID(), "google_calendar"],
+    [zoomId, "zoom"],
+  ]) {
+    await env.DB.prepare(
+      "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,scopes,created_at,updated_at) VALUES(?,?,?,?,?,'connected','[]','now','now')",
+    )
+      .bind(id, f.principalId, provider, id, provider)
+      .run();
+  }
+  const grant = (conferenceProvider?: string) =>
+    f.app.request(`${f.base}/calendar`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: "google_calendar",
+        ...(conferenceProvider ? { conferenceProvider } : {}),
+      }),
+    });
+  expect((await grant()).status).toBe(200);
+  expect(
+    await env.DB.prepare(
+      "SELECT zoom_connection_id FROM tenant_booking_calendar_grants WHERE tenant_id=?",
+    )
+      .bind(f.tenantId)
+      .first(),
+  ).toEqual({ zoom_connection_id: null });
+  expect((await grant("zoom")).status).toBe(200);
+  const response = await f.reserve();
+  expect(response.status).toBe(201);
+  const reservation = ((await response.json()) as any).data.reservation;
+  expect(
+    await env.DB.prepare(
+      "SELECT zoom_connection_id FROM tenant_bookings WHERE id=?",
+    )
+      .bind(reservation.id)
+      .first(),
+  ).toEqual({ zoom_connection_id: zoomId });
+  expect((await grant("auto")).status).toBe(200);
+  expect(
+    await env.DB.prepare(
+      "SELECT zoom_connection_id FROM tenant_booking_calendar_grants WHERE tenant_id=?",
+    )
+      .bind(f.tenantId)
+      .first(),
+  ).toEqual({ zoom_connection_id: null });
 });

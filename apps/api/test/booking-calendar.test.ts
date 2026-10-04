@@ -1081,4 +1081,90 @@ describe("booking calendar adapter", () => {
     expect(requests.map(({ method }) => method)).toEqual(["GET", "DELETE"]);
     expect(requests[1]?.path).toBe("/v1.0/me/events/lost-outlook-event");
   });
+
+  it("writes a Zoom join link into the booking calendar event", async () => {
+    await seedConnection();
+    const requests: Array<{ method: string; path: string; body?: unknown }> =
+      [];
+    const nango = fakeNango(async (request) => {
+      requests.push(request);
+      if (request.path === "/calendar/v3/calendars/primary")
+        return Response.json({
+          conferenceProperties: {
+            allowedConferenceSolutionTypes: ["hangoutsMeet"],
+          },
+        });
+      if (request.method === "POST")
+        return Response.json({ id: (request.body as { id: string }).id });
+      throw new Error(`Unexpected request ${request.method} ${request.path}`);
+    });
+    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+      ...calendarInput,
+      id: "booking-with-zoom",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: null,
+      cancelled: false,
+      conferenceProvider: "zoom",
+      zoomJoinUrl: "https://zoom.us/j/123456789?pwd=secret",
+    } as never);
+
+    expect(requests.map(({ method }) => method)).toEqual(["POST"]);
+    expect(requests[0]?.body).toMatchObject({
+      description:
+        "Join the Zoom meeting: https://zoom.us/j/123456789?pwd=secret",
+    });
+    expect(result).toEqual({
+      externalId: (requests[0]?.body as { id: string }).id,
+      conference: {
+        provider: "zoom",
+        joinUrl: "https://zoom.us/j/123456789?pwd=secret",
+        status: "ready",
+      },
+    });
+  });
+
+  it("writes a Zoom join link into an Outlook event without enabling Teams", async () => {
+    await seedConnection("outlook");
+    const requests: Array<{ method: string; path: string; body?: unknown }> =
+      [];
+    const nango = fakeNango(async (request) => {
+      requests.push(request);
+      if (request.method === "GET") return Response.json({ value: [] });
+      if (request.method === "POST")
+        return Response.json({ id: "outlook-zoom-event" });
+      throw new Error(`Unexpected request ${request.method} ${request.path}`);
+    });
+    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+      ...calendarInput,
+      provider: "outlook",
+      id: "booking-with-outlook-zoom",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: null,
+      cancelled: false,
+      conferenceProvider: "zoom",
+      zoomJoinUrl: "https://us02web.zoom.us/j/123456789?pwd=secret",
+    } as never);
+
+    expect(requests.map(({ method }) => method)).toEqual(["GET", "POST"]);
+    expect(requests[1]?.body).toMatchObject({
+      body: {
+        contentType: "text",
+        content:
+          "Join the Zoom meeting: https://us02web.zoom.us/j/123456789?pwd=secret",
+      },
+    });
+    expect(requests[1]?.body).not.toHaveProperty("isOnlineMeeting", true);
+    expect(result).toEqual({
+      externalId: "outlook-zoom-event",
+      conference: {
+        provider: "zoom",
+        joinUrl: "https://us02web.zoom.us/j/123456789?pwd=secret",
+        status: "ready",
+      },
+    });
+  });
 });

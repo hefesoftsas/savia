@@ -63,6 +63,7 @@ const configuredProviders = createPersonalIntegrationProviderRegistry({
   jiraIntegrationId: "jira-savia",
   linearIntegrationId: "linear-savia",
   githubIntegrationId: "github-savia",
+  zoomIntegrationId: "zoom-savia",
 });
 const payloadCipher = new PersonalActionPayloadCipher("test-mcp-shared-secret");
 
@@ -181,7 +182,7 @@ describe("personal integration providers", () => {
     await seedPrincipal();
   });
 
-  it("lists all nine personal providers for an authenticated user", async () => {
+  it("lists all ten personal providers for an authenticated user", async () => {
     const app = createApp(
       env.DB,
       undefined,
@@ -230,6 +231,16 @@ describe("personal integration providers", () => {
             capabilities: ["issues:read"],
           }),
         }),
+        expect.objectContaining({
+          id: "zoom",
+          attributes: expect.objectContaining({
+            capabilities: [
+              "meetings:create",
+              "meetings:update",
+              "meetings:delete",
+            ],
+          }),
+        }),
       ]),
     });
   });
@@ -244,6 +255,7 @@ describe("personal integration providers", () => {
     ["jira", "jira-savia"],
     ["linear", "linear-savia"],
     ["github", "github-savia"],
+    ["zoom", "zoom-savia"],
   ] as const)(
     "creates a scoped Nango session for %s",
     async (provider, integrationId) => {

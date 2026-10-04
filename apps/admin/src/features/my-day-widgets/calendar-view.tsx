@@ -313,9 +313,11 @@ export function CalendarView({
     const conference = event.conference;
     const joinUrl = safeEventConferenceLink(conference);
     const meetingProvider =
-      conference?.provider === "google_meet"
-        ? agendaText("Google Meet")
-        : agendaText("Microsoft Teams");
+      conference?.provider === "zoom"
+        ? agendaText("Zoom")
+        : conference?.provider === "google_meet"
+          ? agendaText("Google Meet")
+          : agendaText("Microsoft Teams");
     return (
       <div
         key={`${event.sourceId}:${event.id}`}
@@ -798,9 +800,11 @@ export function CalendarView({
                     const conference = (detail as AgendaOccurrence).conference!;
                     const joinUrl = safeEventConferenceLink(conference);
                     const providerName =
-                      conference.provider === "google_meet"
-                        ? agendaText("Google Meet")
-                        : agendaText("Microsoft Teams");
+                      conference.provider === "zoom"
+                        ? agendaText("Zoom")
+                        : conference.provider === "google_meet"
+                          ? agendaText("Google Meet")
+                          : agendaText("Microsoft Teams");
                     return joinUrl ? (
                       <Button asChild variant="outline">
                         <a

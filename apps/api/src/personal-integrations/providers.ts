@@ -86,6 +86,13 @@ const providerTemplates: readonly ProviderTemplate[] = [
     integrationId: (configuration) =>
       configured(configuration.githubIntegrationId),
   },
+  {
+    id: "zoom",
+    displayName: "Zoom",
+    capabilities: ["meetings:create", "meetings:update", "meetings:delete"],
+    integrationId: (configuration) =>
+      configured(configuration.zoomIntegrationId),
+  },
 ];
 
 export function createPersonalIntegrationProviderRegistry(

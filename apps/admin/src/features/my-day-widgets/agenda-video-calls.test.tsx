@@ -83,6 +83,57 @@ afterEach(() => {
 });
 
 describe("My Day video calls", () => {
+  it("creates Zoom in the selected calendar with a stable request key on retry", async () => {
+    const user = userEvent.setup();
+    const client = createClient();
+    vi.mocked(client.listConnections).mockResolvedValue([
+      {
+        id: "google-connection",
+        provider: "google_calendar",
+        status: "connected",
+      },
+      { id: "zoom-connection", provider: "zoom", status: "connected" },
+    ]);
+    vi.mocked(client.createCalendarEvent).mockRejectedValueOnce(
+      new Error("Unavailable"),
+    );
+    renderApp(client);
+    await user.type(screen.getByLabelText("Task"), "Zoom planning");
+    await user.click(screen.getByLabelText("Create a video call"));
+    await user.selectOptions(
+      screen.getByLabelText("Video call platform"),
+      "zoom",
+    );
+    await user.click(screen.getByRole("button", { name: "Create task" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Zoom");
+    await user.click(screen.getByRole("button", { name: "Confirm creation" }));
+    await waitFor(() =>
+      expect(client.createCalendarEvent).toHaveBeenCalledTimes(1),
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm creation" }));
+    await waitFor(() =>
+      expect(client.createCalendarEvent).toHaveBeenCalledTimes(2),
+    );
+    const first = vi.mocked(client.createCalendarEvent).mock.calls[0][0];
+    expect(first).toEqual(
+      expect.objectContaining({
+        provider: "google_calendar",
+        videoCall: true,
+        conferenceProvider: "zoom",
+        requestId: expect.any(String),
+      }),
+    );
+    expect(vi.mocked(client.createCalendarEvent).mock.calls[1][0]).toEqual(
+      first,
+    );
+  });
+
+  it("requires a connected Zoom account before offering Zoom", async () => {
+    renderApp(createClient());
+    await userEvent.click(screen.getByLabelText("Create a video call"));
+    expect(screen.getByRole("option", { name: "Zoom" })).toBeDisabled();
+  });
+
   it("can delete a newly created event immediately using its originating connection", async () => {
     const user = userEvent.setup();
     const client = createClient();

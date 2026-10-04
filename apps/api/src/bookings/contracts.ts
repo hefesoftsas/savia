@@ -136,7 +136,7 @@ export type BookingProfessional = z.infer<typeof professionalSchema>;
 export type BookingService = z.infer<typeof serviceSchema>;
 export type BusyInterval = { start: string; end: string };
 export const bookingConferenceSchema = z.object({
-  provider: z.enum(["google_meet", "teams"]).nullable(),
+  provider: z.enum(["google_meet", "teams", "zoom"]).nullable(),
   joinUrl: z.string().url().nullable(),
   status: z.enum(["ready", "pending", "unsupported", "failed"]),
 });
@@ -156,6 +156,7 @@ export const reservationSchema = z.object({
   deliveryStatus: z.string(),
   calendarStatus: z.string(),
   canGenerateConference: z.boolean().optional(),
+  availableConferenceProviders: z.array(z.enum(["auto", "zoom"])).optional(),
   conference: bookingConferenceSchema.nullable().optional(),
 });
 export const managementBootstrapSchema = z.object({
@@ -194,11 +195,16 @@ export const bootstrapSchema = z.object({
   calendar: z.object({
     provider: z.enum(["google_calendar", "outlook"]).nullable(),
     status: z.string(),
+    conferenceProvider: z.enum(["auto", "zoom"]).default("auto"),
+    zoomStatus: z.enum(["connected", "not_connected", "reconnect_required"]),
   }),
 });
 export const revisionSchema = z
   .object({ version: z.number().int().positive() })
   .strict();
+export const conferenceRequestSchema = revisionSchema.extend({
+  provider: z.enum(["auto", "zoom"]).default("auto"),
+});
 export const slotQuerySchema = z.object({
   serviceId: id,
   professionalId: id,
@@ -212,7 +218,10 @@ export const ownAvailabilitySchema = z
   })
   .strict();
 export const calendarGrantSchema = z
-  .object({ provider: z.enum(["google_calendar", "outlook"]).nullable() })
+  .object({
+    provider: z.enum(["google_calendar", "outlook"]).nullable(),
+    conferenceProvider: z.enum(["auto", "zoom"]).optional(),
+  })
   .strict();
 export const agendaGrantSchema = z.object({ enabled: z.boolean() }).strict();
 export function defaultSettings(title: string): BookingSettings {

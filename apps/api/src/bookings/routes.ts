@@ -26,6 +26,7 @@ import {
   reservationSchema,
   managementBootstrapSchema,
   revisionSchema,
+  conferenceRequestSchema,
   ownAvailabilitySchema,
   calendarGrantSchema,
   agendaGrantSchema,
@@ -418,6 +419,9 @@ export function registerBookingRoutes(
           grant.provider,
         )
       : null;
+    const zoomConnection = await createPersonalIntegrationRepository(
+      db,
+    ).findActiveConnection(actor.principal.id, "zoom");
     return {
       settings: auth.canManage
         ? state.settings
@@ -458,6 +462,14 @@ export function registerBookingRoutes(
               connection.status === "connected"
             ? "connected"
             : "reconnect_required",
+        conferenceProvider: grant?.conference_provider ?? "auto",
+        zoomStatus:
+          !zoomConnection || zoomConnection.status !== "connected"
+            ? "not_connected"
+            : grant?.zoom_connection_id &&
+                zoomConnection.id !== grant.zoom_connection_id
+              ? "reconnect_required"
+              : "connected",
       },
     };
   }
@@ -697,11 +709,32 @@ export function registerBookingRoutes(
         ).findActiveConnection(actor.principal.id, input.provider);
         if (!calendar || !connection || connection.status !== "connected")
           throw unavailable();
+        const conferenceProvider = input.conferenceProvider ?? "auto";
+        const zoomConnection =
+          conferenceProvider === "zoom"
+            ? await createPersonalIntegrationRepository(
+                db,
+              ).findActiveConnection(actor.principal.id, "zoom")
+            : null;
+        if (
+          conferenceProvider === "zoom" &&
+          (!zoomConnection || zoomConnection.status !== "connected")
+        )
+          throw new HTTPException(409, {
+            message: "Connect Zoom for this professional before selecting it.",
+          });
         await db
           .prepare(
-            "INSERT INTO tenant_booking_calendar_grants(tenant_id,principal_id,provider,connection_id) VALUES(?,?,?,?) ON CONFLICT(tenant_id,principal_id) DO UPDATE SET provider=excluded.provider,connection_id=excluded.connection_id",
+            "INSERT INTO tenant_booking_calendar_grants(tenant_id,principal_id,provider,connection_id,conference_provider,zoom_connection_id) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,principal_id) DO UPDATE SET provider=excluded.provider,connection_id=excluded.connection_id,conference_provider=excluded.conference_provider,zoom_connection_id=excluded.zoom_connection_id",
           )
-          .bind(id, actor.principal.id, input.provider, connection.id)
+          .bind(
+            id,
+            actor.principal.id,
+            input.provider,
+            connection.id,
+            conferenceProvider,
+            zoomConnection?.status === "connected" ? zoomConnection.id : null,
+          )
           .run();
       }
       return c.json({ data: await bootstrap(c, id) });
@@ -724,7 +757,7 @@ export function registerBookingRoutes(
       });
       const r = await db
         .prepare(
-          `SELECT b.*,g.provider AS "grantedCalendarProvider",g.connection_id AS "grantedCalendarConnectionId",c.id AS "activeCalendarConnectionId" FROM tenant_bookings b LEFT JOIN tenant_booking_calendar_grants g ON g.tenant_id=b.tenant_id AND g.principal_id=b.principal_id LEFT JOIN personal_integration_connections c ON c.id=g.connection_id AND c.principal_id=b.principal_id AND c.provider=g.provider AND c.status='connected' AND c.disconnected_at IS NULL AND c.id=(SELECT active_connection.id FROM personal_integration_connections active_connection WHERE active_connection.principal_id=b.principal_id AND active_connection.provider=g.provider AND active_connection.disconnected_at IS NULL ORDER BY active_connection.updated_at DESC LIMIT 1) WHERE b.tenant_id=? AND b.starts_at>=? AND b.starts_at<? ${auth.canManage ? "" : "AND b.principal_id=?"} ORDER BY b.starts_at LIMIT 500`,
+          `SELECT b.*,g.provider AS "grantedCalendarProvider",g.connection_id AS "grantedCalendarConnectionId",c.id AS "activeCalendarConnectionId",g.zoom_connection_id AS "grantedZoomConnectionId",z.id AS "activeZoomConnectionId" FROM tenant_bookings b LEFT JOIN tenant_booking_calendar_grants g ON g.tenant_id=b.tenant_id AND g.principal_id=b.principal_id LEFT JOIN personal_integration_connections c ON c.id=g.connection_id AND c.principal_id=b.principal_id AND c.provider=g.provider AND c.status='connected' AND c.disconnected_at IS NULL AND c.id=(SELECT active_connection.id FROM personal_integration_connections active_connection WHERE active_connection.principal_id=b.principal_id AND active_connection.provider=g.provider AND active_connection.disconnected_at IS NULL ORDER BY active_connection.updated_at DESC LIMIT 1) LEFT JOIN personal_integration_connections z ON z.id=g.zoom_connection_id AND z.principal_id=b.principal_id AND z.provider='zoom' AND z.status='connected' AND z.disconnected_at IS NULL AND z.id=(SELECT active_zoom.id FROM personal_integration_connections active_zoom WHERE active_zoom.principal_id=b.principal_id AND active_zoom.provider='zoom' AND active_zoom.status='connected' AND active_zoom.disconnected_at IS NULL ORDER BY active_zoom.updated_at DESC LIMIT 1) WHERE b.tenant_id=? AND b.starts_at>=? AND b.starts_at<? ${auth.canManage ? "" : "AND b.principal_id=?"} ORDER BY b.starts_at LIMIT 500`,
         )
         .bind(
           id,
@@ -737,27 +770,44 @@ export function registerBookingRoutes(
             grantedCalendarProvider: "google_calendar" | "outlook" | null;
             grantedCalendarConnectionId: string | null;
             activeCalendarConnectionId: string | null;
+            grantedZoomConnectionId: string | null;
+            activeZoomConnectionId: string | null;
           }
         >();
       const views = await reservationViews(db, r.results);
       const rows = r.results.map((row, index) => {
         const reservation = views[index]!;
+        const calendarReady = Boolean(
+          row.activeCalendarConnectionId &&
+          row.activeCalendarConnectionId === row.grantedCalendarConnectionId &&
+          (!row.calendar_provider ||
+            (row.calendar_provider === row.grantedCalendarProvider &&
+              row.calendar_connection_id === row.grantedCalendarConnectionId)),
+        );
+        const zoomReady = Boolean(
+          row.activeZoomConnectionId &&
+          row.activeZoomConnectionId === row.grantedZoomConnectionId &&
+          (!row.zoom_connection_id ||
+            row.zoom_connection_id === row.activeZoomConnectionId),
+        );
+        const availableConferenceProviders = calendarReady
+          ? [
+              ...(!row.zoom_connection_id &&
+              reservation.conference?.status !== "unsupported"
+                ? (["auto"] as const)
+                : []),
+              ...(zoomReady ? (["zoom"] as const) : []),
+            ]
+          : [];
         return {
           ...reservation,
+          availableConferenceProviders,
           canGenerateConference:
             row.status === "confirmed" &&
-            !["ready", "pending", "unsupported"].includes(
+            !["ready", "pending"].includes(
               reservation.conference?.status ?? "",
             ) &&
-            Boolean(
-              row.activeCalendarConnectionId &&
-              row.activeCalendarConnectionId ===
-                row.grantedCalendarConnectionId &&
-              (!row.calendar_provider ||
-                (row.calendar_provider === row.grantedCalendarProvider &&
-                  row.calendar_connection_id ===
-                    row.grantedCalendarConnectionId)),
-            ),
+            availableConferenceProviders.length > 0,
         };
       });
       return c.json({
@@ -775,7 +825,7 @@ export function registerBookingRoutes(
       const id = tenant(c),
         actor = actorFromContext(c),
         auth = await authorizeHistory(c, id),
-        input = await body(c, revisionSchema),
+        input = await body(c, conferenceRequestSchema),
         row = await readBooking(db, id, c.req.param("id")!);
       if (!row)
         throw new HTTPException(404, { message: "Reservation unavailable." });
@@ -788,7 +838,8 @@ export function registerBookingRoutes(
       if (
         current.conference?.status === "ready" ||
         current.conference?.status === "pending" ||
-        current.conference?.status === "unsupported"
+        (current.conference?.status === "unsupported" &&
+          input.provider !== "zoom")
       )
         return c.json({ data: current });
 
@@ -841,22 +892,54 @@ export function registerBookingRoutes(
             "Reconnect the calendar used for this reservation before generating a video link.",
         });
 
-      const conferenceProvider =
-        grant.provider === "google_calendar" ? "google_meet" : "teams";
+      if (row.zoom_connection_id && input.provider !== "zoom")
+        throw new HTTPException(409, {
+          message:
+            "This reservation is pinned to its Zoom account. Choose Zoom to keep its meeting in sync.",
+        });
+      const useZoom =
+        input.provider === "zoom" || Boolean(row.zoom_connection_id);
+      let zoomConnectionId: string | null = null;
+      if (useZoom) {
+        const zoomConnection = await createPersonalIntegrationRepository(
+          db,
+        ).findActiveConnection(row.principal_id, "zoom");
+        if (
+          !grant.zoom_connection_id ||
+          !zoomConnection ||
+          zoomConnection.status !== "connected" ||
+          zoomConnection.id !== grant.zoom_connection_id ||
+          (row.zoom_connection_id &&
+            row.zoom_connection_id !== zoomConnection.id)
+        )
+          throw new HTTPException(409, {
+            message:
+              "Connect Zoom for the assigned professional before generating a video link.",
+          });
+        zoomConnectionId = zoomConnection.id;
+      }
+
+      const conferenceProvider = useZoom
+        ? null
+        : grant.provider === "google_calendar"
+          ? "google_meet"
+          : "teams";
       await db.batch([
         db
           .prepare(
-            "UPDATE tenant_bookings SET calendar_provider=?,calendar_connection_id=?,conference_provider=?,conference_url=NULL,conference_status='pending' WHERE tenant_id=? AND id=? AND status='confirmed' AND version=? AND (calendar_provider IS NULL OR (calendar_provider=? AND calendar_connection_id=?)) AND (conference_status IS NULL OR conference_status='failed') AND NOT EXISTS(SELECT 1 FROM tenant_booking_delivery_locks WHERE tenant_id=? AND booking_id=? AND lease_until>?)",
+            "UPDATE tenant_bookings SET calendar_provider=?,calendar_connection_id=?,conference_provider=?,zoom_connection_id=COALESCE(?,zoom_connection_id),conference_url=NULL,conference_status='pending' WHERE tenant_id=? AND id=? AND status='confirmed' AND version=? AND (calendar_provider IS NULL OR (calendar_provider=? AND calendar_connection_id=?)) AND (conference_status IS NULL OR conference_status='failed' OR (?=1 AND conference_status='unsupported')) AND NOT EXISTS(SELECT 1 FROM tenant_booking_delivery_locks WHERE tenant_id=? AND booking_id=? AND lease_until>?)",
           )
           .bind(
             grant.provider,
             grant.connection_id,
             conferenceProvider,
+            zoomConnectionId,
             id,
             row.id,
             input.version,
             grant.provider,
             grant.connection_id,
+            useZoom ? 1 : 0,
             id,
             row.id,
             now(),
@@ -893,7 +976,7 @@ export function registerBookingRoutes(
         });
       return c.json({ data: await reservationView(db, refreshed) });
     },
-    revisionSchema,
+    conferenceRequestSchema,
     undefined,
     reservationSchema,
   );
@@ -1487,6 +1570,10 @@ export function registerBookingRoutes(
         version: 1,
         calendar_provider: result.grant?.provider ?? null,
         calendar_connection_id: result.grant?.connection_id ?? null,
+        zoom_connection_id:
+          result.grant?.conference_provider === "zoom"
+            ? result.grant.zoom_connection_id
+            : null,
         external_id: null,
         created_at: new Date(now()).toISOString(),
       };

@@ -305,6 +305,40 @@ export const personalIntegrationConnections = sqliteTable(
   ],
 );
 
+export const zoomPersonalMeetings = sqliteTable(
+  "zoom_personal_meetings",
+  {
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "cascade" }),
+    resourceKey: text("resource_key").notNull(),
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => personalIntegrationConnections.id),
+    nangoConnectionId: text("nango_connection_id").notNull(),
+    nangoIntegrationId: text("nango_integration_id").notNull(),
+    immutableRequest: text("immutable_request"),
+    meetingId: text("meeting_id"),
+    joinUrl: text("join_url"),
+    calendarConnectionId: text("calendar_connection_id"),
+    calendarNangoConnectionId: text("calendar_nango_connection_id"),
+    calendarNangoIntegrationId: text("calendar_nango_integration_id"),
+    calendarProvider: text("calendar_provider"),
+    calendarEventId: text("calendar_event_id"),
+    state: text("state").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.principalId, table.resourceKey] }),
+    index("zoom_personal_meetings_calendar_event_idx").on(
+      table.principalId,
+      table.calendarProvider,
+      table.calendarEventId,
+    ),
+  ],
+);
+
 export const personalIntegrationAuditEvents = sqliteTable(
   "personal_integration_audit_events",
   {

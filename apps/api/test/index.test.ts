@@ -48,6 +48,7 @@ describe("personal Nango integration configuration", () => {
       NANGO_JIRA_INTEGRATION_ID: "jira-production",
       NANGO_LINEAR_INTEGRATION_ID: "linear-production",
       NANGO_GITHUB_INTEGRATION_ID: "github-production",
+      NANGO_ZOOM_INTEGRATION_ID: "zoom-production",
     } as Record<string, string>);
 
     expect(configuration).toMatchObject({
@@ -60,6 +61,7 @@ describe("personal Nango integration configuration", () => {
       jiraIntegrationId: "jira-production",
       linearIntegrationId: "linear-production",
       githubIntegrationId: "github-production",
+      zoomIntegrationId: "zoom-production",
     });
   });
 });

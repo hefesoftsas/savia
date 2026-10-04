@@ -21,7 +21,8 @@ type SyncInput = BookingCalendarInput & {
   endsAt: string;
   externalId: string | null;
   cancelled: boolean;
-  conferenceProvider?: "google_meet" | "teams";
+  conferenceProvider?: "google_meet" | "teams" | "zoom";
+  zoomJoinUrl?: string;
   requestConference?: boolean;
 };
 type BusyPeriod = { start: string; end: string };
@@ -29,7 +30,7 @@ type BusyPeriod = { start: string; end: string };
 export type BookingCalendarSyncResult = {
   externalId: string | null;
   conference: {
-    provider: "google_meet" | "teams" | null;
+    provider: "google_meet" | "teams" | "zoom" | null;
     joinUrl: string | null;
     status: "ready" | "pending" | "unsupported" | "failed";
   } | null;
@@ -140,6 +141,32 @@ function safeJoinUrl(
   } catch {
     return null;
   }
+}
+
+function safeZoomJoinUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      !(url.hostname === "zoom.us" || url.hostname.endsWith(".zoom.us")) ||
+      url.username ||
+      url.password
+    )
+      return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function zoomConference(
+  value: unknown,
+): BookingCalendarSyncResult["conference"] {
+  const joinUrl = safeZoomJoinUrl(value);
+  return joinUrl
+    ? { provider: "zoom", joinUrl, status: "ready" }
+    : { provider: "zoom", joinUrl: null, status: "failed" };
 }
 
 function googleConference(
@@ -551,8 +578,9 @@ export function createBookingCalendarAdapter(
         }
       }
 
+      const isZoomConference = input.conferenceProvider === "zoom";
       const conferenceProvider =
-        input.requestConference || !input.externalId
+        !isZoomConference && (input.requestConference || !input.externalId)
           ? await conferenceCapability(connection, input.provider)
           : null;
       const baseBody =
@@ -561,11 +589,24 @@ export function createBookingCalendarAdapter(
               summary: input.title,
               start: { dateTime: startsAt },
               end: { dateTime: endsAt },
+              ...(isZoomConference
+                ? {
+                    description: `Join the Zoom meeting: ${safeZoomJoinUrl(input.zoomJoinUrl) ?? ""}`,
+                  }
+                : {}),
             }
           : {
               subject: input.title,
               start: graphDateTime(startsAt),
               end: graphDateTime(endsAt),
+              ...(isZoomConference
+                ? {
+                    body: {
+                      contentType: "text",
+                      content: `Join the Zoom meeting: ${safeZoomJoinUrl(input.zoomJoinUrl) ?? ""}`,
+                    },
+                  }
+                : {}),
               singleValueExtendedProperties: [
                 { id: outlookBookingPropertyId, value: input.id },
               ],
@@ -587,17 +628,24 @@ export function createBookingCalendarAdapter(
             : {}),
         };
         const query =
-          conferenceProvider === "google_meet" || input.externalId
+          !isZoomConference &&
+          (conferenceProvider === "google_meet" || input.externalId)
             ? "?conferenceDataVersion=1"
             : "";
         if (input.externalId) {
-          const currentConference = await eventConference(
-            connection,
-            input.provider,
-            id,
-            input.conferenceProvider ?? conferenceProvider ?? undefined,
-            input.requestConference === true,
-          );
+          const currentConference = isZoomConference
+            ? zoomConference(input.zoomJoinUrl)
+            : await eventConference(
+                connection,
+                input.provider,
+                id,
+                input.conferenceProvider === "zoom"
+                  ? undefined
+                  : (input.conferenceProvider ??
+                      conferenceProvider ??
+                      undefined),
+                input.requestConference === true,
+              );
           const shouldRequest =
             input.requestConference &&
             conferenceProvider === "google_meet" &&
@@ -625,14 +673,16 @@ export function createBookingCalendarAdapter(
           });
           return {
             externalId: id,
-            conference: shouldRequest
-              ? await eventConference(
-                  connection,
-                  input.provider,
-                  id,
-                  "google_meet",
-                )
-              : (currentConference ?? unsupportedConference),
+            conference: isZoomConference
+              ? currentConference
+              : shouldRequest
+                ? await eventConference(
+                    connection,
+                    input.provider,
+                    id,
+                    "google_meet",
+                  )
+                : (currentConference ?? unsupportedConference),
           };
         }
         try {
@@ -648,19 +698,26 @@ export function createBookingCalendarAdapter(
               throw unavailable();
             return {
               externalId: id,
-              conference: conferenceProvider
-                ? googleConference(event, conferenceProvider === "google_meet")
-                : unsupportedConference,
+              conference: isZoomConference
+                ? zoomConference(input.zoomJoinUrl)
+                : conferenceProvider
+                  ? googleConference(
+                      event,
+                      conferenceProvider === "google_meet",
+                    )
+                  : unsupportedConference,
             };
           }
           if (response.status === 409) {
-            const currentConference = await eventConference(
-              connection,
-              input.provider,
-              id,
-              conferenceProvider ?? undefined,
-              input.requestConference === true,
-            );
+            const currentConference = isZoomConference
+              ? zoomConference(input.zoomJoinUrl)
+              : await eventConference(
+                  connection,
+                  input.provider,
+                  id,
+                  conferenceProvider ?? undefined,
+                  input.requestConference === true,
+                );
             const shouldRequest =
               input.requestConference &&
               conferenceProvider === "google_meet" &&
@@ -689,14 +746,16 @@ export function createBookingCalendarAdapter(
             });
             return {
               externalId: id,
-              conference: shouldRequest
-                ? await eventConference(
-                    connection,
-                    input.provider,
-                    id,
-                    "google_meet",
-                  )
-                : currentConference,
+              conference: isZoomConference
+                ? currentConference
+                : shouldRequest
+                  ? await eventConference(
+                      connection,
+                      input.provider,
+                      id,
+                      "google_meet",
+                    )
+                  : currentConference,
             };
           }
           throw unavailable();
@@ -708,13 +767,17 @@ export function createBookingCalendarAdapter(
       const existingId =
         input.externalId ?? (await findOutlookEvent(connection, input.id));
       if (existingId) {
-        const currentConference = await eventConference(
-          connection,
-          input.provider,
-          existingId,
-          input.conferenceProvider ?? conferenceProvider ?? undefined,
-          input.requestConference === true,
-        );
+        const currentConference = isZoomConference
+          ? zoomConference(input.zoomJoinUrl)
+          : await eventConference(
+              connection,
+              input.provider,
+              existingId,
+              input.conferenceProvider === "zoom"
+                ? undefined
+                : (input.conferenceProvider ?? conferenceProvider ?? undefined),
+              input.requestConference === true,
+            );
         const shouldRequest =
           input.requestConference &&
           conferenceProvider === "teams" &&
@@ -737,9 +800,11 @@ export function createBookingCalendarAdapter(
         const patched = record(await response.json().catch(() => undefined));
         return {
           externalId: existingId,
-          conference: shouldRequest
-            ? outlookConference(patched, true)
-            : (currentConference ?? unsupportedConference),
+          conference: isZoomConference
+            ? currentConference
+            : shouldRequest
+              ? outlookConference(patched, true)
+              : (currentConference ?? unsupportedConference),
         };
       }
       const transactionId = await bookingEventId(input.id);
@@ -760,8 +825,9 @@ export function createBookingCalendarAdapter(
       });
       const event = record(await response.json().catch(() => undefined));
       if (typeof event?.id !== "string" || !event.id) throw unavailable();
-      const conference =
-        conferenceProvider === "teams"
+      const conference = isZoomConference
+        ? zoomConference(input.zoomJoinUrl)
+        : conferenceProvider === "teams"
           ? outlookConference(event, true)
           : unsupportedConference;
       return {

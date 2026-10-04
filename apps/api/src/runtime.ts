@@ -30,6 +30,7 @@ import {
 } from "./studio/sql-bridge";
 import type { R2SigningCredentials } from "./lib/r2-presign";
 import { createPersonalIntegrationNangoClient } from "./personal-integrations/nango";
+import { createZoomMeetingService } from "./personal-integrations/zoom";
 import { createBookingCalendarAdapter } from "./bookings/calendar";
 import { runBookingJobs } from "./bookings/jobs";
 import { createPersonalIntegrationProviderRegistry } from "./personal-integrations/providers";
@@ -454,16 +455,15 @@ const runtime = {
               return result.available;
             }
           : undefined;
+      const bookingNango = createPersonalIntegrationNangoClient(
+        nangoConfigurationFromEnvironment(environment),
+        timedFetch,
+      );
       return runBookingJobs(environment.DB, {
         publicOrigin:
           environment.SAVIA_PUBLIC_ORIGIN ?? "http://localhost:5173",
-        calendar: createBookingCalendarAdapter(
-          environment.DB,
-          createPersonalIntegrationNangoClient(
-            nangoConfigurationFromEnvironment(environment),
-            timedFetch,
-          ),
-        ),
+        calendar: createBookingCalendarAdapter(environment.DB, bookingNango),
+        zoom: createZoomMeetingService(environment.DB, bookingNango),
         ...(environment.AUTH && bridgeKey
           ? {
               ...(availability ? { mailAvailability: availability } : {}),

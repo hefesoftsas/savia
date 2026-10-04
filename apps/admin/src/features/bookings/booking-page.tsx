@@ -25,7 +25,12 @@ type Bootstrap = {
   canManage: boolean;
   principalId: string;
   publicUrl: string | null;
-  calendar: { provider: null | "google_calendar" | "outlook"; status: string };
+  calendar: {
+    provider: null | "google_calendar" | "outlook";
+    status: string;
+    conferenceProvider?: "auto" | "zoom";
+    zoomStatus?: "connected" | "not_connected" | "reconnect_required";
+  };
   agenda?: { enabled: boolean; sourceCount: number };
 };
 type Reservation = {
@@ -43,6 +48,7 @@ type Reservation = {
   deliveryStatus: string;
   calendarStatus: string;
   canGenerateConference?: boolean;
+  availableConferenceProviders?: Array<"auto" | "zoom">;
   conference?: BookingConferenceState;
 };
 type Tab = "settings" | "availability" | "reservations" | "sharing";
@@ -108,6 +114,9 @@ export function BookingPage({
   const [reservationsAttempt, setReservationsAttempt] = useState(0);
   const [cancellingId, setCancellingId] = useState("");
   const [generatingConferenceId, setGeneratingConferenceId] = useState("");
+  const [conferenceSelections, setConferenceSelections] = useState<
+    Record<string, "auto" | "zoom">
+  >({});
   const ready = !!bootstrap && loadedTenant === tenantId;
   const currentProfessional = useMemo(
     () =>
@@ -143,6 +152,7 @@ export function BookingPage({
     setBootstrap(undefined);
     setSettings(undefined);
     setReservations([]);
+    setConferenceSelections({});
     setLoadedTenant(undefined);
     setTab(requestedTab);
     void services.apiClient
@@ -369,6 +379,7 @@ export function BookingPage({
 
   async function changeCalendar(
     provider: null | "google_calendar" | "outlook",
+    conferenceProvider?: "auto" | "zoom",
   ) {
     if (!bootstrap) return;
     setSaving(true);
@@ -377,7 +388,7 @@ export function BookingPage({
     try {
       const result = await services.apiClient.put<{ data: Bootstrap }>(
         `/v1/tenants/${tenantId}/booking/calendar`,
-        { provider },
+        { provider, ...(conferenceProvider ? { conferenceProvider } : {}) },
       );
       setBootstrap(result.data);
       setSettings(result.data.settings);
@@ -441,6 +452,20 @@ export function BookingPage({
     }
   }
 
+  function selectedConferenceProvider(
+    reservation: Reservation,
+  ): "auto" | "zoom" | undefined {
+    return (
+      conferenceSelections[reservation.id] ??
+      (reservation.availableConferenceProviders?.includes("zoom") &&
+      (reservation.conference?.status === "unsupported" ||
+        reservation.conference?.provider === "zoom" ||
+        !reservation.availableConferenceProviders.includes("auto"))
+        ? "zoom"
+        : undefined)
+    );
+  }
+
   async function generateConference(reservation: Reservation) {
     setGeneratingConferenceId(reservation.id);
     setError("");
@@ -448,7 +473,12 @@ export function BookingPage({
     try {
       const result = await services.apiClient.post<{ data: Reservation }>(
         `/v1/tenants/${tenantId}/booking/reservations/${encodeURIComponent(reservation.id)}/conference`,
-        { version: reservation.version },
+        {
+          version: reservation.version,
+          ...(selectedConferenceProvider(reservation)
+            ? { provider: selectedConferenceProvider(reservation) }
+            : {}),
+        },
       );
       setReservations((current) =>
         current.map((item) =>
@@ -877,6 +907,49 @@ export function BookingPage({
                   {t("Choose calendar")}
                 </Link>
               </div>
+              {bootstrap.calendar.provider && (
+                <div className="grid gap-2 border-t pt-3">
+                  <p className="text-sm">
+                    {t(
+                      bootstrap.calendar.conferenceProvider === "zoom"
+                        ? bootstrap.calendar.zoomStatus ===
+                            "reconnect_required" ||
+                          bootstrap.calendar.zoomStatus === "not_connected"
+                          ? "Zoom needs reconnection"
+                          : "Zoom authorized for appointments"
+                        : "Calendar default (Meet or Teams)",
+                    )}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {t(
+                      "Connect Zoom first. Only you can authorize your Zoom account for appointments.",
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={
+                        saving ||
+                        bootstrap.calendar.zoomStatus === "not_connected"
+                      }
+                      onClick={() =>
+                        void changeCalendar(bootstrap.calendar.provider, "zoom")
+                      }
+                    >
+                      {t("Use Zoom for appointments")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={saving}
+                      onClick={() =>
+                        void changeCalendar(bootstrap.calendar.provider, "auto")
+                      }
+                    >
+                      {t("Calendar default (Meet or Teams)")}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </section>
           )}
           {currentProfessional && (
@@ -1059,8 +1132,46 @@ export function BookingPage({
                         {reservation.status === "confirmed" &&
                           reservation.conference?.status !== "ready" &&
                           reservation.conference?.status !== "pending" &&
-                          reservation.conference?.status !== "unsupported" && (
+                          (reservation.conference?.status !== "unsupported" ||
+                            reservation.availableConferenceProviders?.includes(
+                              "zoom",
+                            )) && (
                             <div className="mb-2 grid justify-items-start gap-1">
+                              {reservation.availableConferenceProviders?.includes(
+                                "zoom",
+                              ) && (
+                                <label className="grid gap-1 text-xs">
+                                  {t("Video call platform")}
+                                  <select
+                                    aria-label={t("Video call platform")}
+                                    className="rounded-md border bg-background p-2 text-sm"
+                                    value={
+                                      selectedConferenceProvider(reservation) ??
+                                      "auto"
+                                    }
+                                    disabled={
+                                      generatingConferenceId === reservation.id
+                                    }
+                                    onChange={(event) =>
+                                      setConferenceSelections((current) => ({
+                                        ...current,
+                                        [reservation.id]: event.target.value as
+                                          "auto" | "zoom",
+                                      }))
+                                    }
+                                  >
+                                    {reservation.availableConferenceProviders.includes(
+                                      "auto",
+                                    ) && (
+                                      <option value="auto">
+                                        {t("Calendar default (Meet or Teams)")}
+                                      </option>
+                                    )}
+                                    <option value="zoom">{t("Zoom")}</option>
+                                  </select>
+                                </label>
+                              )}
+
                               <Button
                                 type="button"
                                 size="sm"

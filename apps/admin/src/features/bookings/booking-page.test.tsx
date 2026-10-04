@@ -920,3 +920,185 @@ it("uses the shared route loading layout while booking settings are fetched", ()
     screen.getByRole("status").querySelector('[data-slot="skeleton"]'),
   ).toBeInTheDocument();
 });
+
+it("selects Zoom for an eligible reservation without using the calendar provider as the meeting provider", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+  };
+  const reservation = {
+    id: "reservation-3",
+    serviceId: "consult",
+    professionalId: "professional-1",
+    serviceName: "Consultation",
+    professionalName: "Ari",
+    startsAt: "2026-10-05T14:00:00Z",
+    endsAt: "2026-10-05T14:30:00Z",
+    customerName: "Casey Customer",
+    customerEmail: "casey@example.test",
+    status: "confirmed" as const,
+    version: 2,
+    deliveryStatus: "sent",
+    calendarStatus: "completed",
+    canGenerateConference: true,
+    availableConferenceProviders: ["auto", "zoom"],
+    conference: null,
+  };
+  const apiClient = {
+    get: vi
+      .fn()
+      .mockResolvedValueOnce({ data: bootstrap })
+      .mockResolvedValueOnce({ data: [reservation] }),
+    put: vi.fn(),
+    post: vi.fn().mockResolvedValue({
+      data: {
+        ...reservation,
+        calendarStatus: "pending",
+        conference: {
+          provider: "zoom",
+          joinUrl: null,
+          status: "pending",
+        },
+      },
+    }),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
+  fireEvent.change(await screen.findByLabelText("Video call platform"), {
+    target: { value: "zoom" },
+  });
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Generate video link" }),
+  );
+  expect(await screen.findAllByText(/link is being prepared/i)).toHaveLength(2);
+  expect(apiClient.post).toHaveBeenCalledWith(
+    "/v1/tenants/42/booking/reservations/reservation-3/conference",
+    { version: 2, provider: "zoom" },
+  );
+});
+
+it("grants the professional's Zoom account for new appointments", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: {
+      provider: "google_calendar",
+      status: "connected",
+      conferenceProvider: "auto",
+    },
+  };
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({ data: bootstrap }),
+    put: vi.fn().mockResolvedValue({
+      data: {
+        ...bootstrap,
+        calendar: { ...bootstrap.calendar, conferenceProvider: "zoom" },
+      },
+    }),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Availability" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Use Zoom for appointments" }),
+  );
+  expect(
+    await screen.findByText("Zoom authorized for appointments"),
+  ).toBeInTheDocument();
+  expect(apiClient.put).toHaveBeenCalledWith(
+    "/v1/tenants/42/booking/calendar",
+    { provider: "google_calendar", conferenceProvider: "zoom" },
+  );
+});
+
+it("offers Zoom when native calendar conferencing is unsupported", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+  };
+  const reservation = {
+    id: "reservation-3",
+    serviceId: "consult",
+    professionalId: "professional-1",
+    serviceName: "Consultation",
+    professionalName: "Ari",
+    startsAt: "2026-10-05T14:00:00Z",
+    endsAt: "2026-10-05T14:30:00Z",
+    customerName: "Casey Customer",
+    customerEmail: "casey@example.test",
+    status: "confirmed" as const,
+    version: 2,
+    deliveryStatus: "sent",
+    calendarStatus: "completed",
+    canGenerateConference: true,
+    availableConferenceProviders: ["auto", "zoom"],
+    conference: { provider: null, joinUrl: null, status: "unsupported" },
+  };
+  const apiClient = {
+    get: vi
+      .fn()
+      .mockResolvedValueOnce({ data: bootstrap })
+      .mockResolvedValueOnce({ data: [reservation] }),
+    put: vi.fn(),
+    post: vi.fn().mockResolvedValue({
+      data: {
+        ...reservation,
+        calendarStatus: "pending",
+        conference: {
+          provider: "zoom",
+          joinUrl: null,
+          status: "pending",
+        },
+      },
+    }),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Generate video link" }),
+  );
+  expect(await screen.findAllByText(/link is being prepared/i)).toHaveLength(2);
+  expect(apiClient.post).toHaveBeenCalledWith(
+    "/v1/tenants/42/booking/reservations/reservation-3/conference",
+    { version: 2, provider: "zoom" },
+  );
+});
+
+it("does not offer granting a disconnected Zoom account", async () => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      data: {
+        settings,
+        candidates: [],
+        canManage: true,
+        principalId: "principal-1",
+        publicUrl: null,
+        calendar: {
+          provider: "google_calendar",
+          status: "connected",
+          zoomStatus: "not_connected",
+        },
+      },
+    }),
+    put: vi.fn(),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Availability" }));
+  expect(
+    await screen.findByRole("button", { name: "Use Zoom for appointments" }),
+  ).toBeDisabled();
+});

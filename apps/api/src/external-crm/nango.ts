@@ -27,6 +27,7 @@ export type NangoConfiguration = {
   jiraReportingConnectionId?: string;
   linearIntegrationId?: string;
   githubIntegrationId?: string;
+  zoomIntegrationId?: string;
 };
 
 type ConfiguredNango = {

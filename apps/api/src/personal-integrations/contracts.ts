@@ -8,6 +8,7 @@ export const personalIntegrationProviderIds = [
   "jira",
   "linear",
   "github",
+  "zoom",
 ] as const;
 
 export const personalIntegrationConnectionStatuses = [

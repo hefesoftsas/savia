@@ -122,9 +122,24 @@ export function createPersonalIntegrationRepository(
         completion.principalId,
         completion.provider,
       );
-      const id = current?.id ?? crypto.randomUUID();
+      const rotateZoomConnection =
+        current?.provider === "zoom" &&
+        (current.nangoConnectionId !== completion.nangoConnectionId ||
+          current.nangoIntegrationId !== completion.nangoIntegrationId);
+      const id =
+        current && !rotateZoomConnection ? current.id : crypto.randomUUID();
       const scopes = JSON.stringify(completion.scopes ?? []);
-      if (current) {
+      if (rotateZoomConnection && current) {
+        await database
+          .prepare(
+            `UPDATE personal_integration_connections
+             SET status = 'disconnected', disconnected_at = ?, updated_at = ?
+             WHERE id = ?`,
+          )
+          .bind(now, now, current.id)
+          .run();
+      }
+      if (current && !rotateZoomConnection) {
         await database
           .prepare(
             `UPDATE personal_integration_connections

@@ -108,6 +108,33 @@ describe("personal Nango proxy", () => {
 
     expect(response.ok).toBe(true);
   });
+
+  it("routes Zoom proxy requests to the Zoom REST API host", async () => {
+    const fetcher = vi.fn(async () => Response.json({ id: 123 }));
+    const client = createPersonalIntegrationNangoClient(
+      { baseUrl: "https://nango.example.test", apiKey: "test-key" },
+      fetcher,
+    );
+
+    await client.proxy({
+      method: "POST",
+      path: "/v2/users/me/meetings",
+      connection: {
+        provider: "zoom",
+        nangoConnectionId: "zoom-account",
+        nangoIntegrationId: "zoom-app",
+      },
+      body: { topic: "Planning" },
+    });
+
+    const [url, init] = fetcher.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(String(url)).toBe(
+      "https://nango.example.test/proxy/v2/users/me/meetings",
+    );
+    expect(new Headers(init.headers).get("base-url-override")).toBe(
+      "https://api.zoom.us",
+    );
+  });
   it.each([
     ["onedrive_personal", "https://graph.microsoft.com"],
     ["jira", "https://api.atlassian.com"],

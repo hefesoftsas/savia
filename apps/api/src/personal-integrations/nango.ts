@@ -244,7 +244,9 @@ export function createPersonalIntegrationNangoClient(
                   ? { "base-url-override": "https://api.linear.app" }
                   : request.connection.provider === "github"
                     ? { "base-url-override": "https://api.github.com" }
-                    : {}),
+                    : request.connection.provider === "zoom"
+                      ? { "base-url-override": "https://api.zoom.us" }
+                      : {}),
             ...(hasBody
               ? { "content-type": request.contentType ?? "application/json" }
               : {}),

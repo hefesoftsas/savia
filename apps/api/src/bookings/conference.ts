@@ -13,6 +13,13 @@ export function safeConferenceUrl(value: unknown): string | null {
   }
 }
 
+function safeZoomConferenceUrl(value: unknown): string | null {
+  const safe = safeConferenceUrl(value);
+  if (!safe) return null;
+  const host = new URL(safe).hostname;
+  return host === "zoom.us" || host.endsWith(".zoom.us") ? safe : null;
+}
+
 export function bookingConference(
   row: BookingRow,
   calendarStatus: string,
@@ -24,9 +31,10 @@ export function bookingConference(
     (calendarStatus === "completed" || calendarStatus === "not_requested")
   )
     return null;
-  const provider =
-    row.conference_provider ??
-    (row.calendar_provider === "google_calendar" ? "google_meet" : "teams");
+  const provider = row.zoom_connection_id
+    ? "zoom"
+    : (row.conference_provider ??
+      (row.calendar_provider === "google_calendar" ? "google_meet" : "teams"));
   const status =
     row.conference_status === "pending" && calendarStatus === "skipped"
       ? "failed"
@@ -35,7 +43,11 @@ export function bookingConference(
           ? "failed"
           : "pending"));
   const joinUrl =
-    status === "ready" ? safeConferenceUrl(row.conference_url) : null;
+    status === "ready"
+      ? row.zoom_connection_id
+        ? safeZoomConferenceUrl(row.conference_url)
+        : safeConferenceUrl(row.conference_url)
+      : null;
   return {
     provider: status === "unsupported" ? null : provider,
     joinUrl,

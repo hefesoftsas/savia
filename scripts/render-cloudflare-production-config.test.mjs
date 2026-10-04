@@ -430,3 +430,35 @@ test("production search bindings are opt-in and cannot share preview vectors", a
     await rm(outputRoot, { recursive: true, force: true });
   }
 });
+
+test("renders Zoom only when its integration ID is configured", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "savia-zoom-config-"));
+  try {
+    await renderProductionConfigs({
+      authD1Id: "auth-d1-id",
+      domainD1Id: "domain-d1-id",
+      zoomIntegrationId: " zoom-read ",
+      outputRoot,
+    });
+    assert.equal(
+      (await config(outputRoot, "api")).vars.NANGO_ZOOM_INTEGRATION_ID,
+      "zoom-read",
+    );
+    assert.equal(
+      "NANGO_ZOOM_INTEGRATION_ID" in
+        ((await config(outputRoot, "admin")).vars ?? {}),
+      false,
+    );
+    await renderProductionConfigs({
+      authD1Id: "auth-d1-id",
+      domainD1Id: "domain-d1-id",
+      outputRoot,
+    });
+    assert.equal(
+      "NANGO_ZOOM_INTEGRATION_ID" in (await config(outputRoot, "api")).vars,
+      false,
+    );
+  } finally {
+    await rm(outputRoot, { recursive: true, force: true });
+  }
+});

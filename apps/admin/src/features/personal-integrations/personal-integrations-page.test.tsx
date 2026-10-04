@@ -341,7 +341,7 @@ describe("PersonalIntegrationsPage", () => {
     expect(screen.getByRole("button", { name: "Desconectar" })).toBeVisible();
   });
 
-  it("keeps all nine integrations visible and offers retry when their status cannot load", async () => {
+  it("keeps all integrations visible and offers retry when their status cannot load", async () => {
     const user = userEvent.setup();
     const services = createServices();
     const missingRoute = new ApiClientError(404, "NOT_FOUND", "Not found");
@@ -368,7 +368,7 @@ describe("PersonalIntegrationsPage", () => {
     }
     expect(
       screen.getAllByRole("button", { name: "No disponible" }),
-    ).toHaveLength(9);
+    ).toHaveLength(10);
     expect(
       screen.queryByText("No hay integraciones disponibles."),
     ).not.toBeInTheDocument();
