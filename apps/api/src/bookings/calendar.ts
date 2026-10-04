@@ -651,7 +651,7 @@ export function createBookingCalendarAdapter(
               id,
               input.conferenceProvider === "google_meet"
                 ? "google_meet"
-                : conferenceProvider ?? undefined,
+                : (conferenceProvider ?? undefined),
               input.requestConference === true,
             ));
           const shouldRequest =
@@ -682,15 +682,16 @@ export function createBookingCalendarAdapter(
           });
           return {
             externalId: id,
-            conference: jitsiConference ??
+            conference:
+              jitsiConference ??
               (shouldRequest
-              ? await eventConference(
-                  connection,
-                  input.provider,
-                  id,
-                  "google_meet",
-                )
-              : (currentConference ?? unsupportedConference)),
+                ? await eventConference(
+                    connection,
+                    input.provider,
+                    id,
+                    "google_meet",
+                  )
+                : (currentConference ?? unsupportedConference)),
           };
         }
         try {
@@ -706,9 +707,13 @@ export function createBookingCalendarAdapter(
               throw unavailable();
             return {
               externalId: id,
-              conference: jitsiConference ??
+              conference:
+                jitsiConference ??
                 (conferenceProvider
-                  ? googleConference(event, conferenceProvider === "google_meet")
+                  ? googleConference(
+                      event,
+                      conferenceProvider === "google_meet",
+                    )
                   : unsupportedConference),
             };
           }
@@ -751,15 +756,16 @@ export function createBookingCalendarAdapter(
             });
             return {
               externalId: id,
-              conference: jitsiConference ??
+              conference:
+                jitsiConference ??
                 (shouldRequest
-                ? await eventConference(
-                    connection,
-                    input.provider,
-                    id,
-                    "google_meet",
-                  )
-                : currentConference),
+                  ? await eventConference(
+                      connection,
+                      input.provider,
+                      id,
+                      "google_meet",
+                    )
+                  : currentConference),
             };
           }
           throw unavailable();
@@ -779,7 +785,7 @@ export function createBookingCalendarAdapter(
             existingId,
             input.conferenceProvider === "teams"
               ? "teams"
-              : conferenceProvider ?? undefined,
+              : (conferenceProvider ?? undefined),
             input.requestConference === true,
           ));
         const shouldRequest =
@@ -805,10 +811,11 @@ export function createBookingCalendarAdapter(
         const patched = record(await response.json().catch(() => undefined));
         return {
           externalId: existingId,
-          conference: jitsiConference ??
+          conference:
+            jitsiConference ??
             (shouldRequest
-            ? outlookConference(patched, true)
-            : (currentConference ?? unsupportedConference)),
+              ? outlookConference(patched, true)
+              : (currentConference ?? unsupportedConference)),
         };
       }
       const transactionId = await bookingEventId(input.id);
