@@ -16,6 +16,38 @@ export const tenantApiKeyMessages = {
     "Could not complete the operation.",
     "Não foi possível concluir a operação.",
   ],
+  Cancel: ["Cancelar", "Cancel", "Cancelar"],
+  "Key details": ["Ver detalles", "View details", "Ver detalhes"],
+  "Select permissions for this key.": [
+    "Elige qué puede hacer Companion con las grabaciones de este miembro.",
+    "Choose what Companion can do with this member’s recordings.",
+    "Escolha o que o Companion pode fazer com as gravações deste membro.",
+  ],
+  "Read recordings": [
+    "Consultar grabaciones y notas",
+    "Read recordings and notes",
+    "Consultar gravações e notas",
+  ],
+  "Upload recordings": [
+    "Cargar nuevas grabaciones",
+    "Upload new recordings",
+    "Enviar novas gravações",
+  ],
+  "Process recordings": [
+    "Transcribir, resumir y hacer preguntas",
+    "Transcribe, summarize and ask questions",
+    "Transcrever, resumir e fazer perguntas",
+  ],
+  "Delete recordings": [
+    "Eliminar grabaciones y notas",
+    "Delete recordings and notes",
+    "Excluir gravações e notas",
+  ],
+  "Create your first Companion key.": [
+    "Genera una clave para conectar Companion con las grabaciones de un miembro.",
+    "Generate a key to connect Companion to a member’s recordings.",
+    "Gere uma chave para conectar o Companion às gravações de um membro.",
+  ],
   Retry: ["Reintentar", "Retry", "Tentar novamente"],
   Loading: ["Cargando…", "Loading…", "Carregando…"],
   "Key name": ["Nombre de la clave", "Key name", "Nome da chave"],

@@ -12,13 +12,13 @@ on the next request. Removing the user's active membership also disables access.
 
 ## Tenant administration
 
-Tenant administrators can open **Your organization's branding → Tenant API keys** to manage Companion keys
+Tenant administrators can open **Your organization's branding → API keys** to manage Companion keys
 for their organization. Platform administrators can also manage keys from a
-commercial tenant's edit screen.
+commercial tenant's edit screen, under the **API keys** tab.
 
 The tenant list includes every owner's key metadata, permissions, expiry,
 revocation status and last successful use in the current deployment. It never
-reveals an existing secret. Choose an active member, a name, recording permissions
+reveals an existing secret. Select **New key**, then choose an active member, a name, recording permissions
 and a lifetime of 7, 30 or 90 days to generate a key. Copy the secret immediately;
 it appears only once. The key belongs to the selected member and accesses only
 that member's permitted recordings in the selected tenant. Administrators do not

@@ -73,9 +73,19 @@ it("creates a member key, reveals its secret once, and confirms revocation", asy
     </StoreContextProvider>,
   );
 
+  expect(screen.queryByLabelText("Nombre de la clave")).toBeNull();
+  await user.click(await screen.findByRole("button", { name: "Nueva clave" }));
   await screen.findByRole("option", {
     name: "Alex Rivera (alex@example.test)",
   });
+  await user.type(
+    screen.getByLabelText("Nombre de la clave"),
+    "Discard this draft",
+  );
+  await user.click(screen.getByRole("button", { name: "Cancelar" }));
+  expect(screen.queryByLabelText("Nombre de la clave")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Nueva clave" }));
+  expect(screen.getByLabelText("Nombre de la clave")).toHaveValue("");
   await user.type(
     screen.getByLabelText("Nombre de la clave"),
     "Companion de Alex",
@@ -146,6 +156,7 @@ it("clears a revealed secret when the tenant changes", async () => {
       <TenantApiKeysPanel api={api} tenantId={12} />
     </StoreContextProvider>,
   );
+  await user.click(await screen.findByRole("button", { name: "New key" }));
   await screen.findByRole("option", { name: "Alex (alex@example.test)" });
   await user.type(screen.getByLabelText("Key name"), "Companion");
   await user.click(screen.getByRole("button", { name: "Create key" }));
@@ -205,6 +216,7 @@ it("ignores a create response after the API client changes", async () => {
       <TenantApiKeysPanel api={api} tenantId={12} />
     </StoreContextProvider>,
   );
+  await user.click(await screen.findByRole("button", { name: "New key" }));
   await screen.findByRole("option", { name: "Alex (alex@example.test)" });
   await user.type(screen.getByLabelText("Key name"), "Companion");
   await user.click(screen.getByRole("button", { name: "Create key" }));
@@ -215,6 +227,7 @@ it("ignores a create response after the API client changes", async () => {
       <TenantApiKeysPanel api={nextApi} tenantId={12} />
     </StoreContextProvider>,
   );
+  await user.click(await screen.findByRole("button", { name: "New key" }));
   await screen.findByRole("option", { name: "Alex (alex@example.test)" });
   await act(async () => {
     finishCreate(
@@ -280,7 +293,7 @@ it("can retry after the key and member lists fail to load", async () => {
   expect(screen.queryByText("Loading…")).toBeNull();
   await user.click(screen.getByRole("button", { name: "Retry" }));
   expect(
-    await screen.findByRole("option", { name: "Alex (alex@example.test)" }),
+    await screen.findByRole("button", { name: "New key" }),
   ).toBeInTheDocument();
   expect(screen.queryByRole("alert")).toBeNull();
 });

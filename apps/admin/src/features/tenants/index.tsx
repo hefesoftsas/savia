@@ -1,3 +1,7 @@
+import { useState } from "react";
+import { useMessages } from "@/i18n/core";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { tenantSettingsMessages } from "./settings-messages";
 import "@/features/service-credentials/service-credentials.css";
 import { OfficeSettingsPanel } from "@/features/office-settings/office-settings-panel";
 import { useAppServices } from "@/features/assistant/assistant-context";
@@ -398,6 +402,127 @@ function TenantApiKeysEditor() {
   );
 }
 
+function TenantEditSections() {
+  const record = useRecordContext<TenantRecord>();
+  const { apiClient } = useAppServices();
+  const t = useMessages(tenantSettingsMessages);
+  const [tab, setTab] = useState("general");
+  const [visited, setVisited] = useState(() => new Set(["general"]));
+  const commercial = record?.kind === "commercial";
+  const hasApi = Boolean(apiClient?.get);
+  const hasKeys = commercial && record?.isActive && hasApi;
+  const activeTab =
+    (tab !== "general" && !commercial) ||
+    (tab === "keys" && !hasKeys) ||
+    (tab === "configuration" && !hasApi)
+      ? "general"
+      : tab;
+  return (
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => {
+        setTab(value);
+        setVisited((current) => new Set([...current, value]));
+      }}
+      className="min-w-0 max-w-4xl gap-6"
+    >
+      <div className="min-w-0 overflow-x-auto border-b">
+        <TabsList
+          variant="line"
+          aria-label={t("Tenant settings")}
+          className="h-auto min-h-12 justify-start rounded-none px-0"
+        >
+          <TabsTrigger value="general" className="min-h-11 flex-none px-4">
+            {t("General")}
+          </TabsTrigger>
+          {commercial ? (
+            <TabsTrigger value="access" className="min-h-11 flex-none px-4">
+              {t("Access")}
+            </TabsTrigger>
+          ) : null}
+          {commercial && hasApi ? (
+            <TabsTrigger
+              value="configuration"
+              className="min-h-11 flex-none px-4"
+            >
+              {t("Configuration")}
+            </TabsTrigger>
+          ) : null}
+          {hasKeys ? (
+            <TabsTrigger value="keys" className="min-h-11 flex-none px-4">
+              {t("API keys")}
+            </TabsTrigger>
+          ) : null}
+        </TabsList>
+      </div>
+      <TabsContent
+        value="general"
+        forceMount
+        className="grid gap-8 data-[state=inactive]:hidden"
+      >
+        <SimpleForm
+          className="max-w-2xl"
+          resetOptions={{ keepDirtyValues: true }}
+        >
+          <ResourceEditSync resource="tenants" />
+          <TenantFields />
+        </SimpleForm>
+        <div className="max-w-2xl border-t pt-6">
+          <TenantCapacityEditor />
+        </div>
+      </TabsContent>
+      {commercial ? (
+        <TabsContent
+          value="access"
+          forceMount
+          className="grid gap-6 data-[state=inactive]:hidden"
+        >
+          <header className="grid gap-2">
+            <h2 className="text-lg font-semibold">{t("Access")}</h2>
+            <p className="max-w-prose text-sm text-muted-foreground">
+              {t("Manage access links and sign-in providers.")}
+            </p>
+          </header>
+          <SavedTenantAccessUrl />
+          <TenantAuthenticationLinks />
+        </TabsContent>
+      ) : null}
+      {commercial && hasApi && visited.has("configuration") ? (
+        <TabsContent
+          value="configuration"
+          forceMount
+          className="grid gap-8 data-[state=inactive]:hidden"
+        >
+          <header className="grid gap-2">
+            <h2 className="text-lg font-semibold">{t("Configuration")}</h2>
+            <p className="max-w-prose text-sm text-muted-foreground">
+              {t("Configure the tools available to this tenant.")}
+            </p>
+          </header>
+          <TenantOfficeSettings />
+          <div className="border-t pt-6">
+            <TenantPagesSearchEditor />
+          </div>
+        </TabsContent>
+      ) : null}
+      {hasKeys && visited.has("keys") ? (
+        <TabsContent
+          value="keys"
+          forceMount
+          className="data-[state=inactive]:hidden"
+        >
+          <TenantApiKeysEditor />
+        </TabsContent>
+      ) : null}
+    </Tabs>
+  );
+}
+
+function TenantEditBody() {
+  const record = useRecordContext<TenantRecord>();
+  return <TenantEditSections key={record?.id} />;
+}
+
 function TenantEdit() {
   const translate = useTranslate();
   return (
@@ -405,21 +530,7 @@ function TenantEdit() {
       title={translate("savia.tenants.editTenant", { _: "Editar tenant" })}
       mutationMode="optimistic"
     >
-      <SimpleForm
-        className="max-w-2xl"
-        resetOptions={{ keepDirtyValues: true }}
-      >
-        <ResourceEditSync resource="tenants" />
-        <SavedTenantAccessUrl />
-        <TenantFields />
-        <TenantCapacityEditor />
-        <TenantOfficeSettings />
-        <TenantPagesSearchEditor />
-        <TenantAuthenticationLinks />
-      </SimpleForm>
-      <div className="max-w-2xl py-4">
-        <TenantApiKeysEditor />
-      </div>
+      <TenantEditBody />
     </Edit>
   );
 }

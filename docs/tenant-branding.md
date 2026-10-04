@@ -11,8 +11,14 @@ When no commercial organization is available, platform administrators can start 
 creation from this page; other users are directed to request access from a platform
 administrator.
 
-The page shows the selected organization's assigned Savia URL in a selectable,
-read-only field above the editor. **Open in new window** opens the assigned URL
+The page groups settings into **Identity**, **Login screen**, and **API keys**
+tabs. Identity contains the display name, colors, and logo. Login screen contains
+the title, welcome message, animation, cover image, and the selected organization's
+assigned Savia URL in a selectable, read-only field. API keys are available only
+to administrators who can manage the tenant's branding. Switching tabs keeps
+branding drafts and local upload previews in place.
+
+**Open in new window** opens the assigned URL
 in a separate browsing context without replacing the admin page. **Copy link** copies the URL with confirmation;
 **Share link** uses the device's native share sheet, falling back to copying when
 native sharing is unavailable. Clipboard failures explain how to copy manually.
