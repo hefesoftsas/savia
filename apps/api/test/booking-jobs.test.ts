@@ -469,8 +469,11 @@ it("persists a meeting link and exposes it only while the booking is confirmed",
     },
   });
   const row = await readBooking(env.DB, f.tenantId, f.id);
-  expect(row?.external_id).toBe("meeting-id");
-  expect((await reservationView(env.DB, row!)).conference).toEqual(conference);
+  expect(Boolean(row?.external_id)).toBe(true);
+  const view = await reservationView(env.DB, row!);
+  expect(view.conference).toEqual(conference);
+  expect(view.calendarEventIdPresent).toBe(true);
+  expect(view).not.toHaveProperty("externalId");
   await env.DB.prepare(
     "UPDATE tenant_bookings SET status='cancelled' WHERE id=?",
   )
@@ -622,6 +625,19 @@ it("keeps a confirmed appointment when its calendar cannot create video meetings
   expect(result.status).toBe("confirmed");
   expect(result.calendarStatus).toBe("completed");
   expect(result.conference?.status).toBe("unsupported");
+});
+
+it("returns the calendar provider saved on the reservation", async () => {
+  const { readBooking, reservationView } =
+    await import("../src/bookings/repository");
+  const f = await seedCalendar();
+  const view = await reservationView(
+    env.DB,
+    (await readBooking(env.DB, f.tenantId, f.id))!,
+  );
+
+  expect(view.calendarProvider).toBe("google_calendar");
+  expect(view.calendarEventIdPresent).toBe(false);
 });
 
 it("ends bounded conference polling without leaving an appointment permanently pending", async () => {

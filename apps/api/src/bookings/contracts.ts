@@ -156,6 +156,11 @@ export const reservationSchema = z.object({
   version: z.number(),
   deliveryStatus: z.string(),
   calendarStatus: z.string(),
+  calendarProvider: z
+    .enum(["google_calendar", "outlook"])
+    .nullable()
+    .optional(),
+  calendarEventIdPresent: z.boolean().optional(),
   canGenerateConference: z.boolean().optional(),
   availableConferenceProviders: z.array(z.enum(["auto", "zoom"])).optional(),
   conference: bookingConferenceSchema.nullable().optional(),

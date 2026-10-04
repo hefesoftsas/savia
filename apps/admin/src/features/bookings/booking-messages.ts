@@ -645,6 +645,72 @@ export const bookingMessages = {
     "Cancel reservation",
     "Cancelar reserva",
   ],
+  "Confirm reservation cancellation with calendar": [
+    "¿Cancelar esta reserva? Se conservará en el historial como cancelada. Savia solicitará la cancelación del evento de %{calendar} y de la videollamada vinculada cuando el proveedor lo permita.",
+    "Cancel this reservation? It will remain in history as cancelled. Savia will request cancellation of its %{calendar} event and linked video meeting, where supported.",
+    "Cancelar esta reserva? Ela continuará no histórico como cancelada. Savia solicitará o cancelamento do evento do %{calendar} e da videochamada vinculada quando o provedor permitir.",
+  ],
+  "Confirm reservation cancellation without calendar": [
+    "¿Cancelar esta reserva? Se conservará en el historial como cancelada. Los enlaces de reunión dejarán de estar disponibles en Savia.",
+    "Cancel this reservation? It will remain in history as cancelled. Meeting links will no longer be available in Savia.",
+    "Cancelar esta reserva? Ela continuará no histórico como cancelada. Os links da reunião deixarão de estar disponíveis no Savia.",
+  ],
+  "Not requested": ["No solicitado", "Not requested", "Não solicitado"],
+  "Saved in %{calendar}": [
+    "Guardado en %{calendar}",
+    "Saved in %{calendar}",
+    "Salvo no %{calendar}",
+  ],
+  "Event saved in %{calendar}; synchronization pending": [
+    "Evento guardado en %{calendar}; sincronización pendiente",
+    "Event saved in %{calendar}; synchronization pending",
+    "Evento salvo no %{calendar}; sincronização pendente",
+  ],
+  "Event saved in %{calendar}; synchronization failed": [
+    "Evento guardado en %{calendar}; falló la sincronización",
+    "Event saved in %{calendar}; synchronization failed",
+    "Evento salvo no %{calendar}; falha na sincronização",
+  ],
+  "Saving to %{calendar}…": [
+    "Guardando en %{calendar}…",
+    "Saving to %{calendar}…",
+    "Salvando no %{calendar}…",
+  ],
+  "Could not save to %{calendar}": [
+    "No se pudo guardar en %{calendar}",
+    "Could not save to %{calendar}",
+    "Não foi possível salvar no %{calendar}",
+  ],
+  "No event saved to %{calendar}": [
+    "No se guardó ningún evento en %{calendar}",
+    "No event saved to %{calendar}",
+    "Nenhum evento foi salvo no %{calendar}",
+  ],
+  "Calendar sync skipped for %{calendar}": [
+    "Se omitió la sincronización con %{calendar}",
+    "Calendar sync skipped for %{calendar}",
+    "A sincronização com %{calendar} foi ignorada",
+  ],
+  "Calendar cancellation pending for %{calendar}": [
+    "Cancelación pendiente en %{calendar}",
+    "Calendar cancellation pending for %{calendar}",
+    "Cancelamento pendente no %{calendar}",
+  ],
+  "Could not cancel in %{calendar}": [
+    "No se pudo cancelar en %{calendar}",
+    "Could not cancel in %{calendar}",
+    "Não foi possível cancelar no %{calendar}",
+  ],
+  "Cancelled in %{calendar}": [
+    "Cancelada en %{calendar}",
+    "Cancelled in %{calendar}",
+    "Cancelada no %{calendar}",
+  ],
+  "Calendar cancellation processed for %{calendar}": [
+    "Se procesó la cancelación del calendario %{calendar}",
+    "Calendar cancellation processed for %{calendar}",
+    "O cancelamento do calendário %{calendar} foi processado",
+  ],
   "Reservation cancelled.": [
     "Se canceló la reserva.",
     "Reservation cancelled.",

@@ -6,6 +6,7 @@ import {
 } from "@/i18n/core";
 import type { AppLocale } from "@/i18n/app-locale";
 import { agendaMessages } from "./agenda-messages";
+import { MeetingLinkActions } from "@/components/meeting-link-actions";
 import {
   useCallback,
   useEffect,
@@ -978,6 +979,13 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
                     <CalendarProviderIcon key={provider} provider={provider} />
                   ))}
                 </div>
+                <span className="text-xs text-muted-foreground">
+                  {t("Agendada en %{providers}", {
+                    providers: new Intl.ListFormat(intlLocale(locale)).format(
+                      providers.map(calendarProviderLabel),
+                    ),
+                  })}
+                </span>
               </div>
               <p className="text-sm tabular-nums text-muted-foreground">
                 {group.events[0]?.allDay
@@ -988,20 +996,23 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
               </p>
               {conference ? (
                 conference.status === "ready" && joinUrl ? (
-                  <a
-                    className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                    href={joinUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={t("Unirse a %{provider}", {
-                      provider: conferenceProviderLabel(conference.provider!),
-                    })}
-                  >
-                    {t("Unirse a %{provider}", {
-                      provider: conferenceProviderLabel(conference.provider!),
-                    })}
-                    <ExternalLink className="size-3.5" />
-                  </a>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <a
+                      className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      href={joinUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={t("Unirse a %{provider}", {
+                        provider: conferenceProviderLabel(conference.provider!),
+                      })}
+                    >
+                      {t("Unirse a %{provider}", {
+                        provider: conferenceProviderLabel(conference.provider!),
+                      })}
+                      <ExternalLink className="size-3.5" />
+                    </a>
+                    <MeetingLinkActions url={joinUrl} />
+                  </div>
                 ) : (
                   <p className="mt-1 text-sm text-muted-foreground">
                     {conference.status === "pending"
