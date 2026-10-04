@@ -67,6 +67,17 @@ const now = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
 const text = (value: string) => value.replace(/\s+/g, " ").trim();
 
+async function scopedPageId(scope: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(scope),
+  );
+  const hash = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `capture-${hash}`;
+}
+
 export function parsePageContent(value: unknown): PlateNode[] {
   if (!Array.isArray(value))
     throw new PagesError(
@@ -726,6 +737,380 @@ export class PagesService {
       .bind(pageId)
       .first<PageRow>();
     return this.document(row!, creatorRole);
+  }
+
+  async capture(input: {
+    captureId: string;
+    title: string;
+    url: string;
+    note?: string;
+    parentId?: string;
+    folderTitle?: string;
+  }) {
+    if (
+      typeof input.captureId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        input.captureId,
+      )
+    )
+      throw new PagesError(
+        400,
+        "INVALID_CAPTURE_ID",
+        "Capture ID must be a UUID",
+      );
+    if (typeof input.title !== "string")
+      throw new PagesError(400, "INVALID_TITLE", "Title must be a string");
+    const title = input.title.trim();
+    if (!title || title.length > 200)
+      throw new PagesError(
+        400,
+        "INVALID_TITLE",
+        "Title must be 1 to 200 characters",
+      );
+    if (typeof input.url !== "string" || input.url.length > 8192)
+      throw new PagesError(
+        400,
+        "INVALID_URL",
+        "URL must be a valid HTTP(S) URL",
+      );
+    const url = input.url.trim();
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      throw new PagesError(
+        400,
+        "INVALID_URL",
+        "URL must be a valid HTTP(S) URL",
+      );
+    }
+    if (
+      !["http:", "https:"].includes(parsedUrl.protocol) ||
+      parsedUrl.username.length > 0 ||
+      parsedUrl.password.length > 0 ||
+      (url.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i)?.[1] ?? "").includes(
+        "@",
+      ) ||
+      parsedUrl.href.length > 8192
+    )
+      throw new PagesError(
+        400,
+        "INVALID_URL",
+        "URL must be a valid HTTP(S) URL",
+      );
+    if (
+      input.note !== undefined &&
+      (typeof input.note !== "string" || input.note.length > 10_000)
+    )
+      throw new PagesError(
+        400,
+        "INVALID_NOTE",
+        "Note must be at most 10000 characters",
+      );
+    if (
+      input.parentId !== undefined &&
+      (typeof input.parentId !== "string" ||
+        !input.parentId.trim() ||
+        input.parentId.length > 128)
+    )
+      throw new PagesError(400, "INVALID_PARENT", "Parent ID is invalid");
+    if (
+      input.folderTitle !== undefined &&
+      (typeof input.folderTitle !== "string" || input.folderTitle.length > 200)
+    )
+      throw new PagesError(
+        400,
+        "INVALID_FOLDER_TITLE",
+        "Folder title must be at most 200 characters",
+      );
+
+    const tenantId = await this.tenant();
+    const pageId = await scopedPageId(
+      `pages-capture\0${tenantId}\0${this.actor.principal.id}\0${input.captureId.toLowerCase()}`,
+    );
+    const existing = await this.db
+      .prepare("SELECT * FROM pages WHERE id=? AND tenant_id=?")
+      .bind(pageId, tenantId)
+      .first<PageRow>();
+    if (existing)
+      return this.document(
+        existing,
+        await this.load(pageId).then(({ role }) => role),
+      );
+
+    const explicitParent =
+      input.parentId !== undefined
+        ? (await this.load(input.parentId, "editor")).row
+        : undefined;
+    if (explicitParent && explicitParent.kind !== "folder")
+      throw new PagesError(
+        400,
+        "PARENT_NOT_FOLDER",
+        "Capture parent must be a folder",
+      );
+
+    const folderTitle = input.folderTitle?.trim() || "Saved links";
+    if (folderTitle.length > 200)
+      throw new PagesError(
+        400,
+        "INVALID_FOLDER_TITLE",
+        "Folder title must be at most 200 characters",
+      );
+
+    let parentId = explicitParent?.id ?? null;
+    let rootId = explicitParent?.root_id ?? pageId;
+    let ownerId = explicitParent?.owner_id ?? this.actor.principal.id;
+    let creatorRole: PageRole = explicitParent
+      ? (await this.load(explicitParent.id, "editor")).role
+      : "owner";
+    let defaultFolderId: string | undefined;
+    if (!explicitParent) {
+      const folderKey = `pages-capture-folder\0${tenantId}\0${this.actor.principal.id}`;
+      defaultFolderId = await scopedPageId(folderKey);
+      const candidate = await this.db
+        .prepare("SELECT * FROM pages WHERE id=? AND tenant_id=?")
+        .bind(defaultFolderId, tenantId)
+        .first<PageRow>();
+      const candidateShared = candidate
+        ? await this.db
+            .prepare("SELECT 1 FROM page_shares WHERE root_id=? LIMIT 1")
+            .bind(candidate.root_id)
+            .first()
+        : null;
+      const candidatePublic = candidate
+        ? await this.db
+            .prepare(
+              "SELECT 1 FROM page_public_links WHERE page_id=? AND tenant_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?) LIMIT 1",
+            )
+            .bind(candidate.id, tenantId, now())
+            .first()
+        : null;
+      if (
+        candidate &&
+        (candidate.owner_id !== this.actor.principal.id ||
+          candidate.kind !== "folder" ||
+          candidate.parent_id !== null ||
+          candidateShared ||
+          candidatePublic)
+      ) {
+        defaultFolderId = await scopedPageId(
+          `${folderKey}\0private\0${input.captureId.toLowerCase()}`,
+        );
+        const fallback = await this.db
+          .prepare("SELECT * FROM pages WHERE id=? AND tenant_id=?")
+          .bind(defaultFolderId, tenantId)
+          .first<PageRow>();
+        const fallbackShared = fallback
+          ? await this.db
+              .prepare("SELECT 1 FROM page_shares WHERE root_id=? LIMIT 1")
+              .bind(fallback.root_id)
+              .first()
+          : null;
+        const fallbackPublic = fallback
+          ? await this.db
+              .prepare(
+                "SELECT 1 FROM page_public_links WHERE page_id=? AND tenant_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?) LIMIT 1",
+              )
+              .bind(fallback.id, tenantId, now())
+              .first()
+          : null;
+        if (
+          fallback &&
+          (fallback.owner_id !== this.actor.principal.id ||
+            fallback.kind !== "folder" ||
+            fallback.parent_id !== null ||
+            fallbackShared ||
+            fallbackPublic)
+        )
+          throw new PagesError(
+            409,
+            "PRIVATE_CAPTURE_FOLDER_REQUIRED",
+            "Choose a private destination folder for this capture",
+          );
+      }
+      parentId = defaultFolderId;
+      rootId = defaultFolderId;
+      ownerId = this.actor.principal.id;
+    }
+
+    const content: PlateNode[] = [
+      {
+        type: "p",
+        children: [{ type: "a", url, children: [{ text: url }] }],
+      },
+      ...(input.note?.trim()
+        ? [{ type: "p", children: [{ text: input.note.trim() }] }]
+        : []),
+    ];
+    const validatedContent = parsePageContent(content);
+    const contentJson = JSON.stringify(validatedContent);
+    const createdAt = now();
+    const writeGuard = id();
+    const activeScopeSql = `EXISTS(SELECT 1 FROM identity_principal actor WHERE actor.id=? AND actor.is_active=1 AND ${activeTenantScope("actor.id", "?")})`;
+    const parentAccessSql = explicitParent
+      ? `AND EXISTS(SELECT 1 FROM pages p WHERE p.id=? AND p.tenant_id=? AND p.kind='folder' AND
+          (p.owner_id=? OR EXISTS(SELECT 1 FROM page_shares s JOIN identity_tenant_membership m ON m.principal_id=s.principal_id AND m.tenant_id=s.tenant_id AND m.is_active=1 JOIN tenants t ON t.id=m.tenant_id AND t.is_active=1 WHERE s.root_id=p.root_id AND s.principal_id=? AND s.role='editor' AND s.tenant_id=p.tenant_id)))`
+      : `AND NOT EXISTS(SELECT 1 FROM page_shares s WHERE s.root_id=? AND s.tenant_id=?)
+         AND NOT EXISTS(SELECT 1 FROM page_public_links l WHERE l.page_id=? AND l.tenant_id=? AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at>?))`;
+    const guardBindings = explicitParent
+      ? [
+          writeGuard,
+          this.actor.principal.id,
+          tenantId,
+          tenantId,
+          tenantId,
+          explicitParent.id,
+          tenantId,
+          this.actor.principal.id,
+          this.actor.principal.id,
+        ]
+      : [
+          writeGuard,
+          this.actor.principal.id,
+          tenantId,
+          tenantId,
+          tenantId,
+          defaultFolderId,
+          tenantId,
+          defaultFolderId,
+          tenantId,
+          now(),
+        ];
+    const captureParentExistsSql = defaultFolderId
+      ? `AND EXISTS(SELECT 1 FROM pages f WHERE f.id=? AND f.tenant_id=? AND f.owner_id=? AND f.kind='folder' AND f.parent_id IS NULL AND f.root_id=f.id)
+         AND NOT EXISTS(SELECT 1 FROM page_shares s WHERE s.root_id=? AND s.tenant_id=?)
+         AND NOT EXISTS(SELECT 1 FROM page_public_links l WHERE l.page_id=? AND l.tenant_id=? AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at>?))`
+      : "";
+    const statements = [
+      this.db
+        .prepare(
+          `INSERT INTO studio_write_guards(id,valid) SELECT ?,CASE WHEN ${activeScopeSql} ${parentAccessSql} THEN 1 ELSE 0 END`,
+        )
+        .bind(...guardBindings),
+    ];
+    if (defaultFolderId) {
+      statements.push(
+        this.db
+          .prepare(
+            `INSERT INTO pages(id,tenant_id,owner_id,parent_id,root_id,title,kind,content_json,search_text,binding_json,version,share_version,created_at,updated_at)
+             SELECT ?,?,?,NULL,?,?,'folder','[]','',NULL,1,1,?,? WHERE EXISTS(SELECT 1 FROM studio_write_guards WHERE id=? AND valid=1)
+             ON CONFLICT(id) DO NOTHING`,
+          )
+          .bind(
+            defaultFolderId,
+            tenantId,
+            this.actor.principal.id,
+            defaultFolderId,
+            folderTitle,
+            createdAt,
+            createdAt,
+            writeGuard,
+          ),
+      );
+      statements.push(
+        this.db
+          .prepare(
+            `INSERT INTO page_revisions(page_id,version,title,content_json,created_at)
+             SELECT ?,1,?,'[]',? WHERE EXISTS(SELECT 1 FROM pages WHERE id=? AND tenant_id=? AND owner_id=? AND kind='folder' AND parent_id IS NULL AND root_id=id)
+             ON CONFLICT(page_id,version) DO NOTHING`,
+          )
+          .bind(
+            defaultFolderId,
+            folderTitle,
+            createdAt,
+            defaultFolderId,
+            tenantId,
+            this.actor.principal.id,
+          ),
+      );
+    }
+    statements.push(
+      this.db
+        .prepare(
+          `INSERT INTO pages(id,tenant_id,owner_id,parent_id,root_id,title,kind,content_json,search_text,binding_json,version,share_version,created_at,updated_at)
+           SELECT ?,?,?,?,?,?,'page',?,? ,NULL,1,1,?,? WHERE EXISTS(SELECT 1 FROM studio_write_guards WHERE id=? AND valid=1) ${captureParentExistsSql}`,
+        )
+        .bind(
+          pageId,
+          tenantId,
+          ownerId,
+          parentId,
+          rootId,
+          title,
+          contentJson,
+          extractText(validatedContent),
+          createdAt,
+          createdAt,
+          writeGuard,
+          ...(defaultFolderId
+            ? [
+                defaultFolderId,
+                tenantId,
+                this.actor.principal.id,
+                defaultFolderId,
+                tenantId,
+                defaultFolderId,
+                tenantId,
+                now(),
+              ]
+            : []),
+        ),
+      this.db
+        .prepare(
+          "INSERT INTO page_revisions(page_id,version,title,content_json,created_at) SELECT ?,1,?,?,? WHERE EXISTS(SELECT 1 FROM pages WHERE id=? AND tenant_id=?)",
+        )
+        .bind(pageId, title, contentJson, createdAt, pageId, tenantId),
+      this.db
+        .prepare("DELETE FROM studio_write_guards WHERE id=?")
+        .bind(writeGuard),
+    );
+    try {
+      await this.db.batch(statements);
+    } catch (error) {
+      const retry = await this.db
+        .prepare("SELECT * FROM pages WHERE id=? AND tenant_id=?")
+        .bind(pageId, tenantId)
+        .first<PageRow>();
+      if (retry)
+        return this.document(
+          retry,
+          await this.load(pageId).then(({ role }) => role),
+        );
+      if (defaultFolderId) {
+        const racedShare = await this.db
+          .prepare(
+            `SELECT 1 FROM page_shares WHERE root_id=? AND tenant_id=?
+             UNION ALL
+             SELECT 1 FROM page_public_links WHERE page_id=? AND tenant_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?) LIMIT 1`,
+          )
+          .bind(defaultFolderId, tenantId, defaultFolderId, tenantId, now())
+          .first();
+        if (racedShare)
+          throw new PagesError(
+            409,
+            "PRIVATE_CAPTURE_FOLDER_REQUIRED",
+            "Choose a private destination folder for this capture",
+          );
+      }
+      if (isPostgresSerializationFailure(error))
+        throw versionConflict("Page changed while it was being captured");
+      if (explicitParent) await this.load(explicitParent.id, "editor");
+      else await this.tenant();
+      throw error;
+    }
+    const row = await this.db
+      .prepare("SELECT * FROM pages WHERE id=? AND tenant_id=?")
+      .bind(pageId, tenantId)
+      .first<PageRow>();
+    if (!row) {
+      if (explicitParent) await this.load(explicitParent.id, "editor");
+      throw new PagesError(
+        409,
+        "PRIVATE_CAPTURE_FOLDER_REQUIRED",
+        "Choose a private destination folder for this capture",
+      );
+    }
+    return this.document(row, creatorRole);
   }
 
   private async findBinding(tenantId: number, binding: PageBinding) {

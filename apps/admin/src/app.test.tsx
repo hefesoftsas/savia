@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "./app-services";
 import { App } from "./app";
+import { clearSharedLink, updateSharedLink } from "./pwa/share-target";
 
 type AgencyListResult = {
   data: Array<{ id: number; name: string }>;
@@ -163,6 +164,7 @@ function mockAccountRequests(actionPath: string) {
 describe("App", () => {
   afterEach(() => {
     cleanup();
+    clearSharedLink();
     vi.restoreAllMocks();
   });
 
@@ -584,6 +586,25 @@ describe("App", () => {
     );
     expect(window.location.pathname).toBe("/");
     expect(window.location.hash).toBe("#/my-day");
+  });
+
+  it("resumes the shared-link review after the OAuth callback", async () => {
+    const services = createServices();
+    services.authSession.getIdentity = vi
+      .fn()
+      .mockResolvedValue({ id: "principal-1", fullName: "Alex" });
+    updateSharedLink({
+      captureId: crypto.randomUUID(),
+      title: "Read later",
+      url: "https://example.com/article",
+      note: "",
+      receivedAt: Date.now(),
+    });
+    window.history.replaceState({}, "", "/auth/callback?code=code&state=state");
+    render(<App services={services} />);
+    await waitFor(() => expect(window.location.hash).toBe("#/save-link"));
+    expect(window.location.search).toBe("");
+    clearSharedLink();
   });
 
   it("applies the Savia color theme when the OAuth callback fails", async () => {
