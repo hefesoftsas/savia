@@ -479,7 +479,7 @@ export default function PluginIde({
           </Button>
           <h2>
             <span className="plugin-ide-title-full">{t("title")}</span>
-            <span className="plugin-ide-title-short">Plugin</span>
+            <span className="plugin-ide-title-short">{t("shortTitle")}</span>
           </h2>
           <span className="plugin-ide-project-name">{projectName}</span>
         </div>
@@ -1047,7 +1047,9 @@ export default function PluginIde({
       </div>
       <footer className="plugin-ide-statusbar">
         <span role="status">{saveStatus ?? t("draft")}</span>
-        <span>{selected === "entry.tsx" ? "TypeScript JSX" : "JSON"}</span>
+        <span>
+          {t(selected === "entry.tsx" ? "typescriptLanguage" : "jsonLanguage")}
+        </span>
         {undo && (
           <button
             disabled={!!busy}

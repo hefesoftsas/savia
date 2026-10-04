@@ -1,4 +1,7 @@
 export const pluginIdeMessages = {
+  shortTitle: ["Plugin", "Plugin", "Plugin"],
+  typescriptLanguage: ["TypeScript JSX", "TypeScript JSX", "TypeScript JSX"],
+  jsonLanguage: ["JSON", "JSON", "JSON"],
   explorer: ["Explorador", "Explorer", "Explorador"],
   openFiles: ["Archivos abiertos", "Open files", "Arquivos abertos"],
   closeFile: ["Cerrar", "Close", "Fechar"],
