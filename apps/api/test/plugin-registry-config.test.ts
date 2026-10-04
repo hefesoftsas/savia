@@ -6,12 +6,19 @@ import {
 
 describe("plugin registry tenant configuration", () => {
   const config = JSON.stringify({
-    "tenant:1": { url: "https://registry.example", token: "a".repeat(32) },
+    "tenant:1": {
+      url: "https://registry.example",
+      token: "a".repeat(32),
+      publishToken: "p".repeat(32),
+    },
     "tenant:2": { url: "https://registry.example", token: "b".repeat(32) },
   });
   it("selects only the exact tenant and keeps unconfigured tenants disconnected", () => {
     expect(pluginRegistryForTenant(config, "tenant:1")?.token).toBe(
       "a".repeat(32),
+    );
+    expect(pluginRegistryForTenant(config, "tenant:1")?.publishToken).toBe(
+      "p".repeat(32),
     );
     expect(pluginRegistryForTenant(config, "tenant:2")?.token).toBe(
       "b".repeat(32),
@@ -57,6 +64,15 @@ describe("plugin registry tenant configuration", () => {
     expect(pluginRegistryForTenant(raw, "tenant:1")?.url).toBe(
       "http://127.0.0.1:8798",
     );
+  });
+  it("keeps publishing disabled unless a separate publish token is configured", () => {
+    const raw = JSON.stringify({
+      "tenant:1": { url: "https://registry.example", token: "r".repeat(32) },
+    });
+    expect(pluginRegistryForTenant(raw, "tenant:1")).toEqual({
+      url: "https://registry.example",
+      token: "r".repeat(32),
+    });
   });
 });
 

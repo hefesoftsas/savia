@@ -3,6 +3,7 @@ import { pluginDevelopmentReload } from "./build/plugin-development";
 import { officePlugin } from "./build/office-plugin";
 import { collectOfflineShellAssets } from "./build/offline-shell-assets";
 import { reactSandboxPlugin } from "./build/react-sandbox-plugin";
+import { pluginIdeRuntimePlugin } from "./build/plugin-ide-runtime";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
@@ -104,6 +105,7 @@ export default defineConfig({
     officePlugin(),
     tailwindcss(),
     reactSandboxPlugin(),
+    pluginIdeRuntimePlugin(),
     precompressionPlugin(),
     offlineShellPlugin(),
     // App shell precache for airplane-mode boot. Data stays in the Dexie

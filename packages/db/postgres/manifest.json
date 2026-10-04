@@ -157,6 +157,10 @@
     {
       "filename": "0037_personal_collaboration_messages.sql",
       "sha256": "bd96455c9ce671aeb47ab4daaf9c796de7e12f095de0aeffa6659b2d604bed8c"
+    },
+    {
+      "filename": "0038_plugin_authoring_projects.sql",
+      "sha256": "3104b10feacba25c67f5d4e431ab14cb8148b6c34b4eaa5413d09f74228ec3ff"
     }
   ],
   "sqliteOnlyDerivedTables": [

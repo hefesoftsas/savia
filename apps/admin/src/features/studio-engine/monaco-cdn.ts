@@ -30,6 +30,7 @@ export type MonacoEditorInstance = {
   dispose: () => void;
   onDidChangeModelContent: (listener: () => void) => void;
   layout: () => void;
+  updateOptions: (options: Record<string, unknown>) => void;
 };
 
 declare global {
