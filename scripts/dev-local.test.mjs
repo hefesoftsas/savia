@@ -101,6 +101,10 @@ test("starts the application locally with the private Savia request Worker", asy
   );
   assert.match(
     commands,
+    /--filter @savia\/hook-executor exec wrangler dev --local --ip 127\.0\.0\.1 --port 8798 --inspector-port 9233 --config wrangler\.jsonc/,
+  );
+  assert.match(
+    commands,
     /--filter @savia\/request exec wrangler dev --local --ip 127\.0\.0\.1 --port 8797 --inspector-port 9232 --config wrangler\.jsonc/,
   );
   assert.match(commands, /exec node scripts\/dev-api-runtime\.mjs/);

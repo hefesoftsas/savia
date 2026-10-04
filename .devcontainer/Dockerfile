@@ -20,6 +20,7 @@ RUN mkdir -p \
     /workspace/apps/legacy-exporter/node_modules \
     /workspace/apps/mcp/node_modules \
     /workspace/apps/plugin-registry/node_modules \
+    /workspace/apps/hook-executor/node_modules \
     /workspace/apps/savia-request/node_modules \
     /workspace/apps/self-hosted/node_modules \
     /workspace/packages/db/node_modules \
@@ -59,6 +60,7 @@ RUN mkdir -p \
     /workspace/packages/tenant-host/node_modules \
     /workspace/apps/api/.wrangler \
     /workspace/apps/auth/.wrangler \
+    /workspace/apps/hook-executor/.wrangler \
     /workspace/apps/savia-request/.wrangler \
     /home/node/.local/share/pnpm/store \
     && chown -R node:node /workspace /home/node/.local

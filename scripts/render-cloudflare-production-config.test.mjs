@@ -63,6 +63,7 @@ test("writes only the supported production workers and retains their runtime set
     const api = await config(outputRoot, "api");
     const mcp = await config(outputRoot, "mcp");
     const providers = await config(outputRoot, "savia-request");
+    const hookExecutor = await config(outputRoot, "hook-executor");
     const admin = await config(outputRoot, "admin");
     const connectors = await config(outputRoot, "connector-gateway");
 
@@ -158,12 +159,38 @@ test("writes only the supported production workers and retains their runtime set
     assert.equal(providers.main, "src/server/index.ts");
     assert.equal(providers.workers_dev, false);
     assert.equal("routes" in providers, false);
+    assert.deepEqual(providers.services, [
+      { binding: "HOOK_SERVICE", service: "savia-hook-executor" },
+    ]);
+    assert.equal("worker_loaders" in providers, false);
     assert.equal(providers.d1_databases[0].binding, "DB");
     assert.equal(providers.d1_databases[0].database_id, "domain-d1-id");
     assert.equal("ENCRYPTION_KEY" in (providers.vars ?? {}), false);
     assert.deepEqual(providers.secrets, {
       required: ["ENCRYPTION_KEY"],
     });
+    assert.equal(hookExecutor.name, "savia-hook-executor");
+    assert.equal(hookExecutor.main, "src/index.ts");
+    assert.equal(hookExecutor.compatibility_date, "2026-09-04");
+    assert.equal(hookExecutor.workers_dev, false);
+    assert.equal(hookExecutor.preview_urls, false);
+    assert.deepEqual(hookExecutor.limits, { cpu_ms: 30000 });
+    assert.deepEqual(hookExecutor.rules, [
+      {
+        type: "CompiledWasm",
+        globs: ["**/*.wasm"],
+        fallthrough: true,
+      },
+    ]);
+    assert.deepEqual(Object.keys(hookExecutor).sort(), [
+      "compatibility_date",
+      "limits",
+      "main",
+      "name",
+      "preview_urls",
+      "rules",
+      "workers_dev",
+    ]);
     assert.equal(connectors.name, "savia-connectors");
     assert.equal(connectors.workers_dev, false);
     assert.equal(connectors.preview_urls, false);
@@ -244,6 +271,7 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
       "api",
       "mcp",
       "savia-request",
+      "hook-executor",
       "connector-gateway",
       "admin",
     ]) {
@@ -271,6 +299,26 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
       if (app === "auth")
         assert.deepEqual(conf.services, [
           { binding: "SAVIA_IDENTITY", service: "savia-agencies-preview" },
+        ]);
+      if (app === "hook-executor") {
+        assert.equal(conf.name, "savia-hook-executor-preview");
+        assert.equal(conf.workers_dev, false);
+        assert.equal(conf.preview_urls, false);
+        assert.deepEqual(conf.limits, { cpu_ms: 30000 });
+        assert.deepEqual(conf.rules, [
+          {
+            type: "CompiledWasm",
+            globs: ["**/*.wasm"],
+            fallthrough: true,
+          },
+        ]);
+      }
+      if (app === "savia-request")
+        assert.deepEqual(conf.services, [
+          {
+            binding: "HOOK_SERVICE",
+            service: "savia-hook-executor-preview",
+          },
         ]);
       if (app === "admin") {
         assert.equal(conf.vars.CANONICAL_HOST, "savia-preview.hefesoft.com");

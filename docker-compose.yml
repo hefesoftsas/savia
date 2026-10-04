@@ -42,6 +42,7 @@ services:
       - apps_legacy_exporter_modules:/workspace/apps/legacy-exporter/node_modules
       - apps_mcp_modules:/workspace/apps/mcp/node_modules
       - apps_plugin_registry_modules:/workspace/apps/plugin-registry/node_modules
+      - apps_hook_executor_modules:/workspace/apps/hook-executor/node_modules
       - apps_savia_request_modules:/workspace/apps/savia-request/node_modules
       - apps_self_hosted_modules:/workspace/apps/self-hosted/node_modules
       - packages_db_modules:/workspace/packages/db/node_modules
@@ -81,6 +82,7 @@ services:
       - packages_tenant_host_modules:/workspace/packages/tenant-host/node_modules
       - api_state:/workspace/apps/api/.wrangler
       - auth_state:/workspace/apps/auth/.wrangler
+      - hook-executor_state:/workspace/apps/hook-executor/.wrangler
       - savia-request_state:/workspace/apps/savia-request/.wrangler
     healthcheck:
       test: ["CMD", "node", ".devcontainer/verify.mjs"]
@@ -138,6 +140,7 @@ volumes:
   apps_legacy_exporter_modules:
   apps_mcp_modules:
   apps_plugin_registry_modules:
+  apps_hook_executor_modules:
   apps_savia_request_modules:
   apps_self_hosted_modules:
   packages_db_modules:
@@ -177,4 +180,5 @@ volumes:
   packages_tenant_host_modules:
   api_state:
   auth_state:
+  hook-executor_state:
   savia-request_state:
