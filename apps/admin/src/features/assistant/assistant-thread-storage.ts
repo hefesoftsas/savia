@@ -47,7 +47,10 @@ export function generateThreadTitle(
   }
 
   const textPart = firstUser.parts.find(
-    (p) => p.type === "text" && typeof p.text === "string" && p.text.trim().length > 0,
+    (p) =>
+      p.type === "text" &&
+      typeof p.text === "string" &&
+      p.text.trim().length > 0,
   );
 
   if (!textPart?.text) {
@@ -247,18 +250,22 @@ export function formatRelativeTime(dateIso: string): string {
 
 export type TimelineGroup = "Hoy" | "Ayer" | "Esta semana" | "Anteriores";
 
-export function groupThreadsByTimeline(
-  threads: AssistantThreadRecord[],
-): Array<{ group: TimelineGroup; items: AssistantThreadRecord[] }> {
+export function groupThreadsByTimeline<
+  T extends Pick<AssistantThreadRecord, "createdAt" | "updatedAt">,
+>(threads: T[]): Array<{ group: TimelineGroup; items: T[] }> {
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
   const startOfYesterday = startOfToday - 86400000;
   const startOfThisWeek = startOfToday - 6 * 86400000;
 
-  const hoy: AssistantThreadRecord[] = [];
-  const ayer: AssistantThreadRecord[] = [];
-  const estaSemana: AssistantThreadRecord[] = [];
-  const anteriores: AssistantThreadRecord[] = [];
+  const hoy: T[] = [];
+  const ayer: T[] = [];
+  const estaSemana: T[] = [];
+  const anteriores: T[] = [];
 
   for (const thread of threads) {
     const time = new Date(thread.updatedAt || thread.createdAt).getTime();
@@ -273,11 +280,13 @@ export function groupThreadsByTimeline(
     }
   }
 
-  const result: Array<{ group: TimelineGroup; items: AssistantThreadRecord[] }> = [];
+  const result: Array<{ group: TimelineGroup; items: T[] }> = [];
   if (hoy.length > 0) result.push({ group: "Hoy", items: hoy });
   if (ayer.length > 0) result.push({ group: "Ayer", items: ayer });
-  if (estaSemana.length > 0) result.push({ group: "Esta semana", items: estaSemana });
-  if (anteriores.length > 0) result.push({ group: "Anteriores", items: anteriores });
+  if (estaSemana.length > 0)
+    result.push({ group: "Esta semana", items: estaSemana });
+  if (anteriores.length > 0)
+    result.push({ group: "Anteriores", items: anteriores });
 
   return result;
 }

@@ -137,6 +137,10 @@
     {
       "filename": "0032_assistant_threads.sql",
       "sha256": "05b6265d835fe892f3c930cbff8bc265e95a582a52062299160424772bcddc20"
+    },
+    {
+      "filename": "0033_assistant_thread_context_tenant.sql",
+      "sha256": "ea641e136b02d522eea4ad647b04ca0c9febd94d900c61fd67c4e2fbba783c94"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -2448,6 +2452,14 @@
           "notnull": 0,
           "dflt_value": null,
           "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "context_tenant_id",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -2469,7 +2481,7 @@
           "origin": "pk"
         }
       ],
-      "checkCount": 5
+      "checkCount": 6
     },
     {
       "name": "assistant_virtual_employee_chunks",

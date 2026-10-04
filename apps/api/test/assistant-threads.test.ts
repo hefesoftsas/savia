@@ -8,6 +8,7 @@ import type {
   AssistantService,
 } from "../src/assistant/contracts";
 import { registerAssistantRoutes } from "../src/assistant/routes";
+import { AssistantThreadRepository } from "../src/assistant/threads";
 import { createCompanionAssistantContextLoader } from "../src/companion/routes";
 import { CompanionRecordings } from "../src/companion/recordings";
 import { CompanionSessions } from "../src/companion/sessions";
@@ -75,6 +76,19 @@ function assistantRouteApp(
   app.use("*", authenticationMiddleware(env.DB, auth(principalId)));
   registerAssistantRoutes(app, service, { db: env.DB, loadThreadContext });
   return app;
+}
+
+function contextLoader(tenantId: number | null = 101) {
+  return async (
+    _actor: AppActor,
+    _request: Request,
+    stored: { kind: "recording" | "session"; id: string; title: string },
+  ) => ({
+    kind: stored.kind,
+    title: stored.title,
+    content: "server-resolved transcript",
+    tenantId,
+  });
 }
 
 async function seedPrincipal(id: string) {
@@ -159,7 +173,16 @@ describe("assistant conversation persistence", () => {
   });
 
   it("reconstructs the full thread on another request and finds recording threads beyond the list window", async () => {
-    const app = createTestApp({ auth: auth("thread-user-a") });
+    const stubService: AssistantService = {
+      chat: async () => new Response(),
+      confirmAction: async () => ({ state: "unavailable" }),
+      cancelAction: async () => ({ state: "unavailable" }),
+    };
+    const app = assistantRouteApp(
+      "thread-user-a",
+      stubService,
+      contextLoader(),
+    );
     const saved = await app.request(`/api/assistant/threads/${firstThread}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
@@ -180,19 +203,60 @@ describe("assistant conversation persistence", () => {
       id: firstThread,
       userId: "thread-user-a",
       revision: 1,
-      context: { kind: "recording", id: recordingId, title: "Call with Maya" },
+      context: {
+        kind: "recording",
+        id: recordingId,
+        title: "Call with Maya",
+        tenantId: 101,
+      },
       messages,
     });
 
-    const freshApp = createTestApp({ auth: auth("thread-user-a") });
+    const freshApp = assistantRouteApp(
+      "thread-user-a",
+      stubService,
+      contextLoader(202),
+    );
     const loaded = await freshApp.request(
       `/api/assistant/threads/${firstThread}`,
     );
     expect(await loaded.json()).toEqual(body);
-    const filtered = await freshApp.request(
+    const sourceScopedApp = assistantRouteApp(
+      "thread-user-a",
+      stubService,
+      contextLoader(101),
+    );
+    const filtered = await sourceScopedApp.request(
       `/api/assistant/threads?contextKind=recording&contextId=${recordingId}`,
     );
-    expect(await filtered.json()).toMatchObject({ threads: [body] });
+    const filteredBody = await filtered.json<any>();
+    expect(filteredBody).toMatchObject({
+      threads: [
+        {
+          id: firstThread,
+          userId: "thread-user-a",
+          title: "Recording review",
+          revision: 1,
+          context: { tenantId: 101 },
+          messageCount: null,
+          preview: "",
+        },
+      ],
+    });
+    expect(filteredBody.threads[0]).not.toHaveProperty("messages");
+    const summaries = await sourceScopedApp.request("/api/assistant/threads");
+    const summaryBody = await summaries.json<any>();
+    expect(summaryBody.threads).toMatchObject([
+      {
+        id: firstThread,
+        title: "Recording review",
+        revision: 1,
+        context: { tenantId: 101 },
+        messageCount: null,
+        preview: "",
+      },
+    ]);
+    expect(summaryBody.threads[0]).not.toHaveProperty("messages");
   });
 
   it("keeps threads private and prevents foreign reads, updates, and deletes", async () => {
@@ -279,7 +343,12 @@ describe("assistant conversation persistence", () => {
   });
 
   it("keeps an attached recording context bound to its original source", async () => {
-    const app = createTestApp({ auth: auth("thread-user-a") });
+    const service: AssistantService = {
+      chat: async () => new Response(),
+      confirmAction: async () => ({ state: "unavailable" }),
+      cancelAction: async () => ({ state: "unavailable" }),
+    };
+    const app = assistantRouteApp("thread-user-a", service, contextLoader());
     const create = await app.request(`/api/assistant/threads/${firstThread}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
@@ -322,6 +391,97 @@ describe("assistant conversation persistence", () => {
       },
     );
     expect(retarget.status).toBe(409);
+  });
+
+  it("does not bind a legacy null-tenant context to the current workspace on update", async () => {
+    const service: AssistantService = {
+      chat: async () => new Response(),
+      confirmAction: async () => ({ state: "unavailable" }),
+      cancelAction: async () => ({ state: "unavailable" }),
+    };
+    const app = assistantRouteApp("thread-user-a", service, contextLoader(101));
+    const created = await app.request(`/api/assistant/threads/${firstThread}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Legacy recording",
+        messages,
+        context: { kind: "recording", id: recordingId, title: "Call" },
+        expectedRevision: 0,
+      }),
+    });
+    expect(created.status).toBe(200);
+    await env.DB.prepare(
+      "UPDATE assistant_threads SET context_tenant_id = NULL WHERE id = ?",
+    )
+      .bind(firstThread)
+      .run();
+
+    const updated = await app.request(`/api/assistant/threads/${firstThread}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Legacy recording",
+        messages,
+        context: { kind: "recording", id: recordingId, title: "Call" },
+        expectedRevision: 1,
+      }),
+    });
+    expect(updated.status).toBe(409);
+    expect(
+      await new AssistantThreadRepository(env.DB).get(
+        "thread-user-a",
+        firstThread,
+      ),
+    ).toMatchObject({
+      revision: 1,
+      context: { tenantId: null },
+    });
+  });
+
+  it("keeps the same session id isolated by its server-resolved workspace", async () => {
+    const service: AssistantService = {
+      chat: async () => new Response(),
+      confirmAction: async () => ({ state: "unavailable" }),
+      cancelAction: async () => ({ state: "unavailable" }),
+    };
+    const sourceId = "7e9e4702-11e2-43a0-a665-7939c7b923c5";
+    const workspaceA = assistantRouteApp(
+      "thread-user-a",
+      service,
+      contextLoader(101),
+    );
+    const workspaceB = assistantRouteApp(
+      "thread-user-a",
+      service,
+      contextLoader(202),
+    );
+    const save = (app: OpenAPIHono, id: string) =>
+      app.request(`/api/assistant/threads/${id}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Session review",
+          messages,
+          context: { kind: "session", id: sourceId, title: "Session" },
+          expectedRevision: 0,
+        }),
+      });
+
+    expect((await save(workspaceA, firstThread)).status).toBe(200);
+    expect((await save(workspaceB, secondThread)).status).toBe(200);
+    const rowsA = await workspaceA.request(
+      `/api/assistant/threads?contextKind=session&contextId=${sourceId}`,
+    );
+    const rowsB = await workspaceB.request(
+      `/api/assistant/threads?contextKind=session&contextId=${sourceId}`,
+    );
+    expect(await rowsA.json()).toMatchObject({
+      threads: [{ id: firstThread, context: { tenantId: 101 } }],
+    });
+    expect(await rowsB.json()).toMatchObject({
+      threads: [{ id: secondThread, context: { tenantId: 202 } }],
+    });
   });
 
   it("loads recording context only through the owner's current Companion tenant scope", async () => {
@@ -368,6 +528,7 @@ describe("assistant conversation persistence", () => {
         context,
       );
       expect(loaded.content).toContain("We agreed to meet next Tuesday.");
+      expect(loaded.tenantId).toBe(101);
 
       await expect(
         loader(
@@ -521,6 +682,7 @@ describe("assistant conversation persistence", () => {
         kind: stored.kind,
         title: stored.title,
         content: "server-resolved transcript only",
+        tenantId: 101,
       };
     };
     const ownerApp = assistantRouteApp(
@@ -563,6 +725,12 @@ describe("assistant conversation persistence", () => {
     expect(chat.status).toBe(200);
     expect(loadedContexts).toEqual([
       { kind: "recording", id: recordingId, title: "Saved call" },
+      {
+        kind: "recording",
+        id: recordingId,
+        title: "Saved call",
+        tenantId: 101,
+      },
     ]);
     expect(assistantRequests).toHaveLength(1);
     expect(assistantRequests[0]?.trustedContext).toEqual({
@@ -570,6 +738,50 @@ describe("assistant conversation persistence", () => {
       title: "Saved call",
       content: "server-resolved transcript only",
     });
+
+    const spoofedTenant = await ownerApp.request(
+      `/api/assistant/threads/${secondThread}`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Spoofed tenant",
+          messages,
+          context: {
+            kind: "recording",
+            id: recordingId,
+            title: "Saved call",
+            tenantId: 202,
+          },
+          expectedRevision: 0,
+        }),
+      },
+    );
+    expect(spoofedTenant.status).toBe(400);
+
+    const switchedWorkspace = assistantRouteApp(
+      "thread-user-a",
+      service,
+      async (_actor, _request, stored) => ({
+        kind: stored.kind,
+        title: stored.title,
+        content: "other workspace transcript",
+        tenantId: 202,
+      }),
+    );
+    const mismatchedChat = await switchedWorkspace.request(
+      "/api/assistant/chat",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ threadId: firstThread, messages }),
+      },
+    );
+    expect(mismatchedChat.status).toBe(409);
+    expect(assistantRequests).toHaveLength(1);
 
     const foreignApp = assistantRouteApp(
       "thread-user-b",
@@ -586,11 +798,16 @@ describe("assistant conversation persistence", () => {
     });
     expect(foreignChat.status).toBe(404);
     expect(assistantRequests).toHaveLength(1);
-    expect(loadedContexts).toHaveLength(1);
+    expect(loadedContexts).toHaveLength(2);
   });
 
   it("rejects system-role messages and duplicate owner/context threads", async () => {
-    const app = createTestApp({ auth: auth("thread-user-a") });
+    const service: AssistantService = {
+      chat: async () => new Response(),
+      confirmAction: async () => ({ state: "unavailable" }),
+      cancelAction: async () => ({ state: "unavailable" }),
+    };
+    const app = assistantRouteApp("thread-user-a", service, contextLoader());
     const request = (id: string, role = "user") =>
       app.request(`/api/assistant/threads/${id}`, {
         method: "PUT",

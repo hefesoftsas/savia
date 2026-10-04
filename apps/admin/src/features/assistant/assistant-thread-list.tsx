@@ -15,14 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
-  extractThreadPreview,
   formatRelativeTime,
   groupThreadsByTimeline,
-  type AssistantThreadRecord,
 } from "./assistant-thread-storage";
+import type { AssistantThreadSummary } from "./assistant-threads-client";
 
 export interface AssistantThreadListProps {
-  threads: AssistantThreadRecord[];
+  threads: AssistantThreadSummary[];
   activeThreadId: string | null;
   onSelectThread: (threadId: string) => void;
   onNewThread: () => void;
@@ -47,13 +46,7 @@ export function AssistantThreadList({
 
     return threads.filter((thread) => {
       if (thread.title.toLowerCase().includes(query)) return true;
-      const preview = extractThreadPreview(thread).toLowerCase();
-      if (preview.includes(query)) return true;
-      return thread.messages.some((msg) =>
-        msg.parts?.some(
-          (p) => typeof p.text === "string" && p.text.toLowerCase().includes(query),
-        ),
-      );
+      return false;
     });
   }, [threads, search]);
 
@@ -110,7 +103,7 @@ export function AssistantThreadList({
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por pregunta o tema…"
+            placeholder="Buscar por título…"
             className="h-8 rounded-lg border-border/60 bg-background/80 pl-8 pr-7 text-xs placeholder:text-muted-foreground/60 focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20"
             aria-label="Buscar conversaciones"
           />
@@ -138,7 +131,8 @@ export function AssistantThreadList({
               Sin conversaciones previas
             </h4>
             <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-              Cada vez que consultes el CRM o generes informes, tu diálogo se guardará automáticamente para que puedas retomarlo.
+              Cada vez que consultes el CRM o generes informes, tu diálogo se
+              guardará automáticamente para que puedas retomarlo.
             </p>
             <Button
               size="sm"
@@ -214,14 +208,14 @@ function ThreadCard({
   onSelect,
   onDelete,
 }: {
-  thread: AssistantThreadRecord;
+  thread: AssistantThreadSummary;
   isActive: boolean;
   onSelect: () => void;
   onDelete: (e: React.MouseEvent) => void;
 }) {
-  const preview = extractThreadPreview(thread);
+  const preview = thread.preview;
   const relativeTime = formatRelativeTime(thread.updatedAt || thread.createdAt);
-  const messageCount = thread.messages.length;
+  const messageCount = thread.messageCount;
 
   return (
     <div
@@ -259,7 +253,9 @@ function ThreadCard({
           <p
             className={cn(
               "truncate text-xs font-medium tracking-tight",
-              isActive ? "text-primary font-semibold" : "text-foreground group-hover:text-primary transition-colors",
+              isActive
+                ? "text-primary font-semibold"
+                : "text-foreground group-hover:text-primary transition-colors",
             )}
           >
             {thread.title}
@@ -269,15 +265,19 @@ function ThreadCard({
           </span>
         </div>
 
-        <p className="mt-0.5 line-clamp-1 text-[11px] leading-normal text-muted-foreground/85">
-          {preview}
-        </p>
+        {preview ? (
+          <p className="mt-0.5 line-clamp-1 text-[11px] leading-normal text-muted-foreground/85">
+            {preview}
+          </p>
+        ) : null}
 
         <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground/60">
-          <span className="inline-flex items-center gap-1 rounded-sm bg-muted/60 px-1.5 py-0.2 font-medium">
-            <Clock className="size-2.5" />
-            {messageCount} {messageCount === 1 ? "mensaje" : "mensajes"}
-          </span>
+          {messageCount !== null ? (
+            <span className="inline-flex items-center gap-1 rounded-sm bg-muted/60 px-1.5 py-0.2 font-medium">
+              <Clock className="size-2.5" />
+              {messageCount} {messageCount === 1 ? "mensaje" : "mensajes"}
+            </span>
+          ) : null}
           {isActive ? (
             <span className="font-semibold text-primary">Activo</span>
           ) : null}

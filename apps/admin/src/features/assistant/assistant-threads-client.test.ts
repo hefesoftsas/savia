@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ApiClient } from "@/api/api-client";
-import { AssistantThreadsClient } from "./assistant-threads-client";
+import {
+  AssistantThreadsClient,
+  type SyncedThread,
+} from "./assistant-threads-client";
 
 describe("server conversation history", () => {
   it("reopens messages through a fresh client without browser storage", async () => {
@@ -10,6 +13,7 @@ describe("server conversation history", () => {
         baseUrl: "https://savia.test",
         tokenSource: { getAccessToken: async () => "token" },
         fetcher: async (_url, init) => {
+          const url = new URL(String(_url));
           if (init?.method === "PUT") {
             const body = JSON.parse(String(init.body));
             saved = {
@@ -21,7 +25,21 @@ describe("server conversation history", () => {
             };
             return Response.json(saved);
           }
-          return Response.json({ threads: saved ? [saved] : [] });
+          if (url.pathname === "/api/assistant/threads") {
+            const { messages, ...summary } = saved ?? {};
+            return Response.json({
+              threads: saved
+                ? [
+                    {
+                      ...summary,
+                      messageCount: messages.length,
+                      preview: "What was decided?",
+                    },
+                  ]
+                : [],
+            });
+          }
+          return Response.json(saved);
         },
       });
     const first = new AssistantThreadsClient(api());
@@ -40,9 +58,49 @@ describe("server conversation history", () => {
       revision: 0,
     });
     const second = new AssistantThreadsClient(api());
-    expect((await second.list())[0].messages[0].parts[0].text).toBe(
+    const summaries = await second.list();
+    expect(summaries[0]).toMatchObject({
+      id: "thread",
+      messageCount: 1,
+      preview: "What was decided?",
+    });
+    expect(summaries[0]).not.toHaveProperty("messages");
+    expect((await second.get("thread")).messages[0].parts[0].text).toBe(
       "What was decided?",
     );
+  });
+  it("does not send the server-owned tenant id when saving a loaded thread", async () => {
+    let body: Record<string, unknown> | undefined;
+    const client = new AssistantThreadsClient(
+      new ApiClient({
+        baseUrl: "https://savia.test",
+        tokenSource: { getAccessToken: async () => "token" },
+        fetcher: async (_url, init) => {
+          body = JSON.parse(String(init?.body));
+          return Response.json({});
+        },
+      }),
+    );
+    const thread = {
+      id: "thread",
+      title: "Meeting",
+      messages: [],
+      createdAt: "",
+      updatedAt: "",
+      revision: 2,
+      context: {
+        kind: "recording",
+        id: "recording-1",
+        title: "Planning",
+        tenantId: 101,
+      },
+    } as SyncedThread;
+    await client.save(thread);
+    expect(body?.context).toEqual({
+      kind: "recording",
+      id: "recording-1",
+      title: "Planning",
+    });
   });
   it("sends the expected revision and exposes conflicts without overwriting", async () => {
     let body: any;

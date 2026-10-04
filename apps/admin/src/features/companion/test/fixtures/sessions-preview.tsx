@@ -47,7 +47,7 @@ const session = {
     },
   },
 };
-const thread = {
+let thread = {
   id: "synthetic-thread",
   userId: "synthetic-user",
   title: session.name,
@@ -59,6 +59,7 @@ const thread = {
     kind: "session",
     id: session.id,
     title: session.name,
+    tenantId: 101,
   },
 };
 const api = new ApiClient({
@@ -66,14 +67,25 @@ const api = new ApiClient({
   tokenSource: { getAccessToken: async () => null },
   fetcher: async (input, init) => {
     const path = new URL(String(input)).pathname;
-    if (path === "/api/assistant/threads")
-      return Response.json({ threads: [thread] });
-    if (path === "/api/assistant/threads/synthetic-thread")
+    if (path === "/api/assistant/threads") {
+      const { messages, ...summary } = thread;
       return Response.json({
-        ...thread,
-        ...JSON.parse(String(init?.body ?? "{}")),
-        revision: 2,
+        threads: [{ ...summary, messageCount: messages.length, preview: "" }],
       });
+    }
+    if (path === "/api/assistant/threads/synthetic-thread") {
+      if (init?.method === "PUT") {
+        const body = JSON.parse(String(init.body ?? "{}"));
+        thread = {
+          ...thread,
+          ...body,
+          context: thread.context,
+          revision: thread.revision + 1,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return Response.json(thread);
+    }
     if (path.includes("/chunks/"))
       return new Response(new Blob(["synthetic audio"], { type: "audio/ogg" }));
     if (path.endsWith("/questions"))
