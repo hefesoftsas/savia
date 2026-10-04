@@ -59,6 +59,7 @@ describe("requestSelectionAI", () => {
     const body = JSON.parse(String(init.body));
     expect(body.employeeId).toBe("employee-7");
     expect(body.inferEmployeeFromMentions).toBe(false);
+    expect(body.responseMode).toBe("text");
     expect(body.model).toBeUndefined();
     expect(body.messages).toHaveLength(1);
     expect(body.messages[0].role).toBe("user");

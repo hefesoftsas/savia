@@ -172,6 +172,135 @@ describe("assistant conversation persistence", () => {
     await seedPrincipal("thread-user-b");
   });
 
+  it("deletes all recording conversations without deleting other owners or contexts", async () => {
+    const repo = new AssistantThreadRepository(env.DB);
+    const context = {
+      kind: "recording" as const,
+      id: recordingId,
+      title: "Recording",
+    };
+    const write = {
+      title: "Recording",
+      messages,
+      expectedRevision: 0,
+      context,
+    };
+    const first = await repo.save(
+      "thread-user-a",
+      crypto.randomUUID(),
+      write,
+      101,
+    );
+    const second = await repo.save(
+      "thread-user-a",
+      crypto.randomUUID(),
+      write,
+      202,
+    );
+    const otherOwner = await repo.save(
+      "thread-user-b",
+      crypto.randomUUID(),
+      write,
+      101,
+    );
+    const session = await repo.save(
+      "thread-user-a",
+      crypto.randomUUID(),
+      { ...write, context: { ...context, kind: "session" } },
+      101,
+    );
+    const otherRecording = await repo.save(
+      "thread-user-a",
+      crypto.randomUUID(),
+      { ...write, context: { ...context, id: crypto.randomUUID() } },
+      101,
+    );
+    await repo.deleteRecordingConversations("thread-user-a", recordingId);
+    expect(await repo.get("thread-user-a", first.id)).toBeNull();
+    expect(await repo.get("thread-user-a", second.id)).toBeNull();
+    expect(await repo.get("thread-user-b", otherOwner.id)).not.toBeNull();
+    expect(await repo.get("thread-user-a", session.id)).not.toBeNull();
+    expect(await repo.get("thread-user-a", otherRecording.id)).not.toBeNull();
+  });
+
+  it("deletes audio, notes and conversations through the real app wiring", async () => {
+    const owner = "thread-user-a",
+      id = crypto.randomUUID();
+    const recordings = new CompanionRecordings(env.DOCUMENTS);
+    const threads = new AssistantThreadRepository(env.DB);
+    await recordings.save(owner, {
+      id,
+      source: "system",
+      audio: { data: opusFixtureBase64, format: "ogg" },
+      consent: true,
+    });
+    await recordings.storeNotes(owner, id, {
+      transcript: {
+        text: "Meeting content",
+        source: "system",
+        model: "test",
+        durationSeconds: 1,
+      },
+      summary: null,
+    });
+    const thread = await threads.save(
+      owner,
+      crypto.randomUUID(),
+      {
+        title: "Recording chat",
+        messages,
+        context: { kind: "recording", id, title: "Meeting" },
+        expectedRevision: 0,
+      },
+      101,
+    );
+    const app = createTestApp({
+      auth: { authenticate: async () => companionActor(owner) },
+      companion: {
+        enabled: true,
+        storage: env.DOCUMENTS,
+        configuration: {
+          effectiveConfigurationFor: async () => ({
+            apiKey: "test",
+            model: "test",
+          }),
+        },
+      },
+    });
+    try {
+      const deleted = await app.request(`/v1/companion/recordings/${id}`, {
+        method: "DELETE",
+      });
+      expect(deleted.status).toBe(204);
+      await expect(recordings.get(owner, id)).rejects.toMatchObject({
+        status: 404,
+      });
+      expect(await threads.get(owner, thread.id)).toBeNull();
+      const listed = await env.DOCUMENTS.list({ prefix: "companion/samples/" });
+      expect(
+        listed.objects.some((object) =>
+          object.key.endsWith(`${id}.notes.json`),
+        ),
+      ).toBe(false);
+      const recreated = await app.request(
+        `/api/assistant/threads/${crypto.randomUUID()}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            title: "Recording chat",
+            messages,
+            context: { kind: "recording", id, title: "Meeting" },
+            expectedRevision: 0,
+          }),
+        },
+      );
+      expect(recreated.status).toBe(404);
+    } finally {
+      await recordings.remove(owner, id).catch(() => {});
+    }
+  });
+
   it("reconstructs the full thread on another request and finds recording threads beyond the list window", async () => {
     const stubService: AssistantService = {
       chat: async () => new Response(),

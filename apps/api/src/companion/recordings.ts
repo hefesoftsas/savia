@@ -109,7 +109,13 @@ const canRead = (owner: RecordingOwner, recording: Recording) =>
   (owner.tenantId !== undefined && recording.tenantId === owner.tenantId);
 export class CompanionRecordings {
   private readonly processing: Map<string, Promise<void>>;
-  constructor(private bucket?: R2Bucket) {
+  constructor(
+    private bucket?: R2Bucket,
+    private deleteConversations?: (
+      ownerId: string,
+      recordingId: string,
+    ) => Promise<void>,
+  ) {
     if (bucket) {
       let locks = processingByBucket.get(bucket);
       if (!locks) {
@@ -483,6 +489,12 @@ export class CompanionRecordings {
       const key = await this.key(owner, id);
       const object = await bucket.head(key);
       if (!object || !canRead(owner, this.metadata(object))) throw missing();
+      // Keep the audio available for retry if conversation cleanup fails.
+      // Ownership is checked before deleting any associated data.
+      await this.deleteConversations?.(
+        typeof owner === "string" ? owner : owner.ownerId,
+        id,
+      );
       await bucket.delete([key, await this.notesKey(owner, id)]);
     });
   }

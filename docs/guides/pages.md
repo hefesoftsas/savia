@@ -275,6 +275,20 @@ case that employee handles the request. Results stream into a preview. Choose
 **Replace selection**, **Insert below**, or **Copy** to apply the result yourself.
 Cancel stops the request, and errors leave the document unchanged. Nothing is
 written until you choose an apply action; normal autosave then records an edit.
+The Spanish-to-English translator returns three labeled versions: **1. Regular
+translation**, **2. Professional but friendly translation**, and **3. Concise
+professional but friendly translation**. Choose one with the radio controls. The
+preview shows all three headings and translations; replace, insert, and copy use
+only the selected translation, without its heading or extra commentary. If the
+source is too ambiguous to translate reliably, the employee asks one brief
+clarifying question before returning the translations. Clarifications and unrecognized
+translation formats remain visible without replace, insert, or copy actions;
+adjust the instruction and generate again. An inactive existing translator must
+be reactivated in AI employees.
+If no employee uses the `traductor` handle, choose **Create translator** to add
+the active text-only employee and select it for the request. This action creates
+the employee; management's translator template instead opens a draft for review
+before saving.
 
 Block actions appear in a horizontal floating toolbar above the active block.
 A continuous pointer corridor connects the block to its toolbar. A 400 ms dismissal delay allows brief pointer detours; entering the

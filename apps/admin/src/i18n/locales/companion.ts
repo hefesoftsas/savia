@@ -16,11 +16,11 @@ export const companionMessages = {
     "Unable to delete this recording. Try again.",
     "Não foi possível excluir esta gravação. Tente novamente.",
   ],
-  "This permanently deletes the saved audio, transcript and summary from Savia. The original file stays on your device or connected drive.":
+  "This permanently deletes the saved audio, transcript, summary and associated chats from Savia. The original file stays on your device or connected drive.":
     [
-      "Esto elimina definitivamente el audio, la transcripción y el resumen guardados en Savia. El archivo original se conserva en tu dispositivo o unidad conectada.",
-      "This permanently deletes the saved audio, transcript and summary from Savia. The original file stays on your device or connected drive.",
-      "Isso exclui permanentemente o áudio, a transcrição e o resumo salvos no Savia. O arquivo original permanece no seu dispositivo ou unidade conectada.",
+      "Esto elimina definitivamente el audio, la transcripción, el resumen y los chats asociados guardados en Savia. El archivo original se conserva en tu dispositivo o unidad conectada.",
+      "This permanently deletes the saved audio, transcript, summary and associated chats from Savia. The original file stays on your device or connected drive.",
+      "Isso exclui permanentemente o áudio, a transcrição, o resumo e as conversas associadas salvos no Savia. O arquivo original permanece no seu dispositivo ou unidade conectada.",
     ],
   "Private to your account.": [
     "Solo tú puedes verlas.",

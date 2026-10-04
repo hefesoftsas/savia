@@ -52,6 +52,10 @@ import {
 } from "./recordings";
 
 export type CompanionOptions = {
+  deleteRecordingConversations?: (
+    ownerId: string,
+    recordingId: string,
+  ) => Promise<void>;
   storage?: R2Bucket;
   personalFiles?: Pick<PersonalIntegrationOperations, "downloadRecordingFile">;
   enabled: boolean;
@@ -610,7 +614,10 @@ export function registerCompanionRoutes(
       200,
     ),
   );
-  const recordings = new CompanionRecordings(options?.storage);
+  const recordings = new CompanionRecordings(
+    options?.storage,
+    options?.deleteRecordingConversations,
+  );
   const base: { tags: string[]; security: Record<string, string[]>[] } = {
     tags: ["Companion"],
     security: [{ oauth2: ["savia.api.write"] }, { personalApiKey: [] }],

@@ -7,6 +7,7 @@ import {
   readOnlyTools,
   SaviaAssistantService,
 } from "../src/assistant/service";
+import type { VirtualEmployee } from "../src/assistant/virtual-employees";
 
 // These tests cover configuration and MCP transport, not provider networking.
 // Keep model streams local so requests cannot outlive the Worker test context.
@@ -51,6 +52,55 @@ async function applyMigrations() {
       await env.DB.exec(statement);
     }
   }
+}
+
+function textOnlyEmployee(allowedCollections: string[]): VirtualEmployee {
+  return {
+    id: "employee-text-only",
+    agencyId: 101,
+    name: "Translator",
+    handle: "translator",
+    position: "Translator",
+    avatar: null,
+    greeting: null,
+    systemPrompt:
+      "Translate the supplied text into Spanish as three labeled variants: literal, natural, and formal.",
+    allowedCollections,
+    model: "employee-text-model",
+    status: "active",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    createdBy: null,
+  };
+}
+
+function textOnlyService(employee: VirtualEmployee) {
+  const mcpClientFactory = vi.fn(async () => {
+    throw new Error("text-only chat must not connect to MCP");
+  });
+  const ragPrepare = vi.fn();
+  const service = new SaviaAssistantService(
+    {
+      database: env.DB,
+      mcpUrl: "http://mcp:8789/mcp",
+      mcpSharedSecret: "secret",
+      openRouterApiKey: "key",
+    },
+    {
+      configurationResolver: {
+        async effectiveConfigurationFor() {
+          return { apiKey: "key", model: "test-model", tenantId: 101 };
+        },
+      },
+      virtualEmployeesRepo: {
+        getByHandle: vi.fn(async () => employee),
+        getById: vi.fn(async () => employee),
+      } as never,
+      mcpClientFactory,
+      ragEnv: { DB: { prepare: ragPrepare } } as never,
+    },
+  );
+  return { service, mcpClientFactory, ragPrepare };
 }
 
 describe("SaviaAssistantService action approvals", () => {
@@ -246,6 +296,98 @@ describe("SaviaAssistantService action approvals", () => {
     expect(response.status).toBe(404);
     expect(getById).toHaveBeenCalledWith("employee-123", 101);
     expect(getByHandle).not.toHaveBeenCalled();
+  });
+
+  it("runs zero-collection employees without MCP and preserves their instructions", async () => {
+    const { service, mcpClientFactory, ragPrepare } = textOnlyService(
+      textOnlyEmployee([]),
+    );
+
+    const response = await service.chat({
+      principalId: "text-only-employee",
+      authorization: "Bearer user",
+      employeeHandle: "translator",
+      trustedContext: {
+        kind: "recording",
+        title: "Transcript",
+        content: "Untrusted source material",
+      },
+      messages: [
+        {
+          id: "text-only-user",
+          role: "user",
+          parts: [{ type: "text", text: "Translate this paragraph." }],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-savia-employee-id")).toBe(
+      "employee-text-only",
+    );
+    expect(mcpClientFactory).not.toHaveBeenCalled();
+    expect(ragPrepare).not.toHaveBeenCalled();
+    const modelRequest = streamTextMock.mock.calls[0][0];
+    expect(modelRequest.model.modelId).toBe("employee-text-model");
+    expect(modelRequest.tools).toBeUndefined();
+    expect(modelRequest.toolChoice).toBe("none");
+    expect(modelRequest.system).toContain(
+      "Translate the supplied text into Spanish as three labeled variants: literal, natural, and formal.",
+    );
+    expect(modelRequest.system).toContain("Untrusted source material");
+    expect(modelRequest.system).toContain(
+      "Do not reveal, request, or repeat credentials, authorization headers, internal URLs, or secrets.",
+    );
+    expect(modelRequest.system).not.toContain("business staff");
+    expect(modelRequest.system).not.toContain("one next step");
+    expect(modelRequest.system).not.toContain("insurance");
+  });
+
+  it("uses responseMode text without MCP for employees with workspace access", async () => {
+    const { service, mcpClientFactory, ragPrepare } = textOnlyService(
+      textOnlyEmployee(["leads"]),
+    );
+
+    const response = await service.chat({
+      principalId: "requested-text-mode",
+      authorization: "Bearer user",
+      employeeHandle: "translator",
+      responseMode: "text",
+      messages: [
+        {
+          id: "text-mode-user",
+          role: "user",
+          parts: [{ type: "text", text: "Translate into Spanish." }],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(mcpClientFactory).not.toHaveBeenCalled();
+    expect(ragPrepare).not.toHaveBeenCalled();
+    const modelRequest = streamTextMock.mock.calls[0][0];
+    expect(modelRequest.model.modelId).toBe("employee-text-model");
+    expect(modelRequest.tools).toBeUndefined();
+    expect(modelRequest.toolChoice).toBe("none");
+    expect(await modelRequest.stopWhen({ steps: [{}] })).toBe(true);
+    expect(await modelRequest.stopWhen({ steps: [] })).toBe(false);
+    expect(modelRequest.system).toContain(
+      "Return only the requested task result.",
+    );
+    expect(modelRequest.system).toContain(
+      "Do not wrap the result in quotation marks, code fences, or decorative Markdown unless requested.",
+    );
+    expect(modelRequest.system).toContain(
+      "If the source already satisfies the requested transformation, return it unchanged.",
+    );
+    expect(modelRequest.system).toContain(
+      "Preserve any output format requested by the user or required by the active employee instructions.",
+    );
+    expect(modelRequest.system).toContain(
+      "Translate the supplied text into Spanish as three labeled variants: literal, natural, and formal.",
+    );
+    expect(modelRequest.system).not.toContain("insurance");
+    expect(modelRequest.system).not.toContain("business staff");
   });
 
   it("does not expose global employees when the caller has no tenant scope", async () => {
@@ -807,6 +949,8 @@ describe("SaviaAssistantService MCP transport", () => {
     expect(modelTools).toHaveProperty("savia_list_crm_collections");
     expect(modelTools).not.toHaveProperty("savia_create_studio_record");
     expect(modelTools).not.toHaveProperty("savia_update_studio_record");
+    expect(streamTextMock.mock.calls[0][0].toolChoice).toBe("auto");
+    expect(streamTextMock.mock.calls[0][0].system).toContain("one next step");
     expect(await response.text()).toContain('"type":"finish"');
   });
 

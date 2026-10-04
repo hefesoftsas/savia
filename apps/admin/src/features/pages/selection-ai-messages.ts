@@ -30,9 +30,9 @@ export const selectionAIMessages = {
     "Resuma o texto selecionado, preservando suas ideias principais.",
   ],
   "Improve prompt": [
-    "Mejora la claridad y la redacción del texto seleccionado conservando su significado y su idioma.",
-    "Improve the clarity and writing of the selected text, preserving its meaning and language.",
-    "Melhore a clareza e a redação do texto selecionado, preservando seu significado e idioma.",
+    "Mejora la claridad y la redacción del texto seleccionado conservando su significado y su idioma. Si ya es correcto, devuélvelo sin cambios. Devuelve únicamente el texto final.",
+    "Improve the clarity and writing of the selected text, preserving its meaning and language. If already correct, return it unchanged. Return only the final text.",
+    "Melhore a clareza e a redação do texto selecionado, preservando seu significado e idioma. Se já estiver correto, devolva sem alterações. Retorne apenas o texto final.",
   ],
   "Translate prompt": [
     "Traduce el texto seleccionado al inglés.",
@@ -80,5 +80,56 @@ export const selectionAIMessages = {
     "No se pudo copiar. Selecciona la respuesta y cópiala manualmente.",
     "Could not copy. Select the response and copy it manually.",
     "Não foi possível copiar. Selecione a resposta e copie-a manualmente.",
+  ],
+  "Create translator": [
+    "Crear traductor",
+    "Create translator",
+    "Criar tradutor",
+  ],
+  "Creating translator": [
+    "Creando traductor…",
+    "Creating translator…",
+    "Criando tradutor…",
+  ],
+  "Translator prompt": [
+    "Traduce el texto seleccionado al inglés en las tres versiones indicadas por tus instrucciones.",
+    "Translate the selected text into English in the three versions specified by your instructions.",
+    "Traduza o texto selecionado para inglês nas três versões indicadas por suas instruções.",
+  ],
+  "Translator failed": [
+    "No se pudo crear el traductor. Revisa tus permisos o vuelve a intentar.",
+    "Could not create the translator. Check your permissions or retry.",
+    "Não foi possível criar o tradutor. Verifique suas permissões ou tente novamente.",
+  ],
+  "Translator inactive": [
+    "El traductor está inactivo. Actívalo en Empleados IA para usarlo aquí.",
+    "The translator is inactive. Activate it in AI employees to use it here.",
+    "O tradutor está inativo. Ative-o em Funcionários IA para usá-lo aqui.",
+  ],
+  "Translation needs clarification": [
+    "El asistente pidió una aclaración o respondió en otro formato. Ajusta la instrucción y genera de nuevo antes de aplicar una traducción.",
+    "The assistant requested clarification or used a different format. Adjust the instruction and generate again before applying a translation.",
+    "O assistente pediu esclarecimento ou usou outro formato. Ajuste a instrução e gere novamente antes de aplicar uma tradução.",
+  ],
+  "Response ready": ["Respuesta lista.", "Response ready.", "Resposta pronta."],
+  "Choose translation": [
+    "Elige la versión que quieres aplicar",
+    "Choose the version to apply",
+    "Escolha a versão que deseja aplicar",
+  ],
+  "Regular translation": [
+    "Traducción regular",
+    "Regular translation",
+    "Tradução regular",
+  ],
+  "Professional but friendly translation": [
+    "Traducción profesional y amable",
+    "Professional but friendly translation",
+    "Tradução profissional e amigável",
+  ],
+  "Concise professional but friendly translation": [
+    "Traducción breve, profesional y amable",
+    "Concise professional but friendly translation",
+    "Tradução concisa, profissional e amigável",
   ],
 } satisfies MessageCatalog;

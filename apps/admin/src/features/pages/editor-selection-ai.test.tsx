@@ -27,11 +27,12 @@ async function openAI(
   readOnly = false,
   employees: unknown[] = [],
   launch = true,
+  fetcher?: typeof fetch,
 ) {
   const api = new ApiClient({
     baseUrl: "https://savia.test",
     tokenSource: { getAccessToken: async () => null },
-    fetcher: async () => Response.json({ data: employees }),
+    fetcher: fetcher ?? (async () => Response.json({ data: employees })),
   });
   const changed = vi.fn();
   const { container } = render(
@@ -127,6 +128,55 @@ it("does not expose AI editing to readers", async () => {
   expect(
     screen.queryByRole("button", { name: "Ask AI" }),
   ).not.toBeInTheDocument();
+});
+
+it("replaces with the chosen translation without inserting headings or other versions", async () => {
+  request.mockResolvedValue(
+    "1. Regular translation\nHello\n\n2. Professional but friendly translation\nHello there\n\n3. Concise professional but friendly translation\nHi",
+  );
+  const { content } = await openAI();
+  const dialog = await screen.findByRole("dialog", { name: "Ask AI" });
+  fireEvent.change(within(dialog).getByLabelText("Instruction"), {
+    target: { value: "Translate" },
+  });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+  fireEvent.click(
+    await within(dialog).findByRole("radio", {
+      name: "Concise professional but friendly translation",
+    }),
+  );
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Replace selection" }),
+  );
+  await waitFor(() => expect(content.textContent).toBe("Keep Hi selection"));
+});
+
+it("copies only the chosen translation", async () => {
+  request.mockResolvedValue(
+    "1. Regular translation\nHello\n\n2. Professional but friendly translation\nHello there\n\n3. Concise professional but friendly translation\nHi",
+  );
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal(
+    "navigator",
+    Object.assign(Object.create(navigator), { clipboard: { writeText } }),
+  );
+  try {
+    const { content } = await openAI();
+    const dialog = await screen.findByRole("dialog", { name: "Ask AI" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Explain" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+    fireEvent.click(
+      await within(dialog).findByRole("radio", {
+        name: "Professional but friendly translation",
+      }),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copy" }));
+    await within(dialog).findByRole("button", { name: "Copied" });
+    expect(writeText).toHaveBeenCalledWith("Hello there");
+    expect(content.textContent).toBe("Keep this selection");
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 
 it("keeps the expanded selection toolbar inside a narrow viewport", async () => {
@@ -243,4 +293,137 @@ it("copies a completed response without editing the page", async () => {
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+it("creates a collectionless translator explicitly and invokes its three-version prompt", async () => {
+  request.mockResolvedValue(
+    "1. Regular translation\nHello\n2. Professional but friendly translation\nHello there\n3. Concise professional but friendly translation\nHi",
+  );
+  const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST")
+      return Response.json({
+        data: {
+          id: "translator",
+          name: "Translator",
+          handle: "traductor",
+          status: "active",
+        },
+      });
+    return Response.json({ data: [] });
+  });
+  const { content } = await openAI(false, [], true, fetcher);
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(
+    await within(dialog).findByRole("button", { name: "Create translator" }),
+  );
+  await waitFor(() =>
+    expect(within(dialog).getByLabelText("Assistant")).toHaveValue(
+      "translator",
+    ),
+  );
+  const post = fetcher.mock.calls.find((call) => call[1]?.method === "POST")!;
+  expect(JSON.parse(String(post[1]?.body))).toMatchObject({
+    handle: "traductor",
+    allowedCollections: [],
+  });
+  expect(content.textContent).toBe("Keep this selection");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+  await within(dialog).findByRole("radio", { name: "Regular translation" });
+  expect(request.mock.calls[0][1]).toMatchObject({
+    employeeId: "translator",
+    instruction: expect.stringContaining("three versions"),
+  });
+});
+
+it("does not offer a duplicate translator when its handle already exists", async () => {
+  await openAI(false, [
+    {
+      id: "existing",
+      handle: "traductor",
+      name: "Translator",
+      status: "inactive",
+    },
+  ]);
+  const dialog = await screen.findByRole("dialog");
+  await waitFor(() =>
+    expect(within(dialog).getByLabelText("Assistant")).toBeEnabled(),
+  );
+  expect(
+    within(dialog).queryByRole("button", { name: "Create translator" }),
+  ).not.toBeInTheDocument();
+});
+
+it.each([
+  "Which meaning of banco did you intend?",
+  "Here are the translations:\n1. Regular translation\nHello\n2. Professional but friendly translation\nHello there\n3. Concise professional but friendly translation\nHi",
+])(
+  "keeps translator clarification or unrecognized output visible without apply controls: %s",
+  async (result) => {
+    request.mockResolvedValue(result);
+    const { content } = await openAI(false, [
+      {
+        id: "translator",
+        handle: "traductor",
+        name: "Translator",
+        status: "active",
+      },
+    ]);
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() =>
+      expect(within(dialog).getByLabelText("Assistant")).toBeEnabled(),
+    );
+    fireEvent.change(within(dialog).getByLabelText("Assistant"), {
+      target: { value: "translator" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+    expect(
+      (await within(dialog).findByRole("region", { name: "Response" }))
+        .textContent,
+    ).toContain(result);
+    expect(
+      within(dialog).queryByRole("button", { name: "Replace selection" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "Insert below" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "Copy" }),
+    ).not.toBeInTheDocument();
+    expect(content.textContent).toBe("Keep this selection");
+  },
+);
+
+it("explains how to reactivate an existing inactive translator", async () => {
+  await openAI(false, [
+    {
+      id: "existing",
+      handle: "traductor",
+      name: "Translator",
+      status: "inactive",
+    },
+  ]);
+  const dialog = await screen.findByRole("dialog");
+  expect(
+    await within(dialog).findByText(
+      "The translator is inactive. Activate it in AI employees to use it here.",
+    ),
+  ).toBeVisible();
+});
+
+it("keeps ordinary responses about translation styles applicable", async () => {
+  request.mockResolvedValue(
+    "A Regular translation preserves the original meaning.",
+  );
+  const { content } = await openAI();
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Explain" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+  fireEvent.click(
+    await within(dialog).findByRole("button", { name: "Replace selection" }),
+  );
+  await waitFor(() =>
+    expect(content.textContent).toBe(
+      "Keep A Regular translation preserves the original meaning. selection",
+    ),
+  );
 });
