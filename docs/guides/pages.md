@@ -1,6 +1,34 @@
 # Personal pages
 
-Owner: Savia API and Admin. Reviewed: 2026-10-01.
+Owner: Savia API and Admin. Reviewed: 2026-10-04.
+
+## Save a shared link
+
+On Android, open your workspace's HTTPS address and install Savia from Chrome
+using **Install app** or the installation option under **Add to Home screen**.
+A browser shortcut alone is not enough. If Savia does not appear in another app's share menu, update the
+installed app from Chrome or remove it and install it again. Then choose
+**Share**, select Savia, review the link, title, note and destination folder,
+and explicitly save it to Pages. The share intake needs an internet connection
+and keeps its draft in this browser tab for up to one hour. It stores the link,
+an optional title, and shared text as a note; Savia does not fetch or scrape the
+linked article. A pending save and its selected folder resume after signing in
+or refreshing; while a save is pending, keep its details unchanged until Savia
+confirms the result. If the browser blocks session storage, keep the tab open
+while reviewing and saving the draft because a reload or sign-in cannot restore
+it.
+
+The default destination is your private **Saved links** folder (**Guardados** in
+Spanish). If that folder has been shared with members or through an active public
+link, Savia creates a private destination instead. Choosing another folder applies
+that folder's existing permissions, including public links. The review shows the
+current account and workspace before saving. The page, its link and note, and its
+first revision are saved atomically; retrying the same pending capture does not
+create another page. This feature uses the existing Pages schema and needs no new
+database migration.
+
+Safari and Firefox do not offer this installed-app share target. Open **Work →
+Pages → Save link** to enter a link manually there.
 
 **Work → Pages** expands directly in the main sidebar. It contains your page and folder tree; there is no second navigation panel. Select Pages itself to search the workspace, create a root page or folder, or browse its contents. The document breadcrumb returns to a parent or the workspace. Create a page, edit its title and body, and wait for **Saved** before navigating away. One search box offers up to nine accessible title and content matches as you type. When tenant semantic search is enabled and available, semantic matches are added after text matches, with duplicates removed. Suggestions show a short excerpt, highlight the literal search phrase, and include the last update date. Use the arrow keys and Enter to open a suggestion, or Escape to close the list. Searching does not filter the root folder listing. Pages are private until their owner grants member access or explicitly creates a public link. Subpages inherit the root's reader/editor permissions for member access. Administrators do not automatically receive private document access.
 

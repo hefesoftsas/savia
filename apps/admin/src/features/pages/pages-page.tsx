@@ -38,6 +38,7 @@ import {
   ChevronRight,
   Download,
   Upload,
+  Bookmark,
 } from "lucide-react";
 import { pagesMessages } from "./messages";
 import {
@@ -432,6 +433,12 @@ export function PagesPage({
                 <p>{t("Pages hint")}</p>
               </div>
               <div className="flex flex-wrap gap-2">
+                <Button variant="outline" asChild>
+                  <Link to="/save-link">
+                    <Bookmark size={16} />
+                    {t("Save link")}
+                  </Link>
+                </Button>
                 <Button
                   variant="outline"
                   className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
