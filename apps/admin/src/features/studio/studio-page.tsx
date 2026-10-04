@@ -12,7 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useCanAccess } from "ra-core";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { AppServices } from "@/app-services";
 import { createEmbeddedTransport } from "@/api/embedded-transport";
 import { Label } from "@/components/ui/label";
@@ -38,8 +38,17 @@ import type { LocalWorkspace } from "@/local-data/workspaces";
 import "./embedded.css";
 
 const StudioRoot = lazy(() => import("@/features/studio-engine/app"));
+const PluginProjectWorkspace = lazy(
+  () => import("@/features/studio-engine/plugin-project-workspace"),
+);
 
-export function StudioPage({ services }: { services: AppServices }) {
+export function StudioPage({
+  services,
+  pluginStudio = false,
+}: {
+  services: AppServices;
+  pluginStudio?: boolean;
+}) {
   const t = useMessages(automationMessages);
   const isMobile = useIsMobile();
   const { canAccess, isPending } = useCanAccess({
@@ -47,6 +56,7 @@ export function StudioPage({ services }: { services: AppServices }) {
     action: "list",
   });
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const [tenants, setTenants] = useState<StudioTenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -157,7 +167,13 @@ export function StudioPage({ services }: { services: AppServices }) {
     ) : null;
 
   return (
-    <section className="@container min-w-0 w-full">
+    <section
+      className={
+        pluginStudio
+          ? "@container flex min-h-0 min-w-0 w-full flex-1 flex-col"
+          : "@container min-w-0 w-full"
+      }
+    >
       {selected && headerActions && params.get("view") !== "audit" ? (
         isMobile ? (
           <div className="mb-3 flex min-w-0 justify-end">{tenantContext}</div>
@@ -220,6 +236,23 @@ export function StudioPage({ services }: { services: AppServices }) {
           key={selected.id}
           services={services}
           tenant={selected}
+          pluginStudio={pluginStudio}
+          pluginSource={
+            pluginStudio && params.get("source") && params.get("version")
+              ? { id: params.get("source")!, version: params.get("version")! }
+              : undefined
+          }
+          onExitPluginStudio={() =>
+            navigate(
+              `/studio?tenantId=${selected.tenantId}&view=admin&tab=extensions`,
+            )
+          }
+          onPluginSourceOpened={() => {
+            const next = new URLSearchParams(params);
+            next.delete("source");
+            next.delete("version");
+            setParams(next, { replace: true });
+          }}
           query={(() => {
             const next = new URLSearchParams(params);
             next.set("tenantId", String(selected.tenantId));
@@ -251,15 +284,28 @@ export function StudioPage({ services }: { services: AppServices }) {
   );
 }
 
+/** Reuses Studio's tenant authorization and runtime, with a standalone editor surface. */
+export function PluginStudioPage({ services }: { services: AppServices }) {
+  return <StudioPage services={services} pluginStudio />;
+}
+
 function StudioWorkspace({
   services,
   tenant,
   query,
+  pluginStudio = false,
+  pluginSource,
+  onExitPluginStudio,
+  onPluginSourceOpened,
   onNavigate,
 }: {
   services: AppServices;
   tenant: StudioTenant;
   query: string;
+  pluginStudio?: boolean;
+  pluginSource?: { id: string; version: string };
+  onExitPluginStudio?: () => void;
+  onPluginSourceOpened?: () => void;
   onNavigate: (query: string, replace?: boolean) => void;
 }) {
   const t = useMessages(automationMessages);
@@ -333,7 +379,8 @@ function StudioWorkspace({
       setWorkspace(local);
       setReadyTransport(() => transport);
     };
-    if (services.localData) {
+    if (pluginStudio) install();
+    else if (services.localData) {
       void services.localData
         .open(tenant.apiBasePath)
         .then(install)
@@ -353,7 +400,7 @@ function StudioWorkspace({
       opened?.close();
       setStudioRuntime({ embedded: false });
     };
-  }, [transport]);
+  }, [transport, pluginStudio]);
   if (startupError)
     return (
       <div role="alert" className="p-4 text-sm text-destructive">
@@ -364,16 +411,35 @@ function StudioWorkspace({
   if (readyTransport !== transport || !studioClient)
     return <RouteLoading variant="screens" />;
   return (
-    <div className="min-w-0 w-full" title={t("Studio")}>
+    <div
+      className={
+        pluginStudio
+          ? "-mx-3 -mb-6 flex min-h-0 min-w-0 flex-1 flex-col sm:-mx-4"
+          : "min-w-0 w-full"
+      }
+      title={pluginStudio ? undefined : t("Studio")}
+    >
       {workspace && <LocalSyncStatus workspace={workspace} />}
-      <Suspense fallback={<RouteLoading variant="screens" />}>
-        <OfficeAvailabilityProvider
-          apiClient={services.apiClient}
-          tenantId={tenant.tenantId}
-        >
-          <StudioRoot embedded search={query} queryClient={studioClient} />
-        </OfficeAvailabilityProvider>
-      </Suspense>
+      {pluginStudio ? (
+        <Suspense fallback={<RouteLoading variant="screens" />}>
+          <PluginProjectWorkspace
+            tenantId={tenant.tenantId}
+            source={pluginSource}
+            onSourceOpened={onPluginSourceOpened}
+            onClose={onExitPluginStudio ?? (() => {})}
+            onPublished={() => {}}
+          />
+        </Suspense>
+      ) : (
+        <Suspense fallback={<RouteLoading variant="screens" />}>
+          <OfficeAvailabilityProvider
+            apiClient={services.apiClient}
+            tenantId={tenant.tenantId}
+          >
+            <StudioRoot embedded search={query} queryClient={studioClient} />
+          </OfficeAvailabilityProvider>
+        </Suspense>
+      )}
     </div>
   );
 }

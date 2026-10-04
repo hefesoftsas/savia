@@ -18,11 +18,13 @@ type Project = RecoveryDraft & { id: string; updatedAt: string };
 export default function PluginProjectWorkspace({
   tenantId,
   source,
+  onSourceOpened,
   onClose,
   onPublished,
 }: {
   tenantId: number;
   source?: { id: string; version: string };
+  onSourceOpened?: () => void;
   onClose: () => void;
   onPublished: () => void | Promise<unknown>;
 }) {
@@ -171,6 +173,8 @@ export default function PluginProjectWorkspace({
           manifest.version = `${parts[0]}.${parts[1]}.${Number(parts[2]) + 1}`;
         files["savia-extension.json"] = JSON.stringify(manifest, null, 2);
         await create({ files, history: [] });
+        if (cancelled) return;
+        onSourceOpened?.();
       }
       const registry = await request<{ canPublish?: boolean }>(
         "/plugin-store/registry",
@@ -210,6 +214,9 @@ export default function PluginProjectWorkspace({
       window.removeEventListener("savia:session-cleared", leave);
       window.removeEventListener("savia:identity-changed", leave);
     };
+    // The direct-source route is captured on mount. Clearing its query after
+    // opening must not re-run the import and create a duplicate draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   async function action(run: () => Promise<unknown>) {
     if (acting) return;
@@ -240,77 +247,102 @@ export default function PluginProjectWorkspace({
   async function close() {
     try {
       await session.current?.flush();
-      onClose();
+      const refreshed = await request<{ data: typeof projects }>(
+        "/plugin-projects",
+      );
+      setProjects(refreshed.data);
+      session.current?.dispose();
+      session.current = null;
+      setProject(null);
+      setStatus({ state: "saved" });
     } catch (reason) {
       fail(reason);
     }
   }
   return (
-    <div className="space-y-3">
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {project ? (
-        <>
-          <div className="flex flex-wrap items-center gap-3" role="status">
-            <span>
-              {status.state === "saved"
-                ? tr("Proyecto guardado", "Project saved", "Projeto salvo")
-                : status.state === "error"
-                  ? tr(
-                      "No se pudo guardar",
-                      "Could not save",
-                      "Não foi possível salvar",
-                    )
-                  : tr("Guardando…", "Saving…", "Salvando…")}
-            </span>
-            {status.state === "error" && (
-              <>
-                <span>
-                  {String(
-                    status.error instanceof Error
-                      ? status.error.message
-                      : status.error,
-                  )}
-                </span>
-                <Button
-                  onClick={() => void session.current?.flush().catch(fail)}
-                >
-                  {tr("Reintentar", "Retry", "Tentar novamente")}
-                </Button>
-                <Button
-                  disabled={acting}
-                  onClick={() => {
-                    const draft = latest.current;
-                    const previousKey = key(project.id);
-                    if (draft)
-                      void action(async () => {
-                        await create(draft);
-                        try {
-                          localStorage.removeItem(previousKey);
-                        } catch {
-                          /* The new server copy is already saved. */
-                        }
-                      });
-                  }}
-                >
-                  {tr(
-                    "Guardar como copia",
-                    "Save as copy",
-                    "Salvar como cópia",
-                  )}
-                </Button>
-              </>
-            )}
-          </div>
-          <div inert={acting}>
+        <section
+          aria-label={tr(
+            "Editor de plugins",
+            "Plugin Studio",
+            "Editor de plugins",
+          )}
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
+        >
+          {error && (
+            <p role="alert" className="mb-2 text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          {status.state === "error" && (
+            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1">
+                {tr(
+                  "No se pudo guardar",
+                  "Could not save",
+                  "Não foi possível salvar",
+                )}
+                :{" "}
+                {String(
+                  status.error instanceof Error
+                    ? status.error.message
+                    : status.error,
+                )}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void session.current?.flush().catch(fail)}
+              >
+                {tr("Reintentar", "Retry", "Tentar novamente")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={acting}
+                onClick={() => {
+                  const draft = latest.current;
+                  const previousKey = key(project.id);
+                  if (draft)
+                    void action(async () => {
+                      await create(draft);
+                      try {
+                        localStorage.removeItem(previousKey);
+                      } catch {
+                        /* The new server copy is already saved. */
+                      }
+                    });
+                }}
+              >
+                {tr("Guardar como copia", "Save as copy", "Salvar como cópia")}
+              </Button>
+            </div>
+          )}
+          <div className="min-h-0 min-w-0 flex-1" inert={acting}>
             <PluginIde
               key={project.id}
               tenantId={tenantId}
               initialFiles={project.files}
               initialHistory={project.history}
+              backLabel={tr(
+                "Volver a proyectos",
+                "Back to plugin projects",
+                "Voltar aos projetos de plugins",
+              )}
+              saveStatus={
+                <span data-save-state={status.state}>
+                  {status.state === "saved"
+                    ? tr("Guardado", "Saved", "Salvo")
+                    : status.state === "error"
+                      ? tr(
+                          "No se pudo guardar",
+                          "Could not save",
+                          "Não foi possível salvar",
+                        )
+                      : tr("Guardando…", "Saving…", "Salvando…")}
+                </span>
+              }
               onDraftChange={(draft) => {
                 latest.current = draft;
                 session.current?.update(draft);
@@ -320,59 +352,104 @@ export default function PluginProjectWorkspace({
               onPublished={onPublished}
             />
           </div>
-        </>
+        </section>
       ) : (
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            {tr("Volver al store", "Back to store", "Voltar à loja")}
-          </Button>
-          <h2 className="text-xl font-semibold">
-            {tr(
-              "Tus proyectos de plugins",
-              "Your plugin projects",
-              "Seus projetos de plugins",
-            )}
-          </h2>
-          <Button
-            disabled={loading || acting}
-            onClick={() => void action(() => create())}
-          >
-            {tr("Nuevo proyecto", "New project", "Novo projeto")}
-          </Button>
-          {loading ? (
-            <p role="status">{tr("Cargando…", "Loading…", "Carregando…")}</p>
-          ) : (
-            projects.map((item) => (
-              <div key={item.id}>
-                <Button
-                  variant="outline"
-                  disabled={acting}
-                  onClick={() =>
-                    void action(() =>
-                      request<{ data: Project }>(
-                        `/plugin-projects/${item.id}`,
-                      ).then((result) => activate(result.data)),
-                    )
-                  }
-                >
-                  {item.label}
-                </Button>
-                <span className="ml-3 text-sm text-muted-foreground">
-                  {item.updatedAt}
-                </span>
-                <Button
-                  variant="ghost"
-                  disabled={acting}
-                  onClick={() =>
-                    void action(() => remove(item.id, item.version))
-                  }
-                >
-                  {tr("Eliminar", "Delete", "Excluir")}
-                </Button>
-              </div>
-            ))
+        <section
+          aria-label={tr(
+            "Tus proyectos de plugins",
+            "Your plugin projects",
+            "Seus projetos de plugins",
           )}
-        </>
+          className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 sm:px-6"
+        >
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <header className="flex flex-wrap items-center gap-3 border-b pb-4">
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              {tr(
+                "Volver a extensiones",
+                "Back to extensions",
+                "Voltar às extensões",
+              )}
+            </Button>
+            <h1 className="min-w-0 flex-1 text-lg font-semibold tracking-tight text-foreground">
+              {tr(
+                "Tus proyectos de plugins",
+                "Your plugin projects",
+                "Seus projetos de plugins",
+              )}
+            </h1>
+            <Button
+              size="sm"
+              disabled={loading || acting}
+              onClick={() => void action(() => create())}
+            >
+              {tr("Nuevo proyecto", "New project", "Novo projeto")}
+            </Button>
+          </header>
+          {loading ? (
+            <p role="status" className="py-4 text-sm text-muted-foreground">
+              {tr("Cargando…", "Loading…", "Carregando…")}
+            </p>
+          ) : projects.length === 0 ? (
+            <div className="py-6">
+              <h2 className="text-sm font-medium text-foreground">
+                {tr(
+                  "Todavía no hay proyectos",
+                  "No projects yet",
+                  "Ainda não há projetos",
+                )}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {tr(
+                  "Crea un proyecto para empezar a diseñar y probar un plugin.",
+                  "Create a project to start building and previewing a plugin.",
+                  "Crie um projeto para começar a criar e testar um plugin.",
+                )}
+              </p>
+            </div>
+          ) : (
+            <ul className="divide-y rounded-lg border bg-background px-3">
+              {projects.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex min-w-0 items-center gap-3 py-2.5"
+                >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={acting}
+                    onClick={() =>
+                      void action(() =>
+                        request<{ data: Project }>(
+                          `/plugin-projects/${item.id}`,
+                        ).then((result) => activate(result.data)),
+                      )
+                    }
+                  >
+                    {item.label}
+                  </Button>
+                  <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {item.updatedAt}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={acting}
+                    onClick={() =>
+                      void action(() => remove(item.id, item.version))
+                    }
+                  >
+                    {tr("Eliminar", "Delete", "Excluir")}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
     </div>
   );

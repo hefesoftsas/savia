@@ -7,6 +7,7 @@ import {
   upgradeSidebarNavigationPreset,
   reconcileSidebarNavigation,
 } from "./sidebar-navigation-layout";
+import { navigationDefinitions } from "./sidebar-navigation";
 
 const savedLayout = normalizeSidebarNavigationLayout({
   version: 1,
@@ -19,6 +20,21 @@ const savedLayout = normalizeSidebarNavigationLayout({
 });
 
 describe("sidebar navigation registry", () => {
+  it("offers Plugin Studio as a separate, localized build destination", () => {
+    const item = navigationDefinitions["plugin-studio"];
+    expect(item).toMatchObject({
+      id: "plugin-studio",
+      labelKey: "savia.sidebar.items.plugin-studio",
+      route: "/plugin-studio",
+      section: "productivity",
+    });
+    expect(
+      defaultSidebarNavigationLayout().blocks.find(
+        (block) => block.id === "productivity",
+      )?.items,
+    ).toContain("plugin-studio");
+  });
+
   it("filters a persisted item that is no longer permitted", () => {
     const result = reconcileSidebarNavigation(savedLayout, [
       "my-day",

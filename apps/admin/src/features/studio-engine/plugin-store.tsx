@@ -4,8 +4,8 @@ import { resolveLocalizedContent } from "@savia/studio-shared/plugin-localizatio
 import { compareSolutionVersions } from "@savia/studio-shared/solution-package";
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { ErrorBoundary } from "react-error-boundary";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { pluginIdeMessages } from "./plugin-ide-messages";
 import { PackageOpen, Search, ShieldCheck, Upload, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -31,8 +31,6 @@ import {
   type StoreConnectorDeclaration,
 } from "./store-connections";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
-
-const PluginIde = lazy(() => import("./plugin-project-workspace"));
 
 type StoreManifest = {
   id: string;
@@ -128,11 +126,7 @@ export default function PluginStoreManager({
 }) {
   const t = useMessages(automationMessages);
   const ideT = useMessages(pluginIdeMessages);
-  const [creating, setCreating] = useState(false);
-  const [editingSource, setEditingSource] = useState<{
-    id: string;
-    version: string;
-  }>();
+  const navigate = useNavigate();
   const locale = useAppLocale();
   const fileRef = useRef<HTMLInputElement>(null);
   const listGeneration = useRef(0);
@@ -321,41 +315,15 @@ export default function PluginStoreManager({
     { value: "updates", label: t("Con actualización") },
   ];
 
-  if (creating)
-    return (
-      <ErrorBoundary
-        fallbackRender={({ error, resetErrorBoundary }) => (
-          <div role="alert">
-            <p>{error instanceof Error ? error.message : ideT("failed")}</p>
-            <Button
-              onClick={() => {
-                setCreating(false);
-                setEditingSource(undefined);
-                resetErrorBoundary();
-              }}
-            >
-              {ideT("back")}
-            </Button>
-          </div>
-        )}
-      >
-        <Suspense fallback={<p role="status">{ideT("compiling")}</p>}>
-          <PluginIde
-            key={getStudioRuntime().tenantId}
-            tenantId={getStudioRuntime().tenantId ?? 0}
-            source={editingSource}
-            onClose={() => {
-              setCreating(false);
-              setEditingSource(undefined);
-            }}
-            onPublished={async () => {
-              await reload();
-              await onChanged();
-            }}
-          />
-        </Suspense>
-      </ErrorBoundary>
-    );
+  function openPluginStudio(source?: { id: string; version: string }) {
+    const params = new URLSearchParams();
+    params.set("tenantId", String(getStudioRuntime().tenantId ?? 0));
+    if (source) {
+      params.set("source", source.id);
+      params.set("version", source.version);
+    }
+    navigate(`/plugin-studio?${params.toString()}`);
+  }
 
   return (
     <section aria-label={t("Mis plugins")} className="space-y-5">
@@ -384,7 +352,7 @@ export default function PluginStoreManager({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setCreating(true)}
+              onClick={() => openPluginStudio()}
             >
               {ideT("title")}
             </Button>
@@ -656,13 +624,12 @@ export default function PluginStoreManager({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          setEditingSource({
+                        onClick={() =>
+                          openPluginStudio({
                             id: item.manifest.id,
                             version: item.version,
-                          });
-                          setCreating(true);
-                        }}
+                          })
+                        }
                       >
                         {ideT("editSource")}
                       </Button>

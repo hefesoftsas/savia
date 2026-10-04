@@ -14,17 +14,29 @@ vi.mock("@/features/assistant/assistant-context", () => ({
   }),
 }));
 vi.mock("../plugin-ide", () => ({
-  default: ({ initialFiles, onDraftChange }: any) => (
-    <textarea
-      aria-label="source"
-      defaultValue={initialFiles["entry.tsx"]}
-      onChange={(event) =>
-        onDraftChange({
-          files: { ...initialFiles, "entry.tsx": event.target.value },
-          history: [],
-        })
-      }
-    />
+  default: ({
+    initialFiles,
+    onDraftChange,
+    onClose,
+    saveStatus,
+    backLabel,
+  }: any) => (
+    <div>
+      <p data-testid="save-status">{saveStatus}</p>
+      <textarea
+        aria-label="source"
+        defaultValue={initialFiles["entry.tsx"]}
+        onChange={(event) =>
+          onDraftChange({
+            files: { ...initialFiles, "entry.tsx": event.target.value },
+            history: [],
+          })
+        }
+      />
+      <button type="button" aria-label={backLabel} onClick={onClose}>
+        Close editor
+      </button>
+    </div>
   ),
 }));
 const files = {
@@ -63,6 +75,7 @@ it("resumes server drafts and saves through the original tenant transport after 
   fireEvent.change(await screen.findByLabelText("source"), {
     target: { value: "recovered edit" },
   });
+  expect(screen.getByTestId("save-status")).toHaveTextContent("Guardando");
   await waitFor(() =>
     expect(
       localStorage.getItem(`savia:plugin-project:alice:1:${id}`),
@@ -77,6 +90,130 @@ it("resumes server drafts and saves through the original tenant transport after 
     ).toBe(true),
   );
   expect(other).not.toHaveBeenCalled();
+});
+it("flushes editor changes and returns to the project list when the IDE closes", async () => {
+  const writes: any[] = [];
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path, init) => {
+      if (path === "/api/plugin-projects")
+        return Response.json({ data: [{ id, label: "Draft" }] });
+      if (path.endsWith("/registry"))
+        return Response.json({ canPublish: false });
+      if (init?.method === "PUT") {
+        writes.push(JSON.parse(String(init.body)));
+        return Response.json({
+          data: { id, files, history: [], version: 2 },
+        });
+      }
+      return Response.json({ data: { id, files, history: [], version: 1 } });
+    },
+  });
+  render(<Workspace tenantId={1} onClose={() => {}} onPublished={() => {}} />);
+  fireEvent.click(await screen.findByText("Draft"));
+  fireEvent.change(await screen.findByLabelText("source"), {
+    target: { value: "edited before close" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Volver a proyectos" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(writes[0].files["entry.tsx"]).toBe("edited before close");
+  expect(await screen.findByText("Tus proyectos de plugins")).toBeVisible();
+});
+it("loads the selected release source into a new project and clears the deep link", async () => {
+  const calls: string[] = [];
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path, init) => {
+      calls.push(path);
+      if (path === "/api/plugin-projects") return Response.json({ data: [] });
+      if (path.startsWith("/api/plugin-store/custom.demo/source?"))
+        return Response.json({ data: { files, history: [] } });
+      if (path.endsWith("/registry"))
+        return Response.json({ canPublish: false });
+      if (init?.method === "PUT") {
+        return Response.json({
+          data: {
+            id: "new-draft",
+            label: "Demo source",
+            files: JSON.parse(String(init.body)).files,
+            history: [],
+            version: 1,
+            updatedAt: "today",
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    },
+  });
+  const sourceOpened = vi.fn();
+  render(
+    <Workspace
+      tenantId={1}
+      source={{ id: "custom.demo", version: "1.0.0" }}
+      onSourceOpened={sourceOpened}
+      onClose={() => {}}
+      onPublished={() => {}}
+    />,
+  );
+  expect(await screen.findByLabelText("source")).toHaveValue("original");
+  expect(
+    calls.some(
+      (path) => path === "/api/plugin-store/custom.demo/source?version=1.0.0",
+    ),
+  ).toBe(true);
+  expect(sourceOpened).toHaveBeenCalledOnce();
+});
+it("lists and reopens a newly created project after returning from the IDE", async () => {
+  const draftId = "new-draft";
+  let exists = false;
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path, init) => {
+      if (path === "/api/plugin-projects")
+        return Response.json({
+          data: exists
+            ? [{ id: draftId, label: "New draft", updatedAt: "today" }]
+            : [],
+        });
+      if (path === `/api/plugin-projects/${draftId}` && init?.method !== "PUT")
+        return Response.json({
+          data: {
+            id: draftId,
+            label: "New draft",
+            files,
+            history: [],
+            version: 1,
+          },
+        });
+      if (path.endsWith("/registry"))
+        return Response.json({ canPublish: false });
+      if (init?.method === "PUT") {
+        exists = true;
+        return Response.json({
+          data: {
+            id: draftId,
+            label: "New draft",
+            files,
+            history: [],
+            version: 1,
+            updatedAt: "today",
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    },
+  });
+  render(<Workspace tenantId={1} onClose={() => {}} onPublished={() => {}} />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Nuevo proyecto" }),
+  );
+  expect(await screen.findByLabelText("source")).toHaveValue("original");
+  fireEvent.click(screen.getByRole("button", { name: "Volver a proyectos" }));
+  fireEvent.click(await screen.findByRole("button", { name: "New draft" }));
+  expect(await screen.findByLabelText("source")).toHaveValue("original");
 });
 it("recovers unsaved local content for the same owner and version", async () => {
   localStorage.setItem(

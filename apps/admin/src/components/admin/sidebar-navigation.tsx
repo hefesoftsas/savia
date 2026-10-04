@@ -26,6 +26,7 @@ import {
   Bot,
   Palette,
   UsersRound,
+  Code2,
 } from "lucide-react";
 import {
   sidebarNavigationItemIds,
@@ -225,6 +226,13 @@ export const navigationDefinitions: Record<
     section: "productivity",
     icon: ListTree,
   },
+  "plugin-studio": {
+    id: "plugin-studio",
+    labelKey: "savia.sidebar.items.plugin-studio",
+    route: "/plugin-studio",
+    section: "productivity",
+    icon: Code2,
+  },
 };
 
 const resourceNavigationIds = new Set<SidebarNavigationItemId>([
@@ -245,7 +253,10 @@ export function useVisibleSidebarNavigation(): {
   const translate = useTranslate();
   const { canAccess, isPending } = useCanAccessResources({
     action: "list",
-    resources: [...sidebarNavigationItemIds, "savia-request"],
+    resources: [
+      ...sidebarNavigationItemIds.filter((id) => id !== "plugin-studio"),
+      "savia-request",
+    ],
   });
 
   return useMemo(() => {
@@ -274,7 +285,11 @@ export function useVisibleSidebarNavigation(): {
         );
       if (id === "virtual-employees") return Boolean(canAccess.integrations);
       const permissionResource =
-        id === "provider-credentials" ? "savia-request" : id;
+        id === "provider-credentials"
+          ? "savia-request"
+          : id === "plugin-studio"
+            ? "studio"
+            : id;
       if (id === "service-credentials")
         return canAccess["studio"] || canAccess["savia-request"];
       if (id !== "provider-credentials" && !canAccess[permissionResource])

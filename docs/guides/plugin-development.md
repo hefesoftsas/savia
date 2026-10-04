@@ -148,16 +148,38 @@ this development endpoint. Never copy local runtime configurations to a deployme
 
 ## Create with AI inside Savia
 
-Open **My plugins → Create plugin** to open the on-demand editor. The IDE reuses
-Monaco, the workspace's configured AI model, and the existing plugin store. It
-loads the editor, compiler and React runtime only when authoring is opened.
+Open **Plugin Studio** in the left navigation to access the dedicated `/plugin-studio`
+workspace. Choose an authorized workspace, then create or reopen a saved project.
+The store's **Create plugin** and **Edit source** actions also open this workspace.
+The editor, compiler and React runtime load on demand.
 
-On phones, **Chat**, **Code** and **Preview** show one workspace area at a time;
-switching views preserves the code and running preview. Desktop keeps chat beside
-the selected code or preview view. **Run** validates and opens preview, **Publish**
-releases the validated revision, and the project options menu contains portable
-import/export and the optional publication destination. Select a source file from
-the file picker in Code.
+Desktop opens with a keyboard-accessible file explorer, Monaco editor and Savia AI
+conversation. Drag the separators to resize panels, or hide Files/Chat from the
+workspace toolbar. Files open in tabs; returning to a file preserves its editor
+and undo history during the session. Preview is another editor tab. Narrow layouts
+show **Files**, **Code**, **Preview** or **Chat** one at a time, without resetting
+source or the running plugin.
+
+Send a request with Enter (Shift+Enter inserts a line break). The request appears
+immediately, followed by the generating status and assistant response. Failed
+requests can be retried without duplicating the conversation. Changed files open
+in Monaco's inline diff viewer before **Apply changes**. The current code stays
+unchanged until applied. Saved-project status appears in the bottom status bar.
+
+**Run** validates and opens preview; **Publish** releases the validated revision.
+The project options menu contains import/export and the optional publication
+destination. This is a bounded Savia plugin workspace with the four files below,
+not a general-purpose npm workspace, terminal or VS Code extension host.
+
+The resizable layout uses [Allotment](https://github.com/johnwalley/allotment),
+a React component derived from VS Code's split-view implementation, alongside
+Savia's existing Monaco and assistant Markdown renderer. Alternatives reviewed:
+[monaco-vscode-api](https://github.com/CodinGame/monaco-vscode-api) integrates full
+VS Code services but requires initialization before any existing Monaco instance;
+[Eclipse Theia](https://github.com/eclipse-theia/theia) is a broader IDE framework;
+[Sandpack](https://github.com/codesandbox/sandpack) provides an editor/preview toolkit
+with its own bundler iframe. Keeping Savia's compiler and isolated preview preserves
+the publish validation contract and existing on-demand editors.
 
 Monaco and the preview follow the workspace palette and update when the theme
 changes. The isolated preview receives validated color/font values, not access to

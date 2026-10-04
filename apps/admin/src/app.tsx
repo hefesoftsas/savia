@@ -54,11 +54,16 @@ export async function loadStudioPage() {
   const module = await import("@/features/studio/studio-page");
   return { default: module.StudioPage };
 }
+export async function loadPluginStudioPage() {
+  const module = await import("@/features/studio/studio-page");
+  return { default: module.PluginStudioPage };
+}
 export async function loadSaviaRequestPage() {
   const module = await import("@/features/savia-request/savia-request-page");
   return { default: module.SaviaRequestPage };
 }
 const StudioPage = lazy(loadStudioPage);
+const PluginStudioPage = lazy(loadPluginStudioPage);
 const PersonalIntegrationsPage = lazy(async () => {
   const module =
     await import("@/features/personal-integrations/personal-integrations-page");
@@ -185,6 +190,14 @@ function StudioRoute({ services }: { services: AppServices }) {
   return (
     <Suspense fallback={<RouteLoading variant="screens" />}>
       <StudioPage services={services} />
+    </Suspense>
+  );
+}
+
+function PluginStudioRoute({ services }: { services: AppServices }) {
+  return (
+    <Suspense fallback={<RouteLoading variant="screens" />}>
+      <PluginStudioPage services={services} />
     </Suspense>
   );
 }
@@ -449,6 +462,10 @@ function AppContent({ services }: { services?: AppServices } = {}) {
               <Route
                 path="/studio"
                 element={<StudioRoute services={appServices} />}
+              />
+              <Route
+                path="/plugin-studio"
+                element={<PluginStudioRoute services={appServices} />}
               />
               {/* Fase 1: alias legacy — #/crm sigue funcionando, canónica es #/studio */}
               <Route

@@ -92,6 +92,29 @@ describe("user sidebar navigation preferences", () => {
     await seedPrincipal("principal-b");
   });
 
+  it("accepts and restores the dedicated plugin-studio navigation item", async () => {
+    const app = appFor("principal-a");
+    const layout = defaultSidebarNavigationLayout();
+    expect(
+      layout.blocks.find((block) => block.id === "productivity")?.items,
+    ).toContain("plugin-studio");
+    const saved = await app.request(
+      "https://savia.test/v1/user-preferences/sidebar-navigation",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...layout,
+          hiddenItems: ["plugin-studio"],
+        }),
+      },
+    );
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toEqual({
+      data: { ...layout, hiddenItems: ["plugin-studio"] },
+    });
+  });
+
   it("keeps a saved sidebar layout private to its principal", async () => {
     const repository = createUserPreferencesRepository(env.DB);
 
