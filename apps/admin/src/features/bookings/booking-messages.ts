@@ -412,6 +412,58 @@ export const bookingMessages = {
     "Calendar connection",
     "Conexão do calendário",
   ],
+  "My Day availability": [
+    "Disponibilidad de Mi día",
+    "My Day availability",
+    "Disponibilidade do My Day",
+  ],
+  "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.":
+    [
+      "Autoriza el acceso a los horarios ocupados de tu calendario actual de Google u Outlook y de los calendarios importados o suscritos. Los detalles de las reuniones son privados.",
+      "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.",
+      "Conceda acesso aos horários ocupados do seu calendário atual do Google ou Outlook e dos calendários importados ou assinados. Os detalhes das reuniões permanecem privados.",
+    ],
+  "My Day access is enabled. Calendar sources: %{count}.": [
+    "Acceso a Mi día habilitado. Fuentes de calendario: %{count}.",
+    "My Day access is enabled. Calendar sources: %{count}.",
+    "Acesso ao My Day ativado. Fontes de calendário: %{count}.",
+  ],
+  "My Day access is off.": [
+    "El acceso a Mi día está desactivado.",
+    "My Day access is off.",
+    "O acesso ao My Day está desativado.",
+  ],
+  "Use My Day to block busy times": [
+    "Usar Mi día para bloquear horarios ocupados",
+    "Use My Day to block busy times",
+    "Usar My Day para bloquear horários ocupados",
+  ],
+  "Update calendar access": [
+    "Actualizar acceso al calendario",
+    "Update calendar access",
+    "Atualizar acesso ao calendário",
+  ],
+  "Stop using My Day": [
+    "Dejar de usar Mi día",
+    "Stop using My Day",
+    "Parar de usar o My Day",
+  ],
+  "My Day availability access updated.": [
+    "Se actualizó el acceso de disponibilidad de Mi día.",
+    "My Day availability access updated.",
+    "O acesso à disponibilidade do My Day foi atualizado.",
+  ],
+  "My Day availability access stopped.": [
+    "Se detuvo el acceso de disponibilidad de Mi día.",
+    "My Day availability access stopped.",
+    "O acesso à disponibilidade do My Day foi interrompido.",
+  ],
+  "My Day availability could not be updated. Check your connection and retry.":
+    [
+      "No se pudo actualizar el acceso a la disponibilidad de Mi día. Revisa tu conexión e inténtalo de nuevo.",
+      "My Day availability could not be updated. Check your connection and retry.",
+      "Não foi possível atualizar o acesso à disponibilidade do My Day. Verifique sua conexão e tente novamente.",
+    ],
   "Google Calendar connected": [
     "Google Calendar conectado",
     "Google Calendar connected",
@@ -606,6 +658,12 @@ export const bookingMessages = {
     "Your booking could not be confirmed. Retry with the same request.",
     "Não foi possível confirmar o agendamento. Tente novamente com a mesma solicitação.",
   ],
+  "That time conflicts with another meeting or appointment. Choose another available time.":
+    [
+      "Ese horario coincide con otra reunión o cita. Elige otro horario disponible.",
+      "That time conflicts with another meeting or appointment. Choose another available time.",
+      "Esse horário conflita com outra reunião ou agendamento. Escolha outro horário disponível.",
+    ],
   "That time is no longer available. Choose another available time.": [
     "Ese horario ya no está disponible. Elige otro horario disponible.",
     "That time is no longer available. Choose another available time.",

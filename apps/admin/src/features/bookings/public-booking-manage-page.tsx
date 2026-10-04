@@ -35,7 +35,7 @@ type ManageBootstrap = {
   leadMinutes: number;
   canReschedule: boolean;
 };
-type ApiError = Error & { status?: number };
+type ApiError = Error & { code?: string; status?: number };
 
 async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -45,13 +45,14 @@ async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const value = (await response.json()) as {
     data?: T;
-    error?: { message?: string };
+    error?: { code?: string; message?: string };
   };
   if (!response.ok) {
     const error = new Error(
       value.error?.message ?? "Request failed",
     ) as ApiError;
     error.status = response.status;
+    error.code = value.error?.code;
     throw error;
   }
   return value.data as T;
@@ -259,7 +260,9 @@ export function PublicBookingManagePage({ token }: { token: string }) {
               setAvailabilityRefreshKey((key) => key + 1);
               setError(
                 t(
-                  "That time is no longer available. Choose another available time.",
+                  (requestError as ApiError)?.code === "BOOKING_TIME_CONFLICT"
+                    ? "That time conflicts with another meeting or appointment. Choose another available time."
+                    : "That time is no longer available. Choose another available time.",
                 ),
               );
             } else {

@@ -4828,6 +4828,157 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/tenants/{tenantId}/booking/agenda": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            enabled: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Booking response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
+                settings: {
+                  version: number;
+                  enabled: boolean;
+                  published: boolean;
+                  title: string;
+                  description: string;
+                  timeZone: string;
+                  leadMinutes: number;
+                  horizonDays: number;
+                  cancellationMinutes: number;
+                  reminderMinutes: number;
+                  services: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    description: string;
+                    durationMinutes: number;
+                    bufferMinutes: number;
+                    enabled: boolean;
+                    professionalIds: string[];
+                  }[];
+                  professionals: {
+                    /** Format: uuid */
+                    id: string;
+                    principalId: string;
+                    enabled: boolean;
+                    weekly: {
+                      day: number;
+                      start: string;
+                      end: string;
+                    }[];
+                    exceptions: {
+                      date: string;
+                      periods: {
+                        start: string;
+                        end: string;
+                      }[];
+                    }[];
+                  }[];
+                };
+                candidates: {
+                  principalId: string;
+                  displayName: string;
+                }[];
+                canManage: boolean;
+                principalId: string;
+                publicUrl: string | null;
+                calendar: {
+                  /** @enum {string|null} */
+                  provider: "google_calendar" | "outlook" | null;
+                  status: string;
+                };
+              };
+            };
+          };
+        };
+        /** @description Malformed input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Access or verification denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Unavailable resource */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Slot or revision conflict */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid input */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request limit */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/tenants/{tenantId}/booking": {
     parameters: {
       query?: never;
@@ -4854,6 +5005,10 @@ export interface paths {
           content: {
             "application/json": {
               data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
                 settings: {
                   version: number;
                   enabled: boolean;
@@ -5023,6 +5178,10 @@ export interface paths {
           content: {
             "application/json": {
               data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
                 settings: {
                   version: number;
                   enabled: boolean;
@@ -5182,6 +5341,10 @@ export interface paths {
           content: {
             "application/json": {
               data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
                 settings: {
                   version: number;
                   enabled: boolean;
@@ -5330,6 +5493,10 @@ export interface paths {
           content: {
             "application/json": {
               data: {
+                agenda: {
+                  enabled: boolean;
+                  sourceCount: number;
+                };
                 settings: {
                   version: number;
                   enabled: boolean;
@@ -13617,6 +13784,7 @@ export interface paths {
                 startsAt: string;
                 endsAt: string;
                 allDay: boolean;
+                busy?: boolean;
                 webLink: string | null;
                 timeZone: string;
               }[];

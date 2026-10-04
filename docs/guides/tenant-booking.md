@@ -49,11 +49,17 @@ Unpublishing stops new public bookings. Existing management links continue to su
 
 ## Optional calendars through Nango
 
+To avoid conflicts with the rest of your My Day agenda, use **Bookings → Availability → My Day availability → Use My Day to block busy times**. Each professional grants access to their own current Google and Outlook connections and imported or subscribed calendars. Only occupied time intervals influence public availability; meeting names, attendees, links and calendar credentials remain private. Hidden calendars remain conflict sources: hiding a calendar is a display preference, not a release of its occupied time. Events explicitly marked free and cancelled events do not block slots. All-day events use the source time zone and exclusive end date; recurring events retain their exceptions.
+
+Authorization is tenant-scoped and snapshots source identities. Use **Update calendar access** after adding a calendar or reconnecting an account, or **Stop using My Day** to revoke this additional access. Administrators cannot authorize another professional's agenda. The separate calendar choice below still controls where appointment events are created.
+
+Availability and confirmation/rescheduling share the same conflict check, including appointment duration and trailing buffer. Subscriptions are refreshed again when confirming or rescheduling. A failed or stale authorized source stops booking instead of presenting unknown time as free. When another meeting or appointment occupies the requested interval, the form explains the conflict and reloads available times while preserving customer details. Reprogramming excludes only the appointment's saved event in the same connected account; another overlapping meeting still blocks the move. External providers cannot participate in the booking transaction, so changes made outside Savia after its final check can still require review.
+
 Connect a personal Google Calendar or Outlook integration first. Each professional then explicitly grants booking access to their own connected calendar. Administrators cannot grant access to someone else's personal integration. Grants are scoped to the tenant and pinned to the connection; reconnecting requires a fresh grant.
 
 Availability checks the Google primary calendar or the user's Outlook calendar. Google uses its complete free/busy response; Outlook follows pagination. Malformed responses, disconnected grants and provider failures stop new bookings instead of treating unknown availability as free. A professional may revoke the booking grant and use only the native agenda.
 
-Calendar jobs create, update or cancel a corresponding event. Google events use a deterministic identifier; Outlook events use a transaction identifier and a persistent booking marker to recover an event when a creation response is lost. Revoked grants do not authorize further external writes. A connected calendar's existing reservation event may restrict moves that overlap that event; choose a free time. External calendar providers do not participate in Savia's database transaction, so simultaneous changes made outside Savia can still conflict and require review.
+Calendar jobs create, update or cancel a corresponding event. Google events use a deterministic identifier; Outlook events use a transaction identifier and a persistent booking marker to recover an event when a creation response is lost. Revoked grants do not authorize further external writes. Rescheduling ignores only this appointment's saved event in the same connected account; other meetings still block the requested interval. External calendar providers do not participate in Savia's database transaction, so simultaneous changes made outside Savia can still conflict and require review.
 
 ### Automatic video calls
 
@@ -109,7 +115,7 @@ The scheduler processes a durable outbox, leases work and retries transient erro
 
 ## Deployment and verification
 
-Both SQLite/D1 and PostgreSQL have forward migrations `0022_tenant_bookings.sql`, `0026_booking_public_links.sql` and `0027_booking_public_link_short_urls.sql`. Migration `0026` adds scoped links, daily admission receipts and stored customer locale, and preserves existing tenant URLs as independently revocable team links. Migration `0027` adds short URL storage and deletion tombstones. Apply the D1 migration before deploying the updated API. Existing tenants remain disabled until configured. API reference is generated from the Booking OpenAPI routes.
+Both SQLite/D1 and PostgreSQL have forward migrations `0022_tenant_bookings.sql`, `0026_booking_public_links.sql`, `0027_booking_public_link_short_urls.sql` and `0029_booking_agenda_grants.sql`. Migration `0026` adds scoped links, daily admission receipts and stored customer locale, and preserves existing tenant URLs as independently revocable team links. Migration `0027` adds short URL storage and deletion tombstones. Migration `0029` stores each professional's tenant-scoped My Day availability grant. Apply the D1 migration before deploying the updated API. Existing tenants remain disabled until configured. API reference is generated from the Booking OpenAPI routes.
 
 Public requests enforce body limits, per-link request throttling, no-cache and no-referrer headers, and captcha verification. ALTCHA proofs are consumed once; retrying the same confirmed request key returns the existing reservation. Captcha bypass is limited to local development origins.
 

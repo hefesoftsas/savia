@@ -85,6 +85,7 @@ export const calendarOccurrenceSchema = z.object({
   startsAt: z.string(),
   endsAt: z.string(),
   allDay: z.boolean(),
+  busy: z.boolean().optional(),
   webLink: z.string().nullable(),
   timeZone: z.string(),
 });

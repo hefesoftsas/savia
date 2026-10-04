@@ -262,86 +262,99 @@ it("cancels only the linked reservation using its current revision", async () =>
   });
 });
 
-it("refreshes the private booking revision and slots after a stale reschedule conflict", async () => {
-  const requests: Array<{ path: string; body?: string }> = [];
-  let manageReads = 0;
-  let reschedulePosts = 0;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = new URL(String(input), "https://savia.test");
-      requests.push({
-        path: url.pathname + url.search,
-        body: init?.body as string | undefined,
-      });
-      if (url.pathname === managePath) {
-        manageReads += 1;
-        return Response.json({
-          data: manageData(
-            confirmedReservation({ version: manageReads === 1 ? 7 : 8 }),
-          ),
+it.each([
+  {
+    name: "a version conflict",
+    code: "VERSION_CONFLICT",
+    message: "That time is no longer available. Choose another available time.",
+  },
+  {
+    name: "a meeting conflict",
+    code: "BOOKING_TIME_CONFLICT",
+    message:
+      "That time conflicts with another meeting or appointment. Choose another available time.",
+  },
+])(
+  "refreshes the private booking revision and slots after $name",
+  async ({ code, message }) => {
+    const requests: Array<{ path: string; body?: string }> = [];
+    let manageReads = 0;
+    let reschedulePosts = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input), "https://savia.test");
+        requests.push({
+          path: url.pathname + url.search,
+          body: init?.body as string | undefined,
         });
-      }
-      if (url.pathname === `${managePath}/availability`)
-        return Response.json({ data: availabilityData() });
-      if (url.pathname === `${managePath}/reschedule`) {
-        reschedulePosts += 1;
-        if (reschedulePosts === 1)
-          return Response.json(
-            { error: { message: "Revision changed" } },
-            { status: 409 },
-          );
-        return Response.json({
-          data: confirmedReservation({
-            startsAt: "2026-10-06T15:00:00Z",
-            endsAt: "2026-10-06T15:30:00Z",
-            version: 9,
-          }),
-        });
-      }
-      throw new Error(`Unexpected management path ${url.pathname}`);
-    }),
-  );
-  renderManagePage();
+        if (url.pathname === managePath) {
+          manageReads += 1;
+          return Response.json({
+            data: manageData(
+              confirmedReservation({ version: manageReads === 1 ? 7 : 8 }),
+            ),
+          });
+        }
+        if (url.pathname === `${managePath}/availability`)
+          return Response.json({ data: availabilityData() });
+        if (url.pathname === `${managePath}/reschedule`) {
+          reschedulePosts += 1;
+          if (reschedulePosts === 1)
+            return Response.json(
+              { error: { code, message: "Revision changed" } },
+              { status: 409 },
+            );
+          return Response.json({
+            data: confirmedReservation({
+              startsAt: "2026-10-06T15:00:00Z",
+              endsAt: "2026-10-06T15:30:00Z",
+              version: 9,
+            }),
+          });
+        }
+        throw new Error(`Unexpected management path ${url.pathname}`);
+      }),
+    );
+    renderManagePage();
 
-  await screen.findByText("Confirmed");
-  fireEvent.click(screen.getByRole("button", { name: "Reschedule" }));
-  await screen.findByRole("button", { name: "10:00 AM" });
-  fireEvent.click(screen.getByRole("button", { name: /Tuesday, October 6/ }));
-  fireEvent.click(screen.getByRole("button", { name: "10:00 AM" }));
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Confirm reschedule" }),
-  );
+    await screen.findByText("Confirmed");
+    fireEvent.click(screen.getByRole("button", { name: "Reschedule" }));
+    await screen.findByRole("button", { name: "10:00 AM" });
+    fireEvent.click(screen.getByRole("button", { name: /Tuesday, October 6/ }));
+    fireEvent.click(screen.getByRole("button", { name: "10:00 AM" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Confirm reschedule" }),
+    );
 
-  expect(await screen.findByRole("alert")).toHaveTextContent(
-    "That time is no longer available. Choose another available time.",
-  );
-  await screen.findByRole("heading", { name: "Choose a new time" });
-  await screen.findByRole("button", { name: "10:00 AM" });
-  fireEvent.click(screen.getByRole("button", { name: /Tuesday, October 6/ }));
-  fireEvent.click(screen.getByRole("button", { name: "10:00 AM" }));
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Confirm reschedule" }),
-  );
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    await screen.findByRole("heading", { name: "Choose a new time" });
+    await screen.findByRole("button", { name: "10:00 AM" });
+    fireEvent.click(screen.getByRole("button", { name: /Tuesday, October 6/ }));
+    fireEvent.click(screen.getByRole("button", { name: "10:00 AM" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Confirm reschedule" }),
+    );
 
-  await screen.findByRole("heading", { name: "Updated appointment" });
-  const updates = requests.filter(
-    (request) => request.path === `${managePath}/reschedule`,
-  );
-  expect(
-    updates.map((request) => JSON.parse(request.body ?? "{}").version),
-  ).toEqual([7, 8]);
-  expect(
-    requests.filter((request) =>
-      request.path.startsWith(`${managePath}/availability?`),
-    ),
-  ).toHaveLength(2);
-  expect(requests.some((request) => request.path.includes("page-token"))).toBe(
-    false,
-  );
-});
+    await screen.findByRole("heading", { name: "Updated appointment" });
+    const updates = requests.filter(
+      (request) => request.path === `${managePath}/reschedule`,
+    );
+    expect(
+      updates.map((request) => JSON.parse(request.body ?? "{}").version),
+    ).toEqual([7, 8]);
+    expect(
+      requests.filter((request) =>
+        request.path.startsWith(`${managePath}/availability?`),
+      ),
+    ).toHaveLength(2);
+    expect(
+      requests.some((request) => request.path.includes("page-token")),
+    ).toBe(false);
+  },
+);
 
 it("shows an already completed reschedule after a lost-response conflict without posting twice", async () => {
   const requests: string[] = [];

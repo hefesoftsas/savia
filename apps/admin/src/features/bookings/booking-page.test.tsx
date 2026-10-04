@@ -217,6 +217,65 @@ it("loads booking settings and candidates, then saves the edited configuration",
   );
 });
 
+it("grants My Day busy-time access and reports the authorized calendar sources", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+    agenda: { enabled: false, sourceCount: 0 },
+  };
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({ data: bootstrap }),
+    put: vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: { ...bootstrap, agenda: { enabled: true, sourceCount: 3 } },
+      })
+      .mockResolvedValueOnce({
+        data: { ...bootstrap, agenda: { enabled: true, sourceCount: 4 } },
+      })
+      .mockResolvedValueOnce({
+        data: { ...bootstrap, agenda: { enabled: false, sourceCount: 0 } },
+      }),
+  };
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getAllByRole("button", { name: "Availability" })[0]);
+  await screen.findByRole("heading", { name: "My Day availability" });
+  expect(
+    screen.getByText(
+      "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.",
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Use My Day to block busy times" }),
+  );
+  await screen.findByText("My Day access is enabled. Calendar sources: 3.");
+  expect(apiClient.put).toHaveBeenCalledWith("/v1/tenants/42/booking/agenda", {
+    enabled: true,
+  });
+  expect(
+    screen.getByRole("button", { name: "Update calendar access" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Stop using My Day" }),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Update calendar access" }),
+  );
+  await screen.findByText("My Day access is enabled. Calendar sources: 4.");
+  fireEvent.click(screen.getByRole("button", { name: "Stop using My Day" }));
+  await screen.findByText("My Day access is off.");
+  expect(apiClient.put.mock.calls).toEqual([
+    ["/v1/tenants/42/booking/agenda", { enabled: true }],
+    ["/v1/tenants/42/booking/agenda", { enabled: true }],
+    ["/v1/tenants/42/booking/agenda", { enabled: false }],
+  ]);
+});
+
 it("gives a recovery action after a failed bootstrap and reports version conflicts", async () => {
   const apiClient = {
     get: vi

@@ -1,6 +1,7 @@
 import { createPersonalIntegrationRepository } from "../personal-integrations/repository";
 import type { PersonalIntegrationNangoClient } from "../personal-integrations/contracts";
 import type { ActivePersonalIntegrationConnection } from "../personal-integrations/contracts";
+import { localInstant } from "./domain";
 
 type BookingProvider = "google_calendar" | "outlook";
 type BookingCalendarInput = {
@@ -8,7 +9,11 @@ type BookingCalendarInput = {
   provider: BookingProvider;
   connectionId: string;
 };
-type BusyInput = BookingCalendarInput & { from: string; to: string };
+type BusyInput = BookingCalendarInput & {
+  from: string;
+  to: string;
+  excludeExternalId?: string;
+};
 type SyncInput = BookingCalendarInput & {
   id: string;
   title: string;
@@ -356,6 +361,74 @@ export function createBookingCalendarAdapter(
       if (!from || !to || to <= from) throw unavailable();
       const connection = await connectionFor(input);
       if (input.provider === "google_calendar") {
+        if (input.excludeExternalId) {
+          const periods: BusyPeriod[] = [];
+          const tokens = new Set<string>();
+          let pageToken: string | undefined;
+          do {
+            const query = new URLSearchParams({
+              timeMin: from,
+              timeMax: to,
+              singleEvents: "true",
+              maxResults: "2500",
+              ...(pageToken ? { pageToken } : {}),
+            });
+            const response = await proxy(connection, {
+              method: "GET",
+              path: `/calendar/v3/calendars/primary/events?${query}`,
+            });
+            const payload = record(
+              await response.json().catch(() => undefined),
+            );
+            if (!Array.isArray(payload?.items)) throw unavailable();
+            for (const raw of payload.items) {
+              const event = record(raw);
+              if (
+                !event ||
+                typeof event.id !== "string" ||
+                typeof event.status !== "string"
+              )
+                throw unavailable();
+              if (
+                event.id === input.excludeExternalId ||
+                event.status === "cancelled" ||
+                event.transparency === "transparent"
+              )
+                continue;
+              const instant = (value: unknown) => {
+                const date = record(value);
+                if (typeof date?.dateTime === "string")
+                  return validInstant(date.dateTime);
+                if (
+                  typeof date?.date !== "string" ||
+                  !/^\d{4}-\d{2}-\d{2}$/.test(date.date)
+                )
+                  return undefined;
+                const zone = date.timeZone ?? payload.timeZone;
+                if (typeof zone !== "string") return undefined;
+                const time = localInstant(date.date, "00:00", zone);
+                return time === null ? undefined : new Date(time).toISOString();
+              };
+              const start = instant(event.start),
+                end = instant(event.end);
+              if (!start || !end || end <= start) throw unavailable();
+              periods.push({ start, end });
+            }
+            const next = payload.nextPageToken;
+            if (
+              next !== undefined &&
+              (typeof next !== "string" ||
+                !next ||
+                next.length > 4096 ||
+                tokens.has(next) ||
+                tokens.size >= 100)
+            )
+              throw unavailable();
+            pageToken = next as string | undefined;
+            if (pageToken) tokens.add(pageToken);
+          } while (pageToken);
+          return periods;
+        }
         const response = await proxy(connection, {
           method: "POST",
           path: "/calendar/v3/freeBusy",
@@ -385,7 +458,7 @@ export function createBookingCalendarAdapter(
         startDateTime: from,
         endDateTime: to,
         $top: "1000",
-        $select: "start,end,showAs,isCancelled,isAllDay",
+        $select: "id,start,end,showAs,isCancelled,isAllDay",
       })}`;
       const periods: BusyPeriod[] = [];
       const seen = new Set<string>();
@@ -407,6 +480,10 @@ export function createBookingCalendarAdapter(
             typeof event.showAs !== "string"
           )
             throw unavailable();
+          if (input.excludeExternalId) {
+            if (typeof event.id !== "string") throw unavailable();
+            if (event.id === input.excludeExternalId) continue;
+          }
           const period = outlookPeriod(event);
           if (!event || !period) throw unavailable();
           if (event.isCancelled === true || event.showAs === "free") continue;

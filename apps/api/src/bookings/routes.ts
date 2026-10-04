@@ -8,6 +8,7 @@ import {
 } from "@savia/studio-shared/booking-agenda-contracts";
 import { actorFromContext } from "../auth/middleware";
 import { SAVIA_READ_SCOPE } from "../auth/oauth-resource";
+import { BookingAgenda } from "./agenda";
 import { authorizeBranding } from "../tenant-branding/service";
 import {
   captchaConfiguration,
@@ -27,6 +28,7 @@ import {
   revisionSchema,
   ownAvailabilitySchema,
   calendarGrantSchema,
+  agendaGrantSchema,
   publicBookingSchema,
   slotQuerySchema,
   bookingPublicLinkInputSchema,
@@ -69,6 +71,7 @@ import {
 export type BookingOptions = {
   captcha?: CaptchaOptions;
   nango?: PersonalIntegrationNangoClient;
+  calendarSecret?: string;
   shortener?: { shorten(url: string): Promise<string> };
   now?: () => number;
 };
@@ -123,6 +126,10 @@ export function registerBookingRoutes(
   options: BookingOptions = {},
 ) {
   const now = options.now ?? Date.now;
+  const agenda = new BookingAgenda(db, {
+    secret: options.calendarSecret,
+    nango: options.nango,
+  });
   const calendar = options.nango
     ? createBookingCalendarAdapter(db, options.nango)
     : undefined;
@@ -440,6 +447,7 @@ export function registerBookingRoutes(
         : eligible.filter((p) => p.principalId === actor.principal.id),
       canManage: auth.canManage,
       principalId: actor.principal.id,
+      agenda: await agenda.status(id, actor.principal.id),
       publicUrl: state.publicToken ? pageUrl(options, state.publicToken) : null,
       calendar: {
         provider: grant?.provider ?? null,
@@ -458,6 +466,7 @@ export function registerBookingRoutes(
     from: string,
     to: string,
     exceptId?: string,
+    refresh = false,
   ) {
     const busy = await nativeBusy(
       db,
@@ -468,6 +477,19 @@ export function registerBookingRoutes(
       exceptId,
     );
     const grant = await readGrant(db, tenantId, principalId);
+    const currentBooking = exceptId
+      ? await readBooking(db, tenantId, exceptId)
+      : null;
+    const excludeEvent =
+      currentBooking?.calendar_provider &&
+      currentBooking.external_id &&
+      currentBooking.calendar_connection_id
+        ? {
+            provider: currentBooking.calendar_provider,
+            id: currentBooking.external_id,
+            connectionId: currentBooking.calendar_connection_id,
+          }
+        : undefined;
     if (grant) {
       if (!calendar) throw unavailable();
       try {
@@ -478,11 +500,30 @@ export function registerBookingRoutes(
             connectionId: grant.connection_id,
             from,
             to,
+            ...(excludeEvent?.provider === grant.provider &&
+            excludeEvent.connectionId === grant.connection_id
+              ? { excludeExternalId: excludeEvent.id }
+              : {}),
           })),
         );
       } catch {
         throw unavailable();
       }
+    }
+    try {
+      busy.push(
+        ...(await agenda.busy({
+          tenantId,
+          principalId,
+          from,
+          to,
+          refresh,
+          excludeEvent,
+          skipConnectionId: grant?.connection_id,
+        })),
+      );
+    } catch {
+      throw unavailable();
     }
     return { busy, grant };
   }
@@ -490,6 +531,7 @@ export function registerBookingRoutes(
     state: { tenantId: number; settings: BookingSettings },
     query: z.infer<typeof slotQuerySchema>,
     exceptId?: string,
+    refresh = false,
   ) {
     const professional = state.settings.professionals.find(
         (p) => p.id === query.professionalId && p.enabled,
@@ -520,11 +562,13 @@ export function registerBookingRoutes(
       from,
       to,
       exceptId,
+      refresh,
     );
     return {
       professional,
       service,
       grant,
+      busy,
       professionalName: eligible.find(
         (p) => p.principalId === professional.principalId,
       )!.displayName,
@@ -540,6 +584,31 @@ export function registerBookingRoutes(
     };
   }
   const root = "/v1/tenants/{tenantId}/booking";
+  route(
+    "put",
+    `${root}/agenda`,
+    async (c) => {
+      const id = tenant(c),
+        actor = actorFromContext(c);
+      await authorizeBranding(db, actor, id);
+      const input = await body(c, agendaGrantSchema);
+      const state = await readSettings(db, id);
+      if (
+        input.enabled &&
+        !state.settings.professionals.some(
+          (p) => p.principalId === actor.principal.id && p.enabled,
+        )
+      )
+        throw new HTTPException(403, {
+          message: "An enabled professional is required.",
+        });
+      await agenda.authorize(id, actor.principal.id, input.enabled);
+      return c.json({ data: await bootstrap(c, id) });
+    },
+    agendaGrantSchema,
+    undefined,
+    bootstrapSchema,
+  );
   route(
     "get",
     root,
@@ -1202,13 +1271,42 @@ export function registerBookingRoutes(
           now: now(),
         });
       }
-      const result = await slots(state, {
-          serviceId: input.serviceId,
-          professionalId: normalized.professionalId,
-          date: dateInZone(input.startsAt, state.settings.timeZone),
-        }),
+      const result = await slots(
+          state,
+          {
+            serviceId: input.serviceId,
+            professionalId: normalized.professionalId,
+            date: dateInZone(input.startsAt, state.settings.timeZone),
+          },
+          undefined,
+          true,
+        ),
         selected = result.slots.find((s) => s.startsAt === normalized.startsAt);
-      if (!selected) throw conflict();
+      if (!selected) {
+        const start = Date.parse(normalized.startsAt);
+        const end =
+          start +
+          (result.service.durationMinutes + result.service.bufferMinutes) *
+            60000;
+        if (
+          result.busy.some(
+            (interval) =>
+              Date.parse(interval.start) < end &&
+              Date.parse(interval.end) > start,
+          )
+        )
+          return c.json(
+            {
+              error: {
+                code: "BOOKING_TIME_CONFLICT",
+                message:
+                  "This time conflicts with another meeting or appointment. Choose another available time.",
+              },
+            },
+            409,
+          );
+        throw conflict();
+      }
       const row: BookingRow = {
         id: crypto.randomUUID(),
         tenant_id: state.tenantId,
@@ -1463,9 +1561,34 @@ export function registerBookingRoutes(
             date: dateInZone(startsAt, state.settings.timeZone),
           },
           row.id,
+          true,
         ),
         selected = result.slots.find((s) => s.startsAt === startsAt);
-      if (!selected) throw conflict();
+      if (!selected) {
+        const start = Date.parse(startsAt);
+        const end =
+          start +
+          (result.service.durationMinutes + result.service.bufferMinutes) *
+            60000;
+        if (
+          result.busy.some(
+            (interval) =>
+              Date.parse(interval.start) < end &&
+              Date.parse(interval.end) > start,
+          )
+        )
+          return c.json(
+            {
+              error: {
+                code: "BOOKING_TIME_CONFLICT",
+                message:
+                  "This time conflicts with another meeting or appointment. Choose another available time.",
+              },
+            },
+            409,
+          );
+        throw conflict();
+      }
       if (
         result.service.durationMinutes !==
           (Date.parse(row.ends_at) - Date.parse(row.starts_at)) / 60000 ||
