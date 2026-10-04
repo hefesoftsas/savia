@@ -155,7 +155,13 @@ function responseRecords(
   if (
     module.provider === "pipedrive" &&
     (body.success !== true ||
-      (!Array.isArray(body.data) && !Array.isArray(record(body.data).items)))
+      (!Array.isArray(body.data) &&
+        !Array.isArray(record(body.data).items) &&
+        !(
+          body.data === null &&
+          record(record(body.additional_data).pagination)
+            .more_items_in_collection === false
+        )))
   )
     throw new CrmUpstreamError();
   const raw =
@@ -293,11 +299,22 @@ function fieldMap(
       (option) =>
         record(option).active !== false && record(option).active_flag !== false,
     );
-    if (optionsList.length > 200)
+    const oversizedOptions = optionsList.length > 200;
+    const canCreateField =
+      module.provider === "pipedrive" ||
+      field.createable === true ||
+      record(field.operation_type).api_create === true ||
+      field.read_only === false;
+    const canUpdateField =
+      module.provider === "pipedrive" ||
+      field.updateable === true ||
+      record(field.operation_type).api_update === true ||
+      field.read_only === false;
+    if (oversizedOptions && fieldRequired && (canCreateField || canUpdateField))
       throw new HTTPException(422, {
         message: `CRM field ${name} has too many choices to edit safely`,
       });
-    const options = optionsList
+    const options = (oversizedOptions ? [] : optionsList)
       .map((option) => {
         const item = record(option);
         const value = str(
@@ -315,37 +332,29 @@ function fieldMap(
       })
       .filter((option): option is { value: string; label: string } => !!option);
     const dateTime = kind?.includes("datetime") === true;
-    const type = options.length
-      ? kind?.includes("multiselect")
-        ? "MultiSelect"
-        : "Dropdown"
-      : kind?.includes("email")
-        ? "Email"
-        : kind?.includes("phone")
-          ? "Phone"
-          : kind?.includes("boolean") || kind?.includes("checkbox")
-            ? "Toggle"
-            : kind?.includes("date") && !dateTime
-              ? "DateControl"
-              : kind?.includes("currency") ||
-                  kind?.includes("double") ||
-                  kind?.includes("decimal") ||
-                  kind?.includes("number") ||
-                  ["int", "integer", "long", "float", "monetary"].includes(
-                    kind ?? "",
-                  )
-                ? "Number"
-                : "Textbox";
-    const canCreateField =
-      module.provider === "pipedrive" ||
-      field.createable === true ||
-      record(field.operation_type).api_create === true ||
-      field.read_only === false;
-    const canUpdateField =
-      module.provider === "pipedrive" ||
-      field.updateable === true ||
-      record(field.operation_type).api_update === true ||
-      field.read_only === false;
+    const type = oversizedOptions
+      ? "Textbox"
+      : options.length
+        ? kind?.includes("multiselect")
+          ? "MultiSelect"
+          : "Dropdown"
+        : kind?.includes("email")
+          ? "Email"
+          : kind?.includes("phone")
+            ? "Phone"
+            : kind?.includes("boolean") || kind?.includes("checkbox")
+              ? "Toggle"
+              : kind?.includes("date") && !dateTime
+                ? "DateControl"
+                : kind?.includes("currency") ||
+                    kind?.includes("double") ||
+                    kind?.includes("decimal") ||
+                    kind?.includes("number") ||
+                    ["int", "integer", "long", "float", "monetary"].includes(
+                      kind ?? "",
+                    )
+                  ? "Number"
+                  : "Textbox";
     const composite = [
       "address",
       "location",
@@ -367,6 +376,7 @@ function fieldMap(
       label,
       required,
       readOnly:
+        oversizedOptions ||
         (module.provider === "pipedrive" &&
           ["first_name", "last_name"].includes(name)) ||
         type === "MultiSelect" ||

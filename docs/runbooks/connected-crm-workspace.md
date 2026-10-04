@@ -170,8 +170,18 @@ when optional fields are omitted. Schemas with more than 50 required fields
 are rejected. Pipedrive schemas spanning multiple metadata pages are rejected
 explicitly until metadata pagination is supported. Pipedrive search results
 are hydrated from their record endpoints to expose complete field values;
-this requires additional provider requests. First and last name metadata are
-read-only in Pipedrive screens; edit the full name there instead.
+this requires additional provider requests. A Pipedrive `data: null` response
+is treated as an empty page only when pagination explicitly reports no more
+items. First and last name metadata are read-only in Pipedrive screens; edit
+the full name there instead.
+
+Optional CRM picklists with more than 200 active choices appear as read-only
+text fields without a choice list, so existing values stay visible while other
+fields remain editable. Required picklists over that limit are rejected when
+the provider marks them editable, because Savia cannot safely validate their
+values. Writes that include a read-only oversized picklist are rejected before
+the provider is called. Picklists with at most 200 choices retain their full
+editable option list.
 
 ### One CRM connection per organization
 
