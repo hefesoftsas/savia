@@ -13893,6 +13893,21 @@ export interface paths {
           };
           content?: never;
         };
+        /** @description The personal connection requires reconnection */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                /** @enum {string} */
+                code: "PERSONAL_INTEGRATION_RECONNECT_REQUIRED";
+                message: string;
+              };
+            };
+          };
+        };
         /** @description Provider request failed */
         502: {
           headers: {

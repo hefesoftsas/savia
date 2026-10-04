@@ -82,8 +82,9 @@ export function RecordChatShareAction({
   const [reviewing, setReviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<
-    "sent" | "ambiguous" | "failed" | null
+    "sent" | "ambiguous" | "delivery_unknown" | "failed" | null
   >(null);
+  const [freshSendConfirmed, setFreshSendConfirmed] = useState(false);
   const inFlight = useRef(false);
   const channelGeneration = useRef(0);
   const sendGeneration = useRef(0);
@@ -111,6 +112,7 @@ export function RecordChatShareAction({
     setChannelId("");
     setReviewing(false);
     setFeedback(null);
+    setFreshSendConfirmed(false);
     void personalIntegrations
       .listConnections(true)
       .then(
@@ -261,16 +263,33 @@ export function RecordChatShareAction({
         error && typeof error === "object"
           ? (error as { status?: unknown }).status
           : undefined;
-      if (generation === sendGeneration.current)
+      const code =
+        error && typeof error === "object"
+          ? (error as { code?: unknown }).code
+          : undefined;
+      if (generation === sendGeneration.current) {
         setFeedback(
-          [400, 403, 404].includes(Number(status)) ? "failed" : "ambiguous",
+          code === "PERSONAL_COLLABORATION_DELIVERY_UNKNOWN"
+            ? "delivery_unknown"
+            : [400, 403, 404].includes(Number(status)) ||
+                code === "PERSONAL_COLLABORATION_REQUEST_ID_REUSED"
+              ? "failed"
+              : "ambiguous",
         );
+      }
     } finally {
       if (generation === sendGeneration.current) {
         inFlight.current = false;
         setSending(false);
       }
     }
+  }
+
+  function startFreshSend() {
+    if (!freshSendConfirmed || inFlight.current) return;
+    requestIdentity.current = null;
+    setFreshSendConfirmed(false);
+    void shareNow();
   }
 
   useEffect(() => {
@@ -282,6 +301,7 @@ export function RecordChatShareAction({
     setSummary(share.summary.slice(0, 5000));
     setReviewing(false);
     setFeedback(null);
+    setFreshSendConfirmed(false);
   }, [shareFingerprint]);
 
   const selectedChannel = channels.find(
@@ -407,7 +427,43 @@ export function RecordChatShareAction({
                   <dd className="mt-1 break-all">{share.url}</dd>
                 </div>
               </dl>
-              {feedback === "ambiguous" || feedback === "failed" ? (
+              {feedback === "delivery_unknown" ? (
+                <div role="alert" className="space-y-3 text-sm">
+                  <p>
+                    {t(
+                      "El envío anterior no se pudo confirmar. Revisa el canal para comprobar si ya se publicó antes de iniciar otro envío.",
+                    )}
+                  </p>
+                  <label
+                    className="flex items-start gap-2"
+                    htmlFor="record-share-fresh-send-confirmation"
+                  >
+                    <input
+                      id="record-share-fresh-send-confirmation"
+                      type="checkbox"
+                      className="mt-1"
+                      checked={freshSendConfirmed}
+                      disabled={sending}
+                      onChange={(event) =>
+                        setFreshSendConfirmed(event.target.checked)
+                      }
+                    />
+                    <span>
+                      {t(
+                        "He revisado el canal y quiero realizar un nuevo envío.",
+                      )}
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={sending || !freshSendConfirmed}
+                    onClick={startFreshSend}
+                  >
+                    {sending ? t("Compartiendo…") : t("Realizar nuevo envío")}
+                  </Button>
+                </div>
+              ) : feedback === "ambiguous" || feedback === "failed" ? (
                 <div role="alert" className="space-y-2 text-sm">
                   <p>
                     {t(
@@ -434,17 +490,20 @@ export function RecordChatShareAction({
                   onClick={() => {
                     setReviewing(false);
                     setFeedback(null);
+                    setFreshSendConfirmed(false);
                   }}
                 >
                   {t("Volver a editar")}
                 </Button>
-                <Button
-                  type="button"
-                  disabled={sending || !canReview}
-                  onClick={() => void shareNow()}
-                >
-                  {sending ? t("Compartiendo…") : t("Compartir ahora")}
-                </Button>
+                {feedback === "delivery_unknown" ? null : (
+                  <Button
+                    type="button"
+                    disabled={sending || !canReview}
+                    onClick={() => void shareNow()}
+                  >
+                    {sending ? t("Compartiendo…") : t("Compartir ahora")}
+                  </Button>
+                )}
               </DialogFooter>
             </section>
           ) : (

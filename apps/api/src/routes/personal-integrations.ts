@@ -432,6 +432,19 @@ const collaborationChannelsRoute = createRoute({
     },
     400: { description: "Invalid collaboration cursor" },
     404: { description: "Personal connection not found" },
+    409: {
+      description: "The personal connection requires reconnection",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({
+              code: z.literal("PERSONAL_INTEGRATION_RECONNECT_REQUIRED"),
+              message: z.string(),
+            }),
+          }),
+        },
+      },
+    },
     502: { description: "Provider request failed" },
     503: { description: "Provider or connection unavailable" },
   },

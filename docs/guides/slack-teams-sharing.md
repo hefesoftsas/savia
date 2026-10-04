@@ -32,6 +32,9 @@ connection. Channel lists and message drafts are not persisted in browser
 storage. Durable request identifiers prevent a repeated submission from sending
 the same request again. If delivery is uncertain, check the destination before
 starting a new share; the server does not blindly retry an ambiguous send.
+The retry control retains the original request identifier. If a new delivery is
+needed, explicitly confirm that you checked the channel before choosing a fresh
+send; that action creates a new request identifier and can post another message.
 
 ## Configure Nango
 

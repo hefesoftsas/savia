@@ -325,6 +325,21 @@ describe("personal collaboration routes and sends", () => {
     expect(nango.proxy).not.toHaveBeenCalled();
   });
 
+  it("documents the reconnect-required conflict for channel listing", async () => {
+    const response = await appWith(serviceNango()).request(
+      "https://savia.test/openapi.json",
+    );
+    const document = await response.json<any>();
+    const conflict =
+      document.paths["/v1/personal-integrations/collaboration/channels"].get
+        .responses["409"];
+    expect(conflict.description).toContain("reconnection");
+    expect(
+      conflict.content["application/json"].schema.properties.error.properties
+        .code.enum,
+    ).toContain("PERSONAL_INTEGRATION_RECONNECT_REQUIRED");
+  });
+
   it("does not use a connection owned by another principal", async () => {
     await env.DB.prepare(
       `INSERT OR IGNORE INTO identity_principal
@@ -371,6 +386,43 @@ describe("personal collaboration routes and sends", () => {
     expect(nango.proxy).toHaveBeenCalledTimes(3); // two preflights and one post
   });
 
+  it("keeps confirmed delivery sent if the success audit write fails", async () => {
+    const nango = serviceNango();
+    const repository = fakeRepository();
+    vi.mocked(repository.appendAuditEvent).mockRejectedValue(
+      new Error("audit database unavailable"),
+    );
+    const input = {
+      database: env.DB,
+      principalId: "test-agency-member",
+      payload: { ...payload, requestId: "share-audit-failure" },
+      connection,
+      repository,
+      nango,
+      validateContext: vi.fn().mockResolvedValue(undefined),
+      isAllowedOrigin: (origin: string) =>
+        origin.endsWith(".savia-preview.hefesoft.com"),
+    };
+
+    await expect(shareRecord(input)).rejects.toThrow(
+      "audit database unavailable",
+    );
+    await expect(shareRecord(input)).resolves.toEqual({
+      provider: "slack",
+      messageId: "1700000000.000001",
+    });
+
+    expect(
+      nango.proxy.mock.calls.filter(([request]) => request.method === "POST"),
+    ).toHaveLength(1);
+    expect(repository.appendAuditEvent).toHaveBeenCalledTimes(1);
+    expect(repository.appendAuditEvent).toHaveBeenCalledWith({
+      connection,
+      eventType: "share-record",
+      outcome: "succeeded",
+    });
+  });
+
   it("rejects a requestId reused with different content", async () => {
     const nango = serviceNango();
     const input = {
@@ -399,12 +451,16 @@ describe("personal collaboration routes and sends", () => {
     const nango = serviceNango(async () => {
       throw new TypeError("socket closed after write");
     });
+    const repository = fakeRepository();
+    vi.mocked(repository.appendAuditEvent).mockRejectedValue(
+      new Error("audit database unavailable"),
+    );
     const input = {
       database: env.DB,
       principalId: "test-agency-member",
       payload,
       connection,
-      repository: fakeRepository(),
+      repository,
       nango,
       validateContext: vi.fn().mockResolvedValue(undefined),
       isAllowedOrigin: (origin: string) =>
@@ -417,6 +473,12 @@ describe("personal collaboration routes and sends", () => {
       CollaborationConflictError,
     );
     expect(nango.proxy).toHaveBeenCalledTimes(3); // two reads, one attempted post
+    expect(repository.appendAuditEvent).toHaveBeenCalledWith({
+      connection,
+      eventType: "share-record",
+      outcome: "failed",
+      errorCode: "PERSONAL_INTEGRATION_REQUEST_FAILED",
+    });
   });
 
   it("sends Teams HTML with escaped title and summary", async () => {

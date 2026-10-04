@@ -85,6 +85,22 @@ export const recordSharingMessages = {
       "We couldn't confirm the send. Check the channel before trying again.",
       "Não foi possível confirmar o envio. Confira o canal antes de tentar novamente.",
     ],
+  "El envío anterior no se pudo confirmar. Revisa el canal para comprobar si ya se publicó antes de iniciar otro envío.":
+    [
+      "El envío anterior no se pudo confirmar. Revisa el canal para comprobar si ya se publicó antes de iniciar otro envío.",
+      "We couldn't confirm the previous send. Check the channel to see whether it was posted before starting another send.",
+      "Não foi possível confirmar o envio anterior. Confira o canal para saber se a mensagem foi publicada antes de iniciar outro envio.",
+    ],
+  "He revisado el canal y quiero realizar un nuevo envío.": [
+    "He revisado el canal y quiero realizar un nuevo envío.",
+    "I checked the channel and want to make a new send attempt.",
+    "Conferi o canal e quero fazer um novo envio.",
+  ],
+  "Realizar nuevo envío": [
+    "Realizar nuevo envío",
+    "Make a new send attempt",
+    "Fazer um novo envio",
+  ],
   "No se pudo compartir el registro. Revisa los detalles, permisos y conexión.":
     [
       "No se pudo compartir el registro. Revisa los detalles, permisos y conexión.",

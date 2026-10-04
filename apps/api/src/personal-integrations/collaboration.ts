@@ -529,6 +529,7 @@ export async function shareRecord(input: {
       messageId: operation.messageId!,
     };
 
+  let deliveryConfirmed = false;
   try {
     let response: Response;
     if (payload.provider === "slack") {
@@ -585,24 +586,12 @@ export async function shareRecord(input: {
       );
     }
     if (!response.ok) {
-      await finish(
-        input.database,
-        input.principalId,
-        payload.requestId,
-        "ambiguous",
-      );
       if (response.status === 401 || response.status === 403)
         await input.repository.markReconnectRequired(input.connection.id);
       throw new PersonalIntegrationUpstreamError();
     }
     const sent = object(await response.json().catch(() => undefined));
     if (payload.provider === "slack" && sent?.ok === false) {
-      await finish(
-        input.database,
-        input.principalId,
-        payload.requestId,
-        "ambiguous",
-      );
       if (sent.error === "invalid_auth" || sent.error === "token_revoked")
         await input.repository.markReconnectRequired(input.connection.id);
       throw new PersonalIntegrationUpstreamError();
@@ -615,15 +604,8 @@ export async function shareRecord(input: {
         : typeof sent?.id === "string"
           ? sent.id
           : undefined;
-    if (!messageId) {
-      await finish(
-        input.database,
-        input.principalId,
-        payload.requestId,
-        "ambiguous",
-      );
-      throw new PersonalIntegrationUpstreamError();
-    }
+    if (!messageId) throw new PersonalIntegrationUpstreamError();
+    deliveryConfirmed = true;
     await finish(
       input.database,
       input.principalId,
@@ -638,12 +620,27 @@ export async function shareRecord(input: {
     });
     return { provider: payload.provider, messageId };
   } catch (exception) {
-    await finish(
-      input.database,
-      input.principalId,
-      payload.requestId,
-      "ambiguous",
-    );
+    if (deliveryConfirmed) throw exception;
+    try {
+      await finish(
+        input.database,
+        input.principalId,
+        payload.requestId,
+        "ambiguous",
+      );
+    } catch {
+      // A still-sending reservation also blocks another provider POST.
+    }
+    try {
+      await input.repository.appendAuditEvent({
+        connection: input.connection,
+        eventType: "share-record",
+        outcome: "failed",
+        errorCode: "PERSONAL_INTEGRATION_REQUEST_FAILED",
+      });
+    } catch {
+      // Audit storage must not change the delivery outcome or deduplication.
+    }
     throw exception;
   }
 }

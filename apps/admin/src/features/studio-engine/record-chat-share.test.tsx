@@ -245,3 +245,59 @@ it("reuses the request id after an ambiguous send error and blocks duplicate sub
     sentInput.requestId,
   );
 });
+
+it("requires channel confirmation and a fresh request id after delivery is unknown", async () => {
+  const client = clientFactory();
+  client.listConnections.mockResolvedValue([connected("slack")] as never);
+  client.listCollaborationChannels.mockResolvedValue({
+    channels: [{ id: "channel-1", name: "general" }],
+    nextCursor: null,
+  });
+  const deliveryUnknown = Object.assign(new Error("Delivery unknown"), {
+    status: 409,
+    code: "PERSONAL_COLLABORATION_DELIVERY_UNKNOWN",
+  });
+  client.shareRecordToChat
+    .mockRejectedValueOnce(new Error("network timeout"))
+    .mockRejectedValueOnce(deliveryUnknown)
+    .mockResolvedValueOnce({ provider: "slack", messageId: "message-2" });
+
+  mount(client);
+  fireEvent.click(screen.getByRole("button", { name: "Compartir en chat" }));
+  await screen.findByRole("option", { name: "general" });
+  fireEvent.change(await screen.findByLabelText("Canal"), {
+    target: { value: ":channel-1" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Revisar y compartir" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Compartir ahora" }),
+  );
+  const originalRequestId = client.shareRecordToChat.mock.calls[0][0].requestId;
+
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Intentar de nuevo" }),
+  );
+  const confirmation = await screen.findByRole("checkbox", {
+    name: "He revisado el canal y quiero realizar un nuevo envío.",
+  });
+  expect(client.shareRecordToChat.mock.calls[1][0].requestId).toBe(
+    originalRequestId,
+  );
+  expect(
+    screen.queryByRole("button", { name: "Compartir ahora" }),
+  ).not.toBeInTheDocument();
+  const freshSend = screen.getByRole("button", {
+    name: "Realizar nuevo envío",
+  });
+  expect(freshSend).toBeDisabled();
+  fireEvent.click(confirmation);
+  expect(freshSend).toBeEnabled();
+  fireEvent.click(freshSend);
+
+  await waitFor(() =>
+    expect(client.shareRecordToChat).toHaveBeenCalledTimes(3),
+  );
+  expect(client.shareRecordToChat.mock.calls[2][0].requestId).not.toBe(
+    originalRequestId,
+  );
+});
