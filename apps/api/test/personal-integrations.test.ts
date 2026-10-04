@@ -2199,6 +2199,7 @@ describe("personal integration providers", () => {
           startsAt: "2026-01-03T15:00:00.000Z",
           endsAt: "2026-01-03T15:30:00.000Z",
           videoCall: true,
+          attendees: [" Person@Example.com ", "person@example.com"],
         }),
       },
     );
@@ -2226,8 +2227,9 @@ describe("personal integration providers", () => {
       2,
       expect.objectContaining({
         method: "POST",
-        path: "/calendar/v3/calendars/primary/events?conferenceDataVersion=1",
+        path: "/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all",
         body: expect.objectContaining({
+          attendees: [{ email: "person@example.com" }],
           conferenceData: expect.objectContaining({
             createRequest: expect.objectContaining({
               conferenceSolutionKey: { type: "hangoutsMeet" },
@@ -2300,6 +2302,7 @@ describe("personal integration providers", () => {
           startsAt: "2026-01-03T15:00:00.000Z",
           endsAt: "2026-01-03T15:30:00.000Z",
           videoCall: true,
+          attendees: [" Person@Example.com ", "person@example.com"],
         }),
       },
     );
@@ -2319,8 +2322,9 @@ describe("personal integration providers", () => {
       2,
       expect.objectContaining({
         method: "POST",
-        path: "/calendar/v3/calendars/primary/events",
+        path: "/calendar/v3/calendars/primary/events?sendUpdates=all",
         body: expect.objectContaining({
+          attendees: [{ email: "person@example.com" }],
           extendedProperties: {
             private: { saviaVideoCall: "unsupported" },
           },
@@ -2479,6 +2483,296 @@ describe("personal integration providers", () => {
     );
   });
 
+  it.each([
+    ["google_calendar", "personal-google-jitsi-create-connection"],
+    ["outlook", "personal-outlook-jitsi-create-connection"],
+  ] as const)(
+    "creates and reloads a Jitsi event with invitees on %s without native capability checks",
+    async (provider, connectionId) => {
+      const nango = fakeNango();
+      const eventId = `${provider}-jitsi-event`;
+      const roomIdSpy = vi
+        .spyOn(crypto, "randomUUID")
+        .mockReturnValue("123e4567-e89b-42d3-a456-426614174000");
+      nango.proxy
+        .mockResolvedValueOnce(
+          Response.json({
+            id: eventId,
+            summary: "Planning",
+            subject: "Planning",
+            start: { dateTime: "2026-01-03T15:00:00.000Z", timeZone: "UTC" },
+            end: { dateTime: "2026-01-03T15:30:00.000Z", timeZone: "UTC" },
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json(
+            provider === "google_calendar"
+              ? {
+                  items: [
+                    {
+                      id: eventId,
+                      summary: "Planning",
+                      start: { dateTime: "2026-01-03T15:00:00.000Z" },
+                      end: { dateTime: "2026-01-03T15:30:00.000Z" },
+                      extendedProperties: {
+                        private: {
+                          saviaConferenceProvider: "jitsi",
+                          saviaConferenceUrl:
+                            "https://meet.jit.si/savia-123e4567-e89b-42d3-a456-426614174000",
+                        },
+                      },
+                    },
+                    {
+                      id: `${eventId}-unsafe`,
+                      summary: "Unsafe room",
+                      extendedProperties: {
+                        private: {
+                          saviaConferenceProvider: "jitsi",
+                          saviaConferenceUrl:
+                            "https://attacker.example/savia-room",
+                        },
+                      },
+                    },
+                    {
+                      id: `${eventId}-missing-url`,
+                      summary: "Missing room URL",
+                      extendedProperties: {
+                        private: { saviaConferenceProvider: "jitsi" },
+                      },
+                    },
+                  ],
+                }
+              : {
+                  value: [
+                    {
+                      id: eventId,
+                      subject: "Planning",
+                      start: {
+                        dateTime: "2026-01-03T15:00:00Z",
+                        timeZone: "UTC",
+                      },
+                      end: {
+                        dateTime: "2026-01-03T15:30:00Z",
+                        timeZone: "UTC",
+                      },
+                      singleValueExtendedProperties: [
+                        {
+                          id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaConferenceProvider",
+                          value: "jitsi",
+                        },
+                        {
+                          id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaConferenceUrl",
+                          value:
+                            "https://meet.jit.si/savia-123e4567-e89b-42d3-a456-426614174000",
+                        },
+                      ],
+                    },
+                    {
+                      id: `${eventId}-unsafe`,
+                      subject: "Unsafe room",
+                      singleValueExtendedProperties: [
+                        {
+                          id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaConferenceProvider",
+                          value: "jitsi",
+                        },
+                        {
+                          id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaConferenceUrl",
+                          value: "https://meet.jit.si/unsafe-room",
+                        },
+                      ],
+                    },
+                    {
+                      id: `${eventId}-missing-url`,
+                      subject: "Missing room URL",
+                      singleValueExtendedProperties: [
+                        {
+                          id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaConferenceProvider",
+                          value: "jitsi",
+                        },
+                      ],
+                    },
+                  ],
+                },
+          ),
+        );
+      await env.DB.prepare(
+        `INSERT INTO personal_integration_connections (
+          id, principal_id, provider, nango_connection_id, nango_integration_id,
+          status, scopes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          connectionId,
+          "test-agency-member",
+          provider,
+          `nango-${connectionId}`,
+          provider === "google_calendar"
+            ? "google-calendar-savia"
+            : "outlook-savia",
+          "connected",
+          "[]",
+          "2026-01-01T00:00:00.000Z",
+          "2026-01-01T00:00:00.000Z",
+        )
+        .run();
+      const app = configuredApp(nango);
+      const response = await app.request(
+        "https://savia.test/v1/personal-integrations/events",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            provider,
+            title: "Planning",
+            startsAt: "2026-01-03T15:00:00.000Z",
+            endsAt: "2026-01-03T15:30:00.000Z",
+            videoCall: true,
+            conferenceProvider: "jitsi",
+            attendees: [" Person@Example.com ", "person@example.com"],
+          }),
+        },
+      );
+      roomIdSpy.mockRestore();
+
+      expect(response.status).toBe(201);
+      const created = await response.json();
+      const roomUrl = (created as { data: { conference: { joinUrl: string } } })
+        .data.conference.joinUrl;
+      expect(roomUrl).toBe(
+        "https://meet.jit.si/savia-123e4567-e89b-42d3-a456-426614174000",
+      );
+      expect(created).toMatchObject({
+        data: {
+          conference: { provider: "jitsi", joinUrl: roomUrl, status: "ready" },
+        },
+      });
+      expect(nango.proxy).toHaveBeenCalledTimes(1);
+      const write = nango.proxy.mock.calls[0]?.[0];
+      expect(write?.method).toBe("POST");
+      if (provider === "google_calendar")
+        expect(write?.path).toContain("sendUpdates=all");
+      expect(write?.body).toMatchObject(
+        provider === "google_calendar"
+          ? {
+              attendees: [{ email: "person@example.com" }],
+              location: roomUrl,
+              description: expect.stringContaining(roomUrl),
+              extendedProperties: {
+                private: {
+                  saviaConferenceProvider: "jitsi",
+                  saviaConferenceUrl: roomUrl,
+                },
+              },
+            }
+          : {
+              attendees: [
+                {
+                  emailAddress: { address: "person@example.com" },
+                  type: "required",
+                },
+              ],
+              location: { displayName: roomUrl },
+              body: expect.objectContaining({
+                content: expect.stringContaining(roomUrl),
+              }),
+              singleValueExtendedProperties: expect.arrayContaining([
+                {
+                  id: expect.stringContaining("SaviaConferenceProvider"),
+                  value: "jitsi",
+                },
+                {
+                  id: expect.stringContaining("SaviaConferenceUrl"),
+                  value: roomUrl,
+                },
+              ]),
+            },
+      );
+
+      const listed = await app.request(
+        `https://savia.test/v1/personal-integrations/events?provider=${provider}`,
+      );
+      expect(listed.status).toBe(200);
+      await expect(listed.json()).resolves.toMatchObject({
+        data: [
+          {
+            id: eventId,
+            conference: {
+              provider: "jitsi",
+              joinUrl:
+                "https://meet.jit.si/savia-123e4567-e89b-42d3-a456-426614174000",
+              status: "ready",
+            },
+          },
+          {
+            id: `${eventId}-unsafe`,
+            conference: { provider: "jitsi", joinUrl: null, status: "failed" },
+          },
+          {
+            id: `${eventId}-missing-url`,
+            conference: { provider: "jitsi", joinUrl: null, status: "failed" },
+          },
+        ],
+      });
+      if (provider === "outlook") {
+        const listPath = nango.proxy.mock.calls[1]?.[0]?.path as string;
+        expect(
+          new URL(listPath, "https://graph.microsoft.com").searchParams.get(
+            "$select",
+          ),
+        ).toContain("singleValueExtendedProperties");
+      }
+    },
+  );
+
+  it("rejects invalid attendees and Jitsi without videoCall", async () => {
+    const app = configuredApp();
+    for (const payload of [
+      {
+        provider: "google_calendar",
+        title: "Planning",
+        startsAt: "2026-01-03T15:00:00.000Z",
+        endsAt: "2026-01-03T15:30:00.000Z",
+        videoCall: true,
+        attendees: ["not-an-email"],
+      },
+      {
+        provider: "google_calendar",
+        title: "Planning",
+        startsAt: "2026-01-03T15:00:00.000Z",
+        endsAt: "2026-01-03T15:30:00.000Z",
+        attendees: [`${"a".repeat(243)}@example.com`],
+      },
+      {
+        provider: "google_calendar",
+        title: "Planning",
+        startsAt: "2026-01-03T15:00:00.000Z",
+        endsAt: "2026-01-03T15:30:00.000Z",
+        conferenceProvider: "jitsi",
+      },
+      {
+        provider: "google_calendar",
+        title: "Planning",
+        startsAt: "2026-01-03T15:00:00.000Z",
+        endsAt: "2026-01-03T15:30:00.000Z",
+        videoCall: true,
+        attendees: Array.from(
+          { length: 51 },
+          (_, index) => `p${index}@example.com`,
+        ),
+      },
+    ]) {
+      const response = await app.request(
+        "https://savia.test/v1/personal-integrations/events",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      expect(response.status).toBe(400);
+    }
+  });
+
   it("creates an Outlook event with Teams only when the calendar supports it", async () => {
     const nango = fakeNango();
     nango.proxy
@@ -2529,6 +2823,7 @@ describe("personal integration providers", () => {
           startsAt: "2026-01-03T15:00:00.000Z",
           endsAt: "2026-01-03T15:30:00.000Z",
           videoCall: true,
+          attendees: [" Person@Example.com ", "person@example.com"],
         }),
       },
     );
@@ -2559,6 +2854,12 @@ describe("personal integration providers", () => {
         body: expect.objectContaining({
           isOnlineMeeting: true,
           onlineMeetingProvider: "teamsForBusiness",
+          attendees: [
+            {
+              emailAddress: { address: "person@example.com" },
+              type: "required",
+            },
+          ],
         }),
       }),
     );

@@ -36,9 +36,9 @@ const range = {
 };
 
 const outlookCalendarSelect =
-  "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting";
+  "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting,singleValueExtendedProperties";
 const outlookVideoCallExpand =
-  "singleValueExtendedProperties($filter=id eq 'String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaVideoCall')";
+  "singleValueExtendedProperties($filter=id eq 'String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaVideoCall' or id eq 'String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaConferenceProvider' or id eq 'String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaConferenceUrl')";
 
 function outlookCalendarContinuation(
   overrides: Record<string, string> = {},

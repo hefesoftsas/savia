@@ -30,6 +30,7 @@ export type Settings = {
   horizonDays: number;
   cancellationMinutes: number;
   reminderMinutes: number;
+  conferenceProvider?: "automatic" | "jitsi";
   services: Service[];
   professionals: Professional[];
 };

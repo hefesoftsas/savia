@@ -31,7 +31,7 @@ export type BookingRow = {
   calendar_provider: "google_calendar" | "outlook" | null;
   calendar_connection_id: string | null;
   external_id: string | null;
-  conference_provider?: "google_meet" | "teams" | null;
+  conference_provider?: "google_meet" | "teams" | "jitsi" | null;
   conference_url?: string | null;
   conference_status?: "ready" | "pending" | "unsupported" | "failed" | null;
   created_at: string;
@@ -324,7 +324,7 @@ export async function createReservation(
     revision.start,
     db
       .prepare(
-        "INSERT INTO tenant_bookings(id,tenant_id,professional_id,principal_id,service_id,service_name,professional_name,starts_at,ends_at,buffer_minutes,customer_name,customer_email,manage_token,request_key,request_hash,status,version,calendar_provider,calendar_connection_id,external_id,created_at,customer_locale) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO tenant_bookings(id,tenant_id,professional_id,principal_id,service_id,service_name,professional_name,starts_at,ends_at,buffer_minutes,customer_name,customer_email,manage_token,request_key,request_hash,status,version,calendar_provider,calendar_connection_id,external_id,created_at,customer_locale,conference_provider,conference_url,conference_status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       )
       .bind(
         row.id,
@@ -349,6 +349,9 @@ export async function createReservation(
         row.external_id,
         row.created_at,
         row.customer_locale ?? "en",
+        row.conference_provider ?? null,
+        row.conference_url ?? null,
+        row.conference_status ?? null,
       ),
     ...occupancyStatements(db, row),
     ...jobStatements(db, row, "confirmation", settings),

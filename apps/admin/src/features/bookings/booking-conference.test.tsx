@@ -8,7 +8,7 @@ afterEach(cleanup);
 
 function renderConference(
   conference: {
-    provider: "google_meet" | "teams" | null;
+    provider: "google_meet" | "teams" | "jitsi" | null;
     joinUrl: string | null;
     status: "ready" | "pending" | "unsupported" | "failed";
   } | null,
@@ -24,6 +24,7 @@ function renderConference(
 }
 
 it.each([
+  ["jitsi", "https://meet.jit.si/savia-test-room", "Join Jitsi"],
   ["google_meet", "https://meet.google.com/abc-defg-hij", "Join Google Meet"],
   ["teams", "https://teams.microsoft.com/l/meetup-join/123", "Join Teams"],
   ["teams", "https://teams.cloud.microsoft/meet/123", "Join Teams"],
@@ -97,5 +98,14 @@ it("hides conference details after cancellation", () => {
     },
     "cancelled",
   );
+  expect(screen.queryByRole("link")).not.toBeInTheDocument();
+});
+
+it.each([
+  "https://evil.example/room",
+  "https://meet.jit.si.evil.example/room",
+  "https://meet.jit.si/",
+])("hides an invalid Jitsi room %s", (joinUrl) => {
+  renderConference({ provider: "jitsi", joinUrl, status: "ready" });
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });

@@ -165,7 +165,7 @@ rebound to a tenant-scoped source; reopening that source starts a correctly boun
 conversation.
 
 Apply migrations `0032_assistant_threads.sql` and
-`0033_assistant_thread_context_tenant.sql` before serving the updated admin UI.
+`0034_assistant_thread_context_tenant.sql` before serving the updated admin UI.
 The conversation API requires the authenticated account and D1 storage. Existing
 browser-only history can be copied to the server with **Import browser history**;
 the old browser data is preserved. History lists the latest 50 conversations;
