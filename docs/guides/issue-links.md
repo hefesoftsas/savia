@@ -6,7 +6,7 @@ Savia can show a transient preview for Jira Cloud, Linear, and GitHub issue link
 
 ## Configure Nango
 
-Register Jira Cloud, Linear, and GitHub as separate Nango integrations. Savia only reads issue and pull request previews. Configure these server environment variables with each integration's Nango integration ID:
+Register Jira Cloud, Linear, and GitHub as separate Nango integrations. Savia reads issue and pull request previews and personal ticket summaries. Configure these server environment variables with each integration's Nango integration ID:
 
 - `NANGO_JIRA_INTEGRATION_ID`
 - `NANGO_LINEAR_INTEGRATION_ID`
@@ -14,7 +14,7 @@ Register Jira Cloud, Linear, and GitHub as separate Nango integrations. Savia on
 
 All integrations also use the existing `NANGO_BASE_URL`, `NANGO_CONNECT_URL`, and `NANGO_API_KEY` settings. When an integration ID is absent, its provider is marked **Requires setup** in Integrations, without deployment instructions in the personal connections screen. Deployment-level Nango credentials remain server settings; the personal connections screen does not edit or expose secrets. No user token or Nango credential is sent to the browser.
 
-The Jira connection needs permission to read issues and user display names (`read:jira-work` and `read:jira-user`). The Linear connection needs its read scope. Savia requests only issue previews, and its server routes only issue reads.
+The Jira connection needs permission to read issues and user display names (`read:jira-work` and `read:jira-user`). The Linear connection needs its read scope. Savia reads issue metadata and comments for previews and personal summaries; it does not modify tickets.
 
 ### Hosted environment configuration
 
@@ -50,7 +50,7 @@ Use the least permissions supported by the configured application. A GitHub App
 can grant **Issues: read** and **Pull requests: read** for selected repositories.
 A GitHub OAuth App can read public resources without repository scopes, but
 access to private repositories requires the broader `repo` scope, which also
-allows writes at GitHub. Savia still exposes only preview reads; do not describe
+allows writes at GitHub. Savia still exposes only preview and summary reads; do not describe
 that OAuth grant itself as read-only. Organization restrictions and repository
 access still apply to each reader's connection. See the official
 [GitHub OAuth scopes](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps),
@@ -102,3 +102,13 @@ viewer-scoped and is fetched from the integration rather than stored in the page
 
 Cards use compact spacing and a single wrapping metadata row. Status and assignee
 labels remain available to assistive technology without adding visible rows.
+
+## Personal ticket summaries in Pages
+
+The **My tickets** slash command uses the same personal Jira and GitHub connections. Jira is required; GitHub is optional. Each request resolves connections from the authenticated principal, never a Page owner or a caller-provided identity. Disabled Jira providers reject requests; disabling GitHub leaves the Jira portion available.
+
+The summary reads assigned Jira tickets, latest comment excerpts, and associated GitHub pull requests. The Jira query always targets `currentUser()`. Optional project and status filters are validated before provider calls. PR discovery uses supported GitHub links and ticket-key searches; an undiscovered PR is not proof that none exists. Provider errors and pagination limits produce explicit incomplete-result indicators. GitHub review threads require complete data before presenting an unresolved count.
+
+The read-only summary endpoint is included in the generated OpenAPI reference. Responses use `Cache-Control: no-store`. Results are not written to shared Page content, search indexes, revision history, or browser storage. The Page block persists filters only; reconnecting or switching user requires fresh data. GitHub needs access to the relevant repositories and their pull requests, discussions, and reviews. Missing permission does not prevent displaying Jira tickets.
+
+Each refresh is bounded: up to three accessible Jira sites, the 30 most recently updated matching tickets (at most one 30-item search page per site), five GitHub search candidates per ticket, and details for 15 unique PRs. Review-thread inspection is bounded to 20 threads per PR. Larger result sets, failed reads, and incomplete thread counts are marked as partial or unavailable; no complete count is inferred from a truncated page. Narrow the project/status filters when ticket volume exceeds the summary limit. This is a current snapshot, not an unread-comment tracker or a scheduled background monitor.

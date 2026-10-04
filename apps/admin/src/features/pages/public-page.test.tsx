@@ -38,6 +38,11 @@ it("fetches only the anonymous public endpoint and renders rich content as safe 
                 children: [{ text: "<script>never run</script>" }],
               },
               { type: "collection", children: [{ text: "private records" }] },
+              {
+                type: "ticket_summary",
+                ticketSummaryConfig: { project: "OPS" },
+                children: [{ text: "" }],
+              },
               { type: "issue", url: "javascript:alert(2)" },
               { type: "bullet", children: [{ text: "One bullet" }] },
               { type: "numbered", children: [{ text: "First step" }] },
@@ -97,6 +102,9 @@ it("fetches only the anonymous public endpoint and renders rich content as safe 
     "href",
     "/public/pages/abcdefghijklmnopqrstuv/child",
   );
+  expect(
+    screen.getByText("Ticket summary is available only to connected readers."),
+  ).toBeInTheDocument();
   expect(requests).toHaveLength(1);
   expect(requests[0].url).toContain("/api/public/pages/abcdefghijklmnopqrstuv");
   expect(requests[0].init).toMatchObject({

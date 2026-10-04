@@ -95,6 +95,7 @@ type RenderContext = {
   detailsLabel: string;
   completedTaskLabel: string;
   openTaskLabel: string;
+  ticketSummaryPrivateLabel: string;
 };
 
 function PublicAttachment({
@@ -391,6 +392,12 @@ function blocks(
             {context.collectionLabel}
           </aside>
         );
+      case "ticket_summary":
+        return (
+          <aside key={key} className="public-page-private">
+            {context.ticketSummaryPrivateLabel}
+          </aside>
+        );
       case "p":
       case "paragraph":
       case undefined:
@@ -509,6 +516,9 @@ export function PublicPage({
                 detailsLabel: t("Details"),
                 completedTaskLabel: t("Completed task"),
                 openTaskLabel: t("Open task"),
+                ticketSummaryPrivateLabel: t(
+                  "Ticket summary private placeholder",
+                ),
               })}
             </div>
           ) : (

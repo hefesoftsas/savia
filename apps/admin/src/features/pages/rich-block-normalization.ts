@@ -37,6 +37,7 @@ const BODY_BLOCKS = new Set([
   "issue",
   "collection",
   "attachment",
+  "ticket_summary",
   "a",
   "link",
 ]);

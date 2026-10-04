@@ -36,3 +36,16 @@ it("skips non-editable cards and gives an edge code block an exit paragraph", ()
     expect(code.children[direction < 0 ? 0 : 1].type).toBe("p");
   }
 });
+
+it("skips private ticket summary blocks while crossing block edges", () => {
+  const editor = createSlateEditor({
+    value: [
+      p("first"),
+      { type: "ticket_summary", children: [{ text: "" }] },
+      p("last"),
+    ],
+  });
+  editor.tf.select({ path: [0, 0], offset: 5 });
+  expect(navigateBlockEdge(editor, 1)).toBe(true);
+  expect(editor.selection?.focus.path).toEqual([2, 0]);
+});

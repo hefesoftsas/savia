@@ -14,6 +14,9 @@ import {
   PlateElement,
   createPlatePlugin,
   usePlateEditor,
+  useEditorRef,
+  usePath,
+  useReadOnly,
   type PlateElementProps,
 } from "platejs/react";
 import { type Value } from "platejs";
@@ -38,6 +41,8 @@ import { editorMessages } from "./editor-messages";
 import { parseIssueLink } from "@savia/studio-shared/issue-links";
 import { IssueCard } from "./issue-card";
 import { CollectionBlock, type CollectionReference } from "./collection-block";
+import { TicketSummaryBlock } from "./ticket-summary-block";
+import type { TicketSummaryConfig } from "@savia/studio-shared/ticket-summary";
 import { richBlockPlugins, richBlockTemplate } from "./rich-blocks";
 import { RichBlockNormalizationPlugin } from "./rich-block-normalization";
 import { PagesClient } from "./client";
@@ -161,6 +166,36 @@ function CollectionElement(props: PlateElementProps) {
     </PlateElement>
   );
 }
+function TicketSummaryElement(props: PlateElementProps) {
+  const { api, issueProviders } = useEditorContext();
+  const editor = useEditorRef();
+  const path = usePath();
+  const readOnly = useReadOnly();
+  const config = (props.element.ticketSummaryConfig ??
+    {}) as TicketSummaryConfig;
+  return (
+    <PlateElement {...props}>
+      <div contentEditable={false}>
+        <TicketSummaryBlock
+          api={api}
+          config={config}
+          connected={issueProviders.includes("jira")}
+          readOnly={readOnly}
+          onConfigChange={(nextConfig) => {
+            if (Object.keys(nextConfig).length === 0)
+              editor.tf.unsetNodes(["ticketSummaryConfig"], { at: path });
+            else
+              editor.tf.setNodes(
+                { ticketSummaryConfig: nextConfig },
+                { at: path },
+              );
+          }}
+        />
+      </div>
+      {props.children}
+    </PlateElement>
+  );
+}
 function AttachmentElement(props: PlateElementProps) {
   const { pages, pageId } = useEditorContext(),
     t = useMessages(pagesMessages);
@@ -246,6 +281,10 @@ const plugins = [
   createPlatePlugin({
     key: "collection",
     node: { isElement: true, isVoid: true, component: CollectionElement },
+  }),
+  createPlatePlugin({
+    key: "ticket_summary",
+    node: { isElement: true, isVoid: true, component: TicketSummaryElement },
   }),
   createPlatePlugin({
     key: "attachment",
@@ -637,6 +676,17 @@ export const PageEditor = memo(function PageEditor({
       icon: Table2,
       action: () => openSlashInsert("collection"),
     },
+    ...(issueProviders.includes("jira")
+      ? [
+          {
+            id: "ticket_summary",
+            label: te("My tickets"),
+            icon: Table2,
+            action: () => applySlashBlock("ticket_summary"),
+            aliases: ["mis-tickets", "my-tickets", "tickets", "resumen jira"],
+          },
+        ]
+      : []),
     {
       id: "attachment",
       label: t("Attachment"),
@@ -699,6 +749,7 @@ export const PageEditor = memo(function PageEditor({
         "toggle",
         "table",
         "divider",
+        "ticket_summary",
       ].includes(type)
     ) {
       const path = selected[1];
@@ -713,7 +764,15 @@ export const PageEditor = memo(function PageEditor({
         "callout",
       ].includes(type);
       const originalText = editor.api.string(path);
-      const node = richBlockTemplate(type) as {
+      const node = (
+        type === "ticket_summary"
+          ? {
+              type: "ticket_summary",
+              ticketSummaryConfig: {} as TicketSummaryConfig,
+              children: [{ text: "" }],
+            }
+          : richBlockTemplate(type)
+      ) as {
         type: string;
         children: unknown[];
         [key: string]: unknown;

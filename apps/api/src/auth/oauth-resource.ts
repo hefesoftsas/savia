@@ -329,6 +329,8 @@ function verificationErrorCategory(exception: unknown): string {
 export function requiredOAuthScope(request: Request): string {
   const path = new URL(request.url).pathname;
   if (
+    (request.method === "POST" &&
+      path === "/v1/personal-integrations/ticket-summary") ||
     path === "/api/assistant/chat" ||
     /^\/api\/assistant\/mcp\/employees\/[^/]+\/invoke$/.test(path)
   ) {

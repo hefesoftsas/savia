@@ -11,6 +11,7 @@ import type {
   PlateNode,
 } from "@savia/studio-shared/pages";
 import { dialectFor } from "@savia/db/dialect";
+import { ticketSummaryConfigSchema } from "@savia/studio-shared/ticket-summary";
 import { parseIssueLink } from "@savia/studio-shared/issue-links";
 import type { AppActor } from "../auth/types";
 import { makePageExcerpt } from "./excerpt";
@@ -119,6 +120,7 @@ export function parsePageContent(value: unknown): PlateNode[] {
     "table_row",
     "table_cell",
     "issue",
+    "ticket_summary",
     "collection",
     "attachment",
   ]);
@@ -143,6 +145,7 @@ export function parsePageContent(value: unknown): PlateNode[] {
     "mimeType",
     "language",
     "checked",
+    "ticketSummaryConfig",
   ]);
   const isInline = (node: PlateNode): boolean =>
     typeof node.text === "string" ||
@@ -240,6 +243,47 @@ export function parsePageContent(value: unknown): PlateNode[] {
         "INVALID_CONTENT",
         "Page block type is unsupported",
       );
+    }
+    if (
+      node.ticketSummaryConfig !== undefined &&
+      node.type !== "ticket_summary"
+    )
+      throw new PagesError(
+        400,
+        "INVALID_CONTENT",
+        "Ticket configuration belongs to a ticket summary block",
+      );
+    if (node.type === "ticket_summary") {
+      const config = ticketSummaryConfigSchema.safeParse(
+        node.ticketSummaryConfig === undefined ? {} : node.ticketSummaryConfig,
+      );
+      if (
+        !config.success ||
+        Object.keys(node).some(
+          (key) =>
+            !["type", "id", "children", "ticketSummaryConfig"].includes(key),
+        ) ||
+        node.children.length !== 1 ||
+        !node.children[0] ||
+        typeof node.children[0] !== "object" ||
+        (node.children[0] as Record<string, unknown>).text !== "" ||
+        Object.keys(node.children[0]).some(
+          (key) => !["text", "id"].includes(key),
+        )
+      )
+        throw new PagesError(
+          400,
+          "INVALID_CONTENT",
+          "Ticket summaries store configuration only",
+        );
+      return {
+        type: "ticket_summary",
+        ...(node.id !== undefined ? { id: node.id } : {}),
+        ...(node.ticketSummaryConfig !== undefined
+          ? { ticketSummaryConfig: config.data }
+          : {}),
+        children: [{ text: "" }],
+      } as PlateNode;
     }
     const href = node.url ?? node.href;
     if (
