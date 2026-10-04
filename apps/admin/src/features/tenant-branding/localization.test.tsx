@@ -21,25 +21,27 @@ function Switcher() {
 }
 afterEach(cleanup);
 it("switches branding labels through ES/EN/PT without translating or losing unsaved business content", async () => {
-  const get = vi.fn().mockImplementation(async (path: string) =>
-    path === "/v1/tenants"
-      ? { data: [{ id: 1, name: "Acme Agency" }] }
-      : {
-          data: {
-            displayName: "Acme Agency",
-            loginTitle: "Welcome team",
-            loginDescription: "Your workspace",
-            primaryColor: "#125633",
-            accentColor: "#d1e8d9",
-            logoUrl: null,
-            coverUrl: null,
-            version: 1,
-          },
-          canManage: true,
-        },
-  );
+  const get = vi.fn().mockImplementation(async (path: string) => {
+    if (path === "/v1/tenants")
+      return { data: [{ id: 1, name: "Acme Agency" }] };
+    if (path.endsWith("/api-keys/members")) return { members: [] };
+    if (path.endsWith("/api-keys")) return { keys: [] };
+    return {
+      data: {
+        displayName: "Acme Agency",
+        loginTitle: "Welcome team",
+        loginDescription: "Your workspace",
+        primaryColor: "#125633",
+        accentColor: "#d1e8d9",
+        logoUrl: null,
+        coverUrl: null,
+        version: 1,
+      },
+      canManage: true,
+    };
+  });
   const services = {
-    apiClient: { get, put: vi.fn() },
+    apiClient: { get, put: vi.fn(), post: vi.fn(), delete: vi.fn() },
   } as unknown as AppServices;
   render(
     <StoreContextProvider value={memoryStore({ locale: "en" })}>
@@ -77,5 +79,5 @@ it("switches branding labels through ES/EN/PT without translating or losing unsa
   expect(
     screen.getByRole("button", { name: "Salvar alterações" }),
   ).toBeTruthy();
-  expect(get).toHaveBeenCalledTimes(2);
+  expect(get).toHaveBeenCalledTimes(4);
 });
