@@ -61,14 +61,29 @@ Availability checks the Google primary calendar or the user's Outlook calendar. 
 
 Calendar jobs create, update or cancel a corresponding event. Google events use a deterministic identifier; Outlook events use a transaction identifier and a persistent booking marker to recover an event when a creation response is lost. Revoked grants do not authorize further external writes. Rescheduling ignores only this appointment's saved event in the same connected account; other meetings still block the requested interval. External calendar providers do not participate in Savia's database transaction, so simultaneous changes made outside Savia can still conflict and require review.
 
-### Automatic video calls
+### Video calls
 
-When a professional has granted calendar access, new appointments request a
-video call if that calendar advertises support: Google Meet for Google Calendar,
+In **Bookings → Settings → Details**, choose **Video meeting provider**. The
+backward-compatible default is **Automatic (Google Meet or Teams)**. With that
+option, when a professional has granted calendar access, new appointments request
+a video call if that calendar advertises support: Google Meet for Google Calendar,
 or Teams for Outlook. Savia checks the actual calendar capabilities; connecting
 an account alone does not guarantee conferencing support. A calendar without the
-capability still receives an ordinary appointment. Zoom and Jitsi are not part of
-this booking integration.
+capability still receives an ordinary appointment. Zoom is not part of this
+booking integration.
+
+Choose **Jitsi** to give each new reservation a unique room on `meet.jit.si`.
+Savia saves the room before queuing delivery, so confirmation and reminder emails
+include the same link even without an external calendar grant. A connected
+calendar receives that link in its event details instead of creating a Meet or
+Teams call. Changes to the default apply only to new reservations; rescheduling,
+delivery retries and calendar grant failures preserve the existing room.
+
+The Jitsi join action is also available on native appointments in **My Day**.
+Cancelling hides the join action in Savia but cannot revoke a public Jitsi URL.
+This version uses the public Jitsi service, whose host authentication and service
+policies apply; it does not deploy a Jitsi server or implement JaaS tokens. See
+[Jitsi meetings](jitsi-meetings.md) for invitations from My Day.
 
 The Nango Google connection must allow calendar metadata reads in addition to
 event writes and free/busy reads. The narrowly scoped combination is
@@ -115,8 +130,8 @@ as well as commercial Teams hosts; the connection must still be configured for
 the correct cloud. Refreshing a pending link cannot overwrite a later appointment
 cancellation or reschedule.
 
-Deploy the forward migrations `0028_booking_conferences.sql` for D1 and PostgreSQL
-before the updated API. No live provider calls are required by the automated
+Deploy `0028_booking_conferences.sql` and the forward migration
+`0033_booking_jitsi_conference.sql` for D1 and PostgreSQL before the updated API. No live provider calls are required by the automated
 fixtures; live account, policy and license compatibility still needs verification
 in the target environment.
 

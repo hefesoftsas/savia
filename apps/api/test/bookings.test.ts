@@ -211,6 +211,7 @@ function countingDatabase(
 it("configures only active same-tenant Savia professionals and rejects stale settings", async () => {
   const f = await fixture(),
     other = await fixture();
+  expect(f.settings.conferenceProvider).toBe("automatic");
   const save = (body: any) =>
     f.app.request(f.base, {
       method: "PUT",
@@ -229,6 +230,73 @@ it("configures only active same-tenant Savia professionals and rejects stale set
   ).toBe(422);
   expect((await save({ ...f.settings, version: 0 })).status).toBe(409);
   expect((await f.app.request(other.base)).status).toBe(403);
+});
+
+it("keeps a selected Jitsi room without a calendar grant and through rescheduling", async () => {
+  const f = await fixture();
+  const saved = await f.app.request(f.base, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...f.settings, conferenceProvider: "jitsi" }),
+  });
+  expect(saved.status).toBe(200);
+  const created = await f.reserve();
+  expect(created.status).toBe(201);
+  const payload = (await created.json()) as any;
+  const reservation = payload.data.reservation;
+  expect(reservation.conference).toMatchObject({
+    provider: "jitsi",
+    status: "ready",
+  });
+  expect(reservation.conference.joinUrl).toMatch(
+    /^https:\/\/meet\.jit\.si\/savia-/,
+  );
+  const room = reservation.conference.joinUrl;
+  const agenda = await f.app.request(
+    `/v1/personal-integrations/bookings?from=${encodeURIComponent(new Date(Date.parse(reservation.startsAt) - 60000).toISOString())}&to=${encodeURIComponent(new Date(Date.parse(reservation.endsAt) + 60000).toISOString())}&timeZone=UTC`,
+  );
+  expect(((await agenda.json()) as any).data[0].conference.joinUrl).toBe(room);
+  const manageToken = new URL(payload.data.managementUrl).pathname
+    .split("/")
+    .at(-1)!;
+  const date = new Date(Date.parse(reservation.startsAt) + 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const slots = await f.app.request(
+    `/api/public/bookings/manage/${manageToken}/slots?date=${date}`,
+  );
+  const nextStart = ((await slots.json()) as any).data.slots.find(
+    (slot: any) => slot.startsAt !== reservation.startsAt,
+  ).startsAt;
+  const changed = await f.app.request(
+    `/api/public/bookings/manage/${manageToken}/reschedule`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        version: reservation.version,
+        startsAt: nextStart,
+      }),
+    },
+  );
+  expect(changed.status).toBe(200);
+  expect(((await changed.json()) as any).data.conference.joinUrl).toBe(room);
+  const updatedSettings = await f.app.request(f.base, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...f.settings,
+      version: 2,
+      conferenceProvider: "automatic",
+    }),
+  });
+  expect(updatedSettings.status).toBe(200);
+  const bootstrap = await f.app.request(
+    `/api/public/bookings/manage/${manageToken}`,
+  );
+  expect(
+    ((await bootstrap.json()) as any).data.reservation.conference.joinUrl,
+  ).toBe(room);
 });
 
 it("lists a professional's own confirmed agenda with interval overlap and safe fields", async () => {

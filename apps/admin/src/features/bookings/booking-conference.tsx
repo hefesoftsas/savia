@@ -2,7 +2,7 @@ import { useMessages } from "@/i18n/core";
 import { Button } from "@/components/ui/button";
 import { bookingMessages } from "./booking-messages";
 
-type ConferenceProvider = "google_meet" | "teams" | null;
+type ConferenceProvider = "google_meet" | "teams" | "jitsi" | null;
 export type BookingConferenceState = {
   provider: ConferenceProvider;
   joinUrl: string | null;
@@ -25,6 +25,10 @@ function safeHttpsUrl(
       return undefined;
     const host = url.hostname.toLowerCase();
     if (
+      (provider === "jitsi" &&
+        (host !== "meet.jit.si" ||
+          url.port !== "" ||
+          !/^\/[A-Za-z0-9_-]+$/.test(url.pathname))) ||
       (provider === "google_meet" && host !== "meet.google.com") ||
       (provider === "teams" &&
         ![
@@ -86,11 +90,13 @@ export function BookingConference({
       </p>
     );
   const label =
-    conference.provider === "google_meet"
-      ? "Join Google Meet"
-      : conference.provider === "teams"
-        ? "Join Teams"
-        : "Join video meeting";
+    conference.provider === "jitsi"
+      ? "Join Jitsi"
+      : conference.provider === "google_meet"
+        ? "Join Google Meet"
+        : conference.provider === "teams"
+          ? "Join Teams"
+          : "Join video meeting";
 
   return (
     <Button asChild variant="outline" className="w-fit">

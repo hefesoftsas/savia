@@ -33,5 +33,13 @@ export const bookingAgendaEntrySchema = z.object({
       id: z.string(),
     })
     .nullable(),
+  conference: z
+    .object({
+      provider: z.enum(["google_meet", "teams", "jitsi"]).nullable(),
+      joinUrl: z.string().url().nullable(),
+      status: z.enum(["ready", "pending", "unsupported", "failed"]),
+    })
+    .nullable()
+    .optional(),
 });
 export type BookingAgendaEntry = z.infer<typeof bookingAgendaEntrySchema>;

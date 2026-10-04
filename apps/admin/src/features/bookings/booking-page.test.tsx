@@ -920,3 +920,34 @@ it("uses the shared route loading layout while booking settings are fetched", ()
     screen.getByRole("status").querySelector('[data-slot="skeleton"]'),
   ).toBeInTheDocument();
 });
+
+it("saves Jitsi as the default conference provider", async () => {
+  const bootstrap = {
+    settings,
+    candidates: [{ principalId: "principal-1", displayName: "Ari" }],
+    canManage: true,
+    principalId: "principal-1",
+    publicUrl: null,
+    calendar: { provider: null, status: "not_connected" },
+  };
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({ data: bootstrap }),
+    put: vi.fn().mockResolvedValue({
+      data: {
+        ...bootstrap,
+        settings: { ...settings, conferenceProvider: "jitsi", version: 4 },
+      },
+    }),
+  };
+  mount(apiClient);
+  const provider = await screen.findByLabelText("Video meeting provider");
+  expect(provider).toHaveValue("automatic");
+  fireEvent.change(provider, { target: { value: "jitsi" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  await waitFor(() =>
+    expect(apiClient.put).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ conferenceProvider: "jitsi" }),
+    ),
+  );
+});

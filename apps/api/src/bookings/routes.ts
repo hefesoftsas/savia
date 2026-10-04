@@ -9,6 +9,7 @@ import {
 import { actorFromContext } from "../auth/middleware";
 import { SAVIA_READ_SCOPE } from "../auth/oauth-resource";
 import { BookingAgenda } from "./agenda";
+import { bookingConference } from "./conference";
 import { authorizeBranding } from "../tenant-branding/service";
 import {
   captchaConfiguration,
@@ -281,6 +282,9 @@ export function registerBookingRoutes(
              b.status,
              b.version,
              b.calendar_provider AS "calendarProvider",
+             b.conference_provider AS "conferenceProvider",
+             b.conference_url AS "conferenceUrl",
+             b.conference_status AS "conferenceStatus",
              b.external_id AS "externalId",
              b.calendar_connection_id AS "savedConnectionId",
              c.id AS "activeConnectionId",
@@ -333,6 +337,10 @@ export function registerBookingRoutes(
           status: "confirmed";
           version: number;
           calendarProvider: "google_calendar" | "outlook" | null;
+          conferenceProvider: "google_meet" | "teams" | "jitsi" | null;
+          conferenceUrl: string | null;
+          conferenceStatus:
+            "ready" | "pending" | "unsupported" | "failed" | null;
           externalId: string | null;
           savedConnectionId: string | null;
           activeConnectionId: string | null;
@@ -378,6 +386,16 @@ export function registerBookingRoutes(
             row.externalId
               ? { provider: row.calendarProvider, id: row.externalId }
               : null,
+          conference: bookingConference(
+            {
+              status: row.status,
+              calendar_provider: row.calendarProvider,
+              conference_provider: row.conferenceProvider,
+              conference_url: row.conferenceUrl,
+              conference_status: row.conferenceStatus,
+            },
+            "completed",
+          ),
         };
       });
       return c.json({ data });
@@ -1488,6 +1506,14 @@ export function registerBookingRoutes(
         calendar_provider: result.grant?.provider ?? null,
         calendar_connection_id: result.grant?.connection_id ?? null,
         external_id: null,
+        conference_provider:
+          state.settings.conferenceProvider === "jitsi" ? "jitsi" : null,
+        conference_url:
+          state.settings.conferenceProvider === "jitsi"
+            ? `https://meet.jit.si/savia-${crypto.randomUUID()}`
+            : null,
+        conference_status:
+          state.settings.conferenceProvider === "jitsi" ? "ready" : null,
         created_at: new Date(now()).toISOString(),
       };
       try {
