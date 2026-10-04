@@ -14,6 +14,7 @@ import {
 } from "ra-core";
 import { TenantUserCapacity } from "@/features/users/tenant-user-capacity";
 import { TenantPagesSearchSettingsPanel } from "@/features/tenant-pages-search/tenant-pages-search-settings-panel";
+import { TenantApiKeysPanel } from "@/features/tenant-api-keys/tenant-api-keys";
 import { TenantSignInLinks } from "@/features/tenant-sso/tenant-sign-in-links";
 import { useWatch } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
@@ -381,6 +382,22 @@ function TenantAuthenticationLinks() {
   return <TenantSignInLinks tenantId={Number(record.id)} />;
 }
 
+function TenantApiKeysEditor() {
+  const record = useRecordContext<TenantRecord>();
+  const { apiClient } = useAppServices();
+  if (record?.kind !== "commercial" || !record.isActive || !apiClient?.get)
+    return null;
+  return (
+    <div className="md:col-span-2">
+      <TenantApiKeysPanel
+        key={record.id}
+        api={apiClient}
+        tenantId={Number(record.id)}
+      />
+    </div>
+  );
+}
+
 function TenantEdit() {
   const translate = useTranslate();
   return (
@@ -400,6 +417,9 @@ function TenantEdit() {
         <TenantPagesSearchEditor />
         <TenantAuthenticationLinks />
       </SimpleForm>
+      <div className="max-w-2xl py-4">
+        <TenantApiKeysEditor />
+      </div>
     </Edit>
   );
 }

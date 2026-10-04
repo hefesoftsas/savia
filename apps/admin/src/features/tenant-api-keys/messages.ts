@@ -1,0 +1,72 @@
+import type { MessageCatalog } from "@/i18n/core";
+
+export const tenantApiKeyMessages = {
+  "Tenant API keys": [
+    "Claves API del tenant",
+    "Tenant API keys",
+    "Chaves API do tenant",
+  ],
+  "Manage Companion API keys for tenant members.": [
+    "Administra las claves API de Companion de los miembros del tenant.",
+    "Manage Companion API keys for tenant members.",
+    "Gerencie as chaves API do Companion dos membros do tenant.",
+  ],
+  "Could not complete the operation.": [
+    "No se pudo completar la operación.",
+    "Could not complete the operation.",
+    "Não foi possível concluir a operação.",
+  ],
+  Retry: ["Reintentar", "Retry", "Tentar novamente"],
+  Loading: ["Cargando…", "Loading…", "Carregando…"],
+  "Key name": ["Nombre de la clave", "Key name", "Nome da chave"],
+  Member: ["Miembro", "Member", "Membro"],
+  "Select a member": [
+    "Selecciona un miembro",
+    "Select a member",
+    "Selecione um membro",
+  ],
+  Expiry: ["Vencimiento", "Expiry", "Validade"],
+  days: ["días", "days", "dias"],
+  Permissions: ["Permisos", "Permissions", "Permissões"],
+  Read: ["Leer", "Read", "Leitura"],
+  Upload: ["Subir", "Upload", "Enviar"],
+  Process: ["Procesar", "Process", "Processar"],
+  Delete: ["Eliminar", "Delete", "Excluir"],
+  "Create key": ["Crear clave", "Create key", "Criar chave"],
+  "No active members are available.": [
+    "No hay miembros activos disponibles.",
+    "No active members are available.",
+    "Não há membros ativos disponíveis.",
+  ],
+  "No keys yet.": [
+    "Todavía no hay claves.",
+    "No keys yet.",
+    "Ainda não há chaves.",
+  ],
+  "New key": ["Nueva clave", "New key", "Nova chave"],
+  "Copy it into Companion. It will not be shown again.": [
+    "Cópiala en Companion. No volverá a mostrarse.",
+    "Copy it into Companion. It will not be shown again.",
+    "Copie no Companion. Ela não será exibida novamente.",
+  ],
+  Copy: ["Copiar", "Copy", "Copiar"],
+  Copied: ["Copiada", "Copied", "Copiada"],
+  "I saved the key": [
+    "Ya guardé la clave",
+    "I saved the key",
+    "Salvei a chave",
+  ],
+  Owner: ["Propietario", "Owner", "Titular"],
+  Created: ["Creada", "Created", "Criada"],
+  "Last used": ["Último uso", "Last used", "Último uso"],
+  Never: ["Nunca", "Never", "Nunca"],
+  Revoked: ["Revocada", "Revoked", "Revogada"],
+  Expired: ["Vencida", "Expired", "Expirada"],
+  Active: ["Activa", "Active", "Ativa"],
+  Revoke: ["Revocar", "Revoke", "Revogar"],
+  "Revoke key confirmation": [
+    "¿Revocar la clave de %{owner}? Las aplicaciones que la usan perderán acceso.",
+    "Revoke %{owner}’s key? Apps using it will lose access.",
+    "Revogar a chave de %{owner}? Os aplicativos que a usam perderão o acesso.",
+  ],
+} satisfies MessageCatalog;

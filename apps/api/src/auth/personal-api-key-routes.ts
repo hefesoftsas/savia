@@ -7,6 +7,9 @@ import {
   PersonalApiKeys,
   createPersonalApiKeySchema,
   personalApiKeySummarySchema,
+  createTenantApiKeySchema,
+  tenantApiKeySummarySchema,
+  tenantApiKeyMemberSchema,
 } from "./personal-api-keys";
 export function registerPersonalApiKeyRoutes(
   app: OpenAPIHono,
@@ -142,6 +145,124 @@ export function registerPersonalApiKeyRoutes(
         actorFromContext(c).principal.id,
         c.req.valid("param").id,
       );
+      return c.body(null, 204);
+    },
+  );
+  const tenantPath = "/v1/tenants/:tenantId/api-keys";
+  app.use(tenantPath, guard);
+  app.use(`${tenantPath}/*`, guard);
+  const tenantParams = z.object({
+    tenantId: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  });
+  const tenantBase = "/v1/tenants/{tenantId}/api-keys";
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: tenantBase,
+      tags: ["Tenant API keys"],
+      summary: "List personal API key metadata for a tenant",
+      request: { params: tenantParams },
+      responses: {
+        200: {
+          description: "Metadata with owners, without secrets",
+          content: {
+            "application/json": {
+              schema: z.object({ keys: z.array(tenantApiKeySummarySchema) }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) =>
+      c.json(
+        {
+          keys: await repo.listForTenant(
+            actorFromContext(c),
+            c.req.valid("param").tenantId,
+          ),
+        },
+        200,
+      ),
+  );
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: `${tenantBase}/members`,
+      tags: ["Tenant API keys"],
+      summary: "List eligible active tenant members for key creation",
+      request: { params: tenantParams },
+      responses: {
+        200: {
+          description: "Active tenant members",
+          content: {
+            "application/json": {
+              schema: z.object({ members: z.array(tenantApiKeyMemberSchema) }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) =>
+      c.json(
+        {
+          members: await repo.membersForTenant(
+            actorFromContext(c),
+            c.req.valid("param").tenantId,
+          ),
+        },
+        200,
+      ),
+  );
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: tenantBase,
+      tags: ["Tenant API keys"],
+      summary:
+        "Create a personal key for an active tenant member; reveal its secret once",
+      request: {
+        params: tenantParams,
+        body: {
+          required: true,
+          content: { "application/json": { schema: createTenantApiKeySchema } },
+        },
+      },
+      responses: {
+        201: {
+          description: "One-time credential",
+          content: {
+            "application/json": {
+              schema: z.object({
+                key: personalApiKeySummarySchema,
+                secret: z.string(),
+              }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) =>
+      c.json(
+        await repo.createForTenant(
+          actorFromContext(c),
+          c.req.valid("param").tenantId,
+          c.req.valid("json"),
+        ),
+        201,
+      ),
+  );
+  app.openapi(
+    createRoute({
+      method: "delete",
+      path: `${tenantBase}/{id}`,
+      tags: ["Tenant API keys"],
+      summary: "Revoke a personal key in this tenant",
+      request: { params: tenantParams.extend({ id: z.string().uuid() }) },
+      responses: { 204: { description: "Revoked or already absent" } },
+    }),
+    async (c) => {
+      const { tenantId, id } = c.req.valid("param");
+      await repo.revokeForTenant(actorFromContext(c), tenantId, id);
       return c.body(null, 204);
     },
   );

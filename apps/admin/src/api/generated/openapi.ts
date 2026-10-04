@@ -551,6 +551,202 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/tenants/{tenantId}/api-keys": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List personal API key metadata for a tenant */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Metadata with owners, without secrets */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              keys: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                prefix: string;
+                tenantId: number;
+                scopes: (
+                  | "recordings:read"
+                  | "recordings:upload"
+                  | "recordings:process"
+                  | "recordings:delete"
+                )[];
+                createdAt: string;
+                expiresAt: string;
+                revokedAt: string | null;
+                lastUsedAt: string | null;
+                principalId: string;
+                ownerName: string;
+                ownerEmail: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Create a personal key for an active tenant member; reveal its secret once */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            name: string;
+            scopes: (
+              | "recordings:read"
+              | "recordings:upload"
+              | "recordings:process"
+              | "recordings:delete"
+            )[];
+            /** @default 30 */
+            lifetimeDays?: 7 | 30 | 90;
+            principalId: string;
+          };
+        };
+      };
+      responses: {
+        /** @description One-time credential */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              key: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                prefix: string;
+                tenantId: number;
+                scopes: (
+                  | "recordings:read"
+                  | "recordings:upload"
+                  | "recordings:process"
+                  | "recordings:delete"
+                )[];
+                createdAt: string;
+                expiresAt: string;
+                revokedAt: string | null;
+                lastUsedAt: string | null;
+              };
+              secret: string;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/api-keys/members": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List eligible active tenant members for key creation */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Active tenant members */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              members: {
+                id: string;
+                displayName: string;
+                email: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/api-keys/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Revoke a personal key in this tenant */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Revoked or already absent */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
