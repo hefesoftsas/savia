@@ -138,7 +138,7 @@ describe("My Day video calls", () => {
     vi.mocked(client.listEvents).mockImplementation(({ provider }) =>
       Promise.resolve(provider === "outlook" ? [ready] : []),
     );
-    await user.click(screen.getByRole("button", { name: "Sync calendars" }));
+    await user.click(screen.getByRole("button", { name: "Refresh agenda" }));
 
     const join = await screen.findByRole("link", {
       name: "Join Microsoft Teams",
@@ -228,9 +228,7 @@ describe("My Day video calls", () => {
     expect(
       await screen.findByRole("link", { name: "Join Microsoft Teams" }),
     ).toBeVisible();
-    await user.click(
-      screen.getByRole("button", { name: "Planning, 10:00 AM, Outlook" }),
-    );
+    await user.click(screen.getByRole("button", { name: /Planning.*Outlook/ }));
     expect(await screen.findByRole("dialog")).toBeVisible();
     expect(
       screen

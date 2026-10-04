@@ -219,7 +219,10 @@ describe("MyDayPage", () => {
 
     act(() => window.dispatchEvent(new Event("focus")));
     expect(await screen.findByText(/updated@example.test/)).toBeVisible();
-    expect(screen.getByRole("dialog")).toHaveTextContent(/16:00|4:00/);
+    const updatedStartsAt = new Date("2026-01-03T16:00:00.000Z");
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      updatedStartsAt.toLocaleString("es-CO"),
+    );
 
     act(() => window.dispatchEvent(new Event("focus")));
     await waitFor(() =>

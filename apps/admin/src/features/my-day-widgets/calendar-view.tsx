@@ -395,8 +395,8 @@ export function CalendarView({
           variant="ghost"
           size="icon"
           className="size-11 @min-[28rem]/calendar:size-9"
-          aria-label={t("Sync calendars")}
-          title={t("Sync calendars")}
+          aria-label={t("Refresh agenda")}
+          title={t("Refresh agenda")}
           onClick={() => void agenda.refresh()}
         >
           <RefreshCw className="size-4" />
