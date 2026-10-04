@@ -246,6 +246,35 @@ describe("assistant routes", () => {
     );
   });
 
+  it("forwards the mention inference preference to the assistant service", async () => {
+    const service = createAssistantService();
+    const response = await createAssistantApp(service).request(
+      "http://api.savia.test/api/assistant/chat",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer current-user-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          inferEmployeeFromMentions: false,
+          messages: [
+            {
+              id: "message-1",
+              role: "user",
+              parts: [{ type: "text", text: "Review this source: @ventas" }],
+            },
+          ],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(service.chat).toHaveBeenCalledWith(
+      expect.objectContaining({ inferEmployeeFromMentions: false }),
+    );
+  });
+
   it("allows a read-scoped OAuth token to start an assistant chat", async () => {
     const service = createAssistantService();
     const response = await createReadScopedAssistantApp(service).request(

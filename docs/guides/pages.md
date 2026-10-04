@@ -256,6 +256,16 @@ selection instead. For selections extending beyond the viewport, the toolbar
 stays within the visible bottom edge. Block actions are hidden while the formatting toolbar is
 visible to keep the selected text unobstructed.
 
+The selection toolbar also offers **Ask AI** in editable pages. Choose a quick
+action such as summarizing, improving writing, translating, or explaining the
+selection, or enter a custom instruction. The request contains only the selected
+text and instruction; the selection is treated as source material. The configured
+default model is used unless you explicitly choose an active employee, in which
+case that employee handles the request. Results stream into a preview. Choose
+**Replace selection**, **Insert below**, or **Copy** to apply the result yourself.
+Cancel stops the request, and errors leave the document unchanged. Nothing is
+written until you choose an apply action; normal autosave then records an edit.
+
 Block actions appear in a horizontal floating toolbar above the active block.
 A continuous pointer corridor connects the block to its toolbar. A 400 ms dismissal delay allows brief pointer detours; entering the
 toolbar cancels dismissal. Keyboard focus pins the toolbar to its
