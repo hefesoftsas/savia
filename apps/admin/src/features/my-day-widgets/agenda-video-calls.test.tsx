@@ -197,9 +197,6 @@ describe("My Day video calls", () => {
     await waitFor(() =>
       expect(client.createCalendarEvent).toHaveBeenCalledTimes(1),
     );
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "The task was created in Google Calendar.",
-    );
     expect(client.createCalendarEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "google_calendar",

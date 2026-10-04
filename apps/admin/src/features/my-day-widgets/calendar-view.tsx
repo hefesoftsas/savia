@@ -621,15 +621,6 @@ export function CalendarView({
           </button>
         </p>
       ) : null}
-      {agenda.feedback && !agenda.isCalendarConnectNotice ? (
-        <p
-          className="text-sm text-muted-foreground"
-          role="status"
-          aria-live="polite"
-        >
-          {agenda.feedback}
-        </p>
-      ) : null}
       {sources.loading || agenda.loading ? (
         <div
           role="status"
