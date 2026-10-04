@@ -1,3 +1,7 @@
+import {
+  ticketSummaryConfigSchema,
+  ticketSummarySchema,
+} from "@savia/studio-shared/ticket-summary";
 import { sendPersonalMailSchema } from "@savia/studio-shared/mail-contracts";
 import {
   collaborationProviderSchema,
@@ -322,6 +326,35 @@ const issuePreviewRoute = createRoute({
     403: { description: "The connected account cannot access this issue" },
     502: { description: "Issue provider request failed" },
     503: { description: "Issue provider connection is unavailable" },
+  },
+});
+
+const ticketSummaryRoute = createRoute({
+  method: "post",
+  path: "/v1/personal-integrations/ticket-summary",
+  tags: ["Personal integrations"],
+  summary: "Summarize the caller's Jira tickets and GitHub reviews",
+  description:
+    "Reads assigned tickets through the current caller's personal connections. Results are transient and never stored in shared Pages.",
+  security: [{ oauth2: ["savia.api.read"] }],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ticketSummaryConfigSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description:
+        "Personal ticket summary, with explicit partial-result indicators",
+      content: {
+        "application/json": { schema: z.object({ data: ticketSummarySchema }) },
+      },
+    },
+    400: { description: "Invalid summary filters" },
+    403: { description: "The connected account cannot access Jira" },
+    502: { description: "Jira request failed" },
+    503: { description: "Jira provider or personal connection is unavailable" },
   },
 });
 
@@ -1130,6 +1163,31 @@ export function registerPersonalIntegrationRoutes(
         url,
       });
       return context.json({ data: preview }, 200);
+    } catch (exception) {
+      const response = personalErrorResponse(exception);
+      if (!response) throw exception;
+      return context.json(response.body, response.status);
+    }
+  });
+
+  app.openapi(ticketSummaryRoute, async (context) => {
+    const actor = actorFromContext(context);
+    context.header("Cache-Control", "no-store");
+    if (!operations || providers.jira.availability !== "enabled")
+      return context.json(
+        errorBody(
+          "PERSONAL_INTEGRATION_UNAVAILABLE",
+          "The requested personal integration is unavailable",
+        ),
+        503,
+      );
+    try {
+      const summary = await operations.summarizeTickets({
+        principalId: actor.principal.id,
+        config: context.req.valid("json"),
+        githubEnabled: providers.github.availability === "enabled",
+      });
+      return context.json({ data: summary }, 200);
     } catch (exception) {
       const response = personalErrorResponse(exception);
       if (!response) throw exception;

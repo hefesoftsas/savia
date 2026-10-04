@@ -172,6 +172,91 @@ async function seedGoogleBooking(
 }
 
 describe("personal integration providers", () => {
+  it("returns a no-store personal ticket summary through the caller's connection", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockImplementation(async (request: { path: string }) => {
+      if (request.path === "/oauth/token/accessible-resources")
+        return Response.json([
+          {
+            id: "cloud-summary",
+            url: "https://acme.atlassian.net",
+            scopes: ["read:jira-work"],
+          },
+        ]);
+      if (request.path.includes("/status"))
+        return Response.json([{ id: "1", name: "To Do" }]);
+      if (request.path.includes("/search/jql"))
+        return Response.json({ issues: [], isLast: true });
+      return Response.json({}, { status: 404 });
+    });
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections
+      (id, principal_id, provider, nango_connection_id, nango_integration_id, status, scopes, created_at, updated_at)
+      VALUES ('summary-jira', 'test-agency-member', 'jira', 'summary-nango-jira', 'jira-savia', 'connected', '["read:jira-work"]', 'now', 'now')`,
+    ).run();
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/ticket-summary",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ project: "OPS" }),
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const body = (await response.json()) as { data: { tickets: unknown[] } };
+    expect(body.data.tickets).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain("summary-nango-jira");
+    const calls = nango.proxy.mock.calls as unknown as [
+      { connection: { principalId: string }; path: string },
+    ][];
+    expect(calls.length).toBeGreaterThan(0);
+    expect(
+      calls.every(
+        ([request]) => request.connection.principalId === "test-agency-member",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects ticket summary identity overrides before contacting providers", async () => {
+    const nango = fakeNango();
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/ticket-summary",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ principalId: "another-user" }),
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(nango.proxy).not.toHaveBeenCalled();
+  });
+
+  it("does not borrow another user's Jira connection for a ticket summary", async () => {
+    const nango = fakeNango();
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO identity_principal
+      (id, issuer, subject, email, display_name, is_active, created_at, updated_at)
+      VALUES ('ticket-other-user', 'savia:better-auth', 'ticket-other-user', 'other@savia.test', 'Other user', 1, 'now', 'now')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections
+      (id, principal_id, provider, nango_connection_id, nango_integration_id, status, scopes, created_at, updated_at)
+      VALUES ('other-jira', 'ticket-other-user', 'jira', 'other-nango-jira', 'jira-savia', 'connected', '[]', 'now', 'now')`,
+    ).run();
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/ticket-summary",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      },
+    );
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(nango.proxy).not.toHaveBeenCalled();
+  });
+
   beforeAll(applyMigrations);
   beforeEach(async () => {
     await env.DB.exec(`

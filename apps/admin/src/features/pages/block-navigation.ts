@@ -1,6 +1,12 @@
 import type { SlateEditor } from "platejs";
 
-const nonTextBlocks = new Set(["issue", "collection", "attachment", "divider"]);
+const nonTextBlocks = new Set([
+  "issue",
+  "collection",
+  "attachment",
+  "ticket_summary",
+  "divider",
+]);
 
 /** Cross top-level block edges without interfering with selection or line navigation. */
 export function navigateBlockEdge(
