@@ -1,0 +1,244 @@
+import { StoreContextProvider, memoryStore } from "ra-core";
+import userEvent from "@testing-library/user-event";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { PersonalCalendarEvent } from "@/api/personal-integrations-client";
+import { AppLocaleProvider } from "@/i18n/app-locale-provider";
+import {
+  AgendaWidgetBody,
+  QuickTaskWidgetBody,
+  useMyDayAgenda,
+  type PersonalIntegrationsLike,
+} from "./agenda-widget";
+
+const range = {
+  from: "2026-10-04T00:00:00.000Z",
+  to: "2026-10-06T00:00:00.000Z",
+};
+
+function createClient(
+  events: PersonalCalendarEvent[] = [],
+  eventProvider: "google_calendar" | "outlook" = "google_calendar",
+) {
+  return {
+    listConnections: vi.fn().mockResolvedValue([
+      { status: "connected", provider: "google_calendar" },
+      { status: "connected", provider: "outlook" },
+    ]),
+    listEvents: vi.fn(({ provider }) =>
+      Promise.resolve(provider === eventProvider ? events : []),
+    ),
+    createCalendarEvent: vi.fn().mockResolvedValue({
+      id: "created-1",
+      title: "Planning",
+      startsAt: "2026-10-04T15:00:00.000Z",
+      endsAt: "2026-10-04T15:30:00.000Z",
+      webLink: null,
+      conference: {
+        provider: "teams",
+        joinUrl: "https://teams.microsoft.com/l/meetup-join/abc",
+        status: "ready",
+      },
+    }),
+    listBookingAgenda: vi.fn().mockResolvedValue([]),
+  } as unknown as PersonalIntegrationsLike;
+}
+
+function App({ client }: { client: PersonalIntegrationsLike }) {
+  const agenda = useMyDayAgenda(client, range);
+  return (
+    <>
+      <AgendaWidgetBody agenda={agenda} />
+      <QuickTaskWidgetBody agenda={agenda} personalIntegrations={client} />
+    </>
+  );
+}
+
+function renderApp(client: PersonalIntegrationsLike) {
+  return render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <AppLocaleProvider>
+        <App client={client} />
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+}
+
+afterEach(() => {
+  cleanup();
+  window.dispatchEvent(new Event("savia:session-cleared"));
+  vi.restoreAllMocks();
+});
+
+describe("My Day video calls", () => {
+  it("confirms and creates one call in the selected calendar", async () => {
+    const user = userEvent.setup();
+    const client = createClient();
+    renderApp(client);
+
+    await user.type(screen.getByLabelText("Task"), "Planning");
+    await user.click(screen.getByLabelText("Create a video call"));
+    fireEvent.change(screen.getByLabelText("Video call date"), {
+      target: { value: "2026-10-06" },
+    });
+    await user.selectOptions(
+      screen.getByLabelText("Calendar for the video call"),
+      "outlook",
+    );
+    await user.click(screen.getByRole("button", { name: "Create task" }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent(
+      "Date: Tuesday, October 6",
+    );
+    expect(screen.getByRole("dialog")).toHaveTextContent("Microsoft Teams");
+    await user.click(screen.getByRole("button", { name: "Confirm creation" }));
+
+    await waitFor(() =>
+      expect(client.createCalendarEvent).toHaveBeenCalledTimes(1),
+    );
+    expect(client.createCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "outlook",
+        videoCall: true,
+        startsAt: expect.stringMatching(/^2026-10-06T/),
+      }),
+    );
+  });
+
+  it("shows a safe ready join link and updates a pending meeting after refresh", async () => {
+    const pending: PersonalCalendarEvent = {
+      id: "meeting-1",
+      title: "Planning",
+      startsAt: "2026-10-04T15:00:00.000Z",
+      endsAt: "2026-10-04T15:30:00.000Z",
+      webLink: null,
+      conference: { provider: "teams", joinUrl: null, status: "pending" },
+    };
+    const ready = {
+      ...pending,
+      conference: {
+        provider: "teams" as const,
+        joinUrl: "https://teams.microsoft.com/l/meetup-join/abc",
+        status: "ready" as const,
+      },
+    };
+    const user = userEvent.setup();
+    const client = createClient([pending], "outlook");
+    renderApp(client);
+    expect(
+      await screen.findByText("Meeting link is being prepared."),
+    ).toBeVisible();
+
+    vi.mocked(client.listEvents).mockImplementation(({ provider }) =>
+      Promise.resolve(provider === "outlook" ? [ready] : []),
+    );
+    await user.click(screen.getByRole("button", { name: "Refresh agenda" }));
+
+    const join = await screen.findByRole("link", {
+      name: "Join Microsoft Teams",
+    });
+    expect(join).toHaveAttribute("href", ready.conference.joinUrl);
+    expect(join).toHaveAttribute("rel", "noreferrer");
+  });
+
+  it.each([
+    ["unsupported", "Video calls are not supported by this calendar account."],
+    ["failed", "The meeting link could not be created."],
+  ] as const)(
+    "shows the explicit %s conference state",
+    async (status, label) => {
+      const client = createClient(
+        [
+          {
+            id: `meeting-${status}`,
+            title: "Planning",
+            startsAt: "2026-10-04T15:00:00.000Z",
+            endsAt: "2026-10-04T15:30:00.000Z",
+            webLink: null,
+            conference: { provider: null, joinUrl: null, status },
+          },
+        ],
+        "outlook",
+      );
+      renderApp(client);
+
+      expect(await screen.findByText(label)).toBeVisible();
+      expect(
+        screen.queryByRole("link", { name: /Join/ }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it("does not expose a ready meeting link with embedded credentials", async () => {
+    const client = createClient(
+      [
+        {
+          id: "meeting-unsafe",
+          title: "Planning",
+          startsAt: "2026-10-04T15:00:00.000Z",
+          endsAt: "2026-10-04T15:30:00.000Z",
+          webLink: null,
+          conference: {
+            provider: "google_meet",
+            joinUrl: "https://user:secret@meet.google.com/abc-defg-hij",
+            status: "ready",
+          },
+        },
+      ],
+      "outlook",
+    );
+    renderApp(client);
+
+    await screen.findByText("Meeting link is unavailable.");
+    expect(
+      screen.queryByRole("link", { name: /Join/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByText("Meeting link is unavailable."),
+    ).toBeVisible();
+  });
+
+  it("keeps the safe Join action in day, week, month, and event details", async () => {
+    const meeting: PersonalCalendarEvent = {
+      id: "meeting-ready",
+      title: "Planning",
+      startsAt: "2026-10-04T15:00:00.000Z",
+      endsAt: "2026-10-04T15:30:00.000Z",
+      webLink: null,
+      conference: {
+        provider: "teams",
+        joinUrl: "https://teams.cloud.microsoft/l/meetup-join/abc",
+        status: "ready",
+      },
+    };
+    const user = userEvent.setup();
+    const client = createClient([meeting], "outlook");
+    renderApp(client);
+
+    expect(
+      await screen.findByRole("link", { name: "Join Microsoft Teams" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Week" }));
+    expect(
+      await screen.findByRole("link", { name: "Join Microsoft Teams" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Planning.*Outlook/ }));
+    expect(await screen.findByRole("dialog")).toBeVisible();
+    expect(
+      screen
+        .getByRole("dialog")
+        .querySelector('a[aria-label="Join Microsoft Teams"]'),
+    ).toHaveAttribute("href", meeting.conference!.joinUrl);
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Month" }));
+    expect(
+      await screen.findByRole("link", { name: "Join Microsoft Teams" }),
+    ).toBeVisible();
+  });
+});

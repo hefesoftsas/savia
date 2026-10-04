@@ -11,7 +11,7 @@ save automatically to the backend and support drag, keyboard, and menu ordering.
 | Kind                      | Content                                                                                                          |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `agenda`                  | Day, week and month views of assigned Savia appointments, Google Calendar, Outlook and shared iCalendar sources. |
-| `quick_task`              | Create a time block in a connected calendar.                                                                     |
+| `quick_task`              | Create a time block or a Google Meet/Teams call in a connected calendar.                                         |
 | `mail`                    | Recent inbox messages from connected Gmail and Outlook accounts, with an editable mail composer.                 |
 | `office_documents`        | Up to five recent private Savia and connected-drive documents, shown only while Office suite is enabled.         |
 | `summary`                 | Record total, counts by status, and optional amount sum.                                                         |
@@ -131,6 +131,33 @@ Exceeded limits produce errors instead of silently truncated calendars. No
 background scheduler runs after My Day closes. Quick tasks continue to create
 today's event in connected OAuth calendars, and show that date explicitly even
 when the agenda is displaying another period.
+
+### Video calls from quick tasks
+
+Enable **Video call** when creating a quick task, then choose one connected
+calendar: Google Calendar for Google Meet, or Outlook for Microsoft Teams.
+Choose the call date, time and duration; calls can be scheduled for future days.
+The confirmation identifies the date and destination. A call creates one event in that
+calendar, even when both accounts are connected. Ordinary quick tasks retain
+their existing behavior across connected calendars.
+
+Savia checks whether the selected calendar supports the meeting provider before
+requesting a call. An unsupported calendar receives an ordinary event with an
+explicit unavailable status. A ready meeting displays **Join** in the agenda;
+pending or failed provisioning is shown separately from event creation. Refresh
+the agenda to retrieve the provider's latest link without creating another event.
+Meeting links remain stored with the provider's calendar event. Savia also stores
+a conference-request marker on that event so pending or unsupported
+results survive later agenda reloads. Events with unrelated conference providers
+are not labeled as account capability failures.
+
+Google's Nango integration needs `calendar.events`, `calendar.calendars.readonly`
+and `calendar.events.freebusy` (each prefixed with
+`https://www.googleapis.com/auth/`). Outlook uses `Calendars.ReadWrite`.
+Updating Nango scopes does not upgrade existing OAuth tokens: reconnect an
+account if it lacks the newly required permissions. Teams availability depends
+on the actual calendar capability, not merely on having an Outlook connection.
+Zoom and Jitsi require separate provider setup and are not offered by this flow.
 
 Deployment requires D1 migration `0023_personal_calendars.sql`; self-hosted
 PostgreSQL uses its matching native migration and source manifest. Both use the

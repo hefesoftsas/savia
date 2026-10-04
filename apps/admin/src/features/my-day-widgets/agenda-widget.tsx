@@ -80,6 +80,8 @@ type PendingCalendarTask = {
   startsAt: string;
   endsAt: string;
   minutes: number;
+  videoCall: boolean;
+  destination?: CalendarProvider;
 };
 
 export type PersonalIntegrationsLike = {
@@ -96,6 +98,7 @@ export type PersonalIntegrationsLike = {
     title: string;
     startsAt: string;
     endsAt: string;
+    videoCall?: boolean;
   }) => Promise<PersonalCalendarEvent>;
 } & BookingAgendaClient;
 
@@ -110,6 +113,32 @@ export function isCalendarProvider(value: string): value is CalendarProvider {
 
 export function calendarProviderLabel(provider: CalendarProvider): string {
   return provider === "google_calendar" ? "Google Calendar" : "Outlook";
+}
+
+function conferenceProviderLabel(provider: "google_meet" | "teams"): string {
+  return provider === "google_meet" ? "Google Meet" : "Microsoft Teams";
+}
+
+export function safeConferenceLink(
+  provider: "google_meet" | "teams" | null,
+  value: string | null,
+): string | undefined {
+  if (!provider) return undefined;
+  const safe = secureCalendarLink(value);
+  if (!safe) return undefined;
+  const hostname = new URL(safe).hostname.toLowerCase();
+  const allowed =
+    provider === "google_meet"
+      ? hostname === "meet.google.com"
+      : [
+          "teams.microsoft.com",
+          "teams.live.com",
+          "teams.cloud.microsoft",
+          "gov.teams.microsoft.us",
+          "dod.teams.microsoft.us",
+          "teams.microsoftonline.cn",
+        ].includes(hostname);
+  return allowed ? safe : undefined;
 }
 
 type AgendaParams = Readonly<
@@ -239,6 +268,18 @@ function eventStart(day: Date, time: string): Date | undefined {
   );
 }
 
+function localDateFromInput(value: string): Date | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return undefined;
+  const [, year, month, day] = match.map(Number);
+  const parsed = new Date(year, month - 1, day);
+  return parsed.getFullYear() === year &&
+    parsed.getMonth() === month - 1 &&
+    parsed.getDate() === day
+    ? parsed
+    : undefined;
+}
+
 export function formatDay(value: Date, locale: AppLocale = "es"): string {
   return new Intl.DateTimeFormat(intlLocale(locale), {
     weekday: "long",
@@ -260,7 +301,10 @@ function formatTime(value: string | null, locale: AppLocale): string {
 function secureCalendarLink(value: string | null): string | undefined {
   if (!value) return undefined;
   try {
-    return new URL(value).protocol === "https:" ? value : undefined;
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password
+      ? value
+      : undefined;
   } catch {
     return undefined;
   }
@@ -859,6 +903,13 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
         const linkedCalendars = groupCalendarLinks(group);
         const linkedCalendar = linkedCalendars[0];
         const providers = groupProviders(group);
+        const conference = group.events.find(
+          (event) => event.conference,
+        )?.conference;
+        const joinUrl =
+          conference?.status === "ready"
+            ? safeConferenceLink(conference.provider, conference.joinUrl)
+            : undefined;
         return (
           <li
             key={group.id}
@@ -894,6 +945,36 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
                       time: formatTime(group.endsAt, locale),
                     })}
               </p>
+              {conference ? (
+                conference.status === "ready" && joinUrl ? (
+                  <a
+                    className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                    href={joinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={t("Unirse a %{provider}", {
+                      provider: conferenceProviderLabel(conference.provider!),
+                    })}
+                  >
+                    {t("Unirse a %{provider}", {
+                      provider: conferenceProviderLabel(conference.provider!),
+                    })}
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {conference.status === "pending"
+                      ? t("El enlace de la reunión se está preparando.")
+                      : conference.status === "unsupported"
+                        ? t(
+                            "Las videollamadas no son compatibles con esta cuenta de calendario.",
+                          )
+                        : conference.status === "failed"
+                          ? t("No se pudo crear el enlace de la reunión.")
+                          : t("El enlace de la reunión no está disponible.")}
+                  </p>
+                )
+              ) : null}
             </div>
             {linkedCalendars.length > 1 ? (
               <DropdownMenu>
@@ -972,6 +1053,11 @@ export function QuickTaskWidgetBody({
   const [title, setTitle] = useState("");
   const [time, setTime] = useState(nextHalfHour);
   const [duration, setDuration] = useState("30");
+  const [videoCall, setVideoCall] = useState(false);
+  const [callDate, setCallDate] = useState(() => dateKey(new Date()));
+  const [selectedDestination, setSelectedDestination] = useState<
+    CalendarProvider | ""
+  >("");
   const [pendingTask, setPendingTask] = useState<PendingCalendarTask | null>(
     null,
   );
@@ -983,6 +1069,9 @@ export function QuickTaskWidgetBody({
       setPendingTask(null);
       setTitle("");
       setCreating(false);
+      setVideoCall(false);
+      setCallDate(dateKey(new Date()));
+      setSelectedDestination("");
     };
     reset();
     window.addEventListener("savia:identity-changed", reset);
@@ -995,11 +1084,15 @@ export function QuickTaskWidgetBody({
 
   function prepareEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const startsAt = eventStart(day, time);
+    const startsAt = eventStart(
+      videoCall ? (localDateFromInput(callDate) ?? new Date(Number.NaN)) : day,
+      time,
+    );
     const minutes = Number(duration);
     if (
       !title.trim() ||
       !startsAt ||
+      Number.isNaN(startsAt.getTime()) ||
       !Number.isInteger(minutes) ||
       minutes < 5
     ) {
@@ -1020,16 +1113,40 @@ export function QuickTaskWidgetBody({
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
       minutes,
+      videoCall,
+      ...(videoCall
+        ? {
+            destination:
+              selectedDestination &&
+              calendarProviders.includes(selectedDestination)
+                ? selectedDestination
+                : calendarProviders[0],
+          }
+        : {}),
     });
   }
 
   async function createEvent() {
     if (!pendingTask || !personalIntegrations) return;
+    if (
+      pendingTask.videoCall &&
+      (!pendingTask.destination ||
+        !calendarProviders.includes(pendingTask.destination))
+    ) {
+      setFeedback(message("El calendario seleccionado ya no está conectado."));
+      setPendingTask(null);
+      return;
+    }
     setCreating(true);
     setFeedback(null);
     try {
+      const targetProviders = pendingTask.videoCall
+        ? pendingTask.destination
+          ? [pendingTask.destination]
+          : []
+        : calendarProviders;
       const results = await Promise.all(
-        calendarProviders.map(async (provider) => {
+        targetProviders.map(async (provider) => {
           try {
             return {
               provider,
@@ -1038,6 +1155,7 @@ export function QuickTaskWidgetBody({
                 title: pendingTask.title,
                 startsAt: pendingTask.startsAt,
                 endsAt: pendingTask.endsAt,
+                ...(pendingTask.videoCall ? { videoCall: true } : {}),
               }),
             };
           } catch {
@@ -1089,7 +1207,11 @@ export function QuickTaskWidgetBody({
     <>
       <form className="space-y-4" onSubmit={prepareEvent}>
         <p className="text-xs text-muted-foreground">
-          {t("Crear para hoy:")} {formatDay(day, locale)}
+          {videoCall
+            ? t("Fecha: %{date}", {
+                date: formatDay(localDateFromInput(callDate) ?? day, locale),
+              })
+            : `${t("Crear para hoy:")} ${formatDay(day, locale)}`}
         </p>
         <div className="space-y-2">
           <Label htmlFor="my-day-task">{t("Tarea")}</Label>
@@ -1126,6 +1248,60 @@ export function QuickTaskWidgetBody({
             />
           </div>
         </div>
+        <div className="space-y-2 rounded-lg border border-border/60 p-3">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={videoCall}
+              onChange={(event) => setVideoCall(event.target.checked)}
+              aria-label={t("Crear una videollamada")}
+              className="size-4 accent-primary"
+            />
+            {t("Crear una videollamada")}
+          </label>
+          {videoCall ? (
+            <div className="space-y-2">
+              <Label htmlFor="my-day-call-date">
+                {t("Fecha de la videollamada")}
+              </Label>
+              <Input
+                id="my-day-call-date"
+                type="date"
+                value={callDate}
+                onChange={(event) => setCallDate(event.target.value)}
+                required
+              />
+              <Label htmlFor="my-day-video-calendar">
+                {t("Calendario para la videollamada")}
+              </Label>
+              <select
+                id="my-day-video-calendar"
+                aria-label={t("Calendario para la videollamada")}
+                value={
+                  selectedDestination &&
+                  calendarProviders.includes(selectedDestination)
+                    ? selectedDestination
+                    : calendarProviders[0] || ""
+                }
+                onChange={(event) =>
+                  setSelectedDestination(event.target.value as CalendarProvider)
+                }
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {calendarProviders.map((provider) => (
+                  <option key={provider} value={provider}>
+                    {calendarProviderLabel(provider)} —{" "}
+                    {t(
+                      provider === "google_calendar"
+                        ? "Google Meet"
+                        : "Microsoft Teams",
+                    )}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+        </div>
         <Button
           className="w-full"
           type="submit"
@@ -1157,9 +1333,30 @@ export function QuickTaskWidgetBody({
                   start: formatTime(pendingTask?.startsAt ?? null, locale),
                   end: formatTime(pendingTask?.endsAt ?? null, locale),
                   minutes: pendingTask?.minutes ?? 0,
-                  providers: list(calendarProviders),
+                  providers:
+                    pendingTask?.videoCall && pendingTask.destination
+                      ? list([pendingTask.destination])
+                      : list(calendarProviders),
                 },
               )}
+              {pendingTask?.videoCall && pendingTask.destination ? (
+                <span className="mt-1 block">
+                  {t("Fecha: %{date}", {
+                    date: formatDay(new Date(pendingTask.startsAt), locale),
+                  })}{" "}
+                  {t(
+                    "Crearás esta videollamada en %{calendar} con %{provider}.",
+                    {
+                      calendar: calendarProviderLabel(pendingTask.destination),
+                      provider: t(
+                        pendingTask.destination === "google_calendar"
+                          ? "Google Meet"
+                          : "Microsoft Teams",
+                      ),
+                    },
+                  )}
+                </span>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
