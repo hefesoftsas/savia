@@ -64,6 +64,8 @@ const configuredProviders = createPersonalIntegrationProviderRegistry({
   linearIntegrationId: "linear-savia",
   githubIntegrationId: "github-savia",
   zoomIntegrationId: "zoom-savia",
+  slackIntegrationId: "slack-savia",
+  microsoftTeamsIntegrationId: "teams-savia",
 });
 const payloadCipher = new PersonalActionPayloadCipher("test-mcp-shared-secret");
 
@@ -175,6 +177,7 @@ describe("personal integration providers", () => {
     await env.DB.exec(`
       DELETE FROM jira_privacy_connections;
       DELETE FROM jira_privacy_accounts;
+      DELETE FROM zoom_personal_meetings;
       DELETE FROM personal_integration_audit_events;
       DELETE FROM personal_integration_connections;
       DELETE FROM identity_principal WHERE id = 'test-agency-member';
@@ -182,7 +185,7 @@ describe("personal integration providers", () => {
     await seedPrincipal();
   });
 
-  it("lists all ten personal providers for an authenticated user", async () => {
+  it("lists all twelve personal providers for an authenticated user", async () => {
     const app = createApp(
       env.DB,
       undefined,
@@ -241,6 +244,8 @@ describe("personal integration providers", () => {
             ],
           }),
         }),
+        expect.objectContaining({ id: "slack" }),
+        expect.objectContaining({ id: "microsoft_teams" }),
       ]),
     });
   });
@@ -256,6 +261,8 @@ describe("personal integration providers", () => {
     ["linear", "linear-savia"],
     ["github", "github-savia"],
     ["zoom", "zoom-savia"],
+    ["slack", "slack-savia"],
+    ["microsoft_teams", "teams-savia"],
   ] as const)(
     "creates a scoped Nango session for %s",
     async (provider, integrationId) => {

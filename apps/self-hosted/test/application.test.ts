@@ -139,6 +139,8 @@ async function applicationScenario(postgresUrl?: string, qdrantUrl?: string) {
   try {
     app = await createApplication(config, {
       NANGO_GITHUB_INTEGRATION_ID: "github-test",
+      NANGO_SLACK_INTEGRATION_ID: "slack-test",
+      NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: "teams-test",
       NANGO_BASE_URL: "https://nango.test",
       NANGO_API_KEY: "fixture-key",
       NANGO_SALESFORCE_INTEGRATION_ID: "salesforce-test",
@@ -195,6 +197,14 @@ async function applicationScenario(postgresUrl?: string, qdrantUrl?: string) {
         }),
       ]),
     );
+    for (const id of ["slack", "microsoft_teams"]) {
+      expect(providers.data).toContainEqual(
+        expect.objectContaining({
+          id,
+          attributes: expect.objectContaining({ availability: "enabled" }),
+        }),
+      );
+    }
     const crmProviders = await json("/v1/crm/providers");
     for (const id of ["salesforce", "zoho", "pipedrive"]) {
       expect(crmProviders.data).toContainEqual(

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { expect, it } from "vitest";
 import { SqliteDatabase } from "../src/sqlite.js";
 
-it("keeps the PostgreSQL inventory aligned with the migrated Zoom source tables", async () => {
+it("keeps the PostgreSQL inventory aligned with migrated Zoom and collaboration tables", async () => {
   const root = resolve(import.meta.dirname, "../../..");
   const manifest = JSON.parse(
     readFileSync(resolve(root, "packages/db/postgres/manifest.json"), "utf8"),
@@ -15,6 +15,7 @@ it("keeps the PostgreSQL inventory aligned with the migrated Zoom source tables"
       "zoom_personal_meetings",
       "tenant_booking_calendar_grants",
       "tenant_bookings",
+      "personal_collaboration_messages",
     ]) {
       const table = manifest.tables.find(
         (entry: { name: string }) => entry.name === name,

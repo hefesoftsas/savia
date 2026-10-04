@@ -1,0 +1,24 @@
+{
+  "display_information": {
+    "name": "Savia",
+    "description": "Share selected Savia records with your team",
+    "background_color": "#184d47"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Savia",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "redirect_urls": ["https://nango.cloud.hefesoft.com/oauth/callback"],
+    "scopes": {
+      "bot": ["channels:read", "groups:read", "chat:write"]
+    }
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": true
+  }
+}

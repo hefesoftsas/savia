@@ -22,6 +22,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 ## Standing guides
 
 - [Jitsi meetings](guides/jitsi-meetings.md) — schedule calls from My Day and Bookings and share the same room with attendees.
+- [Slack and Teams sharing](guides/slack-teams-sharing.md) — personal Nango connections, channel selection, record sharing and OAuth setup.
 
 - [Workspace layout](guides/workspace-layout.md) — mobile and desktop assistant access.
 - [Savia Companion](companion/README.md) — desktop meeting capture validation, architecture, detailed epics and cross-platform evidence gates.

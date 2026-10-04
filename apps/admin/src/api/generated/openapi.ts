@@ -13071,7 +13071,9 @@ export interface paths {
                   | "jira"
                   | "linear"
                   | "github"
-                  | "zoom";
+                  | "zoom"
+                  | "slack"
+                  | "microsoft_teams";
                 /** @enum {string} */
                 kind: "personal-integration-provider";
                 attributes: {
@@ -13134,7 +13136,9 @@ export interface paths {
                     | "jira"
                     | "linear"
                     | "github"
-                    | "zoom";
+                    | "zoom"
+                    | "slack"
+                    | "microsoft_teams";
                   /** @enum {string} */
                   status:
                     | "pending"
@@ -13273,7 +13277,9 @@ export interface paths {
                     | "jira"
                     | "linear"
                     | "github"
-                    | "zoom";
+                    | "zoom"
+                    | "slack"
+                    | "microsoft_teams";
                   /** @enum {string} */
                   status:
                     | "pending"
@@ -13631,7 +13637,10 @@ export interface paths {
                   | "outlook"
                   | "google_calendar"
                   | "onedrive_personal"
-                  | "onedrive_business";
+                  | "onedrive_business"
+                  | "zoom"
+                  | "slack"
+                  | "microsoft_teams";
                 /** @enum {string} */
                 action: "send-email" | "create-event" | "upload-file";
               };
@@ -13817,6 +13826,204 @@ export interface paths {
           content?: never;
         };
         /** @description Connection unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/personal-integrations/collaboration/channels": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List channels in a caller-owned Slack or Teams connection */
+    get: {
+      parameters: {
+        query: {
+          provider: "slack" | "microsoft_teams";
+          cursor?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description On-demand paginated channel metadata */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                teamId?: string;
+                teamName?: string;
+              }[];
+              pagination: {
+                nextCursor: string | null;
+              };
+            };
+          };
+        };
+        /** @description Invalid collaboration cursor */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Personal connection not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The personal connection requires reconnection */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                /** @enum {string} */
+                code: "PERSONAL_INTEGRATION_RECONNECT_REQUIRED";
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Provider request failed */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider or connection unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/personal-integrations/collaboration/messages": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Share a Savia record to a caller-owned collaboration channel
+     * @description Revalidates the selected record and submits one message to the chosen Slack or Teams channel. Ambiguous sends are never retried automatically.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            provider: "slack" | "microsoft_teams";
+            channelId: string;
+            teamId?: string;
+            title: string;
+            summary: string;
+            url: string;
+            context: {
+              apiBasePath: string;
+              collection: string;
+              recordId: string;
+              fields: string[];
+            };
+            requestId: string;
+          };
+        };
+      };
+      responses: {
+        /** @description The record message was delivered or safely replayed */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                provider: "slack" | "microsoft_teams";
+                messageId: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid record link, channel, or provider input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The selected record is not accessible */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Personal connection or record not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The request may have been delivered already */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider request failed or delivery is unknown */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider or connection unavailable */
         503: {
           headers: {
             [name: string]: unknown;

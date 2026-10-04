@@ -53,6 +53,8 @@ function apiConfig({
   jiraIntegrationId,
   githubIntegrationId,
   zoomIntegrationId,
+  slackIntegrationId,
+  microsoftTeamsIntegrationId,
   publicOrigin,
 }) {
   return {
@@ -108,6 +110,12 @@ function apiConfig({
       NANGO_LINEAR_INTEGRATION_ID: "linear",
       ...(zoomIntegrationId
         ? { NANGO_ZOOM_INTEGRATION_ID: zoomIntegrationId }
+        : {}),
+      ...(slackIntegrationId
+        ? { NANGO_SLACK_INTEGRATION_ID: slackIntegrationId }
+        : {}),
+      ...(microsoftTeamsIntegrationId
+        ? { NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: microsoftTeamsIntegrationId }
         : {}),
       ...(githubIntegrationId
         ? { NANGO_GITHUB_INTEGRATION_ID: githubIntegrationId }
@@ -262,6 +270,8 @@ export async function renderProductionConfigs({
   jiraIntegrationId,
   githubIntegrationId,
   zoomIntegrationId,
+  slackIntegrationId,
+  microsoftTeamsIntegrationId,
   outputRoot,
   publicOrigin = defaultPublicOrigin,
 }) {
@@ -290,6 +300,12 @@ export async function renderProductionConfigs({
             "NANGO_ZOOM_INTEGRATION_ID",
           ),
         }
+      : {}),
+    ...(slackIntegrationId?.trim()
+      ? { slackIntegrationId: slackIntegrationId.trim() }
+      : {}),
+    ...(microsoftTeamsIntegrationId?.trim()
+      ? { microsoftTeamsIntegrationId: microsoftTeamsIntegrationId.trim() }
       : {}),
     ...(githubIntegrationId?.trim()
       ? {
@@ -384,6 +400,9 @@ async function main() {
     jiraIntegrationId: process.env.NANGO_JIRA_INTEGRATION_ID,
     githubIntegrationId: process.env.NANGO_GITHUB_INTEGRATION_ID,
     zoomIntegrationId: process.env.NANGO_ZOOM_INTEGRATION_ID,
+    slackIntegrationId: process.env.NANGO_SLACK_INTEGRATION_ID,
+    microsoftTeamsIntegrationId:
+      process.env.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID,
     outputRoot: process.env.SAVIA_DEPLOY_CONFIG_ROOT ?? process.cwd(),
     publicOrigin: process.env.SAVIA_PUBLIC_ORIGIN,
   });

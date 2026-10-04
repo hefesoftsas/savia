@@ -22,6 +22,8 @@ export type CrmSecrets = {
   NANGO_LINEAR_INTEGRATION_ID?: string;
   NANGO_GITHUB_INTEGRATION_ID?: string;
   NANGO_ZOOM_INTEGRATION_ID?: string;
+  NANGO_SLACK_INTEGRATION_ID?: string;
+  NANGO_MICROSOFT_TEAMS_INTEGRATION_ID?: string;
 };
 
 export function nangoConfigurationFromEnvironment(
@@ -49,6 +51,9 @@ export function nangoConfigurationFromEnvironment(
     linearIntegrationId: environment.NANGO_LINEAR_INTEGRATION_ID,
     githubIntegrationId: environment.NANGO_GITHUB_INTEGRATION_ID,
     zoomIntegrationId: environment.NANGO_ZOOM_INTEGRATION_ID,
+    slackIntegrationId: environment.NANGO_SLACK_INTEGRATION_ID,
+    microsoftTeamsIntegrationId:
+      environment.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID,
   };
 }
 

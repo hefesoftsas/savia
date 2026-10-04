@@ -9,6 +9,8 @@ export const personalIntegrationProviderIds = [
   "linear",
   "github",
   "zoom",
+  "slack",
+  "microsoft_teams",
 ] as const;
 
 export const personalIntegrationConnectionStatuses = [
@@ -134,7 +136,12 @@ export type PersonalIntegrationRepository = {
   markReconnectRequired(connectionId: string, now?: string): Promise<boolean>;
   appendAuditEvent(input: {
     connection: ActivePersonalIntegrationConnection;
-    eventType: "send-email" | "create-event" | "delete-event" | "upload-file";
+    eventType:
+      | "send-email"
+      | "create-event"
+      | "delete-event"
+      | "upload-file"
+      | "share-record";
     outcome: "succeeded" | "failed";
     errorCode?: string;
   }): Promise<void>;
