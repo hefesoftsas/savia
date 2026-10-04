@@ -122,24 +122,57 @@ The owner must choose which connection to retain before applying `0030`:
 No CRM row or provider credential has been deleted, disconnected, or selected
 automatically. Production preflight and deployment remain pending.
 
+## Live rollout continuation (2026-10-04)
+
+PR #162 was squash-merged as `ac8a9278` after CI and coverage passed. Preview
+was deployed successfully, including migration `0030`. The owner selected the
+latest tenant-0 HubSpot connection; the older preview row was soft-disconnected
+and audited. Duplicate preflight is now clear in preview and production. The
+older Nango credential remains because production still references it.
+
+The existing Nango prod key named **Savia production backend** was verified with
+successful Connect Session requests for all three new providers and saved as the
+GitHub `NANGO_API_KEY` environment secret in both preview and production. The
+previous runtime key belonged to an environment without the new integrations.
+Preview OAuth dialogs now open for Salesforce, Zoho CRM, and Pipedrive.
+
+The owner connected Zoho and subsequently Pipedrive in preview tenant 7. Live
+metadata and record reads exposed three application defects, addressed in the rollout follow-up:
+
+- Optional native picklists above 200 active choices aborted the entire catalog.
+  Zoho countries have 248 choices and states have 3,937; Salesforce state
+  picklists also exceed the limit. These fields remain visible as read-only text
+  without truncated choices, while supported fields remain editable. Required
+  oversized picklists still reject unsupported screen installation.
+- OAuth completion discarded Nango's granted scopes before native account
+  validation. Pipedrive therefore saved an empty scope list, making all three
+  catalog entries unavailable. Completion now passes the newly granted scopes
+  into validation, including replacement of stale grants on reconnection.
+- Pipedrive empty list responses use `success: true`, `data: null`, and terminal
+  pagination. Savia must accept that explicit empty-page envelope while rejecting
+  missing data or null data with nonterminal pagination.
+
+Read-only verification of the updated native adapters passed all nine catalog
+and record-list combinations against real Nango connections. Each sandbox list
+was empty; no records were created or modified.
+
+Production promotion remains pending until the follow-up passes CI and preview
+verification. Previously created dashboard test connections can verify native
+metadata through read-only Nango proxy requests without altering tenant bindings.
+
 ## Goal and current status
 
-The user wants working Salesforce, Zoho CRM, and Pipedrive integrations alongside
-HubSpot, including the OAuth applications on the provider platforms, Nango
-configuration, and real account verification. The user explicitly authorized
-creating those applications. This task is **not complete**: the external OAuth apps and Nango integrations are configured and their OAuth
-and token refresh flows passed as recorded above. Savia runtime IDs are now configured in production and preview. CRM code
-integration/deployment and real record verification remain pending. Nothing has been deployed
-or merged.
+The OAuth applications and Nango integrations are configured. The CRM branch is
+merged, migration preflight conflicts are resolved, and preview has the new CRM
+code and corrected Nango runtime key. Live catalog defects are being fixed before
+production promotion. Final verification must cover the connected account's
+catalog after deployment; an existing Pipedrive row saved by the earlier build
+needs reconnection to persist its granted scopes. No CRM business records have
+been written during this continuation.
 
-The original cloud session was asked to open a PR and leave this handoff. The
-local continuation was then authorized to configure the open platforms and email.
-Continue on branch `codex/multi-crm-organization-policy` in `hefesoftsas/savia`;
-the PR targets `main`: https://github.com/hefesoftsas/savia/pull/162 (draft).
-Preserve its implementation instead of starting over. The branch incorporates
-`main` through `efa2ff99`; the CRM migration was renumbered to `0030` because
-main now includes `0028_booking_conferences.sql` and
-`0029_booking_agenda_grants.sql`.
+The original continuation branch and PR #162 are historical references. Continue
+follow-up fixes from current `main`, preserving the one-CRM-per-organization policy
+and provider credentials already configured above.
 
 ## Confirmed product rule
 

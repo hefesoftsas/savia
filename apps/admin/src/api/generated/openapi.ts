@@ -11781,6 +11781,10 @@ export interface paths {
                   /** @enum {string} */
                   availability: "enabled" | "unavailable" | "coming_soon";
                   capabilities: string[];
+                  connectionBlocked?: boolean;
+                  /** @enum {string} */
+                  activeProvider?:
+                    "hubspot" | "salesforce" | "zoho" | "pipedrive";
                 };
               }[];
             };
@@ -11817,7 +11821,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List the current user’s active CRM connections */
+    /** List the current user’s active CRM connection in the selected organization */
     get: {
       parameters: {
         query?: {
@@ -11954,6 +11958,13 @@ export interface paths {
           };
           content?: never;
         };
+        /** @description The organization already has a CRM connection */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
         /** @description Provider is not available yet */
         424: {
           headers: {
@@ -12030,6 +12041,13 @@ export interface paths {
         };
         /** @description Provider or connection is not found */
         404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The organization already has a CRM connection */
+        409: {
           headers: {
             [name: string]: unknown;
           };
@@ -12133,6 +12151,13 @@ export interface paths {
         };
         /** @description Provider is unknown */
         404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The organization already has a CRM connection */
+        409: {
           headers: {
             [name: string]: unknown;
           };
@@ -13600,6 +13625,14 @@ export interface paths {
                 webLink: string | null;
                 allDay?: boolean;
                 timeZone?: string | null;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                };
               }[];
             };
           };
@@ -13647,6 +13680,7 @@ export interface paths {
             title: string;
             startsAt: string;
             endsAt: string;
+            videoCall?: boolean;
           };
         };
       };
@@ -13665,6 +13699,14 @@ export interface paths {
                 endsAt: string | null;
                 /** Format: uri */
                 webLink: string | null;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                };
               };
             };
           };

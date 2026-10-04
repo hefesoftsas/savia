@@ -71,8 +71,10 @@ capability still receives an ordinary appointment. Zoom and Jitsi are not part o
 this booking integration.
 
 The Nango Google connection must allow calendar metadata reads in addition to
-event writes and free/busy reads (for example, `calendar.readonly` plus
-`calendar.events`, or the broader `calendar` scope). Outlook uses delegated
+event writes and free/busy reads. The narrowly scoped combination is
+`https://www.googleapis.com/auth/calendar.events`,
+`https://www.googleapis.com/auth/calendar.calendars.readonly`, and
+`https://www.googleapis.com/auth/calendar.events.freebusy`. Outlook uses delegated
 `Calendars.ReadWrite` for calendar metadata and event operations. Existing
 connections with narrower scopes may need reauthorization before provisioning
 can succeed; Savia does not expand consent automatically.

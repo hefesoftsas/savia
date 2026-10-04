@@ -74,6 +74,12 @@ export type PersonalCalendarEvent = {
   webLink: string | null;
   allDay?: boolean;
   timeZone?: string;
+  conference?: PersonalCalendarConference;
+};
+export type PersonalCalendarConference = {
+  provider: "google_meet" | "teams" | null;
+  joinUrl: string | null;
+  status: "ready" | "pending" | "unsupported" | "failed";
 };
 export type PersonalCalendarProvider = "google_calendar" | "outlook";
 export type PersonalIssuePreview = {
@@ -388,6 +394,7 @@ export class PersonalIntegrationsClient {
     title: string;
     startsAt: string;
     endsAt: string;
+    videoCall?: boolean;
   }): Promise<PersonalCalendarEvent> {
     return (
       await this.api.post<{ data: PersonalCalendarEvent }>(
