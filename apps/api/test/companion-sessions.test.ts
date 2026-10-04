@@ -30,6 +30,22 @@ const clean = async (owner: string, tenantId?: number) => {
   let cursor: string | undefined;
   do {
     const result = await env.DOCUMENTS.list({ prefix, limit: 1000, cursor });
+    // Remove this fixture's queue indexes before deleting their manifests.
+    // Otherwise later scheduler tests randomly consume an orphaned candidate.
+    for (const object of result.objects) {
+      if (!object.key.endsWith("/manifest.json")) continue;
+      const stored = await env.DOCUMENTS.get(object.key);
+      const manifest = await stored?.json<{
+        id: string;
+        job: { runId: string | null };
+      }>();
+      if (manifest?.job.runId)
+        await new CompanionSessions(env.DOCUMENTS).deleteSchedule(
+          ownerAccess(owner, tenantId),
+          manifest.id,
+          manifest.job.runId,
+        );
+    }
     if (result.objects.length)
       await env.DOCUMENTS.delete(result.objects.map((object) => object.key));
     cursor = result.truncated ? result.cursor : undefined;
@@ -304,6 +320,12 @@ describe("private Companion sessions", () => {
     } finally {
       await clean(owner, 89);
     }
+    const remaining = await Promise.all(
+      (await repo.listJobCandidates()).map((key) => repo.readSchedule(key)),
+    );
+    expect(remaining.some((item) => item?.access.ownerId === owner)).toBe(
+      false,
+    );
   });
 
   it("marks an expired in-flight lease for reconciliation and stops before a cancelled call", async () => {
@@ -443,6 +465,7 @@ describe("private Companion sessions", () => {
         });
         await repo.requestProcessing(access, id, { consent: true });
       }
+      expect(await repo.listJobCandidates()).toHaveLength(2);
       expect(await engine.processBatch({ maxCandidates: 2 })).toEqual({
         scanned: 2,
         processed: 2,
