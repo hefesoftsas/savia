@@ -1,10 +1,19 @@
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { StoreContextProvider, memoryStore } from "ra-core";
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
 import { BookingConference } from "./booking-conference";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 function renderConference(
   conference: {
@@ -119,4 +128,87 @@ it.each([
 ])("hides an invalid Jitsi room %s", (joinUrl) => {
   renderConference({ provider: "jitsi", joinUrl, status: "ready" });
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
+});
+
+const meetingUrl = "https://us02web.zoom.us/j/123?pwd=abc";
+function readyConference() {
+  return renderConference({
+    provider: "zoom",
+    joinUrl: meetingUrl,
+    status: "ready",
+  });
+}
+it("copies the participant link, including its passcode, with success feedback", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  readyConference();
+  fireEvent.click(screen.getByRole("button", { name: "Copy meeting link" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("Link copied.");
+  expect(writeText).toHaveBeenCalledWith(meetingUrl);
+});
+it("shares the participant URL with the system share sheet", async () => {
+  const share = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { share });
+  readyConference();
+  fireEvent.click(screen.getByRole("button", { name: "Share meeting link" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("Link shared.");
+  expect(share).toHaveBeenCalledWith({ url: meetingUrl });
+});
+it("copies when native sharing is unavailable", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  readyConference();
+  fireEvent.click(screen.getByRole("button", { name: "Share meeting link" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("Link copied.");
+  expect(writeText).toHaveBeenCalledWith(meetingUrl);
+});
+it("keeps a selectable link when clipboard access fails", async () => {
+  vi.stubGlobal("navigator", {
+    clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+  });
+  readyConference();
+  fireEvent.click(screen.getByRole("button", { name: "Copy meeting link" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Select the link and copy it manually.",
+  );
+  expect(screen.getByRole("textbox", { name: "Meeting link" })).toHaveValue(
+    meetingUrl,
+  );
+  expect(screen.getByRole("textbox", { name: "Meeting link" })).toHaveAttribute(
+    "readonly",
+  );
+});
+it("does not report failure when the user dismisses sharing", async () => {
+  vi.stubGlobal("navigator", {
+    share: vi
+      .fn()
+      .mockRejectedValue(new DOMException("cancelled", "AbortError")),
+  });
+  readyConference();
+  fireEvent.click(screen.getByRole("button", { name: "Share meeting link" }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Share meeting link" }),
+    ).toBeEnabled(),
+  );
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+it("never exposes sharing controls for cancelled or unsafe meetings", () => {
+  renderConference(
+    { provider: "zoom", joinUrl: meetingUrl, status: "ready" },
+    "cancelled",
+  );
+  expect(
+    screen.queryByRole("button", { name: "Copy meeting link" }),
+  ).not.toBeInTheDocument();
+  cleanup();
+  renderConference({
+    provider: "zoom",
+    joinUrl: "https://zoom.us.evil.test/j/1",
+    status: "ready",
+  });
+  expect(
+    screen.queryByRole("button", { name: "Share meeting link" }),
+  ).not.toBeInTheDocument();
 });

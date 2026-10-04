@@ -504,6 +504,8 @@ function reservationFromJobs(
     version: row.version,
     deliveryStatus: state(false),
     calendarStatus: state(true),
+    calendarProvider: row.calendar_provider,
+    calendarEventIdPresent: Boolean(row.external_id),
     conference: bookingConference(row, state(true)),
   };
 }

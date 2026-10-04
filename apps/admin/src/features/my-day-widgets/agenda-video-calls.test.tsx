@@ -197,6 +197,9 @@ describe("My Day video calls", () => {
     await waitFor(() =>
       expect(client.createCalendarEvent).toHaveBeenCalledTimes(1),
     );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "The task was created in Google Calendar.",
+    );
     expect(client.createCalendarEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "google_calendar",
@@ -233,8 +236,11 @@ describe("My Day video calls", () => {
     await user.click(screen.getByRole("button", { name: "Create task" }));
     await user.click(screen.getByRole("button", { name: "Confirm creation" }));
 
-    await user.click(await screen.findByRole("button", { name: /Planning/ }));
-    await user.click(screen.getByRole("button", { name: "Delete event" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Delete event from Outlook · Planning",
+      }),
+    );
     await user.click(screen.getByRole("button", { name: "Confirm delete" }));
 
     await waitFor(() =>
@@ -314,6 +320,127 @@ describe("My Day video calls", () => {
     });
     expect(join).toHaveAttribute("href", ready.conference.joinUrl);
     expect(join).toHaveAttribute("rel", "noreferrer");
+  });
+
+  it("shows provider names as text for a grouped event", async () => {
+    const event: PersonalCalendarEvent = {
+      id: "shared-event",
+      title: "Planning",
+      startsAt: "2026-10-04T15:00:00.000Z",
+      endsAt: "2026-10-04T15:30:00.000Z",
+      webLink: null,
+    };
+    const client = createClient([event]);
+    vi.mocked(client.listEvents).mockImplementation(({ provider }) =>
+      Promise.resolve(provider === "outlook" ? [event] : [event]),
+    );
+    renderApp(client);
+
+    expect(
+      await screen.findAllByText("Scheduled in Google Calendar"),
+    ).toHaveLength(1);
+    expect(await screen.findAllByText("Scheduled in Outlook")).toHaveLength(1);
+  });
+
+  it("deletes only the selected calendar copy from a grouped event", async () => {
+    const user = userEvent.setup();
+    const event: PersonalCalendarEvent = {
+      id: "shared-event",
+      title: "Planning",
+      startsAt: "2026-10-04T15:00:00.000Z",
+      endsAt: "2026-10-04T15:30:00.000Z",
+      webLink: null,
+    };
+    const client = createClient([event]);
+    vi.mocked(client.listEvents).mockResolvedValue([event]);
+    renderApp(client);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Delete event from Google Calendar · Planning",
+      }),
+    );
+    expect(await screen.findByRole("dialog")).toHaveTextContent(
+      "Google Calendar",
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+
+    await waitFor(() =>
+      expect(client.deleteCalendarEvent).toHaveBeenCalledWith({
+        provider: "google_calendar",
+        eventId: "shared-event",
+        connectionId: "google-connection",
+      }),
+    );
+    expect(client.deleteCalendarEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a failed agenda deletion open so the user can retry", async () => {
+    const user = userEvent.setup();
+    const event: PersonalCalendarEvent = {
+      id: "retry-event",
+      title: "Planning",
+      startsAt: "2026-10-04T15:00:00.000Z",
+      endsAt: "2026-10-04T15:30:00.000Z",
+      webLink: null,
+    };
+    const client = createClient([event]);
+    vi.mocked(client.deleteCalendarEvent!)
+      .mockRejectedValueOnce(new Error("Unavailable"))
+      .mockResolvedValueOnce(undefined);
+    renderApp(client);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Delete event from Google Calendar · Planning",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not delete this event. Try again.",
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() =>
+      expect(client.deleteCalendarEvent).toHaveBeenCalledTimes(2),
+    );
+  });
+
+  it("does not offer personal-calendar deletion for a booking record", async () => {
+    const booking = {
+      id: "00000000-0000-4000-8000-000000000001",
+      tenantId: 7,
+      tenantSlug: "team",
+      tenantName: "Team",
+      serviceName: "Consultation",
+      professionalName: "Ari",
+      customerName: "Ana",
+      customerEmail: "ana@example.com",
+      startsAt: "2026-10-04T15:00:00.000Z",
+      endsAt: "2026-10-04T15:30:00.000Z",
+      timeZone: "UTC",
+      status: "confirmed" as const,
+      version: 1,
+      externalEvent: {
+        provider: "google_calendar" as const,
+        id: "booking-external",
+      },
+      conference: null,
+    };
+    const client = createClient();
+    vi.mocked(client.listBookingAgenda!).mockResolvedValue([booking]);
+    renderApp(client);
+
+    expect(
+      await screen.findByRole("button", { name: /Consultation.*Team/ }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", {
+        name: /Delete event from Google Calendar/,
+      }),
+    ).not.toBeInTheDocument();
+    expect(client.deleteCalendarEvent).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -111,7 +111,7 @@ describe("My Day calendar views", () => {
       .mockResolvedValue([]);
     render(<Harness client={client} />);
 
-    await user.click(await screen.findByRole("button", { name: /Planning/ }));
+    await user.click(await screen.findByRole("button", { name: /^Planning,/ }));
     await user.click(screen.getByRole("button", { name: "Eliminar evento" }));
     expect(client.deleteCalendarEvent).not.toHaveBeenCalled();
     await user.click(
@@ -152,7 +152,7 @@ describe("My Day calendar views", () => {
     );
     render(<Harness client={client} />);
 
-    await user.click(await screen.findByRole("button", { name: /Planning/ }));
+    await user.click(await screen.findByRole("button", { name: /^Planning,/ }));
     await user.click(screen.getByRole("button", { name: "Eliminar evento" }));
     await user.click(
       screen.getByRole("button", { name: "Confirmar eliminación" }),

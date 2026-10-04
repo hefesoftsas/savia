@@ -99,6 +99,16 @@ export const agendaMessages = {
     "Scheduled in %{providers}",
     "Agendado em %{providers}",
   ],
+  "Vinculado a %{provider}": [
+    "Vinculado a %{provider}",
+    "Linked to %{provider}",
+    "Vinculado a %{provider}",
+  ],
+  "Delete event from %{provider} · %{title}": [
+    "Eliminar evento de %{provider} · %{title}",
+    "Delete event from %{provider} · %{title}",
+    "Excluir evento de %{provider} · %{title}",
+  ],
   "Hasta %{time}": ["Hasta %{time}", "Until %{time}", "Até %{time}"],
   "Ver en calendario": [
     "Ver en calendario",

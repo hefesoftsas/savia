@@ -421,7 +421,7 @@ it("keeps professional controls to the signed-in professional and saves usable w
   expect(screen.getByText("Google Calendar connected")).toBeInTheDocument();
 });
 
-it("shows tenant-zone reservation details and reports failed delivery before cancellation", async () => {
+it("shows the saved calendar provider and asks before cancelling its event", async () => {
   const reservation = {
     id: "reservation-1",
     serviceId: "consult",
@@ -435,7 +435,8 @@ it("shows tenant-zone reservation details and reports failed delivery before can
     status: "confirmed" as const,
     version: 8,
     deliveryStatus: "failed: SMTP unavailable",
-    calendarStatus: "not_configured",
+    calendarProvider: "google_calendar",
+    calendarStatus: "failed",
   };
   const bootstrap = {
     settings,
@@ -455,6 +456,7 @@ it("shows tenant-zone reservation details and reports failed delivery before can
       data: { ...reservation, status: "cancelled", version: 9 },
     }),
   };
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
   mount(apiClient);
   await screen.findByRole("heading", { name: "Appointments" });
   fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
@@ -463,7 +465,13 @@ it("shows tenant-zone reservation details and reports failed delivery before can
   expect(screen.getByText("failed: SMTP unavailable")).toHaveClass(
     "text-destructive",
   );
+  expect(screen.getByText("Could not save to Google Calendar")).toHaveClass(
+    "text-destructive",
+  );
   fireEvent.click(screen.getByRole("button", { name: "Cancel reservation" }));
+  expect(confirm).toHaveBeenCalledWith(
+    "Cancel this reservation? It will remain in history as cancelled. Savia will request cancellation of its Google Calendar event and linked video meeting, where supported.",
+  );
   expect(await screen.findByText("Reservation cancelled.")).toBeInTheDocument();
   expect(apiClient.post).toHaveBeenCalledWith(
     "/v1/tenants/42/booking/reservations/reservation-1/cancel",
@@ -474,6 +482,141 @@ it("shows tenant-zone reservation details and reports failed delivery before can
   );
   expect(apiClient.get.mock.calls[1][0]).toContain("&to=");
 });
+
+it("does not cancel a reservation when cancellation is declined", async () => {
+  const reservation = {
+    id: "reservation-decline",
+    serviceId: "consult",
+    professionalId: "professional-1",
+    serviceName: "Consultation",
+    professionalName: "Ari",
+    startsAt: "2026-10-05T14:00:00Z",
+    endsAt: "2026-10-05T14:30:00Z",
+    customerName: "Casey Customer",
+    customerEmail: "casey@example.test",
+    status: "confirmed" as const,
+    version: 1,
+    deliveryStatus: "sent",
+    calendarProvider: "outlook",
+    calendarStatus: "pending",
+  };
+  const apiClient = {
+    get: vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: {
+          settings,
+          candidates: [],
+          canManage: true,
+          principalId: "principal-1",
+          publicUrl: null,
+          calendar: { provider: null, status: "not_connected" },
+        },
+      })
+      .mockResolvedValueOnce({ data: [reservation] }),
+    put: vi.fn(),
+    post: vi.fn(),
+  };
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  mount(apiClient);
+  await screen.findByRole("heading", { name: "Appointments" });
+  fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
+  expect(await screen.findByText("Saving to Outlook…")).toBeInTheDocument();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Cancel reservation" }),
+  );
+  expect(confirm).toHaveBeenCalledWith(
+    "Cancel this reservation? It will remain in history as cancelled. Savia will request cancellation of its Outlook event and linked video meeting, where supported.",
+  );
+  expect(apiClient.post).not.toHaveBeenCalled();
+  expect(apiClient.get).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  [
+    "google_calendar",
+    "confirmed",
+    true,
+    "completed",
+    "Saved in Google Calendar",
+  ],
+  ["outlook", "confirmed", true, "completed", "Saved in Outlook"],
+  [
+    "google_calendar",
+    "confirmed",
+    true,
+    "pending",
+    "Event saved in Google Calendar; synchronization pending",
+  ],
+  [
+    "outlook",
+    "confirmed",
+    true,
+    "failed",
+    "Event saved in Outlook; synchronization failed",
+  ],
+  [
+    "google_calendar",
+    "confirmed",
+    false,
+    "completed",
+    "No event saved to Google Calendar",
+  ],
+  ["outlook", "cancelled", true, "completed", "Cancelled in Outlook"],
+] as const)(
+  "renders %s %s reservation with event evidence %s and calendar state %s as %s",
+  async (
+    calendarProvider,
+    status,
+    calendarEventIdPresent,
+    calendarStatus,
+    expectedLabel,
+  ) => {
+    const reservation = {
+      id: "reservation-calendar-state",
+      serviceId: "consult",
+      professionalId: "professional-1",
+      serviceName: "Consultation",
+      professionalName: "Ari",
+      startsAt: "2026-10-05T14:00:00Z",
+      endsAt: "2026-10-05T14:30:00Z",
+      customerName: "Casey Customer",
+      customerEmail: "casey@example.test",
+      status,
+      version: 1,
+      deliveryStatus: "sent",
+      calendarProvider,
+      calendarEventIdPresent,
+      calendarStatus,
+    };
+    const apiClient = {
+      get: vi
+        .fn()
+        .mockResolvedValueOnce({
+          data: {
+            settings,
+            candidates: [],
+            canManage: true,
+            principalId: "principal-1",
+            publicUrl: null,
+            calendar: { provider: null, status: "not_connected" },
+          },
+        })
+        .mockResolvedValueOnce({ data: [reservation] }),
+      put: vi.fn(),
+      post: vi.fn(),
+    };
+    mount(apiClient);
+    await screen.findByRole("heading", { name: "Appointments" });
+    fireEvent.click(screen.getByRole("button", { name: "Reservations" }));
+
+    expect(await screen.findByText(expectedLabel)).toBeInTheDocument();
+    if (status === "cancelled")
+      expect(
+        screen.queryByText(/Saved in (Google Calendar|Outlook)/),
+      ).not.toBeInTheDocument();
+  },
+);
 
 it("refreshes reservation conference state for the current tenant", async () => {
   const bootstrap = {

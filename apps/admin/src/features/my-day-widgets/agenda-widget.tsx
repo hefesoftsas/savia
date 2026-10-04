@@ -6,6 +6,7 @@ import {
 } from "@/i18n/core";
 import type { AppLocale } from "@/i18n/app-locale";
 import { agendaMessages } from "./agenda-messages";
+import { MeetingLinkActions } from "@/components/meeting-link-actions";
 import {
   useCallback,
   useEffect,
@@ -939,142 +940,170 @@ function ProviderAgendaBody({ agenda }: { agenda: AgendaState }) {
   }
 
   return (
-    <ul className="divide-y rounded-xl border border-border/60 bg-card">
-      {eventGroups.map((group) => {
-        const linkedCalendars = groupCalendarLinks(group);
-        const linkedCalendar = linkedCalendars[0];
-        const providers = groupProviders(group);
-        const conference = group.events.find(
-          (event) => event.conference,
-        )?.conference;
-        const joinUrl =
-          conference?.status === "ready"
-            ? safeConferenceLink(conference.provider, conference.joinUrl)
-            : undefined;
-        return (
-          <li
-            key={group.id}
-            className="flex flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
-          >
-            <span className="min-w-20 text-sm font-semibold tabular-nums text-muted-foreground">
-              {group.events[0]?.allDay
-                ? t("Todo el día")
-                : formatTime(group.startsAt, locale)}
-            </span>
-            <div className="min-w-44 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-medium leading-5">
-                  {group.events[0]?.title?.trim() || t("Evento sin título")}
-                </p>
-                <div
-                  aria-label={t("Agendada en %{providers}", {
-                    providers: new Intl.ListFormat(intlLocale(locale)).format(
-                      providers.map(calendarProviderLabel),
-                    ),
-                  })}
-                  className="flex items-center gap-1"
-                >
-                  {providers.map((provider) => (
-                    <CalendarProviderIcon key={provider} provider={provider} />
-                  ))}
-                </div>
-              </div>
-              <p className="text-sm tabular-nums text-muted-foreground">
+    <>
+      {agenda.feedback && !agenda.isCalendarConnectNotice ? (
+        <p
+          className="text-sm text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          {agenda.feedback}
+        </p>
+      ) : null}
+      <ul className="divide-y rounded-xl border border-border/60 bg-card">
+        {eventGroups.map((group) => {
+          const linkedCalendars = groupCalendarLinks(group);
+          const linkedCalendar = linkedCalendars[0];
+          const providers = groupProviders(group);
+          const conference = group.events.find(
+            (event) => event.conference,
+          )?.conference;
+          const joinUrl =
+            conference?.status === "ready"
+              ? safeConferenceLink(conference.provider, conference.joinUrl)
+              : undefined;
+          return (
+            <li
+              key={group.id}
+              className="flex flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+            >
+              <span className="min-w-20 text-sm font-semibold tabular-nums text-muted-foreground">
                 {group.events[0]?.allDay
                   ? t("Todo el día")
-                  : t("Hasta %{time}", {
-                      time: formatTime(group.endsAt, locale),
-                    })}
-              </p>
-              {conference ? (
-                conference.status === "ready" && joinUrl ? (
-                  <a
-                    className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                    href={joinUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={t("Unirse a %{provider}", {
-                      provider: conferenceProviderLabel(conference.provider!),
-                    })}
-                  >
-                    {t("Unirse a %{provider}", {
-                      provider: conferenceProviderLabel(conference.provider!),
-                    })}
-                    <ExternalLink className="size-3.5" />
-                  </a>
-                ) : (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {conference.status === "pending"
-                      ? t("El enlace de la reunión se está preparando.")
-                      : conference.status === "unsupported"
-                        ? t(
-                            "Las videollamadas no son compatibles con esta cuenta de calendario.",
-                          )
-                        : conference.status === "failed"
-                          ? t("No se pudo crear el enlace de la reunión.")
-                          : t("El enlace de la reunión no está disponible.")}
-                  </p>
-                )
-              ) : null}
-            </div>
-            {linkedCalendars.length > 1 ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="h-auto gap-1 px-0 py-0"
-                    aria-label={t("Ver en calendario")}
-                  >
-                    {t("Ver")}
-                    <ExternalLink className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {linkedCalendars.map(({ provider, webLink }) => {
-                    const Icon = calendarProviderIcon(provider);
-                    return (
-                      <DropdownMenuItem asChild key={provider}>
-                        <a
-                          aria-label={t("Abrir en %{provider}", {
-                            provider: calendarProviderLabel(provider),
-                          })}
-                          href={webLink}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <Icon aria-hidden="true" className="size-4" />
-                          {calendarProviderLabel(provider)}
-                          <ExternalLink className="ml-auto size-3.5" />
-                        </a>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : linkedCalendar ? (
-              <a
-                aria-label={t("Ver en %{provider}", {
-                  provider: calendarProviderLabel(linkedCalendar.provider),
-                })}
-                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                href={linkedCalendar.webLink}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t("Ver")}
-                <ExternalLink className="size-3.5" />
-              </a>
-            ) : (
-              <span className="text-sm text-muted-foreground">
-                {t("Enlace no disponible")}
+                  : formatTime(group.startsAt, locale)}
               </span>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+              <div className="min-w-44 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium leading-5">
+                    {group.events[0]?.title?.trim() || t("Evento sin título")}
+                  </p>
+                  <div
+                    aria-label={t("Agendada en %{providers}", {
+                      providers: new Intl.ListFormat(intlLocale(locale)).format(
+                        providers.map(calendarProviderLabel),
+                      ),
+                    })}
+                    className="flex items-center gap-1"
+                  >
+                    {providers.map((provider) => (
+                      <CalendarProviderIcon
+                        key={provider}
+                        provider={provider}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {t("Agendada en %{providers}", {
+                      providers: new Intl.ListFormat(intlLocale(locale)).format(
+                        providers.map(calendarProviderLabel),
+                      ),
+                    })}
+                  </span>
+                </div>
+                <p className="text-sm tabular-nums text-muted-foreground">
+                  {group.events[0]?.allDay
+                    ? t("Todo el día")
+                    : t("Hasta %{time}", {
+                        time: formatTime(group.endsAt, locale),
+                      })}
+                </p>
+                {conference ? (
+                  conference.status === "ready" && joinUrl ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <a
+                        className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                        href={joinUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={t("Unirse a %{provider}", {
+                          provider: conferenceProviderLabel(
+                            conference.provider!,
+                          ),
+                        })}
+                      >
+                        {t("Unirse a %{provider}", {
+                          provider: conferenceProviderLabel(
+                            conference.provider!,
+                          ),
+                        })}
+                        <ExternalLink className="size-3.5" />
+                      </a>
+                      <MeetingLinkActions url={joinUrl} />
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {conference.status === "pending"
+                        ? t("El enlace de la reunión se está preparando.")
+                        : conference.status === "unsupported"
+                          ? t(
+                              "Las videollamadas no son compatibles con esta cuenta de calendario.",
+                            )
+                          : conference.status === "failed"
+                            ? t("No se pudo crear el enlace de la reunión.")
+                            : t("El enlace de la reunión no está disponible.")}
+                    </p>
+                  )
+                ) : null}
+              </div>
+              {linkedCalendars.length > 1 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto gap-1 px-0 py-0"
+                      aria-label={t("Ver en calendario")}
+                    >
+                      {t("Ver")}
+                      <ExternalLink className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {linkedCalendars.map(({ provider, webLink }) => {
+                      const Icon = calendarProviderIcon(provider);
+                      return (
+                        <DropdownMenuItem asChild key={provider}>
+                          <a
+                            aria-label={t("Abrir en %{provider}", {
+                              provider: calendarProviderLabel(provider),
+                            })}
+                            href={webLink}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <Icon aria-hidden="true" className="size-4" />
+                            {calendarProviderLabel(provider)}
+                            <ExternalLink className="ml-auto size-3.5" />
+                          </a>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : linkedCalendar ? (
+                <a
+                  aria-label={t("Ver en %{provider}", {
+                    provider: calendarProviderLabel(linkedCalendar.provider),
+                  })}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                  href={linkedCalendar.webLink}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t("Ver")}
+                  <ExternalLink className="size-3.5" />
+                </a>
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  {t("Enlace no disponible")}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 

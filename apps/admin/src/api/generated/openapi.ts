@@ -5951,6 +5951,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
@@ -6081,6 +6084,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
@@ -6204,6 +6210,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
@@ -7249,6 +7258,9 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  /** @enum {string|null} */
+                  calendarProvider?: "google_calendar" | "outlook" | null;
+                  calendarEventIdPresent?: boolean;
                   canGenerateConference?: boolean;
                   availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
@@ -7291,6 +7303,9 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  /** @enum {string|null} */
+                  calendarProvider?: "google_calendar" | "outlook" | null;
+                  calendarEventIdPresent?: boolean;
                   canGenerateConference?: boolean;
                   availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
@@ -7408,6 +7423,9 @@ export interface paths {
                   version: number;
                   deliveryStatus: string;
                   calendarStatus: string;
+                  /** @enum {string|null} */
+                  calendarProvider?: "google_calendar" | "outlook" | null;
+                  calendarEventIdPresent?: boolean;
                   canGenerateConference?: boolean;
                   availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
@@ -7735,6 +7753,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
@@ -7859,6 +7880,9 @@ export interface paths {
                 version: number;
                 deliveryStatus: string;
                 calendarStatus: string;
+                /** @enum {string|null} */
+                calendarProvider?: "google_calendar" | "outlook" | null;
+                calendarEventIdPresent?: boolean;
                 canGenerateConference?: boolean;
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
