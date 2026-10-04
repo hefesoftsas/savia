@@ -9,6 +9,13 @@ import type { AssistantService } from "./contracts";
 import type { AssistantConfigurationRepository } from "./configuration";
 import { VirtualEmployeesRepository } from "./virtual-employees";
 import { employeeTenantScope } from "./employee-scope";
+import { pluginAuthoringRequestSchema } from "@savia/studio-shared/plugin-authoring";
+import {
+  createPluginAuthoringService,
+  PluginAuthoringError,
+  type PluginAuthoringCollection,
+} from "./plugin-authoring";
+import { AssistantConfigurationUnavailableError } from "./configuration";
 import {
   extractTextFromFile,
   indexDocument,
@@ -93,6 +100,68 @@ export function registerAssistantRoutes(
   dependencies?: AssistantRouteDependencies,
 ): void {
   registerEmployeeMcpRoutes(app, service, dependencies);
+  app.post("/api/assistant/plugin-authoring", async (context) => {
+    if (!dependencies?.configuration) return unavailableResponse();
+    const parsed = pluginAuthoringRequestSchema.safeParse(
+      await context.req.json().catch(() => undefined),
+    );
+    if (!parsed.success) {
+      return context.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid request" } },
+        400,
+      );
+    }
+    const actor = actorFromContext(context);
+    const pluginAuthoring = createPluginAuthoringService(
+      dependencies.configuration,
+      {
+        loadCollectionMetadata: async (tenantId) => {
+          // Resolve through the same authenticated Studio route used by clients.
+          // The fixed path keeps the client from selecting another source URL.
+          const target = new URL(context.req.url);
+          target.pathname = `/v1/studio/${tenantId}/api/objects`;
+          target.search = "";
+          const headers = new Headers();
+          for (const name of ["authorization", "cookie"]) {
+            const value = context.req.header(name);
+            if (value) headers.set(name, value);
+          }
+          const response = await app.fetch(
+            new Request(target, { method: "GET", headers }),
+            context.env,
+            context.executionCtx,
+          );
+          if (!response.ok)
+            throw new Error("Authorized collection metadata lookup failed");
+          const body = (await response.json().catch(() => null)) as {
+            data?: unknown;
+          } | null;
+          if (!body || !Array.isArray(body.data))
+            throw new Error("Authorized collection metadata was invalid");
+          return summarizePluginAuthoringCollections(body.data);
+        },
+      },
+    );
+    try {
+      const result = await pluginAuthoring.generate({
+        ...parsed.data,
+        principalId: actor.principal.id,
+        isPlatformAdministrator: actor.globalRoles.includes("platform_admin"),
+        signal: context.req.raw.signal,
+      });
+      return context.json(result);
+    } catch (error) {
+      if (error instanceof PluginAuthoringError) {
+        return context.json(
+          { error: { code: error.code, message: error.message } },
+          error.status,
+        );
+      }
+      if (error instanceof AssistantConfigurationUnavailableError)
+        return unavailableResponse();
+      throw error;
+    }
+  });
   app.get("/api/assistant/threads", async (context) => {
     if (!dependencies?.db) return unavailableResponse();
     const actor = actorFromContext(context);
@@ -795,4 +864,42 @@ export function registerAssistantRoutes(
     await repo.removeFile(fileId);
     return context.json({ data: { success: true } });
   });
+}
+
+/** Keep only bounded schema labels and field names/types from the authorized route. */
+export function summarizePluginAuthoringCollections(
+  value: unknown[],
+): PluginAuthoringCollection[] {
+  const strings = (value: unknown, maximum: number) =>
+    typeof value === "string" ? value.slice(0, maximum) : "";
+  const summaries: PluginAuthoringCollection[] = [];
+  let fieldCount = 0;
+  for (const candidate of value.slice(0, 20)) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const collection = candidate as Record<string, unknown>;
+    const config = collection.config;
+    if (!config || typeof config !== "object") continue;
+    const fields = (config as Record<string, unknown>).fields;
+    if (!fields || typeof fields !== "object" || Array.isArray(fields))
+      continue;
+    const safeFields: PluginAuthoringCollection["fields"] = [];
+    for (const [name, rawField] of Object.entries(fields).slice(0, 40)) {
+      if (fieldCount >= 400) break;
+      if (!rawField || typeof rawField !== "object") continue;
+      const field = rawField as Record<string, unknown>;
+      if (typeof field.type !== "string") continue;
+      safeFields.push({
+        name: strings(name, 128),
+        label: strings(field.label, 120),
+        type: strings(field.type, 64),
+      });
+      fieldCount++;
+    }
+    summaries.push({
+      name: strings(collection.name, 128),
+      label: strings(collection.label, 160),
+      fields: safeFields,
+    });
+  }
+  return summaries;
 }

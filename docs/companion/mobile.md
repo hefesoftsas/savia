@@ -67,8 +67,18 @@ There are no automatic write or paid-provider retries. A summary failure rereads
 notes so a saved transcript remains visible. Errors expose only safe descriptors,
 not response bodies or credentials, and are translated at render time.
 
-Refresh is serialized and rotated credentials replace old credentials. Sign-out
-clears local state even if remote revocation fails, and reports that failure.
+The mobile app uses browser OAuth with `offline_access`, not a pasted personal
+API key. Short-lived access tokens are renewed using the saved refresh grant;
+access-token expiry alone must not require another interactive sign-in.
+
+Refresh and startup restoration are serialized. Rotated credentials are saved
+before account discovery, so an unavailable account endpoint does not strand the
+previous token. Network timeouts, server failures and temporary secure-storage
+errors keep the saved grant and offer an explicit retry. Only a confirmed OAuth
+`invalid_grant` response clears an expired or revoked grant. Issuer/client binding
+changes still reject the old identity, and explicit sign-out clears local state
+even if remote revocation fails, reporting that failure. Recovery does not retry
+uploads or paid processing automatically.
 Native credential storage/permission failures remain device qualification items.
 
 ## Automated and device validation

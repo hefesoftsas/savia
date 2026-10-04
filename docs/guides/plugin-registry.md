@@ -6,7 +6,7 @@ The registry stores published ZIP releases in a dedicated private R2 bucket, ind
 
 - `apps/plugin-registry` is a standalone Worker. Its `PLUGIN_REGISTRY` binding points to `savia-plugin-registry`, never to an environment document bucket.
 - Each server credential selects exactly one namespace. Clients cannot choose another namespace in a request. Separate tokens may share a namespace across environments.
-- `REGISTRY_CREDENTIALS` is a Worker secret containing an array of `{tokenSha256, namespace, permissions}`. Permissions are `read` and `publish`; use read-only tokens in Savia environments. Use cryptographically random tokens of at least 32 characters. Only hashes are stored in registry credential configuration.
+- `REGISTRY_CREDENTIALS` is a Worker secret containing an array of `{tokenSha256, namespace, permissions}`. Permissions are `read` and `publish`; use read-only tokens for catalog browsing/import. In-app publication requires a separate, explicitly configured publisher token. Use cryptographically random tokens of at least 32 characters. Only hashes are stored in registry credential configuration.
 - The complete original ZIP is stored with its digest and release metadata in one conditional R2 write. Publishing different semantic contents under an existing version fails. Repacking unchanged contents returns the original release and digest.
 - There is no public bucket endpoint, anonymous download, overwrite, or delete API. Removing a local installation does not remove its published release.
 
@@ -50,13 +50,14 @@ The Worker denies all access before valid credentials exist. Use its HTTPS origi
 
 ## Configure consumers
 
-Set the API Worker secret `PLUGIN_REGISTRY_TENANTS` to a JSON object. Map the exact **local tenant key**, which can differ between environments, to the registry origin and a read-only token:
+Set the API Worker secret `PLUGIN_REGISTRY_TENANTS` to a JSON object. Map the exact **local tenant key**, which can differ between environments, to the registry origin and a read-only token. Optionally add `publishToken` with a separate credential authorized to publish to the same namespace. Omitting it keeps in-app publication disabled; the read token is never reused for publishing:
 
 ```json
 {
   "tenant:42": {
     "url": "https://registry.example.com",
-    "token": "<preview-read-token-at-least-32-characters>"
+    "token": "<preview-read-token-at-least-32-characters>",
+    "publishToken": "<optional-separate-publisher-token-at-least-32-characters>"
   }
 }
 ```
@@ -118,3 +119,5 @@ The shared service is deployed at `https://savia-plugin-registry.jose-douglas-de
 The initial publication reused 24 retained ZIPs after comparing their contents with the repository packages (the portal's earlier version differs only by its manifest version). The current portal and quotes releases were packaged from the repository. Tenant-authored packages were not shared. All six configured reader credentials (four preview tenants and two production tenants) were verified, read-only publication was rejected, and all 26 release ZIPs were downloaded with verified digests into a protected local recovery copy. Scheduled independent backups remain an operator follow-up.
 
 The environment-specific tenant maps are stored in the API Worker secrets and GitHub environment secrets. They take effect in the UI when the consumer changes pass review and deploy through the existing preview/production gates. The central service is already active independently of that rollout.
+
+In the plugin IDE, the shared catalog destination is shown only when the server reports a configured publisher. Publication requires workspace extension administration, validates the ZIP before forwarding it, rejects redirects, and preserves immutable-version conflicts. Neither registry credential reaches the browser. A shared release still requires import and installation in each consuming workspace.

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { type Env, fail } from "./context";
+import { PLUGIN_STORE_MAX_ZIP_BYTES } from "@savia/studio-shared/plugin-store";
 import {
   parsePluginStoreZip,
   persistParsedStoreArtifact,
@@ -41,6 +42,10 @@ const importSchema = z
       ),
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
   })
+  .strict();
+
+const publishSchema = z
+  .object({ data: releaseSchema, deduped: z.boolean() })
   .strict();
 
 function registryBaseUrl(value: string): URL {
@@ -136,7 +141,13 @@ export function registerPluginRegistry(
       "*",
     );
     const config = options.pluginRegistry;
-    if (!config) return c.json({ configured: false, data: [], cursor: null });
+    if (!config)
+      return c.json({
+        configured: false,
+        canPublish: false,
+        data: [],
+        cursor: null,
+      });
     try {
       if (!config.url || !config.token || /[\r\n]/.test(config.token))
         return c.json(
@@ -162,7 +173,110 @@ export function registerPluginRegistry(
       );
       if (!parsed.success)
         return fail("El registro devolvió una respuesta no válida.", 502);
-      return c.json({ configured: true, ...parsed.data });
+      return c.json({
+        configured: true,
+        canPublish: Boolean(config.publishToken),
+        ...parsed.data,
+      });
+    } catch (error) {
+      if (error instanceof HTTPException) throw error;
+      return c.json(
+        { error: "El registro de plugins no está disponible." },
+        503,
+      );
+    }
+  });
+
+  app.post("/api/plugin-store/registry/publish", async (c) => {
+    c.header("cache-control", "private, no-store");
+    await assertRegistryAdmin(
+      options,
+      c.get("tenant"),
+      c.get("principalId"),
+      "*",
+    );
+    const config = options.pluginRegistry;
+    if (!config || !config.publishToken)
+      return c.json(
+        { error: "La publicación en el registro no está configurada." },
+        503,
+      );
+    const declaredLength = Number(c.req.header("content-length"));
+    if (
+      Number.isFinite(declaredLength) &&
+      declaredLength > PLUGIN_STORE_MAX_ZIP_BYTES + 64 * 1024
+    )
+      return fail("El ZIP supera el máximo de 6 MB.", 413);
+    const form = await c.req.formData().catch(() => null);
+    const file = form?.get("file");
+    if (!(file instanceof File))
+      return fail("Selecciona un archivo ZIP para publicar.", 400);
+    let bytes: Uint8Array;
+    try {
+      if (file.size <= 0 || file.size > PLUGIN_STORE_MAX_ZIP_BYTES)
+        return fail("El ZIP supera el máximo de 6 MB.", 413);
+      bytes = new Uint8Array(await file.arrayBuffer());
+    } catch {
+      return fail("No se pudo leer el ZIP.", 400);
+    }
+    let parsed: ParsedStoreZip;
+    try {
+      parsed = await parsePluginStoreZip(bytes);
+    } catch {
+      return fail("El ZIP no contiene un paquete válido.", 422);
+    }
+    try {
+      if (
+        !config.url ||
+        !config.publishToken ||
+        /[\r\n]/.test(config.publishToken)
+      )
+        return c.json(
+          { error: "El registro de plugins no está disponible." },
+          503,
+        );
+      const url = registryBaseUrl(config.url);
+      url.pathname = `/v1/plugins/${encodeURIComponent(parsed.manifest.id)}/${encodeURIComponent(parsed.manifest.version)}`;
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          authorization: `Bearer ${config.publishToken}`,
+          "content-type": "application/zip",
+        },
+        body: bytes as unknown as BodyInit,
+        redirect: "error",
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (response.status === 409)
+        return c.json(
+          { error: "Esta versión ya existe con contenido diferente." },
+          409,
+        );
+      if (response.status === 403)
+        return c.json(
+          { error: "El registro no autoriza la publicación." },
+          403,
+        );
+      if (response.status !== 200 && response.status !== 201)
+        return c.json(
+          { error: "No se pudo publicar la versión en el registro." },
+          502,
+        );
+      const replyBytes = await readBoundedBody(response, 32 * 1024);
+      let replyBody: unknown;
+      try {
+        replyBody = JSON.parse(new TextDecoder().decode(replyBytes));
+      } catch {
+        return fail("El registro devolvió una respuesta no válida.", 502);
+      }
+      const reply = publishSchema.safeParse(replyBody);
+      if (
+        !reply.success ||
+        reply.data.data.id !== parsed.manifest.id ||
+        reply.data.data.version !== parsed.manifest.version
+      )
+        return fail("El registro devolvió una respuesta no válida.", 502);
+      return c.json({ data: reply.data.data }, response.status);
     } catch (error) {
       if (error instanceof HTTPException) throw error;
       return c.json(

@@ -26,6 +26,43 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
+  for (final code in [
+    'invalid_grant',
+    'network_error',
+    'temporarily_unavailable',
+    'invalid_client',
+  ]) {
+    test('refresh classifies $code without leaking provider details', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            throw PlatformException(
+              code: 'token_failed',
+              message: 'private provider details',
+              details: {'error': code, 'error_description': 'secret-value'},
+            );
+          });
+      final adapter = AppAuthOAuthAdapter(
+        config: MobileConfig.preview(clientId: 'public-client-id'),
+      );
+      await expectLater(
+        adapter.refresh('refresh-token'),
+        throwsA(
+          isA<OAuthFailure>()
+              .having(
+                (error) => error.requiresSignIn,
+                'requires sign in',
+                code == 'invalid_grant',
+              )
+              .having(
+                (error) => error.toString(),
+                'safe message',
+                isNot(contains('secret-value')),
+              ),
+        ),
+      );
+    });
+  }
+
   test(
     'includes the API resource in AppAuth authorization and refresh requests',
     () async {

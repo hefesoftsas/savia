@@ -4,7 +4,9 @@ import { resolveLocalizedContent } from "@savia/studio-shared/plugin-localizatio
 import { compareSolutionVersions } from "@savia/studio-shared/solution-package";
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { ErrorBoundary } from "react-error-boundary";
+import { pluginIdeMessages } from "./plugin-ide-messages";
 import { PackageOpen, Search, ShieldCheck, Upload, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,8 @@ import {
   type StoreConnectorDeclaration,
 } from "./store-connections";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
+
+const PluginIde = lazy(() => import("./plugin-project-workspace"));
 
 type StoreManifest = {
   id: string;
@@ -123,6 +127,12 @@ export default function PluginStoreManager({
   hideBundledPlugins?: boolean;
 }) {
   const t = useMessages(automationMessages);
+  const ideT = useMessages(pluginIdeMessages);
+  const [creating, setCreating] = useState(false);
+  const [editingSource, setEditingSource] = useState<{
+    id: string;
+    version: string;
+  }>();
   const locale = useAppLocale();
   const fileRef = useRef<HTMLInputElement>(null);
   const listGeneration = useRef(0);
@@ -311,6 +321,42 @@ export default function PluginStoreManager({
     { value: "updates", label: t("Con actualización") },
   ];
 
+  if (creating)
+    return (
+      <ErrorBoundary
+        fallbackRender={({ error, resetErrorBoundary }) => (
+          <div role="alert">
+            <p>{error instanceof Error ? error.message : ideT("failed")}</p>
+            <Button
+              onClick={() => {
+                setCreating(false);
+                setEditingSource(undefined);
+                resetErrorBoundary();
+              }}
+            >
+              {ideT("back")}
+            </Button>
+          </div>
+        )}
+      >
+        <Suspense fallback={<p role="status">{ideT("compiling")}</p>}>
+          <PluginIde
+            key={getStudioRuntime().tenantId}
+            tenantId={getStudioRuntime().tenantId ?? 0}
+            source={editingSource}
+            onClose={() => {
+              setCreating(false);
+              setEditingSource(undefined);
+            }}
+            onPublished={async () => {
+              await reload();
+              await onChanged();
+            }}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    );
+
   return (
     <section aria-label={t("Mis plugins")} className="space-y-5">
       <RemoteChangesNotice {...remoteChanges} />
@@ -334,7 +380,14 @@ export default function PluginStoreManager({
               "Sube un .zip con savia-extension.json y dist/plugin.js compilado. Solo es visible en este espacio.",
             )}
           </StudioHelpTooltip>
-          <span className="ms-auto">
+          <span className="ms-auto flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCreating(true)}
+            >
+              {ideT("title")}
+            </Button>
             <input
               ref={fileRef}
               type="file"
@@ -600,6 +653,19 @@ export default function PluginStoreManager({
                   </p>
                   <div className="mt-auto pt-4">
                     <div className="flex flex-wrap gap-1.5 border-t pt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingSource({
+                            id: item.manifest.id,
+                            version: item.version,
+                          });
+                          setCreating(true);
+                        }}
+                      >
+                        {ideT("editSource")}
+                      </Button>
                       {!item.installed ? (
                         <Button
                           size="sm"

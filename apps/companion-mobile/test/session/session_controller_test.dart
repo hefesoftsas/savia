@@ -155,17 +155,155 @@ void main() {
   );
 
   test(
-    'refresh failure clears local session and requires sign in again',
+    'temporary refresh failure preserves session and retries the saved grant',
     () async {
       final oauth = FakeOAuthAdapter()..authorizeResult = expiredToken;
       final store = FakeSecureSessionStore();
       final session = controller(oauth: oauth, store: store);
       await session.signIn();
+      await session.setWorkspace(
+        const Workspace(id: 4, name: 'Operations', slug: 'ops'),
+      );
+      final generation = session.generation;
       oauth.refreshError = StateError('private provider response');
 
-      await expectLater(session.accessToken(), throwsA(isA<SessionRequired>()));
+      await expectLater(session.accessToken(), throwsA(isA<SessionFailure>()));
 
-      expect(session.session, isNull);
+      expect(session.session, isNotNull);
+      expect(session.generation, generation);
+      expect(session.selectedWorkspace?.id, 4);
+      expect(store.value?.refreshToken, 'refresh-first-secret');
+      oauth.refreshError = null;
+      expect(await session.accessToken(), 'access-second-secret');
+    },
+  );
+
+  test('offline restore preserves the grant across an app restart', () async {
+    final oauth = FakeOAuthAdapter()
+      ..refreshError = TimeoutException('offline');
+    final store = FakeSecureSessionStore()
+      ..value = StoredSession(
+        refreshToken: 'saved-grant',
+        issuer: config.issuer.toString(),
+        clientId: config.clientId,
+      );
+    final session = controller(oauth: oauth, store: store);
+    await expectLater(session.restore(), throwsA(isA<SessionFailure>()));
+    expect(store.value?.refreshToken, 'saved-grant');
+    final restarted = controller(store: store);
+    await restarted.restore();
+    expect(await restarted.accessToken(), 'access-second-secret');
+  });
+
+  test(
+    'rotation is saved before discovery so a server failure is recoverable',
+    () async {
+      final store = FakeSecureSessionStore()
+        ..value = StoredSession(
+          refreshToken: 'saved-grant',
+          issuer: config.issuer.toString(),
+          clientId: config.clientId,
+        );
+      final session = controller(
+        store: store,
+        beforeDiscovery: () async {
+          throw StateError('server unavailable');
+        },
+      );
+      await expectLater(session.restore(), throwsA(isA<SessionFailure>()));
+      expect(store.value?.refreshToken, 'refresh-rotated-secret');
+      final oauth = FakeOAuthAdapter();
+      await controller(store: store, oauth: oauth).restore();
+      expect(oauth.refreshTokens, ['refresh-rotated-secret']);
+    },
+  );
+
+  test(
+    'restore during an active refresh shares the request and keeps workspace',
+    () async {
+      final oauth = FakeOAuthAdapter()..authorizeResult = expiredToken;
+      final session = controller(oauth: oauth);
+      await session.signIn();
+      await session.setWorkspace(
+        const Workspace(id: 4, name: 'Operations', slug: 'ops'),
+      );
+      oauth.refreshCompleter = Completer<TokenSet>();
+      final refresh = session.accessToken();
+      final restore = session.restore();
+      await Future<void>.delayed(Duration.zero);
+      expect(oauth.refreshCalls, 1);
+      oauth.refreshCompleter!.complete(refreshedToken);
+      await Future.wait([refresh, restore]);
+      expect(session.selectedWorkspace?.id, 4);
+    },
+  );
+
+  test('confirmed invalid grant clears revoked credentials', () async {
+    final oauth = FakeOAuthAdapter()..authorizeResult = expiredToken;
+    final store = FakeSecureSessionStore();
+    final session = controller(oauth: oauth, store: store);
+    await session.signIn();
+    oauth.refreshError = const OAuthFailure('Revoked', requiresSignIn: true);
+    await expectLater(session.accessToken(), throwsA(isA<SessionRequired>()));
+    expect(session.session, isNull);
+    expect(session.canRestore, isFalse);
+    expect(store.value, isNull);
+  });
+
+  test('concurrent restores share one rotating refresh grant', () async {
+    final oauth = FakeOAuthAdapter()..refreshCompleter = Completer<TokenSet>();
+    final store = FakeSecureSessionStore()
+      ..value = StoredSession(
+        refreshToken: 'saved',
+        issuer: config.issuer.toString(),
+        clientId: config.clientId,
+      );
+    final session = controller(oauth: oauth, store: store);
+    final one = session.restore();
+    final two = session.restore();
+    await Future<void>.delayed(Duration.zero);
+    expect(oauth.refreshCalls, 1);
+    oauth.refreshCompleter!.complete(refreshedToken);
+    await Future.wait([one, two]);
+    expect(session.session, isNotNull);
+    expect(store.value?.refreshToken, 'refresh-rotated-secret');
+  });
+
+  test(
+    'a failed secure write retains the rotated grant for explicit recovery',
+    () async {
+      final oauth = FakeOAuthAdapter()..authorizeResult = expiredToken;
+      final store = FakeSecureSessionStore();
+      final session = controller(oauth: oauth, store: store);
+      await session.signIn();
+      store.writeError = StateError('locked storage');
+      await expectLater(session.accessToken(), throwsA(isA<SessionFailure>()));
+      expect(session.session, isNotNull);
+      expect(session.canRestore, isTrue);
+      store.writeError = null;
+      await session.accessToken();
+      expect(oauth.refreshTokens, [
+        'refresh-first-secret',
+        'refresh-rotated-secret',
+      ]);
+      expect(store.value?.refreshToken, 'refresh-rotated-secret');
+    },
+  );
+
+  test(
+    'confirmed invalid grant during restore requires new authorization',
+    () async {
+      final store = FakeSecureSessionStore()
+        ..value = StoredSession(
+          refreshToken: 'revoked',
+          issuer: config.issuer.toString(),
+          clientId: config.clientId,
+        );
+      final oauth = FakeOAuthAdapter()
+        ..refreshError = const OAuthFailure('Revoked', requiresSignIn: true);
+      final session = controller(oauth: oauth, store: store);
+      await expectLater(session.restore(), throwsA(isA<SessionRequired>()));
+      expect(session.canRestore, isFalse);
       expect(store.value, isNull);
     },
   );
@@ -281,10 +419,15 @@ const refreshed = TokenSet(
 
 class FakeSecureSessionStore implements SecureSessionStore {
   StoredSession? value;
+  Object? writeError;
   @override
   Future<StoredSession?> read() async => value;
   @override
-  Future<void> write(StoredSession session) async => value = session;
+  Future<void> write(StoredSession session) async {
+    if (writeError case final error?) throw error;
+    value = session;
+  }
+
   @override
   Future<void> clear() async => value = null;
 }
