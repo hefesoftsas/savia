@@ -54,7 +54,7 @@ in Nango and are not recorded in source. These are dashboard test connections
 with end-user ID `test_unknown`; they are not organization-bound Savia
 connections. Existing HubSpot integration and connections were preserved.
 
-Runtime settings to save in Savia:
+Runtime settings verified in Savia:
 
 ```dotenv
 NANGO_BASE_URL=https://nango.cloud.hefesoft.com
@@ -64,17 +64,36 @@ NANGO_ZOHO_INTEGRATION_ID=zoho-crm
 NANGO_PIPEDRIVE_INTEGRATION_ID=pipedrive
 ```
 
-Keep the existing Nango prod API key in runtime secret storage, or configure the
-actual prod key if missing. Coolify at `https://coolify.hefesoft.com/login` requires
-login; the user was asked to sign in directly. Runtime settings, migration
-preflight, deployment, and Savia identity/discovery/read/write verification remain
-pending. Nango's dashboard Playground only offered deployed functions and showed
+### Cloudflare runtime continuation
+
+Coolify login succeeded, but its Savia project contains only the landing and
+Shlink. The Savia API runs on Cloudflare. Signed into the existing Cloudflare
+account and verified **savia-agencies** (production) and
+**savia-agencies-preview** (preview application). Both already had the correct
+Nango base/connect URLs, encrypted `NANGO_API_KEY`, and independent HubSpot ID.
+Preserved those values and all other settings.
+
+Added the three exact CRM integration IDs above to each API Worker's Production
+runtime through **Add 3 variables and deploy**. The saved variable tables confirmed
+all three names and values in both Workers. This deployed configuration changes
+on their existing code; it did not deploy the CRM branch or apply migrations.
+The deployment config renderer uses `keep_vars: true`, retaining dashboard vars
+on subsequent Wrangler deployments unless explicitly overridden.
+
+Opened a separate Savia preview tab to preserve the user's existing booking draft.
+The authenticated CRM tab still shows Salesforce, Zoho CRM, and Pipedrive as
+**Disponible próximamente**, with disabled connect buttons. Therefore no Savia
+organization-bound OAuth connection, identity/discovery/record read, or test write
+has been verified. Nango's Playground only offered deployed functions and showed
 **No functions found** for Pipedrive; no API record calls were performed.
 
-PR #162 remains open and draft. Its remote checks at the earlier inspection
-included failures in admin unit shards 2/6 and 3/6, coverage admin-2/admin-3, and
-the coverage merge. These failures were inventoried, not diagnosed or fixed during
-external setup. No new local application tests were run for these UI changes.
+PR #162 remains open and draft. GitHub now reports `mergeStateStatus: DIRTY`
+(conflicts with current main); the latest documentation head has no check results.
+The earlier head had failures in admin unit shards 2/6 and 3/6 and related coverage.
+Resolve conflicts and CI, run migration preflight, then deploy/promote the tested
+code before verifying the new CRM flows from Savia. No application code was
+changed, merged, or deployed in this UI configuration continuation. No new local
+application tests were run; `git diff --check` passed for the handoff update.
 
 ## Goal and current status
 
@@ -82,8 +101,8 @@ The user wants working Salesforce, Zoho CRM, and Pipedrive integrations alongsid
 HubSpot, including the OAuth applications on the provider platforms, Nango
 configuration, and real account verification. The user explicitly authorized
 creating those applications. This task is **not complete**: the external OAuth apps and Nango integrations are configured and their OAuth
-and token refresh flows passed as recorded above. Savia runtime configuration,
-deployment, and real record verification remain pending. Nothing has been deployed
+and token refresh flows passed as recorded above. Savia runtime IDs are now configured in production and preview. CRM code
+integration/deployment and real record verification remain pending. Nothing has been deployed
 or merged.
 
 The original cloud session was asked to open a PR and leave this handoff. The
