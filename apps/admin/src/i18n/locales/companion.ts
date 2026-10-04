@@ -7,11 +7,6 @@ export const companionMessages = {
     "Evidence used",
     "Evidências utilizadas",
   ],
-  "This answer uses selected transcript excerpts, not the entire recording.": [
-    "Esta respuesta usa fragmentos seleccionados de la transcripción, no la grabación completa.",
-    "This answer uses selected transcript excerpts, not the entire recording.",
-    "Esta resposta usa trechos selecionados da transcrição, não a gravação inteira.",
-  ],
   "Audio unavailable": [
     "Audio no disponible",
     "Audio unavailable",
@@ -48,12 +43,6 @@ export const companionMessages = {
     "I accept that retrying may incur another charge.",
     "Aceito que tentar novamente pode gerar outra cobrança.",
   ],
-  "I agree to send audio and transcripts to OpenRouter. Processing may incur charges.":
-    [
-      "Acepto enviar audio y transcripciones a OpenRouter. El procesamiento puede generar cargos.",
-      "I agree to send audio and transcripts to OpenRouter. Processing may incur charges.",
-      "Concordo em enviar áudio e transcrições ao OpenRouter. O processamento pode gerar cobranças.",
-    ],
   "Processing stopped. Saved results are preserved. A previous provider request may have incurred charges.":
     [
       "El procesamiento se detuvo. Los resultados guardados se conservan. Una solicitud anterior al proveedor pudo generar cargos.",
@@ -118,37 +107,10 @@ export const companionMessages = {
     "Recording sessions",
     "Sessões gravadas",
   ],
-  "Ask about this recording": [
-    "Pregunta sobre esta grabación",
-    "Ask about this recording",
-    "Pergunte sobre esta gravação",
-  ],
-  "Answers use only this transcript. Verify them against the audio.": [
-    "Las respuestas usan solo esta transcripción. Verifícalas con el audio.",
-    "Answers use only this transcript. Verify them against the audio.",
-    "As respostas usam apenas esta transcrição. Confira com o áudio.",
-  ],
-  "Your question": ["Tu pregunta", "Your question", "Sua pergunta"],
-  "I agree to send this transcript and question to OpenRouter. Processing may incur charges.":
-    [
-      "Acepto enviar esta transcripción y pregunta a OpenRouter. El procesamiento puede generar cargos.",
-      "I agree to send this transcript and question to OpenRouter. Processing may incur charges.",
-      "Concordo em enviar esta transcrição e pergunta ao OpenRouter. O processamento pode gerar cobranças.",
-    ],
-  "Preparing answer…": [
-    "Preparando respuesta…",
-    "Preparing answer…",
-    "Preparando resposta…",
-  ],
-  "Ask about recording": [
-    "Preguntar sobre la grabación",
-    "Ask about recording",
-    "Perguntar sobre a gravação",
-  ],
-  "Insufficient evidence in this recording.": [
-    "No hay evidencia suficiente en esta grabación.",
-    "Insufficient evidence in this recording.",
-    "Não há evidência suficiente nesta gravação.",
+  "Loading assistant…": [
+    "Cargando el asistente…",
+    "Loading assistant…",
+    "Carregando o assistente…",
   ],
 
   "Your browser cannot play this audio. Download it or use a browser that supports Ogg Opus.":
@@ -198,12 +160,6 @@ export const companionMessages = {
     "Preparing transcript and summary…",
     "Preparando transcrição e resumo…",
   ],
-  "I have permission to send this recording through Savia to OpenRouter for transcription and a summary.":
-    [
-      "Tengo permiso para enviar esta grabación a través de Savia a OpenRouter para transcribirla y resumirla.",
-      "I have permission to send this recording through Savia to OpenRouter for transcription and a summary.",
-      "Tenho permissão para enviar esta gravação pelo Savia ao OpenRouter para transcrição e resumo.",
-    ],
   "Provider processing may incur charges. No automatic retries.": [
     "El procesamiento puede generar cargos. No hay reintentos automáticos.",
     "Provider processing may incur charges. No automatic retries.",

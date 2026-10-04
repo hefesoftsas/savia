@@ -72,17 +72,11 @@ import {
   AssistantPresentationCard,
   presentationFrom,
 } from "./assistant-response-ui";
-import {
-  createNewThread,
-  deleteStoredThread,
-  generateThreadTitle,
-  loadActiveThreadId,
-  loadStoredThreads,
-  saveActiveThreadId,
-  saveStoredThread,
-  type AssistantThreadRecord,
-  type StoredUIMessage,
-} from "./assistant-thread-storage";
+import type { StoredUIMessage } from "./assistant-thread-storage";
+import type { RecordingContext } from "./assistant-threads-client";
+import { useAssistantThreads } from "./use-assistant-threads";
+import { AssistantSyncStatus } from "./assistant-sync-status";
+import { assistantSyncMessages } from "./assistant-sync-messages";
 import { AssistantThreadList } from "./assistant-thread-list";
 import { useMessages } from "@/i18n/core";
 import { uiMessages } from "@/i18n/locales/ui";
@@ -715,6 +709,7 @@ function RuntimeStatusSync({
   const isRunning = useAuiState((s) => s.thread.isRunning);
   useEffect(() => {
     onStatusChange?.(isRunning);
+    return () => onStatusChange?.(false);
   }, [isRunning, onStatusChange]);
   return null;
 }
@@ -1073,9 +1068,11 @@ function ComposerActiveContext({
 function ComposerTextInput({
   employees = [],
   inputRef: externalInputRef,
+  placeholder,
 }: {
   employees?: VirtualEmployee[];
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  placeholder?: string;
 }) {
   const t = useMessages(uiMessages);
   const isRunning = useAuiState((s) => s.thread.isRunning);
@@ -1257,7 +1254,7 @@ function ComposerTextInput({
         placeholder={
           isRunning
             ? t("The assistant is responding…")
-            : t("Write a request or mention @employee…")
+            : (placeholder ?? t("Write a request or mention @employee…"))
         }
         aria-label={t("Message for the assistant")}
         rows={1}
@@ -1315,10 +1312,12 @@ function ComposerSection({
   employees = [],
   models = [],
   summary,
+  placeholder,
 }: {
   employees: VirtualEmployee[];
   models: AssistantModel[];
   summary: AssistantConfigurationSummary | null;
+  placeholder?: string;
 }) {
   const t = useMessages(uiMessages);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1380,6 +1379,7 @@ function ComposerSection({
           <ComposerTextInput
             employees={employees}
             inputRef={composerInputRef}
+            placeholder={placeholder}
           />
           <ComposerActionButton />
         </div>
@@ -1389,22 +1389,32 @@ function ComposerSection({
   );
 }
 
-function AssistantConversation({
+export function AssistantConversation({
   threadId,
   initialMessages,
   onSaveThread,
   onOpenHistory,
   threadTitle,
   onRunningChange,
+  recordingContext,
+  disabled = false,
 }: {
   threadId: string;
   initialMessages: StoredUIMessage[];
-  onSaveThread: (threadId: string, messages: StoredUIMessage[]) => void;
+  onSaveThread: (
+    threadId: string,
+    messages: StoredUIMessage[],
+  ) => Promise<void>;
   onOpenHistory: () => void;
   threadTitle?: string;
   onRunningChange?: (isRunning: boolean) => void;
+  recordingContext?: RecordingContext;
+  disabled?: boolean;
 }) {
   const t = useMessages(uiMessages);
+  const syncText = useMessages(assistantSyncMessages);
+  const saveRef = useRef(onSaveThread);
+  saveRef.current = onSaveThread;
   const { authSession, assistantConfiguration, virtualEmployees } =
     useAppServices();
   const [employees, setEmployees] = useState<VirtualEmployee[]>([]);
@@ -1461,6 +1471,14 @@ function AssistantConversation({
       new AssistantChatTransport({
         api: assistantApiUrl(apiUrl),
         credentials: "include",
+        body: { threadId },
+        fetch: async (input, init) => {
+          const body = JSON.parse(String(init?.body ?? "{}"));
+          if (Array.isArray(body.messages)) {
+            await saveRef.current(threadId, body.messages);
+          }
+          return fetch(input, init);
+        },
         headers: async (): Promise<Headers> => {
           const accessToken = await authSession.getAccessToken();
           const headers = new Headers();
@@ -1470,13 +1488,15 @@ function AssistantConversation({
           return headers;
         },
       }),
-    [apiUrl, authSession],
+    [apiUrl, authSession, threadId],
   );
   const runtime = useChatRuntime({
     transport,
     messages: initialMessages as any,
     onFinish: ({ messages }) => {
-      onSaveThread(threadId, messages as unknown as StoredUIMessage[]);
+      void saveRef
+        .current(threadId, messages as unknown as StoredUIMessage[])
+        .catch(() => {});
     },
   });
 
@@ -1484,86 +1504,133 @@ function AssistantConversation({
     <AssistantRuntimeProvider runtime={runtime}>
       <RuntimeStatusSync onStatusChange={onRunningChange} />
       <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
-        <ActiveTenantSelector client={assistantConfiguration} />
+        {recordingContext ? (
+          <div className="border-b px-4 py-3 text-sm">
+            <p className="text-xs text-muted-foreground">
+              {syncText("Recording context")}
+            </p>
+            <p className="mt-1 break-words font-medium">
+              {recordingContext.title}
+            </p>
+          </div>
+        ) : (
+          <ActiveTenantSelector client={assistantConfiguration} />
+        )}
         <ThreadPrimitive.Viewport
           className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5"
           autoScroll
         >
           <ThreadPrimitive.Empty>
-            <div className="my-auto flex flex-1 flex-col items-center justify-center p-4 text-center">
-              <div className="relative mb-3 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-0.5 shadow-inner">
-                <div className="flex size-full items-center justify-center rounded-[14px] border border-primary/20 bg-card">
-                  <Sparkles className="size-5 text-primary" />
-                </div>
-              </div>
-              <h3 className="text-sm font-semibold tracking-tight text-foreground sm:text-base">
-                {t("How can I help today?")}
-              </h3>
-              <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-                {t(
-                  "Browse collections, search for customers, analyze metrics, and create interactive charts from your Studio data.",
-                )}
-              </p>
-
-              {employees.length > 0 ? (
-                <div className="mt-4 w-full max-w-sm space-y-2">
-                  <p className="px-1 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                    {t("Virtual employees (@mention)")}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {employees.map((emp) => {
-                      const Icon = getEmployeeAvatarIcon(emp.avatar);
-                      return (
-                        <ThreadPrimitive.Suggestion
-                          key={emp.id}
-                          prompt={`@${emp.handle} `}
-                          send={false}
-                          asChild
-                        >
-                          <button
-                            type="button"
-                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/20 bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-all hover:border-primary/40 hover:bg-muted/60"
-                            title={emp.position ?? emp.name}
-                          >
-                            <Icon className="size-3 text-primary shrink-0" />
-                            <span>{emp.name}</span>
-                            <span className="font-mono text-[10px] font-medium text-primary">
-                              @{emp.handle}
-                            </span>
-                          </button>
-                        </ThreadPrimitive.Suggestion>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="mt-5 w-full max-w-sm space-y-2">
-                <p className="px-1 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                  {t("Suggested queries")}
+            {recordingContext ? (
+              <div className="my-auto py-8">
+                <h3 className="text-base font-medium">
+                  {syncText("Chat about these notes")}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {syncText(
+                    "Ask about decisions, tasks, or details in this recording.",
+                  )}
                 </p>
-                <div className="grid grid-cols-1 gap-2">
-                  {quickPrompts.map((item) => (
+                <div className="mt-6 flex flex-col items-start gap-2">
+                  {(
+                    [
+                      "Summarize the decisions",
+                      "What tasks are still pending?",
+                    ] as const
+                  ).map((prompt) => (
                     <ThreadPrimitive.Suggestion
-                      key={item.label}
-                      prompt={t(item.prompt as keyof typeof uiMessages)}
-                      send
+                      key={prompt}
+                      prompt={syncText(prompt)}
+                      send={false}
                       asChild
                     >
-                      <button
-                        type="button"
-                        className="group flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border/60 bg-card/60 px-3.5 py-2.5 text-left text-xs font-medium text-foreground shadow-2xs transition-all hover:border-primary/40 hover:bg-muted/50"
+                      <Button
+                        variant="outline"
+                        className="h-auto min-h-11 whitespace-normal text-left"
+                        disabled={disabled}
                       >
-                        <item.icon className="size-4 shrink-0 text-primary/70 transition-colors group-hover:text-primary" />
-                        <span className="flex-1 truncate">
-                          {t(item.label as keyof typeof uiMessages)}
-                        </span>
-                      </button>
+                        {syncText(prompt)}
+                      </Button>
                     </ThreadPrimitive.Suggestion>
                   ))}
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="my-auto flex flex-1 flex-col items-center justify-center p-4 text-center">
+                <div className="relative mb-3 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-0.5 shadow-inner">
+                  <div className="flex size-full items-center justify-center rounded-[14px] border border-primary/20 bg-card">
+                    <Sparkles className="size-5 text-primary" />
+                  </div>
+                </div>
+                <h3 className="text-sm font-semibold tracking-tight text-foreground sm:text-base">
+                  {t("How can I help today?")}
+                </h3>
+                <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                  {t(
+                    "Browse collections, search for customers, analyze metrics, and create interactive charts from your Studio data.",
+                  )}
+                </p>
+
+                {employees.length > 0 ? (
+                  <div className="mt-4 w-full max-w-sm space-y-2">
+                    <p className="px-1 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                      {t("Virtual employees (@mention)")}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {employees.map((emp) => {
+                        const Icon = getEmployeeAvatarIcon(emp.avatar);
+                        return (
+                          <ThreadPrimitive.Suggestion
+                            key={emp.id}
+                            prompt={`@${emp.handle} `}
+                            send={false}
+                            asChild
+                          >
+                            <button
+                              type="button"
+                              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/20 bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-all hover:border-primary/40 hover:bg-muted/60"
+                              title={emp.position ?? emp.name}
+                            >
+                              <Icon className="size-3 text-primary shrink-0" />
+                              <span>{emp.name}</span>
+                              <span className="font-mono text-[10px] font-medium text-primary">
+                                @{emp.handle}
+                              </span>
+                            </button>
+                          </ThreadPrimitive.Suggestion>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-5 w-full max-w-sm space-y-2">
+                  <p className="px-1 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                    {t("Suggested queries")}
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {quickPrompts.map((item) => (
+                      <ThreadPrimitive.Suggestion
+                        key={item.label}
+                        prompt={t(item.prompt as keyof typeof uiMessages)}
+                        send
+                        asChild
+                      >
+                        <button
+                          type="button"
+                          className="group flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border/60 bg-card/60 px-3.5 py-2.5 text-left text-xs font-medium text-foreground shadow-2xs transition-all hover:border-primary/40 hover:bg-muted/50"
+                        >
+                          <item.icon className="size-4 shrink-0 text-primary/70 transition-colors group-hover:text-primary" />
+                          <span className="flex-1 truncate">
+                            {t(item.label as keyof typeof uiMessages)}
+                          </span>
+                        </button>
+                      </ThreadPrimitive.Suggestion>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </ThreadPrimitive.Empty>
 
           <ThreadPrimitive.Messages>
@@ -1578,11 +1645,16 @@ function AssistantConversation({
 
           <AssistantRunningIndicator employees={employees} />
         </ThreadPrimitive.Viewport>
-        <ComposerSection
-          employees={employees}
-          models={models}
-          summary={summary}
-        />
+        <fieldset disabled={disabled} className="min-w-0" aria-busy={disabled}>
+          <ComposerSection
+            employees={employees}
+            models={models}
+            summary={summary}
+            placeholder={
+              recordingContext ? syncText("Ask about these notes…") : undefined
+            }
+          />
+        </fieldset>
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>
   );
@@ -1592,124 +1664,32 @@ export function AssistantBar() {
   const t = useMessages(uiMessages);
   const [open, setOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"chat" | "history">("chat");
-  const { authProvider } = useAppServices();
-  const [userId, setUserId] = useState<string>("default");
-  const [threads, setThreads] = useState<AssistantThreadRecord[]>([]);
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const history = useAssistantThreads(open);
+  const { threads, activeThread } = history;
+  const activeThreadId = activeThread?.id ?? null;
   const [isAssistantBusy, setIsAssistantBusy] = useState(false);
-
-  useEffect(() => {
-    setIsAssistantBusy(false);
-  }, [activeThreadId, viewMode]);
-
-  useEffect(() => {
-    let active = true;
-    authProvider
-      .getIdentity?.()
-      .then((identity) => {
-        if (active && identity?.id) {
-          setUserId(String(identity.id));
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [authProvider]);
-
-  useEffect(() => {
-    const loaded = loadStoredThreads(userId);
-    setThreads(loaded);
-
-    const savedActiveId = loadActiveThreadId(userId);
-    if (savedActiveId && loaded.some((t) => t.id === savedActiveId)) {
-      setActiveThreadId(savedActiveId);
-    } else if (loaded.length > 0) {
-      setActiveThreadId(loaded[0].id);
-      saveActiveThreadId(loaded[0].id, userId);
-    } else {
-      const fresh = createNewThread(userId);
-      saveStoredThread(fresh, userId);
-      setThreads([fresh]);
-      setActiveThreadId(fresh.id);
-      saveActiveThreadId(fresh.id, userId);
-    }
-  }, [userId, open]);
-
-  const activeThread = useMemo(
-    () => threads.find((t) => t.id === activeThreadId) ?? null,
-    [threads, activeThreadId],
-  );
-
-  const handleOpenHistory = useCallback(() => {
-    setThreads(loadStoredThreads(userId));
-    setViewMode("history");
-  }, [userId]);
-
-  const handleSelectThread = (threadId: string) => {
-    setActiveThreadId(threadId);
-    saveActiveThreadId(threadId, userId);
-    setViewMode("chat");
-  };
-
-  const handleNewThread = () => {
-    const fresh = createNewThread(userId);
-    saveStoredThread(fresh, userId);
-    setThreads((prev) => [fresh, ...prev.filter((t) => t.id !== fresh.id)]);
-    setActiveThreadId(fresh.id);
-    saveActiveThreadId(fresh.id, userId);
-    setViewMode("chat");
-  };
-
-  const handleDeleteThread = (threadId: string) => {
-    deleteStoredThread(threadId, userId);
-    const remaining = loadStoredThreads(userId);
-    setThreads(remaining);
-
-    if (activeThreadId === threadId) {
-      if (remaining.length > 0) {
-        setActiveThreadId(remaining[0].id);
-        saveActiveThreadId(remaining[0].id, userId);
-      } else {
-        const fresh = createNewThread(userId);
-        saveStoredThread(fresh, userId);
-        setThreads([fresh]);
-        setActiveThreadId(fresh.id);
-        saveActiveThreadId(fresh.id, userId);
-      }
-    }
-  };
-
-  const handleSaveThread = useCallback(
-    (threadId: string, messages: StoredUIMessage[]) => {
-      if (!messages || messages.length === 0) return;
-      const current = loadStoredThreads(userId);
-      const target = current.find((t) => t.id === threadId) ?? {
-        id: threadId,
-        userId,
-        title: "Nueva conversación",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        messages: [],
-      };
-
-      const updated: AssistantThreadRecord = {
-        ...target,
-        messages,
-        updatedAt: new Date().toISOString(),
-        title:
-          target.title === "Nueva conversación"
-            ? generateThreadTitle(messages)
-            : target.title,
-      };
-
-      saveStoredThread(updated, userId);
-      setTimeout(() => {
-        setThreads(loadStoredThreads(userId));
-      }, 50);
+  const handleRunning = useCallback(
+    (busy: boolean) => {
+      setIsAssistantBusy(busy);
+      history.setRunning(busy);
     },
-    [userId],
+    [history.setRunning],
   );
+  const handleOpenHistory = () => {
+    void history.refresh();
+    setViewMode("history");
+  };
+  const handleSelectThread = (id: string) => {
+    history.select(id);
+    setViewMode("chat");
+  };
+  const handleNewThread = () => {
+    void history.create();
+    setViewMode("chat");
+  };
+  const handleDeleteThread = (id: string) => {
+    void history.remove(id);
+  };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -1770,6 +1750,7 @@ export function AssistantBar() {
                     variant="ghost"
                     size="sm"
                     onClick={handleOpenHistory}
+                    disabled={isAssistantBusy || history.saving}
                     className="relative h-8 gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/70"
                     aria-label={t("Show history")}
                     title={t("Conversation history")}
@@ -1787,6 +1768,7 @@ export function AssistantBar() {
                     variant="ghost"
                     size="icon"
                     onClick={handleNewThread}
+                    disabled={isAssistantBusy || history.saving}
                     className="size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/70"
                     aria-label={t("New conversation")}
                     title={t("New conversation")}
@@ -1799,6 +1781,7 @@ export function AssistantBar() {
                   size="sm"
                   variant="default"
                   onClick={handleNewThread}
+                  disabled={isAssistantBusy || history.saving}
                   className="h-8 gap-1.5 rounded-lg text-xs font-medium"
                 >
                   <Plus className="size-3.5" />
@@ -1809,7 +1792,8 @@ export function AssistantBar() {
           </div>
         </SheetHeader>
 
-        {viewMode === "history" ? (
+        <AssistantSyncStatus history={history} />
+        {history.loading ? null : viewMode === "history" ? (
           <AssistantThreadList
             threads={threads}
             activeThreadId={activeThreadId}
@@ -1817,17 +1801,19 @@ export function AssistantBar() {
             onNewThread={handleNewThread}
             onDeleteThread={handleDeleteThread}
           />
-        ) : (
+        ) : activeThread ? (
           <AssistantConversation
-            key={activeThreadId ?? "fresh"}
+            key={`${activeThreadId}:${history.epoch}`}
             threadId={activeThreadId ?? "fresh"}
             initialMessages={activeThread?.messages ?? []}
-            onSaveThread={handleSaveThread}
+            onSaveThread={history.save}
             onOpenHistory={handleOpenHistory}
             threadTitle={activeThread?.title}
-            onRunningChange={setIsAssistantBusy}
+            onRunningChange={handleRunning}
+            recordingContext={activeThread.context}
+            disabled={Boolean(history.error)}
           />
-        )}
+        ) : null}
       </SheetContent>
     </Sheet>
   );

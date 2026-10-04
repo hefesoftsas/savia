@@ -12,3 +12,20 @@
     grid-template-columns: 15rem minmax(0, 1fr);
   }
 }
+.recording-session-review {
+  display: grid;
+  min-width: 0;
+  gap: 2rem;
+}
+@media (min-width: 80rem) {
+  .recording-session-review {
+    grid-template-columns: minmax(0, 1fr) 22rem;
+  }
+  .recording-session-chat {
+    position: sticky;
+    top: 1.5rem;
+    align-self: start;
+    max-height: calc(100vh - 3rem);
+    overflow: auto;
+  }
+}

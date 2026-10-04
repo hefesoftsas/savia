@@ -133,13 +133,35 @@ never be placed in URLs, frontend configuration, logs or screenshots.
 
 ## Questions about recordings
 
-After generating a transcript, open the recording and enter a question. Each
-question requires consent to send the saved transcript and question to OpenRouter.
-Answers use the configured summary model and only the selected transcript. An
-insufficient-evidence outcome means the recording does not support an answer.
-Verify AI answers against the original audio; they can still be mistaken. Answers
-are temporary, disappear when changing recordings, and create no business records.
-No automatic retries are performed.
+After generating a transcript, open the recording or recording session to use the
+embedded Savia assistant. The same assistant runtime, model configuration and
+history are used by the general chat. Notes and the chat appear side by side on
+wide screens and stack on small screens. Routine processing and question consent
+checkboxes are no longer shown; the action itself submits the request. The
+acknowledgement for retrying an ambiguous processing result remains in place.
+
+Each recording/session has one owner-private conversation stored on the server.
+Questions are saved before the model request; completed responses are saved when
+the stream finishes. Other devices load the same conversation after signing in.
+History refreshes on opening, window focus and every 15 seconds while idle. If an
+open conversation changes elsewhere, the UI preserves the current draft and asks
+the user to copy it before loading the latest version. Revision checks reject stale
+saves and deletes rather than silently overwrite messages. Failed saves remain
+visible and can be retried; a failed save prevents a new provider request.
+
+The assistant resolves recording context on the server under the authenticated
+owner's Companion access checks. Transcript content is reference material, not
+instructions. The assistant can use its existing tools, with their existing write
+confirmation controls. Verify answers against the original audio.
+
+Apply migration `0032_assistant_threads.sql` before serving the updated admin UI.
+The conversation API requires the authenticated account and D1 storage. Existing
+browser-only history can be copied to the server with **Import browser history**;
+the old browser data is preserved. History lists the latest 50 conversations;
+a recording's conversation is resolved directly even when older. The server
+bounds each conversation to 100 messages and serialized message data to 1.5 MiB;
+large inline attachments can exceed that limit and are rejected explicitly.
+No live provider call is performed merely by opening the page or syncing history.
 
 ## Deployment binding
 

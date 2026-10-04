@@ -1,5 +1,5 @@
 import { ApiClient } from "@/api/api-client";
-import type { RecordingAnswer, RecordingNotes } from "./client";
+import type { RecordingNotes } from "./client";
 export type SessionChunk = {
   source: "microphone" | "system";
   sequence: number;
@@ -31,13 +31,6 @@ export type RecordingSession = {
     summary: RecordingNotes["summary"];
   };
 };
-export type SessionAnswer = RecordingAnswer & {
-  partial: boolean;
-  evidence: Pick<
-    SessionChunk,
-    "source" | "sequence" | "startSeconds" | "durationSeconds"
-  >[];
-};
 export class CompanionSessionsClient {
   constructor(private api: ApiClient) {}
   list(
@@ -61,12 +54,6 @@ export class CompanionSessionsClient {
   cancel(id: string): Promise<RecordingSession> {
     return this.api.post(
       `/v1/companion/sessions/${encodeURIComponent(id)}/cancel`,
-    );
-  }
-  answer(id: string, question: string): Promise<SessionAnswer> {
-    return this.api.post(
-      `/v1/companion/sessions/${encodeURIComponent(id)}/questions`,
-      { question, consent: true },
     );
   }
   async audio(

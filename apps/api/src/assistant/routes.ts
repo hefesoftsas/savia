@@ -16,11 +16,19 @@ import {
   type RagEnvironment,
 } from "./rag";
 import { disabledSolutionObjects } from "@savia/studio-server/solutions";
+import { CompanionError } from "../companion/service";
+import {
+  AssistantThreadConflictError,
+  AssistantThreadRepository,
+  assistantThreadMessagesSchema,
+  assistantThreadWriteSchema,
+} from "./threads";
 
 const chatRequestSchema = z.object({
-  messages: z.array(z.unknown()).max(100),
+  messages: assistantThreadMessagesSchema,
   employeeId: z.string().optional(),
   employeeHandle: z.string().optional(),
+  threadId: z.string().uuid().optional(),
 });
 
 const createEmployeeSchema = z.object({
@@ -42,6 +50,15 @@ export type AssistantRouteDependencies = {
   documents?: R2Bucket;
   ragEnv?: RagEnvironment;
   configuration?: AssistantConfigurationRepository;
+  loadThreadContext?: (
+    actor: ReturnType<typeof actorFromContext>,
+    request: Request,
+    threadContext: { kind: "recording" | "session"; id: string; title: string },
+  ) => Promise<{
+    kind: "recording" | "session";
+    title: string;
+    content: string;
+  }>;
 };
 
 function unavailableResponse(): Response {
@@ -73,6 +90,134 @@ export function registerAssistantRoutes(
   dependencies?: AssistantRouteDependencies,
 ): void {
   registerEmployeeMcpRoutes(app, service, dependencies);
+  app.get("/api/assistant/threads", async (context) => {
+    if (!dependencies?.db) return unavailableResponse();
+    const actor = actorFromContext(context);
+    const repo = new AssistantThreadRepository(dependencies.db);
+    const kind = context.req.query("contextKind");
+    const id = context.req.query("contextId");
+    if (
+      (kind && !id) ||
+      (!kind && id) ||
+      (kind && !["recording", "session"].includes(kind))
+    )
+      return context.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid context filter",
+          },
+        },
+        400,
+      );
+    const matching =
+      kind && id
+        ? await repo.findByContext(
+            actor.principal.id,
+            kind as "recording" | "session",
+            id,
+          )
+        : null;
+    const threads =
+      kind && id
+        ? matching
+          ? [matching]
+          : []
+        : await repo.list(actor.principal.id);
+    return context.json({ threads });
+  });
+
+  app.get("/api/assistant/threads/:id", async (context) => {
+    if (!dependencies?.db) return unavailableResponse();
+    const actor = actorFromContext(context);
+    const thread = await new AssistantThreadRepository(dependencies.db).get(
+      actor.principal.id,
+      context.req.param("id"),
+    );
+    return thread
+      ? context.json(thread)
+      : context.json(
+          { error: { code: "NOT_FOUND", message: "Conversation not found" } },
+          404,
+        );
+  });
+
+  app.put("/api/assistant/threads/:id", async (context) => {
+    if (!dependencies?.db) return unavailableResponse();
+    const actor = actorFromContext(context);
+    const parsed = assistantThreadWriteSchema.safeParse(
+      await context.req.json().catch(() => undefined),
+    );
+    if (!parsed.success)
+      return context.json(
+        {
+          error: { code: "VALIDATION_ERROR", message: "Invalid conversation" },
+        },
+        400,
+      );
+    try {
+      const thread = await new AssistantThreadRepository(dependencies.db).save(
+        actor.principal.id,
+        context.req.param("id"),
+        parsed.data,
+      );
+      return context.json(thread);
+    } catch (error) {
+      if (error instanceof AssistantThreadConflictError)
+        return context.json(
+          { error: { code: "REVISION_CONFLICT", message: error.message } },
+          409,
+        );
+      if (error instanceof RangeError)
+        return context.json(
+          { error: { code: "THREAD_TOO_LARGE", message: error.message } },
+          413,
+        );
+      if (error instanceof TypeError)
+        return context.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Invalid conversation identifier",
+            },
+          },
+          400,
+        );
+      throw error;
+    }
+  });
+
+  app.delete("/api/assistant/threads/:id", async (context) => {
+    if (!dependencies?.db) return unavailableResponse();
+    const actor = actorFromContext(context);
+    const expectedRevision = Number(context.req.query("expectedRevision"));
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+      return context.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "expectedRevision is required",
+          },
+        },
+        400,
+      );
+    try {
+      await new AssistantThreadRepository(dependencies.db).delete(
+        actor.principal.id,
+        context.req.param("id"),
+        expectedRevision,
+      );
+      return context.body(null, 204);
+    } catch (error) {
+      if (error instanceof AssistantThreadConflictError)
+        return context.json(
+          { error: { code: "REVISION_CONFLICT", message: error.message } },
+          409,
+        );
+      throw error;
+    }
+  });
+
   app.post("/api/assistant/chat", async (context) => {
     if (!service) return unavailableResponse();
     const parsed = chatRequestSchema.safeParse(
@@ -87,12 +232,67 @@ export function registerAssistantRoutes(
 
     const actor = actorFromContext(context);
     try {
+      let trustedContext:
+        | Awaited<
+            ReturnType<
+              NonNullable<AssistantRouteDependencies["loadThreadContext"]>
+            >
+          >
+        | undefined;
+      if (parsed.data.threadId) {
+        if (!dependencies?.db)
+          return context.json(
+            {
+              error: {
+                code: "ASSISTANT_UNAVAILABLE",
+                message: "Conversation storage is unavailable",
+              },
+            },
+            503,
+          );
+        const thread = await new AssistantThreadRepository(dependencies.db).get(
+          actor.principal.id,
+          parsed.data.threadId,
+        );
+        if (!thread)
+          return context.json(
+            { error: { code: "NOT_FOUND", message: "Conversation not found" } },
+            404,
+          );
+        if (thread.context) {
+          if (!dependencies.loadThreadContext)
+            return context.json(
+              {
+                error: {
+                  code: "ASSISTANT_UNAVAILABLE",
+                  message: "Conversation context is unavailable",
+                },
+              },
+              503,
+            );
+          try {
+            trustedContext = await dependencies.loadThreadContext(
+              actor,
+              context.req.raw,
+              thread.context,
+            );
+          } catch (error) {
+            if (error instanceof CompanionError)
+              return context.json(
+                { error: { code: error.code, message: error.message } },
+                error.status,
+              );
+            throw error;
+          }
+        }
+      }
       return await service.chat({
         messages: parsed.data.messages,
         principalId: actor.principal.id,
         authorization: authorizationFor(context),
         employeeId: parsed.data.employeeId,
         employeeHandle: parsed.data.employeeHandle,
+        trustedContext,
       });
     } catch (chatError) {
       console.error("[Assistant Chat Error]:", chatError);
