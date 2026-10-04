@@ -4,6 +4,7 @@ export type AssistantChatRequest = {
   messages: unknown[];
   employeeId?: string;
   employeeHandle?: string;
+  inferEmployeeFromMentions?: boolean;
   trustedContext?: {
     kind: "recording" | "session";
     title: string;

@@ -75,6 +75,18 @@ const providers = [
     availability: "enabled",
     capabilities: ["issues:read"],
   },
+  {
+    id: "slack",
+    displayName: "Slack",
+    availability: "enabled",
+    capabilities: ["messages:send"],
+  },
+  {
+    id: "microsoft_teams",
+    displayName: "Microsoft Teams",
+    availability: "enabled",
+    capabilities: ["messages:send"],
+  },
 ] as const;
 
 function createServices() {
@@ -257,6 +269,32 @@ describe("PersonalIntegrationsPage", () => {
     }
   });
 
+  it("shows Slack and Teams with their channel-sharing capability", async () => {
+    render(
+      <MemoryRouter>
+        <PersonalIntegrationsPage services={createServices()} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Colaboración" }),
+    ).toBeVisible();
+    for (const name of ["Slack", "Microsoft Teams"]) {
+      expect(screen.getByText(name)).toBeVisible();
+      expect(
+        screen.getByRole("img", { name: `Logo de ${name}` }),
+      ).toBeVisible();
+    }
+    expect(
+      screen.getByText("Comparte resúmenes de registros en canales de Slack."),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "Comparte resúmenes de registros en canales de Microsoft Teams.",
+      ),
+    ).toBeVisible();
+  });
+
   it("shows unavailable issue providers without deployment instructions", async () => {
     const services = createServices();
     vi.mocked(services.personalIntegrations.listProviders).mockResolvedValue(
@@ -341,7 +379,7 @@ describe("PersonalIntegrationsPage", () => {
     expect(screen.getByRole("button", { name: "Desconectar" })).toBeVisible();
   });
 
-  it("keeps all integrations visible and offers retry when their status cannot load", async () => {
+  it("keeps all twelve integrations visible and offers retry when their status cannot load", async () => {
     const user = userEvent.setup();
     const services = createServices();
     const missingRoute = new ApiClientError(404, "NOT_FOUND", "Not found");
@@ -366,9 +404,10 @@ describe("PersonalIntegrationsPage", () => {
     for (const provider of providers) {
       expect(screen.getByText(provider.displayName)).toBeVisible();
     }
+    expect(screen.getAllByText("Zoom")).toHaveLength(2);
     expect(
       screen.getAllByRole("button", { name: "No disponible" }),
-    ).toHaveLength(10);
+    ).toHaveLength(12);
     expect(
       screen.queryByText("No hay integraciones disponibles."),
     ).not.toBeInTheDocument();

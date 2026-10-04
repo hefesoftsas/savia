@@ -7,6 +7,23 @@ export const integrationMessages = {
 
 /** Personal integrations (connections) and virtual AI employees UI copy. Keys are the Spanish source. */
 export const personalIntegrationsMessages = {
+  Colaboración: ["Colaboración", "Collaboration", "Colaboração"],
+  "Un administrador debe habilitar %{provider} en Nango. Después podrás conectar tu cuenta aquí.":
+    [
+      "Un administrador debe habilitar %{provider} en Nango. Después podrás conectar tu cuenta aquí.",
+      "An administrator must enable %{provider} in Nango. Then you can connect your account here.",
+      "Um administrador precisa habilitar %{provider} no Nango. Depois você poderá conectar sua conta aqui.",
+    ],
+  "Comparte resúmenes de registros en canales de Slack.": [
+    "Comparte resúmenes de registros en canales de Slack.",
+    "Share record summaries in Slack channels.",
+    "Compartilhe resumos de registros nos canais do Slack.",
+  ],
+  "Comparte resúmenes de registros en canales de Microsoft Teams.": [
+    "Comparte resúmenes de registros en canales de Microsoft Teams.",
+    "Share record summaries in Microsoft Teams channels.",
+    "Compartilhe resumos de registros nos canais do Microsoft Teams.",
+  ],
   Aplicaciones: ["Aplicaciones", "Apps", "Aplicativos"],
   Integraciones: ["Integraciones", "Integrations", "Integrações"],
   "Ayuda sobre %{v1}": [

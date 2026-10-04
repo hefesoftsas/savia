@@ -3,6 +3,7 @@ import {
   memo,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -59,6 +60,7 @@ import {
   Paperclip,
   Search,
   Table2,
+  Sparkles,
 } from "lucide-react";
 import {
   Popover,
@@ -76,6 +78,8 @@ import type {
 import "./editor.css";
 import { navigateBlockEdge } from "./block-navigation";
 import { codeLanguage, fencedCodePaste } from "./code-input";
+import { SelectionAIPanel } from "./selection-ai-panel";
+import { selectionAIMessages } from "./selection-ai-messages";
 
 const EditorContext = createContext<{
   api: ApiClient;
@@ -277,6 +281,7 @@ export const PageEditor = memo(function PageEditor({
   );
   const t = useMessages(pagesMessages);
   const te = useMessages(editorMessages);
+  const tai = useMessages(selectionAIMessages);
   const editor = usePlateEditor({
     plugins,
     override: {
@@ -296,6 +301,62 @@ export const PageEditor = memo(function PageEditor({
   });
   const [insert, setInsert] = useState<"issue" | "collection" | null>(null),
     [url, setUrl] = useState("");
+  const [aiText, setAIText] = useState<string | null>(null);
+  const aiRange = useRef<ReturnType<typeof editor.api.rangeRef> | null>(null);
+  useEffect(
+    () => () => {
+      aiRange.current?.unref();
+    },
+    [editor],
+  );
+  function openSelectionAI() {
+    if (readOnly) return;
+    const selection = window.getSelection();
+    if (!selection?.rangeCount || selection.isCollapsed) return;
+    const nativeRange = selection.getRangeAt(0);
+    if (
+      !editorContentRef.current?.contains(nativeRange.startContainer) ||
+      !editorContentRef.current.contains(nativeRange.endContainer)
+    )
+      return;
+    const range = editor.api.toSlateRange(nativeRange, {
+      exactMatch: true,
+      suppressThrow: true,
+    });
+    if (!range) return;
+    const text = editor.api.string(range);
+    if (!text.trim()) return;
+    aiRange.current?.unref();
+    aiRange.current = editor.api.rangeRef(range);
+    setAIText(text);
+    setSelectionTools(null);
+  }
+  function closeSelectionAI() {
+    const range = aiRange.current?.unref();
+    aiRange.current = null;
+    if (range) editor.tf.select(range);
+    setAIText(null);
+  }
+  function applyAIResponse(text: string, mode: "replace" | "insert") {
+    const range = aiRange.current?.current;
+    if (readOnly || !range || editor.api.string(range) !== aiText) return false;
+    aiRange.current?.unref();
+    aiRange.current = null;
+    if (mode === "replace") {
+      editor.tf.select(range);
+      editor.tf.insertText(text);
+    } else {
+      const index = Math.max(range.anchor.path[0], range.focus.path[0]) + 1;
+      editor.tf.insertNodes(
+        text.split(/\r?\n/).map((line) => ({
+          type: "p",
+          children: [{ text: line }],
+        })),
+        { at: [index] },
+      );
+    }
+    return true;
+  }
   const [issueProviderToInsert, setIssueProviderToInsert] = useState<
     "jira" | "linear" | "github" | null
   >(null);
@@ -314,6 +375,24 @@ export const PageEditor = memo(function PageEditor({
     x: number;
     y: number;
   } | null>(null);
+  const selectionToolbarRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (
+      !selectionTools ||
+      !selectionToolbarRef.current ||
+      !editorContentRef.current
+    )
+      return;
+    const halfWidth =
+      selectionToolbarRef.current.getBoundingClientRect().width / 2;
+    if (!halfWidth) return;
+    const left = editorContentRef.current.getBoundingClientRect().left;
+    const x = Math.max(
+      halfWidth + 8 - left,
+      Math.min(selectionTools.x, window.innerWidth - halfWidth - 8 - left),
+    );
+    if (x !== selectionTools.x) setSelectionTools({ ...selectionTools, x });
+  }, [selectionTools]);
   const [insertPoint, setInsertPoint] = useState<{
     x: number;
     y: number;
@@ -1009,6 +1088,7 @@ export const PageEditor = memo(function PageEditor({
               {selectionTools && (
                 <div
                   className="page-editor-selection-tools"
+                  ref={selectionToolbarRef}
                   role="toolbar"
                   aria-label={te("Formatting")}
                   style={{ left: selectionTools.x, top: selectionTools.y }}
@@ -1043,6 +1123,15 @@ export const PageEditor = memo(function PageEditor({
                     onClick={() => editor.tf.toggleMark("code")}
                   >
                     <Code aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="page-editor-ask-ai"
+                    onClick={openSelectionAI}
+                  >
+                    <Sparkles aria-hidden="true" />
+                    {tai("Ask AI")}
                   </Button>
                 </div>
               )}
@@ -1611,6 +1700,15 @@ export const PageEditor = memo(function PageEditor({
             </DialogContent>
           </Dialog>
         </div>
+        {aiText !== null && (
+          <SelectionAIPanel
+            api={api}
+            text={aiText}
+            onClose={closeSelectionAI}
+            onApply={applyAIResponse}
+            onRestoreFocus={() => editor.tf.focus()}
+          />
+        )}
       </Plate>
     </EditorContext.Provider>
   );

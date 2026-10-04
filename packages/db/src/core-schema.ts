@@ -367,6 +367,33 @@ export const personalIntegrationAuditEvents = sqliteTable(
   ],
 );
 
+export const personalCollaborationMessages = sqliteTable(
+  "personal_collaboration_messages",
+  {
+    id: text("id").primaryKey().notNull(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "cascade" }),
+    requestId: text("request_id").notNull(),
+    requestHash: text("request_hash").notNull(),
+    provider: text("provider").notNull(),
+    state: text("state").notNull(),
+    messageId: text("message_id"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("personal_collaboration_messages_principal_request_unique").on(
+      table.principalId,
+      table.requestId,
+    ),
+    index("personal_collaboration_messages_principal_created").on(
+      table.principalId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const userNavigationPreferences = sqliteTable(
   "user_navigation_preferences",
   {

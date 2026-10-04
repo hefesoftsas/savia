@@ -28,6 +28,8 @@ export type NangoConfiguration = {
   linearIntegrationId?: string;
   githubIntegrationId?: string;
   zoomIntegrationId?: string;
+  slackIntegrationId?: string;
+  microsoftTeamsIntegrationId?: string;
 };
 
 type ConfiguredNango = {

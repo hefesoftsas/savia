@@ -93,6 +93,20 @@ const providerTemplates: readonly ProviderTemplate[] = [
     integrationId: (configuration) =>
       configured(configuration.zoomIntegrationId),
   },
+  {
+    id: "slack",
+    displayName: "Slack",
+    capabilities: ["channels:read", "messages:send"],
+    integrationId: (configuration) =>
+      configured(configuration.slackIntegrationId),
+  },
+  {
+    id: "microsoft_teams",
+    displayName: "Microsoft Teams",
+    capabilities: ["channels:read", "messages:send"],
+    integrationId: (configuration) =>
+      configured(configuration.microsoftTeamsIntegrationId),
+  },
 ];
 
 export function createPersonalIntegrationProviderRegistry(

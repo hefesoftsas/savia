@@ -1,5 +1,9 @@
 # Integraciones personales de Google y Microsoft mediante Nango
 
+For Slack and Microsoft Teams channel sharing, see
+[Slack and Teams sharing](../guides/slack-teams-sharing.md). Those providers use
+separate Nango integrations and do not inherit Outlook authorization.
+
 ## Qué activa esta guía
 
 Esta integración es individual: cada principal de Savia conecta, consulta, reconecta y desconecta únicamente sus propias cuentas. Nunca se reutiliza una conexión CRM por agencia ni se exponen tokens OAuth al navegador, API pública, asistente o MCP.

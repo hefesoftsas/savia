@@ -1,7 +1,13 @@
 import { sendPersonalMailSchema } from "@savia/studio-shared/mail-contracts";
+import {
+  collaborationProviderSchema,
+  shareRecordInputSchema,
+} from "@savia/studio-shared/collaboration-contracts";
 import { validateMailContext } from "../personal-integrations/mail-context";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { actorFromContext } from "../auth/middleware";
+import { canonicalHostForApi } from "../auth/tenant-host-guard";
+import { isAllowedPublicOrigin } from "@savia/tenant-host/tenant-host";
 import { PendingActionRepository } from "../assistant/pending-actions";
 import {
   PersonalActionPayloadCipher,
@@ -25,6 +31,11 @@ import { createPersonalIntegrationNangoClient } from "../personal-integrations/n
 import { createPersonalIntegrationProviderRegistry } from "../personal-integrations/providers";
 import { createPersonalIntegrationRepository } from "../personal-integrations/repository";
 import { createJiraPrivacyRepository } from "../personal-integrations/jira-privacy-repository";
+import {
+  CollaborationConflictError,
+  listCollaborationChannels,
+  shareRecord,
+} from "../personal-integrations/collaboration";
 import { resolveJiraIdentity } from "../personal-integrations/jira-privacy";
 import { cleanJiraPrivacySnapshots } from "../personal-integrations/jira-privacy-runtime";
 import {
@@ -54,6 +65,8 @@ const providerDocumentSchema = z.object({
     "linear",
     "github",
     "zoom",
+    "slack",
+    "microsoft_teams",
   ]),
   kind: z.literal("personal-integration-provider"),
   attributes: z.object({
@@ -98,6 +111,8 @@ const connectionAttributesSchema = z.object({
     "linear",
     "github",
     "zoom",
+    "slack",
+    "microsoft_teams",
   ]),
   status: z.enum([
     "pending",
@@ -384,6 +399,119 @@ const sendMailRoute = createRoute({
   },
 });
 
+const collaborationChannelsRoute = createRoute({
+  method: "get",
+  path: "/v1/personal-integrations/collaboration/channels",
+  tags: ["Personal integrations"],
+  summary: "List channels in a caller-owned Slack or Teams connection",
+  security: [{ oauth2: ["savia.api.read"] }],
+  request: {
+    query: z.object({
+      provider: collaborationProviderSchema,
+      cursor: z.string().min(1).max(8192).optional(),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            data: z.array(
+              z.object({
+                id: z.string(),
+                name: z.string(),
+                teamId: z.string().optional(),
+                teamName: z.string().optional(),
+              }),
+            ),
+            pagination: z.object({ nextCursor: z.string().nullable() }),
+          }),
+        },
+      },
+      description: "On-demand paginated channel metadata",
+    },
+    400: { description: "Invalid collaboration cursor" },
+    404: { description: "Personal connection not found" },
+    409: {
+      description: "The personal connection requires reconnection",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({
+              code: z.literal("PERSONAL_INTEGRATION_RECONNECT_REQUIRED"),
+              message: z.string(),
+            }),
+          }),
+        },
+      },
+    },
+    502: { description: "Provider request failed" },
+    503: { description: "Provider or connection unavailable" },
+  },
+});
+
+function collaborationConnectionError(
+  connection: PersonalIntegrationConnection & {
+    nangoIntegrationId?: string;
+  },
+  configuredIntegrationId: string,
+) {
+  if (connection.status !== "connected")
+    return {
+      status: 409 as const,
+      body: errorBody(
+        "PERSONAL_INTEGRATION_RECONNECT_REQUIRED",
+        "Reconnect this collaboration account before continuing",
+      ),
+    };
+  if (connection.nangoIntegrationId !== configuredIntegrationId)
+    return {
+      status: 409 as const,
+      body: errorBody(
+        "PERSONAL_INTEGRATION_RECONNECT_REQUIRED",
+        "Reconnect this collaboration account to use the configured provider",
+      ),
+    };
+  return undefined;
+}
+
+const shareCollaborationRecordRoute = createRoute({
+  method: "post",
+  path: "/v1/personal-integrations/collaboration/messages",
+  tags: ["Personal integrations"],
+  summary: "Share a Savia record to a caller-owned collaboration channel",
+  description:
+    "Revalidates the selected record and submits one message to the chosen Slack or Teams channel. Ambiguous sends are never retried automatically.",
+  security: [{ oauth2: ["savia.api.write"] }],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: shareRecordInputSchema } },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            data: z.object({
+              provider: collaborationProviderSchema,
+              messageId: z.string(),
+            }),
+          }),
+        },
+      },
+      description: "The record message was delivered or safely replayed",
+    },
+    400: { description: "Invalid record link, channel, or provider input" },
+    403: { description: "The selected record is not accessible" },
+    404: { description: "Personal connection or record not found" },
+    409: { description: "The request may have been delivered already" },
+    502: { description: "Provider request failed or delivery is unknown" },
+    503: { description: "Provider or connection unavailable" },
+  },
+});
+
 const eventListRoute = createRoute({
   method: "get",
   path: "/v1/personal-integrations/events",
@@ -559,6 +687,9 @@ const actionResultSchema = z.object({
     "google_calendar",
     "onedrive_personal",
     "onedrive_business",
+    "zoom",
+    "slack",
+    "microsoft_teams",
   ]),
   action: z.enum(["send-email", "create-event", "upload-file"]),
 });
@@ -1120,6 +1251,148 @@ export function registerPersonalIntegrationRoutes(
         200,
       );
     } catch (exception) {
+      const response = personalErrorResponse(exception);
+      if (!response) throw exception;
+      return context.json(response.body, response.status);
+    }
+  });
+
+  app.openapi(collaborationChannelsRoute, async (context) => {
+    const actor = actorFromContext(context);
+    const query = context.req.valid("query");
+    const resolved = providerResolution(providers, query.provider);
+    if (isProviderError(resolved))
+      return context.json(
+        errorBody(resolved.code, resolved.message),
+        resolved.status,
+      );
+    if (!nango || !resolved.provider.integrationId)
+      return context.json(
+        errorBody(
+          "PERSONAL_INTEGRATION_UNAVAILABLE",
+          "The requested personal integration is unavailable",
+        ),
+        503,
+      );
+    const connection = await activeConnectionFor(
+      repository,
+      actor.principal.id,
+      query.provider,
+    );
+    if (!connection)
+      return context.json(
+        errorBody(
+          "PERSONAL_INTEGRATION_CONNECTION_NOT_FOUND",
+          "Personal integration connection not found",
+        ),
+        404,
+      );
+    const connectionError = collaborationConnectionError(
+      connection,
+      resolved.provider.integrationId,
+    );
+    if (connectionError)
+      return context.json(connectionError.body, connectionError.status);
+    try {
+      const page = await listCollaborationChannels({
+        provider: query.provider,
+        connection,
+        nango,
+        repository,
+        cursor: query.cursor,
+      });
+      return context.json(
+        { data: page.channels, pagination: { nextCursor: page.nextCursor } },
+        200,
+      );
+    } catch (exception) {
+      const response = personalErrorResponse(exception);
+      if (!response) throw exception;
+      return context.json(response.body, response.status);
+    }
+  });
+
+  app.openapi(shareCollaborationRecordRoute, async (context) => {
+    const actor = actorFromContext(context);
+    const input = context.req.valid("json");
+    const resolved = providerResolution(providers, input.provider);
+    if (isProviderError(resolved))
+      return context.json(
+        errorBody(resolved.code, resolved.message),
+        resolved.status,
+      );
+    if (!nango || !resolved.provider.integrationId)
+      return context.json(
+        errorBody(
+          "PERSONAL_INTEGRATION_UNAVAILABLE",
+          "The requested personal integration is unavailable",
+        ),
+        503,
+      );
+    const connection = await activeConnectionFor(
+      repository,
+      actor.principal.id,
+      input.provider,
+    );
+    if (!connection)
+      return context.json(
+        errorBody(
+          "PERSONAL_INTEGRATION_CONNECTION_NOT_FOUND",
+          "Personal integration connection not found",
+        ),
+        404,
+      );
+    const connectionError = collaborationConnectionError(
+      connection,
+      resolved.provider.integrationId,
+    );
+    if (connectionError)
+      return context.json(connectionError.body, connectionError.status);
+    try {
+      const result = await shareRecord({
+        database,
+        principalId: actor.principal.id,
+        payload: input,
+        connection,
+        repository,
+        nango,
+        validateContext: () =>
+          validateMailContext([input.context], (path) => {
+            const url = new URL(context.req.url);
+            url.pathname = path;
+            url.search = "";
+            return Promise.resolve(
+              app.request(
+                new Request(url, {
+                  method: "GET",
+                  headers: context.req.raw.headers,
+                }),
+                undefined,
+                context.env,
+              ),
+            );
+          }),
+        isAllowedOrigin: (origin) => {
+          const configuredOrigin = (
+            context.env as { SAVIA_PUBLIC_ORIGIN?: string } | undefined
+          )?.SAVIA_PUBLIC_ORIGIN;
+          if (configuredOrigin) {
+            try {
+              if (new URL(configuredOrigin).origin === origin) return true;
+            } catch {
+              // Invalid configuration fails closed through the canonical-host check.
+            }
+          }
+          return isAllowedPublicOrigin(
+            origin,
+            canonicalHostForApi(configuredOrigin),
+          );
+        },
+      });
+      return context.json({ data: result }, 200);
+    } catch (exception) {
+      if (exception instanceof CollaborationConflictError)
+        return context.json(errorBody(exception.code, exception.message), 409);
       const response = personalErrorResponse(exception);
       if (!response) throw exception;
       return context.json(response.body, response.status);

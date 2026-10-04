@@ -61,6 +61,34 @@ beforeAll(async () => {
   )?.[1];
   if (!zoomMigration) throw new Error("Zoom migration was not found");
   await executeMigration(zoomMigration);
+
+  await env.DB.prepare(
+    `INSERT INTO personal_integration_connections (
+      id, principal_id, provider, nango_connection_id, nango_integration_id,
+      status, scopes, created_at, updated_at
+    ) VALUES ('zoom-meeting-connection', 'zoom-migration-principal',
+      'zoom', 'nango-zoom', 'zoom-app', 'connected', '[]', 'now', 'now')`,
+  ).run();
+  await env.DB.prepare(
+    `INSERT INTO zoom_personal_meetings (
+      principal_id, resource_key, connection_id, nango_connection_id,
+      nango_integration_id, immutable_request, meeting_id, join_url,
+      calendar_connection_id, calendar_nango_connection_id,
+      calendar_nango_integration_id, calendar_provider, calendar_event_id,
+      state, created_at, updated_at
+    ) VALUES ('zoom-migration-principal', 'contact:42', 'zoom-meeting-connection',
+      'nango-zoom', 'zoom-app', '{"topic":"Review"}', 'meeting-42',
+      'https://zoom.us/j/42', 'zoom-migration-connection', 'nango-zoom',
+      'zoom-app', 'google_calendar', 'event-42', 'active', 'now', 'now')`,
+  ).run();
+
+  const collaborationMigration = migrations.find(([filename]) =>
+    filename.endsWith("0037_personal_collaboration_messages.sql"),
+  )?.[1];
+  if (!collaborationMigration) {
+    throw new Error("Collaboration migration was not found");
+  }
+  await executeMigration(collaborationMigration);
 });
 
 it("preserves connected accounts and audit foreign keys when adding Zoom", async () => {
@@ -81,5 +109,26 @@ it("preserves connected accounts and audit foreign keys when adding Zoom", async
   });
   expect(audit?.connection_id).toBe("zoom-migration-connection");
   expect(grant?.connection_id).toBe("zoom-migration-connection");
+  expect(violations.results).toEqual([]);
+});
+
+it("preserves Zoom meeting rows and foreign keys when rebuilding connections", async () => {
+  const meeting = await env.DB.prepare(
+    `SELECT connection_id, meeting_id, join_url, calendar_connection_id,
+            calendar_provider, calendar_event_id, state
+     FROM zoom_personal_meetings
+     WHERE principal_id = 'zoom-migration-principal' AND resource_key = 'contact:42'`,
+  ).first<Record<string, string>>();
+  const violations = await env.DB.prepare("PRAGMA foreign_key_check").all();
+
+  expect(meeting).toEqual({
+    connection_id: "zoom-meeting-connection",
+    meeting_id: "meeting-42",
+    join_url: "https://zoom.us/j/42",
+    calendar_connection_id: "zoom-migration-connection",
+    calendar_provider: "google_calendar",
+    calendar_event_id: "event-42",
+    state: "active",
+  });
   expect(violations.results).toEqual([]);
 });

@@ -69,6 +69,61 @@ it("requests an issue preview without retaining the returned metadata", async ()
   });
 });
 
+it("lists collaboration channels with provider and cursor pagination", async () => {
+  const page = {
+    data: [
+      {
+        id: "channel-1",
+        name: "launch",
+        teamId: "team-1",
+        teamName: "Product",
+      },
+    ],
+    pagination: { nextCursor: "cursor-2" },
+  };
+  const get = vi.fn().mockResolvedValue(page);
+  const client = new PersonalIntegrationsClient({ get } as never);
+
+  await expect(
+    client.listCollaborationChannels({
+      provider: "microsoft_teams",
+      cursor: "cursor/2",
+    }),
+  ).resolves.toEqual({
+    channels: page.data,
+    nextCursor: "cursor-2",
+  });
+  expect(get).toHaveBeenCalledWith(
+    "/v1/personal-integrations/collaboration/channels?provider=microsoft_teams&cursor=cursor%2F2",
+  );
+});
+
+it("sends a reviewed record message to its selected collaboration channel", async () => {
+  const result = { provider: "slack", messageId: "message-1" } as const;
+  const post = vi.fn().mockResolvedValue({ data: result });
+  const client = new PersonalIntegrationsClient({ post } as never);
+  const input = {
+    provider: "slack" as const,
+    channelId: "channel-1",
+    title: "Renewal",
+    summary: "Customer requested a quote",
+    url: "https://savia.example/admin?object=deals&view=records&record=1",
+    context: {
+      apiBasePath: "/v1/studio/7",
+      collection: "deals",
+      recordId: "1",
+      fields: ["name", "status"],
+    },
+    requestId: "attempt-1",
+  };
+
+  await expect(client.shareRecordToChat(input)).resolves.toEqual(result);
+  expect(post).toHaveBeenCalledWith(
+    "/v1/personal-integrations/collaboration/messages",
+    input,
+  );
+});
+
 it("requests the native booking agenda with range and time zone", async () => {
   const booking = { id: "booking-1", tenantId: 7 };
   const get = vi.fn().mockResolvedValue({ data: [booking] });

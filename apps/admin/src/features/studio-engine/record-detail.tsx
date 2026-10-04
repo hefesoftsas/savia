@@ -57,6 +57,8 @@ import {
 } from "@savia/studio-shared/map-location";
 import { OperationError, OperationPager, TaskPanel } from "./operations";
 import "./operations.css";
+import { RecordChatShareAction } from "./record-chat-share";
+import { useOptionalAppServices } from "@/features/assistant/assistant-context";
 
 type Relation = {
   object: string;
@@ -179,6 +181,7 @@ export default function RecordDetail({
 
   const t = useMessages(recordsMessages);
   const deliveryT = useMessages(documentDeliveryMessages);
+  const appServices = useOptionalAppServices();
 
   const labelLocale = useFieldLabelLocale();
   const [duplicating, setDuplicating] = useState(false);
@@ -263,6 +266,57 @@ export default function RecordDetail({
           .join(" ")
           .trim() || current[object.config.fieldOrder?.[0] ?? ""]
       : undefined;
+  const shareableFields = fieldEntries(object)
+    .filter(
+      ([name]) =>
+        /^[a-z][a-z0-9_]{0,47}$/.test(name) &&
+        current[name] !== null &&
+        current[name] !== undefined &&
+        current[name] !== "",
+    )
+    .slice(0, 50);
+  const shareRuntime = getStudioRuntime();
+  const shareApiBasePath = shareRuntime.apiBasePath;
+  const recordShare =
+    appServices &&
+    shareApiBasePath &&
+    shareableFields.length > 0 &&
+    String(current.id).length > 0 &&
+    (() => {
+      const shareUrl = new URL(window.location.href);
+      const currentHashQuery = shareUrl.hash.includes("?")
+        ? shareUrl.hash.slice(shareUrl.hash.indexOf("?") + 1)
+        : "";
+      const tenantId =
+        new URLSearchParams(currentHashQuery).get("tenantId") ??
+        String(shareRuntime.tenantId ?? "");
+      if (!/^\d+$/.test(tenantId)) return undefined;
+      const params = new URLSearchParams({
+        tenantId,
+        object: object.name,
+        view: "records",
+        record: String(current.id),
+      });
+      shareUrl.hash = `/studio?${params.toString()}`;
+      const summary = shareableFields
+        .map(
+          ([name, field]) =>
+            `${resolveFieldLabel(field, labelLocale)}: ${display(current[name], uiLocale)}`,
+        )
+        .join("\n")
+        .slice(0, 5000);
+      return {
+        title: display(studioTitle || label(current), uiLocale).slice(0, 500),
+        summary,
+        url: shareUrl.toString(),
+        context: {
+          apiBasePath: shareApiBasePath,
+          collection: object.name,
+          recordId: String(current.id),
+          fields: shareableFields.map(([name]) => name),
+        },
+      };
+    })();
   const detailTabs = [
     { id: "summary", label: t("Información") },
     ...(usesCollectionRelationGroups
@@ -485,6 +539,12 @@ export default function RecordDetail({
                   <Pencil size={15} /> {t("Editar")}
                 </Button>
               )}
+              {recordShare ? (
+                <RecordChatShareAction
+                  share={recordShare}
+                  personalIntegrations={appServices!.personalIntegrations}
+                />
+              ) : null}
             </div>
           </div>
           {duplicateError && !detail.error && (
