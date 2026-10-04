@@ -72,6 +72,72 @@ describe("Companion bounded provider adapter", () => {
       { type: "input_audio", input_audio: { data: audio(), format: "wav" } },
     ]);
   });
+  it("uses OpenRouter's native transcription endpoint for Whisper models", async () => {
+    let request: Request | undefined;
+    const service = new CompanionService({
+      fetch: async (input, init) => {
+        request = new Request(input, init);
+        return Response.json({ text: "Whisper transcript" });
+      },
+    });
+    const result = await service.transcribe(
+      {
+        ...config,
+        transcriptionModel: "openai/whisper-large-v3",
+      },
+      {
+        source: "microphone",
+        audio: { data: audio(), format: "wav" },
+        language: "en",
+        consent: true,
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: "Whisper transcript",
+      model: "openai/whisper-large-v3",
+    });
+    expect(request!.url).toBe(
+      "https://openrouter.ai/api/v1/audio/transcriptions",
+    );
+    expect(request!.headers.get("authorization")).toBe("Bearer test-key");
+    expect(await request!.json()).toEqual({
+      model: "openai/whisper-large-v3",
+      input_audio: { data: audio(), format: "wav" },
+      language: "en",
+    });
+  });
+  it("honors an explicitly stored endpoint for a non-Whisper model", async () => {
+    let request: Request | undefined;
+    const service = new CompanionService({
+      fetch: async (input, init) => {
+        request = new Request(input, init);
+        return Response.json({ text: "Catalog-routed transcript" });
+      },
+    });
+    const result = await service.transcribe(
+      {
+        ...config,
+        transcriptionModel: "provider/custom-transcriber",
+        transcriptionEndpoint: "audio/transcriptions",
+      },
+      {
+        source: "microphone",
+        audio: { data: audio(), format: "wav" },
+        consent: true,
+      },
+    );
+
+    expect(result.text).toBe("Catalog-routed transcript");
+    expect(request!.url).toBe(
+      "https://openrouter.ai/api/v1/audio/transcriptions",
+    );
+    expect(request!.headers.get("authorization")).toBe("Bearer test-key");
+    await expect(request!.json()).resolves.toMatchObject({
+      model: "provider/custom-transcriber",
+      input_audio: { format: "wav" },
+    });
+  });
   it("forwards saved meeting transcription and summary models", async () => {
     const requests: Array<{ url: string; body: any }> = [];
     const service = new CompanionService({
@@ -80,24 +146,30 @@ describe("Companion bounded provider adapter", () => {
           url: String(input),
           body: JSON.parse(init!.body as string),
         });
-        const content = JSON.parse(init!.body as string).messages?.[0]?.content;
-        return Array.isArray(content) &&
-          content.some((part: any) => part.type === "input_audio")
-          ? Response.json({ choices: [{ message: { content: "Hola" } }] })
-          : Response.json({
-              choices: [
-                {
-                  message: {
-                    content: JSON.stringify({
-                      summary: "Notas",
-                      decisions: [],
-                      actions: [],
-                      openQuestions: [],
-                    }),
-                  },
-                },
-              ],
-            });
+        const body = JSON.parse(init!.body as string);
+        if (String(input).includes("audio/transcriptions"))
+          return Response.json({ text: "Hola" });
+        if (
+          Array.isArray(body.messages?.[0]?.content) &&
+          body.messages[0].content.some(
+            (part: any) => part.type === "input_audio",
+          )
+        )
+          return Response.json({ choices: [{ message: { content: "Hola" } }] });
+        return Response.json({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: "Notas",
+                  decisions: [],
+                  actions: [],
+                  openQuestions: [],
+                }),
+              },
+            },
+          ],
+        });
       },
     });
     const configured = {
@@ -106,23 +178,26 @@ describe("Companion bounded provider adapter", () => {
       summaryModel: "openai/gpt-4o-mini",
     };
 
-    await service.transcribe(configured, {
+    const transcript = await service.transcribe(configured, {
       source: "microphone",
       audio: { data: audio(), format: "wav" },
       consent: true,
     });
-    await service.summarize(configured, {
+    const summary = await service.summarize(configured, {
       transcripts: [{ source: "microphone", text: "Hola" }],
       consent: true,
     });
 
+    expect(transcript.text).toBe("Hola");
+    expect(summary.summary).toBe("Notas");
     expect(requests.map(({ body }) => body.model)).toEqual([
       "openai/whisper-large-v3-turbo",
       "openai/gpt-4o-mini",
     ]);
-    expect(requests[0].url).toBe(
+    expect(requests.map(({ url }) => url)).toEqual([
+      "https://openrouter.ai/api/v1/audio/transcriptions",
       "https://openrouter.ai/api/v1/chat/completions",
-    );
+    ]);
   });
   it("forwards validated Opus audio without expanding it to WAV", async () => {
     let body: any;
@@ -174,6 +249,29 @@ describe("Companion bounded provider adapter", () => {
           audio: { data: audio(), format: "wav" },
           consent: true,
         }),
+      ).rejects.toMatchObject({
+        code: "PROVIDER_INVALID_RESPONSE",
+        status: 502,
+      });
+    }
+  });
+  it("rejects missing or oversized native transcription text", async () => {
+    for (const text of [undefined, "x".repeat(60001)]) {
+      const service = new CompanionService({
+        fetch: async () => Response.json({ text }),
+      });
+      await expect(
+        service.transcribe(
+          {
+            ...config,
+            transcriptionModel: "openai/whisper-large-v3",
+          },
+          {
+            source: "microphone",
+            audio: { data: audio(), format: "wav" },
+            consent: true,
+          },
+        ),
       ).rejects.toMatchObject({
         code: "PROVIDER_INVALID_RESPONSE",
         status: 502,

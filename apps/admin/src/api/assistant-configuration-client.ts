@@ -3,12 +3,15 @@ import type { ApiClient } from "./api-client";
 export type AssistantConfigurationKeyState =
   "configured" | "inherited" | "deployment_fallback" | "not_configured";
 
+export type TranscriptionEndpoint = "audio/transcriptions" | "chat/completions";
+
 export type AssistantConfigurationSetting = {
   scope: "global" | "tenant";
   tenantId?: number;
   keyState: AssistantConfigurationKeyState;
   model: string | null;
   transcriptionModel?: string | null;
+  transcriptionEndpoint?: TranscriptionEndpoint | null;
   summaryModel?: string | null;
   updatedAt?: string;
   updatedBy?: string;
@@ -23,6 +26,7 @@ export type AssistantConfigurationSummary = {
     keyState: "deployment_fallback" | "not_configured";
     model: string;
     transcriptionModel?: string;
+    transcriptionEndpoint?: TranscriptionEndpoint;
     summaryModel?: string;
   };
 };
@@ -32,6 +36,7 @@ export type AssistantConfigurationWrite = {
   clearApiKey?: boolean;
   model?: string | null;
   transcriptionModel?: string | null;
+  transcriptionEndpoint?: TranscriptionEndpoint | null;
   summaryModel?: string | null;
 };
 
@@ -50,6 +55,7 @@ export type AssistantModel = {
   outputPricePerMillion: number | null;
   modalities?: AssistantModelModalities;
   supportsTools?: boolean;
+  transcriptionEndpoint?: TranscriptionEndpoint;
 };
 
 export type AssistantActiveTenant = {

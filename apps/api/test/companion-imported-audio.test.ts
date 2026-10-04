@@ -171,15 +171,13 @@ describe("imported recording audio inspection", () => {
       fetch: async (input, init) => {
         requestUrl = String(input);
         requestBody = await new Response(init!.body as ReadableStream).json();
-        return Response.json({
-          choices: [{ message: { content: "Imported transcript" } }],
-        });
+        return Response.json({ text: "Imported transcript" });
       },
     }).transcribeRecording(
       {
         apiKey: "test-key",
         model: "test/summary",
-        transcriptionModel: "test/audio-input",
+        transcriptionModel: "openai/whisper-large-v3",
       },
       { bytes, format: "wav", source: "upload", durationSeconds: 75 },
     );
@@ -188,13 +186,14 @@ describe("imported recording audio inspection", () => {
       source: "upload",
       durationSeconds: 75,
     });
-    expect(requestUrl).toBe("https://openrouter.ai/api/v1/chat/completions");
-    expect(requestBody.model).toBe("test/audio-input");
-    expect(requestBody.messages[0].content[0].text).toContain(
-      "without timestamps, labels, bullets, or commentary",
+    expect(requestUrl).toBe(
+      "https://openrouter.ai/api/v1/audio/transcriptions",
     );
-    expect(requestBody.messages[0].content[1].input_audio.format).toBe("wav");
-    expect(requestBody.messages[0].content[1].input_audio.data).toHaveLength(
+    expect(requestBody).toMatchObject({
+      model: "openai/whisper-large-v3",
+      input_audio: { format: "wav" },
+    });
+    expect(requestBody.input_audio.data).toHaveLength(
       Math.ceil(bytes.length / 3) * 4,
     );
   });
