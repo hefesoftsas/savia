@@ -17,6 +17,19 @@ function createServices(
     pageInfo: { hasNextPage: false, hasPreviousPage: false },
   },
 ): AppServices {
+  const assistantThreads = new Map<
+    string,
+    {
+      id: string;
+      userId: string;
+      title: string;
+      createdAt: string;
+      updatedAt: string;
+      messages: unknown[];
+      context?: unknown;
+      revision: number;
+    }
+  >();
   return {
     authSession: {
       checkSession: vi.fn().mockResolvedValue(undefined),
@@ -84,7 +97,39 @@ function createServices(
       setActiveTenant: vi.fn(),
     },
     apiClient: {
-      get: vi.fn().mockResolvedValue({ data: [] }),
+      get: vi.fn((path: string) => {
+        if (path.split("?", 1)[0] === "/api/assistant/threads") {
+          return Promise.resolve({ threads: [...assistantThreads.values()] });
+        }
+        return Promise.resolve({ data: [] });
+      }),
+      put: vi.fn(
+        (
+          path: string,
+          body: {
+            title: string;
+            messages: unknown[];
+            context?: unknown;
+            expectedRevision?: number;
+          },
+        ) => {
+          const id = decodeURIComponent(path.split("/").at(-1) ?? "");
+          const previous = assistantThreads.get(id);
+          const now = new Date().toISOString();
+          const thread = {
+            id,
+            userId: "principal-1",
+            title: body.title,
+            createdAt: previous?.createdAt ?? now,
+            updatedAt: now,
+            messages: body.messages,
+            ...(body.context ? { context: body.context } : {}),
+            revision: (body.expectedRevision ?? 0) + 1,
+          };
+          assistantThreads.set(id, thread);
+          return Promise.resolve(thread);
+        },
+      ),
       requestResponse: vi.fn(),
     },
   } as unknown as AppServices;

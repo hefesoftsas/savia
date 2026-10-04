@@ -42,3 +42,10 @@ source manifest retains SQLite source tables separately from
 copying SQLite cache/search internals. Configured expression indexes are installed
 from portable metadata during initialization and import, and updated atomically
 when performance settings are published.
+
+`0032_assistant_threads.sql` is an additive upgrade for owner-private assistant
+history. It stores messages as validated JSON text, cascades thread cleanup with
+principal deletion, and enforces one recording or session thread per owner and
+context. The native table and indexes are included in `manifest.json` for SQLite
+imports and baseline parity checks; the immutable `0001_initial.sql` snapshot is
+unchanged.
