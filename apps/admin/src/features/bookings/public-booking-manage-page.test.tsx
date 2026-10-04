@@ -1,6 +1,12 @@
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { StoreContextProvider, memoryStore } from "ra-core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PublicBookingManagePage } from "./public-booking-manage-page";
 
@@ -563,4 +569,93 @@ it("does not render the public booking link when bootstrap has no public URL", a
   expect(
     screen.queryByText("Book another appointment"),
   ).not.toBeInTheDocument();
+});
+
+it("refreshes a pending conference link from the private management endpoint", async () => {
+  let reads = 0;
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), "https://savia.test").pathname;
+      if (path === managePath) {
+        reads += 1;
+        const reservation = confirmedReservation({
+          conference:
+            reads === 1
+              ? { provider: "google_meet", joinUrl: null, status: "pending" }
+              : {
+                  provider: "google_meet",
+                  joinUrl: "https://meet.google.com/abc-defg-hij",
+                  status: "ready",
+                },
+        });
+        return Response.json({ data: manageData(reservation) });
+      }
+      throw new Error(`Unexpected management path ${path}`);
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  renderManagePage();
+
+  expect(
+    await screen.findByText(/link is being prepared/i),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh appointment" }));
+
+  expect(
+    await screen.findByRole("link", { name: "Join Google Meet" }),
+  ).toHaveAttribute("href", "https://meet.google.com/abc-defg-hij");
+  expect(reads).toBe(2);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock.mock.calls[1][1]?.credentials).toBe("omit");
+});
+
+it("discards a stale refresh response after cancellation advances the reservation", async () => {
+  let refreshReads = 0;
+  let resolveRefresh!: (response: Response) => void;
+  const delayedRefresh = new Promise<Response>((resolve) => {
+    resolveRefresh = resolve;
+  });
+  const staleReservation = confirmedReservation({
+    conference: { provider: "google_meet", joinUrl: null, status: "pending" },
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), "https://savia.test").pathname;
+      if (path === managePath) {
+        refreshReads += 1;
+        return refreshReads === 1
+          ? Response.json({ data: manageData(staleReservation) })
+          : delayedRefresh;
+      }
+      if (path === `${managePath}/cancel`)
+        return Response.json({
+          data: {
+            ...staleReservation,
+            status: "cancelled",
+            version: staleReservation.version + 1,
+          },
+        });
+      throw new Error(`Unexpected management path ${path}`);
+    }),
+  );
+  renderManagePage();
+
+  expect(
+    await screen.findByText(/link is being prepared/i),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh appointment" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel reservation" }));
+  expect(await screen.findByText("Cancelled")).toBeInTheDocument();
+
+  await act(async () => {
+    resolveRefresh(Response.json({ data: manageData(staleReservation) }));
+    await delayedRefresh;
+  });
+
+  expect(screen.getByText("Cancelled")).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Cancel reservation" }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Join Google Meet" })).toBeNull();
 });

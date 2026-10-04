@@ -168,7 +168,14 @@ it("keeps the exact idempotency key and customer locale on an identical retry", 
         }
         return Response.json({
           data: {
-            reservation: slot,
+            reservation: {
+              ...slot,
+              conference: {
+                provider: "google_meet",
+                joinUrl: "https://meet.google.com/abc-defg-hij",
+                status: "ready",
+              },
+            },
             managementUrl: "https://savia.test/manage/private-token",
           },
         });
@@ -193,6 +200,9 @@ it("keeps the exact idempotency key and customer locale on an identical retry", 
   );
   fireEvent.click(screen.getByRole("button", { name: "Retry booking" }));
   await screen.findByText("Appointment confirmed");
+  expect(
+    screen.getByRole("link", { name: "Join Google Meet" }),
+  ).toHaveAttribute("href", "https://meet.google.com/abc-defg-hij");
 
   expect(posts).toHaveLength(2);
   expect(posts[0].headers.get("Idempotency-Key")).toBeTruthy();

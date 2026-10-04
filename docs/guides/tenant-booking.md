@@ -55,6 +55,52 @@ Availability checks the Google primary calendar or the user's Outlook calendar. 
 
 Calendar jobs create, update or cancel a corresponding event. Google events use a deterministic identifier; Outlook events use a transaction identifier and a persistent booking marker to recover an event when a creation response is lost. Revoked grants do not authorize further external writes. A connected calendar's existing reservation event may restrict moves that overlap that event; choose a free time. External calendar providers do not participate in Savia's database transaction, so simultaneous changes made outside Savia can still conflict and require review.
 
+### Automatic video calls
+
+When a professional has granted calendar access, new appointments request a
+video call if that calendar advertises support: Google Meet for Google Calendar,
+or Teams for Outlook. Savia checks the actual calendar capabilities; connecting
+an account alone does not guarantee conferencing support. A calendar without the
+capability still receives an ordinary appointment. Zoom and Jitsi are not part of
+this booking integration.
+
+The Nango Google connection must allow calendar metadata reads in addition to
+event writes and free/busy reads (for example, `calendar.readonly` plus
+`calendar.events`, or the broader `calendar` scope). Outlook uses delegated
+`Calendars.ReadWrite` for calendar metadata and event operations. Existing
+connections with narrower scopes may need reauthorization before provisioning
+can succeed; Savia does not expand consent automatically.
+
+Provisioning runs through the existing background calendar jobs after the native
+reservation is confirmed. The reservation stores the external event identifier,
+meeting provider, link, and provisioning state. Pending links reuse the same event
+on bounded retries (up to five job attempts); a provider failure never cancels the
+native reservation. Unknown calendar capabilities are retried instead of being
+silently treated as unsupported. A final failure is shown as unavailable rather
+than leaving a permanent pending indicator.
+
+Open the appointment in **Bookings → Reservations**, or use its private management
+link, to view the call status and join a ready meeting. Refresh the appointment
+after pending provisioning. Customer confirmation screens can show the returned
+status; the management page contains the latest saved result. Emails include a
+ready call link when it has already been saved; an earlier confirmation email
+still includes the private management link. No video link is exposed in public
+catalogs or availability results.
+
+Rescheduling updates the existing calendar event and preserves its call. Cancelling
+hides the join action immediately and queues deletion of the same provider event.
+Links are accepted only as HTTPS participant URLs. The existing tenant grant,
+professional membership and pinned Nango connection checks apply to every job.
+Teams link validation includes the documented [sovereign cloud client hosts](https://learn.microsoft.com/en-us/microsoftteams/platform/concepts/sovereign-cloud)
+as well as commercial Teams hosts; the connection must still be configured for
+the correct cloud. Refreshing a pending link cannot overwrite a later appointment
+cancellation or reschedule.
+
+Deploy the forward migrations `0028_booking_conferences.sql` for D1 and PostgreSQL
+before the updated API. No live provider calls are required by the automated
+fixtures; live account, policy and license compatibility still needs verification
+in the target environment.
+
 ## Email and delivery status
 
 Confirmation, rescheduling, cancellation and optional reminder messages use the tenant's configured outbound mail first, or the existing global SMTP/transactional fallback when tenant mail is unconfigured. Mail setup is optional for booking: without a transport, the reservation is confirmed and delivery is marked skipped with `BOOKING_EMAIL_NOT_CONFIGURED`. A configuration-read or delivery failure remains retryable and does not undo the reservation. Configure mail under the existing tenant email settings; a contact address alone is not a sending transport. Messages include the customer, service, professional, start/end, duration, time zone and private management link. The customer locale is saved as English, Spanish or Portuguese at creation; older reservations default to English. Delivery and calendar status appear separately from reservation status: a reservation remains confirmed while delivery is pending or failed.

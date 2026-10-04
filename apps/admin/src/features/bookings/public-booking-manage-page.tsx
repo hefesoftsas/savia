@@ -5,6 +5,10 @@ import { bookingMessages } from "./booking-messages";
 import { PublicBookingAvailability } from "./public-booking-availability";
 import { PublicBookingSummary } from "./public-booking-summary";
 import type { BookingSelection } from "./booking-types";
+import {
+  BookingConference,
+  type BookingConferenceState,
+} from "./booking-conference";
 
 type Reservation = {
   id: string;
@@ -20,6 +24,7 @@ type Reservation = {
   version: number;
   deliveryStatus: string;
   calendarStatus: string;
+  conference?: BookingConferenceState;
 };
 type ManageBootstrap = {
   reservation: Reservation;
@@ -68,6 +73,8 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [conferenceRefreshError, setConferenceRefreshError] = useState("");
   const [rescheduling, setRescheduling] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [updated, setUpdated] = useState(false);
@@ -76,6 +83,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   const stepHeading = useRef<HTMLHeadingElement>(null);
+  const refreshSequence = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -109,6 +117,50 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   }, [rescheduling, reviewing]);
 
   const reservation = bootstrap?.reservation;
+  function updateBootstrap(next: ManageBootstrap) {
+    setBootstrap((current) => {
+      if (!current) return next;
+      if (
+        next.reservation.version < current.reservation.version ||
+        (current.reservation.status === "cancelled" &&
+          next.reservation.status !== "cancelled")
+      )
+        return current;
+      return next;
+    });
+  }
+  function updateReservation(nextReservation: Reservation) {
+    setBootstrap((current) => {
+      if (!current) return current;
+      if (
+        nextReservation.version < current.reservation.version ||
+        (current.reservation.status === "cancelled" &&
+          nextReservation.status !== "cancelled")
+      )
+        return current;
+      return { ...current, reservation: nextReservation };
+    });
+  }
+  function invalidateRefresh() {
+    refreshSequence.current += 1;
+    setRefreshing(false);
+  }
+  async function refreshAppointment() {
+    const request = ++refreshSequence.current;
+    setRefreshing(true);
+    setConferenceRefreshError("");
+    try {
+      const data = await publicRequest<ManageBootstrap>(managePath);
+      if (request === refreshSequence.current) updateBootstrap(data);
+    } catch {
+      if (request === refreshSequence.current)
+        setConferenceRefreshError(
+          t("The appointment could not be refreshed. Try again."),
+        );
+    } finally {
+      if (request === refreshSequence.current) setRefreshing(false);
+    }
+  }
   const summaryCatalog = useMemo(
     () =>
       bootstrap
@@ -138,6 +190,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
 
   async function cancel() {
     if (!bootstrap) return;
+    invalidateRefresh();
     setBusy(true);
     setError("");
     try {
@@ -149,7 +202,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
           body: JSON.stringify({ version: bootstrap.reservation.version }),
         },
       );
-      setBootstrap({ ...bootstrap, reservation: nextReservation });
+      updateReservation(nextReservation);
       setUpdated(false);
     } catch {
       setError(
@@ -163,6 +216,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   async function reschedule() {
     if (!bootstrap || !selection) return;
     const submittedStartsAt = selection.slot.startsAt;
+    invalidateRefresh();
     setBusy(true);
     setError("");
     try {
@@ -177,7 +231,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
           }),
         },
       );
-      setBootstrap({ ...bootstrap, reservation: nextReservation });
+      updateReservation(nextReservation);
       setRescheduling(false);
       setReviewing(false);
       setUpdated(true);
@@ -185,7 +239,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
       if ([404, 409].includes((requestError as ApiError)?.status ?? 0)) {
         try {
           const current = await publicRequest<ManageBootstrap>(managePath);
-          setBootstrap(current);
+          updateBootstrap(current);
           setDisplayTimeZone(selection.displayTimeZone);
           setReviewing(false);
           if (
@@ -286,6 +340,28 @@ export function PublicBookingManagePage({ token }: { token: string }) {
       <p role="status" className="text-sm">
         {t(reservation.status === "confirmed" ? "Confirmed" : "Cancelled")}
       </p>
+      <BookingConference
+        conference={reservation.conference}
+        status={reservation.status}
+      />
+      {reservation.status === "confirmed" &&
+        reservation.conference?.status === "pending" && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={refreshing || busy}
+            onClick={() => void refreshAppointment()}
+          >
+            {refreshing
+              ? t("Refreshing appointment…")
+              : t("Refresh appointment")}
+          </Button>
+        )}
+      {conferenceRefreshError && (
+        <p role="alert" className="text-sm text-destructive">
+          {conferenceRefreshError}
+        </p>
+      )}
       {updated && summaryCatalog && selection && (
         <section className="grid gap-2" aria-live="polite">
           <h2 className="text-lg font-semibold">{t("Updated appointment")}</h2>

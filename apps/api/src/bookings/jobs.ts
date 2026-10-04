@@ -1,6 +1,7 @@
 import type { createBookingCalendarAdapter } from "./calendar";
 import { readBooking, readSettings, readGrant } from "./repository";
 import { formatBookingEmail } from "./email";
+import { safeConferenceUrl } from "./conference";
 import { cleanupBookingAdmissions } from "./public-policy";
 export type BookingJobsOptions = {
   now?: () => number;
@@ -131,7 +132,7 @@ export async function runBookingJobs(
             await finish("skipped");
             continue;
           }
-          const externalId = await options.calendar.sync({
+          const synced = await options.calendar.sync({
             principalId: booking.principal_id,
             provider: grant.provider,
             connectionId: grant.connection_id,
@@ -140,8 +141,12 @@ export async function runBookingJobs(
             startsAt: booking.starts_at,
             endsAt: booking.ends_at,
             externalId: booking.external_id,
+            ...(booking.conference_provider
+              ? { conferenceProvider: booking.conference_provider }
+              : {}),
             cancelled: booking.status === "cancelled",
           });
+          const externalId = synced.externalId;
           // Preserve a recovered ID even if a new native revision arrived during I/O.
           // The next revision can then update/cancel the same provider event.
           if (externalId)
@@ -159,6 +164,37 @@ export async function runBookingJobs(
                 lease,
               )
               .run();
+          const conference = synced.conference;
+          const joinUrl =
+            conference?.status === "ready"
+              ? safeConferenceUrl(conference.joinUrl)
+              : null;
+          const conferenceStatus =
+            conference?.status === "pending" && job.attempts >= 5
+              ? "failed"
+              : conference?.status === "ready" && !joinUrl
+                ? "failed"
+                : (conference?.status ?? null);
+          await db
+            .prepare(
+              "UPDATE tenant_bookings SET conference_provider=?,conference_url=?,conference_status=? WHERE tenant_id=? AND id=? AND version=? AND EXISTS(SELECT 1 FROM tenant_booking_delivery_locks WHERE tenant_id=? AND booking_id=? AND lease_token=?)",
+            )
+            .bind(
+              conference?.provider ?? null,
+              joinUrl,
+              conferenceStatus,
+              job.tenant_id,
+              booking.id,
+              job.revision,
+              job.tenant_id,
+              booking.id,
+              lease,
+            )
+            .run();
+          if (conferenceStatus === "pending") {
+            await finish("failed", "BOOKING_CONFERENCE_PENDING");
+            continue;
+          }
         } else {
           if (!options.sendMail && !options.mailAvailability) {
             await finish("skipped", "BOOKING_EMAIL_NOT_CONFIGURED");
@@ -191,6 +227,21 @@ export async function runBookingJobs(
         }
         await finish("completed");
       } catch {
+        if (job.kind === "calendar" && job.attempts >= 5) {
+          await db
+            .prepare(
+              "UPDATE tenant_bookings SET conference_status='failed',conference_url=NULL WHERE tenant_id=? AND id=? AND version=? AND (conference_status IS NULL OR conference_status='pending') AND EXISTS(SELECT 1 FROM tenant_booking_delivery_locks WHERE tenant_id=? AND booking_id=? AND lease_token=?)",
+            )
+            .bind(
+              job.tenant_id,
+              booking.id,
+              job.revision,
+              job.tenant_id,
+              booking.id,
+              lease,
+            )
+            .run();
+        }
         await finish(
           "failed",
           job.kind === "calendar"

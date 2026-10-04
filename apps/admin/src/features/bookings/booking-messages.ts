@@ -457,6 +457,58 @@ export const bookingMessages = {
   Status: ["Estado", "Status", "Status"],
   Delivery: ["Entrega", "Delivery", "Entrega"],
   Calendar: ["Calendario", "Calendar", "Calendário"],
+  "Join Google Meet": [
+    "Unirse a Google Meet",
+    "Join Google Meet",
+    "Entrar no Google Meet",
+  ],
+  "Join Teams": ["Unirse a Teams", "Join Teams", "Entrar no Teams"],
+  "Join video meeting": [
+    "Unirse a la videollamada",
+    "Join video meeting",
+    "Entrar na videochamada",
+  ],
+  "Video meeting link is being prepared. Refresh to check again.": [
+    "Se está preparando el enlace de videollamada. Actualiza para comprobarlo de nuevo.",
+    "Video meeting link is being prepared. Refresh to check again.",
+    "O link da videochamada está sendo preparado. Atualize para verificar novamente.",
+  ],
+  "Video meeting link is being prepared. Open appointment management to refresh the status.":
+    [
+      "Se está preparando el enlace de videollamada. Abre la administración de la cita para actualizar el estado.",
+      "Video meeting link is being prepared. Open appointment management to refresh the status.",
+      "O link da videochamada está sendo preparado. Abra o gerenciamento do agendamento para atualizar o status.",
+    ],
+  "Video meetings are not available for this appointment.": [
+    "Esta cita no admite videollamada.",
+    "Video meetings are not available for this appointment.",
+    "Este agendamento não oferece videochamada.",
+  ],
+  "The video meeting could not be created.": [
+    "No se pudo crear la videollamada.",
+    "The video meeting could not be created.",
+    "Não foi possível criar a videochamada.",
+  ],
+  "The video meeting link is unavailable.": [
+    "El enlace de videollamada no está disponible.",
+    "The video meeting link is unavailable.",
+    "O link da videochamada não está disponível.",
+  ],
+  "Refresh appointment": [
+    "Actualizar cita",
+    "Refresh appointment",
+    "Atualizar agendamento",
+  ],
+  "Refreshing appointment…": [
+    "Actualizando cita…",
+    "Refreshing appointment…",
+    "Atualizando agendamento…",
+  ],
+  "The appointment could not be refreshed. Try again.": [
+    "No se pudo actualizar la cita. Inténtalo de nuevo.",
+    "The appointment could not be refreshed. Try again.",
+    "Não foi possível atualizar o agendamento. Tente novamente.",
+  ],
   "Cancel reservation": [
     "Cancelar reserva",
     "Cancel reservation",

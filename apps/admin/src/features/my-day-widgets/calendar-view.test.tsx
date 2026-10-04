@@ -2,7 +2,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "../studio-engine/test/locale-test-render";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AgendaWidgetBody,
   useMyDayAgenda,
@@ -75,10 +75,16 @@ function Harness({
   useEffect(() => agenda.setSelectedDay(new Date(2026, 9, 3)), []);
   return <AgendaWidgetBody agenda={agenda} />;
 }
+beforeEach(() => {
+  // The fixture selects October 3; keep "today" independent of the CI clock.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 3, 12));
+});
 afterEach(() => {
   cleanup();
   window.dispatchEvent(new Event("savia:session-cleared"));
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 describe("My Day calendar views", () => {
   it("links to a confirmed canonical tenant booking route and omits unknown hosts", () => {

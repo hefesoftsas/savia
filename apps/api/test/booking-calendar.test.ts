@@ -1,6 +1,9 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { createBookingCalendarAdapter } from "../src/bookings/calendar";
+import {
+  createBookingCalendarAdapter,
+  type BookingCalendarSyncResult,
+} from "../src/bookings/calendar";
 import type { PersonalIntegrationNangoClient } from "../src/personal-integrations/contracts";
 
 const migrations = Object.entries(
@@ -74,6 +77,18 @@ function fakeNango(
     proxy: vi.fn(proxy),
   } as unknown as PersonalIntegrationNangoClient;
 }
+
+const noConference: BookingCalendarSyncResult["conference"] = {
+  provider: null,
+  joinUrl: null,
+  status: "unsupported",
+};
+
+const readyConference: BookingCalendarSyncResult["conference"] = {
+  provider: "google_meet",
+  joinUrl: "https://meet.google.com/abc-defg-hij",
+  status: "ready",
+};
 
 const calendarInput = {
   principalId,
@@ -189,6 +204,25 @@ describe("booking calendar adapter", () => {
       [];
     const nango = fakeNango(async ({ method, path, body }) => {
       requests.push({ method, path, body });
+      if (path === "/calendar/v3/calendars/primary")
+        return Response.json({
+          conferenceProperties: {
+            allowedConferenceSolutionTypes: ["hangoutsMeet"],
+          },
+        });
+      if (method === "GET")
+        return Response.json({
+          id: path.split("?")[0]?.split("/").at(-1),
+          conferenceData: {
+            conferenceSolution: { key: { type: "hangoutsMeet" } },
+            entryPoints: [
+              {
+                entryPointType: "video",
+                uri: "https://meet.google.com/abc-defg-hij",
+              },
+            ],
+          },
+        });
       return method === "POST"
         ? new Response(null, { status: 409 })
         : Response.json({ id: "stable-event-id" });
@@ -206,10 +240,14 @@ describe("booking calendar adapter", () => {
     await adapter.sync(input);
     await adapter.sync(input);
     expect(requests.map(({ method }) => method)).toEqual([
+      "GET",
       "POST",
-      "PUT",
+      "GET",
+      "PATCH",
+      "GET",
       "POST",
-      "PUT",
+      "GET",
+      "PATCH",
     ]);
     const expectedId = await crypto.subtle.digest(
       "SHA-256",
@@ -218,10 +256,295 @@ describe("booking calendar adapter", () => {
     const hexId = Array.from(new Uint8Array(expectedId), (byte) =>
       byte.toString(16).padStart(2, "0"),
     ).join("");
-    expect(requests[0]?.path).toBe("/calendar/v3/calendars/primary/events");
-    expect((requests[0]?.body as { id?: string })?.id).toBe(hexId);
     expect(requests[1]?.path).toBe(
+      "/calendar/v3/calendars/primary/events?conferenceDataVersion=1",
+    );
+    expect((requests[1]?.body as { id?: string })?.id).toBe(hexId);
+    expect(requests[2]?.path).toContain(
       `/calendar/v3/calendars/primary/events/${hexId}`,
+    );
+    expect(requests[3]?.body).not.toHaveProperty(
+      "conferenceData.createRequest",
+    );
+  });
+
+  it("creates a Google Meet conference only when the calendar supports it", async () => {
+    await seedConnection();
+    const requests: Array<{ method: string; path: string; body?: unknown }> =
+      [];
+    const nango = fakeNango(async ({ method, path, body }) => {
+      requests.push({ method, path, body });
+      if (path === "/calendar/v3/calendars/primary")
+        return Response.json({
+          conferenceProperties: {
+            allowedConferenceSolutionTypes: ["hangoutsMeet"],
+          },
+        });
+      return Response.json({
+        id: (body as { id?: string })?.id,
+        conferenceData: {
+          conferenceSolution: { key: { type: "hangoutsMeet" } },
+          createRequest: { status: { statusCode: "pending" } },
+        },
+      });
+    });
+    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+      ...calendarInput,
+      id: "booking-meet-pending",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: null,
+      cancelled: false,
+    });
+    expect(result).toEqual({
+      externalId: (requests[1]?.body as { id?: string })?.id,
+      conference: { provider: "google_meet", joinUrl: null, status: "pending" },
+    });
+    expect(requests[1]?.path).toContain("conferenceDataVersion=1");
+    expect(requests[1]?.body).toMatchObject({
+      conferenceData: {
+        createRequest: {
+          requestId: (requests[1]?.body as { id?: string })?.id,
+          conferenceSolutionKey: { type: "hangoutsMeet" },
+        },
+      },
+    });
+  });
+
+  it("preserves the requested Google provider while conference provisioning is pending", async () => {
+    await seedConnection();
+    const requests: Array<{ method: string; path: string; body?: unknown }> =
+      [];
+    const nango = fakeNango(async ({ method, path, body }) => {
+      requests.push({ method, path, body });
+      if (path === "/calendar/v3/calendars/primary")
+        return Response.json({
+          conferenceProperties: {
+            allowedConferenceSolutionTypes: ["hangoutsMeet"],
+          },
+        });
+      if (method === "POST")
+        return Response.json({ id: (body as { id?: string })?.id });
+      return Response.json({
+        id: path.split("?")[0]?.split("/").at(-1),
+      });
+    });
+    const adapter = createBookingCalendarAdapter(env.DB, nango);
+    const input = {
+      ...calendarInput,
+      id: "booking-meet-retry",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: null,
+      cancelled: false,
+    };
+    const created = await adapter.sync(input);
+    expect(created).toMatchObject({
+      externalId: expect.any(String),
+      conference: { provider: "google_meet", joinUrl: null, status: "pending" },
+    });
+    await expect(
+      adapter.sync({
+        ...input,
+        externalId: created.externalId,
+        conferenceProvider: "google_meet",
+      }),
+    ).resolves.toEqual({
+      externalId: created.externalId,
+      conference: { provider: "google_meet", joinUrl: null, status: "pending" },
+    });
+    expect(requests.map(({ method }) => method)).toEqual([
+      "GET",
+      "POST",
+      "GET",
+      "PATCH",
+    ]);
+    expect(requests[3]?.body).not.toHaveProperty(
+      "conferenceData.createRequest",
+    );
+  });
+
+  it("returns unsupported for a valid calendar with no supported conference provider", async () => {
+    await seedConnection();
+    const requests: Array<{ method: string; path: string; body?: unknown }> =
+      [];
+    const nango = fakeNango(async ({ method, path, body }) => {
+      requests.push({ method, path, body });
+      if (path === "/calendar/v3/calendars/primary")
+        return Response.json({
+          conferenceProperties: {
+            allowedConferenceSolutionTypes: ["eventHangout"],
+          },
+        });
+      return Response.json({ id: (body as { id?: string })?.id });
+    });
+    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+      ...calendarInput,
+      id: "booking-no-meet",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: null,
+      cancelled: false,
+    });
+    expect(result).toEqual({
+      externalId: (requests[1]?.body as { id?: string })?.id,
+      conference: noConference,
+    });
+    expect(requests[1]?.body).not.toHaveProperty("conferenceData");
+  });
+
+  it.each([
+    "teams.microsoft.com",
+    "gov.teams.microsoft.us",
+    "dod.teams.microsoft.us",
+    "teams.microsoftonline.cn",
+  ])(
+    "creates a Teams meeting at %s when Outlook advertises Teams support",
+    async (host) => {
+      await seedConnection("outlook");
+      const requests: Array<{ method: string; path: string; body?: unknown }> =
+        [];
+      const nango = fakeNango(async ({ method, path, body }) => {
+        requests.push({ method, path, body });
+        if (path.startsWith("/v1.0/me/calendar?"))
+          return Response.json({
+            allowedOnlineMeetingProviders: ["teamsForBusiness"],
+          });
+        if (method === "GET") return Response.json({ value: [] });
+        return Response.json({
+          id: "teams-event",
+          isOnlineMeeting: true,
+          onlineMeetingProvider: "teamsForBusiness",
+          onlineMeeting: {
+            joinUrl: `https://${host}/l/meetup-join/abc`,
+          },
+        });
+      });
+      const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+        ...calendarInput,
+        provider: "outlook",
+        id: "booking-teams-ready",
+        title: "Consultation",
+        startsAt: "2026-03-01T09:00:00Z",
+        endsAt: "2026-03-01T10:00:00Z",
+        externalId: null,
+        cancelled: false,
+      });
+      expect(result).toEqual({
+        externalId: "teams-event",
+        conference: {
+          provider: "teams",
+          joinUrl: `https://${host}/l/meetup-join/abc`,
+          status: "ready",
+        },
+      });
+      expect(requests[2]?.body).toMatchObject({
+        isOnlineMeeting: true,
+        onlineMeetingProvider: "teamsForBusiness",
+      });
+    },
+  );
+
+  it("fails retryably when conference capability data is malformed", async () => {
+    await seedConnection();
+    const nango = fakeNango(async () =>
+      Response.json({ conferenceProperties: {} }),
+    );
+    await expect(
+      createBookingCalendarAdapter(env.DB, nango).sync({
+        ...calendarInput,
+        id: "booking-bad-capability",
+        title: "Consultation",
+        startsAt: "2026-03-01T09:00:00Z",
+        endsAt: "2026-03-01T10:00:00Z",
+        externalId: null,
+        cancelled: false,
+      }),
+    ).rejects.toThrow(/unavailable/i);
+  });
+
+  it("rejects a Google create response whose ID does not match the stable booking ID", async () => {
+    await seedConnection();
+    const nango = fakeNango(async ({ path }) =>
+      path === "/calendar/v3/calendars/primary"
+        ? Response.json({
+            conferenceProperties: { allowedConferenceSolutionTypes: [] },
+          })
+        : Response.json({ id: "unexpected-event-id" }),
+    );
+    await expect(
+      createBookingCalendarAdapter(env.DB, nango).sync({
+        ...calendarInput,
+        id: "booking-unexpected-id",
+        title: "Consultation",
+        startsAt: "2026-03-01T09:00:00Z",
+        endsAt: "2026-03-01T10:00:00Z",
+        externalId: null,
+        cancelled: false,
+      }),
+    ).rejects.toThrow(/unavailable/i);
+  });
+
+  it("marks a Teams conference failed when Outlook explicitly returns it disabled", async () => {
+    await seedConnection("outlook");
+    const nango = fakeNango(async ({ path }) =>
+      path.startsWith("/v1.0/me/events/")
+        ? Response.json({ id: "disabled-teams", isOnlineMeeting: false })
+        : Response.json({ id: "disabled-teams" }),
+    );
+    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+      ...calendarInput,
+      provider: "outlook",
+      id: "booking-disabled-teams",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: "disabled-teams",
+      conferenceProvider: "teams",
+      cancelled: false,
+    });
+    expect(result).toEqual({
+      externalId: "disabled-teams",
+      conference: { provider: "teams", joinUrl: null, status: "failed" },
+    });
+  });
+
+  it("keeps the existing Google conference when a booking is rescheduled", async () => {
+    await seedConnection();
+    const requests: Array<{ method: string; path: string; body?: unknown }> =
+      [];
+    const nango = fakeNango(async ({ method, path, body }) => {
+      requests.push({ method, path, body });
+      if (method === "GET")
+        return Response.json({
+          id: "stable-meet",
+          hangoutLink: "https://meet.google.com/abc-defg-hij",
+        });
+      return Response.json({
+        id: "stable-meet",
+        hangoutLink: "https://meet.google.com/abc-defg-hij",
+      });
+    });
+    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+      ...calendarInput,
+      id: "booking-reschedule",
+      title: "Consultation",
+      startsAt: "2026-03-02T09:00:00Z",
+      endsAt: "2026-03-02T10:00:00Z",
+      externalId: "stable-meet",
+      cancelled: false,
+    });
+    expect(result).toEqual({
+      externalId: "stable-meet",
+      conference: readyConference,
+    });
+    expect(requests.map(({ method }) => method)).toEqual(["GET", "PATCH"]);
+    expect(requests[1]?.path).toContain("conferenceDataVersion=1");
+    expect(requests[1]?.body).not.toHaveProperty(
+      "conferenceData.createRequest",
     );
   });
 
@@ -240,7 +563,10 @@ describe("booking calendar adapter", () => {
       const google = fakeNango(async () => new Response(null, { status }));
       await expect(
         createBookingCalendarAdapter(env.DB, google).sync(input),
-      ).resolves.toBe("persisted-google-id");
+      ).resolves.toEqual({
+        externalId: "persisted-google-id",
+        conference: null,
+      });
     }
     await seedConnection("outlook");
     const outlook = fakeNango(async () => new Response(null, { status: 404 }));
@@ -249,7 +575,7 @@ describe("booking calendar adapter", () => {
         ...input,
         provider: "outlook",
       }),
-    ).resolves.toBe("persisted-google-id");
+    ).resolves.toEqual({ externalId: "persisted-google-id", conference: null });
   });
 
   it("deletes the deterministic Google event when create returned before persistence", async () => {
@@ -278,7 +604,7 @@ describe("booking calendar adapter", () => {
     const expectedId = Array.from(new Uint8Array(digest), (byte) =>
       byte.toString(16).padStart(2, "0"),
     ).join("");
-    expect(externalId).toBe(expectedId);
+    expect(externalId).toEqual({ externalId: expectedId, conference: null });
     expect(requests).toEqual([
       {
         method: "DELETE",
@@ -293,6 +619,12 @@ describe("booking calendar adapter", () => {
       [];
     const nango = fakeNango(async ({ method, path, body }) => {
       requests.push({ method, path, body });
+      if (path.startsWith("/v1.0/me/calendar?"))
+        return Response.json({
+          allowedOnlineMeetingProviders: ["teamsForBusiness"],
+        });
+      if (path.startsWith("/v1.0/me/events/persisted-outlook-id"))
+        return Response.json({ id: "persisted-outlook-id" });
       if (method === "GET") return Response.json({ value: [] });
       return method === "POST"
         ? Response.json({ id: "outlook-event" })
@@ -309,27 +641,36 @@ describe("booking calendar adapter", () => {
       externalId: null,
       cancelled: false,
     };
-    await expect(adapter.sync(input)).resolves.toBe("outlook-event");
+    await expect(adapter.sync(input)).resolves.toEqual({
+      externalId: "outlook-event",
+      conference: { provider: "teams", joinUrl: null, status: "pending" },
+    });
+    expect(requests[2]?.body).toMatchObject({
+      isOnlineMeeting: true,
+      onlineMeetingProvider: "teamsForBusiness",
+    });
     await adapter.sync({ ...input, externalId: "persisted-outlook-id" });
     expect(requests.map(({ method }) => method)).toEqual([
       "GET",
+      "GET",
       "POST",
+      "GET",
       "PATCH",
     ]);
     expect(
-      (requests[1]?.body as { transactionId?: string })?.transactionId,
+      (requests[2]?.body as { transactionId?: string })?.transactionId,
     ).toBeTruthy();
-    expect(requests[1]?.body).toHaveProperty("singleValueExtendedProperties", [
+    expect(requests[2]?.body).toHaveProperty("singleValueExtendedProperties", [
       {
         id: "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ab} Name SaviaBookingId",
         value: input.id,
       },
     ]);
-    expect(requests[2]).toMatchObject({
+    expect(requests[4]).toMatchObject({
       method: "PATCH",
       path: "/v1.0/me/events/persisted-outlook-id",
     });
-    expect(requests[1]?.body).not.toHaveProperty("attendees");
+    expect(requests[2]?.body).not.toHaveProperty("attendees");
   });
 
   it("recovers an Outlook create whose response was lost by finding its booking marker", async () => {
@@ -339,10 +680,14 @@ describe("booking calendar adapter", () => {
     let lookupCount = 0;
     const nango = fakeNango(async ({ method, path, body }) => {
       requests.push({ method, path, body });
+      if (path.startsWith("/v1.0/me/calendar?"))
+        return Response.json({
+          allowedOnlineMeetingProviders: ["teamsForBusiness"],
+        });
       if (method === "POST") throw new Error("simulated lost create response");
       if (method === "GET" && lookupCount++ === 0)
         return Response.json({ value: [] });
-      if (method === "GET")
+      if (method === "GET" && path.includes("filter"))
         return Response.json({
           value: [
             {
@@ -356,6 +701,8 @@ describe("booking calendar adapter", () => {
             },
           ],
         });
+      if (method === "GET")
+        return Response.json({ id: "recovered-outlook-event" });
       return new Response(null, { status: 204 });
     });
     const adapter = createBookingCalendarAdapter(env.DB, nango);
@@ -370,15 +717,23 @@ describe("booking calendar adapter", () => {
       cancelled: false,
     };
     await expect(adapter.sync(input)).rejects.toThrow(/unavailable/i);
-    await expect(adapter.sync(input)).resolves.toBe("recovered-outlook-event");
+    await expect(adapter.sync(input)).resolves.toEqual({
+      externalId: "recovered-outlook-event",
+      conference: { provider: "teams", joinUrl: null, status: "pending" },
+    });
     expect(requests.map(({ method }) => method)).toEqual([
+      "GET",
       "GET",
       "POST",
       "GET",
+      "GET",
+      "GET",
       "PATCH",
     ]);
-    expect(requests[3]?.path).toBe("/v1.0/me/events/recovered-outlook-event");
-    expect(decodeURIComponent(requests[0]?.path ?? "")).toContain(input.id);
+    expect(requests[5]?.path).toContain(
+      "/v1.0/me/events/recovered-outlook-event?",
+    );
+    expect(decodeURIComponent(requests[1]?.path ?? "")).toContain(input.id);
   });
 
   it("fails closed when Outlook booking marker lookup is malformed or ambiguous", async () => {
@@ -436,7 +791,10 @@ describe("booking calendar adapter", () => {
       externalId: null,
       cancelled: true,
     });
-    expect(result).toBe("lost-outlook-event");
+    expect(result).toEqual({
+      externalId: "lost-outlook-event",
+      conference: null,
+    });
     expect(requests.map(({ method }) => method)).toEqual(["GET", "DELETE"]);
     expect(requests[1]?.path).toBe("/v1.0/me/events/lost-outlook-event");
   });
