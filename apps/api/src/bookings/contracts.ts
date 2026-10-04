@@ -179,6 +179,10 @@ export const publicBookingSchema = z
   })
   .strict();
 export const bootstrapSchema = z.object({
+  agenda: z.object({
+    enabled: z.boolean(),
+    sourceCount: z.number().int().min(0),
+  }),
   settings: settingsSchema,
   candidates: z.array(
     z.object({ principalId: z.string(), displayName: z.string() }),
@@ -209,6 +213,7 @@ export const ownAvailabilitySchema = z
 export const calendarGrantSchema = z
   .object({ provider: z.enum(["google_calendar", "outlook"]).nullable() })
   .strict();
+export const agendaGrantSchema = z.object({ enabled: z.boolean() }).strict();
 export function defaultSettings(title: string): BookingSettings {
   return {
     version: 0,

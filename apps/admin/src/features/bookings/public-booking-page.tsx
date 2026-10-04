@@ -47,13 +47,16 @@ async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { Accept: "application/json", ...init?.headers },
   });
   const body = (await response.json()) as
-    Envelope<T> | { error?: { message?: string } };
+    Envelope<T> | { error?: { code?: string; message?: string } };
   if (!response.ok)
     throw Object.assign(
       new Error(
         body && "error" in body ? body.error?.message : "Request failed",
       ),
-      { status: response.status },
+      {
+        status: response.status,
+        code: body && "error" in body ? body.error?.code : undefined,
+      },
     );
   return (body as Envelope<T>).data;
 }
@@ -292,6 +295,12 @@ export function PublicBookingPage({ token }: { token: string }) {
         "status" in requestError
           ? requestError.status
           : undefined;
+      const code =
+        requestError &&
+        typeof requestError === "object" &&
+        "code" in requestError
+          ? requestError.code
+          : undefined;
       if (status === 403 || status === 409) {
         if (catalog.captcha.captchaProvider !== "disabled") {
           setCaptchaToken("");
@@ -306,7 +315,9 @@ export function PublicBookingPage({ token }: { token: string }) {
       setError(
         status === 409
           ? t(
-              "That time is no longer available. Choose another available time.",
+              code === "BOOKING_TIME_CONFLICT"
+                ? "That time conflicts with another meeting or appointment. Choose another available time."
+                : "That time is no longer available. Choose another available time.",
             )
           : t(
               "Your booking could not be confirmed. Retry with the same request.",

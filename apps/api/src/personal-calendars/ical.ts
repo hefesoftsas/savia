@@ -238,6 +238,7 @@ export function expandCalendar(
   const masters = [...newest.values()].filter(
     (event) => !event.isRecurrenceException(),
   );
+  const masterByUid = new Map(masters.map((event) => [event.uid, event]));
   const output = new Map<string, CalendarOccurrence>();
   let steps = 0;
 
@@ -283,6 +284,10 @@ export function expandCalendar(
           startsAt,
           endsAt,
           allDay,
+          busy:
+            (
+              propertyText(item, "transp") ?? propertyText(master, "transp")
+            )?.toUpperCase() !== "TRANSPARENT",
           webLink: safeLink,
           timeZone: allDay
             ? input.timeZone
@@ -300,6 +305,7 @@ export function expandCalendar(
   );
   for (const event of exceptions) {
     if (propertyText(event, "status") === "CANCELLED") continue;
+    const master = masterByUid.get(event.uid);
     const recurrence = event.recurrenceId;
     const start = event.startDate;
     const end = event.endDate;
@@ -328,6 +334,11 @@ export function expandCalendar(
         startsAt,
         endsAt,
         allDay,
+        busy:
+          (
+            propertyText(event, "transp") ??
+            (master ? propertyText(master, "transp") : null)
+          )?.toUpperCase() !== "TRANSPARENT",
         webLink: link && /^https:\/\//i.test(link) ? link : null,
         timeZone: allDay
           ? input.timeZone

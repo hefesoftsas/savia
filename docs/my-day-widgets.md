@@ -85,6 +85,11 @@ and business time zone. Where the current deployment supports tenant hostnames,
 page for the appointment date. **Show upcoming reservations** returns to the
 usual upcoming list.
 Private customer management links are never included in this personal feed.
+Your other calendar events can also block appointment slots. In the workspace,
+use **Bookings → Availability → My Day availability** to authorize your current
+calendar sources for conflict checks. Only busy intervals are used; private
+meeting details are not exposed on the public booking page. Update this access
+when adding or reconnecting sources. See [Tenant booking](guides/tenant-booking.md).
 When Savia has the exact event identity for the currently connected Google or
 Outlook account, its calendar copy is omitted from the agenda; unrelated events
 with similar names or times remain visible.

@@ -108,6 +108,51 @@ beforeEach(async () => {
 });
 
 describe("booking calendar adapter", () => {
+  it("excludes only the booking's own Google event when rescheduling overlapping meetings", async () => {
+    await seedConnection();
+    const nango = fakeNango(async ({ path }) => {
+      if (path.startsWith("/calendar/v3/calendars/primary/events?"))
+        return Response.json({
+          items: [
+            {
+              id: "own",
+              status: "confirmed",
+              start: { dateTime: "2026-03-01T10:00:00Z" },
+              end: { dateTime: "2026-03-01T10:30:00Z" },
+            },
+            {
+              id: "other",
+              status: "confirmed",
+              start: { dateTime: "2026-03-01T10:15:00Z" },
+              end: { dateTime: "2026-03-01T10:45:00Z" },
+            },
+            {
+              id: "free",
+              status: "confirmed",
+              transparency: "transparent",
+              start: { dateTime: "2026-03-01T11:00:00Z" },
+              end: { dateTime: "2026-03-01T12:00:00Z" },
+            },
+          ],
+        });
+      return Response.json({
+        calendars: {
+          primary: {
+            busy: [
+              { start: "2026-03-01T10:00:00Z", end: "2026-03-01T10:45:00Z" },
+            ],
+          },
+        },
+      });
+    });
+    const busy = await createBookingCalendarAdapter(env.DB, nango).busy({
+      ...calendarInput,
+      excludeExternalId: "own",
+    });
+    expect(busy).toEqual([
+      { start: "2026-03-01T10:15:00.000Z", end: "2026-03-01T10:45:00.000Z" },
+    ]);
+  });
   it("requires the exact active connection pinned by the grant", async () => {
     await seedConnection();
     const nango = fakeNango(async () => Response.json({ calendars: {} }));

@@ -121,6 +121,10 @@
     {
       "filename": "0028_booking_conferences.sql",
       "sha256": "1d901032ff247b358db5bfda640919c5431b0ff852ac229a1f40dd36940f7aa3"
+    },
+    {
+      "filename": "0029_booking_agenda_grants.sql",
+      "sha256": "cc3224ce334f5b722f1ff292e6eb34508052fbe5f533561da317302e13b35414"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1570,6 +1574,11 @@
       "type": "index",
       "name": "tenant_booking_receipts_created_at",
       "table": "tenant_booking_request_receipts"
+    },
+    {
+      "type": "table",
+      "name": "tenant_booking_agenda_grants",
+      "table": "tenant_booking_agenda_grants"
     }
   ],
   "tables": [
@@ -13724,6 +13733,65 @@
         }
       ],
       "checkCount": 0
+    },
+    {
+      "name": "tenant_booking_agenda_grants",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "config",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id", "principal_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
     }
   ],
   "mappingNotes": [
