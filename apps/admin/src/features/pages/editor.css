@@ -51,6 +51,12 @@
   color: var(--foreground);
 }
 
+.page-editor-selection-tools .page-editor-ask-ai {
+  width: auto;
+  padding: 0 0.5rem;
+  color: var(--foreground);
+}
+
 .page-editor-slash-anchor {
   position: fixed;
   z-index: 10;

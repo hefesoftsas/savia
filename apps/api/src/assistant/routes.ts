@@ -28,6 +28,7 @@ const chatRequestSchema = z.object({
   messages: assistantThreadMessagesSchema,
   employeeId: z.string().optional(),
   employeeHandle: z.string().optional(),
+  inferEmployeeFromMentions: z.boolean().optional(),
   threadId: z.string().uuid().optional(),
 });
 
@@ -367,6 +368,7 @@ export function registerAssistantRoutes(
         authorization: authorizationFor(context),
         employeeId: parsed.data.employeeId,
         employeeHandle: parsed.data.employeeHandle,
+        inferEmployeeFromMentions: parsed.data.inferEmployeeFromMentions,
         trustedContext,
       });
     } catch (chatError) {

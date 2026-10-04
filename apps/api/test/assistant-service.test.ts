@@ -77,6 +77,177 @@ describe("SaviaAssistantService action approvals", () => {
     expect(factory).not.toHaveBeenCalled();
   });
 
+  it("skips latest and earlier-turn mention inference when disabled", async () => {
+    const getByHandle = vi.fn(async () => null);
+    const service = new SaviaAssistantService(
+      {
+        database: env.DB,
+        mcpUrl: "http://mcp:8789/mcp",
+        mcpSharedSecret: "secret",
+        openRouterApiKey: "key",
+      },
+      {
+        configurationResolver: {
+          async effectiveConfigurationFor() {
+            return { apiKey: "key", model: "test-model", tenantId: 101 };
+          },
+        },
+        virtualEmployeesRepo: { getByHandle, getById: vi.fn() } as never,
+        mcpClientFactory: vi.fn(async () => ({
+          callTool: vi.fn(),
+          close: vi.fn(async () => undefined),
+          tools: vi.fn(async () => ({})),
+        })),
+      },
+    );
+
+    const response = await service.chat({
+      principalId: "mention-inference-disabled",
+      authorization: "Bearer user",
+      inferEmployeeFromMentions: false,
+      messages: [
+        {
+          id: "earlier-user",
+          role: "user",
+          parts: [{ type: "text", text: "Continue with @ventas" }],
+        },
+        {
+          id: "assistant-reply",
+          role: "assistant",
+          parts: [{ type: "text", text: "Ready" }],
+        },
+        {
+          id: "latest-user",
+          role: "user",
+          parts: [{ type: "text", text: "Review this selected text: @rh" }],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(getByHandle).not.toHaveBeenCalled();
+  });
+
+  it("keeps mention inference enabled by default", async () => {
+    const getByHandle = vi.fn(async () => null);
+    const service = new SaviaAssistantService(
+      {
+        database: env.DB,
+        mcpUrl: "http://mcp:8789/mcp",
+        mcpSharedSecret: "secret",
+        openRouterApiKey: "key",
+      },
+      {
+        configurationResolver: {
+          async effectiveConfigurationFor() {
+            return { apiKey: "key", model: "test-model", tenantId: 101 };
+          },
+        },
+        virtualEmployeesRepo: { getByHandle, getById: vi.fn() } as never,
+        mcpClientFactory: vi.fn(async () => ({
+          callTool: vi.fn(),
+          close: vi.fn(async () => undefined),
+          tools: vi.fn(async () => ({})),
+        })),
+      },
+    );
+
+    const response = await service.chat({
+      principalId: "mention-inference-default",
+      authorization: "Bearer user",
+      messages: [
+        {
+          id: "latest-user",
+          role: "user",
+          parts: [{ type: "text", text: "Ask @ventas" }],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(getByHandle).toHaveBeenCalledWith("ventas", 101);
+  });
+
+  it("keeps explicit employee selection when mention inference is disabled", async () => {
+    const getByHandle = vi.fn(async () => null);
+    const getById = vi.fn(async () => null);
+    const service = new SaviaAssistantService(
+      {
+        database: env.DB,
+        mcpUrl: "http://mcp:8789/mcp",
+        mcpSharedSecret: "secret",
+        openRouterApiKey: "key",
+      },
+      {
+        configurationResolver: {
+          async effectiveConfigurationFor() {
+            return { apiKey: "key", model: "test-model", tenantId: 101 };
+          },
+        },
+        virtualEmployeesRepo: { getByHandle, getById } as never,
+        mcpClientFactory: vi.fn(),
+      },
+    );
+
+    const response = await service.chat({
+      principalId: "explicit-employee-with-inference-disabled",
+      authorization: "Bearer user",
+      employeeHandle: "ventas",
+      inferEmployeeFromMentions: false,
+      messages: [
+        {
+          id: "explicit-user",
+          role: "user",
+          parts: [{ type: "text", text: "Please help with @rh" }],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(404);
+    expect(getByHandle).toHaveBeenCalledWith("ventas", 101);
+    expect(getById).not.toHaveBeenCalled();
+  });
+
+  it("keeps explicit employee IDs when mention inference is disabled", async () => {
+    const getByHandle = vi.fn(async () => null);
+    const getById = vi.fn(async () => null);
+    const service = new SaviaAssistantService(
+      {
+        database: env.DB,
+        mcpUrl: "http://mcp:8789/mcp",
+        mcpSharedSecret: "secret",
+        openRouterApiKey: "key",
+      },
+      {
+        configurationResolver: {
+          async effectiveConfigurationFor() {
+            return { apiKey: "key", model: "test-model", tenantId: 101 };
+          },
+        },
+        virtualEmployeesRepo: { getByHandle, getById } as never,
+        mcpClientFactory: vi.fn(),
+      },
+    );
+
+    const response = await service.chat({
+      principalId: "explicit-employee-id-with-inference-disabled",
+      authorization: "Bearer user",
+      employeeId: "employee-123",
+      inferEmployeeFromMentions: false,
+      messages: [
+        {
+          id: "explicit-user",
+          role: "user",
+          parts: [{ type: "text", text: "Please help with @rh" }],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(404);
+    expect(getById).toHaveBeenCalledWith("employee-123", 101);
+    expect(getByHandle).not.toHaveBeenCalled();
+  });
+
   it("does not expose global employees when the caller has no tenant scope", async () => {
     const factory = vi.fn();
     const service = new SaviaAssistantService(

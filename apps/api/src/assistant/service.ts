@@ -384,7 +384,10 @@ export class SaviaAssistantService implements AssistantService {
             request.employeeHandle,
             tenantId,
           );
-        } else if (lastUserText) {
+        } else if (
+          request.inferEmployeeFromMentions !== false &&
+          lastUserText
+        ) {
           const mentionMatch = lastUserText.match(/@([a-zA-Z0-9_\-]+)/);
           if (mentionMatch) {
             employee = await this.virtualEmployees.getByHandle(
@@ -399,6 +402,7 @@ export class SaviaAssistantService implements AssistantService {
           !employee &&
           !request.employeeId &&
           !request.employeeHandle &&
+          request.inferEmployeeFromMentions !== false &&
           Array.isArray(request.messages)
         ) {
           for (let i = request.messages.length - 1; i >= 0; i--) {
