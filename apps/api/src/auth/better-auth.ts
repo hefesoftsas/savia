@@ -307,7 +307,7 @@ export function betterAuthAuthenticator(
             "A valid Savia credential is required",
           );
         const { actor, key } = await personalKeys.authenticate(personalSecret);
-        authorizePersonalApiKeyRequest(request, key.scopes);
+        authorizePersonalApiKeyRequest(request, key.scopes, key.tenantId);
         return {
           ...actor,
           credential: {

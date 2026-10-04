@@ -1,7 +1,7 @@
 import type { ApiClient } from "@/api/api-client";
 import type {
+  ApiKeyScope,
   PersonalKey,
-  RecordingScope,
 } from "@/features/account/personal-api-keys-client";
 
 export type TenantApiKey = PersonalKey & {
@@ -38,7 +38,7 @@ export class TenantApiKeysClient {
     input: {
       principalId: string;
       name: string;
-      scopes: RecordingScope[];
+      scopes: ApiKeyScope[];
       lifetimeDays: number;
     },
   ) {

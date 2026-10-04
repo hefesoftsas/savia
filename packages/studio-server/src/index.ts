@@ -870,6 +870,7 @@ export function createStudioApp(
       c.get("tenant"),
       c.req.param("object"),
       c.req.param("id"),
+      "update",
     );
     const record = await updateRecord(
       c.env.DB,

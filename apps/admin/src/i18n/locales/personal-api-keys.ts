@@ -10,6 +10,58 @@ export const personalApiKeyMessages = {
   Expiry: ["Caducidad", "Expiry", "Validade"],
   days: ["días", "days", "dias"],
   Permissions: ["Permisos", "Permissions", "Permissões"],
+  "Companion recordings": [
+    "Grabaciones de Companion",
+    "Companion recordings",
+    "Gravações do Companion",
+  ],
+  "Companion recordings description": [
+    "Permisos para usar grabaciones y notas de Companion.",
+    "Permissions for Companion recordings and notes.",
+    "Permissões para gravações e notas do Companion.",
+  ],
+  "Savia collection data": [
+    "Datos de colecciones Savia",
+    "Savia collection data",
+    "Dados de coleções Savia",
+  ],
+  "Collection data description": [
+    "Elige qué operaciones puede realizar la aplicación en las colecciones Savia.",
+    "Choose which operations the app can perform on Savia collections.",
+    "Escolha quais operações o aplicativo pode realizar nas coleções Savia.",
+  ],
+  "Collection data unavailable for platform": [
+    "Los permisos de datos de colecciones no están disponibles para el tenant de plataforma.",
+    "Collection data permissions are unavailable for the platform tenant.",
+    "As permissões de dados de coleções não estão disponíveis para o tenant da plataforma.",
+  ],
+  "Read records": ["Leer registros", "Read records", "Ler registros"],
+  "Create records": ["Crear registros", "Create records", "Criar registros"],
+  "Update records": [
+    "Actualizar registros",
+    "Update records",
+    "Atualizar registros",
+  ],
+  "Read records description": [
+    "Consultar registros autorizados para el titular de la clave.",
+    "View records permitted to the key owner.",
+    "Consultar registros permitidos ao titular da chave.",
+  ],
+  "Create records description": [
+    "Añadir registros en colecciones que el titular puede crear.",
+    "Add records to collections where the key owner can create.",
+    "Adicionar registros a coleções nas quais o titular pode criar.",
+  ],
+  "Update records description": [
+    "Editar registros y campos que el titular puede actualizar.",
+    "Edit records and fields the key owner can update.",
+    "Editar registros e campos que o titular pode atualizar.",
+  ],
+  "Key owner access explanation": [
+    "El acceso a datos está limitado a los permisos actuales del titular de la clave sobre colecciones, registros y campos. Solo incluye colecciones nativas de Savia.",
+    "Data access is limited to the key owner’s current collection, record, and field permissions. Only native Savia collections are available.",
+    "O acesso a dados é limitado às permissões atuais do titular da chave para coleções, registros e campos. Somente coleções nativas do Savia estão disponíveis.",
+  ],
   Read: [
     "Consultar audio y notas",
     "Read audio and notes",
@@ -31,10 +83,10 @@ export const personalApiKeyMessages = {
     "I saved the key",
     "Já salvei a chave",
   ],
-  "Copy it into Companion. It will not be shown again.": [
-    "Cópiala en Companion. No volverá a mostrarse.",
-    "Copy it into Companion. It will not be shown again.",
-    "Copie para o Companion. Ela não será exibida novamente.",
+  "Copy the key into your app or integration": [
+    "Copia la clave en tu aplicación o integración. No volverá a mostrarse.",
+    "Copy the key into your app or integration. It will not be shown again.",
+    "Copie a chave para seu aplicativo ou integração. Ela não será exibida novamente.",
   ],
   "No keys yet.": [
     "Aún no hay claves.",
@@ -58,10 +110,4 @@ export const personalApiKeyMessages = {
     "Could not complete the operation. Check your connection and try again.",
     "Não foi possível concluir a operação. Verifique a conexão e tente novamente.",
   ],
-  "Keys only access your recordings in the selected workspace. Legacy recordings remain available on the web.":
-    [
-      "Las claves solo acceden a tus grabaciones del espacio elegido. Las grabaciones antiguas siguen disponibles en la web.",
-      "Keys only access your recordings in the selected workspace. Legacy recordings remain available on the web.",
-      "As chaves só acessam suas gravações no espaço escolhido. As gravações antigas continuam disponíveis na web.",
-    ],
 } as const;

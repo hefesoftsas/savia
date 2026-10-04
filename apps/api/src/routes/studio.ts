@@ -9,6 +9,8 @@ import type { SaviaRequestService } from "@savia/studio-shared/savia-request-quo
 import { actorFromContext } from "../auth/middleware";
 import { hasCustomAccess } from "../auth/access-context";
 import { loadAccessPolicy } from "../auth/access-repository";
+import { authorizePersonalApiKeyRequest } from "../auth/personal-api-key-policy";
+import { apiKeyAccessPolicy } from "../studio/api-key-access";
 import { AuthenticationError } from "../auth/types";
 import {
   canAccessSharedCrm,
@@ -77,6 +79,12 @@ export function registerStudioRoutes(
         },
         400,
       );
+    const key =
+      actor.credential?.kind === "personal-api-key"
+        ? actor.credential
+        : undefined;
+    if (key)
+      authorizePersonalApiKeyRequest(c.req.raw, key.scopes, key.tenantId);
     const url = new URL(c.req.url);
     const isTenantRoute = url.pathname.startsWith("/v1/tenants/");
     const tenantKey = await resolveStudioTenantKey(tenantId);
@@ -112,9 +120,14 @@ export function registerStudioRoutes(
         404,
       );
     const manager = canManageSharedCrm(actor, tenantKey);
-    const accessPolicy =
-      !manager &&
-      (await hasCustomAccess(db, actor.principal.id, `tenant:${tenantId}`))
+    const accessPolicy = key
+      ? await apiKeyAccessPolicy(
+          db,
+          await loadAccessPolicy(db, actor, `tenant:${tenantId}`),
+          key.scopes,
+        )
+      : !manager &&
+          (await hasCustomAccess(db, actor.principal.id, `tenant:${tenantId}`))
         ? await loadAccessPolicy(db, actor, `tenant:${tenantId}`)
         : undefined;
     let sharedNames: Set<string> | undefined;
