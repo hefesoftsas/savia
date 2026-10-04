@@ -357,6 +357,7 @@ describe("generic tenant pages", () => {
         }),
       ),
     );
+    await user.click(await screen.findByRole("tab", { name: "Acceso" }));
     const url = "https://nueva-comunidad-2.savia-preview.hefesoft.com";
     expect(
       await screen.findByRole("textbox", { name: "Tu URL de Savia" }),
@@ -395,24 +396,31 @@ describe("generic tenant pages", () => {
     });
     await renderApp(appServices);
     const name = await screen.findByDisplayValue("Comunidad");
+    await user.clear(name);
+    await user.type(name, "Comunidad renovada");
+    await user.click(await screen.findByRole("tab", { name: "Claves API" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Nueva clave" }),
+    );
     const keyName = await screen.findByLabelText("Nombre de la clave");
     expect(keyName.closest("form")).toBeNull();
     await user.type(keyName, "Companion{Enter}");
     expect(appServices.dataProvider.update).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("tab", { name: "Acceso" }));
     expect(
       screen.getByRole("link", { name: "Configurar SSO" }),
     ).toHaveAttribute("href", "#/service-credentials?tenantId=101&tab=sso");
     expect(
       screen.getByRole("link", { name: "Configurar Google / Microsoft" }),
     ).toHaveAttribute("href", "#/service-credentials?tenantId=101&tab=social");
+    await user.click(screen.getByRole("tab", { name: "General" }));
     expect(document.querySelector('input[name="idSlug"]')).toBe(null);
     expect(
       screen.getByText(
         "La URL del tenant se asigna automáticamente a partir de su nombre y no cambia al renombrarlo.",
       ),
     ).toBeVisible();
-    await user.clear(name);
-    await user.type(name, "Comunidad renovada");
+    expect(name).toHaveValue("Comunidad renovada");
     expect(
       screen.getByText(
         "Desactivar el tenant suspende el acceso de sus miembros.",

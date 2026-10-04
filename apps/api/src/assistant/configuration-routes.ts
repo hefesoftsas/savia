@@ -13,12 +13,17 @@ import {
   type AssistantModelCatalog,
 } from "./configuration";
 
+const transcriptionEndpointSchema = z
+  .enum(["audio/transcriptions", "chat/completions"])
+  .nullable();
+
 const configurationWriteSchema = z
   .object({
     apiKey: z.string().trim().min(1).max(512).optional(),
     clearApiKey: z.boolean().optional(),
     model: z.string().trim().max(160).nullable().optional(),
     transcriptionModel: z.string().trim().max(160).nullable().optional(),
+    transcriptionEndpoint: transcriptionEndpointSchema.optional(),
     summaryModel: z.string().trim().max(160).nullable().optional(),
   })
   .superRefine((value, context) => {
@@ -33,6 +38,7 @@ const configurationWriteSchema = z
       value.clearApiKey === undefined &&
       value.model === undefined &&
       value.transcriptionModel === undefined &&
+      value.transcriptionEndpoint === undefined &&
       value.summaryModel === undefined
     ) {
       context.addIssue({ code: "custom", message: "A change is required" });

@@ -11,15 +11,14 @@ import {
   type CrmRouteDependencies,
 } from "../src/routes/crm";
 import { createCrmProviderRegistry } from "../src/external-crm/providers";
-const migrations = Object.entries(
+const migrationFiles = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
     import: "default",
     query: "?raw",
   }),
-)
-  .sort(([a], [b]) => a.localeCompare(b))
-  .map(([, s]) => s);
+).sort(([a], [b]) => a.localeCompare(b));
+const migrations = migrationFiles.map(([, sql]) => sql);
 beforeAll(async () => {
   for (const sql of migrations)
     for (const statement of sql
@@ -311,7 +310,11 @@ it("fails migration on existing duplicates without deleting or selecting an acco
   )
     .bind(id, s.tenant, s.actors[1].principal.id)
     .run();
-  const migration = migrations.at(-1)!.split("--> statement-breakpoint")[0];
+  const migration = migrationFiles
+    .find(([path]) =>
+      path.endsWith("/0030_crm_organization_connection.sql"),
+    )![1]
+    .split("--> statement-breakpoint")[0];
   try {
     await expect(
       env.DB.exec(

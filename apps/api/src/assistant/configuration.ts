@@ -11,9 +11,13 @@ export type EffectiveAssistantConfiguration = {
   apiKey?: string;
   model: string;
   transcriptionModel?: string;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint;
   summaryModel?: string;
   tenantId?: number;
 };
+
+export type AssistantTranscriptionEndpoint =
+  "audio/transcriptions" | "chat/completions";
 
 export type AssistantModelModalities = {
   text: boolean;
@@ -30,6 +34,7 @@ export type AssistantModel = {
   outputPricePerMillion: number | null;
   modalities?: AssistantModelModalities;
   supportsTools?: boolean;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint;
 };
 
 export type AssistantModelCatalog = {
@@ -44,6 +49,7 @@ export type AssistantConfigurationWrite = {
   clearApiKey?: boolean;
   model?: string | null;
   transcriptionModel?: string | null;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
   summaryModel?: string | null;
 };
 
@@ -55,6 +61,7 @@ type AssistantSettingRow = {
   api_key_iv: string | null;
   model: string | null;
   transcription_model: string | null;
+  transcription_endpoint: AssistantTranscriptionEndpoint | null;
   summary_model: string | null;
   updated_at: string;
   updated_by: string;
@@ -80,6 +87,7 @@ export type AssistantConfigurationSettingSummary = {
   keyState: AssistantConfigurationKeyState;
   model: string | null;
   transcriptionModel?: string | null;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
   summaryModel?: string | null;
   updatedAt?: string;
   updatedBy?: string;
@@ -89,8 +97,17 @@ export type AssistantConfigurationDeploymentSummary = {
   keyState: "deployment_fallback" | "not_configured";
   model: string;
   transcriptionModel: string;
+  transcriptionEndpoint: AssistantTranscriptionEndpoint;
   summaryModel: string;
 };
+
+export function transcriptionEndpointForModel(
+  model: string | null | undefined,
+): AssistantTranscriptionEndpoint {
+  return model && /(?:^|[/:_-])whisper(?:$|[/:_-])/i.test(model)
+    ? "audio/transcriptions"
+    : "chat/completions";
+}
 
 export class AssistantConfigurationUnavailableError extends Error {
   readonly code = "ASSISTANT_CONFIGURATION_UNAVAILABLE" as const;
@@ -139,7 +156,8 @@ export function normalizeAssistantModel(
 ): string | null | undefined {
   if (candidate === undefined || candidate === null) return candidate;
   const model = candidate.trim();
-  if (!model || !modelIdentifier.test(model)) {
+  if (!model) return null;
+  if (!modelIdentifier.test(model)) {
     throw new TypeError("An OpenRouter model must use provider/model format");
   }
   return model;
@@ -155,6 +173,11 @@ function summary(
     keyState,
     model: row.model,
     transcriptionModel: row.transcription_model,
+    transcriptionEndpoint:
+      row.transcription_endpoint ??
+      (row.transcription_model
+        ? transcriptionEndpointForModel(row.transcription_model)
+        : null),
     summaryModel: row.summary_model,
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
@@ -331,7 +354,7 @@ export class AssistantConfigurationRepository {
   async summary(): Promise<AssistantConfigurationSummary> {
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
          FROM assistant_openrouter_settings
          ORDER BY CASE scope WHEN 'global' THEN 0 ELSE 1 END, agency_id`,
       )
@@ -343,6 +366,9 @@ export class AssistantConfigurationRepository {
         : "not_configured",
       model: this.deploymentModel,
       transcriptionModel: this.deploymentTranscriptionModel,
+      transcriptionEndpoint: transcriptionEndpointForModel(
+        this.deploymentTranscriptionModel,
+      ),
       summaryModel: this.deploymentModel,
     } as const;
     const globalKeyState = global?.api_key_ciphertext
@@ -421,6 +447,8 @@ export class AssistantConfigurationRepository {
           keyState: fullSummary.global.keyState,
           model: fullSummary.global.model,
           transcriptionModel: fullSummary.global.transcriptionModel ?? null,
+          transcriptionEndpoint:
+            fullSummary.global.transcriptionEndpoint ?? null,
           summaryModel: fullSummary.global.summaryModel ?? null,
         }
       : null;
@@ -612,7 +640,7 @@ export class AssistantConfigurationRepository {
   ): Promise<EffectiveAssistantConfiguration> {
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
          FROM assistant_openrouter_settings
          WHERE id = ? OR id = 'global'`,
       )
@@ -633,13 +661,22 @@ export class AssistantConfigurationRepository {
       ? await this.decryptKey(keyRow)
       : this.deploymentApiKey;
     const model = agency?.model ?? global?.model ?? this.deploymentModel;
+    const transcriptionModel =
+      agency?.transcription_model ??
+      global?.transcription_model ??
+      this.deploymentTranscriptionModel;
+    const transcriptionSource = agency?.transcription_model
+      ? agency
+      : global?.transcription_model
+        ? global
+        : undefined;
     return {
       ...(apiKey ? { apiKey } : {}),
       model,
-      transcriptionModel:
-        agency?.transcription_model ??
-        global?.transcription_model ??
-        this.deploymentTranscriptionModel,
+      transcriptionModel,
+      transcriptionEndpoint:
+        transcriptionSource?.transcription_endpoint ??
+        transcriptionEndpointForModel(transcriptionModel),
       summaryModel: agency?.summary_model ?? global?.summary_model ?? model,
       ...(agencyId === undefined ? {} : { tenantId: agencyId }),
     };
@@ -653,7 +690,7 @@ export class AssistantConfigurationRepository {
     const id = settingId(scope, agencyId);
     const existing = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
          FROM assistant_openrouter_settings WHERE id = ?`,
       )
       .bind(id)
@@ -686,6 +723,30 @@ export class AssistantConfigurationRepository {
       input.transcriptionModel === undefined
         ? (existing?.transcription_model ?? null)
         : (normalizeAssistantModel(input.transcriptionModel) ?? null);
+    if (
+      input.transcriptionEndpoint != null &&
+      transcriptionModel === null &&
+      input.transcriptionModel === undefined
+    ) {
+      throw new TypeError(
+        "A transcription model is required to set an endpoint",
+      );
+    }
+    const transcriptionModelChanged =
+      input.transcriptionModel !== undefined &&
+      transcriptionModel !== existing?.transcription_model;
+    const transcriptionEndpoint =
+      transcriptionModel === null && input.transcriptionModel !== undefined
+        ? null
+        : input.transcriptionEndpoint === null
+          ? transcriptionModelChanged && transcriptionModel
+            ? transcriptionEndpointForModel(transcriptionModel)
+            : null
+          : input.transcriptionEndpoint !== undefined
+            ? input.transcriptionEndpoint
+            : transcriptionModelChanged && transcriptionModel
+              ? transcriptionEndpointForModel(transcriptionModel)
+              : (existing?.transcription_endpoint ?? null);
     const summaryModel =
       input.summaryModel === undefined
         ? (existing?.summary_model ?? null)
@@ -695,6 +756,7 @@ export class AssistantConfigurationRepository {
       ciphertext === null &&
       model === null &&
       transcriptionModel === null &&
+      transcriptionEndpoint === null &&
       summaryModel === null
     ) {
       await this.clearAgencyOverride(agencyId!);
@@ -703,13 +765,14 @@ export class AssistantConfigurationRepository {
     await this.database
       .prepare(
         `INSERT INTO assistant_openrouter_settings (
-          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, summary_model, updated_at, updated_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           api_key_ciphertext = excluded.api_key_ciphertext,
           api_key_iv = excluded.api_key_iv,
           model = excluded.model,
           transcription_model = excluded.transcription_model,
+          transcription_endpoint = excluded.transcription_endpoint,
           summary_model = excluded.summary_model,
           updated_at = excluded.updated_at,
           updated_by = excluded.updated_by`,
@@ -722,6 +785,7 @@ export class AssistantConfigurationRepository {
         iv,
         model ?? null,
         transcriptionModel,
+        transcriptionEndpoint,
         summaryModel,
         this.now().toISOString(),
         input.actorId,
@@ -752,7 +816,7 @@ export function openRouterModelCatalog(
         headers.authorization = `Bearer ${configuration.apiKey}`;
       }
       const response = await fetcher(
-        "https://openrouter.ai/api/v1/models?output_modalities=text&sort=most-popular",
+        "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
         Object.keys(headers).length ? { headers } : undefined,
       );
       if (!response.ok) throw new Error("OpenRouter models request failed");
@@ -847,6 +911,14 @@ export function openRouterModelCatalog(
                 inputModalities.includes("image"),
             };
             const supportsTools = supportedParams.includes("tools");
+            const transcriptionEndpoint = outputModalities.includes(
+              "transcription",
+            )
+              ? "audio/transcriptions"
+              : inputModalities.includes("audio") &&
+                  outputModalities.includes("text")
+                ? "chat/completions"
+                : undefined;
 
             return [
               {
@@ -863,6 +935,7 @@ export function openRouterModelCatalog(
                 ),
                 modalities,
                 supportsTools,
+                ...(transcriptionEndpoint ? { transcriptionEndpoint } : {}),
               },
             ];
           } catch {

@@ -1,4 +1,5 @@
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
+import userEvent from "@testing-library/user-event";
 import {
   cleanup,
   fireEvent,
@@ -51,7 +52,11 @@ it("switches branding labels through ES/EN/PT without translating or losing unsa
       </AppLocaleProvider>
     </StoreContextProvider>,
   );
+  const user = userEvent.setup();
   const input = await screen.findByLabelText("Display name");
+  const baselineCalls = get.mock.calls.length;
+  expect(baselineCalls).toBe(2);
+  await user.click(screen.getByRole("tab", { name: "Login screen" }));
   expect(screen.getByLabelText("Repeat animation")).toBeTruthy();
   expect(
     screen.getByRole("link", { name: "Find free animations on LottieFiles" }),
@@ -59,15 +64,20 @@ it("switches branding labels through ES/EN/PT without translating or losing unsa
   fireEvent.change(input, { target: { value: "Unsaved business name" } });
   fireEvent.click(screen.getByText("ES"));
   await waitFor(() =>
-    expect(screen.getByLabelText("Nombre visible")).toHaveValue(
-      "Unsaved business name",
+    expect(screen.getByLabelText("Título de acceso")).toHaveValue(
+      "Welcome team",
     ),
   );
   expect(screen.getByLabelText("Repetir animación")).toBeTruthy();
+  await user.click(screen.getByRole("tab", { name: "Identidad" }));
+  expect(screen.getByLabelText("Nombre visible")).toHaveValue(
+    "Unsaved business name",
+  );
+  await user.click(screen.getByRole("tab", { name: "Pantalla de acceso" }));
   fireEvent.click(screen.getByText("PT"));
   await waitFor(() =>
-    expect(screen.getByLabelText("Nome de exibição")).toHaveValue(
-      "Unsaved business name",
+    expect(screen.getByLabelText("Título de acesso")).toHaveValue(
+      "Welcome team",
     ),
   );
   expect(screen.getByLabelText("Repetir animação")).toBeTruthy();
@@ -79,5 +89,5 @@ it("switches branding labels through ES/EN/PT without translating or losing unsa
   expect(
     screen.getByRole("button", { name: "Salvar alterações" }),
   ).toBeTruthy();
-  expect(get).toHaveBeenCalledTimes(4);
+  expect(get).toHaveBeenCalledTimes(baselineCalls);
 });

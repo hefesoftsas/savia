@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app";
 import {
   AssistantConfigurationRepository,
@@ -208,6 +208,12 @@ function createReadScopedAssistantApp(service: AssistantService) {
 describe("assistant routes", () => {
   beforeAll(applyMigrations);
 
+  beforeEach(async () => {
+    await env.DB.exec("DELETE FROM assistant_active_tenants");
+    await env.DB.exec("DELETE FROM identity_tenant_membership");
+    await env.DB.exec("DELETE FROM assistant_openrouter_settings");
+  });
+
   it("streams a chat with the authenticated principal and current bearer", async () => {
     const service = createAssistantService();
     const response = await createAssistantApp(service).request(
@@ -366,6 +372,50 @@ describe("assistant routes", () => {
     await expect(
       repository.effectiveConfigurationFor("test-platform-admin"),
     ).resolves.toMatchObject({ apiKey: "not-a-real-global-key" });
+  });
+
+  it("persists the transcription endpoint as part of assistant configuration", async () => {
+    const response = await createConfigurationApp().request(
+      "http://api.savia.test/v1/assistant/configuration/global",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transcriptionModel: "openai/whisper-large-v3",
+          transcriptionEndpoint: "audio/transcriptions",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      global: {
+        transcriptionModel: "openai/whisper-large-v3",
+        transcriptionEndpoint: "audio/transcriptions",
+      },
+    });
+    const invalid = await createConfigurationApp().request(
+      "http://api.savia.test/v1/assistant/configuration/global",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ transcriptionEndpoint: "responses" }),
+      },
+    );
+    expect(invalid.status).toBe(400);
+  });
+
+  it("rejects a tenant endpoint override without a tenant transcription model", async () => {
+    await seedAssistantAgencyMember(127);
+    const response = await createConfigurationApp().request(
+      "http://api.savia.test/v1/assistant/configuration/tenants/127",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ transcriptionEndpoint: "audio/transcriptions" }),
+      },
+    );
+    expect(response.status).toBe(400);
   });
 
   it("allows meeting model fields on tenant assistant configuration writes", async () => {
@@ -738,6 +788,15 @@ describe("assistant routes", () => {
             },
             supported_parameters: [],
           },
+          {
+            id: "openai/whisper-large-v3",
+            name: "Whisper Large v3",
+            architecture: {
+              input_modalities: ["audio"],
+              modality: "audio->transcription",
+            },
+            supported_parameters: [],
+          },
           { id: "invalid model", name: "Invalid" },
         ],
       }),
@@ -762,6 +821,7 @@ describe("assistant routes", () => {
           file: true,
         },
         supportsTools: true,
+        transcriptionEndpoint: "chat/completions",
       },
       {
         id: "audio/model",
@@ -776,10 +836,26 @@ describe("assistant routes", () => {
           file: false,
         },
         supportsTools: false,
+        transcriptionEndpoint: "chat/completions",
+      },
+      {
+        id: "openai/whisper-large-v3",
+        name: "Whisper Large v3",
+        contextLength: null,
+        inputPricePerMillion: null,
+        outputPricePerMillion: null,
+        modalities: {
+          text: false,
+          image: false,
+          audio: true,
+          file: false,
+        },
+        supportsTools: false,
+        transcriptionEndpoint: "audio/transcriptions",
       },
     ]);
     expect(fetcher).toHaveBeenCalledWith(
-      "https://openrouter.ai/api/v1/models?output_modalities=text&sort=most-popular",
+      "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
       expect.objectContaining({
         headers: { authorization: "Bearer not-a-real-catalog-key" },
       }),
@@ -821,7 +897,7 @@ describe("assistant routes", () => {
       },
     ]);
     expect(fetcher).toHaveBeenCalledWith(
-      "https://openrouter.ai/api/v1/models?output_modalities=text&sort=most-popular",
+      "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
       undefined,
     );
   });
