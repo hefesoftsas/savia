@@ -76,6 +76,7 @@ export const settingsSchema = z
     published: z.boolean(),
     title: text(120).min(1),
     description: text(1000),
+    conferenceProvider: z.enum(["automatic", "jitsi"]).default("automatic"),
     timeZone: zone,
     leadMinutes: z.number().int().min(0).max(43200),
     horizonDays: z.number().int().min(1).max(180),
@@ -136,7 +137,7 @@ export type BookingProfessional = z.infer<typeof professionalSchema>;
 export type BookingService = z.infer<typeof serviceSchema>;
 export type BusyInterval = { start: string; end: string };
 export const bookingConferenceSchema = z.object({
-  provider: z.enum(["google_meet", "teams", "zoom"]).nullable(),
+  provider: z.enum(["google_meet", "teams", "jitsi", "zoom"]).nullable(),
   joinUrl: z.string().url().nullable(),
   status: z.enum(["ready", "pending", "unsupported", "failed"]),
 });
@@ -231,6 +232,7 @@ export function defaultSettings(title: string): BookingSettings {
     published: false,
     title,
     description: "",
+    conferenceProvider: "automatic",
     timeZone: "America/Bogota",
     leadMinutes: 60,
     horizonDays: 60,

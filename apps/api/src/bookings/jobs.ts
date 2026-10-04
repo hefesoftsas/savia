@@ -1,7 +1,7 @@
 import type { createBookingCalendarAdapter } from "./calendar";
 import { readBooking, readSettings, readGrant } from "./repository";
 import { formatBookingEmail } from "./email";
-import { safeConferenceUrl } from "./conference";
+import { safeBookingConferenceUrl } from "./conference";
 import { cleanupBookingAdmissions } from "./public-policy";
 import { createPersonalIntegrationRepository } from "../personal-integrations/repository";
 import type { createZoomMeetingService } from "../personal-integrations/zoom";
@@ -182,6 +182,10 @@ export async function runBookingJobs(
             booking.conference_status === "pending"
               ? { requestConference: true }
               : {}),
+            ...(booking.conference_provider === "jitsi" &&
+            booking.conference_url
+              ? { conferenceUrl: booking.conference_url }
+              : {}),
             cancelled: booking.status === "cancelled",
           });
           const externalId = synced.externalId;
@@ -202,10 +206,20 @@ export async function runBookingJobs(
                 lease,
               )
               .run();
-          const conference = synced.conference;
+          const conference =
+            booking.conference_provider === "jitsi"
+              ? {
+                  provider: "jitsi" as const,
+                  joinUrl: booking.conference_url ?? null,
+                  status: "ready" as const,
+                }
+              : synced.conference;
           const joinUrl =
             conference?.status === "ready"
-              ? safeConferenceUrl(conference.joinUrl)
+              ? safeBookingConferenceUrl(
+                  conference.provider,
+                  conference.joinUrl,
+                )
               : null;
           const conferenceStatus =
             conference?.status === "pending" && job.attempts >= 5

@@ -1,6 +1,29 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const bookingMessages = {
+  Jitsi: ["Jitsi", "Jitsi", "Jitsi"],
+  "Join Jitsi": ["Unirse a Jitsi", "Join Jitsi", "Entrar no Jitsi"],
+  "Video meeting provider": [
+    "Proveedor de videollamada",
+    "Video meeting provider",
+    "Provedor da videochamada",
+  ],
+  "Automatic (Google Meet or Teams)": [
+    "Automático (Google Meet o Teams)",
+    "Automatic (Google Meet or Teams)",
+    "Automático (Google Meet ou Teams)",
+  ],
+  "New appointments include the meeting link in confirmations and reminders.": [
+    "Las nuevas citas incluyen el enlace de la reunión en confirmaciones y recordatorios.",
+    "New appointments include the meeting link in confirmations and reminders.",
+    "Os novos agendamentos incluem o link da reunião nas confirmações e nos lembretes.",
+  ],
+  "The tenant-wide Jitsi setting takes priority. This Zoom default applies when automatic is selected.":
+    [
+      "La configuración de Jitsi de la organización tiene prioridad. Este valor de Zoom se usa cuando está seleccionado el modo automático.",
+      "The tenant-wide Jitsi setting takes priority. This Zoom default applies when automatic is selected.",
+      "A configuração de Jitsi da organização tem prioridade. Este padrão do Zoom vale quando o modo automático está selecionado.",
+    ],
   Zoom: ["Zoom", "Zoom", "Zoom"],
   "Zoom needs reconnection": [
     "Zoom necesita reconexión",

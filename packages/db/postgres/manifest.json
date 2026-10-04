@@ -139,6 +139,10 @@
       "sha256": "05b6265d835fe892f3c930cbff8bc265e95a582a52062299160424772bcddc20"
     },
     {
+      "filename": "0033_booking_jitsi_conference.sql",
+      "sha256": "4bd4aeea413cd3657e292da4eaba5293e8157165971f8837e68a65b1a634055d"
+    },
+    {
       "filename": "0034_zoom_personal_meetings.sql",
       "sha256": "48f905e4f359df104d5d18e983b0522c4977ecf14885b5242a1552cafc4cc986"
     },

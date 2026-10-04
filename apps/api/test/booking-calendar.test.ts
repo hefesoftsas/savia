@@ -595,6 +595,87 @@ describe("booking calendar adapter", () => {
     },
   );
 
+  it("adds the saved Jitsi room to Google event description and location without requesting Meet", async () => {
+    await seedConnection();
+    const requests: Array<{ method: string; path: string; body?: any }> = [];
+    const nango = fakeNango(async ({ method, path, body }) => {
+      requests.push({ method, path, body });
+      return Response.json({ id: body?.id ?? "jitsi-event" });
+    });
+    const room = `https://meet.jit.si/savia-${crypto.randomUUID()}`;
+    const result = await createBookingCalendarAdapter(env.DB, nango).sync({
+      ...calendarInput,
+      id: "booking-jitsi",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: null,
+      conferenceProvider: "jitsi",
+      conferenceUrl: room,
+      cancelled: false,
+    });
+    expect(result.conference).toEqual({
+      provider: "jitsi",
+      joinUrl: room,
+      status: "ready",
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.body).toMatchObject({
+      description: `Join the video meeting: ${room}`,
+      location: room,
+    });
+    expect(requests[0]?.path).not.toContain("conferenceDataVersion");
+  });
+
+  it("adds and preserves the saved Jitsi room in Outlook events without requesting Teams", async () => {
+    await seedConnection("outlook");
+    const requests: Array<{ method: string; path: string; body?: any }> = [];
+    const nango = fakeNango(async ({ method, path, body }) => {
+      requests.push({ method, path, body });
+      if (method === "GET" && path.startsWith("/v1.0/me/events?"))
+        return Response.json({ value: [] });
+      return Response.json({ id: "outlook-jitsi" });
+    });
+    const room = `https://meet.jit.si/savia-${crypto.randomUUID()}`;
+    const adapter = createBookingCalendarAdapter(env.DB, nango);
+    const input = {
+      ...calendarInput,
+      provider: "outlook" as const,
+      id: "booking-outlook-jitsi",
+      title: "Consultation",
+      startsAt: "2026-03-01T09:00:00Z",
+      endsAt: "2026-03-01T10:00:00Z",
+      externalId: null,
+      conferenceProvider: "jitsi" as const,
+      conferenceUrl: room,
+      cancelled: false,
+    };
+    const created = await adapter.sync(input);
+    expect(created.conference).toEqual({
+      provider: "jitsi",
+      joinUrl: room,
+      status: "ready",
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.path).toContain("/v1.0/me/events?");
+    expect(requests[1]?.body).toMatchObject({
+      body: { content: `Join the video meeting: ${room}` },
+      location: { displayName: room },
+    });
+
+    const updated = await adapter.sync({
+      ...input,
+      externalId: "outlook-jitsi",
+      startsAt: "2026-03-01T10:00:00Z",
+      endsAt: "2026-03-01T11:00:00Z",
+    });
+    expect(updated.conference?.joinUrl).toBe(room);
+    expect(requests[2]?.method).toBe("PATCH");
+    expect(requests[2]?.body).toMatchObject({
+      location: { displayName: room },
+    });
+  });
+
   it("preserves the requested Google provider while conference provisioning is pending", async () => {
     await seedConnection();
     const requests: Array<{ method: string; path: string; body?: unknown }> =

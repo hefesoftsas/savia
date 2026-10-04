@@ -179,7 +179,9 @@ Savia blocks a second create for that request until the uncertain result is
 reconciled, avoiding duplicate meetings. Reconnecting to another Zoom account
 does not transfer control over meetings created with the old connection.
 See [Zoom setup](guides/zoom-integration.md) for the required OAuth configuration.
-Jitsi is not offered by this flow.
+Jitsi remains available as a separate choice without a Zoom connection. See
+[Jitsi meetings](guides/jitsi-meetings.md) for its public room behavior and guest
+invitations.
 
 Deployment requires D1 migration `0023_personal_calendars.sql`; self-hosted
 PostgreSQL uses its matching native migration and source manifest. Both use the

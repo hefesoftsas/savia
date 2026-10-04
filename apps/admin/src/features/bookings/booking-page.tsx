@@ -925,6 +925,13 @@ export function BookingPage({
                       "Connect Zoom first. Only you can authorize your Zoom account for appointments.",
                     )}
                   </p>
+                  {settings?.conferenceProvider === "jitsi" && (
+                    <p className="text-sm text-muted-foreground">
+                      {t(
+                        "The tenant-wide Jitsi setting takes priority. This Zoom default applies when automatic is selected.",
+                      )}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       variant="outline"

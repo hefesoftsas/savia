@@ -3,7 +3,9 @@
 Zoom is a personal OAuth connection managed by Nango. It provides video meetings;
 Google Calendar or Outlook provides the destination calendar. Each user connects
 their own Zoom account. Bookings additionally require that professional to grant
-Zoom access for the tenant in **Bookings → Availability**.
+Zoom access for the tenant in **Bookings → Availability**. This personal Zoom
+default applies when the tenant uses automatic conferencing; an explicit tenant
+Jitsi setting continues to use Jitsi for new reservations.
 
 ## Configure the provider
 

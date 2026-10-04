@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { formatBookingEmail } from "../src/bookings/email";
+import { safeBookingConferenceUrl } from "../src/bookings/conference";
 
 const booking = {
   customer_name: "Casey Customer",
@@ -85,4 +86,17 @@ it("includes a ready video link in appointment notices but never cancellation em
       booking: { ...withMeeting, conference_url: "javascript:alert(1)" },
     }).text,
   ).not.toContain("javascript:");
+});
+
+it("accepts only exact HTTPS Jitsi UUID rooms for Jitsi booking links", () => {
+  const room = `https://meet.jit.si/savia-${crypto.randomUUID()}`;
+  expect(safeBookingConferenceUrl("jitsi", room)).toBe(room);
+  for (const unsafe of [
+    `${room}/`,
+    `${room}?config.prejoinPageEnabled=false`,
+    `${room}#fragment`,
+    room.replace("meet.jit.si", "example.com"),
+    room.replace("/savia-", "/savia-00000000-0000-0000-0000-"),
+  ])
+    expect(safeBookingConferenceUrl("jitsi", unsafe)).toBeNull();
 });

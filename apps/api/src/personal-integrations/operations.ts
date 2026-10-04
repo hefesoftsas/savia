@@ -49,7 +49,7 @@ export type PersonalEvent = {
   allDay?: boolean;
   timeZone?: string | null;
   conference?: {
-    provider: "google_meet" | "teams" | "zoom" | null;
+    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
     joinUrl: string | null;
     status: "ready" | "pending" | "unsupported" | "failed";
   };
@@ -60,11 +60,17 @@ const calendarPageLimit = 20;
 const calendarEventLimit = 2000;
 const calendarRangeMaxMilliseconds = 62 * 24 * 60 * 60 * 1000;
 const googleVideoCallProperty = "saviaVideoCall";
+const googleConferenceProviderProperty = "saviaConferenceProvider";
+const googleConferenceUrlProperty = "saviaConferenceUrl";
 const outlookVideoCallPropertyId =
   "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaVideoCall";
 const outlookBookingPropertyId =
   "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ab} Name SaviaBookingId";
-const outlookVideoCallExpand = `singleValueExtendedProperties($filter=id eq '${outlookVideoCallPropertyId}')`;
+const outlookConferenceProviderPropertyId =
+  "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaConferenceProvider";
+const outlookConferenceUrlPropertyId =
+  "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ac} Name SaviaConferenceUrl";
+const outlookVideoCallExpand = `singleValueExtendedProperties($filter=id eq '${outlookVideoCallPropertyId}' or id eq '${outlookConferenceProviderPropertyId}' or id eq '${outlookConferenceUrlPropertyId}')`;
 
 // Microsoft Graph returns Windows timezone IDs. Keep this small, explicit map
 // for common mailbox zones; unknown IDs fail closed instead of shifting dates.
@@ -396,6 +402,70 @@ function safeConferenceUrl(
   }
 }
 
+function safeJitsiUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      url.hostname === "meet.jit.si" &&
+      url.port === "" &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      /^\/savia-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        url.pathname,
+      )
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function conferenceMetadata(
+  event: Record<string, unknown>,
+  provider: "google_calendar" | "outlook",
+): PersonalConference | null {
+  let conferenceProvider: unknown;
+  let rawUrl: unknown;
+  if (provider === "google_calendar") {
+    const extendedProperties = event.extendedProperties;
+    const privateProperties =
+      extendedProperties &&
+      typeof extendedProperties === "object" &&
+      !Array.isArray(extendedProperties)
+        ? (extendedProperties as Record<string, unknown>).private
+        : undefined;
+    if (
+      !privateProperties ||
+      typeof privateProperties !== "object" ||
+      Array.isArray(privateProperties)
+    )
+      return null;
+    conferenceProvider = (privateProperties as Record<string, unknown>)[
+      googleConferenceProviderProperty
+    ];
+    rawUrl = (privateProperties as Record<string, unknown>)[
+      googleConferenceUrlProperty
+    ];
+  } else {
+    const properties = event.singleValueExtendedProperties;
+    if (!Array.isArray(properties)) return null;
+    for (const property of properties) {
+      if (!property || typeof property !== "object" || Array.isArray(property))
+        continue;
+      const item = property as Record<string, unknown>;
+      if (item.id === outlookConferenceProviderPropertyId)
+        conferenceProvider = item.value;
+      if (item.id === outlookConferenceUrlPropertyId) rawUrl = item.value;
+    }
+  }
+  if (conferenceProvider !== "jitsi") return null;
+  const joinUrl = safeJitsiUrl(rawUrl);
+  return { provider: "jitsi", joinUrl, status: joinUrl ? "ready" : "failed" };
+}
+
 const unsupportedConference: PersonalConference = {
   provider: null,
   joinUrl: null,
@@ -619,6 +689,22 @@ function emailRecipients(
       return invalidAction(`The ${field} field is invalid`);
     return email;
   });
+}
+
+function calendarAttendees(input: Record<string, unknown>): string[] {
+  const value = input.attendees;
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 50)
+    return invalidAction("The attendees field is invalid");
+  const attendees = value.map((entry) => {
+    if (typeof entry !== "string")
+      return invalidAction("The attendees field is invalid");
+    const email = entry.trim().toLowerCase();
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return invalidAction("The attendees field is invalid");
+    return email;
+  });
+  return [...new Set(attendees)];
 }
 
 function emailProvider(value: unknown): "gmail" | "outlook" {
@@ -1183,10 +1269,9 @@ function eventsFromGoogle(
     const end = item.end as
       { dateTime?: unknown; date?: unknown; timeZone?: unknown } | undefined;
     if (item.status === "cancelled") return [];
-    const conference = googleConference(
-      item,
-      googleVideoCallMarker(item) ?? requestedMeet,
-    );
+    const conference =
+      conferenceMetadata(item, "google_calendar") ??
+      googleConference(item, googleVideoCallMarker(item) ?? requestedMeet);
     return [
       {
         id,
@@ -1243,10 +1328,9 @@ function eventsFromOutlook(
       endsAt = outlookAllDayDate(end, originalEndTimeZone);
       timeZone = originalStartTimeZone;
     }
-    const conference = outlookConference(
-      item,
-      outlookVideoCallMarker(item) ?? requestedTeams,
-    );
+    const conference =
+      conferenceMetadata(item, "outlook") ??
+      outlookConference(item, outlookVideoCallMarker(item) ?? requestedTeams);
     return [
       {
         id,
@@ -1972,13 +2056,13 @@ export class PersonalIntegrationOperations {
             $orderby: "start/dateTime",
             $expand: outlookVideoCallExpand,
             $select:
-              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting",
+              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting,singleValueExtendedProperties",
           })
         : new URLSearchParams({
             $top: String(calendarPageSize),
             $expand: outlookVideoCallExpand,
             $select:
-              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeetingProvider,onlineMeeting",
+              "id,subject,start,end,webLink,isAllDay,isCancelled,showAs,originalStartTimeZone,originalEndTimeZone,isOnlineMeeting,onlineMeeting,singleValueExtendedProperties",
           });
     const events: PersonalEvent[] = [];
     const seenGoogleTokens = new Set<string>();
@@ -2210,8 +2294,9 @@ export class PersonalIntegrationOperations {
     startsAt: string;
     endsAt: string;
     videoCall?: boolean;
-    conferenceProvider?: "zoom";
+    conferenceProvider?: "zoom" | "jitsi";
     requestId?: string;
+    attendees?: string[];
   }): Promise<PersonalEvent> {
     const title = requiredActionText(input, "title", 2000);
     const startsAt = eventDate(input, "startsAt");
@@ -2239,14 +2324,22 @@ export class PersonalIntegrationOperations {
       input.requestId === undefined
     )
       return invalidAction("A requestId is required for Zoom video calls");
+    if (input.conferenceProvider && !input.videoCall)
+      return invalidAction("A conference provider requires videoCall");
+    const attendees = calendarAttendees(input);
     const connection = await this.connectedConnection(
       input.principalId,
       input.provider,
     );
+    const requestId = input.requestId ?? crypto.randomUUID();
+    const jitsiUrl =
+      input.conferenceProvider === "jitsi"
+        ? `https://meet.jit.si/savia-${crypto.randomUUID()}`
+        : null;
     const conferenceProvider =
       input.videoCall && input.conferenceProvider === "zoom"
         ? "zoom"
-        : input.videoCall
+        : input.videoCall && input.conferenceProvider !== "jitsi"
           ? await this.conferenceCapability(connection, input.provider)
           : null;
     const zoomConnection =
@@ -2257,7 +2350,6 @@ export class PersonalIntegrationOperations {
       throw new PersonalIntegrationUnavailableError(
         "Zoom meeting creation is unavailable",
       );
-    const requestId = input.requestId ?? crypto.randomUUID();
     const zoomMeeting =
       conferenceProvider === "zoom"
         ? await this.zoomMeetings!.sync({
@@ -2276,6 +2368,7 @@ export class PersonalIntegrationOperations {
               title,
               startsAt: startsAt.toISOString(),
               endsAt: endsAt.toISOString(),
+              attendees: [...attendees].sort(),
             }),
           })
         : undefined;
@@ -2285,7 +2378,9 @@ export class PersonalIntegrationOperations {
     const videoCallMarker: VideoCallMarker | null = input.videoCall
       ? requestConference
         ? "requested"
-        : "unsupported"
+        : conferenceProvider === "zoom" || jitsiUrl
+          ? null
+          : "unsupported"
       : null;
     const googleEventId =
       input.provider === "google_calendar" && input.requestId
@@ -2295,7 +2390,14 @@ export class PersonalIntegrationOperations {
       input.provider === "google_calendar"
         ? {
             method: "POST" as const,
-            path: `/calendar/v3/calendars/primary/events${requestConference ? "?conferenceDataVersion=1" : ""}`,
+            path: `/calendar/v3/calendars/primary/events${
+              requestConference || attendees.length
+                ? `?${[
+                    ...(requestConference ? ["conferenceDataVersion=1"] : []),
+                    ...(attendees.length ? ["sendUpdates=all"] : []),
+                  ].join("&")}`
+                : ""
+            }`,
             body: {
               ...(googleEventId ? { id: googleEventId } : {}),
               summary: title,
@@ -2305,6 +2407,15 @@ export class PersonalIntegrationOperations {
                 ? {
                     location: zoomMeeting.joinUrl,
                     description: `Join Zoom meeting: ${zoomMeeting.joinUrl}`,
+                  }
+                : {}),
+              ...(attendees.length
+                ? { attendees: attendees.map((email) => ({ email })) }
+                : {}),
+              ...(jitsiUrl
+                ? {
+                    description: `Join the meeting: ${jitsiUrl}`,
+                    location: jitsiUrl,
                   }
                 : {}),
               ...(requestConference && conferenceProvider === "google_meet"
@@ -2317,15 +2428,24 @@ export class PersonalIntegrationOperations {
                     },
                   }
                 : {}),
-              ...(videoCallMarker
+              ...(jitsiUrl
                 ? {
                     extendedProperties: {
                       private: {
-                        [googleVideoCallProperty]: videoCallMarker,
+                        [googleConferenceProviderProperty]: "jitsi",
+                        [googleConferenceUrlProperty]: jitsiUrl,
                       },
                     },
                   }
-                : {}),
+                : videoCallMarker
+                  ? {
+                      extendedProperties: {
+                        private: {
+                          [googleVideoCallProperty]: videoCallMarker,
+                        },
+                      },
+                    }
+                  : {}),
             },
           }
         : {
@@ -2345,22 +2465,52 @@ export class PersonalIntegrationOperations {
                     },
                   }
                 : {}),
+              ...(attendees.length
+                ? {
+                    attendees: attendees.map((address) => ({
+                      emailAddress: { address },
+                      type: "required",
+                    })),
+                  }
+                : {}),
+              ...(jitsiUrl
+                ? {
+                    body: {
+                      contentType: "Text",
+                      content: `Join the meeting: ${jitsiUrl}`,
+                    },
+                    location: { displayName: jitsiUrl },
+                  }
+                : {}),
               ...(requestConference && conferenceProvider === "teams"
                 ? {
                     isOnlineMeeting: true,
                     onlineMeetingProvider: "teamsForBusiness",
                   }
                 : {}),
-              ...(videoCallMarker
+              ...(jitsiUrl
                 ? {
                     singleValueExtendedProperties: [
                       {
-                        id: outlookVideoCallPropertyId,
-                        value: videoCallMarker,
+                        id: outlookConferenceProviderPropertyId,
+                        value: "jitsi",
+                      },
+                      {
+                        id: outlookConferenceUrlPropertyId,
+                        value: jitsiUrl,
                       },
                     ],
                   }
-                : {}),
+                : videoCallMarker
+                  ? {
+                      singleValueExtendedProperties: [
+                        {
+                          id: outlookVideoCallPropertyId,
+                          value: videoCallMarker,
+                        },
+                      ],
+                    }
+                  : {}),
             },
             upstreamHeaders: outlookUtcPreference,
           };
@@ -2428,6 +2578,12 @@ export class PersonalIntegrationOperations {
         status: "ready",
       };
     }
+    if (jitsiUrl)
+      event.conference = {
+        provider: "jitsi",
+        joinUrl: jitsiUrl,
+        status: "ready",
+      };
     return { ...event, connectionId: connection.id };
   }
 

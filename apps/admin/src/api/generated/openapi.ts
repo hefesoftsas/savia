@@ -4979,6 +4979,14 @@ export interface paths {
                   provider: "google_calendar" | "outlook";
                   id: string;
                 } | null;
+                conference?: {
+                  /** @enum {string|null} */
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
+                  /** Format: uri */
+                  joinUrl: string | null;
+                  /** @enum {string} */
+                  status: "ready" | "pending" | "unsupported" | "failed";
+                } | null;
               }[];
             };
           };
@@ -5085,6 +5093,11 @@ export interface paths {
                   published: boolean;
                   title: string;
                   description: string;
+                  /**
+                   * @default automatic
+                   * @enum {string}
+                   */
+                  conferenceProvider: "automatic" | "jitsi";
                   timeZone: string;
                   leadMinutes: number;
                   horizonDays: number;
@@ -5237,6 +5250,11 @@ export interface paths {
                   published: boolean;
                   title: string;
                   description: string;
+                  /**
+                   * @default automatic
+                   * @enum {string}
+                   */
+                  conferenceProvider: "automatic" | "jitsi";
                   timeZone: string;
                   leadMinutes: number;
                   horizonDays: number;
@@ -5363,6 +5381,11 @@ export interface paths {
             published: boolean;
             title: string;
             description: string;
+            /**
+             * @default automatic
+             * @enum {string}
+             */
+            conferenceProvider?: "automatic" | "jitsi";
             timeZone: string;
             leadMinutes: number;
             horizonDays: number;
@@ -5418,6 +5441,11 @@ export interface paths {
                   published: boolean;
                   title: string;
                   description: string;
+                  /**
+                   * @default automatic
+                   * @enum {string}
+                   */
+                  conferenceProvider: "automatic" | "jitsi";
                   timeZone: string;
                   leadMinutes: number;
                   horizonDays: number;
@@ -5589,6 +5617,11 @@ export interface paths {
                   published: boolean;
                   title: string;
                   description: string;
+                  /**
+                   * @default automatic
+                   * @enum {string}
+                   */
+                  conferenceProvider: "automatic" | "jitsi";
                   timeZone: string;
                   leadMinutes: number;
                   horizonDays: number;
@@ -5751,6 +5784,11 @@ export interface paths {
                   published: boolean;
                   title: string;
                   description: string;
+                  /**
+                   * @default automatic
+                   * @enum {string}
+                   */
+                  conferenceProvider: "automatic" | "jitsi";
                   timeZone: string;
                   leadMinutes: number;
                   horizonDays: number;
@@ -5917,7 +5955,7 @@ export interface paths {
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "zoom" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -6047,7 +6085,7 @@ export interface paths {
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "zoom" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -6170,7 +6208,7 @@ export interface paths {
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "zoom" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -7215,7 +7253,7 @@ export interface paths {
                   availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
                     /** @enum {string|null} */
-                    provider: "google_meet" | "teams" | "zoom" | null;
+                    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                     /** Format: uri */
                     joinUrl: string | null;
                     /** @enum {string} */
@@ -7257,7 +7295,7 @@ export interface paths {
                   availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
                     /** @enum {string|null} */
-                    provider: "google_meet" | "teams" | "zoom" | null;
+                    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                     /** Format: uri */
                     joinUrl: string | null;
                     /** @enum {string} */
@@ -7374,7 +7412,7 @@ export interface paths {
                   availableConferenceProviders?: ("auto" | "zoom")[];
                   conference?: {
                     /** @enum {string|null} */
-                    provider: "google_meet" | "teams" | "zoom" | null;
+                    provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                     /** Format: uri */
                     joinUrl: string | null;
                     /** @enum {string} */
@@ -7701,7 +7739,7 @@ export interface paths {
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "zoom" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -7825,7 +7863,7 @@ export interface paths {
                 availableConferenceProviders?: ("auto" | "zoom")[];
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "zoom" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -13832,7 +13870,7 @@ export interface paths {
                 timeZone?: string | null;
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "zoom" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -13887,9 +13925,10 @@ export interface paths {
             endsAt: string;
             videoCall?: boolean;
             /** @enum {string} */
-            conferenceProvider?: "zoom";
+            conferenceProvider?: "jitsi" | "zoom";
             /** Format: uuid */
             requestId?: string;
+            attendees?: string[];
           };
         };
       };
@@ -13911,7 +13950,7 @@ export interface paths {
                 webLink: string | null;
                 conference?: {
                   /** @enum {string|null} */
-                  provider: "google_meet" | "teams" | "zoom" | null;
+                  provider: "google_meet" | "teams" | "jitsi" | "zoom" | null;
                   /** Format: uri */
                   joinUrl: string | null;
                   /** @enum {string} */
@@ -15186,6 +15225,153 @@ export interface paths {
         };
         /** @description Attachment storage is unavailable */
         503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/pages/capture": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Capture an HTTP(S) link as a private Page */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            captureId: string;
+            title: string;
+            url: string;
+            note?: string;
+            parentId?: string;
+            folderTitle?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Captured page document */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                kind: "page" | "folder";
+                id: string;
+                parentId: string | null;
+                rootId: string;
+                title: string;
+                version: number;
+                updatedAt: string;
+                ownerId: string;
+                /** @enum {string} */
+                role: "owner" | "editor" | "reader";
+                isShared: boolean;
+                binding: {
+                  domain: string;
+                  collection: string;
+                  recordId: string;
+                } | null;
+                excerpt?: string;
+                content: {
+                  [key: string]: unknown;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Captured page document */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                kind: "page" | "folder";
+                id: string;
+                parentId: string | null;
+                rootId: string;
+                title: string;
+                version: number;
+                updatedAt: string;
+                ownerId: string;
+                /** @enum {string} */
+                role: "owner" | "editor" | "reader";
+                isShared: boolean;
+                binding: {
+                  domain: string;
+                  collection: string;
+                  recordId: string;
+                } | null;
+                excerpt?: string;
+                content: {
+                  [key: string]: unknown;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Page not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Version conflict */
+        409: {
           headers: {
             [name: string]: unknown;
           };

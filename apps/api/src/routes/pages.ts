@@ -233,6 +233,39 @@ const createRouteDefinition = createRoute({
     },
   },
 });
+const captureRoute = createRoute({
+  method: "post",
+  path: "/v1/pages/capture",
+  tags: ["Pages"],
+  summary: "Capture an HTTP(S) link as a private Page",
+  security: writeSecurity,
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              captureId: z.string().uuid(),
+              title: z.string().trim().min(1).max(200),
+              url: z.string().max(8192),
+              note: z.string().max(10_000).optional(),
+              parentId: z.string().min(1).max(128).optional(),
+              folderTitle: z.string().max(200).optional(),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    ...response(pageDocumentSchema, "Captured page document"),
+    201: {
+      content: { "application/json": { schema: envelope(pageDocumentSchema) } },
+      description: "Captured page document",
+    },
+  },
+});
 const membersRoute = createRoute({
   method: "get",
   path: "/v1/pages/members",
@@ -618,6 +651,22 @@ export function registerPagesRoutes(
       if (response.ok) scheduleImportIndexing(db, pagesSearch, actor);
       return response;
     }),
+  );
+  register(captureRoute, (c) =>
+    withBody<{
+      captureId: string;
+      title: string;
+      url: string;
+      note?: string;
+      parentId?: string;
+      folderTitle?: string;
+    }>(c, (input) =>
+      run(async () => {
+        const page = await service(c).capture(input);
+        schedulePageIndex(db, pagesSearch, actorFromContext(c), page);
+        return page;
+      }, 201),
+    ),
   );
   register(listRoute, (c) =>
     run(() => service(c).list(c.req.query("q") ?? "")),

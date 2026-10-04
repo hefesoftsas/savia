@@ -486,6 +486,57 @@ it("persists a meeting link and exposes it only while the booking is confirmed",
   ).toBeNull();
 });
 
+it("preserves a ready Jitsi room through calendar sync failure and mail retries", async () => {
+  const { readBooking, reservationView } =
+    await import("../src/bookings/repository");
+  const f = await seedCalendar();
+  const room = `https://meet.jit.si/savia-${crypto.randomUUID()}`;
+  await env.DB.prepare(
+    "UPDATE tenant_bookings SET conference_provider='jitsi',conference_url=?,conference_status='ready' WHERE id=?",
+  )
+    .bind(room, f.id)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO tenant_booking_jobs(id,tenant_id,booking_id,revision,kind,due_at) VALUES(?,?,?,1,'confirmation',?)",
+  )
+    .bind(crypto.randomUUID(), f.tenantId, f.id, f.now)
+    .run();
+  let time = f.now;
+  let mailAttempts = 0;
+  const messages: string[] = [];
+  const options = {
+    now: () => time,
+    publicOrigin: "https://example.test",
+    sendMail: async (message: { text: string }) => {
+      mailAttempts++;
+      if (mailAttempts === 1) throw new Error("temporary mail failure");
+      messages.push(message.text);
+    },
+    calendar: {
+      busy: async () => [],
+      sync: async () => {
+        throw new Error("calendar unavailable");
+      },
+    },
+  };
+  await runBookingJobs(env.DB, options);
+  let row = await readBooking(env.DB, f.tenantId, f.id);
+  expect((await reservationView(env.DB, row!)).conference).toEqual({
+    provider: "jitsi",
+    joinUrl: room,
+    status: "ready",
+  });
+  time += 120000;
+  await runBookingJobs(env.DB, options);
+  row = await readBooking(env.DB, f.tenantId, f.id);
+  expect(mailAttempts).toBeGreaterThan(1);
+  expect(messages.length).toBeGreaterThan(0);
+  expect(messages).toEqual(
+    expect.arrayContaining([expect.stringContaining(room)]),
+  );
+  expect((await reservationView(env.DB, row!)).conference?.joinUrl).toBe(room);
+});
+
 it("saves the provider event before retrying a pending conference and reuses it", async () => {
   const { readBooking, reservationView } =
     await import("../src/bookings/repository");

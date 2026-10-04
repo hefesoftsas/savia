@@ -101,7 +101,7 @@ describe("My Day video calls", () => {
     await user.type(screen.getByLabelText("Task"), "Zoom planning");
     await user.click(screen.getByLabelText("Create a video call"));
     await user.selectOptions(
-      screen.getByLabelText("Video call platform"),
+      screen.getByLabelText("Video meeting provider"),
       "zoom",
     );
     await user.click(screen.getByRole("button", { name: "Create task" }));
@@ -132,6 +132,91 @@ describe("My Day video calls", () => {
     renderApp(createClient());
     await userEvent.click(screen.getByLabelText("Create a video call"));
     expect(screen.getByRole("option", { name: "Zoom" })).toBeDisabled();
+  });
+
+  it("shows a native booking Jitsi room without an external calendar", async () => {
+    const user = userEvent.setup();
+    const client = createClient();
+    vi.mocked(client.listConnections).mockResolvedValue([]);
+    const booking = {
+      id: "00000000-0000-4000-8000-000000000001",
+      tenantId: 7,
+      tenantSlug: "team",
+      tenantName: "Team",
+      serviceName: "Consultation",
+      professionalName: "Ari",
+      customerName: "Ana",
+      customerEmail: "ana@example.com",
+      startsAt: "2026-10-04T15:00:00.000Z",
+      endsAt: "2026-10-04T15:30:00.000Z",
+      timeZone: "UTC",
+      status: "confirmed" as const,
+      version: 1,
+      externalEvent: null,
+      conference: {
+        provider: "jitsi" as const,
+        status: "ready" as const,
+        joinUrl: "https://meet.jit.si/savia-native-room",
+      },
+    };
+    vi.mocked(client.listBookingAgenda!).mockResolvedValue([booking]);
+    renderApp(client);
+    expect(
+      await screen.findByRole("link", { name: "Join Jitsi" }),
+    ).toHaveAttribute("href", booking.conference.joinUrl);
+    await user.click(
+      screen.getByRole("button", { name: /Consultation.*Team/ }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector('a[aria-label="Join Jitsi"]')).toHaveAttribute(
+      "href",
+      booking.conference.joinUrl,
+    );
+  });
+
+  it("confirms Jitsi and attendees before sending a single calendar invitation", async () => {
+    const user = userEvent.setup();
+    const client = createClient();
+    renderApp(client);
+    await user.type(screen.getByLabelText("Task"), "Client call");
+    await user.click(screen.getByLabelText("Create a video call"));
+    await user.selectOptions(
+      screen.getByLabelText("Video meeting provider"),
+      "jitsi",
+    );
+    await user.type(
+      screen.getByLabelText("Guest emails"),
+      "ana@example.com, bob@example.com",
+    );
+    await user.click(screen.getByRole("button", { name: "Create task" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Jitsi");
+    expect(dialog).toHaveTextContent("ana@example.com, bob@example.com");
+    expect(client.createCalendarEvent).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Confirm creation" }));
+    await waitFor(() =>
+      expect(client.createCalendarEvent).toHaveBeenCalledTimes(1),
+    );
+    expect(client.createCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "google_calendar",
+        videoCall: true,
+        conferenceProvider: "jitsi",
+        attendees: ["ana@example.com", "bob@example.com"],
+      }),
+    );
+  });
+
+  it("does not submit an invalid guest email", async () => {
+    const user = userEvent.setup();
+    const client = createClient();
+    renderApp(client);
+    await user.type(screen.getByLabelText("Task"), "Client call");
+    await user.click(screen.getByLabelText("Create a video call"));
+    await user.type(screen.getByLabelText("Guest emails"), "invalid-address");
+    await user.click(screen.getByRole("button", { name: "Create task" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(client.createCalendarEvent).not.toHaveBeenCalled();
   });
 
   it("can delete a newly created event immediately using its originating connection", async () => {
@@ -288,41 +373,47 @@ describe("My Day video calls", () => {
     ).toBeVisible();
   });
 
-  it("keeps the safe Join action in day, week, month, and event details", async () => {
-    const meeting: PersonalCalendarEvent = {
-      id: "meeting-ready",
-      title: "Planning",
-      startsAt: "2026-10-04T15:00:00.000Z",
-      endsAt: "2026-10-04T15:30:00.000Z",
-      webLink: null,
-      conference: {
-        provider: "teams",
-        joinUrl: "https://teams.cloud.microsoft/l/meetup-join/abc",
-        status: "ready",
-      },
-    };
-    const user = userEvent.setup();
-    const client = createClient([meeting], "outlook");
-    renderApp(client);
+  it.each([
+    ["google_meet", "https://meet.google.com/abc-defg-hij", "Join Google Meet"],
+    [
+      "teams",
+      "https://teams.cloud.microsoft/l/meetup-join/abc",
+      "Join Microsoft Teams",
+    ],
+    ["jitsi", "https://meet.jit.si/savia-planning", "Join Jitsi"],
+    ["zoom", "https://us02web.zoom.us/j/123456789?pwd=secret", "Join Zoom"],
+  ] as const)(
+    "keeps the safe %s join action in day, week, month, and event details",
+    async (provider, joinUrl, label) => {
+      const meeting: PersonalCalendarEvent = {
+        id: "meeting-ready",
+        title: "Planning",
+        startsAt: "2026-10-04T15:00:00.000Z",
+        endsAt: "2026-10-04T15:30:00.000Z",
+        webLink: null,
+        conference: {
+          provider,
+          joinUrl,
+          status: "ready",
+        },
+      };
+      const user = userEvent.setup();
+      const client = createClient([meeting], "outlook");
+      renderApp(client);
 
-    expect(
-      await screen.findByRole("link", { name: "Join Microsoft Teams" }),
-    ).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Week" }));
-    expect(
-      await screen.findByRole("link", { name: "Join Microsoft Teams" }),
-    ).toBeVisible();
-    await user.click(screen.getByRole("button", { name: /Planning.*Outlook/ }));
-    expect(await screen.findByRole("dialog")).toBeVisible();
-    expect(
-      screen
-        .getByRole("dialog")
-        .querySelector('a[aria-label="Join Microsoft Teams"]'),
-    ).toHaveAttribute("href", meeting.conference!.joinUrl);
-    await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "Month" }));
-    expect(
-      await screen.findByRole("link", { name: "Join Microsoft Teams" }),
-    ).toBeVisible();
-  });
+      expect(await screen.findByRole("link", { name: label })).toBeVisible();
+      await user.click(screen.getByRole("button", { name: "Week" }));
+      expect(await screen.findByRole("link", { name: label })).toBeVisible();
+      await user.click(
+        screen.getByRole("button", { name: /Planning.*Outlook/ }),
+      );
+      expect(await screen.findByRole("dialog")).toBeVisible();
+      expect(
+        screen.getByRole("dialog").querySelector(`a[aria-label="${label}"]`),
+      ).toHaveAttribute("href", joinUrl);
+      await user.keyboard("{Escape}");
+      await user.click(screen.getByRole("button", { name: "Month" }));
+      expect(await screen.findByRole("link", { name: label })).toBeVisible();
+    },
+  );
 });

@@ -414,7 +414,7 @@ const eventListRoute = createRoute({
                 conference: z
                   .object({
                     provider: z
-                      .enum(["google_meet", "teams", "zoom"])
+                      .enum(["google_meet", "teams", "jitsi", "zoom"])
                       .nullable(),
                     joinUrl: z.string().url().nullable(),
                     status: z.enum([
@@ -450,15 +450,28 @@ const createCalendarEventRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z.object({
-            provider: z.enum(["google_calendar", "outlook"]),
-            title: z.string().trim().min(1).max(2000),
-            startsAt: z.string().trim().min(1).max(64),
-            endsAt: z.string().trim().min(1).max(64),
-            videoCall: z.boolean().optional(),
-            conferenceProvider: z.enum(["zoom"]).optional(),
-            requestId: z.uuid().optional(),
-          }),
+          schema: z
+            .object({
+              provider: z.enum(["google_calendar", "outlook"]),
+              title: z.string().trim().min(1).max(2000),
+              startsAt: z.string().trim().min(1).max(64),
+              endsAt: z.string().trim().min(1).max(64),
+              videoCall: z.boolean().optional(),
+              conferenceProvider: z.enum(["jitsi", "zoom"]).optional(),
+              requestId: z.uuid().optional(),
+              attendees: z
+                .array(z.string().trim().email().max(254))
+                .max(50)
+                .optional(),
+            })
+            .refine(
+              (input) => !input.conferenceProvider || input.videoCall === true,
+              { message: "A conference provider requires videoCall" },
+            )
+            .refine(
+              (input) => input.conferenceProvider !== "zoom" || input.requestId,
+              { message: "A requestId is required for Zoom video calls" },
+            ),
         },
       },
       required: true,
@@ -478,7 +491,9 @@ const createCalendarEventRoute = createRoute({
               webLink: z.string().url().nullable(),
               conference: z
                 .object({
-                  provider: z.enum(["google_meet", "teams", "zoom"]).nullable(),
+                  provider: z
+                    .enum(["google_meet", "teams", "jitsi", "zoom"])
+                    .nullable(),
                   joinUrl: z.string().url().nullable(),
                   status: z.enum(["ready", "pending", "unsupported", "failed"]),
                 })
@@ -859,10 +874,17 @@ export function registerPersonalIntegrationRoutes(
         404,
       );
     try {
-      const session = await nango.createReconnectSession({
-        connectionId: connection.nangoConnectionId,
-        integrationId: connection.nangoIntegrationId,
-      });
+      const session =
+        resolved.provider.id === "zoom"
+          ? await nango.createConnectSession({
+              actor,
+              provider: resolved.provider.id,
+              integrationId: resolved.provider.integrationId,
+            })
+          : await nango.createReconnectSession({
+              connectionId: connection.nangoConnectionId,
+              integrationId: connection.nangoIntegrationId,
+            });
       return context.json({ data: session }, 200);
     } catch (exception) {
       const response = personalErrorResponse(exception);
@@ -1237,6 +1259,7 @@ export function registerPersonalIntegrationRoutes(
             videoCall: input.videoCall,
             conferenceProvider: input.conferenceProvider,
             requestId: input.requestId,
+            attendees: input.attendees,
           }),
         },
         201,
