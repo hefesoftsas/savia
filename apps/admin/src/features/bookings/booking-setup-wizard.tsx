@@ -420,6 +420,36 @@ export function BookingSetupWizard({
                   ))}
                 </datalist>
               </label>
+              <div className="grid gap-2 text-sm font-medium">
+                <label htmlFor="booking-conference-provider">
+                  {t("Video meeting provider")}
+                </label>
+                <select
+                  id="booking-conference-provider"
+                  aria-describedby="booking-conference-help"
+                  className={`${inputClass} w-full rounded-md border border-input bg-background px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                  value={settings.conferenceProvider ?? "automatic"}
+                  onChange={(event) =>
+                    change(
+                      "conferenceProvider",
+                      event.target.value as "automatic" | "jitsi",
+                    )
+                  }
+                >
+                  <option value="automatic">
+                    {t("Automatic (Google Meet or Teams)")}
+                  </option>
+                  <option value="jitsi">Jitsi</option>
+                </select>
+                <span
+                  id="booking-conference-help"
+                  className="text-xs font-normal text-muted-foreground"
+                >
+                  {t(
+                    "New appointments include the meeting link in confirmations and reminders.",
+                  )}
+                </span>
+              </div>
               <details className="border-t pt-4">
                 <summary className="min-h-11 cursor-pointer text-sm font-medium">
                   {w("Booking rules")}

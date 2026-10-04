@@ -1,4 +1,35 @@
 export const agendaMessages = {
+  "Proveedor de videollamada": [
+    "Proveedor de videollamada",
+    "Video meeting provider",
+    "Provedor da videochamada",
+  ],
+  "Automático (Google Meet o Teams)": [
+    "Automático (Google Meet o Teams)",
+    "Automatic (Google Meet or Teams)",
+    "Automático (Google Meet ou Teams)",
+  ],
+  "Correos de los invitados": [
+    "Correos de los invitados",
+    "Guest emails",
+    "E-mails dos convidados",
+  ],
+  "Separa los correos con comas. Recibirán una invitación con el enlace de la reunión.":
+    [
+      "Separa los correos con comas. Recibirán una invitación con el enlace de la reunión.",
+      "Separate emails with commas. Guests will receive an invitation with the meeting link.",
+      "Separe os e-mails com vírgulas. Os convidados receberão um convite com o link da reunião.",
+    ],
+  "Se enviará la invitación a: %{guests}": [
+    "Se enviará la invitación a: %{guests}",
+    "The invitation will be sent to: %{guests}",
+    "O convite será enviado para: %{guests}",
+  ],
+  "Puedes invitar hasta 50 personas.": [
+    "Puedes invitar hasta 50 personas.",
+    "You can invite up to 50 people.",
+    "Você pode convidar até 50 pessoas.",
+  ],
   "Mi día": ["Mi día", "My day", "Meu dia"],
   "Calendarios personales": [
     "Calendarios personales",

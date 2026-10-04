@@ -411,7 +411,9 @@ const eventListRoute = createRoute({
                 timeZone: z.string().nullable().optional(),
                 conference: z
                   .object({
-                    provider: z.enum(["google_meet", "teams"]).nullable(),
+                    provider: z
+                      .enum(["google_meet", "teams", "jitsi"])
+                      .nullable(),
                     joinUrl: z.string().url().nullable(),
                     status: z.enum([
                       "ready",
@@ -446,13 +448,23 @@ const createCalendarEventRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z.object({
-            provider: z.enum(["google_calendar", "outlook"]),
-            title: z.string().trim().min(1).max(2000),
-            startsAt: z.string().trim().min(1).max(64),
-            endsAt: z.string().trim().min(1).max(64),
-            videoCall: z.boolean().optional(),
-          }),
+          schema: z
+            .object({
+              provider: z.enum(["google_calendar", "outlook"]),
+              title: z.string().trim().min(1).max(2000),
+              startsAt: z.string().trim().min(1).max(64),
+              endsAt: z.string().trim().min(1).max(64),
+              videoCall: z.boolean().optional(),
+              conferenceProvider: z.enum(["jitsi"]).optional(),
+              attendees: z
+                .array(z.string().trim().email().max(254))
+                .max(50)
+                .optional(),
+            })
+            .refine(
+              (input) => !input.conferenceProvider || input.videoCall === true,
+              { message: "A conference provider requires videoCall" },
+            ),
         },
       },
       required: true,
@@ -472,7 +484,9 @@ const createCalendarEventRoute = createRoute({
               webLink: z.string().url().nullable(),
               conference: z
                 .object({
-                  provider: z.enum(["google_meet", "teams"]).nullable(),
+                  provider: z
+                    .enum(["google_meet", "teams", "jitsi"])
+                    .nullable(),
                   joinUrl: z.string().url().nullable(),
                   status: z.enum(["ready", "pending", "unsupported", "failed"]),
                 })
@@ -1229,6 +1243,8 @@ export function registerPersonalIntegrationRoutes(
             startsAt: input.startsAt,
             endsAt: input.endsAt,
             videoCall: input.videoCall,
+            conferenceProvider: input.conferenceProvider,
+            attendees: input.attendees,
           }),
         },
         201,

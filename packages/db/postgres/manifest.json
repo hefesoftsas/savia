@@ -137,6 +137,10 @@
     {
       "filename": "0032_assistant_threads.sql",
       "sha256": "05b6265d835fe892f3c930cbff8bc265e95a582a52062299160424772bcddc20"
+    },
+    {
+      "filename": "0033_booking_jitsi_conference.sql",
+      "sha256": "1bf51ab9492cf40d924d5e4cc78b56ede8507f6bf532fd1d5bc9f1cc6f88fb0a"
     }
   ],
   "sqliteOnlyDerivedTables": [

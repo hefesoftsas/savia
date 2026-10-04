@@ -1,4 +1,4 @@
-import { safeConferenceUrl } from "./conference";
+import { safeBookingConferenceUrl } from "./conference";
 import type { BookingRow } from "./repository";
 
 type BookingEmailKind = "confirmation" | "change" | "cancellation" | "reminder";
@@ -12,6 +12,7 @@ type EmailBooking = Pick<
 > & {
   customer_locale?: string | null;
   conference_status?: string | null;
+  conference_provider?: "google_meet" | "teams" | "jitsi" | null;
   conference_url?: string | null;
 };
 
@@ -125,7 +126,10 @@ export function formatBookingEmail(input: {
   );
   const joinUrl =
     input.kind !== "cancellation" && input.booking.conference_status === "ready"
-      ? safeConferenceUrl(input.booking.conference_url)
+      ? safeBookingConferenceUrl(
+          input.booking.conference_provider,
+          input.booking.conference_url,
+        )
       : null;
   const durationText = `${duration} ${messages.minutes}`;
   return {

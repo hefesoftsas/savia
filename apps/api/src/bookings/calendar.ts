@@ -21,7 +21,8 @@ type SyncInput = BookingCalendarInput & {
   endsAt: string;
   externalId: string | null;
   cancelled: boolean;
-  conferenceProvider?: "google_meet" | "teams";
+  conferenceProvider?: "google_meet" | "teams" | "jitsi";
+  conferenceUrl?: string;
   requestConference?: boolean;
 };
 type BusyPeriod = { start: string; end: string };
@@ -29,13 +30,34 @@ type BusyPeriod = { start: string; end: string };
 export type BookingCalendarSyncResult = {
   externalId: string | null;
   conference: {
-    provider: "google_meet" | "teams" | null;
+    provider: "google_meet" | "teams" | "jitsi" | null;
     joinUrl: string | null;
     status: "ready" | "pending" | "unsupported" | "failed";
   } | null;
 };
 
 const unavailable = () => new Error("Booking calendar is unavailable");
+function safeJitsiUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return value === url.href &&
+      url.protocol === "https:" &&
+      url.hostname === "meet.jit.si" &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      !url.search &&
+      !url.hash &&
+      /^\/savia-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        url.pathname,
+      )
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
 const outlookUtcPreference = { prefer: 'outlook.timezone="UTC"' } as const;
 const outlookBookingPropertyId =
   "String {6f8d1c44-1ab2-4e1e-9e8f-0123456789ab} Name SaviaBookingId";
@@ -551,21 +573,51 @@ export function createBookingCalendarAdapter(
         }
       }
 
-      const conferenceProvider =
-        input.requestConference || !input.externalId
-          ? await conferenceCapability(connection, input.provider)
+      const jitsiUrl =
+        input.conferenceProvider === "jitsi"
+          ? safeJitsiUrl(input.conferenceUrl)
           : null;
+      if (input.conferenceProvider === "jitsi" && !jitsiUrl)
+        throw unavailable();
+      const jitsiConference = jitsiUrl
+        ? {
+            provider: "jitsi" as const,
+            joinUrl: jitsiUrl,
+            status: "ready" as const,
+          }
+        : null;
+      const conferenceProvider =
+        input.conferenceProvider === "jitsi"
+          ? null
+          : input.requestConference || !input.externalId
+            ? await conferenceCapability(connection, input.provider)
+            : null;
       const baseBody =
         input.provider === "google_calendar"
           ? {
               summary: input.title,
               start: { dateTime: startsAt },
               end: { dateTime: endsAt },
+              ...(jitsiUrl
+                ? {
+                    description: `Join the video meeting: ${jitsiUrl}`,
+                    location: jitsiUrl,
+                  }
+                : {}),
             }
           : {
               subject: input.title,
               start: graphDateTime(startsAt),
               end: graphDateTime(endsAt),
+              ...(jitsiUrl
+                ? {
+                    body: {
+                      contentType: "text",
+                      content: `Join the video meeting: ${jitsiUrl}`,
+                    },
+                    location: { displayName: jitsiUrl },
+                  }
+                : {}),
               singleValueExtendedProperties: [
                 { id: outlookBookingPropertyId, value: input.id },
               ],
@@ -591,14 +643,19 @@ export function createBookingCalendarAdapter(
             ? "?conferenceDataVersion=1"
             : "";
         if (input.externalId) {
-          const currentConference = await eventConference(
-            connection,
-            input.provider,
-            id,
-            input.conferenceProvider ?? conferenceProvider ?? undefined,
-            input.requestConference === true,
-          );
+          const currentConference =
+            jitsiConference ??
+            (await eventConference(
+              connection,
+              input.provider,
+              id,
+              input.conferenceProvider === "google_meet"
+                ? "google_meet"
+                : conferenceProvider ?? undefined,
+              input.requestConference === true,
+            ));
           const shouldRequest =
+            !jitsiConference &&
             input.requestConference &&
             conferenceProvider === "google_meet" &&
             currentConference?.status !== "ready" &&
@@ -625,14 +682,15 @@ export function createBookingCalendarAdapter(
           });
           return {
             externalId: id,
-            conference: shouldRequest
+            conference: jitsiConference ??
+              (shouldRequest
               ? await eventConference(
                   connection,
                   input.provider,
                   id,
                   "google_meet",
                 )
-              : (currentConference ?? unsupportedConference),
+              : (currentConference ?? unsupportedConference)),
           };
         }
         try {
@@ -648,20 +706,24 @@ export function createBookingCalendarAdapter(
               throw unavailable();
             return {
               externalId: id,
-              conference: conferenceProvider
-                ? googleConference(event, conferenceProvider === "google_meet")
-                : unsupportedConference,
+              conference: jitsiConference ??
+                (conferenceProvider
+                  ? googleConference(event, conferenceProvider === "google_meet")
+                  : unsupportedConference),
             };
           }
           if (response.status === 409) {
-            const currentConference = await eventConference(
-              connection,
-              input.provider,
-              id,
-              conferenceProvider ?? undefined,
-              input.requestConference === true,
-            );
+            const currentConference =
+              jitsiConference ??
+              (await eventConference(
+                connection,
+                input.provider,
+                id,
+                conferenceProvider ?? undefined,
+                input.requestConference === true,
+              ));
             const shouldRequest =
+              !jitsiConference &&
               input.requestConference &&
               conferenceProvider === "google_meet" &&
               currentConference?.status !== "ready" &&
@@ -689,14 +751,15 @@ export function createBookingCalendarAdapter(
             });
             return {
               externalId: id,
-              conference: shouldRequest
+              conference: jitsiConference ??
+                (shouldRequest
                 ? await eventConference(
                     connection,
                     input.provider,
                     id,
                     "google_meet",
                   )
-                : currentConference,
+                : currentConference),
             };
           }
           throw unavailable();
@@ -708,14 +771,19 @@ export function createBookingCalendarAdapter(
       const existingId =
         input.externalId ?? (await findOutlookEvent(connection, input.id));
       if (existingId) {
-        const currentConference = await eventConference(
-          connection,
-          input.provider,
-          existingId,
-          input.conferenceProvider ?? conferenceProvider ?? undefined,
-          input.requestConference === true,
-        );
+        const currentConference =
+          jitsiConference ??
+          (await eventConference(
+            connection,
+            input.provider,
+            existingId,
+            input.conferenceProvider === "teams"
+              ? "teams"
+              : conferenceProvider ?? undefined,
+            input.requestConference === true,
+          ));
         const shouldRequest =
+          !jitsiConference &&
           input.requestConference &&
           conferenceProvider === "teams" &&
           currentConference?.status !== "ready" &&
@@ -737,9 +805,10 @@ export function createBookingCalendarAdapter(
         const patched = record(await response.json().catch(() => undefined));
         return {
           externalId: existingId,
-          conference: shouldRequest
+          conference: jitsiConference ??
+            (shouldRequest
             ? outlookConference(patched, true)
-            : (currentConference ?? unsupportedConference),
+            : (currentConference ?? unsupportedConference)),
         };
       }
       const transactionId = await bookingEventId(input.id);
@@ -761,9 +830,10 @@ export function createBookingCalendarAdapter(
       const event = record(await response.json().catch(() => undefined));
       if (typeof event?.id !== "string" || !event.id) throw unavailable();
       const conference =
-        conferenceProvider === "teams"
+        jitsiConference ??
+        (conferenceProvider === "teams"
           ? outlookConference(event, true)
-          : unsupportedConference;
+          : unsupportedConference);
       return {
         externalId: event.id,
         conference,

@@ -1,6 +1,22 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const bookingMessages = {
+  "Join Jitsi": ["Unirse a Jitsi", "Join Jitsi", "Entrar no Jitsi"],
+  "Video meeting provider": [
+    "Proveedor de videollamada",
+    "Video meeting provider",
+    "Provedor da videochamada",
+  ],
+  "Automatic (Google Meet or Teams)": [
+    "Automático (Google Meet o Teams)",
+    "Automatic (Google Meet or Teams)",
+    "Automático (Google Meet ou Teams)",
+  ],
+  "New appointments include the meeting link in confirmations and reminders.": [
+    "Las nuevas citas incluyen el enlace de la reunión en confirmaciones y recordatorios.",
+    "New appointments include the meeting link in confirmations and reminders.",
+    "Os novos agendamentos incluem o link da reunião nas confirmações e nos lembretes.",
+  ],
   Appointments: ["Citas", "Appointments", "Agendamentos"],
   "Manage appointments and your availability.": [
     "Administra las citas y tu disponibilidad.",
