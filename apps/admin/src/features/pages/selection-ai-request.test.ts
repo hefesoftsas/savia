@@ -191,3 +191,90 @@ describe("requestSelectionAI", () => {
     await expect(request).rejects.toThrow("aborted");
   });
 });
+
+it("continues a clarification with the original selection and assistant question", async () => {
+  const fetcher = vi.fn(
+    async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      sseResponse(assistantChunks("Translations")),
+  );
+  let history: import("ai").UIMessage[] = [];
+  await requestSelectionAI(api(fetcher), {
+    text: "original",
+    instruction: "Translate",
+    onMessages: (messages) => {
+      history = messages;
+    },
+  });
+  await requestSelectionAI(api(fetcher), {
+    text: "original",
+    instruction: "Translate",
+    history,
+    clarification: "I meant they synchronized it.",
+  });
+  const body = JSON.parse(String(fetcher.mock.calls[1][1]?.body));
+  expect(body.messages).toHaveLength(3);
+  expect(body.messages[0].parts[0].text).toContain("original");
+  expect(body.messages[1].role).toBe("assistant");
+  expect(body.messages[1].parts[0].text).toBe("Translations");
+  expect(body.messages[2].parts[0].text).toBe("I meant they synchronized it.");
+});
+
+it("reports the effective model from stream metadata", async () => {
+  const chunks = [
+    {
+      type: "start",
+      messageId: "assistant-1",
+      messageMetadata: { model: "provider/fast-model" },
+    },
+    ...assistantChunks("Done").slice(1),
+  ];
+  const fetcher = vi.fn(async () => sseResponse(chunks));
+  let model: string | undefined;
+  await requestSelectionAI(api(fetcher), {
+    text: "original",
+    instruction: "Translate",
+    onModel: (value) => {
+      model = value;
+    },
+  });
+  expect(model).toBe("provider/fast-model");
+});
+
+it("sends an explicitly selected enabled model to the server", async () => {
+  const fetcher = vi.fn(
+    async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      sseResponse(assistantChunks("Done")),
+  );
+  await requestSelectionAI(api(fetcher), {
+    text: "Original",
+    instruction: "Translate",
+    model: "provider/enabled-model",
+  });
+  expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body)).model).toBe(
+    "provider/enabled-model",
+  );
+});
+
+it("preserves the server policy error code when a model was disabled", async () => {
+  const fetcher = vi.fn(async () =>
+    Response.json(
+      {
+        error: {
+          code: "ASSISTANT_MODEL_NOT_ALLOWED",
+          message: "Disabled by admin",
+        },
+      },
+      { status: 403 },
+    ),
+  );
+  await expect(
+    requestSelectionAI(api(fetcher), {
+      text: "Source",
+      instruction: "Translate",
+      model: "provider/disabled",
+    }),
+  ).rejects.toMatchObject({
+    code: "ASSISTANT_MODEL_NOT_ALLOWED",
+    message: "Disabled by admin",
+  });
+});

@@ -592,6 +592,52 @@ export const settingsMessages = {
     "Unable to load the model catalog.",
     "Não foi possível carregar o catálogo de modelos.",
   ],
+  "Save enabled models": [
+    "Guardar modelos habilitados",
+    "Save enabled models",
+    "Salvar modelos habilitados",
+  ],
+  "Modelos habilitados guardados.": [
+    "Modelos habilitados guardados.",
+    "Enabled models saved.",
+    "Modelos habilitados salvos.",
+  ],
+  "No fue posible guardar los modelos habilitados.": [
+    "No fue posible guardar los modelos habilitados.",
+    "Unable to save enabled models.",
+    "Não foi possível salvar os modelos habilitados.",
+  ],
+  "Available models for Ask AI": [
+    "Modelos disponibles para Ask AI",
+    "Available models for Ask AI",
+    "Modelos disponíveis para o Ask AI",
+  ],
+  "Enable text models for Ask AI. The configured default model always remains available.":
+    [
+      "Habilita modelos de texto para Ask AI. El modelo predeterminado configurado siempre permanece disponible.",
+      "Enable text models for Ask AI. The configured default model always remains available.",
+      "Ative modelos de texto para o Ask AI. O modelo padrão configurado permanece sempre disponível.",
+    ],
+  "Search text models for Ask AI": [
+    "Buscar modelos de texto para Ask AI",
+    "Search text models for Ask AI",
+    "Buscar modelos de texto para o Ask AI",
+  ],
+  "Inherit enabled models from global": [
+    "Heredar modelos habilitados de global",
+    "Inherit enabled models from global",
+    "Herdar modelos habilitados da configuração global",
+  ],
+  "Loading text model catalog…": [
+    "Cargando catálogo de modelos de texto…",
+    "Loading text model catalog…",
+    "Carregando catálogo de modelos de texto…",
+  ],
+  "No matching text models.": [
+    "No hay modelos de texto coincidentes.",
+    "No matching text models.",
+    "Nenhum modelo de texto correspondente.",
+  ],
   "Debes ingresar una clave de OpenRouter antes de guardar.": [
     "Debes ingresar una clave de OpenRouter antes de guardar.",
     "Enter an OpenRouter key before saving.",

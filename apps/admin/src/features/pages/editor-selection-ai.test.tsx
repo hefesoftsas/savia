@@ -61,8 +61,10 @@ async function openAI(
   window.getSelection()!.addRange(range);
   fireEvent.mouseMove(text.parentElement!);
   fireEvent(document, new Event("selectionchange"));
-  if (!readOnly && launch)
-    fireEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
+  if (!readOnly && launch) {
+    const toolbar = await screen.findByRole("toolbar", { name: "Formatting" });
+    fireEvent.click(within(toolbar).getByRole("button", { name: "Ask AI" }));
+  }
   return { changed, container, content };
 }
 
@@ -145,6 +147,13 @@ it("replaces with the chosen translation without inserting headings or other ver
       name: "Concise professional but friendly translation",
     }),
   );
+  expect(within(dialog).getByText("Hi", { exact: true })).toBeVisible();
+  expect(
+    within(dialog).queryByText("Hello", { exact: true }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(dialog).queryByText("Hello there", { exact: true }),
+  ).not.toBeInTheDocument();
   fireEvent.click(
     within(dialog).getByRole("button", { name: "Replace selection" }),
   );
@@ -426,4 +435,199 @@ it("keeps ordinary responses about translation styles applicable", async () => {
       "Keep A Regular translation preserves the original meaning. selection",
     ),
   );
+});
+
+it("shows employee instructions and continues an ambiguous translation without replacing the selection", async () => {
+  const history = [
+    { id: "original", role: "user", parts: [{ type: "text", text: "this" }] },
+    {
+      id: "question",
+      role: "assistant",
+      parts: [{ type: "text", text: "Did they synchronize it?" }],
+    },
+  ];
+  request
+    .mockImplementationOnce((_api, options) => {
+      options.onMessages?.(history);
+      options.onModel?.("provider/fast-model");
+      return Promise.resolve("Did they synchronize it?");
+    })
+    .mockResolvedValueOnce(
+      "1. Regular translation\nThey did\n\n2. Professional but friendly translation\nThey synchronized it\n\n3. Concise professional but friendly translation\nSynced",
+    );
+  const { content } = await openAI(false, [
+    {
+      id: "translator",
+      name: "Translator",
+      handle: "traductor",
+      status: "active",
+      systemPrompt: "Translate in three versions",
+      model: "provider/fast-model",
+    },
+  ]);
+  const dialog = await screen.findByRole("dialog", { name: "Ask AI" });
+  fireEvent.change(within(dialog).getByLabelText("Assistant"), {
+    target: { value: "translator" },
+  });
+  expect(within(dialog).getByText("provider/fast-model")).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByText("Options"));
+  fireEvent.click(within(dialog).getByText("Assistant instructions"));
+  expect(within(dialog).getByText("Translate in three versions")).toBeVisible();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+  await within(dialog).findByText("Did they synchronize it?");
+  expect(
+    within(dialog).queryByRole("button", { name: "Replace selection" }),
+  ).not.toBeInTheDocument();
+  fireEvent.change(
+    within(dialog).getByLabelText("Clarification or format correction"),
+    { target: { value: "Yes, they did." } },
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+  await within(dialog).findByRole("radio", { name: "Regular translation" });
+  expect(request.mock.calls[1][1].history).toEqual(history);
+  expect(request.mock.calls[1][1].clarification).toBe("Yes, they did.");
+  expect(content.textContent).toBe("Keep this selection");
+});
+
+it("preserves a clarification and its reply when continuing fails so it can be retried", async () => {
+  request
+    .mockResolvedValueOnce("Did they synchronize it?")
+    .mockRejectedValueOnce(new Error("Unavailable"));
+  await openAI(false, [
+    {
+      id: "translator",
+      name: "Translator",
+      handle: "traductor",
+      status: "active",
+      systemPrompt: "Translate",
+      model: null,
+    },
+  ]);
+  const dialog = await screen.findByRole("dialog", { name: "Ask AI" });
+  fireEvent.change(within(dialog).getByLabelText("Assistant"), {
+    target: { value: "translator" },
+  });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+  await within(dialog).findByText("Did they synchronize it?");
+  fireEvent.change(
+    within(dialog).getByLabelText("Clarification or format correction"),
+    { target: { value: "Yes, they did." } },
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+  await within(dialog).findByRole("alert");
+  expect(
+    within(dialog).getByText("Did they synchronize it?"),
+  ).toBeInTheDocument();
+  expect(
+    within(dialog).getByLabelText("Clarification or format correction"),
+  ).toHaveValue("Yes, they did.");
+  expect(
+    within(dialog).getByRole("button", { name: "Continue" }),
+  ).toBeEnabled();
+});
+
+it("offers only admin-enabled model choices and forwards the user's choice", async () => {
+  request.mockResolvedValue("Done");
+  const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+    String(input).includes("model-policy")
+      ? Response.json({
+          defaultModel: "provider/default",
+          allowedModels: [{ id: "provider/enabled", name: "Enabled model" }],
+        })
+      : Response.json({ data: [] }),
+  );
+  const { content } = await openAI(false, [], true, fetcher);
+  const dialog = await screen.findByRole("dialog", { name: "Ask AI" });
+  fireEvent.click(within(dialog).getByText("Options"));
+  const models = await within(dialog).findByRole("combobox", {
+    name: "Choose model",
+  });
+  await waitFor(() =>
+    expect(
+      within(models).getByRole("option", {
+        name: "Enabled model (provider/enabled)",
+      }),
+    ).toBeInTheDocument(),
+  );
+  expect(within(models).getAllByRole("option")).toHaveLength(2);
+  fireEvent.change(models, { target: { value: "provider/enabled" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Explain" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+  await within(dialog).findByText("Done");
+  expect(request.mock.calls[0][1].model).toBe("provider/enabled");
+  expect(content.textContent).toBe("Keep this selection");
+});
+
+it("returns to the default when an admin disables the selected model", async () => {
+  request.mockRejectedValue(
+    Object.assign(new Error("Disabled"), {
+      code: "ASSISTANT_MODEL_NOT_ALLOWED",
+    }),
+  );
+  let policyLoads = 0;
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input).includes("model-policy")) {
+      policyLoads++;
+      return Response.json({
+        defaultModel: "provider/default",
+        allowedModels:
+          policyLoads === 1
+            ? [{ id: "provider/enabled", name: "Enabled model" }]
+            : [],
+      });
+    }
+    return Response.json({ data: [] });
+  });
+  await openAI(false, [], true, fetcher);
+  const dialog = await screen.findByRole("dialog", { name: "Ask AI" });
+  fireEvent.click(within(dialog).getByText("Options"));
+  const models = await within(dialog).findByRole("combobox", {
+    name: "Choose model",
+  });
+  await waitFor(() =>
+    expect(
+      within(models).getByRole("option", {
+        name: "Enabled model (provider/enabled)",
+      }),
+    ).toBeInTheDocument(),
+  );
+  fireEvent.change(models, { target: { value: "provider/enabled" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Explain" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+  expect((await within(dialog).findByRole("alert")).textContent).toContain(
+    "no longer enabled",
+  );
+  await waitFor(() => expect(models).toHaveValue(""));
+  await waitFor(() =>
+    expect(
+      within(dialog).queryByRole("combobox", { name: "Choose model" }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(
+    within(dialog).getByRole("button", { name: "Generate" }),
+  ).toBeEnabled();
+});
+
+it("asks AI about the focused block without a text selection and replaces only that block", async () => {
+  request.mockResolvedValue("Rewritten block");
+  const { content } = await openAI(false, [], false);
+  const text = screen.getByText("Keep this selection").firstChild!;
+  act(() => window.getSelection()!.collapse(text, 6));
+  fireEvent.mouseMove(text.parentElement!);
+  fireEvent(document, new Event("selectionchange"));
+  const toolbar = await screen.findByRole("toolbar", { name: "Block actions" });
+  fireEvent.click(within(toolbar).getByRole("button", { name: "Ask AI" }));
+  const dialog = await screen.findByRole("dialog", { name: "Ask AI" });
+  expect(within(dialog).getByText("Keep this selection")).toBeInTheDocument();
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Improve writing" }),
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Generate" }));
+  await within(dialog).findByText("Rewritten block");
+  expect(request.mock.calls[0][1].text).toBe("Keep this selection");
+  expect(content.textContent).toBe("Keep this selection");
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Replace selection" }),
+  );
+  await waitFor(() => expect(content.textContent).toBe("Rewritten block"));
 });

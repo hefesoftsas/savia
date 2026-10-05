@@ -11,15 +11,21 @@ import type { VirtualEmployee } from "../src/assistant/virtual-employees";
 
 // These tests cover configuration and MCP transport, not provider networking.
 // Keep model streams local so requests cannot outlive the Worker test context.
-const { streamTextMock } = vi.hoisted(() => ({ streamTextMock: vi.fn() }));
+const { streamTextMock, uiMessageMetadataMock } = vi.hoisted(() => ({
+  streamTextMock: vi.fn(),
+  uiMessageMetadataMock: vi.fn(),
+}));
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
   return { ...actual, streamText: streamTextMock };
 });
 beforeEach(() => {
   streamTextMock.mockReset();
+  uiMessageMetadataMock.mockReset();
   streamTextMock.mockImplementation(({ onEnd }) => ({
-    toUIMessageStreamResponse: () => {
+    toUIMessageStreamResponse: (options) => {
+      const metadata = options.messageMetadata?.({ part: { type: "start" } });
+      if (metadata !== undefined) uiMessageMetadataMock(metadata);
       onEnd?.();
       return new Response('data: {"type":"finish"}\n\n', {
         headers: { "content-type": "text/event-stream" },
@@ -74,7 +80,10 @@ function textOnlyEmployee(allowedCollections: string[]): VirtualEmployee {
   };
 }
 
-function textOnlyService(employee: VirtualEmployee) {
+function textOnlyService(
+  employee: VirtualEmployee,
+  allowedModels: string[] = [],
+) {
   const mcpClientFactory = vi.fn(async () => {
     throw new Error("text-only chat must not connect to MCP");
   });
@@ -89,7 +98,12 @@ function textOnlyService(employee: VirtualEmployee) {
     {
       configurationResolver: {
         async effectiveConfigurationFor() {
-          return { apiKey: "key", model: "test-model", tenantId: 101 };
+          return {
+            apiKey: "key",
+            model: "test-model",
+            tenantId: 101,
+            allowedModels,
+          };
         },
       },
       virtualEmployeesRepo: {
@@ -139,7 +153,12 @@ describe("SaviaAssistantService action approvals", () => {
       {
         configurationResolver: {
           async effectiveConfigurationFor() {
-            return { apiKey: "key", model: "test-model", tenantId: 101 };
+            return {
+              apiKey: "key",
+              model: "test-model",
+              tenantId: 101,
+              allowedModels: [],
+            };
           },
         },
         virtualEmployeesRepo: { getByHandle, getById: vi.fn() } as never,
@@ -190,7 +209,12 @@ describe("SaviaAssistantService action approvals", () => {
       {
         configurationResolver: {
           async effectiveConfigurationFor() {
-            return { apiKey: "key", model: "test-model", tenantId: 101 };
+            return {
+              apiKey: "key",
+              model: "test-model",
+              tenantId: 101,
+              allowedModels: [],
+            };
           },
         },
         virtualEmployeesRepo: { getByHandle, getById: vi.fn() } as never,
@@ -231,7 +255,12 @@ describe("SaviaAssistantService action approvals", () => {
       {
         configurationResolver: {
           async effectiveConfigurationFor() {
-            return { apiKey: "key", model: "test-model", tenantId: 101 };
+            return {
+              apiKey: "key",
+              model: "test-model",
+              tenantId: 101,
+              allowedModels: [],
+            };
           },
         },
         virtualEmployeesRepo: { getByHandle, getById } as never,
@@ -271,7 +300,12 @@ describe("SaviaAssistantService action approvals", () => {
       {
         configurationResolver: {
           async effectiveConfigurationFor() {
-            return { apiKey: "key", model: "test-model", tenantId: 101 };
+            return {
+              apiKey: "key",
+              model: "test-model",
+              tenantId: 101,
+              allowedModels: [],
+            };
           },
         },
         virtualEmployeesRepo: { getByHandle, getById } as never,
@@ -344,9 +378,11 @@ describe("SaviaAssistantService action approvals", () => {
   });
 
   it("uses responseMode text without MCP for employees with workspace access", async () => {
-    const { service, mcpClientFactory, ragPrepare } = textOnlyService(
-      textOnlyEmployee(["leads"]),
-    );
+    const employee = {
+      ...textOnlyEmployee(["leads"]),
+      model: "  ",
+    };
+    const { service, mcpClientFactory, ragPrepare } = textOnlyService(employee);
 
     const response = await service.chat({
       principalId: "requested-text-mode",
@@ -366,7 +402,10 @@ describe("SaviaAssistantService action approvals", () => {
     expect(mcpClientFactory).not.toHaveBeenCalled();
     expect(ragPrepare).not.toHaveBeenCalled();
     const modelRequest = streamTextMock.mock.calls[0][0];
-    expect(modelRequest.model.modelId).toBe("employee-text-model");
+    expect(modelRequest.model.modelId).toBe("test-model");
+    expect(uiMessageMetadataMock).toHaveBeenCalledWith({
+      model: "test-model",
+    });
     expect(modelRequest.tools).toBeUndefined();
     expect(modelRequest.toolChoice).toBe("none");
     expect(await modelRequest.stopWhen({ steps: [{}] })).toBe(true);
@@ -1103,3 +1142,83 @@ it.each(["savia_get_quote_form", "savia_lookup_quote_vehicle"])(
     expect(execute).not.toHaveBeenCalled();
   },
 );
+
+it("uses an admin-enabled model override for selection text tasks", async () => {
+  const { service, mcpClientFactory } = textOnlyService(textOnlyEmployee([]), [
+    "provider/enabled",
+  ]);
+  const response = await service.chat({
+    principalId: "user",
+    authorization: "Bearer user",
+    employeeId: "employee-text-only",
+    responseMode: "text",
+    model: "provider/enabled",
+    messages: [
+      {
+        id: "user-1",
+        role: "user",
+        parts: [{ type: "text", text: "Translate" }],
+      },
+    ],
+  });
+  expect(response.status).toBe(200);
+  expect(streamTextMock.mock.calls[0][0].model.modelId).toBe(
+    "provider/enabled",
+  );
+  expect(uiMessageMetadataMock).toHaveBeenCalledWith({
+    model: "provider/enabled",
+  });
+  expect(mcpClientFactory).not.toHaveBeenCalled();
+});
+
+it.each(["provider/not-enabled", "employee-text-model"])(
+  "rejects an explicit disabled model %s before contacting the provider",
+  async (model) => {
+    const { service, mcpClientFactory } = textOnlyService(
+      textOnlyEmployee([]),
+      ["provider/enabled"],
+    );
+    const response = await service.chat({
+      principalId: "user",
+      authorization: "Bearer user",
+      responseMode: "text",
+      model,
+      messages: [],
+    });
+    expect(response.status).toBe(403);
+    expect(
+      ((await response.json()) as { error: { code: string } }).error.code,
+    ).toBe("ASSISTANT_MODEL_NOT_ALLOWED");
+    expect(streamTextMock).not.toHaveBeenCalled();
+    expect(mcpClientFactory).not.toHaveBeenCalled();
+  },
+);
+
+it("rejects a model override for a tool-enabled chat", async () => {
+  const { service, mcpClientFactory } = textOnlyService(
+    textOnlyEmployee(["leads"]),
+    ["provider/enabled"],
+  );
+  const response = await service.chat({
+    principalId: "user",
+    authorization: "Bearer user",
+    model: "provider/enabled",
+    messages: [],
+  });
+  expect(response.status).toBe(403);
+  expect(streamTextMock).not.toHaveBeenCalled();
+  expect(mcpClientFactory).not.toHaveBeenCalled();
+});
+
+it("accepts the explicitly configured default model without enabling extra choices", async () => {
+  const { service } = textOnlyService(textOnlyEmployee([]));
+  const response = await service.chat({
+    principalId: "user",
+    authorization: "Bearer user",
+    responseMode: "text",
+    model: "test-model",
+    messages: [],
+  });
+  expect(response.status).toBe(200);
+  expect(streamTextMock.mock.calls[0][0].model.modelId).toBe("test-model");
+});

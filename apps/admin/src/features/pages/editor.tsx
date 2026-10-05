@@ -370,6 +370,28 @@ export const PageEditor = memo(function PageEditor({
     setAIText(text);
     setSelectionTools(null);
   }
+  function openBlockAI(index: number) {
+    if (readOnly) return;
+    const selection = window.getSelection();
+    if (
+      selection?.rangeCount &&
+      !selection.isCollapsed &&
+      editorContentRef.current?.contains(selection.anchorNode) &&
+      editorContentRef.current.contains(selection.focusNode)
+    ) {
+      openSelectionAI();
+      return;
+    }
+    const range = editor.api.range([index]);
+    if (!range) return;
+    const text = editor.api.string(range);
+    if (!text.trim()) return;
+    aiRange.current?.unref();
+    aiRange.current = editor.api.rangeRef(range);
+    setAIText(text);
+    setSelectionTools(null);
+    setHoverBlock(null);
+  }
   function closeSelectionAI() {
     const range = aiRange.current?.unref();
     aiRange.current = null;
@@ -1091,6 +1113,17 @@ export const PageEditor = memo(function PageEditor({
                   >
                     <GripVertical size={16} aria-hidden="true" />
                   </button>
+                  {editor.api.string([hoverBlock.index]).trim() && (
+                    <button
+                      type="button"
+                      aria-label={tai("Ask AI")}
+                      title={tai("Ask AI")}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => openBlockAI(hoverBlock.index)}
+                    >
+                      <Sparkles size={16} aria-hidden="true" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     aria-label={te("Write above")}
@@ -1186,11 +1219,12 @@ export const PageEditor = memo(function PageEditor({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="page-editor-ask-ai"
+                    size="icon"
+                    aria-label={tai("Ask AI")}
+                    title={tai("Ask AI")}
                     onClick={openSelectionAI}
                   >
                     <Sparkles aria-hidden="true" />
-                    {tai("Ask AI")}
                   </Button>
                 </div>
               )}

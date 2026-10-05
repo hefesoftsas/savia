@@ -284,8 +284,30 @@ preview shows all three headings and translations; replace, insert, and copy use
 only the selected translation, without its heading or extra commentary. If the
 source is too ambiguous to translate reliably, the employee asks one brief
 clarifying question before returning the translations. Clarifications and unrecognized
-translation formats remain visible without replace, insert, or copy actions;
-adjust the instruction and generate again. An inactive existing translator must
+translation formats remain visible without replace, insert, or copy actions. Use
+**Clarification or format correction** and **Continue** to answer or request the
+required format; this retains the original selection and conversation. A failed,
+cancelled, or timed-out continuation preserves the question and your reply so you
+can retry. **Generate** starts a fresh conversation with the current instruction.
+The panel shows the employee model when configured and the effective server-selected
+model when generation starts. Expand **Assistant instructions** to inspect the
+selected employee’s custom system prompt; these can be edited in AI employees.
+Administrators can enable additional text models in **Credentials → OpenRouter → Available models for Ask AI**, globally
+or for an organization. The organization can inherit the global choices or keep
+its own list; an empty list exposes only the assistant default. Use **Save
+enabled models** to save the global choices independently of the API key and
+default model. **Choose model**
+offers the effective enabled choices available to the configured OpenRouter
+account. The assistant default still follows the employee, organization, and
+global settings. Model selection applies to the panel's request and does not
+change those administrative defaults. The server checks every explicit model
+choice against the administrator's list. If an administrator disables a model
+while the panel is open, the panel returns to the default and refreshes the
+choices so you can retry without changing the document. Model-catalog failure
+also leaves the default available.
+
+Generation shows elapsed seconds and can be cancelled. After 90 seconds, a stalled
+request stops with a retry message, leaving the document unchanged. An inactive existing translator must
 be reactivated in AI employees.
 If no employee uses the `traductor` handle, choose **Create translator** to add
 the active text-only employee and select it for the request. This action creates
@@ -337,3 +359,14 @@ destination. Local or unavailable-provider fallback links use `/s/p/{code}` on
 the current Savia host and are stored on the backend. A localhost link remains
 local to that machine; public sharing outside the machine requires a deployed
 public origin. Shortening failure leaves the original full link usable.
+
+Ask AI keeps model selection and employee instructions under **Options**. If no
+alternative models are enabled, it shows the current model without an inactive
+selector. Translator requests omit the generic task shortcuts. Translation
+results use **Regular**, **Professional**, and **Brief** style choices and preview
+only the chosen version; replace, insert, and copy still use that version.
+
+The sparkle icon opens Ask AI for a text selection or for the highlighted block
+from its block actions. A block request uses the whole block's text; empty blocks
+do not show the action. The original text changes only after an explicit replace
+or insert, and the saved range is checked before applying a response.

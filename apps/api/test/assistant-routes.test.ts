@@ -304,6 +304,58 @@ describe("assistant routes", () => {
     );
   });
 
+  it("forwards an explicit model choice for text-mode assistant chats", async () => {
+    const service = createAssistantService();
+    const response = await createAssistantApp(service).request(
+      "http://api.savia.test/api/assistant/chat",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer current-user-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          responseMode: "text",
+          model: "openai/gpt-5",
+          messages: [
+            {
+              id: "message-1",
+              role: "user",
+              parts: [{ type: "text", text: "Translate this into Spanish" }],
+            },
+          ],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(service.chat).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "openai/gpt-5", responseMode: "text" }),
+    );
+  });
+
+  it("rejects malformed explicit assistant model identifiers", async () => {
+    const service = createAssistantService();
+    const response = await createAssistantApp(service).request(
+      "http://api.savia.test/api/assistant/chat",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer current-user-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          responseMode: "text",
+          model: "not-a-provider-model",
+          messages: [],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(service.chat).not.toHaveBeenCalled();
+  });
+
   it("allows a read-scoped OAuth token to start an assistant chat", async () => {
     const service = createAssistantService();
     const response = await createReadScopedAssistantApp(service).request(
@@ -686,6 +738,156 @@ describe("assistant routes", () => {
     expect(deleted.status).toBe(204);
   });
 
+  it("allows only existing configuration admins to write model policy", async () => {
+    const memberApp = createConfigurationApp(agencyMemberAuthenticator());
+    const response = await memberApp.request(
+      "http://api.savia.test/v1/assistant/configuration/global",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ allowedModels: ["openai/gpt-5"] }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("persists a global model allowlist through the existing admin route", async () => {
+    const response = await createConfigurationApp().request(
+      "http://api.savia.test/v1/assistant/configuration/global",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "deepseek/deepseek-v4-flash",
+          allowedModels: ["openai/gpt-5", "openai/gpt-5"],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      global: {
+        model: "deepseek/deepseek-v4-flash",
+        allowedModels: ["openai/gpt-5"],
+      },
+    });
+  });
+
+  it("returns the principal's model policy filtered by allowed and account models", async () => {
+    await seedAssistantAgencyMember(117);
+    const repository = configurationRepository();
+    await repository.saveGlobal({
+      actorId: "test-platform-admin",
+      apiKey: "not-a-real-policy-key",
+      model: "deepseek/deepseek-v4-flash",
+      allowedModels: [
+        "openai/gpt-5",
+        "google/gemini-2.5-flash",
+        "openai/whisper-large-v3",
+      ],
+    });
+    const list = vi.fn(async () => [
+      {
+        id: "openai/gpt-5",
+        name: "GPT-5",
+        contextLength: 400_000,
+        modalities: { text: true, image: false, audio: false, file: false },
+      },
+      {
+        id: "google/gemini-2.5-flash",
+        name: "Gemini Flash",
+        contextLength: 1_000_000,
+        modalities: { text: true, image: false, audio: false, file: false },
+      },
+      {
+        id: "anthropic/claude-sonnet-4",
+        name: "Claude Sonnet",
+        contextLength: 200_000,
+        modalities: { text: true, image: false, audio: false, file: false },
+      },
+      {
+        id: "openai/whisper-large-v3",
+        name: "Whisper Large v3",
+        contextLength: 0,
+        modalities: { text: false, image: false, audio: true, file: false },
+      },
+    ]);
+    const response = await createConfigurationApp(
+      agencyMemberAuthenticator(),
+      repository,
+      { list },
+    ).request("http://api.savia.test/v1/assistant/model-policy");
+
+    expect(response.status).toBe(200);
+    const policy = await response.json();
+    expect(policy).toEqual({
+      defaultModel: "deepseek/deepseek-v4-flash",
+      allowedModels: [
+        {
+          id: "openai/gpt-5",
+          name: "GPT-5",
+          contextLength: 400_000,
+          modalities: { text: true, image: false, audio: false, file: false },
+        },
+        {
+          id: "google/gemini-2.5-flash",
+          name: "Gemini Flash",
+          contextLength: 1_000_000,
+          modalities: { text: true, image: false, audio: false, file: false },
+        },
+      ],
+    });
+    expect(JSON.stringify(policy)).not.toContain("not-a-real-policy-key");
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: "not-a-real-policy-key",
+        model: "deepseek/deepseek-v4-flash",
+        tenantId: 117,
+      }),
+    );
+  });
+
+  it("returns an empty selectable catalog without contacting OpenRouter", async () => {
+    const repository = configurationRepository();
+    await repository.saveGlobal({
+      actorId: "test-platform-admin",
+      model: "deepseek/deepseek-v4-flash",
+      allowedModels: [],
+    });
+    const list = vi.fn(async () => []);
+    const response = await createConfigurationApp(
+      platformAdministratorAuthenticator(),
+      repository,
+      { list },
+    ).request("http://api.savia.test/v1/assistant/model-policy");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      defaultModel: "deepseek/deepseek-v4-flash",
+      allowedModels: [],
+    });
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it("denies model-policy reads when a non-admin's tenant membership is revoked", async () => {
+    await seedAssistantAgencyMember(118);
+    await env.DB.prepare(
+      "DELETE FROM identity_tenant_membership WHERE principal_id = ?",
+    )
+      .bind("test-agency-member")
+      .run();
+    const list = vi.fn(async () => []);
+    const response = await createConfigurationApp(
+      agencyMemberAuthenticator(),
+      configurationRepository(),
+      { list },
+    ).request("http://api.savia.test/v1/assistant/model-policy");
+
+    expect(response.status).toBe(403);
+    expect(list).not.toHaveBeenCalled();
+  });
+
   it("returns a bounded model catalog without exposing its configuration", async () => {
     const repository = configurationRepository();
     await repository.saveGlobal({
@@ -913,7 +1115,28 @@ describe("assistant routes", () => {
       },
     ]);
     expect(fetcher).toHaveBeenCalledWith(
-      "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
+      "https://openrouter.ai/api/v1/models/user?output_modalities=text,transcription&sort=most-popular",
+      expect.objectContaining({
+        headers: { authorization: "Bearer not-a-real-catalog-key" },
+      }),
+    );
+  });
+
+  it("does not fall back to the public model catalog when the account catalog fails", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 503 }));
+
+    await expect(
+      openRouterModelCatalog(fetcher).list({
+        apiKey: "not-a-real-catalog-key",
+        model: "deepseek/deepseek-v4-flash",
+      }),
+    ).rejects.toThrow("OpenRouter models request failed");
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/models/user?output_modalities=text,transcription&sort=most-popular",
       expect.objectContaining({
         headers: { authorization: "Bearer not-a-real-catalog-key" },
       }),

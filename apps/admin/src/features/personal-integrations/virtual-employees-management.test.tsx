@@ -157,6 +157,27 @@ describe("virtual employee access modes", () => {
     });
   });
 
+  it.each([null, "provider/admin-model"])(
+    "does not resend an unchanged employee model (%s) when editing its prompt",
+    async (model) => {
+      const user = userEvent.setup();
+      const employee = { ...makeEmployee([]), model };
+      const { client } = setup({ employees: [employee], locale: "en" });
+      await user.click(await screen.findByRole("button", { name: "Edit" }));
+      await user.click(screen.getByRole("tab", { name: "Role & Prompt" }));
+      await user.type(
+        screen.getByLabelText("Role Instructions (System Prompt)"),
+        " Be concise.",
+      );
+      await user.click(screen.getByRole("button", { name: "Save Changes" }));
+      await waitFor(() => expect(client.update).toHaveBeenCalledOnce());
+      expect(client.update.mock.calls[0][1]).not.toHaveProperty("model");
+      expect(client.update.mock.calls[0][1].systemPrompt).toContain(
+        "Be concise.",
+      );
+    },
+  );
+
   it("opens an empty-allowlist employee in text-only mode without loading files", async () => {
     const user = userEvent.setup();
     const { client } = setup({ employees: [makeEmployee([])] });

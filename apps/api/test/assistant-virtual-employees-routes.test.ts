@@ -10,6 +10,7 @@ import { createOAuthResourceAuthenticator } from "../src/auth/oauth-resource";
 import type { Authenticator } from "../src/auth/types";
 import {
   agencyAdministratorAuthenticator,
+  agencyMemberAuthenticator,
   platformAdministratorAuthenticator,
 } from "./auth-fixtures";
 import { VirtualEmployeesRepository } from "../src/assistant/virtual-employees";
@@ -68,6 +69,160 @@ function createTestApp(
 
 describe("Virtual Employees API Routes", () => {
   beforeAll(applyMigrations);
+
+  it("lets tenant admins assign employee models but blocks ordinary members", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(101,'assistant-model-tenant-101','Assistant Model Tenant',1,?,?,'commercial')",
+    )
+      .bind(now, now)
+      .run();
+    for (const [principalId, issuer, email, name, membershipId, role] of [
+      [
+        "test-agency-member",
+        "savia:better-auth",
+        "member@savia.test",
+        "Savia Test Member",
+        "assistant-model-member-101",
+        "viewer",
+      ],
+      [
+        "test-agency-administrator",
+        "savia:better-auth",
+        "administrator@savia.test",
+        "Savia Test Agency Administrator",
+        "assistant-model-admin-101",
+        "agency_admin",
+      ],
+    ]) {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO identity_principal (
+          id, issuer, subject, email, display_name, is_active, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+      )
+        .bind(principalId, issuer, principalId, email, name, now, now)
+        .run();
+      await env.DB.prepare(
+        `INSERT OR REPLACE INTO identity_tenant_membership (
+          id, principal_id, tenant_id, role, is_active, created_at, updated_at
+        ) VALUES (?, ?, 101, ?, 1, ?, ?)`,
+      )
+        .bind(membershipId, principalId, role, now, now)
+        .run();
+    }
+
+    const membersApp = createTestApp(agencyMemberAuthenticator());
+    const deniedCreate = await membersApp.request("/api/assistant/employees", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Member model attempt",
+        handle: `member-model-${crypto.randomUUID()}`,
+        systemPrompt: "Translate text",
+        model: "openai/gpt-5",
+      }),
+    });
+    expect(deniedCreate.status).toBe(403);
+
+    const createdWithoutModel = await membersApp.request(
+      "/api/assistant/employees",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Member inherited model",
+          handle: `member-inherited-${crypto.randomUUID()}`,
+          systemPrompt: "Translate text",
+        }),
+      },
+    );
+    expect(createdWithoutModel.status).toBe(201);
+    const memberEmployee = (await createdWithoutModel.json()) as {
+      data: { id: string };
+    };
+    const deniedPatch = await membersApp.request(
+      `/api/assistant/employees/${memberEmployee.data.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "openai/gpt-5" }),
+      },
+    );
+    expect(deniedPatch.status).toBe(403);
+    const inheritedPromptUpdate = await membersApp.request(
+      `/api/assistant/employees/${memberEmployee.data.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ systemPrompt: "Updated inherited prompt" }),
+      },
+    );
+    expect(inheritedPromptUpdate.status).toBe(200);
+
+    const adminsApp = createTestApp(agencyAdministratorAuthenticator());
+    const adminCreate = await adminsApp.request("/api/assistant/employees", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Admin model assignment",
+        handle: `admin-model-${crypto.randomUUID()}`,
+        systemPrompt: "Translate text",
+        model: "openai/gpt-5",
+      }),
+    });
+    expect(adminCreate.status).toBe(201);
+    const adminEmployee = (await adminCreate.json()) as {
+      data: { id: string; model: string };
+    };
+    expect(adminEmployee.data.model).toBe("openai/gpt-5");
+
+    for (const model of [null, ""]) {
+      const deniedClear = await membersApp.request(
+        `/api/assistant/employees/${adminEmployee.data.id}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model }),
+        },
+      );
+      expect(deniedClear.status).toBe(403);
+    }
+
+    const updated = await adminsApp.request(
+      `/api/assistant/employees/${adminEmployee.data.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "google/gemini-2.5-flash" }),
+      },
+    );
+    expect(updated.status).toBe(200);
+    const cleared = await adminsApp.request(
+      `/api/assistant/employees/${adminEmployee.data.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: null }),
+      },
+    );
+    expect(cleared.status).toBe(200);
+    expect(
+      ((await cleared.json()) as { data: { model: string | null } }).data.model,
+    ).toBeNull();
+    await new VirtualEmployeesRepository(env.DB).delete(
+      memberEmployee.data.id,
+      101,
+    );
+    await new VirtualEmployeesRepository(env.DB).delete(
+      adminEmployee.data.id,
+      101,
+    );
+    await env.DB.prepare(
+      "DELETE FROM identity_tenant_membership WHERE id IN (?, ?)",
+    )
+      .bind("assistant-model-member-101", "assistant-model-admin-101")
+      .run();
+  });
 
   it("lists virtual employees including seeded defaults", async () => {
     const app = createTestApp();

@@ -41,12 +41,39 @@ describe("AssistantConfigurationClient", () => {
     const saved = await client.saveGlobal({
       apiKey: "not-a-real-browser-input",
       model: "openai/gpt-5",
+      allowedModels: ["openai/gpt-5-mini"],
     });
 
     const request = fetcher.mock.calls[0]?.[1] as RequestInit;
     expect(String(request.body)).toContain("not-a-real-browser-input");
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      allowedModels: ["openai/gpt-5-mini"],
+    });
     expect(saved.global).toMatchObject({ keyState: "configured" });
     expect(JSON.stringify(saved)).not.toContain("not-a-real-browser-input");
+  });
+
+  it("loads the Ask AI model policy", async () => {
+    let requestedUrl = "";
+    const api = new ApiClient({
+      baseUrl: "https://savia.test",
+      tokenSource: { getAccessToken: async () => null },
+      fetcher: async (input) => {
+        requestedUrl = String(input);
+        return Response.json({
+          defaultModel: "deepseek/deepseek-v4-flash",
+          allowedModels: [],
+        });
+      },
+    });
+
+    await expect(
+      new AssistantConfigurationClient(api).modelPolicy(),
+    ).resolves.toEqual({
+      defaultModel: "deepseek/deepseek-v4-flash",
+      allowedModels: [],
+    });
+    expect(new URL(requestedUrl).pathname).toBe("/v1/assistant/model-policy");
   });
 });
 
