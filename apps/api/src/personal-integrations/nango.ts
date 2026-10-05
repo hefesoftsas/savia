@@ -10,7 +10,12 @@ import {
   PersonalIntegrationUpstreamError,
 } from "./contracts";
 
-type ConfiguredNango = { baseUrl: string; connectUrl: string; apiKey: string };
+type ConfiguredNango = {
+  baseUrl: string;
+  connectUrl: string;
+  apiKey: string;
+  fallbackApiKey?: string;
+};
 
 function configuredValue(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -34,7 +39,95 @@ function requireConfigured(configuration: NangoConfiguration): ConfiguredNango {
     baseUrl,
     connectUrl: normalizedUrl(configuration.connectUrl) ?? baseUrl,
     apiKey,
+    fallbackApiKey: configuredValue(configuration.fallbackApiKey),
   };
+}
+
+function missingConnection(response: Response): Promise<boolean> {
+  if (response.status !== 400) return Promise.resolve(false);
+  return response
+    .clone()
+    .json()
+    .then((payload: unknown) => {
+      if (!payload || typeof payload !== "object" || Array.isArray(payload))
+        return false;
+      const error = (payload as Record<string, unknown>).error;
+      if (!error || typeof error !== "object" || Array.isArray(error))
+        return false;
+      const detail = error as Record<string, unknown>;
+      return (
+        detail.code === "unknown_connection" ||
+        (detail.code === "server_error" &&
+          detail.message === "Failed to get connection")
+      );
+    })
+    .catch(() => false);
+}
+
+function fallbackReadPost(request: {
+  method: string;
+  path: string;
+  body?: unknown;
+  rawBody?: string | Uint8Array<ArrayBuffer>;
+  connection: { provider: string };
+}): boolean {
+  let url: URL;
+  try {
+    url = new URL(request.path, "https://savia.invalid");
+  } catch {
+    return false;
+  }
+  if (url.origin !== "https://savia.invalid") return false;
+  if (
+    request.method === "POST" &&
+    request.connection.provider === "jira" &&
+    /^\/ex\/jira\/[^/]+\/rest\/api\/3\/search\/jql$/.test(url.pathname)
+  )
+    return true;
+  if (
+    request.method !== "POST" ||
+    request.connection.provider !== "github" ||
+    url.pathname !== "/graphql" ||
+    url.search
+  )
+    return false;
+
+  let body: unknown = request.body;
+  if (request.rawBody !== undefined) {
+    try {
+      body = JSON.parse(
+        typeof request.rawBody === "string"
+          ? request.rawBody
+          : new TextDecoder().decode(request.rawBody),
+      );
+    } catch {
+      return false;
+    }
+  } else if (typeof body === "string") {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      return false;
+    }
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const payload = body as Record<string, unknown>;
+  if (typeof payload.query !== "string") return false;
+  const query = payload.query
+    .replace(/"""[\s\S]*?"""/g, " ")
+    .replace(/"(?:\\.|[^"\\])*"/g, " ")
+    .replace(/#[^\n\r]*/g, " ");
+  const start = /^\s*query(?:\s+([_A-Za-z][_0-9A-Za-z]*))?(?=\s|\()/;
+  const match = start.exec(query);
+  if (
+    !match ||
+    /\b(?:mutation|subscription)\b/.test(query.slice(match[0].length)) ||
+    /\bquery\s+[_A-Za-z][_0-9A-Za-z]*/.test(query.slice(match[0].length))
+  )
+    return false;
+  return (
+    payload.operationName === undefined || payload.operationName === match[1]
+  );
 }
 
 function nangoUrl(baseUrl: string, path: string): URL {
@@ -227,7 +320,8 @@ export function createPersonalIntegrationNangoClient(
       try {
         const hasBody =
           request.body !== undefined || request.rawBody !== undefined;
-        return await fetcher(nangoUrl(nango.baseUrl, `/proxy${request.path}`), {
+        const url = nangoUrl(nango.baseUrl, `/proxy${request.path}`);
+        const init: RequestInit = {
           method: request.method,
           ...(request.redirect ? { redirect: request.redirect } : {}),
           headers: {
@@ -261,7 +355,22 @@ export function createPersonalIntegrationNangoClient(
             (request.body === undefined
               ? undefined
               : JSON.stringify(request.body)),
-        });
+        };
+        const response = await fetcher(url, init);
+        if (
+          nango.fallbackApiKey &&
+          nango.fallbackApiKey !== nango.apiKey &&
+          (request.method === "GET" || fallbackReadPost(request)) &&
+          (await missingConnection(response))
+        ) {
+          const fallbackHeaders = new Headers(init.headers);
+          fallbackHeaders.set(
+            "authorization",
+            `Bearer ${nango.fallbackApiKey}`,
+          );
+          return await fetcher(url, { ...init, headers: fallbackHeaders });
+        }
+        return response;
       } catch {
         throw new PersonalIntegrationUpstreamError();
       }

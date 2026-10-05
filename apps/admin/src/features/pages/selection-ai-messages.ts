@@ -1,6 +1,10 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const selectionAIMessages = {
+  Options: ["Opciones", "Options", "Opções"],
+  Regular: ["Regular", "Regular", "Regular"],
+  Professional: ["Profesional", "Professional", "Profissional"],
+  Brief: ["Breve", "Brief", "Breve"],
   "Ask AI": ["Pedir a IA", "Ask AI", "Pedir à IA"],
   Description: [
     "Trabaja con el texto seleccionado y revisa la respuesta antes de aplicarla.",
@@ -8,6 +12,59 @@ export const selectionAIMessages = {
     "Trabalhe com o texto selecionado e revise a resposta antes de aplicá-la.",
   ],
   "Selected text": ["Texto seleccionado", "Selected text", "Texto selecionado"],
+  "Choose model": ["Elegir modelo", "Choose model", "Escolher modelo"],
+  "Assistant default model": [
+    "Modelo predeterminado del asistente",
+    "Assistant default model",
+    "Modelo padrão do assistente",
+  ],
+  "No enabled models": [
+    "El administrador no ha habilitado modelos adicionales. Se usará el predeterminado del asistente.",
+    "Your administrator has not enabled additional models. The assistant default will be used.",
+    "O administrador não habilitou modelos adicionais. Será usado o padrão do assistente.",
+  ],
+  "Selected model disabled": [
+    "Ese modelo ya no está habilitado. Se seleccionó el predeterminado; vuelve a generar o elige otro modelo habilitado.",
+    "That model is no longer enabled. The default is selected; generate again or choose another enabled model.",
+    "Esse modelo não está mais habilitado. O padrão foi selecionado; gere novamente ou escolha outro modelo habilitado.",
+  ],
+  "Models failed": [
+    "No se pudieron cargar los modelos habilitados. Puedes usar el predeterminado o reintentar.",
+    "Could not load enabled models. Use the default or retry.",
+    "Não foi possível carregar os modelos habilitados. Use o padrão ou tente novamente.",
+  ],
+  Model: ["Modelo", "Model", "Modelo"],
+  "Inherited model": [
+    "Predeterminado; se identificará al generar",
+    "Default; identified when generating",
+    "Padrão; identificado ao gerar",
+  ],
+  "Assistant instructions": [
+    "Instrucciones del asistente",
+    "Assistant instructions",
+    "Instruções do assistente",
+  ],
+  "No custom instructions": [
+    "Sin instrucciones personalizadas",
+    "No custom instructions",
+    "Sem instruções personalizadas",
+  ],
+  "Clarification or format correction": [
+    "Aclaración o corrección del formato",
+    "Clarification or format correction",
+    "Esclarecimento ou correção do formato",
+  ],
+  Continue: ["Continuar", "Continue", "Continuar"],
+  "Slow request": [
+    "La solicitud sigue en curso. Puedes cancelar y reintentar; la espera máxima es de 90 segundos.",
+    "The request is still in progress. You can cancel and retry; the maximum wait is 90 seconds.",
+    "A solicitação ainda está em andamento. Você pode cancelar e tentar novamente; a espera máxima é de 90 segundos.",
+  ],
+  "Request timed out": [
+    "El modelo no completó la respuesta en 90 segundos. Vuelve a generar o elige otro asistente.",
+    "The model did not finish within 90 seconds. Generate again or choose another assistant.",
+    "O modelo não terminou em 90 segundos. Gere novamente ou escolha outro assistente.",
+  ],
   Assistant: ["Asistente", "Assistant", "Assistente"],
   "Connected model": [
     "Modelo conectado (predeterminado)",
@@ -53,7 +110,7 @@ export const selectionAIMessages = {
   Cancel: ["Cancelar", "Cancel", "Cancelar"],
   Response: ["Respuesta", "Response", "Resposta"],
   "Replace selection": [
-    "Reemplazar selección",
+    "Reemplazar",
     "Replace selection",
     "Substituir seleção",
   ],
@@ -107,9 +164,9 @@ export const selectionAIMessages = {
     "O tradutor está inativo. Ative-o em Funcionários IA para usá-lo aqui.",
   ],
   "Translation needs clarification": [
-    "El asistente pidió una aclaración o respondió en otro formato. Ajusta la instrucción y genera de nuevo antes de aplicar una traducción.",
-    "The assistant requested clarification or used a different format. Adjust the instruction and generate again before applying a translation.",
-    "O assistente pediu esclarecimento ou usou outro formato. Ajuste a instrução e gere novamente antes de aplicar uma tradução.",
+    "El asistente pidió una aclaración o respondió en otro formato. Responde abajo para continuar la traducción.",
+    "The assistant requested clarification or used a different format. Reply below to continue the translation.",
+    "O assistente pediu esclarecimento ou usou outro formato. Responda abaixo para continuar a tradução.",
   ],
   "Response ready": ["Respuesta lista.", "Response ready.", "Resposta pronta."],
   "Choose translation": [

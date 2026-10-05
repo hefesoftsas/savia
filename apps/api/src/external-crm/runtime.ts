@@ -7,6 +7,7 @@ export type CrmSecrets = {
   NANGO_BASE_URL?: string;
   NANGO_CONNECT_URL?: string;
   NANGO_API_KEY?: string;
+  NANGO_FALLBACK_API_KEY?: string;
   NANGO_HUBSPOT_INTEGRATION_ID?: string;
   NANGO_SALESFORCE_INTEGRATION_ID?: string;
   NANGO_ZOHO_INTEGRATION_ID?: string;
@@ -33,6 +34,7 @@ export function nangoConfigurationFromEnvironment(
     baseUrl: environment.NANGO_BASE_URL,
     connectUrl: environment.NANGO_CONNECT_URL,
     apiKey: environment.NANGO_API_KEY,
+    fallbackApiKey: environment.NANGO_FALLBACK_API_KEY,
     hubspotIntegrationId: environment.NANGO_HUBSPOT_INTEGRATION_ID,
     salesforceIntegrationId: environment.NANGO_SALESFORCE_INTEGRATION_ID,
     zohoIntegrationId: environment.NANGO_ZOHO_INTEGRATION_ID,

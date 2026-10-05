@@ -33,12 +33,14 @@ function servicesWithSummary(
           scope: "global",
           keyState: "configured",
           model: "deepseek/deepseek-v4-flash",
+          allowedModels: null,
           updatedAt: "2026-09-03T12:00:00.000Z",
           updatedBy: "platform-admin",
         },
         tenants: overrides.map((override) => ({
           scope: "tenant",
           keyState: "not_configured",
+          allowedModels: null,
           updatedAt: "2026-09-03T12:00:00.000Z",
           updatedBy: "platform-admin",
           ...override,
@@ -64,6 +66,112 @@ function servicesWithSummary(
 }
 
 describe("AssistantConfigurationPage", () => {
+  it("filters output models and saves explicit global model selections", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    services.assistantConfiguration.models = vi.fn().mockResolvedValue([
+      {
+        id: "image/provider-cheap",
+        name: "Image provider",
+        modalities: { imageOutput: true },
+        generationPricing: { image: { price: 0.02, unit: "image" } },
+      },
+      {
+        id: "speech/provider",
+        name: "Speech provider",
+        modalities: { speechOutput: true },
+        generationPricing: {
+          speech: { prompt: { price: 0.00001, unit: "character" } },
+        },
+      },
+      {
+        id: "input/image-only",
+        name: "Input only",
+        modalities: { image: true },
+      },
+    ]);
+    services.assistantConfiguration.saveGlobal = vi
+      .fn()
+      .mockResolvedValue(await services.assistantConfiguration.summary());
+    render(<AssistantConfigurationPage services={services} />);
+
+    const imageInput = await screen.findByRole("combobox", {
+      name: "Modelo de generación de imágenes",
+    });
+    await user.click(imageInput);
+    expect(
+      await screen.findByRole("option", { name: /Image provider/ }),
+    ).toBeVisible();
+    expect(screen.queryByRole("option", { name: /Input only/ })).toBeNull();
+    await user.keyboard("image/provider-cheap");
+    await user.click(
+      screen.getByRole("button", {
+        name: /Aplicar el modelo sugerido image\/provider-cheap/,
+      }),
+    );
+    await user.type(
+      screen.getByRole("combobox", { name: "Modelo de generación de voz" }),
+      "speech/provider",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Guardar modelos de salida" }),
+    );
+
+    await waitFor(() =>
+      expect(services.assistantConfiguration.saveGlobal).toHaveBeenCalledWith({
+        imageGenerationModel: "image/provider-cheap",
+        speechModel: "speech/provider",
+      }),
+    );
+  });
+
+  it("saves tenant output models and leaves blank fields inheriting global", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary([{ tenantId: 101, model: null }]);
+    services.assistantConfiguration.models = vi.fn().mockResolvedValue([
+      {
+        id: "image/tenant-model",
+        name: "Tenant image",
+        modalities: { imageOutput: true },
+      },
+      {
+        id: "speech/tenant-model",
+        name: "Tenant speech",
+        modalities: { speechOutput: true },
+      },
+    ]);
+    services.assistantConfiguration.saveTenantOverride = vi
+      .fn()
+      .mockResolvedValue(await services.assistantConfiguration.summary());
+    render(<AssistantConfigurationPage services={services} />);
+    await user.click(
+      await screen.findByRole("tab", { name: /Por organización/i }),
+    );
+    await user.type(
+      await screen.findByRole("combobox", {
+        name: "Modelo de generación de imágenes",
+      }),
+      "image/tenant-model",
+    );
+    await user.type(
+      screen.getByRole("combobox", { name: "Modelo de generación de voz" }),
+      "speech/tenant-model",
+    );
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() =>
+      expect(
+        services.assistantConfiguration.saveTenantOverride,
+      ).toHaveBeenCalledWith(
+        101,
+        expect.objectContaining({
+          imageGenerationModel: "image/tenant-model",
+          speechModel: "speech/tenant-model",
+        }),
+      ),
+    );
+  });
+
   it("offers dedicated transcription models and saves their endpoint", async () => {
     const user = userEvent.setup();
     const services = servicesWithSummary();
@@ -198,9 +306,12 @@ describe("AssistantConfigurationPage", () => {
       ).toHaveBeenCalledWith(101, {
         apiKey: "test-key",
         model: "test/chat",
+        allowedModels: null,
         transcriptionModel: "test/audio",
         transcriptionEndpoint: "audio/transcriptions",
         summaryModel: "test/summary",
+        imageGenerationModel: null,
+        speechModel: null,
       }),
     );
     expect(services.assistantConfiguration.saveGlobal).not.toHaveBeenCalled();
@@ -530,8 +641,11 @@ describe("AssistantConfigurationPage", () => {
       ).toHaveBeenCalledWith(101, {
         clearApiKey: true,
         model: "openai/gpt-5",
+        allowedModels: null,
         transcriptionModel: null,
         summaryModel: null,
+        imageGenerationModel: null,
+        speechModel: null,
       }),
     );
   });
@@ -562,6 +676,192 @@ describe("AssistantConfigurationPage", () => {
 
     await user.click(option);
     expect(model).toHaveValue("openai/gpt-5");
+  });
+
+  it("saves searchable, supported text models as extra Ask AI choices", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    services.assistantConfiguration.models = vi.fn().mockResolvedValue([
+      {
+        id: "openai/gpt-5-mini",
+        name: "GPT-5 mini",
+        contextLength: 128_000,
+        inputPricePerMillion: 0.25,
+        outputPricePerMillion: 2,
+        modalities: { text: true, image: true, audio: false, file: false },
+        supportsTools: true,
+      },
+      {
+        id: "openai/gpt-5",
+        name: "GPT-5",
+        contextLength: 128_000,
+        inputPricePerMillion: 1,
+        outputPricePerMillion: 2,
+        modalities: { text: true, image: true, audio: false, file: false },
+        supportsTools: true,
+      },
+      {
+        id: "openai/audio-only",
+        name: "Audio only",
+        contextLength: 32_000,
+        inputPricePerMillion: 1,
+        outputPricePerMillion: 1,
+        modalities: { text: false, image: false, audio: true, file: false },
+        supportsTools: true,
+      },
+      {
+        id: "openai/no-tools",
+        name: "No tools",
+        contextLength: 32_000,
+        inputPricePerMillion: 1,
+        outputPricePerMillion: 1,
+        modalities: { text: true, image: false, audio: false, file: false },
+        supportsTools: false,
+      },
+    ]);
+    services.assistantConfiguration.saveGlobal = vi
+      .fn()
+      .mockResolvedValue(await services.assistantConfiguration.summary());
+    render(<AssistantConfigurationPage services={services} />);
+
+    const search = await screen.findByRole("searchbox", {
+      name: "Buscar modelos de texto para Ask AI",
+    });
+    await user.type(search, "tools");
+    expect(
+      await screen.findByRole("checkbox", { name: /No tools/ }),
+    ).toBeVisible();
+    await user.clear(search);
+    await user.type(search, "mini");
+    const textModel = await screen.findByRole("checkbox", {
+      name: /GPT-5 mini/,
+    });
+    expect(textModel).not.toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: "GPT-5" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Audio only/ })).toBeNull();
+    expect(
+      screen.getByText(
+        /modelo predeterminado configurado.*permanece disponible/i,
+      ),
+    ).toBeVisible();
+    await user.click(textModel);
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() =>
+      expect(services.assistantConfiguration.saveGlobal).toHaveBeenCalledWith(
+        expect.objectContaining({ allowedModels: ["openai/gpt-5-mini"] }),
+      ),
+    );
+  });
+
+  it("keeps tenant model choices inherited and disables the list until inheritance is turned off", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary([
+      { tenantId: 101, model: "test/chat" },
+    ]);
+    const summary = {
+      ...(await services.assistantConfiguration.summary()),
+      canManageGlobal: false,
+      manageableTenantIds: [101],
+      global: {
+        ...(await services.assistantConfiguration.summary()).global!,
+        allowedModels: ["openai/gpt-5-mini"],
+      },
+    };
+    services.assistantConfiguration.summary = vi
+      .fn()
+      .mockResolvedValue(summary);
+    services.assistantConfiguration.models = vi.fn().mockResolvedValue([
+      {
+        id: "openai/gpt-5-mini",
+        name: "GPT-5 mini",
+        contextLength: 128_000,
+        inputPricePerMillion: 0.25,
+        outputPricePerMillion: 2,
+        modalities: { text: true, image: true, audio: false, file: false },
+        supportsTools: true,
+      },
+    ]);
+    services.assistantConfiguration.saveTenantOverride = vi
+      .fn()
+      .mockResolvedValue(summary);
+    render(
+      <AssistantConfigurationPanel
+        services={services}
+        embedded
+        tenantId={101}
+      />,
+    );
+
+    const inherit = await screen.findByRole("checkbox", {
+      name: "Heredar modelos habilitados de global",
+    });
+    expect(inherit).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /GPT-5 mini/ })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: /GPT-5 mini/ })).toBeChecked();
+    await user.click(inherit);
+    expect(inherit).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /GPT-5 mini/ })).toBeEnabled();
+    await user.click(inherit);
+    expect(inherit).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /GPT-5 mini/ })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() =>
+      expect(
+        services.assistantConfiguration.saveTenantOverride,
+      ).toHaveBeenCalledWith(
+        101,
+        expect.objectContaining({ allowedModels: null }),
+      ),
+    );
+  });
+
+  it("saves Ask AI model choices without requiring a custom global key", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    const initial = await services.assistantConfiguration.summary();
+    const fallbackSummary = {
+      ...initial,
+      global: {
+        ...initial.global!,
+        keyState: "deployment_fallback" as const,
+        allowedModels: null,
+      },
+    };
+    services.assistantConfiguration.summary = vi
+      .fn()
+      .mockResolvedValue(fallbackSummary);
+    services.assistantConfiguration.models = vi.fn().mockResolvedValue([
+      {
+        id: "openai/text-without-tools",
+        name: "Text without tools",
+        contextLength: 64_000,
+        inputPricePerMillion: 1,
+        outputPricePerMillion: 2,
+        modalities: { text: true, image: false, audio: false, file: false },
+        supportsTools: false,
+      },
+    ]);
+    services.assistantConfiguration.saveGlobal = vi
+      .fn()
+      .mockResolvedValue(fallbackSummary);
+    render(
+      <AssistantConfigurationPanel services={services} embedded globalOnly />,
+    );
+
+    await user.click(
+      await screen.findByRole("checkbox", { name: /Text without tools/ }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Guardar modelos habilitados" }),
+    );
+
+    await waitFor(() =>
+      expect(services.assistantConfiguration.saveGlobal).toHaveBeenCalledWith({
+        allowedModels: ["openai/text-without-tools"],
+      }),
+    );
   });
 });
 

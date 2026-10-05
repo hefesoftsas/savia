@@ -1,4 +1,45 @@
 export const pluginIdeMessages = {
+  elapsedSeconds: ["%{seconds} s", "%{seconds} s", "%{seconds} s"],
+  generationTimeout: [
+    "La IA no respondió a tiempo. Tu código está intacto. Reintenta; puedes probar el código actual mientras esperas.",
+    "AI did not respond in time. Your code is unchanged. Retry; you can preview the current code while waiting.",
+    "A IA não respondeu a tempo. Seu código está intacto. Tente novamente; você pode testar o código atual enquanto espera.",
+  ],
+  generationInvalid: [
+    "La IA no consiguió generar archivos válidos. Tu código está intacto. Revisa los detalles y reintenta.",
+    "AI could not generate valid files. Your code is unchanged. Review the details and retry.",
+    "A IA não conseguiu gerar arquivos válidos. Seu código está intacto. Confira os detalhes e tente novamente.",
+  ],
+  generationAuth: [
+    "El proveedor rechazó las credenciales de IA. Revisa la configuración de IA del espacio.",
+    "The provider rejected the AI credentials. Check the workspace AI settings.",
+    "O provedor rejeitou as credenciais de IA. Confira as configurações de IA do espaço.",
+  ],
+  generationQuota: [
+    "El proveedor de IA alcanzó su límite de uso o saldo. Revisa la cuota o reintenta más tarde.",
+    "The AI provider reached its usage or credit limit. Check the quota or retry later.",
+    "O provedor de IA atingiu o limite de uso ou saldo. Confira a cota ou tente novamente mais tarde.",
+  ],
+  generationRejected: [
+    "El proveedor rechazó la solicitud. Comprueba que el modelo configurado en este espacio esté disponible.",
+    "The provider rejected the request. Check that the model configured for this workspace is available.",
+    "O provedor rejeitou a solicitação. Confira se o modelo configurado neste espaço está disponível.",
+  ],
+  generationNotConfigured: [
+    "Este espacio no tiene credenciales de IA configuradas. Añádelas en la configuración de IA del espacio.",
+    "This workspace has no AI credentials configured. Add them in the workspace AI settings.",
+    "Este espaço não tem credenciais de IA configuradas. Adicione-as nas configurações de IA do espaço.",
+  ],
+  generationMetadataUnavailable: [
+    "No se pudo consultar la estructura de las colecciones del espacio. Reintenta más tarde.",
+    "The workspace collection schemas could not be loaded. Retry later.",
+    "Não foi possível consultar a estrutura das coleções do espaço. Tente novamente mais tarde.",
+  ],
+  generationUnavailable: [
+    "La IA no está disponible en este momento. Puedes probar tu código y reintentar más tarde.",
+    "AI is currently unavailable. You can preview your code and retry later.",
+    "A IA está indisponível no momento. Você pode testar seu código e tentar novamente mais tarde.",
+  ],
   shortTitle: ["Plugin", "Plugin", "Plugin"],
   typescriptLanguage: ["TypeScript JSX", "TypeScript JSX", "TypeScript JSX"],
   jsonLanguage: ["JSON", "JSON", "JSON"],

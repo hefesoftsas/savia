@@ -76,21 +76,27 @@ export function TicketSummaryBlock({
   const [suspended, setSuspended] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const controllerRef = useRef<AbortController | undefined>(undefined);
+  const refreshConfigKey = useRef<string | undefined>(undefined);
   const requestId = useRef(0);
   const currentConfigKey = useRef(configKey);
   currentConfigKey.current = configKey;
+  const previousConfigKey = useRef(configKey);
+  if (previousConfigKey.current !== configKey) {
+    previousConfigKey.current = configKey;
+    refreshConfigKey.current = undefined;
+  }
 
   const load = useCallback(
     async (signal: AbortSignal) => {
       const id = ++requestId.current;
-      setSummary(undefined);
-      setSummaryConfigKey(undefined);
+      const refresh = refreshConfigKey.current === configKey;
+      if (refresh) refreshConfigKey.current = undefined;
       setFailed(false);
       setLoading(true);
       try {
         if (signal.aborted) return;
         const result = await api.post<{ data: unknown }>(
-          "/v1/personal-integrations/ticket-summary",
+          `/v1/personal-integrations/ticket-summary${refresh ? "?refresh=true" : ""}`,
           stableConfig,
           { signal },
         );
@@ -120,8 +126,10 @@ export function TicketSummaryBlock({
 
   useEffect(() => {
     if (!connected) {
+      refreshConfigKey.current = undefined;
       setSuspended(false);
       setSummary(undefined);
+      setSummaryConfigKey(undefined);
       return;
     }
     if (!suspended) {
@@ -136,7 +144,9 @@ export function TicketSummaryBlock({
     const clear = (suspend: boolean) => {
       requestId.current += 1;
       controllerRef.current?.abort();
+      refreshConfigKey.current = undefined;
       setSummary(undefined);
+      setSummaryConfigKey(undefined);
       setLoading(false);
       setFailed(false);
       setSuspended(suspend);
@@ -210,7 +220,10 @@ export function TicketSummaryBlock({
         <Button
           type="button"
           variant="outline"
-          onClick={() => setReloadKey((value) => value + 1)}
+          onClick={() => {
+            refreshConfigKey.current = configKey;
+            setReloadKey((value) => value + 1);
+          }}
           disabled={loading || suspended}
         >
           {t("Refresh")}
@@ -267,7 +280,15 @@ export function TicketSummaryBlock({
       )}
       <div aria-live="polite" className="ticket-summary-state">
         {loading && <p role="status">{t("Loading tickets")}</p>}
-        {failed && <p role="alert">{t("Tickets unavailable")}</p>}
+        {failed && (
+          <p role="alert">
+            {t(
+              visibleSummary
+                ? "Could not refresh tickets. Showing the last saved summary."
+                : "Tickets unavailable",
+            )}
+          </p>
+        )}
         {!loading &&
           !failed &&
           visibleSummary &&
