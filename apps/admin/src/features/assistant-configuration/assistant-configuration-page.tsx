@@ -31,6 +31,14 @@ import type {
   AssistantConfigurationSummary,
   AssistantModel,
 } from "@/api/assistant-configuration-client";
+import {
+  cheapestOutputModelSuggestions,
+  compatibleOutputModels,
+  hasIncomparableOutputPricing,
+  hasUnknownOutputPricing,
+  outputPriceGroupLabel,
+  type OutputModelTask,
+} from "./output-model-options";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -159,7 +167,12 @@ export function AssistantConfigurationPanel({
   const [savingAllowedModels, setSavingAllowedModels] = useState(false);
   const [transcriptionModel, setTranscriptionModel] = useState("");
   const [summaryModel, setSummaryModel] = useState("");
+  const [imageGenerationModel, setImageGenerationModel] = useState("");
+  const [speechModel, setSpeechModel] = useState("");
   const [savingMeetingModels, setSavingMeetingModels] = useState(false);
+  const [savingOutputModels, setSavingOutputModels] = useState(false);
+  const [outputModelError, setOutputModelError] = useState<string | null>(null);
+  const [outputModelNotice, setOutputModelNotice] = useState(false);
   const [meetingModelError, setMeetingModelError] = useState<string | null>(
     null,
   );
@@ -176,6 +189,9 @@ export function AssistantConfigurationPanel({
   >(null);
   const [tenantTranscriptionModel, setTenantTranscriptionModel] = useState("");
   const [tenantSummaryModel, setTenantSummaryModel] = useState("");
+  const [tenantImageGenerationModel, setTenantImageGenerationModel] =
+    useState("");
+  const [tenantSpeechModel, setTenantSpeechModel] = useState("");
   const [savingTenant, setSavingTenant] = useState(false);
   const [pendingDeletion, setPendingDeletion] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -197,12 +213,16 @@ export function AssistantConfigurationPanel({
     globalModel,
     transcriptionModel,
     summaryModel,
+    imageGenerationModel,
+    speechModel,
     tenantKey,
     tenantModel,
     globalAllowedModels,
     tenantAllowedModels,
     tenantTranscriptionModel,
     tenantSummaryModel,
+    tenantImageGenerationModel,
+    tenantSpeechModel,
     clearTenantKey,
     selectedTenantId,
   ]);
@@ -232,12 +252,16 @@ export function AssistantConfigurationPanel({
       setGlobalAllowedModels(nextSummary.global?.allowedModels ?? null);
       setTranscriptionModel(nextSummary.global?.transcriptionModel ?? "");
       setSummaryModel(nextSummary.global?.summaryModel ?? "");
+      setImageGenerationModel(nextSummary.global?.imageGenerationModel ?? "");
+      setSpeechModel(nextSummary.global?.speechModel ?? "");
       if (selectedTenantId !== undefined) {
         const setting = nextSummary.tenants.find(
           (entry) => entry.tenantId === selectedTenantId,
         );
         setTenantModel(setting?.model ?? "");
         setTenantAllowedModels(setting?.allowedModels ?? null);
+        setTenantImageGenerationModel(setting?.imageGenerationModel ?? "");
+        setTenantSpeechModel(setting?.speechModel ?? "");
       }
       const soleAccessibleTenant =
         accessibleTenants.length === 1 ? accessibleTenants[0] : undefined;
@@ -248,6 +272,8 @@ export function AssistantConfigurationPanel({
         setSelectedTenantId(soleAccessibleTenant.id);
         setTenantModel(setting?.model ?? "");
         setTenantAllowedModels(setting?.allowedModels ?? null);
+        setTenantImageGenerationModel(setting?.imageGenerationModel ?? "");
+        setTenantSpeechModel(setting?.speechModel ?? "");
       } else if (
         selectedTenantId === undefined &&
         accessibleTenants[0] !== undefined
@@ -263,6 +289,11 @@ export function AssistantConfigurationPanel({
             (entry) => entry.tenantId === accessibleTenants[0].id,
           )?.allowedModels ?? null,
         );
+        const setting = nextSummary.tenants.find(
+          (entry) => entry.tenantId === accessibleTenants[0].id,
+        );
+        setTenantImageGenerationModel(setting?.imageGenerationModel ?? "");
+        setTenantSpeechModel(setting?.speechModel ?? "");
       }
     } catch (exception) {
       if (exception instanceof ApiClientError && exception.status === 403) {
@@ -290,6 +321,8 @@ export function AssistantConfigurationPanel({
     clearTenantKey ||
     transcriptionModel !== (summary?.global?.transcriptionModel ?? "") ||
     summaryModel !== (summary?.global?.summaryModel ?? "") ||
+    imageGenerationModel !== (summary?.global?.imageGenerationModel ?? "") ||
+    speechModel !== (summary?.global?.speechModel ?? "") ||
     globalModel !== (summary?.global?.model ?? "") ||
     !sameAllowedModels(
       globalAllowedModels,
@@ -301,7 +334,10 @@ export function AssistantConfigurationPanel({
       selectedOverride?.allowedModels ?? null,
     ) ||
     tenantTranscriptionModel !== (selectedOverride?.transcriptionModel ?? "") ||
-    tenantSummaryModel !== (selectedOverride?.summaryModel ?? ""),
+    tenantSummaryModel !== (selectedOverride?.summaryModel ?? "") ||
+    tenantImageGenerationModel !==
+      (selectedOverride?.imageGenerationModel ?? "") ||
+    tenantSpeechModel !== (selectedOverride?.speechModel ?? ""),
   );
   const remoteGlobal = useRealtimeRefresh({
     topics: ["settings"],
@@ -311,7 +347,8 @@ export function AssistantConfigurationPanel({
       savingGlobal ||
       savingAllowedModels ||
       savingTenant ||
-      savingMeetingModels,
+      savingMeetingModels ||
+      savingOutputModels,
     refresh: load,
   });
   const remoteTenant = useRealtimeRefresh({
@@ -323,18 +360,23 @@ export function AssistantConfigurationPanel({
       savingGlobal ||
       savingAllowedModels ||
       savingTenant ||
-      savingMeetingModels,
+      savingMeetingModels ||
+      savingOutputModels,
     refresh: load,
   });
 
   useEffect(() => {
     setTenantTranscriptionModel(selectedOverride?.transcriptionModel ?? "");
     setTenantSummaryModel(selectedOverride?.summaryModel ?? "");
+    setTenantImageGenerationModel(selectedOverride?.imageGenerationModel ?? "");
+    setTenantSpeechModel(selectedOverride?.speechModel ?? "");
     setTenantAllowedModels(selectedOverride?.allowedModels ?? null);
   }, [
     selectedTenantId,
     selectedOverride?.transcriptionModel,
     selectedOverride?.summaryModel,
+    selectedOverride?.imageGenerationModel,
+    selectedOverride?.speechModel,
     selectedOverride?.allowedModels,
   ]);
 
@@ -374,6 +416,8 @@ export function AssistantConfigurationPanel({
     setSelectedTenantId(tenantId);
     setTenantModel(override?.model ?? "");
     setTenantAllowedModels(override?.allowedModels ?? null);
+    setTenantImageGenerationModel(override?.imageGenerationModel ?? "");
+    setTenantSpeechModel(override?.speechModel ?? "");
     setTenantKey("");
     setClearTenantKey(false);
     setNotice(null);
@@ -477,6 +521,30 @@ export function AssistantConfigurationPanel({
     }
   };
 
+  const saveOutputModels = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!summary) return;
+    setSavingOutputModels(true);
+    setOutputModelError(null);
+    setOutputModelNotice(false);
+    try {
+      const next = await client.saveGlobal({
+        imageGenerationModel: imageGenerationModel.trim() || null,
+        speechModel: speechModel.trim() || null,
+      });
+      setSummary(next);
+      setImageGenerationModel(next.global?.imageGenerationModel ?? "");
+      setSpeechModel(next.global?.speechModel ?? "");
+      setOutputModelNotice(true);
+    } catch (exception) {
+      setOutputModelError(
+        failureMessage(exception, t("Could not save output models.")),
+      );
+    } finally {
+      setSavingOutputModels(false);
+    }
+  };
+
   const clearGlobalKey = async () => {
     setSavingGlobal(true);
     setError(null);
@@ -520,6 +588,8 @@ export function AssistantConfigurationPanel({
         transcriptionModel: tenantTranscriptionModel.trim() || null,
         ...transcriptionRouting(tenantTranscriptionModel, selectedOverride),
         summaryModel: tenantSummaryModel.trim() || null,
+        imageGenerationModel: tenantImageGenerationModel.trim() || null,
+        speechModel: tenantSpeechModel.trim() || null,
       });
       setSummary(next);
       setTenantKey("");
@@ -558,6 +628,8 @@ export function AssistantConfigurationPanel({
       setTenantAllowedModels(null);
       setTenantTranscriptionModel("");
       setTenantSummaryModel("");
+      setTenantImageGenerationModel("");
+      setTenantSpeechModel("");
       setNotice(
         t("%{tenant} vuelve a heredar la configuración global.", {
           tenant: tenantName(pendingDeletion, tenants, t),
@@ -822,6 +894,70 @@ export function AssistantConfigurationPanel({
     </form>
   );
 
+  const outputModelsForm = (
+    <form className="grid max-w-3xl gap-4" onSubmit={saveOutputModels}>
+      <p className="text-sm text-muted-foreground">
+        {t(
+          "Choose OpenRouter models for image generation and speech output. Blank global values leave generation unconfigured.",
+        )}
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <OutputModelSetting
+          id="image-generation-model"
+          label={t("Image generation model")}
+          task="image"
+          value={imageGenerationModel}
+          onChange={(value) => {
+            setImageGenerationModel(value);
+            setOutputModelNotice(false);
+          }}
+          models={models}
+          fallbackLabel={t("Unconfigured model")}
+          disabled={savingOutputModels}
+        />
+        <OutputModelSetting
+          id="speech-generation-model"
+          label={t("Speech generation model")}
+          task="speech"
+          value={speechModel}
+          onChange={(value) => {
+            setSpeechModel(value);
+            setOutputModelNotice(false);
+          }}
+          models={models}
+          fallbackLabel={t("Unconfigured model")}
+          disabled={savingOutputModels}
+        />
+      </div>
+      {outputModelError ? (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertDescription>{outputModelError}</AlertDescription>
+        </Alert>
+      ) : null}
+      {outputModelNotice ? (
+        <p className="text-sm text-primary" role="status">
+          {t("Output models saved.")}
+        </p>
+      ) : null}
+      <div>
+        <Button
+          type="submit"
+          disabled={savingOutputModels || savingGlobal || summary === null}
+          className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+        >
+          {savingOutputModels ? (
+            <LoaderCircle className="animate-spin" />
+          ) : null}
+          {!savingOutputModels ? <Save aria-hidden="true" /> : null}
+          <span className="sr-only sm:not-sr-only">
+            {t("Save output models")}
+          </span>
+        </Button>
+      </div>
+    </form>
+  );
+
   const panel = (
     <>
       {catalogError ? (
@@ -890,6 +1026,15 @@ export function AssistantConfigurationPanel({
           >
             {meetingModelsForm}
           </CredentialEntry>
+          <CredentialEntry
+            title={t("Image and voice generation")}
+            description={t(
+              "OpenRouter models for images and speech generation.",
+            )}
+            requirement="optional"
+          >
+            {outputModelsForm}
+          </CredentialEntry>
         </>
       ) : (
         <Tabs
@@ -952,6 +1097,18 @@ export function AssistantConfigurationPanel({
                   {t("Meeting recordings")}
                 </h2>
                 {meetingModelsForm}
+              </section>
+              <section
+                className="mt-6 space-y-4"
+                aria-labelledby="output-models-heading"
+              >
+                <h2
+                  id="output-models-heading"
+                  className="text-lg font-semibold"
+                >
+                  {t("Image and voice generation")}
+                </h2>
+                {outputModelsForm}
               </section>
             </TabsContent>
           ) : null}
@@ -1239,6 +1396,40 @@ export function AssistantConfigurationPanel({
                     }
                   />
                 </div>
+                <div className="grid gap-4 rounded-lg border border-border/70 p-4">
+                  <h3 className="font-medium">
+                    {t("Image and voice generation")}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {t("Leave blank to inherit the global model.")}
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <OutputModelSetting
+                      id="tenant-image-generation-model"
+                      label={t("Image generation model")}
+                      task="image"
+                      value={tenantImageGenerationModel}
+                      onChange={setTenantImageGenerationModel}
+                      models={models}
+                      fallbackModel={
+                        summary?.global?.imageGenerationModel ?? undefined
+                      }
+                      fallbackLabel={t("Hereda global")}
+                      disabled={selectedTenantId === undefined || savingTenant}
+                    />
+                    <OutputModelSetting
+                      id="tenant-speech-generation-model"
+                      label={t("Speech generation model")}
+                      task="speech"
+                      value={tenantSpeechModel}
+                      onChange={setTenantSpeechModel}
+                      models={models}
+                      fallbackModel={summary?.global?.speechModel ?? undefined}
+                      fallbackLabel={t("Hereda global")}
+                      disabled={selectedTenantId === undefined || savingTenant}
+                    />
+                  </div>
+                </div>
                 <div>
                   <Button
                     type="submit"
@@ -1371,6 +1562,112 @@ export function AssistantConfigurationPage({
   services: ConfigurationServices;
 }) {
   return <AssistantConfigurationPanel services={services} />;
+}
+
+function OutputModelSetting({
+  id,
+  label,
+  task,
+  value,
+  onChange,
+  models,
+  fallbackModel,
+  fallbackLabel,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  task: OutputModelTask;
+  value: string;
+  onChange(value: string): void;
+  models: AssistantModel[];
+  fallbackModel?: string;
+  fallbackLabel: string;
+  disabled: boolean;
+}) {
+  const t = useMessages(settingsMessages);
+  const locale = intlLocale(useAppLocale());
+  const compatibleModels = compatibleOutputModels(models, task);
+  const suggestions = cheapestOutputModelSuggestions(models, task);
+  const hasUnknownPricing = hasUnknownOutputPricing(models, task);
+  const hasIncomparablePricing = hasIncomparableOutputPricing(models, task);
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 8,
+    }).format(price);
+
+  return (
+    <div className="grid min-w-0 gap-2">
+      <ModelInput
+        id={id}
+        label={label}
+        value={value}
+        onChange={onChange}
+        models={compatibleModels}
+        fallbackModel={fallbackModel}
+        fallbackLabel={fallbackLabel}
+        disabled={disabled}
+        catalogDescription={t(
+          "OpenRouter output capability from the model catalog.",
+        )}
+      />
+      {compatibleModels.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {t("No compatible output models are available in the catalog.")}
+        </p>
+      ) : (
+        <>
+          {suggestions.length > 0 ? (
+            <div className="grid gap-1" aria-label={t("Cheapest known rates")}>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Cheapest known rates by unit; this is not a total request cost.",
+                )}
+              </p>
+              {suggestions.map((suggestion) => (
+                <Button
+                  key={suggestion.group}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto justify-start whitespace-normal px-2 py-1 text-left text-xs"
+                  onClick={() => onChange(suggestion.model.id)}
+                  disabled={disabled}
+                  aria-label={t("Apply suggested model %{model}", {
+                    model: `${suggestion.model.id}, ${formatPrice(suggestion.price)} ${outputPriceGroupLabel(suggestion.group)}`,
+                  })}
+                >
+                  {t("Suggested: %{model} at %{price} %{unit}", {
+                    model: suggestion.model.id,
+                    price: formatPrice(suggestion.price),
+                    unit: `${t(outputPriceGroupLabel(suggestion.group))}${
+                      suggestion.variant ? ` (${suggestion.variant})` : ""
+                    }`,
+                  })}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          {hasUnknownPricing ? (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Some compatible models have missing or invalid task-specific prices and are not ranked.",
+              )}
+            </p>
+          ) : null}
+          {hasIncomparablePricing ? (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Some speech models have multiple billing components, so their total cost is not directly comparable.",
+              )}
+            </p>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
 }
 
 function AllowedModelsSelector({

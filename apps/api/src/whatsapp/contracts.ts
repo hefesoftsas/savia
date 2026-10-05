@@ -53,6 +53,8 @@ export type WhatsappProxyRequest = {
   path: string;
   connection: ActiveWhatsappConnection;
   body?: unknown;
+  /** Only Meta attachment downloads may override the Graph API origin. */
+  baseUrl?: string;
 };
 
 export type WhatsappNangoClient = {

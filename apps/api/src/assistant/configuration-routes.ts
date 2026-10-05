@@ -30,6 +30,8 @@ const configurationWriteSchema = z
     transcriptionModel: z.string().trim().max(160).nullable().optional(),
     transcriptionEndpoint: transcriptionEndpointSchema.optional(),
     summaryModel: z.string().trim().max(160).nullable().optional(),
+    imageGenerationModel: z.string().trim().max(160).nullable().optional(),
+    speechModel: z.string().trim().max(160).nullable().optional(),
   })
   .superRefine((value, context) => {
     if (value.apiKey !== undefined && value.clearApiKey) {
@@ -45,7 +47,9 @@ const configurationWriteSchema = z
       value.allowedModels === undefined &&
       value.transcriptionModel === undefined &&
       value.transcriptionEndpoint === undefined &&
-      value.summaryModel === undefined
+      value.summaryModel === undefined &&
+      value.imageGenerationModel === undefined &&
+      value.speechModel === undefined
     ) {
       context.addIssue({ code: "custom", message: "A change is required" });
     }
@@ -317,7 +321,9 @@ export function registerAssistantConfigurationRoutes(
           allowedModels: [],
         });
       }
-      const catalog = await modelCatalog.list(configuration);
+      const catalog = await modelCatalog.list(configuration, {
+        includeGenerationPricing: false,
+      });
       return context.json({
         defaultModel: configuration.model,
         allowedModels: catalog.filter(
