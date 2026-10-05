@@ -124,6 +124,11 @@ export const editorMessages = {
     "Tickets unavailable",
     "Tickets indisponíveis",
   ],
+  "Could not refresh tickets. Showing the last saved summary.": [
+    "No se pudieron actualizar los tickets. Se muestra el último resumen guardado.",
+    "Could not refresh tickets. Showing the last saved summary.",
+    "Não foi possível atualizar os tickets. Exibindo o último resumo salvo.",
+  ],
   "No tickets found": [
     "No se encontraron tickets",
     "No tickets found",
