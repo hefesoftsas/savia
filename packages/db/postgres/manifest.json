@@ -169,6 +169,10 @@
     {
       "filename": "0039_tenant_whatsapp_connections.sql",
       "sha256": "e6eafd41a53d954223452ee9eed1c09a5ed893aaa39c57744d004c18ac062131"
+    },
+    {
+      "filename": "0040_personal_ticket_summary_cache.sql",
+      "sha256": "a356642effb1fb33e60f268b500180827e760e08d975413bcdaa05b09f14eaaa"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -963,6 +967,21 @@
       "type": "table",
       "name": "personal_integration_connections",
       "table": "personal_integration_connections"
+    },
+    {
+      "type": "index",
+      "name": "personal_ticket_summary_cache_updated_at_index",
+      "table": "personal_ticket_summary_cache"
+    },
+    {
+      "type": "trigger",
+      "name": "personal_ticket_summary_cache_purge_connection_update",
+      "table": "personal_integration_connections"
+    },
+    {
+      "type": "table",
+      "name": "personal_ticket_summary_cache",
+      "table": "personal_ticket_summary_cache"
     },
     {
       "type": "table",
@@ -6505,6 +6524,99 @@
         }
       ],
       "checkCount": 2
+    },
+    {
+      "name": "personal_ticket_summary_cache",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "cache_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "jira_connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "github_connection_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "encrypted_payload",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "personal_integration_connections",
+          "from": "github_connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "personal_integration_connections",
+          "from": "jira_connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["principal_id", "cache_key"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
     },
     {
       "name": "zoom_personal_meetings",

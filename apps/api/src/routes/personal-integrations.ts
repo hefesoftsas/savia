@@ -34,6 +34,7 @@ import {
 import { createPersonalIntegrationNangoClient } from "../personal-integrations/nango";
 import { createPersonalIntegrationProviderRegistry } from "../personal-integrations/providers";
 import { createPersonalIntegrationRepository } from "../personal-integrations/repository";
+import { PersonalTicketSummaryCache } from "../personal-integrations/ticket-summary-cache";
 import { createJiraPrivacyRepository } from "../personal-integrations/jira-privacy-repository";
 import {
   CollaborationConflictError,
@@ -335,9 +336,15 @@ const ticketSummaryRoute = createRoute({
   tags: ["Personal integrations"],
   summary: "Summarize the caller's Jira tickets and GitHub reviews",
   description:
-    "Reads assigned tickets through the current caller's personal connections. Results are transient and never stored in shared Pages.",
+    "Returns the caller's encrypted saved summary, generating it from their personal connections when no matching snapshot exists. Use refresh=true to replace it with current provider data. Results are never stored in shared Pages.",
   security: [{ oauth2: ["savia.api.read"] }],
   request: {
+    query: z.object({
+      refresh: z.enum(["true", "false"]).optional().openapi({
+        description:
+          "Force a new provider read instead of using the saved private summary",
+      }),
+    }),
     body: {
       required: true,
       content: { "application/json": { schema: ticketSummaryConfigSchema } },
@@ -877,8 +884,16 @@ export function registerPersonalIntegrationRoutes(
   const actions = new PendingActionRepository(database);
   const nango = dependencies?.nango;
   const personalActionPayloadCipher = dependencies?.personalActionPayloadCipher;
+  const ticketSummaryCache = personalActionPayloadCipher
+    ? new PersonalTicketSummaryCache(database, personalActionPayloadCipher)
+    : undefined;
   const operations = nango
-    ? new PersonalIntegrationOperations(repository, nango, database)
+    ? new PersonalIntegrationOperations(
+        repository,
+        nango,
+        database,
+        ticketSummaryCache,
+      )
     : undefined;
 
   app.openapi(providerListRoute, (context) => {
@@ -1173,7 +1188,11 @@ export function registerPersonalIntegrationRoutes(
   app.openapi(ticketSummaryRoute, async (context) => {
     const actor = actorFromContext(context);
     context.header("Cache-Control", "no-store");
-    if (!operations || providers.jira.availability !== "enabled")
+    if (
+      !operations ||
+      !ticketSummaryCache ||
+      providers.jira.availability !== "enabled"
+    )
       return context.json(
         errorBody(
           "PERSONAL_INTEGRATION_UNAVAILABLE",
@@ -1186,6 +1205,7 @@ export function registerPersonalIntegrationRoutes(
         principalId: actor.principal.id,
         config: context.req.valid("json"),
         githubEnabled: providers.github.availability === "enabled",
+        refresh: context.req.valid("query").refresh === "true",
       });
       return context.json({ data: summary }, 200);
     } catch (exception) {
