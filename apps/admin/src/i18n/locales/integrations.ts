@@ -183,6 +183,11 @@ export const personalIntegrationsMessages = {
     "No integrations available.",
     "Nenhuma integração disponível.",
   ],
+  "WhatsApp no está disponible en este entorno.": [
+    "WhatsApp no está disponible en este entorno.",
+    "WhatsApp is not available in this environment.",
+    "O WhatsApp não está disponível neste ambiente.",
+  ],
   "Logo de %{value}": [
     "Logo de %{value}",
     "Logo of %{value}",

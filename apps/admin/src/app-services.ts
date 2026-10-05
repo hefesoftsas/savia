@@ -2,6 +2,7 @@ import { RequestResultClient } from "./api/request-result-client";
 import { ApiClient } from "./api/api-client";
 import { AssistantConfigurationClient } from "./api/assistant-configuration-client";
 import { CrmClient } from "./api/crm-client";
+import { WhatsappClient } from "./api/whatsapp-client";
 import { DomainClient } from "./api/domain-client";
 import {
   fetchTenantWorkspaces,
@@ -88,6 +89,7 @@ export function createAppServices() {
     domains: new DomainClient(apiClient),
     commands: new SaviaCommands(apiClient),
     crm: new CrmClient(apiClient),
+    whatsapp: new WhatsappClient(apiClient),
     personalIntegrations: new PersonalIntegrationsClient(apiClient),
     virtualEmployees: new VirtualEmployeesClient(apiClient),
     userPreferences: new UserPreferencesClient(apiClient),

@@ -87,6 +87,10 @@ import { registerAssistantConfigurationRoutes } from "./assistant/configuration-
 import type { AssistantService } from "./assistant/contracts";
 import { registerAssistantRoutes } from "./assistant/routes";
 import { registerCrmRoutes, type CrmRouteDependencies } from "./routes/crm";
+import {
+  registerWhatsappRoutes,
+  type WhatsappRouteDependencies,
+} from "./routes/whatsapp";
 import type { SqlBridgeClient } from "./studio/sql-bridge";
 import { registerIdentityRoutes } from "./routes/identity";
 import { registerRealtimeRoutes } from "./realtime/routes";
@@ -138,6 +142,7 @@ export function createApp(
   identityBridgeKey?: string,
   companion?: CompanionOptions,
   pagesSearch?: PagesSearchBindings,
+  whatsapp?: WhatsappRouteDependencies,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -251,6 +256,7 @@ export function createApp(
   registerRequestPageRoutes(app, db, saviaRequestService);
   registerRequestResultRoutes(app, saviaRequestService);
   registerCrmRoutes(app, db, crm);
+  registerWhatsappRoutes(app, db, whatsapp);
   registerStudioRoutes(
     app,
     db,
