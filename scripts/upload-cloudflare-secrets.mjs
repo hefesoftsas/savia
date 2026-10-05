@@ -121,6 +121,8 @@ export function buildSecretUploads(environment, values) {
     );
     if (app === "api" && values.PLUGIN_REGISTRY_TENANTS)
       secrets.PLUGIN_REGISTRY_TENANTS = values.PLUGIN_REGISTRY_TENANTS;
+    if (app === "api" && values.NANGO_FALLBACK_API_KEY?.trim())
+      secrets.NANGO_FALLBACK_API_KEY = values.NANGO_FALLBACK_API_KEY.trim();
     if (app === "api" && values.OPENROUTER_API_KEY)
       secrets.OPENROUTER_API_KEY = values.OPENROUTER_API_KEY;
     if (app === "api" && jiraReportingConnectionId)
