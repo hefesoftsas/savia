@@ -328,6 +328,23 @@ export class SaviaAssistantService implements AssistantService {
       throw error;
     }
     if (!effective.apiKey) return unavailableResponse();
+    if (
+      request.model !== undefined &&
+      (request.responseMode !== "text" ||
+        (request.model !== effective.model &&
+          !effective.allowedModels?.includes(request.model)))
+    ) {
+      return Response.json(
+        {
+          error: {
+            code: "ASSISTANT_MODEL_NOT_ALLOWED",
+            message:
+              "This model is not enabled by your administrator. Choose an enabled model or use the assistant default.",
+          },
+        },
+        { status: 403 },
+      );
+    }
 
     // The configuration resolver checks current tenant membership, including revocations.
     const tenantId = effective.tenantId;
@@ -663,7 +680,8 @@ export class SaviaAssistantService implements AssistantService {
             ]),
       );
 
-      const chosenModel = employee?.model?.trim() || effective.model;
+      const chosenModel =
+        request.model || employee?.model?.trim() || effective.model;
 
       const result = streamText({
         model: openrouter(chosenModel),
@@ -703,6 +721,12 @@ export class SaviaAssistantService implements AssistantService {
 
       const response = result.toUIMessageStreamResponse({
         originalMessages: request.messages as UIMessage[],
+        ...(request.responseMode === "text"
+          ? {
+              messageMetadata: ({ part }) =>
+                part.type === "start" ? { model: chosenModel } : undefined,
+            }
+          : {}),
       });
 
       if (employee) {

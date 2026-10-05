@@ -10,6 +10,7 @@ export type AssistantSettingScope = "global" | "agency";
 export type EffectiveAssistantConfiguration = {
   apiKey?: string;
   model: string;
+  allowedModels?: string[];
   transcriptionModel?: string;
   transcriptionEndpoint?: AssistantTranscriptionEndpoint;
   summaryModel?: string;
@@ -48,6 +49,7 @@ export type AssistantConfigurationWrite = {
   apiKey?: string;
   clearApiKey?: boolean;
   model?: string | null;
+  allowedModels?: string[] | null;
   transcriptionModel?: string | null;
   transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
   summaryModel?: string | null;
@@ -60,6 +62,7 @@ type AssistantSettingRow = {
   api_key_ciphertext: string | null;
   api_key_iv: string | null;
   model: string | null;
+  allowed_models: string | null;
   transcription_model: string | null;
   transcription_endpoint: AssistantTranscriptionEndpoint | null;
   summary_model: string | null;
@@ -86,6 +89,7 @@ export type AssistantConfigurationSettingSummary = {
   tenantId?: number;
   keyState: AssistantConfigurationKeyState;
   model: string | null;
+  allowedModels: string[] | null;
   transcriptionModel?: string | null;
   transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
   summaryModel?: string | null;
@@ -163,6 +167,49 @@ export function normalizeAssistantModel(
   return model;
 }
 
+function normalizeAllowedModels(
+  candidates: string[] | null | undefined,
+): string[] | null | undefined {
+  if (candidates === null || candidates === undefined) return candidates;
+  if (!Array.isArray(candidates)) {
+    throw new TypeError("Allowed models must be an array");
+  }
+  if (candidates.length > 100) {
+    throw new TypeError("At most 100 allowed models can be configured");
+  }
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string" || candidate.length > 160) {
+      throw new TypeError(
+        "Allowed model identifiers must be at most 160 characters",
+      );
+    }
+    const model = normalizeAssistantModel(candidate);
+    if (!model) {
+      throw new TypeError("An allowed model must use provider/model format");
+    }
+    if (!seen.has(model)) {
+      normalized.push(model);
+      seen.add(model);
+    }
+  }
+  return normalized;
+}
+
+function storedAllowedModels(
+  serialized: string | null | undefined,
+): string[] | null {
+  if (serialized == null) return null;
+  try {
+    const parsed: unknown = JSON.parse(serialized);
+    if (!Array.isArray(parsed)) return [];
+    return normalizeAllowedModels(parsed as string[]) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 function summary(
   row: AssistantSettingRow,
   keyState: AssistantConfigurationKeyState,
@@ -172,6 +219,7 @@ function summary(
     ...(row.agency_id === null ? {} : { tenantId: row.agency_id }),
     keyState,
     model: row.model,
+    allowedModels: storedAllowedModels(row.allowed_models),
     transcriptionModel: row.transcription_model,
     transcriptionEndpoint:
       row.transcription_endpoint ??
@@ -354,7 +402,7 @@ export class AssistantConfigurationRepository {
   async summary(): Promise<AssistantConfigurationSummary> {
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, allowed_models, updated_at, updated_by
          FROM assistant_openrouter_settings
          ORDER BY CASE scope WHEN 'global' THEN 0 ELSE 1 END, agency_id`,
       )
@@ -450,6 +498,7 @@ export class AssistantConfigurationRepository {
           transcriptionEndpoint:
             fullSummary.global.transcriptionEndpoint ?? null,
           summaryModel: fullSummary.global.summaryModel ?? null,
+          allowedModels: fullSummary.global.allowedModels,
         }
       : null;
     return {
@@ -640,7 +689,7 @@ export class AssistantConfigurationRepository {
   ): Promise<EffectiveAssistantConfiguration> {
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, allowed_models, updated_at, updated_by
          FROM assistant_openrouter_settings
          WHERE id = ? OR id = 'global'`,
       )
@@ -661,6 +710,10 @@ export class AssistantConfigurationRepository {
       ? await this.decryptKey(keyRow)
       : this.deploymentApiKey;
     const model = agency?.model ?? global?.model ?? this.deploymentModel;
+    const allowedModels =
+      storedAllowedModels(agency?.allowed_models) ??
+      storedAllowedModels(global?.allowed_models) ??
+      [];
     const transcriptionModel =
       agency?.transcription_model ??
       global?.transcription_model ??
@@ -673,6 +726,7 @@ export class AssistantConfigurationRepository {
     return {
       ...(apiKey ? { apiKey } : {}),
       model,
+      allowedModels,
       transcriptionModel,
       transcriptionEndpoint:
         transcriptionSource?.transcription_endpoint ??
@@ -690,7 +744,7 @@ export class AssistantConfigurationRepository {
     const id = settingId(scope, agencyId);
     const existing = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, allowed_models, updated_at, updated_by
          FROM assistant_openrouter_settings WHERE id = ?`,
       )
       .bind(id)
@@ -751,13 +805,20 @@ export class AssistantConfigurationRepository {
       input.summaryModel === undefined
         ? (existing?.summary_model ?? null)
         : (normalizeAssistantModel(input.summaryModel) ?? null);
+    const allowedModels =
+      input.allowedModels === undefined
+        ? storedAllowedModels(existing?.allowed_models)
+        : normalizeAllowedModels(input.allowedModels);
+    const allowedModelsJson =
+      allowedModels == null ? null : JSON.stringify(allowedModels);
     if (
       scope === "agency" &&
       ciphertext === null &&
       model === null &&
       transcriptionModel === null &&
       transcriptionEndpoint === null &&
-      summaryModel === null
+      summaryModel === null &&
+      allowedModelsJson === null
     ) {
       await this.clearAgencyOverride(agencyId!);
       return;
@@ -765,8 +826,8 @@ export class AssistantConfigurationRepository {
     await this.database
       .prepare(
         `INSERT INTO assistant_openrouter_settings (
-          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, updated_at, updated_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, allowed_models, updated_at, updated_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           api_key_ciphertext = excluded.api_key_ciphertext,
           api_key_iv = excluded.api_key_iv,
@@ -774,6 +835,7 @@ export class AssistantConfigurationRepository {
           transcription_model = excluded.transcription_model,
           transcription_endpoint = excluded.transcription_endpoint,
           summary_model = excluded.summary_model,
+          allowed_models = excluded.allowed_models,
           updated_at = excluded.updated_at,
           updated_by = excluded.updated_by`,
       )
@@ -787,6 +849,7 @@ export class AssistantConfigurationRepository {
         transcriptionModel,
         transcriptionEndpoint,
         summaryModel,
+        allowedModelsJson,
         this.now().toISOString(),
         input.actorId,
       )
@@ -816,7 +879,9 @@ export function openRouterModelCatalog(
         headers.authorization = `Bearer ${configuration.apiKey}`;
       }
       const response = await fetcher(
-        "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
+        configuration.apiKey
+          ? "https://openrouter.ai/api/v1/models/user?output_modalities=text,transcription&sort=most-popular"
+          : "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
         Object.keys(headers).length ? { headers } : undefined,
       );
       if (!response.ok) throw new Error("OpenRouter models request failed");

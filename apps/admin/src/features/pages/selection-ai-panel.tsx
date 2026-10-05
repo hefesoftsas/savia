@@ -1,3 +1,8 @@
+import {
+  AssistantConfigurationClient,
+  type AssistantModel,
+} from "@/api/assistant-configuration-client";
+import type { UIMessage } from "ai";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
 import {
@@ -35,6 +40,12 @@ export function SelectionAIPanel({
 }) {
   const t = useMessages(selectionAIMessages);
   const id = useId();
+  const [modelChoices, setModelChoices] = useState<AssistantModel[]>([]);
+  const [defaultModel, setDefaultModel] = useState<string | null>(null);
+  const [modelLoading, setModelLoading] = useState(true);
+  const [modelError, setModelError] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [modelRetry, setModelRetry] = useState(0);
   const [employees, setEmployees] = useState<VirtualEmployee[]>([]);
   const [creatingTranslator, setCreatingTranslator] = useState(false);
   const [translatorResponse, setTranslatorResponse] = useState(false);
@@ -52,10 +63,43 @@ export function SelectionAIPanel({
     | "Selection changed"
     | "Copy failed"
     | "Translator failed"
+    | "Request timed out"
+    | "Selected model disabled"
     | null
   >(null);
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<UIMessage[]>([]);
+  const [clarification, setClarification] = useState("");
+  const [resolvedModel, setResolvedModel] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const recoveryResponse = useRef<string | null>(null);
   const controller = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setModelLoading(true);
+    setModelError(false);
+    new AssistantConfigurationClient(api)
+      .modelPolicy()
+      .then((policy) => {
+        if (!active) return;
+        setModelChoices(
+          Array.isArray(policy.allowedModels) ? policy.allowedModels : [],
+        );
+        setDefaultModel(
+          typeof policy.defaultModel === "string" ? policy.defaultModel : null,
+        );
+      })
+      .catch(() => {
+        if (active) setModelError(true);
+      })
+      .finally(() => {
+        if (active) setModelLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, modelRetry]);
 
   useEffect(() => {
     let active = true;
@@ -84,18 +128,46 @@ export function SelectionAIPanel({
     [],
   );
 
+  useEffect(() => {
+    if (!running) return;
+    const started = Date.now();
+    const timer = setInterval(
+      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, [running]);
+
   function cancel() {
     controller.current?.abort();
     controller.current = null;
     setRunning(false);
-    setResponse("");
-    setComplete(false);
+    setResponse(recoveryResponse.current ?? "");
+    setComplete(recoveryResponse.current !== null);
   }
-  async function generate() {
-    if (controller.current || !instruction.trim()) return;
+  async function generate(continuing = false) {
+    if (
+      controller.current ||
+      !instruction.trim() ||
+      (continuing && !clarification.trim())
+    )
+      return;
     const current = new AbortController();
     controller.current = current;
+    recoveryResponse.current = continuing ? response : null;
     setRunning(true);
+    setElapsed(0);
+    if (!continuing) setHistory([]);
+    const timeout = setTimeout(() => {
+      current.abort();
+      if (controller.current === current) {
+        controller.current = null;
+        setRunning(false);
+        setResponse(recoveryResponse.current ?? "");
+        setComplete(recoveryResponse.current !== null);
+        setError("Request timed out");
+      }
+    }, 90_000);
     setComplete(false);
     setResponse("");
     setError(null);
@@ -110,7 +182,16 @@ export function SelectionAIPanel({
         text,
         instruction: instruction.trim(),
         employeeId: employeeId || undefined,
+        model: selectedModel || undefined,
         signal: current.signal,
+        history: continuing ? history : [],
+        clarification: continuing ? clarification.trim() : undefined,
+        onMessages: (messages) => {
+          if (controller.current === current) setHistory(messages);
+        },
+        onModel: (model) => {
+          if (controller.current === current) setResolvedModel(model);
+        },
         onText: (value) => {
           if (controller.current === current) setResponse(value);
         },
@@ -118,13 +199,25 @@ export function SelectionAIPanel({
       if (controller.current === current) {
         setResponse(result);
         setComplete(true);
+        setClarification("");
       }
-    } catch {
+    } catch (failure) {
       if (controller.current === current && !current.signal.aborted) {
-        setError("Request failed");
-        setResponse("");
+        if (
+          failure instanceof Error &&
+          "code" in failure &&
+          failure.code === "ASSISTANT_MODEL_NOT_ALLOWED"
+        ) {
+          setError("Selected model disabled");
+          setSelectedModel("");
+          setResolvedModel(null);
+          setModelRetry((value) => value + 1);
+        } else setError("Request failed");
+        setResponse(recoveryResponse.current ?? "");
+        setComplete(recoveryResponse.current !== null);
       }
     } finally {
+      clearTimeout(timeout);
       if (controller.current === current) {
         controller.current = null;
         setRunning(false);
@@ -146,6 +239,9 @@ export function SelectionAIPanel({
     }
   }
 
+  const selectedEmployee = employees.find(
+    (employee) => employee.id === employeeId,
+  );
   const variants = complete ? translationVariants(response) : null;
   const appliedText = variants?.[selectedVariant] ?? response;
   const canApplyResponse =
@@ -184,7 +280,9 @@ export function SelectionAIPanel({
       >
         <SheetHeader className="pr-12">
           <SheetTitle>{t("Ask AI")}</SheetTitle>
-          <SheetDescription>{t("Description")}</SheetDescription>
+          <SheetDescription className="sr-only">
+            {t("Description")}
+          </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-5 p-4 pt-2">
           <div className="space-y-2">
@@ -202,6 +300,11 @@ export function SelectionAIPanel({
               value={employeeId}
               onChange={(event) => {
                 setEmployeeId(event.target.value);
+                setResolvedModel(null);
+                setSelectedModel("");
+                setHistory([]);
+                setResponse("");
+                setComplete(false);
                 if (
                   employees.find(
                     (employee) => employee.id === event.target.value,
@@ -219,6 +322,72 @@ export function SelectionAIPanel({
                   </option>
                 ))}
             </select>
+            <details className="group text-sm">
+              <summary className="min-h-11 cursor-pointer py-3 font-medium text-muted-foreground hover:text-foreground focus-visible:outline-ring">
+                {t("Options")}
+              </summary>
+              <div className="space-y-3 pb-2">
+                {modelChoices.length > 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor={`${id}-model`}>{t("Choose model")}</Label>
+                    <select
+                      id={`${id}-model`}
+                      className="border-input bg-background focus-visible:ring-ring h-10 w-full min-w-0 rounded-md border px-3 text-sm focus-visible:ring-2"
+                      value={selectedModel}
+                      disabled={
+                        running || modelLoading || modelChoices.length === 0
+                      }
+                      onChange={(event) => {
+                        setSelectedModel(event.target.value);
+                        setResolvedModel(null);
+                      }}
+                    >
+                      <option value="">{t("Assistant default model")}</option>
+                      {modelChoices.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name} ({model.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {modelError ? (
+                  <div className="text-sm text-muted-foreground">
+                    <p role="status">{t("Models failed")}</p>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0"
+                      disabled={running}
+                      onClick={() => setModelRetry((value) => value + 1)}
+                    >
+                      {t("Retry")}
+                    </Button>
+                  </div>
+                ) : null}
+                <p className="text-sm text-muted-foreground">
+                  {t("Model")}:{" "}
+                  <span className="break-words">
+                    {resolvedModel ||
+                      selectedModel ||
+                      selectedEmployee?.model ||
+                      defaultModel ||
+                      t("Inherited model")}
+                  </span>
+                </p>
+                {selectedEmployee && (
+                  <details className="text-sm">
+                    <summary className="cursor-pointer font-medium">
+                      {t("Assistant instructions")}
+                    </summary>
+                    <div className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3">
+                      {selectedEmployee.systemPrompt ||
+                        t("No custom instructions")}
+                    </div>
+                  </details>
+                )}
+              </div>
+            </details>
             {!employeesLoading &&
               !employeesError &&
               !employees.some(
@@ -276,9 +445,11 @@ export function SelectionAIPanel({
               disabled={running}
               onChange={(event) => setInstruction(event.target.value)}
             />
-            <div className="flex flex-wrap gap-2">
-              {(["Summarize", "Improve", "Translate", "Explain"] as const).map(
-                (action) => (
+            {selectedEmployee?.handle !== "traductor" && (
+              <div className="flex flex-wrap gap-2">
+                {(
+                  ["Summarize", "Improve", "Translate", "Explain"] as const
+                ).map((action) => (
                   <Button
                     key={action}
                     type="button"
@@ -300,9 +471,9 @@ export function SelectionAIPanel({
                   >
                     {t(action)}
                   </Button>
-                ),
-              )}
-            </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <Button
                 type="submit"
@@ -319,7 +490,10 @@ export function SelectionAIPanel({
           </form>
           {running && (
             <p role="status" className="text-muted-foreground text-sm">
-              {t("Generating")}
+              {t("Generating")} {elapsed}s
+              {elapsed >= 15 && (
+                <span className="mt-1 block">{t("Slow request")}</span>
+              )}
             </p>
           )}
           {complete && (
@@ -340,37 +514,39 @@ export function SelectionAIPanel({
             >
               <h3 className="text-sm font-medium">{t("Response")}</h3>
               {variants ? (
-                <fieldset className="space-y-2">
-                  <legend className="mb-2 text-sm text-muted-foreground">
-                    {t("Choose translation")}
-                  </legend>
-                  {variants.map((variant, index) => (
-                    <label
-                      key={translationLabels[index]}
-                      className="flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[:checked]:border-primary has-[:checked]:bg-accent"
-                    >
-                      <input
-                        type="radio"
-                        name={`${id}-variant`}
-                        aria-label={t(translationLabels[index])}
-                        checked={selectedVariant === index}
-                        onChange={() => {
-                          setSelectedVariant(index);
-                          setCopied(false);
-                        }}
-                        className="mt-1 shrink-0 accent-primary"
-                      />
-                      <span className="min-w-0 space-y-1">
-                        <span className="block text-sm font-medium">
-                          {t(translationLabels[index])}
-                        </span>
-                        <span className="block whitespace-pre-wrap break-words text-sm leading-relaxed">
-                          {variant}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
-                </fieldset>
+                <div className="space-y-3">
+                  <fieldset className="flex flex-wrap gap-2">
+                    <legend className="sr-only">
+                      {t("Choose translation")}
+                    </legend>
+                    {variants.map((_variant, index) => (
+                      <label
+                        key={translationLabels[index]}
+                        className="relative flex min-h-11 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                      >
+                        <input
+                          type="radio"
+                          name={`${id}-variant`}
+                          aria-label={t(translationLabels[index])}
+                          checked={selectedVariant === index}
+                          onChange={() => {
+                            setSelectedVariant(index);
+                            setCopied(false);
+                          }}
+                          className="size-4 shrink-0 accent-primary"
+                        />
+                        {t(
+                          (["Regular", "Professional", "Brief"] as const)[
+                            index
+                          ],
+                        )}
+                      </label>
+                    ))}
+                  </fieldset>
+                  <div className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm leading-relaxed">
+                    {variants[selectedVariant]}
+                  </div>
+                </div>
               ) : (
                 <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                   {response}
@@ -380,6 +556,32 @@ export function SelectionAIPanel({
                 <p role="status" className="text-sm text-muted-foreground">
                   {t("Translation needs clarification")}
                 </p>
+              )}
+              {complete && !canApplyResponse && (
+                <form
+                  className="space-y-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void generate(true);
+                  }}
+                >
+                  <Label htmlFor={`${id}-clarification`}>
+                    {t("Clarification or format correction")}
+                  </Label>
+                  <Textarea
+                    id={`${id}-clarification`}
+                    rows={2}
+                    value={clarification}
+                    disabled={running}
+                    onChange={(event) => setClarification(event.target.value)}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={running || !clarification.trim()}
+                  >
+                    {t("Continue")}
+                  </Button>
+                </form>
               )}
               {canApplyResponse && (
                 <div className="flex flex-wrap gap-2">

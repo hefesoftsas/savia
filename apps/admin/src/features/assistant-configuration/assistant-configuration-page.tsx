@@ -78,6 +78,19 @@ function failureMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function sameAllowedModels(
+  left: string[] | null,
+  right: string[] | null,
+): boolean {
+  if (left === null || right === null) return left === right;
+  if (left.length !== right.length) return false;
+  const normalizedLeft = [...left].sort();
+  const normalizedRight = [...right].sort();
+  return normalizedLeft.every(
+    (model, index) => model === normalizedRight[index],
+  );
+}
+
 function tenantName(
   tenantId: number,
   tenants: Array<{ id: number; name: string }>,
@@ -130,6 +143,7 @@ export function AssistantConfigurationPanel({
     [],
   );
   const [models, setModels] = useState<AssistantModel[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,7 +152,11 @@ export function AssistantConfigurationPanel({
   const [globalKey, setGlobalKey] = useState("");
   const [showGlobalKey, setShowGlobalKey] = useState(false);
   const [globalModel, setGlobalModel] = useState("");
+  const [globalAllowedModels, setGlobalAllowedModels] = useState<
+    string[] | null
+  >(null);
   const [savingGlobal, setSavingGlobal] = useState(false);
+  const [savingAllowedModels, setSavingAllowedModels] = useState(false);
   const [transcriptionModel, setTranscriptionModel] = useState("");
   const [summaryModel, setSummaryModel] = useState("");
   const [savingMeetingModels, setSavingMeetingModels] = useState(false);
@@ -153,6 +171,9 @@ export function AssistantConfigurationPanel({
   const [tenantKey, setTenantKey] = useState("");
   const [clearTenantKey, setClearTenantKey] = useState(false);
   const [tenantModel, setTenantModel] = useState("");
+  const [tenantAllowedModels, setTenantAllowedModels] = useState<
+    string[] | null
+  >(null);
   const [tenantTranscriptionModel, setTenantTranscriptionModel] = useState("");
   const [tenantSummaryModel, setTenantSummaryModel] = useState("");
   const [savingTenant, setSavingTenant] = useState(false);
@@ -178,6 +199,8 @@ export function AssistantConfigurationPanel({
     summaryModel,
     tenantKey,
     tenantModel,
+    globalAllowedModels,
+    tenantAllowedModels,
     tenantTranscriptionModel,
     tenantSummaryModel,
     clearTenantKey,
@@ -206,14 +229,15 @@ export function AssistantConfigurationPanel({
       if (nextSummary.canManageGlobal === false || fixedTenantId !== undefined)
         setActiveTab("tenant");
       setGlobalModel(nextSummary.global?.model ?? "");
+      setGlobalAllowedModels(nextSummary.global?.allowedModels ?? null);
       setTranscriptionModel(nextSummary.global?.transcriptionModel ?? "");
       setSummaryModel(nextSummary.global?.summaryModel ?? "");
       if (selectedTenantId !== undefined) {
-        setTenantModel(
-          nextSummary.tenants.find(
-            (setting) => setting.tenantId === selectedTenantId,
-          )?.model ?? "",
+        const setting = nextSummary.tenants.find(
+          (entry) => entry.tenantId === selectedTenantId,
         );
+        setTenantModel(setting?.model ?? "");
+        setTenantAllowedModels(setting?.allowedModels ?? null);
       }
       const soleAccessibleTenant =
         accessibleTenants.length === 1 ? accessibleTenants[0] : undefined;
@@ -223,6 +247,7 @@ export function AssistantConfigurationPanel({
         );
         setSelectedTenantId(soleAccessibleTenant.id);
         setTenantModel(setting?.model ?? "");
+        setTenantAllowedModels(setting?.allowedModels ?? null);
       } else if (
         selectedTenantId === undefined &&
         accessibleTenants[0] !== undefined
@@ -232,6 +257,11 @@ export function AssistantConfigurationPanel({
           nextSummary.tenants.find(
             (entry) => entry.tenantId === accessibleTenants[0].id,
           )?.model ?? "",
+        );
+        setTenantAllowedModels(
+          nextSummary.tenants.find(
+            (entry) => entry.tenantId === accessibleTenants[0].id,
+          )?.allowedModels ?? null,
         );
       }
     } catch (exception) {
@@ -261,48 +291,76 @@ export function AssistantConfigurationPanel({
     transcriptionModel !== (summary?.global?.transcriptionModel ?? "") ||
     summaryModel !== (summary?.global?.summaryModel ?? "") ||
     globalModel !== (summary?.global?.model ?? "") ||
+    !sameAllowedModels(
+      globalAllowedModels,
+      summary?.global?.allowedModels ?? null,
+    ) ||
     tenantModel !== (selectedOverride?.model ?? "") ||
+    !sameAllowedModels(
+      tenantAllowedModels,
+      selectedOverride?.allowedModels ?? null,
+    ) ||
     tenantTranscriptionModel !== (selectedOverride?.transcriptionModel ?? "") ||
     tenantSummaryModel !== (selectedOverride?.summaryModel ?? ""),
   );
   const remoteGlobal = useRealtimeRefresh({
     topics: ["settings"],
     tenantId: 0,
-    blocked: draftDirty || savingGlobal || savingTenant || savingMeetingModels,
+    blocked:
+      draftDirty ||
+      savingGlobal ||
+      savingAllowedModels ||
+      savingTenant ||
+      savingMeetingModels,
     refresh: load,
   });
   const remoteTenant = useRealtimeRefresh({
     topics: ["settings"],
     tenantId: selectedTenantId,
     enabled: selectedTenantId !== undefined && selectedTenantId !== 0,
-    blocked: draftDirty || savingGlobal || savingTenant || savingMeetingModels,
+    blocked:
+      draftDirty ||
+      savingGlobal ||
+      savingAllowedModels ||
+      savingTenant ||
+      savingMeetingModels,
     refresh: load,
   });
 
   useEffect(() => {
     setTenantTranscriptionModel(selectedOverride?.transcriptionModel ?? "");
     setTenantSummaryModel(selectedOverride?.summaryModel ?? "");
+    setTenantAllowedModels(selectedOverride?.allowedModels ?? null);
   }, [
     selectedTenantId,
     selectedOverride?.transcriptionModel,
     selectedOverride?.summaryModel,
+    selectedOverride?.allowedModels,
   ]);
 
   useEffect(() => {
     let current = true;
-    if (activeTab === "tenant" && selectedTenantId === undefined) return;
+    if (activeTab === "tenant" && selectedTenantId === undefined) {
+      setCatalogLoading(false);
+      return;
+    }
     setModels([]);
+    setCatalogLoading(true);
+    setCatalogError(null);
     void client
       .models(activeTab === "tenant" ? selectedTenantId : undefined)
       .then((next) => {
         if (current) {
           setModels(next);
           setCatalogError(null);
+          setCatalogLoading(false);
         }
       })
       .catch(() => {
-        if (current)
+        if (current) {
           setCatalogError("No se pudo cargar el catálogo de modelos.");
+          setCatalogLoading(false);
+        }
       });
     return () => {
       current = false;
@@ -315,6 +373,7 @@ export function AssistantConfigurationPanel({
     );
     setSelectedTenantId(tenantId);
     setTenantModel(override?.model ?? "");
+    setTenantAllowedModels(override?.allowedModels ?? null);
     setTenantKey("");
     setClearTenantKey(false);
     setNotice(null);
@@ -334,8 +393,10 @@ export function AssistantConfigurationPanel({
       const next = await client.saveGlobal({
         ...(globalKey.trim() ? { apiKey: globalKey.trim() } : {}),
         model: globalModel.trim() || null,
+        allowedModels: globalAllowedModels,
       });
       setSummary(next);
+      setGlobalAllowedModels(next.global?.allowedModels ?? null);
       setGlobalKey("");
       setNotice("Configuración global guardada.");
       try {
@@ -351,6 +412,30 @@ export function AssistantConfigurationPanel({
       );
     } finally {
       setSavingGlobal(false);
+    }
+  };
+
+  const saveAllowedModels = async () => {
+    if (!summary) return;
+    setSavingAllowedModels(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const next = await client.saveGlobal({
+        allowedModels: globalAllowedModels,
+      });
+      setSummary(next);
+      setGlobalAllowedModels(next.global?.allowedModels ?? globalAllowedModels);
+      setNotice("Modelos habilitados guardados.");
+    } catch (exception) {
+      setError(
+        failureMessage(
+          exception,
+          t("No fue posible guardar los modelos habilitados."),
+        ),
+      );
+    } finally {
+      setSavingAllowedModels(false);
     }
   };
 
@@ -431,6 +516,7 @@ export function AssistantConfigurationPanel({
             ? { apiKey: tenantKey.trim() }
             : {}),
         model: tenantModel.trim() || null,
+        allowedModels: tenantAllowedModels,
         transcriptionModel: tenantTranscriptionModel.trim() || null,
         ...transcriptionRouting(tenantTranscriptionModel, selectedOverride),
         summaryModel: tenantSummaryModel.trim() || null,
@@ -469,6 +555,7 @@ export function AssistantConfigurationPanel({
       setTenantKey("");
       setClearTenantKey(false);
       setTenantModel("");
+      setTenantAllowedModels(null);
       setTenantTranscriptionModel("");
       setTenantSummaryModel("");
       setNotice(
@@ -598,10 +685,19 @@ export function AssistantConfigurationPanel({
         }
         fallbackLabel={t("Modelo predeterminado")}
       />
+      <AllowedModelsSelector
+        models={models}
+        allowedModels={globalAllowedModels ?? []}
+        onChange={setGlobalAllowedModels}
+        loading={catalogLoading}
+        disabled={Boolean(catalogError) || savingGlobal || savingAllowedModels}
+        onSave={saveAllowedModels}
+        saving={savingAllowedModels}
+      />
       <div className="flex flex-wrap gap-2">
         <Button
           type="submit"
-          disabled={savingGlobal || savingMeetingModels}
+          disabled={savingGlobal || savingMeetingModels || savingAllowedModels}
           className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
         >
           {savingGlobal ? <LoaderCircle className="animate-spin" /> : null}
@@ -613,7 +709,9 @@ export function AssistantConfigurationPanel({
             type="button"
             variant="outline"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-            disabled={savingGlobal || savingMeetingModels}
+            disabled={
+              savingGlobal || savingMeetingModels || savingAllowedModels
+            }
             onClick={() => setConfirmGlobalKeyClear(true)}
           >
             <Trash2 aria-hidden="true" />
@@ -1050,6 +1148,45 @@ export function AssistantConfigurationPanel({
                   }
                   disabled={selectedTenantId === undefined}
                 />
+                <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+                  <label
+                    className="flex min-h-11 items-center gap-2 text-sm"
+                    htmlFor="assistant-tenant-inherit-models"
+                  >
+                    <input
+                      id="assistant-tenant-inherit-models"
+                      type="checkbox"
+                      checked={tenantAllowedModels === null}
+                      disabled={selectedTenantId === undefined || savingTenant}
+                      onChange={(event) =>
+                        setTenantAllowedModels(
+                          event.target.checked
+                            ? null
+                            : (selectedOverride?.allowedModels ??
+                                summary?.global?.allowedModels ??
+                                []),
+                        )
+                      }
+                    />
+                    {t("Inherit enabled models from global")}
+                  </label>
+                  <AllowedModelsSelector
+                    models={models}
+                    allowedModels={
+                      tenantAllowedModels ??
+                      summary?.global?.allowedModels ??
+                      []
+                    }
+                    onChange={setTenantAllowedModels}
+                    loading={catalogLoading}
+                    disabled={
+                      tenantAllowedModels === null ||
+                      selectedTenantId === undefined ||
+                      savingTenant ||
+                      Boolean(catalogError)
+                    }
+                  />
+                </div>
                 <p className="text-sm text-muted-foreground">
                   {t(
                     "Uses the configured OpenRouter key. Leave a model blank to use its default.",
@@ -1234,6 +1371,108 @@ export function AssistantConfigurationPage({
   services: ConfigurationServices;
 }) {
   return <AssistantConfigurationPanel services={services} />;
+}
+
+function AllowedModelsSelector({
+  models,
+  allowedModels,
+  onChange,
+  loading,
+  disabled = false,
+  onSave,
+  saving = false,
+}: {
+  models: AssistantModel[];
+  allowedModels: string[];
+  onChange(models: string[]): void;
+  loading: boolean;
+  disabled?: boolean;
+  onSave?(): void;
+  saving?: boolean;
+}) {
+  const t = useMessages(settingsMessages);
+  const [query, setQuery] = useState("");
+  const supportedModels = models.filter(
+    (model) => model.modalities?.text === true,
+  );
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleModels = supportedModels.filter((model) =>
+    `${model.name} ${model.id}`.toLocaleLowerCase().includes(normalizedQuery),
+  );
+  const listDisabled = disabled || loading;
+
+  return (
+    <fieldset className="grid min-w-0 gap-3 rounded-lg border border-border/70 p-3">
+      <legend className="px-1 text-sm font-medium">
+        {t("Available models for Ask AI")}
+      </legend>
+      <p className="text-sm text-muted-foreground">
+        {t(
+          "Enable text models for Ask AI. The configured default model always remains available.",
+        )}
+      </p>
+      <Input
+        type="search"
+        aria-label={t("Search text models for Ask AI")}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        disabled={listDisabled}
+        className="max-w-xl"
+      />
+      <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border bg-background p-2">
+        {loading ? (
+          <p className="py-3 text-center text-sm text-muted-foreground">
+            {t("Loading text model catalog…")}
+          </p>
+        ) : visibleModels.length ? (
+          visibleModels.map((model) => (
+            <label
+              key={model.id}
+              className={`flex min-h-11 items-start gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/60 ${listDisabled ? "opacity-60" : "cursor-pointer"}`}
+            >
+              <input
+                type="checkbox"
+                checked={allowedModels.includes(model.id)}
+                disabled={listDisabled}
+                onChange={(event) =>
+                  onChange(
+                    event.target.checked
+                      ? [...allowedModels, model.id]
+                      : allowedModels.filter((id) => id !== model.id),
+                  )
+                }
+                className="mt-1 size-4 shrink-0 accent-primary"
+              />
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{model.name}</span>
+                <span className="block break-all font-mono text-xs text-muted-foreground">
+                  {model.id}
+                </span>
+              </span>
+            </label>
+          ))
+        ) : (
+          <p className="py-3 text-center text-sm text-muted-foreground">
+            {t("No matching text models.")}
+          </p>
+        )}
+      </div>
+      {onSave ? (
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onSave}
+            disabled={listDisabled || saving}
+          >
+            {saving ? <LoaderCircle className="animate-spin" /> : null}
+            {!saving ? <Save aria-hidden="true" /> : null}
+            {t("Save enabled models")}
+          </Button>
+        </div>
+      ) : null}
+    </fieldset>
+  );
 }
 
 export function ModelInput({
