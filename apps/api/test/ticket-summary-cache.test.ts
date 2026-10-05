@@ -463,6 +463,51 @@ describe("personal ticket summary cache", () => {
     ).toMatchObject({ count: 0 });
   });
 
+  it("does not persist a fetch across a GitHub reconnect state cycle", async () => {
+    let finishFetch!: (value: TicketSummary) => void;
+    let started!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => (started = resolve));
+    const pendingFetch = cache().getOrFetch(
+      {
+        principalId,
+        jira: connection("jira"),
+        github: connection("github"),
+        config: { project: "OPS" },
+        refresh: false,
+      },
+      () =>
+        new Promise<TicketSummary>((resolve) => {
+          finishFetch = resolve;
+          started();
+        }),
+    );
+    await fetchStarted;
+    await env.DB.prepare(
+      `UPDATE personal_integration_connections
+       SET status='reconnect_required', disconnected_at='cycle-start', updated_at='cycle-start'
+       WHERE id=?`,
+    )
+      .bind(githubId)
+      .run();
+    await env.DB.prepare(
+      `UPDATE personal_integration_connections
+       SET status='connected', disconnected_at=NULL, updated_at='cycle-finish'
+       WHERE id=?`,
+    )
+      .bind(githubId)
+      .run();
+    finishFetch(summary("fetched-before-reconnect-cycle"));
+
+    await expect(pendingFetch).rejects.toThrow();
+    expect(
+      await env.DB.prepare(
+        "SELECT count(*) AS count FROM personal_ticket_summary_cache WHERE principal_id=?",
+      )
+        .bind(principalId)
+        .first<{ count: number }>(),
+    ).toMatchObject({ count: 0 });
+  });
+
   it("does not persist a fetch after provider account identity changes", async () => {
     let finishFetch!: (value: TicketSummary) => void;
     let started!: () => void;

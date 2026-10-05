@@ -35,11 +35,14 @@ type StoredConnection = {
   disconnected_at: string | null;
   scopes: string;
   jira_privacy_generation: string | null;
+  updated_at: string;
 };
 
 type ConnectionSnapshot = {
   jiraScopes: string;
   githubScopes: string | null;
+  jiraRevision: string;
+  githubRevision: string | null;
 };
 
 function assertOwnerConnections(input: TicketSummaryCacheInput): void {
@@ -174,7 +177,7 @@ export class PersonalTicketSummaryCache {
           `SELECT principal_id, provider, nango_connection_id,
                   nango_integration_id, external_account_id, status,
                   disconnected_at, scopes,
-                  jira_privacy_generation
+                  jira_privacy_generation, updated_at
            FROM personal_integration_connections WHERE id=?`,
         )
         .bind(connection.id)
@@ -200,6 +203,8 @@ export class PersonalTicketSummaryCache {
     return {
       jiraScopes: jira.scopes,
       githubScopes: github?.scopes ?? null,
+      jiraRevision: jira.updated_at,
+      githubRevision: github?.updated_at ?? null,
     };
   }
 
@@ -263,6 +268,7 @@ export class PersonalTicketSummaryCache {
              AND g.nango_connection_id=? AND g.nango_integration_id=?
              AND g.external_account_id ${nullSafeEqual} ?
              AND g.scopes=?
+             AND g.updated_at=?
              AND g.jira_privacy_generation ${nullSafeEqual} ?
          )`
       : "";
@@ -280,6 +286,7 @@ export class PersonalTicketSummaryCache {
              AND j.nango_connection_id=? AND j.nango_integration_id=?
              AND j.external_account_id ${nullSafeEqual} ?
              AND j.scopes=?
+             AND j.updated_at=?
              AND j.jira_privacy_generation ${nullSafeEqual} ?
          ) ${githubGuard}
          ON CONFLICT (principal_id, cache_key) DO UPDATE SET
@@ -302,6 +309,7 @@ export class PersonalTicketSummaryCache {
         input.jira.nangoIntegrationId,
         input.jira.externalAccountId,
         snapshot.jiraScopes,
+        snapshot.jiraRevision,
         input.jira.jiraPrivacyGeneration ?? null,
         ...(input.github
           ? [
@@ -311,6 +319,7 @@ export class PersonalTicketSummaryCache {
               input.github.nangoIntegrationId,
               input.github.externalAccountId,
               snapshot.githubScopes,
+              snapshot.githubRevision,
               input.github.jiraPrivacyGeneration ?? null,
             ]
           : []),
