@@ -127,7 +127,7 @@ const contactFields = [
 ] as const;
 
 const fieldExamples: Record<string, string> = {
-  vehicle_plate: "ABC123",
+  vehicle_plate: "TESTCAR",
   vehicle_fasecoldaCode: "04408010",
   vehicle_productionYear: "2023",
   vehicle_isNew: "false",

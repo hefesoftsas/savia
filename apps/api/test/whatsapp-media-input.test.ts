@@ -42,7 +42,7 @@ function setup() {
   const companion = {
     transcribeRecording: vi
       .fn()
-      .mockResolvedValue({ text: "My plate is ABC123" }),
+      .mockResolvedValue({ text: "My plate is TESTCAR" }),
   } as unknown as CompanionService;
   return {
     bucket,
@@ -97,7 +97,7 @@ describe("private WhatsApp media preparation", () => {
     });
     const s = setup();
     expect((await s.prepare(binding, input, configuration)).text).toContain(
-      "ABC123",
+      "TESTCAR",
     );
     expect(s.bucket.put).toHaveBeenCalledWith(
       expect.stringMatching(

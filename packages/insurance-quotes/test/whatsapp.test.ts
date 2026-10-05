@@ -7,7 +7,7 @@ import {
 import { insuranceQuoteProductCatalog } from "../src/configuration";
 
 const validIntake = {
-  vehicle_plate: "ABC123",
+  vehicle_plate: "TESTCAR",
   vehicle_fasecoldaCode: "04408010",
   vehicle_productionYear: "2023",
   vehicle_isNew: false,
@@ -59,7 +59,7 @@ describe("WhatsApp insurance intake contribution", () => {
   it("uses the plugin's canonical vehicle and applicant shape", () => {
     expect(validateWhatsappVehicleQuoteIntake(validIntake)).toEqual({
       vehicle: {
-        plate: "ABC123",
+        plate: "TESTCAR",
         fasecoldaCode: "04408010",
         productionYear: 2023,
         isNew: false,
@@ -183,7 +183,7 @@ describe("WhatsApp insurance intake contribution", () => {
       vehicleFieldNames.sort(),
     );
     expect(applicant.data).toMatchObject({
-      vehicle_plate: { type: "string", __example__: "ABC123" },
+      vehicle_plate: { type: "string", __example__: "TESTCAR" },
       vehicle_isNew: { type: "string", __example__: "false" },
     });
     expect(footer(applicant)["on-click-action"].payload).toMatchObject({

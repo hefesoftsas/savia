@@ -51,7 +51,7 @@ describe("native WhatsApp incoming messages", () => {
         nfm_reply: {
           response_json: JSON.stringify({
             flow_token: "private-token",
-            plate: "ABC123",
+            plate: "TESTCAR",
             consent: true,
           }),
         },
@@ -59,7 +59,7 @@ describe("native WhatsApp incoming messages", () => {
     });
     expect(result?.native).toEqual({
       kind: "flow",
-      values: { plate: "ABC123", consent: true },
+      values: { plate: "TESTCAR", consent: true },
     });
     expect(result?.text).not.toContain("private-token");
   });
