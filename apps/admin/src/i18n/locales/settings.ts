@@ -1093,6 +1093,39 @@ export const settingsMessages = {
     "OpenRouter models for transcription and meeting summaries.",
     "Modelos do OpenRouter para transcrição e resumos de reuniões.",
   ],
+  "OpenRouter models for transcription, meeting summaries, image generation, and speech output.":
+    [
+      "Modelos de OpenRouter para transcripción, resúmenes de reuniones, generación de imágenes y voz.",
+      "OpenRouter models for transcription, meeting summaries, image generation, and speech output.",
+      "Modelos do OpenRouter para transcrição, resumos de reuniões, geração de imagens e fala.",
+    ],
+  "per image": ["por imagen", "per image", "por imagem"],
+  "per megapixel": ["por megapíxel", "per megapixel", "por megapixel"],
+  "per image token": [
+    "por token de imagen",
+    "per image token",
+    "por token de imagem",
+  ],
+  "per input character": [
+    "por carácter de entrada",
+    "per input character",
+    "por caractere de entrada",
+  ],
+  "per input token": [
+    "por token de entrada",
+    "per input token",
+    "por token de entrada",
+  ],
+  "per generated audio second": [
+    "por segundo de audio generado",
+    "per generated audio second",
+    "por segundo de áudio gerado",
+  ],
+  "per output token": [
+    "por token de salida",
+    "per output token",
+    "por token de saída",
+  ],
   "Transcription model": [
     "Modelo de transcripción",
     "Transcription model",
@@ -1104,6 +1137,99 @@ export const settingsMessages = {
     "Modelos de reuniones guardados.",
     "Meeting models saved.",
     "Modelos de reuniões salvos.",
+  ],
+  "Unconfigured model": [
+    "Modelo sin configurar",
+    "Unconfigured model",
+    "Modelo não configurado",
+  ],
+  "Image and voice generation": [
+    "Generación de imágenes y voz",
+    "Image and voice generation",
+    "Geração de imagens e voz",
+  ],
+  "Image generation model": [
+    "Modelo de generación de imágenes",
+    "Image generation model",
+    "Modelo de geração de imagens",
+  ],
+  "Speech generation model": [
+    "Modelo de generación de voz",
+    "Speech generation model",
+    "Modelo de geração de fala",
+  ],
+  "Choose OpenRouter models for image generation and speech output. Blank global values leave generation unconfigured.":
+    [
+      "Elige modelos de OpenRouter para generar imágenes y voz. Los campos globales vacíos dejan la generación sin configurar.",
+      "Choose OpenRouter models for image generation and speech output. Blank global values leave generation unconfigured.",
+      "Escolha modelos do OpenRouter para gerar imagens e fala. Campos globais vazios deixam a geração sem configuração.",
+    ],
+  "Leave blank to inherit the global model.": [
+    "Déjalo vacío para heredar el modelo global.",
+    "Leave blank to inherit the global model.",
+    "Deixe em branco para herdar o modelo global.",
+  ],
+  "OpenRouter output capability from the model catalog.": [
+    "Capacidad de salida de OpenRouter según el catálogo de modelos.",
+    "OpenRouter output capability from the model catalog.",
+    "Capacidade de saída do OpenRouter conforme o catálogo de modelos.",
+  ],
+  "No compatible output models are available in the catalog.": [
+    "El catálogo no tiene modelos compatibles para esta salida.",
+    "No compatible output models are available in the catalog.",
+    "O catálogo não tem modelos compatíveis para esta saída.",
+  ],
+  "Cheapest known rates": [
+    "Tarifas conocidas más bajas",
+    "Cheapest known rates",
+    "Menores tarifas conhecidas",
+  ],
+  "Cheapest known rates by unit; this is not a total request cost.": [
+    "Menor tarifa conocida por unidad; no representa el costo total de una solicitud.",
+    "Cheapest known rates by unit; this is not a total request cost.",
+    "Menor tarifa conhecida por unidade; não representa o custo total de uma solicitação.",
+  ],
+  "Apply suggested model %{model}": [
+    "Aplicar el modelo sugerido %{model}",
+    "Apply suggested model %{model}",
+    "Aplicar o modelo sugerido %{model}",
+  ],
+  "Suggested: %{model} at %{price} %{unit}": [
+    "Sugerido: %{model} a %{price} %{unit}",
+    "Suggested: %{model} at %{price} %{unit}",
+    "Sugerido: %{model} por %{price} %{unit}",
+  ],
+  "Some compatible models have missing or invalid task-specific prices and are not ranked.":
+    [
+      "Algunos modelos compatibles no tienen un precio válido para esta tarea y no se ordenan.",
+      "Some compatible models have missing or invalid task-specific prices and are not ranked.",
+      "Alguns modelos compatíveis não têm preço válido para esta tarefa e não são classificados.",
+    ],
+  "Some speech models have multiple billing components, so their total cost is not directly comparable.":
+    [
+      "Algunos modelos de voz tienen varios componentes de facturación, por lo que su costo total no se puede comparar directamente.",
+      "Some speech models have multiple billing components, so their total cost is not directly comparable.",
+      "Alguns modelos de fala têm vários componentes de cobrança, então o custo total não pode ser comparado diretamente.",
+    ],
+  "Could not save output models.": [
+    "No se pudieron guardar los modelos de salida.",
+    "Could not save output models.",
+    "Não foi possível salvar os modelos de saída.",
+  ],
+  "Output models saved.": [
+    "Modelos de salida guardados.",
+    "Output models saved.",
+    "Modelos de saída salvos.",
+  ],
+  "Save output models": [
+    "Guardar modelos de salida",
+    "Save output models",
+    "Salvar modelos de saída",
+  ],
+  "OpenRouter models for images and speech generation.": [
+    "Modelos de OpenRouter para generar imágenes y voz.",
+    "OpenRouter models for images and speech generation.",
+    "Modelos do OpenRouter para geração de imagens e fala.",
   ],
   "Could not save meeting models.": [
     "No se pudieron guardar los modelos de reuniones.",
