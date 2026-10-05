@@ -204,6 +204,11 @@ test("optional Nango fallback stays with the matching API worker", () => {
     const unconfigured = buildSecretUploads(environment, values).find(
       (plan) => plan.app === "api",
     );
-    assert.equal("NANGO_FALLBACK_API_KEY" in unconfigured.secrets, false);
+    assert.equal(unconfigured.secrets.NANGO_FALLBACK_API_KEY, null);
+    const cleared = buildSecretUploads(environment, {
+      ...values,
+      NANGO_FALLBACK_API_KEY: "   ",
+    }).find((plan) => plan.app === "api");
+    assert.equal(cleared.secrets.NANGO_FALLBACK_API_KEY, null);
   }
 });

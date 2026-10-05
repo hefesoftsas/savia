@@ -40,6 +40,9 @@ Connect, reconnect and delete operations continue using the primary key.
 This is temporary read compatibility, not a connection migration. Keep both
 keys restricted to their existing environments and move remaining connections
 through the normal user authorization flow before removing the fallback.
+To disable it, clear `NANGO_FALLBACK_API_KEY` in the matching GitHub environment
+and deploy again. The secret uploader explicitly deletes the API Worker binding
+when the value is absent or blank; other Worker secrets remain unchanged.
 
 Para desarrollo local, agregue esas variables al archivo `infra/secrets/assistant-api.dev.env` y reinicie `pnpm dev`; el lanzador las pasa al Worker de la API. No se deben poner en `.env` del Admin.
 
