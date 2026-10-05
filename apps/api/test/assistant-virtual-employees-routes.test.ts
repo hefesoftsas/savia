@@ -149,6 +149,15 @@ describe("Virtual Employees API Routes", () => {
       },
     );
     expect(deniedPatch.status).toBe(403);
+    const inheritedPromptUpdate = await membersApp.request(
+      `/api/assistant/employees/${memberEmployee.data.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ systemPrompt: "Updated inherited prompt" }),
+      },
+    );
+    expect(inheritedPromptUpdate.status).toBe(200);
 
     const adminsApp = createTestApp(agencyAdministratorAuthenticator());
     const adminCreate = await adminsApp.request("/api/assistant/employees", {
@@ -167,6 +176,18 @@ describe("Virtual Employees API Routes", () => {
     };
     expect(adminEmployee.data.model).toBe("openai/gpt-5");
 
+    for (const model of [null, ""]) {
+      const deniedClear = await membersApp.request(
+        `/api/assistant/employees/${adminEmployee.data.id}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model }),
+        },
+      );
+      expect(deniedClear.status).toBe(403);
+    }
+
     const updated = await adminsApp.request(
       `/api/assistant/employees/${adminEmployee.data.id}`,
       {
@@ -176,6 +197,18 @@ describe("Virtual Employees API Routes", () => {
       },
     );
     expect(updated.status).toBe(200);
+    const cleared = await adminsApp.request(
+      `/api/assistant/employees/${adminEmployee.data.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: null }),
+      },
+    );
+    expect(cleared.status).toBe(200);
+    expect(
+      ((await cleared.json()) as { data: { model: string | null } }).data.model,
+    ).toBeNull();
     await new VirtualEmployeesRepository(env.DB).delete(
       memberEmployee.data.id,
       101,

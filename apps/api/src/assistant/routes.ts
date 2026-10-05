@@ -60,8 +60,14 @@ function assertEmployeeModelAdministrator(
   actor: ReturnType<typeof actorFromContext>,
   tenantId: number | null,
   model: string | null | undefined,
+  allowInherited = true,
 ): void {
-  if (!model?.trim() || actor.globalRoles.includes("platform_admin")) return;
+  if (
+    model === undefined ||
+    (allowInherited && !model?.trim()) ||
+    actor.globalRoles.includes("platform_admin")
+  )
+    return;
   if (
     tenantId !== null &&
     actor.memberships.some(
@@ -684,7 +690,7 @@ export function registerAssistantRoutes(
       );
     }
 
-    assertEmployeeModelAdministrator(actor, agencyId, parsed.data.model);
+    assertEmployeeModelAdministrator(actor, agencyId, parsed.data.model, false);
     const repo = new VirtualEmployeesRepository(dependencies.db);
     const updated = await repo.update(
       context.req.param("id"),
