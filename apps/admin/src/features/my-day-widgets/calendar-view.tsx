@@ -427,10 +427,7 @@ export function CalendarView({
                     }[sourceColor(event.sourceId)]
                   }`}
                 />
-                <span className="truncate">
-                  {compact && event.allDay ? `${t("All day")} · ` : ""}
-                  {sourceName(event.sourceId)}
-                </span>
+                <span className="truncate">{sourceName(event.sourceId)}</span>
               </>
             )}
           </span>

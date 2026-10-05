@@ -66,7 +66,9 @@ separate time and title, and compact copy/share controls with accessible labels.
 Google Calendar and Outlook use their provider icons beside the time. View,
 navigation, calendar settings, and meeting actions use icons with tooltips and
 accessible names. Join links show the Meet, Teams, Zoom, or Jitsi logo; added
-calendar sources retain their visible names and color markers.
+calendar sources retain their visible names and color markers. Compact all-day
+entries show the all-day marker once alongside the event title, with the source
+name on its own line.
 The join link stays visible; deletion is in event details. A failed day read offers a retry directly in the agenda. Desktop
 month cells show three events and a
 **more** action for additional events. Multi-day events appear on every
