@@ -570,21 +570,21 @@ fn resume_capture_blocking(capture: SharedCapture) -> Result<CaptureStatus, Stri
     let resume_offset = spool_elapsed
         .max(session.lifecycle.elapsed.as_secs_f64())
         .min(3_600.0);
-    session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
-    session.lifecycle.resume(requested_at)?;
-    session.temp_dir.take();
-
+    // Allocate fallible resources before changing lifecycle state so a
+    // failure keeps the session paused instead of reporting a recording
+    // that captures nothing.
     let temp_dir = tempfile::Builder::new()
         .prefix("savia-companion-")
         .tempdir()
         .map_err(|_| "Could not prepare temporary audio storage.".to_string())?;
     if sources.microphone {
         if let Err(error) = capture::authorize_microphone(temp_dir.path()) {
-            session.lifecycle.pause(requested_at);
-            session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
             return Err(error);
         }
     }
+    session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
+    session.lifecycle.resume(requested_at)?;
+    session.temp_dir.take();
     let generation = Instant::now();
     session.lifecycle.reanchor_start(generation);
     session.temp_dir = Some(temp_dir);

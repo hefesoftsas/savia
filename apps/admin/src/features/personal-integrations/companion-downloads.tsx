@@ -134,12 +134,12 @@ export function CompanionDownloads() {
         </p>
         <p className="text-sm leading-6 text-muted-foreground">
           {t(
-            "Versiones de preview para pruebas. Android usa firma de prueba; los instaladores de escritorio todavía no tienen firma de distribución ni notarización.",
+            "Versiones de preview para pruebas. Android usa firma de prueba; los instaladores de escritorio pueden no tener firma de distribución ni notarización.",
           )}
         </p>
         <p className="text-sm leading-6 text-muted-foreground">
           {t(
-            'En macOS, si el sistema dice que la app está dañada, es por la falta de firma de esta preview. Copia la app a Aplicaciones, haz Control + clic en ella y elige Abrir, o ejecuta xattr -cr "/Applications/Savia Companion.app" y vuelve a abrirla.',
+            'En macOS, las previews sin firma muestran el aviso de app dañada. Si es tu caso, copia la app a Aplicaciones, haz Control + clic en ella y elige Abrir, o ejecuta xattr -cr "/Applications/Savia Companion.app" y vuelve a abrirla.',
           )}
         </p>
         <p className="text-sm leading-6 text-muted-foreground">

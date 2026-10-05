@@ -106,6 +106,10 @@ jobs:
     needs: [desktop-tests]
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      # Presence flags only (never secret values): the secrets context is not
+      # available in steps.if, so derive booleans here where it is allowed.
+      HAS_APPLE_DISTRIBUTION_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+      HAS_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -120,7 +124,7 @@ jobs:
           targets: aarch64-apple-darwin
       - run: pnpm install --frozen-lockfile
       - name: Import Apple Developer ID certificate (optional)
-        if: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+        if: env.HAS_APPLE_DISTRIBUTION_CERTIFICATE == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -145,6 +149,8 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm --filter @savia/companion exec tauri build --target aarch64-apple-darwin --bundles dmg -- --locked
       - name: Verify Apple silicon bundle
+        env:
+          HAS_APPLE_SIGNING_IDENTITY: ${{ env.HAS_APPLE_SIGNING_IDENTITY }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -168,7 +174,7 @@ jobs:
             echo "spctl:"
             spctl -a -t exec -vv "${apps[0]}" || true
           fi
-          if [ -z "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]; then
+          if [ "$HAS_APPLE_SIGNING_IDENTITY" != "true" ]; then
             echo "No APPLE_SIGNING_IDENTITY secret configured; the DMG is unsigned and macOS Gatekeeper will report it as damaged until it is signed and notarized. This is expected for preview artifacts."
           fi
       - name: Stage download
