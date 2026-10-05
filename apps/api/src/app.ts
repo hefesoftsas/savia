@@ -1,3 +1,5 @@
+import { createWhatsappNangoClient } from "./whatsapp/nango";
+import { registerWhatsappNativeRoutes } from "./whatsapp/native-routes";
 import { AssistantThreadRepository } from "./assistant/threads";
 import { PersonalApiKeys } from "./auth/personal-api-keys";
 import { registerPagesSearchSettingsRoutes } from "./routes/pages-search-settings";
@@ -86,6 +88,11 @@ import type {
 import { registerAssistantConfigurationRoutes } from "./assistant/configuration-routes";
 import type { AssistantService } from "./assistant/contracts";
 import { registerAssistantRoutes } from "./assistant/routes";
+import { registerWhatsappAssistantRoutes } from "./whatsapp/assistant-routes";
+import {
+  registerWhatsappWebhook,
+  type WhatsappWebhookDependencies,
+} from "./whatsapp/webhook";
 import { registerCrmRoutes, type CrmRouteDependencies } from "./routes/crm";
 import {
   registerWhatsappRoutes,
@@ -143,6 +150,7 @@ export function createApp(
   companion?: CompanionOptions,
   pagesSearch?: PagesSearchBindings,
   whatsapp?: WhatsappRouteDependencies,
+  whatsappWebhook?: WhatsappWebhookDependencies,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -257,6 +265,18 @@ export function createApp(
   registerRequestResultRoutes(app, saviaRequestService);
   registerCrmRoutes(app, db, crm);
   registerWhatsappRoutes(app, db, whatsapp);
+  registerWhatsappAssistantRoutes(
+    app,
+    db,
+    Boolean(whatsappWebhook?.appSecret && whatsappWebhook?.verifyToken),
+  );
+  registerWhatsappNativeRoutes(
+    app,
+    db,
+    whatsapp?.nango ?? createWhatsappNangoClient({}),
+    whatsapp?.nativeContributions,
+  );
+  if (whatsappWebhook) registerWhatsappWebhook(app, whatsappWebhook);
   registerStudioRoutes(
     app,
     db,
