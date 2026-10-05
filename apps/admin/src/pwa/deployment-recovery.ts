@@ -10,6 +10,28 @@ export function isModuleLoadError(error: unknown): boolean {
  * design; 30s still covers slow 4G while keeping recovery retryable instead
  * of hanging forever. */
 export const UPDATE_DEADLINE_MS = 30_000;
+const UNREGISTER_DEADLINE_MS = 5_000;
+
+async function removeStaleWorker(
+  registration: ServiceWorkerRegistration,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const error = new Error(
+    "No se pudo completar la actualización. Comprueba tu conexión y reintenta.",
+  );
+  try {
+    await Promise.race([
+      registration.unregister(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(error), UNREGISTER_DEADLINE_MS);
+      }),
+    ]);
+  } catch {
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function waitForActivation(
   worker: ServiceWorker,
@@ -77,6 +99,7 @@ export async function prepareAppReload(): Promise<void> {
   });
   let registration: ServiceWorkerRegistration | undefined;
   let updateReachedServer = false;
+  let needsNetworkReload = false;
   try {
     await Promise.race([
       deadline,
@@ -89,15 +112,16 @@ export async function prepareAppReload(): Promise<void> {
         await registration.update();
         updateReachedServer = true;
         if (controller.signal.aborted) throw controller.signal.reason;
-        const worker =
-          registration.installing ??
-          registration.waiting ??
-          registration.active;
+        const replacement = registration.installing ?? registration.waiting;
+        const worker = replacement ?? registration.active;
         if (!worker)
           throw new Error(
             "La actualización todavía no está disponible. Reintenta en unos segundos.",
           );
         await waitForActivation(worker, controller.signal);
+        // An unchanged active worker can still serve the same retired shell.
+        // A successful update check alone does not make that shell usable.
+        needsNetworkReload = !replacement;
       })(),
     ]);
   } catch (error) {
@@ -116,18 +140,15 @@ export async function prepareAppReload(): Promise<void> {
       error instanceof Error &&
       !error.message.includes("todavía no está disponible")
     ) {
-      try {
-        await registration?.unregister();
-      } catch {
-        // ignore: the plain reload below is still the right recovery.
-      }
-      return;
-    }
-    throw error;
+      needsNetworkReload = true;
+    } else throw error;
   } finally {
     clearTimeout(timer!);
     controller.abort();
   }
+  // Worker removal has its own bounded wait. Failure must reach the recovery
+  // UI instead of hanging forever or reloading the same broken shell.
+  if (needsNetworkReload && registration) await removeStaleWorker(registration);
 }
 
 export async function reloadApplication() {
