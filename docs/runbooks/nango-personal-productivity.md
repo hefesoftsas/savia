@@ -21,6 +21,29 @@ Las seis configuraciones de Nango son independientes:
 
 También se necesitan `NANGO_BASE_URL`, `NANGO_CONNECT_URL` y `NANGO_API_KEY`. La API key necesita capacidad de Proxy en el entorno Nango; no se debe usar una key de usuario ni publicarla en Vite.
 
+### Reading connections during an environment transition
+
+`NANGO_API_KEY` remains the primary environment key for new connections and
+writes. An optional backend-only `NANGO_FALLBACK_API_KEY` can read existing
+personal connections left in another Nango environment during a transition.
+Configure it in the matching GitHub deployment environment and API Worker
+secret store; never expose it in Vite or shared Page content.
+
+The personal proxy tries the primary key first. It retries once with the
+fallback only after HTTP 400 with Nango's `unknown_connection` error or the
+exact `server_error` / `Failed to get connection` envelope. The retry preserves
+the connection ID, provider, path, headers and body. It is limited to GET reads,
+Jira's POST issue search and GitHub GraphQL query operations. Authentication
+failures, rate limits, upstream errors, network errors and writes do not retry.
+Connect, reconnect and delete operations continue using the primary key.
+
+This is temporary read compatibility, not a connection migration. Keep both
+keys restricted to their existing environments and move remaining connections
+through the normal user authorization flow before removing the fallback.
+To disable it, clear `NANGO_FALLBACK_API_KEY` in the matching GitHub environment
+and deploy again. The secret uploader explicitly deletes the API Worker binding
+when the value is absent or blank; other Worker secrets remain unchanged.
+
 Para desarrollo local, agregue esas variables al archivo `infra/secrets/assistant-api.dev.env` y reinicie `pnpm dev`; el lanzador las pasa al Worker de la API. No se deben poner en `.env` del Admin.
 
 ## Configuración en Nango y proveedores

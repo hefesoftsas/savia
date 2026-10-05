@@ -13,6 +13,7 @@ export type NangoConfiguration = {
   baseUrl?: string;
   connectUrl?: string;
   apiKey?: string;
+  fallbackApiKey?: string;
   hubspotIntegrationId?: string;
   salesforceIntegrationId?: string;
   zohoIntegrationId?: string;
