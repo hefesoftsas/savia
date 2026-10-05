@@ -149,14 +149,14 @@ async function uploadSession(
   expect(finalize.status).toBe(200);
 }
 
-function mockService(languages: string[]) {
+function mockService(languages: unknown[]) {
   return {
     sttModel: "test/transcription",
     async transcribe(
       _config: unknown,
       input: { source: string; language?: string },
     ) {
-      languages.push(input.language ?? "missing");
+      languages.push(input.language);
       return {
         text: "Transcript text.",
         source: input.source,
@@ -319,8 +319,8 @@ describe("Companion session full audio", () => {
 });
 
 describe("Companion session transcription language", () => {
-  it("transcribes in the requested language and defaults to Spanish", async () => {
-    const languages: string[] = [];
+  it("transcribes in the requested language and detects it by default", async () => {
+    const languages: unknown[] = [];
     const service = mockService(languages);
     const instance = app(service);
     const sessions = new CompanionSessions(env.DOCUMENTS);
@@ -369,7 +369,7 @@ describe("Companion session transcription language", () => {
     );
     expect(defaulted.status).toBe(200);
     await expect(defaulted.json()).resolves.toMatchObject({
-      job: { language: "es" },
+      job: { language: "auto" },
     });
     await processUntilComplete(
       sessions,
@@ -377,11 +377,11 @@ describe("Companion session transcription language", () => {
       "session-audio-member",
       other,
     );
-    expect([...languages].sort()).toEqual(["en", "es"]);
+    expect(languages).toEqual(["en", undefined]);
   });
 
   it("replaces saved results only with explicit retranscription consent", async () => {
-    const languages: string[] = [];
+    const languages: unknown[] = [];
     const service = mockService(languages);
     const instance = app(service);
     const sessions = new CompanionSessions(env.DOCUMENTS);
@@ -406,7 +406,7 @@ describe("Companion session transcription language", () => {
     });
     expect(first.status).toBe(200);
     await processUntilComplete(sessions, service, "session-audio-member", id);
-    expect(languages).toEqual(["es"]);
+    expect(languages).toEqual([undefined]);
 
     const conflict = await instance.request(
       `/v1/companion/sessions/${id}/notes`,
@@ -438,7 +438,7 @@ describe("Companion session transcription language", () => {
       job: { status: "queued", language: "fr", transcripts: {} },
     });
     await processUntilComplete(sessions, service, "session-audio-member", id);
-    expect(languages).toEqual(["es", "fr"]);
+    expect(languages).toEqual([undefined, "fr"]);
     const session = await sessions.get(
       { ownerId: "session-audio-member", tenantId: 101, requireTenant: true },
       id,

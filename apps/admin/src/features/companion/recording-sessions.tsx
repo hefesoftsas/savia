@@ -181,7 +181,7 @@ function SessionDetail({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(false),
     [retry, setRetry] = useState(false);
-  const [language, setLanguage] = useState(initial.job.language ?? "es");
+  const [language, setLanguage] = useState(initial.job.language ?? "auto");
   const [retranscribeAck, setRetranscribeAck] = useState(false);
   const inFlight = useRef(false),
     mounted = useRef(true);
@@ -209,8 +209,9 @@ function SessionDetail({
     item.text.trim(),
   );
   const savedTranscripts = Object.keys(session.job.transcripts).length;
+  const currentJobLanguage = session.job.language ?? "auto";
   const switchLanguage =
-    savedTranscripts > 0 && language !== (session.job.language ?? "es");
+    savedTranscripts > 0 && language !== currentJobLanguage;
   useEffect(() => {
     if (!running) return;
     const abort = new AbortController();
@@ -287,7 +288,7 @@ function SessionDetail({
           {session.job.totalChunks > 0 &&
             ` · ${session.job.completedChunks}/${session.job.totalChunks}`}
           {savedTranscripts > 0 &&
-            ` · ${t("Transcript language")}: ${languageName(session.job.language ?? "es")}`}
+            ` · ${t("Transcript language")}: ${currentJobLanguage === "auto" ? t("Automatic") : languageName(currentJobLanguage)}`}
         </p>
         {running && (
           <>
@@ -343,6 +344,7 @@ function SessionDetail({
                   onChange={(event) => setLanguage(event.target.value)}
                   disabled={busy}
                 >
+                  <option value="auto">{t("Automatic")}</option>
                   {TRANSCRIPT_LANGUAGES.map((item) => (
                     <option key={item.code} value={item.code}>
                       {item.name}

@@ -93,6 +93,7 @@ export const companionMessages = {
     "Transcript language",
     "Idioma da transcrição",
   ],
+  Automatic: ["Automático", "Automatic", "Automático"],
   "Switching language replaces the saved transcript and summary. Provider usage may be billed again.":
     [
       "Cambiar de idioma reemplaza la transcripción y el resumen guardados. El uso del proveedor puede facturarse de nuevo.",

@@ -25,7 +25,7 @@ export const transcribeSchema = z
     language: z
       .string()
       .regex(/^[a-z]{2}$/)
-      .default("es"),
+      .optional(),
     consent: z.literal(true),
   })
   .strict();
@@ -437,13 +437,16 @@ export class CompanionService {
       configuration.transcriptionEndpoint ??
       transcriptionEndpointForModel(model);
     const language =
-      typeof input.language === "string" && /^[a-z]{2}$/.test(input.language)
-        ? input.language
-        : "es";
+      typeof input.language === "string" &&
+      (/^[a-z]{2}$/.test(input.language) || input.language === "auto")
+        ? input.language === "auto"
+          ? undefined
+          : input.language
+        : undefined;
     const encoder = new TextEncoder();
     const prefix =
       endpoint === "audio/transcriptions"
-        ? `{"model":${JSON.stringify(model)},"language":${JSON.stringify(language)},"input_audio":{"data":"`
+        ? `{"model":${JSON.stringify(model)}${language ? `,"language":${JSON.stringify(language)}` : ""},"input_audio":{"data":"`
         : [
             `{"model":${JSON.stringify(model)},"messages":[{"role":"user","content":[`,
             `{"type":"text","text":${JSON.stringify(transcriptionInstruction(language))}},`,

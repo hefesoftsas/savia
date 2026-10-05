@@ -91,10 +91,34 @@ describe("Companion bounded provider adapter", () => {
     expect(body.messages[0].content).toEqual([
       {
         type: "text",
-        text: expect.stringContaining("language es"),
+        text: expect.not.stringContaining("language"),
       },
       { type: "input_audio", input_audio: { data: audio(), format: "wav" } },
     ]);
+    expect(body.messages[0].content[0].text).toContain(
+      "Transcribe the provided audio.",
+    );
+  });
+  it("passes an explicit user language as a transcription hint", async () => {
+    let request: Request | undefined;
+    const service = new CompanionService({
+      fetch: async (input, init) => {
+        request = new Request(input, init);
+        return Response.json({
+          choices: [{ message: { content: "Olá" } }],
+          usage: { cost: 0.001 },
+        });
+      },
+      sttModel: "test/transcription",
+    });
+    await service.transcribe(config, {
+      source: "microphone",
+      audio: { data: audio(), format: "wav" },
+      language: "pt",
+      consent: true,
+    });
+    const body = (await request!.json()) as any;
+    expect(body.messages[0].content[0].text).toContain("in language pt");
   });
   it("uses OpenRouter's native transcription endpoint for Whisper models", async () => {
     let request: Request | undefined;

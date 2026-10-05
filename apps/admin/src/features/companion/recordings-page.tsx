@@ -133,7 +133,7 @@ function AudioFilesPage({
     [deleting, setDeleting] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
   const [recordingPickerOpen, setRecordingPickerOpen] = useState(false);
-  const [language, setLanguage] = useState("es");
+  const [language, setLanguage] = useState("auto");
   const [retranscribeAck, setRetranscribeAck] = useState(false);
   const recordingPickerTrigger = useRef<HTMLButtonElement>(null);
   const mounted = useRef(true),
@@ -565,6 +565,7 @@ function AudioFilesPage({
                             }
                             disabled={processing}
                           >
+                            <option value="auto">{t("Automatic")}</option>
                             {TRANSCRIPT_LANGUAGES.map((item) => (
                               <option key={item.code} value={item.code}>
                                 {item.name}

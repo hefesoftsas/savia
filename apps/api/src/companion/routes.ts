@@ -823,7 +823,7 @@ export function registerCompanionRoutes(
       consent: z.literal(true),
       language: z
         .string()
-        .regex(/^[a-z]{2}$/)
+        .regex(/^([a-z]{2}|auto)$/)
         .optional(),
       retranscribe: z.boolean().optional(),
     })
@@ -877,7 +877,10 @@ export function registerCompanionRoutes(
       const owner = await access(c);
       const id = c.req.valid("param").id;
       const body = c.req.valid("json");
-      const requestedLanguage = body.language ?? "es";
+      // "auto" (or omitted) lets the provider detect the spoken language;
+      // an explicit user choice is passed through as a hint.
+      const requestedLanguage =
+        body.language === "auto" ? undefined : body.language;
       return recordings.withNotesLock(owner, id, async () => {
         let notes = await recordings.getNotes(owner, id);
         if (body.retranscribe) {

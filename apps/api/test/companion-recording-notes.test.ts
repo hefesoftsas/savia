@@ -106,6 +106,7 @@ describe("saved Companion recording notes", () => {
         summary: { summary: "The team discussed the launch date." },
       });
       expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(transcribe.mock.calls[0][1].language).toBeUndefined();
       expect(summarize).toHaveBeenCalledTimes(1);
     } finally {
       await new CompanionRecordings(env.DOCUMENTS)
@@ -131,7 +132,6 @@ describe("saved Companion recording notes", () => {
       expect(first.status).toBe(200);
       expect(transcribe).toHaveBeenCalledTimes(1);
       expect(transcribe.mock.calls[0][1]).toMatchObject({ language: "pt" });
-
       const cached = await instance.request(
         `/v1/companion/recordings/${id}/notes`,
         {

@@ -37,14 +37,12 @@ export const finalizeSessionSchema = z
     durationSeconds: z.number().finite().positive().max(3600),
   })
   .strict();
+const languageSchema = z.string().regex(/^([a-z]{2}|auto)$/);
 export const processingRequestSchema = z
   .object({
     consent: z.literal(true),
     retryAmbiguous: z.boolean().optional(),
-    language: z
-      .string()
-      .regex(/^[a-z]{2}$/)
-      .optional(),
+    language: languageSchema.optional(),
     retranscribe: z.boolean().optional(),
   })
   .strict();
@@ -71,10 +69,9 @@ const jobStatusSchema = z.enum([
 const jobSchema = z.object({
   runId: z.string().uuid().nullable().default(null),
   status: jobStatusSchema,
-  language: z
-    .string()
-    .regex(/^[a-z]{2}$/)
-    .default("es"),
+  // "auto" lets the provider detect the spoken language; a two-letter code
+  // forces it. An explicit user choice always wins over detection.
+  language: languageSchema.default("es"),
   completedChunks: z.number().int().min(0).max(240),
   totalChunks: z.number().int().min(0).max(240),
   error: z.string().max(80).optional(),
@@ -294,7 +291,7 @@ export class CompanionSessions {
       job: {
         runId: null,
         status: "idle",
-        language: "es",
+        language: "auto",
         completedChunks: 0,
         totalChunks: 0,
         transcripts: {},
@@ -805,14 +802,18 @@ export class CompanionSessions {
           409,
         );
       const currentLanguage = manifest.job.language ?? "es";
-      const requestedLanguage = parsed.data.language ?? currentLanguage;
       const savedTranscripts = Object.keys(manifest.job.transcripts).length;
+      const requestedLanguage =
+        parsed.data.language ??
+        (savedTranscripts > 0 ? currentLanguage : "auto");
       const switchLanguage =
         savedTranscripts > 0 && requestedLanguage !== currentLanguage;
       if (switchLanguage && !parsed.data.retranscribe)
         throw new CompanionError(
           "RETRANSCRIBE_REQUIRED",
-          `This session already has a transcript in ${currentLanguage}. Confirm retranscription to switch to ${requestedLanguage}; saved results are replaced and provider usage may be billed again.`,
+          currentLanguage === "auto"
+            ? `This session already has an automatically detected transcript. Confirm retranscription to force ${requestedLanguage}; saved results are replaced and provider usage may be billed again.`
+            : `This session already has a transcript in ${currentLanguage}. Confirm retranscription to switch to ${requestedLanguage}; saved results are replaced and provider usage may be billed again.`,
           409,
         );
       if (switchLanguage) {
@@ -852,13 +853,17 @@ export class CompanionSessions {
         manifest.job.status === "idle" ||
         manifest.job.status === "failed"
       ) {
-        manifest.job.language = requestedLanguage;
         manifest.job.runId = crypto.randomUUID();
         manifest.job.status =
           manifest.job.completedChunks < manifest.chunks.length
             ? "queued"
             : "summarizing";
         manifest.job.error = undefined;
+      }
+      if (!switchLanguage && savedTranscripts === 0) {
+        // No transcripts yet: an explicit choice is honored immediately,
+        // otherwise a fresh run starts in detection mode.
+        manifest.job.language = requestedLanguage;
       }
       manifest.job.totalChunks = manifest.chunks.length;
       return manifest;

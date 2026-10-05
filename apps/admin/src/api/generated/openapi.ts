@@ -2673,7 +2673,6 @@ export interface paths {
               /** @enum {string} */
               format: "wav" | "ogg";
             };
-            /** @default es */
             language?: string;
             /** @enum {boolean} */
             consent: true;

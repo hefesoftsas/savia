@@ -89,13 +89,14 @@ requires renewed consent and acknowledgment of possible additional charges.
 Each processing run has its own queue identity so cleanup of an older run cannot
 remove a later retry.
 
-Transcription defaults to Spanish (`es`). The processing request accepts an
-optional two-letter `language` (for example `en`, `pt`, `fr`, `de`, `it`),
-stored on the job and used for every chunk; the summary follows the transcript
-language. Switching language after transcripts exist requires explicit
-`retranscribe` consent, replaces saved transcripts and summaries, and may be
-billed again. Short audio-file notes accept the same `language`/`retranscribe`
-options.
+Transcription first tries automatic language detection (`auto`, the default for
+new runs). The processing request accepts an optional `language`: `auto` or a
+two-letter code (for example `en`, `pt`, `fr`, `de`, `it`). An explicit user
+choice is stored on the job, used for every chunk, and always wins over
+detection; the summary follows the transcript language. Switching language
+after transcripts exist requires explicit `retranscribe` consent, replaces
+saved transcripts and summaries, and may be billed again. Short audio-file
+notes accept the same `language`/`retranscribe` options.
 
 ## Review and questions
 
