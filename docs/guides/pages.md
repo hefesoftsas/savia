@@ -50,13 +50,15 @@ Jira, Linear, and GitHub block commands appear only when that provider is enable
 
 ### Personal ticket summaries
 
-With a personal Jira connection, type `/mis-tickets` (or search **My tickets** / `/my-tickets`) in an empty paragraph. The command inserts a live summary of tickets assigned to the current viewer. It loads when the page opens; **Refresh** reads the latest provider data without changing the document.
+With a personal Jira connection, type `/mis-tickets` (or search **My tickets** / `/my-tickets`) in an empty paragraph. The command inserts a summary of tickets assigned to the current viewer. Opening the page retrieves the viewer's saved summary from the backend. The first load for a set of filters and connections generates and saves it; subsequent openings reuse it without contacting Jira or GitHub. **Refresh** explicitly reads current provider data and replaces that summary without changing the document.
 
 Default status names are **To Do**, **In Code Review**, **Code Review**, **Ready for QA**, **QA**, and **QA / Acceptance**. Configure a project key and custom status names in the block when a Jira workflow uses different labels. Configuration changes follow the page's edit permissions; readers can refresh their own results but cannot change the saved filters.
 
 Tickets are grouped by status and include Jira comment counts and the latest comment excerpt, author, date, and source link. Connected GitHub accounts add discovered pull requests, open/draft/closed/merged state, review decisions, unresolved review-thread counts when complete, and discussion excerpts. A missing connection, inaccessible PR, or partial provider result is explicitly marked; it does not mean that no comments or PRs exist.
 
-Only the block configuration is stored in Page content, autosave, history, and exports. Provider results stay transient and are requested with the viewer's own connections. Sharing a Page does not share the author's Jira or GitHub results. Anonymous public pages show a private-content placeholder. No scheduled background refresh is created by inserting this block.
+Only the block configuration is stored in Page content, autosave, history, and exports. The backend encrypts saved provider results separately for each viewer, filter configuration and connection identity. It checks the viewer's active connections before returning a cached summary. Disconnecting or changing a source account removes its cached snapshots. Sharing a Page does not share the author's Jira or GitHub results. Anonymous public pages show a private-content placeholder. No scheduled background refresh is created by inserting this block, and the browser does not persist ticket data.
+
+The displayed update time belongs to the saved summary, so returning to the page does not make old data appear freshly fetched. Tickets stay visible while refreshing. If the update fails, the previous summary and its timestamp remain visible with an explicit warning; a failed initial load still reports that tickets are unavailable.
 
 ### Rich blocks
 
