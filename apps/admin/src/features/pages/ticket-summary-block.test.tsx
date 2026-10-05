@@ -83,9 +83,74 @@ it("loads reader-scoped ticket details and refreshes on demand without saving re
   expect(screen.getByText("Ready for another look")).toBeInTheDocument();
   expect(screen.getByText(/1 unresolved thread/)).toBeInTheDocument();
   expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls[0]?.[0]).toContain(
+    "/v1/personal-integrations/ticket-summary",
+  );
+  expect(fetcher.mock.calls[0]?.[0]).not.toContain("refresh=true");
   expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ method: "POST" });
   await fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(fetcher.mock.calls[1]?.[0]).toContain(
+    "/v1/personal-integrations/ticket-summary?refresh=true",
+  );
+});
+
+it("keeps the saved summary and timestamp visible while refresh fails", async () => {
+  let rejectRefresh!: (response: Response) => void;
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ data: summary }))
+    .mockImplementationOnce(
+      () => new Promise<Response>((done) => (rejectRefresh = done)),
+    );
+  render(
+    <TicketSummaryBlock
+      api={makeApi(fetcher)}
+      connected
+      onConfigChange={() => {}}
+    />,
+  );
+  expect(
+    await screen.findByRole("link", {
+      name: /OPS-41.*Restore the release pipeline/,
+    }),
+  ).toBeInTheDocument();
+  const updatedTime = screen.getByText(/Updated:/).querySelector("time");
+  expect(updatedTime).toHaveAttribute("datetime", summary.updatedAt);
+
+  fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(screen.getByRole("status")).toHaveTextContent("Loading tickets");
+  expect(
+    screen.getByRole("link", {
+      name: /OPS-41.*Restore the release pipeline/,
+    }),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/Updated:/).querySelector("time")).toHaveAttribute(
+    "datetime",
+    summary.updatedAt,
+  );
+
+  await act(async () =>
+    rejectRefresh(
+      Response.json(
+        { error: { message: "Provider unavailable" } },
+        { status: 503 },
+      ),
+    ),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Could not refresh tickets. Showing the last saved summary.",
+  );
+  expect(
+    screen.getByRole("link", {
+      name: /OPS-41.*Restore the release pipeline/,
+    }),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/Updated:/).querySelector("time")).toHaveAttribute(
+    "datetime",
+    summary.updatedAt,
+  );
 });
 
 it("does not fetch when Jira is disconnected and offers a connect link", () => {
@@ -161,6 +226,69 @@ it("clears reader data immediately on identity or session changes and ignores st
   expect(
     screen.queryByRole("link", { name: /OPS-41/ }),
   ).not.toBeInTheDocument();
+});
+
+it("does not carry a queued refresh across disconnect and reconnect", async () => {
+  const fetcher = vi.fn(async (_input: RequestInfo | URL) =>
+    Response.json({ data: summary }),
+  );
+  const api = makeApi(fetcher);
+  const onConfigChange = vi.fn();
+  const { rerender } = render(
+    <TicketSummaryBlock api={api} connected onConfigChange={onConfigChange} />,
+  );
+  await screen.findByRole("link", { name: /OPS-41/ });
+
+  act(() => {
+    screen
+      .getByRole("button", { name: "Refresh" })
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    rerender(
+      <TicketSummaryBlock
+        api={api}
+        connected={false}
+        onConfigChange={onConfigChange}
+      />,
+    );
+  });
+  rerender(
+    <TicketSummaryBlock api={api} connected onConfigChange={onConfigChange} />,
+  );
+
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(fetcher.mock.calls[1]?.[0]).not.toContain("refresh=true");
+});
+
+it("does not carry a queued refresh across reader identity invalidation", async () => {
+  const fetcher = vi.fn(async (_input: RequestInfo | URL) =>
+    Response.json({ data: summary }),
+  );
+  const api = makeApi(fetcher);
+  const onConfigChange = vi.fn();
+  const { rerender } = render(
+    <TicketSummaryBlock api={api} connected onConfigChange={onConfigChange} />,
+  );
+  await screen.findByRole("link", { name: /OPS-41/ });
+
+  act(() => {
+    screen
+      .getByRole("button", { name: "Refresh" })
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    window.dispatchEvent(new Event("savia:identity-changed"));
+  });
+  rerender(
+    <TicketSummaryBlock
+      api={api}
+      connected={false}
+      onConfigChange={onConfigChange}
+    />,
+  );
+  rerender(
+    <TicketSummaryBlock api={api} connected onConfigChange={onConfigChange} />,
+  );
+
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(fetcher.mock.calls[1]?.[0]).not.toContain("refresh=true");
 });
 
 it("does not render an earlier configuration response after config changes", async () => {
