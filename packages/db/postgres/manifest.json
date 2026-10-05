@@ -161,6 +161,10 @@
     {
       "filename": "0038_plugin_authoring_projects.sql",
       "sha256": "3104b10feacba25c67f5d4e431ab14cb8148b6c34b4eaa5413d09f74228ec3ff"
+    },
+    {
+      "filename": "0039_tenant_whatsapp_connections.sql",
+      "sha256": "65ddb16417f2af7409ed965a21a2c906de32abf48ef354e59e024887ff970e37"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -590,6 +594,26 @@
       "type": "index",
       "name": "tenant_crm_connections_tenant_provider_index",
       "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_whatsapp_connections_tenant_active_unique",
+      "table": "tenant_whatsapp_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_whatsapp_connections_nango_active_unique",
+      "table": "tenant_whatsapp_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_whatsapp_connections_owner_index",
+      "table": "tenant_whatsapp_connections"
+    },
+    {
+      "type": "table",
+      "name": "tenant_whatsapp_connections",
+      "table": "tenant_whatsapp_connections"
     },
     {
       "type": "index",
@@ -10560,6 +10584,161 @@
         }
       ],
       "checkCount": 2
+    },
+    {
+      "name": "tenant_whatsapp_connections",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "created_by_principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "nango_connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "nango_integration_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "phone_number_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "display_phone_number",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "waba_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "external_account_label",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "last_validated_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "disconnected_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "created_by_principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["nango_integration_id", "nango_connection_id"],
+          "origin": "c"
+        },
+        {
+          "columns": ["tenant_id"],
+          "origin": "c"
+        },
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
     },
     {
       "name": "tenant_flow_runs",

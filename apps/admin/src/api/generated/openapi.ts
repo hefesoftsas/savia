@@ -12905,6 +12905,639 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/whatsapp/providers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Describe the WhatsApp messaging provider
+     * @description Describes Savia's WhatsApp provider backed by Nango. Provider credentials and Nango integration configuration are never returned.
+     */
+    get: {
+      parameters: {
+        query?: {
+          agencyId?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Provider availability */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                id: "whatsapp";
+                /** @enum {string} */
+                kind: "whatsapp-provider";
+                attributes: {
+                  displayName: string;
+                  /** @enum {string} */
+                  availability: "enabled" | "unavailable";
+                  capabilities: string[];
+                };
+              }[];
+            };
+          };
+        };
+        /** @description Invalid agency identifier */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The actor cannot access messaging integrations */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/connections": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the current user's WhatsApp connection */
+    get: {
+      parameters: {
+        query?: {
+          agencyId?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Active WhatsApp connection state without Nango credentials */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "whatsapp-connection";
+                attributes: {
+                  agencyId: number;
+                  /** @enum {string} */
+                  provider: "whatsapp";
+                  /** @enum {string} */
+                  status:
+                    | "pending"
+                    | "connected"
+                    | "reconnect_required"
+                    | "disconnected"
+                    | "failed";
+                  phoneNumberId: string | null;
+                  displayPhoneNumber: string | null;
+                  wabaId: string | null;
+                  externalAccountLabel: string | null;
+                  lastValidatedAt: string | null;
+                  createdAt: string;
+                  updatedAt: string;
+                };
+              }[];
+            };
+          };
+        };
+        /** @description Invalid agency identifier */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The actor cannot access messaging integrations */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /** Disconnect WhatsApp messaging */
+    delete: {
+      parameters: {
+        query?: {
+          agencyId?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Connection disconnected */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description An active tenant membership is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp connection not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp messaging is not configured */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/connections/connect-session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create a short-lived Nango Connect session for WhatsApp
+     * @description Creates a session scoped to the authenticated user for the WhatsApp integration. The result is not a messaging credential.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            agencyId?: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Short-lived Connect session */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                token: string;
+                expiresAt: string;
+                /** Format: uri */
+                connectUrl: string;
+                /** Format: uri */
+                apiUrl: string;
+              };
+            };
+          };
+        };
+        /** @description An active tenant membership is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp messaging is not configured */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/connections/reconnect-session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a reconnect session for the WhatsApp connection */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            agencyId?: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Short-lived reconnect session */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                token: string;
+                expiresAt: string;
+                /** Format: uri */
+                connectUrl: string;
+                /** Format: uri */
+                apiUrl: string;
+              };
+            };
+          };
+        };
+        /** @description An active tenant membership is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp connection not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp messaging is not configured */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/connections/complete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Verify and persist a completed WhatsApp connection */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            agencyId?: number;
+            connectionId: string;
+            phoneNumberId?: string;
+            displayPhoneNumber?: string;
+            wabaId?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Validated user-owned WhatsApp connection */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "whatsapp-connection";
+                attributes: {
+                  agencyId: number;
+                  /** @enum {string} */
+                  provider: "whatsapp";
+                  /** @enum {string} */
+                  status:
+                    | "pending"
+                    | "connected"
+                    | "reconnect_required"
+                    | "disconnected"
+                    | "failed";
+                  phoneNumberId: string | null;
+                  displayPhoneNumber: string | null;
+                  wabaId: string | null;
+                  externalAccountLabel: string | null;
+                  lastValidatedAt: string | null;
+                  createdAt: string;
+                  updatedAt: string;
+                };
+              };
+            };
+          };
+        };
+        /** @description Nango connection does not match the WhatsApp integration */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description An active tenant membership is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp connection not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The organization already has a WhatsApp connection */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp messaging is not configured */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/connections/number": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Link a WhatsApp phone number to the connection
+     * @description Validates the phone number through Nango against the WhatsApp Cloud API and stores it without exposing Nango credentials.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            agencyId?: number;
+            phoneNumberId: string;
+            displayPhoneNumber?: string;
+            wabaId?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Connection with the linked phone number */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                /** @enum {string} */
+                kind: "whatsapp-connection";
+                attributes: {
+                  agencyId: number;
+                  /** @enum {string} */
+                  provider: "whatsapp";
+                  /** @enum {string} */
+                  status:
+                    | "pending"
+                    | "connected"
+                    | "reconnect_required"
+                    | "disconnected"
+                    | "failed";
+                  phoneNumberId: string | null;
+                  displayPhoneNumber: string | null;
+                  wabaId: string | null;
+                  externalAccountLabel: string | null;
+                  lastValidatedAt: string | null;
+                  createdAt: string;
+                  updatedAt: string;
+                };
+              };
+            };
+          };
+        };
+        /** @description Invalid phone number input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description An active tenant membership is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp connection not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The WhatsApp connection requires reconnection */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp messaging is not configured */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/connections/test-send": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a test message through the WhatsApp connection
+     * @description Sends a short free-form text message through Nango to the WhatsApp Cloud API. Only works inside an open 24-hour customer-service window.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            agencyId: number;
+            to: string;
+            text: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Test message accepted by the WhatsApp API */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                messageId: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid test message input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description An active tenant membership is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp connection not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The WhatsApp connection requires reconnection */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The WhatsApp number is not linked yet */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description WhatsApp messaging is not configured */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/tenant-workspaces": {
     parameters: {
       query?: never;

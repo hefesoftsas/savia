@@ -21,6 +21,7 @@ import type {
   PersonalIntegrationProviderId,
 } from "@/api/personal-integrations-client";
 import { CrmConnectionsPage } from "@/features/crm/crm-connections-page";
+import { WhatsappConnectionsPage } from "@/features/whatsapp/whatsapp-connections-page";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CompanionDownloads } from "./companion-downloads";
@@ -330,9 +331,10 @@ export function PersonalIntegrationsPage({
     | "crm"
     | "dataProvider"
     | "virtualEmployees"
-  > & {
-    assistantConfiguration?: AppServices["assistantConfiguration"];
-  };
+  > &
+    Partial<Pick<AppServices, "whatsapp">> & {
+      assistantConfiguration?: AppServices["assistantConfiguration"];
+    };
   nangoFactory?: PersonalNangoConnectFactory;
 }) {
   const t = useMessages(personalIntegrationsMessages);
@@ -342,9 +344,11 @@ export function PersonalIntegrationsPage({
       ? "virtual-employees"
       : searchParams.get("tab") === "crm"
         ? "crm"
-        : searchParams.get("tab") === "apps"
-          ? "apps"
-          : "connections";
+        : searchParams.get("tab") === "whatsapp"
+          ? "whatsapp"
+          : searchParams.get("tab") === "apps"
+            ? "apps"
+            : "connections";
   const selectTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("tab", tab);
@@ -535,6 +539,9 @@ export function PersonalIntegrationsPage({
           <TabsTrigger className="min-h-11 sm:min-h-0" value="crm">
             {t("CRM")}
           </TabsTrigger>
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="whatsapp">
+            WhatsApp
+          </TabsTrigger>
           <TabsTrigger
             className="min-h-11 sm:min-h-0"
             value="virtual-employees"
@@ -646,6 +653,21 @@ export function PersonalIntegrationsPage({
 
         <TabsContent value="crm" className="space-y-6">
           <CrmConnectionsPage embedded services={{ crm: services.crm }} />
+        </TabsContent>
+
+        <TabsContent value="whatsapp" className="space-y-6">
+          {services.whatsapp ? (
+            <WhatsappConnectionsPage
+              embedded
+              services={{ whatsapp: services.whatsapp }}
+            />
+          ) : (
+            <IntegrationGroup title="WhatsApp">
+              <IntegrationGroupEmpty
+                message={t("WhatsApp no está disponible en este entorno.")}
+              />
+            </IntegrationGroup>
+          )}
         </TabsContent>
 
         <TabsContent value="virtual-employees" className="space-y-6">

@@ -284,6 +284,7 @@ export async function createApplication(
         "NANGO_GITHUB_INTEGRATION_ID",
         "NANGO_SLACK_INTEGRATION_ID",
         "NANGO_MICROSOFT_TEAMS_INTEGRATION_ID",
+        "NANGO_WHATSAPP_INTEGRATION_ID",
         "PLUGIN_REGISTRY_TENANTS",
         "SQL_BRIDGE_URL",
         "SQL_BRIDGE_SECRET",

@@ -214,6 +214,42 @@ export const tenantCrmConnections = sqliteTable(
   ],
 );
 
+export const tenantWhatsappConnections = sqliteTable(
+  "tenant_whatsapp_connections",
+  {
+    id: text("id").primaryKey().notNull(),
+    tenantId: bigint("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    createdByPrincipalId: text("created_by_principal_id")
+      .notNull()
+      .references(() => identityPrincipals.id),
+    nangoConnectionId: text("nango_connection_id").notNull(),
+    nangoIntegrationId: text("nango_integration_id").notNull(),
+    status: text("status").notNull(),
+    phoneNumberId: text("phone_number_id"),
+    displayPhoneNumber: text("display_phone_number"),
+    wabaId: text("waba_id"),
+    externalAccountLabel: text("external_account_label"),
+    lastValidatedAt: text("last_validated_at"),
+    disconnectedAt: text("disconnected_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("tenant_whatsapp_connections_tenant_active_unique")
+      .on(table.tenantId)
+      .where(sql`${table.disconnectedAt} IS NULL`),
+    uniqueIndex("tenant_whatsapp_connections_nango_active_unique")
+      .on(table.nangoIntegrationId, table.nangoConnectionId)
+      .where(sql`${table.disconnectedAt} IS NULL`),
+    index("tenant_whatsapp_connections_owner_index").on(
+      table.createdByPrincipalId,
+      table.tenantId,
+    ),
+  ],
+);
+
 export const jiraPrivacyAccounts = sqliteTable(
   "jira_privacy_accounts",
   {
