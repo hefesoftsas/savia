@@ -173,6 +173,22 @@
     {
       "filename": "0040_personal_ticket_summary_cache.sql",
       "sha256": "a356642effb1fb33e60f268b500180827e760e08d975413bcdaa05b09f14eaaa"
+    },
+    {
+      "filename": "0040_whatsapp_assistant.sql",
+      "sha256": "d73b733959858f7288a4c0aadb24b4283551762d465a1a7831edf9e54c0e8f3c"
+    },
+    {
+      "filename": "0041_whatsapp_native.sql",
+      "sha256": "d8d581523cb932a483c0b5d51c5da2fe37c90248940637615170ce4f01f9c376"
+    },
+    {
+      "filename": "0042_assistant_generation_models.sql",
+      "sha256": "0f9aca0c35db00da8ba4ab205c320bc88b172388529d2f52919b905b5eccfa68"
+    },
+    {
+      "filename": "0043_whatsapp_inbox_binding_snapshot.sql",
+      "sha256": "1f10cc3461c53b65a912eb5c53dcd46c028638740e9d1e08d219ada1151819ce"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -969,21 +985,6 @@
       "table": "personal_integration_connections"
     },
     {
-      "type": "index",
-      "name": "personal_ticket_summary_cache_updated_at_index",
-      "table": "personal_ticket_summary_cache"
-    },
-    {
-      "type": "trigger",
-      "name": "personal_ticket_summary_cache_purge_connection_update",
-      "table": "personal_integration_connections"
-    },
-    {
-      "type": "table",
-      "name": "personal_ticket_summary_cache",
-      "table": "personal_ticket_summary_cache"
-    },
-    {
       "type": "table",
       "name": "plugin_store_artifacts",
       "table": "plugin_store_artifacts"
@@ -1702,6 +1703,106 @@
       "type": "table",
       "name": "tenant_booking_agenda_grants",
       "table": "tenant_booking_agenda_grants"
+    },
+    {
+      "type": "table",
+      "name": "tenant_whatsapp_assistant_bindings",
+      "table": "tenant_whatsapp_assistant_bindings"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_inbox_pending_idx",
+      "table": "whatsapp_inbox"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_inbox_contact_history_idx",
+      "table": "whatsapp_inbox"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_inbox_sender_idx",
+      "table": "whatsapp_inbox"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_inbox_active_contact_unique",
+      "table": "whatsapp_inbox"
+    },
+    {
+      "type": "table",
+      "name": "whatsapp_inbox",
+      "table": "whatsapp_inbox"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_delivery_receipts_message_idx",
+      "table": "whatsapp_delivery_receipts"
+    },
+    {
+      "type": "table",
+      "name": "whatsapp_delivery_receipts",
+      "table": "whatsapp_delivery_receipts"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_native_outbox_tenant_created",
+      "table": "whatsapp_native_outbox"
+    },
+    {
+      "type": "table",
+      "name": "whatsapp_native_outbox",
+      "table": "whatsapp_native_outbox"
+    },
+    {
+      "type": "index",
+      "name": "idx_plugin_authoring_projects_scope_updated",
+      "table": "plugin_authoring_projects"
+    },
+    {
+      "type": "index",
+      "name": "personal_ticket_summary_cache_updated_at_index",
+      "table": "personal_ticket_summary_cache"
+    },
+    {
+      "type": "table",
+      "name": "personal_ticket_summary_cache",
+      "table": "personal_ticket_summary_cache"
+    },
+    {
+      "type": "table",
+      "name": "plugin_authoring_projects",
+      "table": "plugin_authoring_projects"
+    },
+    {
+      "type": "table",
+      "name": "plugin_store_sources",
+      "table": "plugin_store_sources"
+    },
+    {
+      "type": "trigger",
+      "name": "personal_ticket_summary_cache_purge_connection_update",
+      "table": "personal_integration_connections"
+    },
+    {
+      "type": "table",
+      "name": "zoom_personal_meetings",
+      "table": "zoom_personal_meetings"
+    },
+    {
+      "type": "table",
+      "name": "tenant_page_search_index",
+      "table": "tenant_page_search_index"
+    },
+    {
+      "type": "table",
+      "name": "tenant_page_search_index_leases",
+      "table": "tenant_page_search_index_leases"
+    },
+    {
+      "type": "table",
+      "name": "tenant_pages_search_settings",
+      "table": "tenant_pages_search_settings"
     }
   ],
   "tables": [
@@ -2335,6 +2436,22 @@
         {
           "cid": 11,
           "name": "allowed_models",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "image_generation_model",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "speech_model",
           "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,
@@ -6524,99 +6641,6 @@
         }
       ],
       "checkCount": 2
-    },
-    {
-      "name": "personal_ticket_summary_cache",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "principal_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "cache_key",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 2
-        },
-        {
-          "cid": 2,
-          "name": "jira_connection_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "github_connection_id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "encrypted_payload",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "updated_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "seq": 0,
-          "table": "personal_integration_connections",
-          "from": "github_connection_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "CASCADE",
-          "match": "NONE"
-        },
-        {
-          "id": 1,
-          "seq": 0,
-          "table": "personal_integration_connections",
-          "from": "jira_connection_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "CASCADE",
-          "match": "NONE"
-        },
-        {
-          "id": 2,
-          "seq": 0,
-          "table": "identity_principal",
-          "from": "principal_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "CASCADE",
-          "match": "NONE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["principal_id", "cache_key"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
     },
     {
       "name": "zoom_personal_meetings",
@@ -14588,6 +14612,865 @@
         }
       ],
       "checkCount": 1
+    },
+    {
+      "name": "tenant_whatsapp_assistant_bindings",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "employee_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "enabled",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "allowed_contacts",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'[]'",
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "updated_by",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "native_config",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'{}'",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "updated_by",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "RESTRICT",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "assistant_virtual_employees",
+          "from": "employee_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "tenant_whatsapp_connections",
+          "from": "connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["connection_id"],
+          "origin": "u"
+        },
+        {
+          "columns": ["tenant_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 3
+    },
+    {
+      "name": "whatsapp_inbox",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "message_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "phone_number_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "waba_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "contact_phone",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "normalized_contact",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "message_text",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "provider_timestamp",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'pending'",
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "generation_attempts",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "retry_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "lease_token",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "lease_until",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "reply_text",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "send_started_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "outbound_message_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 17,
+          "name": "delivery_status",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 18,
+          "name": "delivery_rank",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 19,
+          "name": "delivery_error_codes",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'[]'",
+          "pk": 0
+        },
+        {
+          "cid": 20,
+          "name": "failure_code",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 21,
+          "name": "received_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 22,
+          "name": "completed_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 23,
+          "name": "input_payload",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 24,
+          "name": "reply_payload",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 25,
+          "name": "assigned_employee_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 26,
+          "name": "assigned_owner_principal_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenant_whatsapp_connections",
+          "from": "connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["connection_id", "normalized_contact"],
+          "origin": "c"
+        },
+        {
+          "columns": ["outbound_message_id"],
+          "origin": "u"
+        },
+        {
+          "columns": ["message_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 6
+    },
+    {
+      "name": "whatsapp_delivery_receipts",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "phone_number_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "waba_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "message_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "delivery_rank",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "error_code",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["phone_number_id", "waba_id", "message_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "whatsapp_native_outbox",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "idempotency_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "contact_phone",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "reply_payload",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "outbound_message_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "completed_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "phone_number_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "waba_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "assigned_employee_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "assigned_owner_principal_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenant_whatsapp_connections",
+          "from": "connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["outbound_message_id"],
+          "origin": "u"
+        },
+        {
+          "columns": ["idempotency_key"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "personal_ticket_summary_cache",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "cache_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "jira_connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "github_connection_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "encrypted_payload",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "personal_integration_connections",
+          "from": "github_connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "personal_integration_connections",
+          "from": "jira_connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["principal_id", "cache_key"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "plugin_authoring_projects",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "label",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "files",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "history",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "version",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id", "principal_id", "id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "plugin_store_sources",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "files",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "plugin_store_artifacts",
+          "from": "tenant_id",
+          "to": "tenant_id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "table": "plugin_store_artifacts",
+          "from": "id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "table": "plugin_store_artifacts",
+          "from": "version",
+          "to": "version",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id", "id", "version"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
     }
   ],
   "mappingNotes": [
