@@ -58,7 +58,7 @@ export function ServiceCredentialsPage({
             <CredentialEntry
               title="OpenRouter"
               description={t(
-                "OpenRouter models for transcription and meeting summaries.",
+                "OpenRouter models for transcription, meeting summaries, image generation, and speech output.",
               )}
               requirement="optional"
             >

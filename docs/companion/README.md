@@ -4,7 +4,6 @@
 > for one-hour capture, native draft recovery and durable processing. Short-sample
 > limits and earlier verification results below describe the preceding increment.
 
-
 Owner: Savia platform maintainers. Reviewed: 2026-10-01.
 Status: bounded desktop/API validation implementation; hardware and live-provider gates pending.
 
@@ -32,7 +31,7 @@ unpassed hardware/provider gates and the remaining epic scope.
 | Document                                                                              | Purpose                                                                           |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | [Workspace instructions](../../apps/companion/README.md)                              | Run the available CLI and tests; understand current limits.                       |
-| [Meeting model configuration](model-configuration.md)                                 | Configure independent OpenRouter transcription and summary models.                |
+| [OpenRouter model configuration](model-configuration.md)                              | Configure independent OpenRouter transcription, summary, image, and voice models. |
 | [Live-flow smoke test](live-flow-smoke.md)                                            | Real storage, playback, OpenRouter notes and the remaining macOS capture failure. |
 | [Implementation status](implementation-status.md)                                     | Implemented prototype scope and remaining epic gates.                             |
 | [Architecture and research](architecture.md)                                          | Deployment decision, component boundaries, reusable OSS and source links.         |

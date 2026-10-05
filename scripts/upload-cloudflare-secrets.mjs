@@ -7,6 +7,12 @@ import { fileURLToPath } from "node:url";
 export function buildSecretUploads(environment, values) {
   if (!["production", "preview"].includes(environment))
     throw new Error("Unsupported deployment environment");
+  const whatsappAppSecret = values.WHATSAPP_META_APP_SECRET?.trim();
+  const whatsappVerifyToken = values.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim();
+  if (Boolean(whatsappAppSecret) !== Boolean(whatsappVerifyToken))
+    throw new Error(
+      "WHATSAPP_META_APP_SECRET and WHATSAPP_WEBHOOK_VERIFY_TOKEN must be configured together",
+    );
   const jiraIntegrationId = values.NANGO_JIRA_INTEGRATION_ID?.trim();
   const jiraReportingConnectionId =
     values.NANGO_JIRA_REPORTING_CONNECTION_ID?.trim();
@@ -126,6 +132,10 @@ export function buildSecretUploads(environment, values) {
         values.NANGO_FALLBACK_API_KEY?.trim() || null;
     if (app === "api" && values.OPENROUTER_API_KEY)
       secrets.OPENROUTER_API_KEY = values.OPENROUTER_API_KEY;
+    if (app === "api" && whatsappAppSecret) {
+      secrets.WHATSAPP_META_APP_SECRET = whatsappAppSecret;
+      secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN = whatsappVerifyToken;
+    }
     if (app === "api" && jiraReportingConnectionId)
       secrets.NANGO_JIRA_REPORTING_CONNECTION_ID = jiraReportingConnectionId;
     if (app === "api" && values.SQL_BRIDGE_URL) {

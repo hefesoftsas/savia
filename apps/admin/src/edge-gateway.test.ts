@@ -11,6 +11,20 @@ import {
 } from "./edge-gateway";
 
 describe("edge gateway", () => {
+  it("forwards signed WhatsApp webhooks to the API instead of serving the admin app", async () => {
+    const api = { fetch: vi.fn(async () => new Response("EVENT_RECEIVED")) };
+    const assets = { fetch: vi.fn(async () => new Response("admin")) };
+    const request = new Request(
+      "https://savia.example.workers.dev/webhooks/whatsapp",
+      { method: "POST", body: "{}" },
+    );
+    expect(
+      await (await gatewayFetch(request, { API: api, ASSETS: assets })).text(),
+    ).toBe("EVENT_RECEIVED");
+    expect(api.fetch).toHaveBeenCalledWith(request);
+    expect(assets.fetch).not.toHaveBeenCalled();
+  });
+
   it("forwards API and OAuth paths only to the private API service", async () => {
     const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
     const assets = { fetch: vi.fn(async () => new Response("asset")) };

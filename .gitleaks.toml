@@ -30,3 +30,10 @@ condition = "AND"
 paths = ['''^docs/superpowers/specs/2026-10-03-tenant-booking-design\.md$''']
 regexTarget = "secret"
 regexes = ['''^foreign/disabled$''']
+
+[[allowlists]]
+description = "Synthetic WhatsApp client test idempotency UUID"
+condition = "AND"
+paths = ['''^apps/admin/src/api/whatsapp-client\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^123e4567-e89b-42d3-a456-426614174000$''']

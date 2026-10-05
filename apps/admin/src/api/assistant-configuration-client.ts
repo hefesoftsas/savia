@@ -14,6 +14,8 @@ export type AssistantConfigurationSetting = {
   transcriptionModel?: string | null;
   transcriptionEndpoint?: TranscriptionEndpoint | null;
   summaryModel?: string | null;
+  imageGenerationModel?: string | null;
+  speechModel?: string | null;
   updatedAt?: string;
   updatedBy?: string;
 };
@@ -40,6 +42,8 @@ export type AssistantConfigurationWrite = {
   transcriptionModel?: string | null;
   transcriptionEndpoint?: TranscriptionEndpoint | null;
   summaryModel?: string | null;
+  imageGenerationModel?: string | null;
+  speechModel?: string | null;
 };
 
 export type AssistantModelModalities = {
@@ -47,6 +51,21 @@ export type AssistantModelModalities = {
   image: boolean;
   audio: boolean;
   file: boolean;
+  imageOutput?: boolean;
+  speechOutput?: boolean;
+};
+
+export type AssistantGenerationPricing = {
+  image?: {
+    price: number;
+    unit: "image" | "megapixel" | "token";
+    variant?: string;
+    providerSlug?: string;
+  };
+  speech?: {
+    prompt?: { price: number; unit: "character" | "token" };
+    completion?: { price: number; unit: "second" | "token" };
+  };
 };
 
 export type AssistantModel = {
@@ -58,6 +77,7 @@ export type AssistantModel = {
   modalities?: AssistantModelModalities;
   supportsTools?: boolean;
   transcriptionEndpoint?: TranscriptionEndpoint;
+  generationPricing?: AssistantGenerationPricing;
 };
 
 export type AssistantModelPolicy = {
