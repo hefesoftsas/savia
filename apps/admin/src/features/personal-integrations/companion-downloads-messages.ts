@@ -37,6 +37,18 @@ export const companionDownloadMessages = {
       "Preview builds for testing. Android uses a test signing key; desktop installers do not yet have distribution signing or notarization.",
       "Versões de preview para testes. O Android usa assinatura de teste; os instaladores desktop ainda não têm assinatura de distribuição nem notarização.",
     ],
+  'En macOS, si el sistema dice que la app está dañada, es por la falta de firma de esta preview. Copia la app a Aplicaciones, haz Control + clic en ella y elige Abrir, o ejecuta xattr -cr "/Applications/Savia Companion.app" y vuelve a abrirla.':
+    [
+      'En macOS, si el sistema dice que la app está dañada, es por la falta de firma de esta preview. Copia la app a Aplicaciones, haz Control + clic en ella y elige Abrir, o ejecuta xattr -cr "/Applications/Savia Companion.app" y vuelve a abrirla.',
+      'On macOS, if the system says the app is damaged, it is caused by the missing signature in this preview. Copy the app to Applications, Control-click it and choose Open, or run xattr -cr "/Applications/Savia Companion.app" and open it again.',
+      'No macOS, se o sistema disser que o app está danificado, é pela falta de assinatura nesta preview. Copie o app para Aplicativos, clique com Control nele e escolha Abrir, ou execute xattr -cr "/Applications/Savia Companion.app" e abra novamente.',
+    ],
+  "Los instaladores de escritorio son pequeños (unos pocos MB) porque usan el WebView del sistema; ese tamaño no significa que la descarga esté incompleta.":
+    [
+      "Los instaladores de escritorio son pequeños (unos pocos MB) porque usan el WebView del sistema; ese tamaño no significa que la descarga esté incompleta.",
+      "Desktop installers are small (a few MB) because they use the system WebView; that size does not mean the download is incomplete.",
+      "Os instaladores desktop são pequenos (poucos MB) porque usam o WebView do sistema; esse tamanho não significa que o download esteja incompleto.",
+    ],
   "Buscando descargas disponibles…": [
     "Buscando descargas disponibles…",
     "Checking available downloads…",

@@ -40,6 +40,8 @@ stop, discard, crash and logout according to the accepted session policy.
 
 1. Record environment, selected source devices, code revision and permission state.
 2. Start recording manually. Confirm source labels, indicator and live levels.
+   Pause and resume once; confirm the timer freezes while paused, the take
+   continues on resume, and paused time is excluded from the recorded duration.
 3. Feed distinct synthetic spoken phrases into the microphone and selected output,
    including a synchronization marker. Never use a generated PCM fixture alone as
    evidence that the OS supplied audio.
@@ -67,18 +69,19 @@ CPU/memory, disk growth and clipping with the product/audio owners. Record numer
 thresholds and measured values in the report; do not retroactively move a threshold
 to turn a failed run into a pass.
 
-| Failure or transition                          | Required evidence                                                                     |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Bluetooth connect/disconnect or profile switch | Actual routes before/after, detected gap, sample rate change and UI outcome.          |
-| USB unplug/replug / default output change      | No unintended source switch; gap/recovery timeline is explicit.                       |
-| Sleep/wake / wall clock adjustment             | Monotonic offsets remain ordered; discontinuity is visible.                           |
-| Crash / force quit during write                | Finalized prior chunks recover; incomplete tail is identified, not uploaded as valid. |
-| Disk quota/full / permission denied            | Capture/backpressure policy is visible and media stays bounded.                       |
-| Network outage / reconnect / revoked token     | No loss of retained accepted chunks; only missing authorized chunks resume.           |
-| Duplicate upload / delayed acknowledgement     | Same logical chunk produces one persisted transcript result.                          |
-| Provider accepted then timed out               | Ambiguous billed attempt is reconciled; no blind unlimited retry.                     |
-| Stop/cancel/discard/delete                     | Native handles close; queued work and retention follow the defined state transitions. |
-| Two tenants requesting the same object/job     | All unauthorized access is denied, including temporary URLs and retries.              |
+| Failure or transition                          | Required evidence                                                                                                    |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Bluetooth connect/disconnect or profile switch | Actual routes before/after, detected gap, sample rate change and UI outcome.                                         |
+| USB unplug/replug / default output change      | No unintended source switch; gap/recovery timeline is explicit.                                                      |
+| Sleep/wake / wall clock adjustment             | Monotonic offsets remain ordered; discontinuity is visible.                                                          |
+| Crash / force quit during write                | Finalized prior chunks recover; incomplete tail is identified, not uploaded as valid.                                |
+| Disk quota/full / permission denied            | Capture/backpressure policy is visible and media stays bounded.                                                      |
+| Network outage / reconnect / revoked token     | No loss of retained accepted chunks; only missing authorized chunks resume.                                          |
+| Duplicate upload / delayed acknowledgement     | Same logical chunk produces one persisted transcript result.                                                         |
+| Provider accepted then timed out               | Ambiguous billed attempt is reconciled; no blind unlimited retry.                                                    |
+| Stop/cancel/discard/delete                     | Native handles close; queued work and retention follow the defined state transitions.                                |
+| Pause/resume during capture                    | Timer freezes while paused; resume appends to the same take with no overlap; stop from paused finalizes prior audio. |
+| Two tenants requesting the same object/job     | All unauthorized access is denied, including temporary URLs and retries.                                             |
 
 Inspect every upload chunk with an independent decoder, including chunks whose
 boundaries split speech. Arbitrary byte slicing and unfinalized recorder fragments

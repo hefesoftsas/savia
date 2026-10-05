@@ -156,6 +156,7 @@ impl CaptureSession {
         let state = match self.lifecycle.state {
             State::Idle => "idle",
             State::Recording => "recording",
+            State::Paused => "paused",
             State::Ready => "ready",
             State::Error => "error",
         };
@@ -201,7 +202,7 @@ impl CaptureSession {
     }
 
     fn stop(&mut self) {
-        if self.lifecycle.state != State::Recording {
+        if self.lifecycle.state != State::Recording && self.lifecycle.state != State::Paused {
             return;
         }
         if let Some(microphone) = self.microphone.as_ref() {
@@ -269,6 +270,60 @@ impl CaptureSession {
         }
     }
 
+    fn pause(&mut self) -> Result<(), String> {
+        if self.lifecycle.state != State::Recording {
+            return Err("There is no active recording to pause.".into());
+        }
+        if let Some(microphone) = self.microphone.as_ref() {
+            microphone.request_stop();
+        }
+        #[cfg(target_os = "macos")]
+        let system_stop_error = self
+            .system
+            .as_mut()
+            .and_then(|system| system.request_stop().err());
+        #[cfg(target_os = "windows")]
+        let system_stop_error = {
+            if let Some(system) = self.system.as_ref() {
+                system.request_stop();
+            }
+            None
+        };
+        let now = Instant::now();
+        let microphone = self
+            .microphone
+            .take()
+            .map(MicrophoneCapture::stop)
+            .transpose();
+        let system = self.system.take().map(SystemCapture::stop).transpose();
+        self.temp_dir.take();
+        if let Some(error) = system_stop_error {
+            self.fail_stop(error.clone());
+            return Err(error);
+        }
+        if let Err(error) = microphone.and(system).map(|_| ()) {
+            self.fail_stop(error.clone());
+            return Err(error);
+        }
+        // Freeze the clock and keep the spool open so resume can append.
+        let elapsed = self.lifecycle.elapsed_at(now);
+        self.lifecycle.pause(now);
+        let elapsed_secs = elapsed.as_secs_f64().min(3_600.0);
+        let spool_result = if let Some(spool) = self.spool.as_ref() {
+            spool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .update_elapsed(elapsed_secs)
+        } else {
+            Ok(())
+        };
+        if let Err(error) = spool_result {
+            self.fail_stop(error.clone());
+            return Err(error);
+        }
+        Ok(())
+    }
+
     fn fail_stop(&mut self, error: String) {
         let elapsed = self.lifecycle.elapsed_at(Instant::now()).as_secs_f64();
         if let Some(spool) = self.spool.as_mut() {
@@ -282,7 +337,7 @@ impl CaptureSession {
     }
 
     fn discard(&mut self) -> Result<(), String> {
-        if self.lifecycle.state == State::Recording {
+        if self.lifecycle.state == State::Recording || self.lifecycle.state == State::Paused {
             self.stop();
         }
         self.microphone.take();
@@ -358,9 +413,12 @@ fn start_capture_blocking(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if session.spool.is_some() {
-        session.lifecycle.fail(
-            "A saved capture draft must be discarded before starting another recording.".into(),
-        );
+        let hint = if session.lifecycle.state == State::Paused {
+            "The recording is paused. Resume or discard it before starting another recording."
+        } else {
+            "A saved capture draft must be discarded before starting another recording."
+        };
+        session.lifecycle.fail(hint.into());
         return session.status();
     }
     if let Some(error) = session.storage_error.clone() {
@@ -456,10 +514,17 @@ fn start_capture_blocking(
     }
     drop(session);
 
-    let stop_capture = capture.clone();
+    spawn_elapsed_watcher(capture.clone(), generation);
+    capture
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .status()
+}
+
+fn spawn_elapsed_watcher(capture: SharedCapture, generation: Instant) {
     thread::spawn(move || loop {
         thread::sleep(std::time::Duration::from_secs(1));
-        let mut session = stop_capture
+        let mut session = capture
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !session.lifecycle.is_recording_generation(generation) {
@@ -477,10 +542,113 @@ fn start_capture_blocking(
             return;
         }
     });
-    capture
+}
+
+fn resume_capture_blocking(capture: SharedCapture) -> Result<CaptureStatus, String> {
+    let requested_at = Instant::now();
+    let mut session = capture
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if session.lifecycle.state != State::Paused {
+        return Err("There is no paused recording to resume.".into());
+    }
+    let spool = session
+        .spool
+        .as_ref()
+        .ok_or_else(|| "The paused recording has no saved audio.".to_string())?
+        .clone();
+    let sources = session.lifecycle.sources;
+    if !sources.any() {
+        return Err("The paused recording has no capture sources.".into());
+    }
+    // Continue the timeline where prior audio ended so chunks stay ordered
+    // and non-overlapping; paused wall-clock time is excluded.
+    let spool_elapsed = spool
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .status()
+        .elapsed_seconds();
+    let resume_offset = spool_elapsed
+        .max(session.lifecycle.elapsed.as_secs_f64())
+        .min(3_600.0);
+    session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
+    session.lifecycle.resume(requested_at)?;
+    session.temp_dir.take();
+
+    let temp_dir = tempfile::Builder::new()
+        .prefix("savia-companion-")
+        .tempdir()
+        .map_err(|_| "Could not prepare temporary audio storage.".to_string())?;
+    if sources.microphone {
+        if let Err(error) = capture::authorize_microphone(temp_dir.path()) {
+            session.lifecycle.pause(requested_at);
+            session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
+            return Err(error);
+        }
+    }
+    let generation = Instant::now();
+    session.lifecycle.reanchor_start(generation);
+    session.temp_dir = Some(temp_dir);
+    // Shift the device clock origin back by the recorded offset so new
+    // segments continue the timeline instead of restarting at zero.
+    let origin = generation
+        .checked_sub(std::time::Duration::from_secs_f64(resume_offset))
+        .unwrap_or(generation);
+    if sources.system {
+        let started = match session.temp_dir.as_ref() {
+            Some(temp_dir) => SystemCapture::start(temp_dir.path(), Arc::clone(&spool), origin),
+            None => Err("Could not prepare temporary audio storage.".into()),
+        };
+        match started {
+            Ok(system) => session.system = Some(system),
+            Err(error) => {
+                session.temp_dir.take();
+                session.lifecycle.pause(generation);
+                session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
+                return Err(error);
+            }
+        }
+    }
+    if sources.microphone {
+        match MicrophoneCapture::start(Arc::clone(&spool), origin) {
+            Ok(microphone) => session.microphone = Some(microphone),
+            Err(error) => {
+                session.temp_dir.take();
+                session.microphone.take();
+                session.system.take();
+                session.lifecycle.pause(generation);
+                session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
+                return Err(error);
+            }
+        }
+    }
+    drop(session);
+    spawn_elapsed_watcher(capture.clone(), generation);
+    Ok(capture
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .status())
+}
+
+#[tauri::command]
+async fn pause_capture(capture: TauriState<'_, SharedCapture>) -> Result<CaptureStatus, String> {
+    let capture = capture.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut session = capture
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        session.pause()?;
+        Ok(session.status())
+    })
+    .await
+    .map_err(|_| "Could not pause audio capture.".to_string())?
+}
+
+#[tauri::command]
+async fn resume_capture(capture: TauriState<'_, SharedCapture>) -> Result<CaptureStatus, String> {
+    let capture = capture.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || resume_capture_blocking(capture))
+        .await
+        .map_err(|_| "Could not resume audio capture.".to_string())?
 }
 
 #[tauri::command]
@@ -536,7 +704,7 @@ async fn read_capture(
         let spool = spool
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if capture.lifecycle.state == State::Recording {
+        if capture.lifecycle.state == State::Recording || capture.lifecycle.state == State::Paused {
             return Err("Captured audio is available only after recording has stopped.".into());
         }
         let chunks = spool.chunks_for(source);
@@ -654,6 +822,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             capture_status,
             start_capture,
+            pause_capture,
+            resume_capture,
             stop_capture,
             discard_capture,
             read_capture,

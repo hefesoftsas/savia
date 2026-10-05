@@ -119,8 +119,58 @@ jobs:
         with:
           targets: aarch64-apple-darwin
       - run: pnpm install --frozen-lockfile
+      - name: Import Apple Developer ID certificate (optional)
+        if: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          certificate_path="$RUNNER_TEMP/apple-certificate.p12"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          keychain_password="${KEYCHAIN_PASSWORD:-actions}"
+          security create-keychain -p "$keychain_password" "$RUNNER_TEMP/actions.keychain"
+          security default-keychain -s "$RUNNER_TEMP/actions.keychain"
+          security unlock-keychain -p "$keychain_password" "$RUNNER_TEMP/actions.keychain"
+          security import "$certificate_path" -k "$RUNNER_TEMP/actions.keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$RUNNER_TEMP/actions.keychain"
+          rm "$certificate_path"
       - name: Build Apple silicon DMG
+        env:
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm --filter @savia/companion exec tauri build --target aarch64-apple-darwin --bundles dmg -- --locked
+      - name: Verify Apple silicon bundle
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(apps/companion/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg)
+          apps=(apps/companion/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app)
+          if [ "${#dmgs[@]}" -ne 1 ]; then
+            echo "Expected one Apple silicon DMG; found ${#dmgs[@]}." >&2
+            exit 1
+          fi
+          echo "DMG size:"
+          ls -lh "${dmgs[0]}"
+          du -h "${dmgs[0]}"
+          dmg_bytes="$(stat -f%z "${dmgs[0]}")"
+          if [ "$dmg_bytes" -lt 1048576 ]; then
+            echo "DMG is smaller than 1 MiB; the frontend bundle is probably missing." >&2
+            exit 1
+          fi
+          if [ "${#apps[@]}" -eq 1 ]; then
+            echo "codesign:"
+            codesign --verify --deep --strict "${apps[0]}" || true
+            echo "spctl:"
+            spctl -a -t exec -vv "${apps[0]}" || true
+          fi
+          if [ -z "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]; then
+            echo "No APPLE_SIGNING_IDENTITY secret configured; the DMG is unsigned and macOS Gatekeeper will report it as damaged until it is signed and notarized. This is expected for preview artifacts."
+          fi
       - name: Stage download
         run: |
           set -euo pipefail
@@ -200,7 +250,7 @@ jobs:
           cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
           Savia Companion preview builds for Android, Windows x64, and macOS Apple silicon.
 
-          Android is a debug APK signed with a generated debug test key. The Windows installer and macOS app are unsigned; the macOS build is not notarized. These are test artifacts, not qualified or production releases. OS security warnings are expected.
+          Android is a debug APK signed with a generated debug test key. The Windows installer is unsigned. The macOS build is signed and notarized only when Apple Developer ID secrets are configured; otherwise it is unsigned and macOS Gatekeeper reports it as damaged. These are test artifacts, not qualified or production releases. OS security warnings are expected. The desktop installers are small (a few MB) because Tauri uses the system WebView; that size alone does not mean the download is corrupt.
           NOTES
           gh release create "$tag" \
             downloads/savia-companion-android.apk \
