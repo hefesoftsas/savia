@@ -188,6 +188,69 @@ describe("WhatsappConnectionsPage", () => {
     expect(screen.getByRole("button", { name: "Enviar prueba" })).toBeVisible();
   });
 
+  it("keeps a saved assistant available to disable after disconnect", async () => {
+    const user = userEvent.setup();
+    tenantState.id = 101;
+    const services = createServices();
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      {
+        id: "connection-1",
+        agencyId: 101,
+        provider: "whatsapp",
+        status: "disconnected",
+        phoneNumberId: null,
+        displayPhoneNumber: null,
+        wabaId: null,
+        externalAccountLabel: null,
+        lastValidatedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    vi.mocked(services.whatsapp.getAssistant).mockResolvedValue({
+      settings: {
+        connectionId: "connection-1",
+        tenantId: 101,
+        employeeId: "employee-1",
+        enabled: true,
+        allowedContacts: ["573001234567"],
+        updatedBy: "admin-1",
+      },
+      employees: [{ id: "employee-1", name: "Asistente de soporte" }],
+      webhookReady: false,
+    });
+
+    render(
+      <MemoryRouter>
+        <WhatsappConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+
+    const assistantToggle = await screen.findByRole("checkbox", {
+      name: "Responder con IA",
+    });
+    expect(assistantToggle).toBeChecked();
+    expect(assistantToggle).toBeEnabled();
+    expect(
+      screen.getByText("Asistente de WhatsApp", { selector: "h2" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Enviar prueba" })).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: "WhatsApp nativo" }),
+    ).toBeNull();
+
+    await user.click(assistantToggle);
+    await user.click(screen.getByRole("button", { name: "Guardar asistente" }));
+    await waitFor(() =>
+      expect(services.whatsapp.updateAssistant).toHaveBeenCalledWith({
+        agencyId: 101,
+        employeeId: "employee-1",
+        enabled: false,
+        allowedContacts: ["+573001234567"],
+      }),
+    );
+  });
+
   it("keeps the connected integration usable when the native settings request fails", async () => {
     tenantState.id = 101;
     const services = createServices();

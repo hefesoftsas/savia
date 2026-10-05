@@ -44,6 +44,8 @@ type ConnectionRow = {
 export type WhatsappInboxItem = WhatsappInboundInput & {
   tenantId: number;
   connectionId: string;
+  assignedEmployeeId: string | null;
+  assignedOwnerPrincipalId: string | null;
   normalizedContact: string;
   attempts: number;
   leaseToken: string;
@@ -359,8 +361,9 @@ export class WhatsappInboundRepository {
       .prepare(
         `INSERT INTO whatsapp_inbox
            (message_id,phone_number_id,waba_id,contact_phone,normalized_contact,message_text,
-            provider_timestamp,tenant_id,connection_id,state,received_at,input_payload)
-         VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?) ON CONFLICT(message_id) DO NOTHING`,
+            provider_timestamp,tenant_id,connection_id,assigned_employee_id,
+            assigned_owner_principal_id,state,received_at,input_payload)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?) ON CONFLICT(message_id) DO NOTHING`,
       )
       .bind(
         input.messageId,
@@ -372,6 +375,8 @@ export class WhatsappInboundRepository {
         canonicalTimestamp,
         binding.tenantId,
         binding.connectionId,
+        binding.employeeId,
+        binding.ownerPrincipalId,
         new Date().toISOString(),
         input.native
           ? JSON.stringify(nativeInboundSchema.parse(input.native))
@@ -535,7 +540,8 @@ export class WhatsappInboundRepository {
     const row = await this.db
       .prepare(
         `SELECT message_id,phone_number_id,waba_id,contact_phone,message_text,provider_timestamp,
-           tenant_id,connection_id,normalized_contact,generation_attempts,lease_token,input_payload
+           tenant_id,connection_id,assigned_employee_id,assigned_owner_principal_id,
+           normalized_contact,generation_attempts,lease_token,input_payload
          FROM whatsapp_inbox WHERE message_id=? AND lease_token=? AND state='generating'`,
       )
       .bind(messageId, token)
@@ -548,6 +554,8 @@ export class WhatsappInboundRepository {
         provider_timestamp: string;
         tenant_id: number;
         connection_id: string;
+        assigned_employee_id: string | null;
+        assigned_owner_principal_id: string | null;
         normalized_contact: string;
         generation_attempts: number;
         lease_token: string;
@@ -563,6 +571,8 @@ export class WhatsappInboundRepository {
           timestamp: row.provider_timestamp,
           tenantId: row.tenant_id,
           connectionId: row.connection_id,
+          assignedEmployeeId: row.assigned_employee_id,
+          assignedOwnerPrincipalId: row.assigned_owner_principal_id,
           normalizedContact: row.normalized_contact,
           attempts: row.generation_attempts,
           leaseToken: row.lease_token,
@@ -578,16 +588,33 @@ export class WhatsappInboundRepository {
   }
 
   async getHistory(
-    connectionId: string,
-    normalizedContact: string,
+    item: Pick<
+      WhatsappInboxItem,
+      | "connectionId"
+      | "phoneNumberId"
+      | "wabaId"
+      | "normalizedContact"
+      | "assignedEmployeeId"
+      | "assignedOwnerPrincipalId"
+    >,
   ): Promise<WhatsappHistoryMessage[]> {
+    if (!item.assignedEmployeeId || !item.assignedOwnerPrincipalId) return [];
     const rows = await this.db
       .prepare(
         `SELECT message_text,reply_text FROM whatsapp_inbox
-         WHERE connection_id=? AND normalized_contact=? AND state='completed' AND reply_text IS NOT NULL
+         WHERE connection_id=? AND phone_number_id=? AND waba_id=? AND normalized_contact=?
+           AND assigned_employee_id=? AND assigned_owner_principal_id=?
+           AND state='completed' AND reply_text IS NOT NULL
          ORDER BY received_at DESC,message_id DESC LIMIT 20`,
       )
-      .bind(connectionId, normalizedContact)
+      .bind(
+        item.connectionId,
+        item.phoneNumberId,
+        item.wabaId,
+        item.normalizedContact,
+        item.assignedEmployeeId,
+        item.assignedOwnerPrincipalId,
+      )
       .all<{ message_text: string; reply_text: string }>();
     return rows.results.reverse().flatMap((row) => [
       { role: "user" as const, content: row.message_text },
@@ -596,15 +623,43 @@ export class WhatsappInboundRepository {
   }
 
   async isWithinReplyWindow(
-    messageId: string,
+    message:
+      | string
+      | Pick<
+          WhatsappInboxItem,
+          | "messageId"
+          | "phoneNumberId"
+          | "wabaId"
+          | "tenantId"
+          | "connectionId"
+          | "assignedEmployeeId"
+          | "assignedOwnerPrincipalId"
+        >,
     now = Date.now(),
   ): Promise<boolean> {
-    const timestamp = await this.db
+    const messageId = typeof message === "string" ? message : message.messageId;
+    const scope = typeof message === "string" ? undefined : message;
+    const query = this.db
       .prepare(
-        "SELECT provider_timestamp FROM whatsapp_inbox WHERE message_id=?",
+        `SELECT i.provider_timestamp FROM whatsapp_inbox i
+         JOIN tenant_whatsapp_connections c
+           ON c.id=i.connection_id AND c.tenant_id=i.tenant_id
+           AND c.phone_number_id=i.phone_number_id AND c.waba_id=i.waba_id
+         WHERE i.message_id=?
+           AND (? = 0 OR (i.phone_number_id=? AND i.waba_id=? AND i.tenant_id=? AND i.connection_id=?
+             AND i.assigned_employee_id=? AND i.assigned_owner_principal_id=?))`,
       )
-      .bind(messageId)
-      .first<string>("provider_timestamp");
+      .bind(
+        messageId,
+        scope ? 1 : 0,
+        scope?.phoneNumberId ?? null,
+        scope?.wabaId ?? null,
+        scope?.tenantId ?? null,
+        scope?.connectionId ?? null,
+        scope?.assignedEmployeeId ?? null,
+        scope?.assignedOwnerPrincipalId ?? null,
+      );
+    const timestamp = await query.first<string>("provider_timestamp");
     const receivedAt = timestamp ? Date.parse(timestamp) : Number.NaN;
     return (
       Number.isFinite(receivedAt) && now - receivedAt <= MESSAGE_AGE_LIMIT_MS

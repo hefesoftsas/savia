@@ -185,15 +185,17 @@ type ReplyWindow = { open: boolean; inboundMessageId?: string };
 async function readReplyWindow(
   db: D1Database,
   connectionId: string,
+  phoneNumberId: string,
+  wabaId: string,
   contact: string,
 ): Promise<ReplyWindow> {
   const latest = await db
     .prepare(
       `SELECT message_id,provider_timestamp FROM whatsapp_inbox
-       WHERE connection_id=? AND normalized_contact=?
+       WHERE connection_id=? AND phone_number_id=? AND waba_id=? AND normalized_contact=?
        ORDER BY provider_timestamp DESC,received_at DESC,message_id DESC LIMIT 1`,
     )
-    .bind(connectionId, contact)
+    .bind(connectionId, phoneNumberId, wabaId, contact)
     .first<{ message_id: string; provider_timestamp: string }>();
   if (!latest) return { open: false };
   const timestamp = Date.parse(latest.provider_timestamp);
@@ -462,18 +464,25 @@ export function registerWhatsappNativeRoutes(
       );
     if (!connectionRow)
       return context.json({ error: "Connected sender required" }, 409);
+    if (!binding.connection.phoneNumberId || !binding.connection.wabaId)
+      return context.json({ error: "Connected sender required" }, 409);
     const configuration = binding.native ?? defaultNativeConfiguration;
 
     const requestPayload = JSON.stringify({ reply, consent });
     const prior = await db
       .prepare(
-        `SELECT tenant_id,connection_id,contact_phone,state,outbound_message_id,reply_payload
+        `SELECT tenant_id,connection_id,phone_number_id,waba_id,assigned_employee_id,
+                assigned_owner_principal_id,contact_phone,state,outbound_message_id,reply_payload
          FROM whatsapp_native_outbox WHERE idempotency_key=?`,
       )
       .bind(idempotencyKey)
       .first<{
         tenant_id: number;
         connection_id: string;
+        phone_number_id: string | null;
+        waba_id: string | null;
+        assigned_employee_id: string | null;
+        assigned_owner_principal_id: string | null;
         contact_phone: string;
         state: string;
         outbound_message_id: string | null;
@@ -483,6 +492,10 @@ export function registerWhatsappNativeRoutes(
       if (
         prior.tenant_id !== agencyId ||
         prior.connection_id !== binding.connectionId ||
+        prior.phone_number_id !== binding.connection.phoneNumberId ||
+        prior.waba_id !== binding.connection.wabaId ||
+        prior.assigned_employee_id !== binding.employeeId ||
+        prior.assigned_owner_principal_id !== binding.ownerPrincipalId ||
         prior.contact_phone !== to ||
         prior.reply_payload !== requestPayload
       )
@@ -518,7 +531,13 @@ export function registerWhatsappNativeRoutes(
       );
     }
     if (reply.kind !== "template") {
-      const window = await readReplyWindow(db, binding.connectionId, to);
+      const window = await readReplyWindow(
+        db,
+        binding.connectionId,
+        binding.connection.phoneNumberId,
+        binding.connection.wabaId,
+        to,
+      );
       if (!window.open)
         return context.json(
           { error: "Reply window is closed; use an approved template" },
@@ -529,13 +548,18 @@ export function registerWhatsappNativeRoutes(
     const reserved = await db
       .prepare(
         `INSERT INTO whatsapp_native_outbox
-          (idempotency_key,tenant_id,connection_id,contact_phone,reply_payload,state,created_at)
-         VALUES(?,?,?,?,?,'responding',?) ON CONFLICT(idempotency_key) DO NOTHING`,
+          (idempotency_key,tenant_id,connection_id,phone_number_id,waba_id,
+           assigned_employee_id,assigned_owner_principal_id,contact_phone,reply_payload,state,created_at)
+         VALUES(?,?,?,?,?,?,?,?,?,'responding',?) ON CONFLICT(idempotency_key) DO NOTHING`,
       )
       .bind(
         idempotencyKey,
         agencyId,
         binding.connectionId,
+        binding.connection.phoneNumberId,
+        binding.connection.wabaId,
+        binding.employeeId,
+        binding.ownerPrincipalId,
         to,
         requestPayload,
         new Date().toISOString(),
@@ -558,16 +582,28 @@ export function registerWhatsappNativeRoutes(
           );
           if (
             !current ||
+            !current.connection.phoneNumberId ||
+            !current.connection.wabaId ||
             current.tenantId !== agencyId ||
             current.connectionId !== binding.connectionId ||
             current.employeeId !== binding.employeeId ||
+            current.ownerPrincipalId !== binding.ownerPrincipalId ||
+            current.connection.phoneNumberId !==
+              binding.connection.phoneNumberId ||
+            current.connection.wabaId !== binding.connection.wabaId ||
             !current.allowedContacts.includes(to) ||
             JSON.stringify(current.native ?? defaultNativeConfiguration) !==
               JSON.stringify(configuration)
           )
             throw new Error("WHATSAPP_NATIVE_BINDING_CHANGED");
           if (reply.kind !== "template") {
-            const window = await readReplyWindow(db, current.connectionId, to);
+            const window = await readReplyWindow(
+              db,
+              current.connectionId,
+              current.connection.phoneNumberId,
+              current.connection.wabaId,
+              to,
+            );
             if (!window.open) throw new Error("WHATSAPP_REPLY_WINDOW_CLOSED");
           }
         },

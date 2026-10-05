@@ -100,7 +100,7 @@ export function whatsappInboundFromEnvironment(
                         contactPhone.replace(/\D/g, ""),
                       ) ||
                       !input ||
-                      !(await repository.isWithinReplyWindow(input.messageId))
+                      !(await repository.isWithinReplyWindow(input))
                     )
                       throw new Error("WHATSAPP_NATIVE_DISPATCH_REVOKED");
                   },

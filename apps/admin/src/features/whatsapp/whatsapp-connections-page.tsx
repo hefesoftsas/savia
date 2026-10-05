@@ -399,6 +399,15 @@ export function WhatsappConnectionsPage({
         </IntegrationGroup>
       )}
 
+      {enabled && tenantDataIsCurrent && currentTenant.id !== null ? (
+        <WhatsappAssistantSettings
+          key={currentTenant.id}
+          services={services}
+          tenantId={currentTenant.id}
+          connected={connected}
+        />
+      ) : null}
+
       {enabled && connected && tenantDataIsCurrent ? (
         <>
           <IntegrationGroup title="Número de WhatsApp">
@@ -451,15 +460,6 @@ export function WhatsappConnectionsPage({
               </p>
             </li>
           </IntegrationGroup>
-
-          {currentTenant.id !== null ? (
-            <WhatsappAssistantSettings
-              key={currentTenant.id}
-              services={services}
-              tenantId={currentTenant.id}
-              connected={connected}
-            />
-          ) : null}
 
           {currentTenant.id !== null ? (
             <WhatsappNativeSettings

@@ -109,7 +109,7 @@ async function setup(options: { native?: NativeConfiguration } = {}) {
   });
   const nango = {
     proxy: vi.fn(async () =>
-      Response.json({ messages: [{ id: "wamid.native" }] }),
+      Response.json({ messages: [{ id: `wamid.native.${tenantId}` }] }),
     ),
   } as unknown as WhatsappNangoClient & { proxy: ReturnType<typeof vi.fn> };
 
@@ -331,6 +331,60 @@ describe("WhatsApp native message route safety", () => {
     expect(
       (await requestJson(s.appAs(), "/v1/whatsapp/native/messages", body))
         .status,
+    ).toBe(409);
+    expect(s.nango.proxy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not use an old sender's inbound message to open the reply window", async () => {
+    const s = await setup({
+      native: { ...defaultNativeConfiguration, replyButtons: true },
+    });
+    await s.addInbound();
+    const app = s.appAs();
+    await env.DB.prepare(
+      "UPDATE tenant_whatsapp_connections SET phone_number_id=?,waba_id=? WHERE id=?",
+    )
+      .bind(
+        `${s.phoneNumberId}-replacement`,
+        `${s.wabaId}-replacement`,
+        s.connectionId,
+      )
+      .run();
+    const response = await requestJson(app, "/v1/whatsapp/native/messages", {
+      agencyId: s.tenantId,
+      to: "+57 300 123 4567",
+      reply: buttonsReply(),
+      idempotencyKey: crypto.randomUUID(),
+    });
+    expect(response.status).toBe(409);
+    expect(s.nango.proxy).not.toHaveBeenCalled();
+  });
+
+  it("does not return a cached send after sender identity changes", async () => {
+    const s = await setup({
+      native: { ...defaultNativeConfiguration, replyButtons: true },
+    });
+    await s.addInbound();
+    const app = s.appAs();
+    const body = {
+      agencyId: s.tenantId,
+      to: "+57 300 123 4567",
+      reply: buttonsReply(),
+      idempotencyKey: crypto.randomUUID(),
+    };
+    const first = await requestJson(app, "/v1/whatsapp/native/messages", body);
+    expect(first.status, await first.clone().text()).toBe(200);
+    await env.DB.prepare(
+      "UPDATE tenant_whatsapp_connections SET phone_number_id=?,waba_id=? WHERE id=?",
+    )
+      .bind(
+        `${s.phoneNumberId}-replacement`,
+        `${s.wabaId}-replacement`,
+        s.connectionId,
+      )
+      .run();
+    expect(
+      (await requestJson(app, "/v1/whatsapp/native/messages", body)).status,
     ).toBe(409);
     expect(s.nango.proxy).toHaveBeenCalledTimes(1);
   });

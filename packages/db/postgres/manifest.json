@@ -181,6 +181,10 @@
     {
       "filename": "0042_assistant_generation_models.sql",
       "sha256": "0f9aca0c35db00da8ba4ab205c320bc88b172388529d2f52919b905b5eccfa68"
+    },
+    {
+      "filename": "0043_whatsapp_inbox_binding_snapshot.sql",
+      "sha256": "1f10cc3461c53b65a912eb5c53dcd46c028638740e9d1e08d219ada1151819ce"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -14884,6 +14888,22 @@
         {
           "cid": 24,
           "name": "reply_payload",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 25,
+          "name": "assigned_employee_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 26,
+          "name": "assigned_owner_principal_id",
           "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,

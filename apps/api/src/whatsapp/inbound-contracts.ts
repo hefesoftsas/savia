@@ -27,6 +27,13 @@ export type WhatsappInboundInput = {
   native?: NativeInbound;
 };
 
+export type WhatsappInboundDispatchInput = WhatsappInboundInput & {
+  tenantId: number;
+  connectionId: string;
+  assignedEmployeeId: string | null;
+  assignedOwnerPrincipalId: string | null;
+};
+
 export type WhatsappDeliveryInput = {
   phoneNumberId: string;
   wabaId: string;
@@ -55,6 +62,6 @@ export type WhatsappInboundDependencies = {
     binding: WhatsappAssistantBinding,
     text: string | NativeReply,
     contactPhone: string,
-    input?: WhatsappInboundInput,
+    input?: WhatsappInboundDispatchInput,
   ): Promise<string>;
 };

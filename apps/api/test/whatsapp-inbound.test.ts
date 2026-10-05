@@ -407,6 +407,151 @@ describe("WhatsApp inbound persistence and processing", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("fails closed when the assistant employee changes between receive and claim", async () => {
+    const s = await setup();
+    const messageId = `wamid-reassigned-${s.tenantId}`;
+    expect(await s.repository.receive(inbound(s, messageId))).toBe(true);
+    const replacementEmployeeId = `replacement-${s.tenantId}`;
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO assistant_virtual_employees
+       (id,agency_id,name,handle,system_prompt,allowed_collections,status,created_at,updated_at,created_by)
+       VALUES(?,?,'Replacement employee','replacement','Answer safely','[]','active',?,?,?)`,
+    )
+      .bind(replacementEmployeeId, s.tenantId, now, now, s.principal.id)
+      .run();
+    await s.repository.configure({
+      ...s.settings,
+      employeeId: replacementEmployeeId,
+    });
+    const generate = vi.fn(
+      async () => "Must not generate under a replacement employee",
+    );
+    const send = vi.fn(async () => "must-not-send");
+
+    expect(
+      await processWhatsappInbox(s.repository, { generate, send }),
+    ).toEqual({ processed: 0, failed: 1 });
+    expect(generate).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      await env.DB.prepare(
+        "SELECT state,failure_code FROM whatsapp_inbox WHERE message_id=?",
+      )
+        .bind(messageId)
+        .first(),
+    ).toEqual({ state: "failed", failure_code: "assistant_binding_changed" });
+  });
+
+  it("fails closed for queued legacy rows without a binding snapshot", async () => {
+    const s = await setup();
+    const messageId = `wamid-legacy-${s.tenantId}`;
+    await s.repository.receive(inbound(s, messageId));
+    await env.DB.prepare(
+      "UPDATE whatsapp_inbox SET assigned_employee_id=NULL,assigned_owner_principal_id=NULL WHERE message_id=?",
+    )
+      .bind(messageId)
+      .run();
+    const generate = vi.fn(
+      async () => "Must not generate for an unsnapshotted row",
+    );
+    const send = vi.fn(async () => "must-not-send");
+
+    expect(
+      await processWhatsappInbox(s.repository, { generate, send }),
+    ).toEqual({ processed: 0, failed: 1 });
+    expect(generate).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      await env.DB.prepare(
+        "SELECT state,failure_code FROM whatsapp_inbox WHERE message_id=?",
+      )
+        .bind(messageId)
+        .first(),
+    ).toEqual({ state: "failed", failure_code: "assistant_binding_changed" });
+  });
+
+  it("keeps history scoped to the current sender and binding snapshot", async () => {
+    const s = await setup();
+    const oldSenderMessageId = `old-sender-${s.tenantId}`;
+    await s.repository.receive(inbound(s, oldSenderMessageId));
+    expect(
+      await processWhatsappInbox(s.repository, {
+        generate: async () => "Old sender secret context",
+        send: async () => "old-outbound",
+      }),
+    ).toEqual({ processed: 1, failed: 0 });
+
+    const currentPhoneNumberId = `987654321${s.tenantId}`;
+    const currentWabaId = `87654321${s.tenantId}`;
+    await env.DB.prepare(
+      "UPDATE tenant_whatsapp_connections SET phone_number_id=?,waba_id=? WHERE id=?",
+    )
+      .bind(currentPhoneNumberId, currentWabaId, s.connectionId)
+      .run();
+    const priorBindingAt = new Date(Date.now() - 10_000).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO whatsapp_inbox
+       (message_id,phone_number_id,waba_id,contact_phone,normalized_contact,message_text,provider_timestamp,
+        tenant_id,connection_id,assigned_employee_id,assigned_owner_principal_id,state,reply_text,received_at)
+       VALUES(?,?,?,?,?,?,?,?,?,? ,?,'completed',?,?)`,
+    )
+      .bind(
+        `prior-binding-${s.tenantId}`,
+        currentPhoneNumberId,
+        currentWabaId,
+        "+57 300 123 4567",
+        "573001234567",
+        "Previous employee confidential context",
+        priorBindingAt,
+        s.tenantId,
+        s.connectionId,
+        `former-employee-${s.tenantId}`,
+        `former-owner-${s.tenantId}`,
+        "Previous employee confidential answer",
+        priorBindingAt,
+      )
+      .run();
+    const currentInbound = {
+      ...inbound(s, `current-sender-first-${s.tenantId}`),
+      phoneNumberId: currentPhoneNumberId,
+      wabaId: currentWabaId,
+    };
+    await s.repository.receive(currentInbound);
+    const firstCurrentSend = vi.fn(async () => "current-outbound-1");
+    expect(
+      await processWhatsappInbox(s.repository, {
+        generate: async (_binding, history) => {
+          expect(history).toEqual([]);
+          return "Current sender context only";
+        },
+        send: firstCurrentSend,
+      }),
+    ).toEqual({ processed: 1, failed: 0 });
+
+    await s.repository.receive({
+      ...currentInbound,
+      messageId: `current-sender-second-${s.tenantId}`,
+    });
+    let secondHistory: Awaited<ReturnType<typeof s.repository.getHistory>> = [];
+    expect(
+      await processWhatsappInbox(s.repository, {
+        generate: async (_binding, history) => {
+          secondHistory = history;
+          return "Second current sender answer";
+        },
+        send: async () => "current-outbound-2",
+      }),
+    ).toEqual({ processed: 1, failed: 0 });
+    expect(secondHistory).toEqual([
+      { role: "user", content: currentInbound.text },
+      { role: "assistant", content: "Current sender context only" },
+    ]);
+    expect(JSON.stringify(secondHistory)).not.toContain(
+      "Old sender secret context",
+    );
+  });
+
   it("lets an authorized administrator disable a stale binding", async () => {
     const s = await setup();
     const platformAdmin = await upsertPrincipal(env.DB, {
@@ -589,15 +734,22 @@ it("persists native input and a structured reply before sending, retaining reada
       send,
     }),
   ).toEqual({ processed: 1, failed: 0 });
-  expect(await s.repository.getHistory(s.connectionId, "573001234567")).toEqual(
-    [
-      { role: "user", content: input.text },
-      {
-        role: "assistant",
-        content: expect.stringContaining("Elige un servicio"),
-      },
-    ],
-  );
+  expect(
+    await s.repository.getHistory({
+      connectionId: s.connectionId,
+      phoneNumberId: s.phoneNumberId,
+      wabaId: s.wabaId,
+      normalizedContact: "573001234567",
+      assignedEmployeeId: s.employeeId,
+      assignedOwnerPrincipalId: s.principal.id,
+    }),
+  ).toEqual([
+    { role: "user", content: input.text },
+    {
+      role: "assistant",
+      content: expect.stringContaining("Elige un servicio"),
+    },
+  ]);
 });
 
 it("does not send a generated button response after the tenant revokes the capability", async () => {

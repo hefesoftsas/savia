@@ -692,6 +692,8 @@ export const whatsappInbox = sqliteTable(
     failureCode: text("failure_code"),
     receivedAt: text("received_at").notNull(),
     completedAt: text("completed_at"),
+    assignedEmployeeId: text("assigned_employee_id"),
+    assignedOwnerPrincipalId: text("assigned_owner_principal_id"),
   },
   (table) => [
     check(
@@ -726,7 +728,11 @@ export const whatsappInbox = sqliteTable(
     ),
     index("whatsapp_inbox_contact_history_idx").on(
       table.connectionId,
+      table.phoneNumberId,
+      table.wabaId,
       table.normalizedContact,
+      table.assignedEmployeeId,
+      table.assignedOwnerPrincipalId,
       table.state,
       table.receivedAt,
     ),
@@ -751,6 +757,10 @@ export const whatsappNativeOutbox = sqliteTable(
     connectionId: text("connection_id")
       .notNull()
       .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+    phoneNumberId: text("phone_number_id"),
+    wabaId: text("waba_id"),
+    assignedEmployeeId: text("assigned_employee_id"),
+    assignedOwnerPrincipalId: text("assigned_owner_principal_id"),
     contactPhone: text("contact_phone").notNull(),
     replyPayload: text("reply_payload").notNull(),
     state: text("state").notNull(),

@@ -46,12 +46,6 @@ export async function processWhatsappInbox(
     );
     if (!item) continue;
 
-    if (!(await repository.isWithinReplyWindow(item.messageId))) {
-      await repository.fail(item.messageId, token, "inbound_message_expired");
-      failed++;
-      continue;
-    }
-
     let binding = await repository.resolve(item.phoneNumberId, item.wabaId);
     if (
       !binding ||
@@ -67,6 +61,21 @@ export async function processWhatsappInbox(
       failed++;
       continue;
     }
+    if (
+      !item.assignedEmployeeId ||
+      !item.assignedOwnerPrincipalId ||
+      binding.employeeId !== item.assignedEmployeeId ||
+      binding.ownerPrincipalId !== item.assignedOwnerPrincipalId
+    ) {
+      await repository.fail(item.messageId, token, "assistant_binding_changed");
+      failed++;
+      continue;
+    }
+    if (!(await repository.isWithinReplyWindow(item))) {
+      await repository.fail(item.messageId, token, "inbound_message_expired");
+      failed++;
+      continue;
+    }
 
     if (dependencies.indicator) {
       try {
@@ -75,10 +84,7 @@ export async function processWhatsappInbox(
         /* Metadata indicators must not block the conversation. */
       }
     }
-    const history = await repository.getHistory(
-      item.connectionId,
-      item.normalizedContact,
-    );
+    const history = await repository.getHistory(item);
     let reply: string;
     let outgoing: string | NativeReply;
     try {
@@ -113,7 +119,7 @@ export async function processWhatsappInbox(
       continue;
     }
 
-    if (!(await repository.isWithinReplyWindow(item.messageId))) {
+    if (!(await repository.isWithinReplyWindow(item))) {
       await repository.fail(item.messageId, token, "inbound_message_expired");
       failed++;
       continue;
@@ -149,7 +155,7 @@ export async function processWhatsappInbox(
       item.phoneNumberId,
       item.wabaId,
     );
-    if (!(await repository.isWithinReplyWindow(item.messageId))) {
+    if (!(await repository.isWithinReplyWindow(item))) {
       await repository.fail(item.messageId, token, "inbound_message_expired");
       failed++;
       continue;

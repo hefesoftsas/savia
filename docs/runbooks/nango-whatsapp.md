@@ -120,7 +120,12 @@ replacement connections do not invalidate an existing healthy connection.
 2. Set `WHATSAPP_META_APP_SECRET` and `WHATSAPP_WEBHOOK_VERIFY_TOKEN` as backend
    secrets in the intended environment. The first is the app secret, not the
    Meta system-user messaging token held by Nango. Missing secrets keep the
-   webhook unavailable and prevent enabling automatic replies.
+   webhook unavailable and prevent enabling automatic replies. Repository deployment
+   workflows read the same two secret names from their GitHub deployment environment
+   (`preview` or `production`) and upload the pair only to the API worker. Configure
+   both together; neither is required for deployments without this integration, but
+   an incomplete pair is rejected. Values never belong in tracked configuration.
+   Preview and production credentials are configured independently.
 3. Create an active virtual employee in the intended tenant with its prompt and
    optional reference documents. Use the tenant's default model or a model
    explicitly enabled by its administrator. External contacts receive plain-text
@@ -144,6 +149,20 @@ Routing requires exactly one enabled binding for the registered phone-number
 ID and WABA ID, an active tenant and connection owner membership, and an active
 employee belonging to that tenant. Shared senders with ambiguous enabled
 bindings fail closed. Other tenants do not inherit the pilot configuration.
+
+Pending messages retain the employee and connection owner that accepted them.
+Changing either identity before processing makes those messages fail closed;
+legacy queued rows without an acceptance identity are also rejected. History is
+scoped to the tenant connection, contact, phone-number ID, WABA ID, and assistant
+identity so sender replacements and employee reassignment cannot reuse old
+conversation context. Native manual sends also retain the sender and assistant
+identity with their idempotency record; a changed identity cannot return an old
+success receipt. Reply windows use only inbound events for the currently connected
+phone-number ID and WABA ID. Apply `0043_whatsapp_inbox_binding_snapshot.sql`
+before serving these identity fences.
+Assistant controls remain visible for the selected tenant when its connection is
+disconnected or requires reconnection, so administrators can disable an existing
+binding before reconnecting. Sending and enabling still require a healthy sender.
 
 The webhook checks `X-Hub-Signature-256` against the raw body and durably stores
 accepted messages before acknowledging them, including validated native payloads.
