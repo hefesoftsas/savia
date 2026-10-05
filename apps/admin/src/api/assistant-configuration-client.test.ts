@@ -42,12 +42,16 @@ describe("AssistantConfigurationClient", () => {
       apiKey: "not-a-real-browser-input",
       model: "openai/gpt-5",
       allowedModels: ["openai/gpt-5-mini"],
+      imageGenerationModel: "provider/image-model",
+      speechModel: "provider/speech-model",
     });
 
     const request = fetcher.mock.calls[0]?.[1] as RequestInit;
     expect(String(request.body)).toContain("not-a-real-browser-input");
     expect(JSON.parse(String(request.body))).toMatchObject({
       allowedModels: ["openai/gpt-5-mini"],
+      imageGenerationModel: "provider/image-model",
+      speechModel: "provider/speech-model",
     });
     expect(saved.global).toMatchObject({ keyState: "configured" });
     expect(JSON.stringify(saved)).not.toContain("not-a-real-browser-input");

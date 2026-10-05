@@ -2,6 +2,93 @@ import { describe, expect, it, vi } from "vitest";
 import { WhatsappClient } from "./whatsapp-client";
 
 describe("WhatsappClient", () => {
+  it("loads tenant-native settings and assets, saves settings, sends explicit native tests, and uploads media", async () => {
+    const configuration = {
+      replyButtons: false,
+      listMessages: false,
+      mediaUnderstanding: false,
+      readReceipts: false,
+      typingIndicator: false,
+      flows: [],
+      catalogs: [],
+      templates: [],
+      media: [],
+      locations: [],
+    };
+    const api = {
+      get: vi
+        .fn()
+        .mockResolvedValueOnce({
+          data: {
+            configuration,
+            configured: true,
+            contributions: [{ pluginId: "insurance.quotes" }],
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            flows: [{ id: "12345", name: "Cotizar", status: "PUBLISHED" }],
+            templates: [],
+          },
+        }),
+      put: vi.fn().mockResolvedValue({ data: configuration }),
+      post: vi.fn().mockResolvedValue({ data: { messageId: "wamid.native" } }),
+      postForm: vi.fn().mockResolvedValue({
+        data: { mediaId: "98765", type: "image", filename: "photo.png" },
+      }),
+    };
+    const client = new WhatsappClient(api as never);
+    await expect(client.getNative(101)).resolves.toMatchObject({
+      configured: true,
+      configuration: { replyButtons: false, flows: [] },
+    });
+    await expect(client.listNativeAssets(101)).resolves.toMatchObject({
+      flows: [{ id: "12345", name: "Cotizar" }],
+    });
+    await expect(
+      client.updateNative({ agencyId: 101, configuration }),
+    ).resolves.toEqual(configuration);
+    await expect(
+      client.sendNativeMessage({
+        agencyId: 101,
+        to: "+573001234567",
+        reply: { kind: "text", text: "Prueba" },
+        idempotencyKey: "123e4567-e89b-42d3-a456-426614174000",
+        consent: true,
+      }),
+    ).resolves.toEqual({ messageId: "wamid.native" });
+    await expect(
+      client.uploadNativeMedia(101, new File(["image"], "photo.png")),
+    ).resolves.toEqual({
+      mediaId: "98765",
+      type: "image",
+      filename: "photo.png",
+    });
+
+    expect(api.get).toHaveBeenNthCalledWith(
+      1,
+      "/v1/whatsapp/native?agencyId=101",
+    );
+    expect(api.get).toHaveBeenNthCalledWith(
+      2,
+      "/v1/whatsapp/native/assets?agencyId=101",
+    );
+    expect(api.put).toHaveBeenCalledWith("/v1/whatsapp/native", {
+      agencyId: 101,
+      configuration,
+    });
+    expect(api.post).toHaveBeenCalledWith("/v1/whatsapp/native/messages", {
+      agencyId: 101,
+      to: "+573001234567",
+      reply: { kind: "text", text: "Prueba" },
+      idempotencyKey: "123e4567-e89b-42d3-a456-426614174000",
+      consent: true,
+    });
+    const [mediaPath, form] = api.postForm.mock.calls[0];
+    expect(mediaPath).toBe("/v1/whatsapp/native/media?agencyId=101");
+    expect((form as FormData).get("file")).toBeInstanceOf(File);
+  });
+
   it("uses only Savia's curated WhatsApp paths and opaque connection identifiers", async () => {
     const api = {
       get: vi

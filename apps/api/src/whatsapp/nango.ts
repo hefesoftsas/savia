@@ -91,22 +91,45 @@ function safeMetadata(value: unknown): Record<string, string | string[]> {
 
 const graphVersionPattern = /^\/v\d{2}\.\d+/;
 const graphResourcePattern =
-  /^\/v\d{2}\.\d+\/(?:me|\d{5,20}(?:\/(?:messages|message_templates|phone_numbers))?)$/;
+  /^\/v\d{2}\.\d+\/(?:me|\d{5,20}(?:\/(?:messages|message_templates|phone_numbers|flows|assets|media))?)$/;
 
 export function allowedWhatsappProxyPath(
   method: "GET" | "POST",
   path: string,
+  baseUrl?: string,
 ): boolean {
+  if (baseUrl !== undefined) {
+    if (baseUrl !== "https://lookaside.fbsbx.com" || method !== "GET")
+      return false;
+    try {
+      const attachment = new URL(path, baseUrl);
+      return (
+        attachment.origin === baseUrl &&
+        !attachment.username &&
+        !attachment.password &&
+        !attachment.hash &&
+        attachment.pathname.startsWith("/whatsapp_business/attachments/")
+      );
+    } catch {
+      return false;
+    }
+  }
   let url: URL;
   try {
     url = new URL(path, "https://savia.invalid");
   } catch {
     return false;
   }
-  if (url.origin !== "https://savia.invalid") return false;
+  if (
+    url.origin !== "https://savia.invalid" ||
+    url.hash ||
+    url.username ||
+    url.password
+  )
+    return false;
   if (!graphVersionPattern.test(url.pathname)) return false;
   if (!graphResourcePattern.test(url.pathname)) return false;
-  if (method === "POST") return url.pathname.endsWith("/messages");
+  if (method === "POST") return /\/(messages|media)$/.test(url.pathname);
   return method === "GET";
 }
 
@@ -114,7 +137,9 @@ function proxyHeaders(apiKey: string, request: WhatsappProxyRequest): Headers {
   const headers = authorizationHeaders(apiKey);
   headers.set("connection-id", request.connection.nangoConnectionId);
   headers.set("provider-config-key", request.connection.nangoIntegrationId);
-  if (request.body !== undefined)
+  headers.set("retries", "0");
+  if (request.baseUrl) headers.set("base-url-override", request.baseUrl);
+  if (request.body !== undefined && !(request.body instanceof FormData))
     headers.set("content-type", "application/json");
   return headers;
 }
@@ -271,7 +296,9 @@ export function createWhatsappNangoClient(
         throw new WhatsappUnavailableError(
           "The requested WhatsApp operation is unavailable",
         );
-      if (!allowedWhatsappProxyPath(request.method, request.path))
+      if (
+        !allowedWhatsappProxyPath(request.method, request.path, request.baseUrl)
+      )
         throw new WhatsappUnavailableError(
           "The requested WhatsApp operation is unavailable",
         );
@@ -285,7 +312,9 @@ export function createWhatsappNangoClient(
           body:
             request.body === undefined
               ? undefined
-              : JSON.stringify(request.body),
+              : request.body instanceof FormData
+                ? request.body
+                : JSON.stringify(request.body),
         });
       } catch {
         throw new WhatsappUpstreamError();

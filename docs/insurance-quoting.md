@@ -6,6 +6,30 @@ Step-by-step auto quote flow (`savia.insurance-quoter` + `insurance.quotes`).
 Each selected insurer product runs as its own independent flow; products run
 concurrently and each provider flow executes its steps sequentially.
 
+## WhatsApp intake
+
+The quote plugin exports a static WhatsApp Flow intake contribution through the
+release catalog. It identifies `insurance.quotes`, the `savia.insurance-quoter`
+solution and the `insurance-auto-light` Savia Request bundle, and returns the
+same validated `vehicle` and `applicant` shape used by the quote wizard. The
+Flow collects vehicle, applicant, contact and explicit data-processing consent.
+Flow completion is untrusted input and must be validated again by the server.
+
+This contribution collects information only. It does not enable provider
+execution, choose products from contact messages or start quotes. A tenant must
+install the `insurance.quotes` plugin and `savia.insurance-quoter` solution,
+enable products and vehicle lookup in that tenant's quote settings, and prepare
+the matching `insurance-auto-light` Savia Request bundle with that tenant's
+provider credentials before a trusted server flow can request quotes. The Meta
+WhatsApp Business account must also have the Flow created and published before
+it can be sent.
+
+Future execution must resolve allowed products from the tenant's saved settings
+and invoke the existing trusted quote action with the validated canonical
+input. It must use durable idempotency for a completed Flow submission and keep
+provider execution out of AI tools. Receiving a questionnaire is not a quote;
+quote results and their CRM history should follow the existing quote lifecycle.
+
 ## Performance
 
 - Quote startup records elapsed time for setup (`setupMs`), CRM persistence
