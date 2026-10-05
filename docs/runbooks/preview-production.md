@@ -96,6 +96,54 @@ prove that every public automated client can pass the domain's bot protection.
 Bot protection remains enabled for preview and production. Promotion evidence
 is created only after this authenticated check succeeds.
 
+## Recover an older preview interface
+
+The shared `savia-preview` gateway is a release target for the successful
+`main` CI workflow. Use [branch previews](preview-environments.md) for manual
+feature testing. A direct Wrangler deployment from another checkout can replace
+its assets independently of the API and database, bypassing CI's superseded
+commit check. An update notice can then install that older interface even while
+newer integration records remain intact.
+
+If a released feature disappears after **Actualizar y recargar**:
+
+1. Compare the gateway's active version with **Verify deployed gateway** in the
+   latest successful **Deploy Savia preview** run. Use the run's tested commit
+   and version ID; a health check alone does not identify its frontend release.
+
+   ```sh
+   pnpm --filter @savia/api exec wrangler deployments status --name savia-preview
+   pnpm --filter @savia/api exec wrangler deployments list --name savia-preview
+   ```
+
+2. Inspect the visible interface and the script URL in its rendered document.
+   Compare an existing tab with a new tab. Both can share a service worker, so
+   matching old interfaces are evidence to investigate, not proof by themselves
+   that the server reverted. Confirm the deployment history before changing the
+   cache policy or treating this as lost application data.
+3. If an unintended direct deployment replaced the verified release, coordinate
+   with anyone deploying preview and restore the exact previously verified
+   gateway version. Check its `API` service and `OFFICE_RUNTIME` bucket bindings
+   first. Replace `<verified-version-id>` with the version recorded in the
+   successful CI run; do not infer it from the most recent deployment alone.
+
+   ```sh
+   pnpm --filter @savia/api exec wrangler versions view <verified-version-id> --name savia-preview
+   pnpm --filter @savia/api exec wrangler rollback <verified-version-id> --name savia-preview --message "Restore verified preview release"
+   ```
+
+   This restores the gateway code and assets without reverting bound D1/R2
+   resources. It is operational recovery of an already verified release, not a
+   replacement for CI validation of new source changes.
+
+4. Use the app's **Actualizar y recargar** action, then perform a normal reload.
+   Verify the feature and its saved backend record still appear. Do not clear
+   site data: pending offline changes and credentials must remain intact.
+5. Confirm the restored gateway version is active and record the recovery in
+   private operational notes. Resume the regular `main` CI delivery flow for
+   subsequent changes; do not publish private tenant inventories or credentials
+   in the recovery PR or workflow artifacts.
+
 ## Promote to production
 
 1. Verify that preview succeeded for the current `main` commit and test preview.

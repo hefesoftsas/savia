@@ -10,6 +10,7 @@ export type AssistantConfigurationSetting = {
   tenantId?: number;
   keyState: AssistantConfigurationKeyState;
   model: string | null;
+  allowedModels?: string[] | null;
   transcriptionModel?: string | null;
   transcriptionEndpoint?: TranscriptionEndpoint | null;
   summaryModel?: string | null;
@@ -35,6 +36,7 @@ export type AssistantConfigurationWrite = {
   apiKey?: string;
   clearApiKey?: boolean;
   model?: string | null;
+  allowedModels?: string[] | null;
   transcriptionModel?: string | null;
   transcriptionEndpoint?: TranscriptionEndpoint | null;
   summaryModel?: string | null;
@@ -56,6 +58,11 @@ export type AssistantModel = {
   modalities?: AssistantModelModalities;
   supportsTools?: boolean;
   transcriptionEndpoint?: TranscriptionEndpoint;
+};
+
+export type AssistantModelPolicy = {
+  defaultModel: string;
+  allowedModels: AssistantModel[];
 };
 
 export type AssistantActiveTenant = {
@@ -99,6 +106,10 @@ export class AssistantConfigurationClient {
         : `/v1/assistant/models?tenantId=${tenantId}`,
     );
     return response.models;
+  }
+
+  modelPolicy(): Promise<AssistantModelPolicy> {
+    return this.apiClient.get("/v1/assistant/model-policy");
   }
 
   activeTenant(): Promise<AssistantActiveTenant> {
