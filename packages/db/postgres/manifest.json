@@ -164,7 +164,7 @@
     },
     {
       "filename": "0039_tenant_whatsapp_connections.sql",
-      "sha256": "65ddb16417f2af7409ed965a21a2c906de32abf48ef354e59e024887ff970e37"
+      "sha256": "e6eafd41a53d954223452ee9eed1c09a5ed893aaa39c57744d004c18ac062131"
     }
   ],
   "sqliteOnlyDerivedTables": [
