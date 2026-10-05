@@ -163,6 +163,10 @@
       "sha256": "3104b10feacba25c67f5d4e431ab14cb8148b6c34b4eaa5413d09f74228ec3ff"
     },
     {
+      "filename": "0039_assistant_allowed_models.sql",
+      "sha256": "d0b52f45f16b41ae5f9be8b29c5aec637836f462bfce2ace6efdb1d86bed2a02"
+    },
+    {
       "filename": "0039_tenant_whatsapp_connections.sql",
       "sha256": "e6eafd41a53d954223452ee9eed1c09a5ed893aaa39c57744d004c18ac062131"
     }
@@ -2304,6 +2308,14 @@
         {
           "cid": 10,
           "name": "transcription_endpoint",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "allowed_models",
           "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,
