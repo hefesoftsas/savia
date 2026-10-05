@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   customType,
   foreignKey,
   index,
@@ -613,6 +614,140 @@ export const assistantVirtualEmployees = sqliteTable(
       table.handle,
     ),
     index("assistant_virtual_employees_agency_index").on(table.agencyId),
+  ],
+);
+
+export const tenantWhatsappAssistantBindings = sqliteTable(
+  "tenant_whatsapp_assistant_bindings",
+  {
+    tenantId: bigint("tenant_id")
+      .primaryKey()
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+    employeeId: text("employee_id")
+      .notNull()
+      .references(() => assistantVirtualEmployees.id, { onDelete: "cascade" }),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+    allowedContacts: text("allowed_contacts").notNull().default("[]"),
+    updatedBy: text("updated_by")
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "restrict" }),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    check(
+      "tenant_whatsapp_assistant_bindings_enabled_check",
+      sql`${table.enabled} IN (0, 1)`,
+    ),
+    check(
+      "tenant_whatsapp_assistant_bindings_contacts_check",
+      sql`json_valid(${table.allowedContacts}) AND json_type(${table.allowedContacts}) = 'array'`,
+    ),
+    uniqueIndex("tenant_whatsapp_assistant_bindings_connection_unique").on(
+      table.connectionId,
+    ),
+  ],
+);
+
+export const whatsappInbox = sqliteTable(
+  "whatsapp_inbox",
+  {
+    messageId: text("message_id").primaryKey().notNull(),
+    phoneNumberId: text("phone_number_id").notNull(),
+    wabaId: text("waba_id").notNull(),
+    contactPhone: text("contact_phone").notNull(),
+    normalizedContact: text("normalized_contact").notNull(),
+    messageText: text("message_text").notNull(),
+    providerTimestamp: text("provider_timestamp").notNull(),
+    tenantId: bigint("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+    state: text("state").notNull().default("pending"),
+    generationAttempts: integer("generation_attempts").notNull().default(0),
+    retryAt: text("retry_at"),
+    leaseToken: text("lease_token"),
+    leaseUntil: text("lease_until"),
+    replyText: text("reply_text"),
+    sendStartedAt: text("send_started_at"),
+    outboundMessageId: text("outbound_message_id"),
+    deliveryStatus: text("delivery_status"),
+    deliveryRank: integer("delivery_rank").notNull().default(0),
+    deliveryErrorCodes: text("delivery_error_codes").notNull().default("[]"),
+    failureCode: text("failure_code"),
+    receivedAt: text("received_at").notNull(),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    check(
+      "whatsapp_inbox_state_check",
+      sql`${table.state} IN ('pending', 'generating', 'responding', 'completed', 'failed')`,
+    ),
+    check(
+      "whatsapp_inbox_attempts_check",
+      sql`${table.generationAttempts} >= 0`,
+    ),
+    check(
+      "whatsapp_inbox_delivery_rank_check",
+      sql`${table.deliveryRank} >= 0`,
+    ),
+    check(
+      "whatsapp_inbox_errors_check",
+      sql`json_valid(${table.deliveryErrorCodes}) AND json_type(${table.deliveryErrorCodes}) = 'array'`,
+    ),
+    uniqueIndex("whatsapp_inbox_outbound_unique").on(table.outboundMessageId),
+    index("whatsapp_inbox_pending_idx").on(
+      table.state,
+      table.retryAt,
+      table.receivedAt,
+    ),
+    index("whatsapp_inbox_contact_history_idx").on(
+      table.connectionId,
+      table.normalizedContact,
+      table.state,
+      table.receivedAt,
+    ),
+    index("whatsapp_inbox_sender_idx").on(
+      table.phoneNumberId,
+      table.wabaId,
+      table.receivedAt,
+    ),
+    uniqueIndex("whatsapp_inbox_active_contact_unique")
+      .on(table.connectionId, table.normalizedContact)
+      .where(sql`${table.state} IN ('generating', 'responding')`),
+  ],
+);
+
+export const whatsappDeliveryReceipts = sqliteTable(
+  "whatsapp_delivery_receipts",
+  {
+    phoneNumberId: text("phone_number_id").notNull(),
+    wabaId: text("waba_id").notNull(),
+    messageId: text("message_id").notNull(),
+    status: text("status").notNull(),
+    deliveryRank: integer("delivery_rank").notNull(),
+    errorCode: text("error_code"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    check(
+      "whatsapp_delivery_receipts_status_check",
+      sql`${table.status} IN ('sent', 'delivered', 'read', 'failed')`,
+    ),
+    check(
+      "whatsapp_delivery_receipts_rank_check",
+      sql`${table.deliveryRank} >= 0`,
+    ),
+    primaryKey({
+      columns: [table.phoneNumberId, table.wabaId, table.messageId],
+    }),
+    index("whatsapp_delivery_receipts_message_idx").on(table.messageId),
   ],
 );
 

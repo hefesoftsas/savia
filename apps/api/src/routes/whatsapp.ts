@@ -43,10 +43,15 @@ const testSendBodySchema = z.object({
   agencyId: agencyIdSchema,
   to: z
     .string()
-    .trim()
-    .min(7)
-    .max(20)
-    .regex(/^\+?\d+$/),
+    .max(32)
+    .transform((value) => value.replace(/\s/g, ""))
+    .pipe(
+      z
+        .string()
+        .min(7)
+        .max(20)
+        .regex(/^\+?\d+$/),
+    ),
   text: z.string().trim().min(1).max(1000),
 });
 const numberBodySchema = z.object({

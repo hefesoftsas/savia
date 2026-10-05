@@ -16,9 +16,9 @@ Owner: platform administrator. Review date: 2026-11-05.
   (`apps/api/src/whatsapp/nango.ts`): `GET /v21.0/...` reads and
   `POST /v21.0/<phone_number_id>/messages` sends. Any other provider path
   is rejected with `WHATSAPP_UNAVAILABLE`.
-- Inbound WhatsApp webhooks are out of scope for this iteration: Nango does
-  not forward Meta webhooks, so delivery receipts and replies arrive only
-  when a Meta webhook subscription is configured.
+- Incoming text and delivery receipts can arrive directly from Meta at
+  `/webhooks/whatsapp`. Nango remains the outbound credential transport;
+  Chatwoot is optional and is not part of the direct assistant flow.
 
 ## Nango preparation (browser handoff)
 
@@ -38,6 +38,8 @@ NANGO_BASE_URL=https://<host-api-nango>
 NANGO_CONNECT_URL=https://<host-connect-nango>
 NANGO_WHATSAPP_INTEGRATION_ID=whatsapp-business
 NANGO_API_KEY=<server-side-nango-secret>
+WHATSAPP_META_APP_SECRET=<meta-app-secret-for-signature-verification>
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=<random-subscription-verification-token>
 ```
 
 Use `wrangler secret put NANGO_API_KEY` for the server key. Production and
@@ -92,9 +94,14 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
    phone number live against the WhatsApp Cloud API through
    the proxy, and persists only safe metadata with status `connected`.
 6. **Probar envío** sends a short free-form text through
-   `POST /v21.0/<phone_number_id>/messages`. Delivery outside an open
-   24-hour customer-service window requires a pre-approved template, which
-   this endpoint does not send; the API then reports `WHATSAPP_SEND_FAILED`.
+   `POST /v21.0/<phone_number_id>/messages`. Destination numbers may include
+   whitespace for readability; Savia removes whitespace before validating and
+   sending the number. The plus sign and digits are preserved, and other
+   characters are rejected. Delivery outside an open 24-hour customer-service
+   window requires a pre-approved template, which this endpoint does not send.
+   A successful API response confirms Meta accepted the request, not that the
+   message was delivered; asynchronous delivery failures are not surfaced
+   without inbound webhook handling.
 
 **Reconectar** uses Nango's reconnect session endpoint with the existing
 connection and integration IDs, preserving the tenant binding. Authentication
@@ -103,6 +110,60 @@ reconnection. Invalid phone IDs, temporary upstream errors, and rejected
 replacement connections do not invalidate an existing healthy connection.
 
 ## Verification after deployment
+
+### Direct assistant pilot
+
+1. Apply `0040_whatsapp_assistant.sql` before serving the updated API. The
+   PostgreSQL source projection and core schema contain the same persistence.
+2. Set `WHATSAPP_META_APP_SECRET` and `WHATSAPP_WEBHOOK_VERIFY_TOKEN` as backend
+   secrets in the intended environment. The first is the app secret, not the
+   Meta system-user messaging token held by Nango. Missing secrets keep the
+   webhook unavailable and prevent enabling automatic replies.
+3. Create an active virtual employee in the intended tenant with its prompt and
+   optional reference documents. Use the tenant's default model or a model
+   explicitly enabled by its administrator. External contacts receive plain-text
+   answers without MCP tools, user credentials or administrative actions.
+4. Open **My integrations → WhatsApp → Asistente de WhatsApp**. Select the
+   employee, enter pilot contacts with country codes (one per line), enable
+   **Responder con IA**, and save. An empty contact list never means everyone.
+   Authenticated `GET` and `PUT /v1/whatsapp/assistant` require an explicit
+   `agencyId` and a tenant administrator; personal API keys cannot manage it.
+5. Verify the public endpoint's GET challenge and rejection of unsigned POSTs
+   before changing Meta's callback. Set the callback to
+   `https://<deployment-host>/webhooks/whatsapp` and subscribe to `messages`.
+   Moving an existing callback from Chatwoot routes new events to Savia instead.
+   Keep the previous URL in private deployment notes for rollback.
+6. From an allowed contact, send a new text to the connected sender. Confirm
+   one reply, then ask a follow-up that uses earlier conversation context.
+   Replay the same event and confirm that it produces no second send. Verify
+   a disallowed contact and another tenant cannot trigger this assistant.
+
+Routing requires exactly one enabled binding for the registered phone-number
+ID and WABA ID, an active tenant and connection owner membership, and an active
+employee belonging to that tenant. Shared senders with ambiguous enabled
+bindings fail closed. Other tenants do not inherit the pilot configuration.
+
+The webhook checks `X-Hub-Signature-256` against the raw body and durably stores
+accepted text before acknowledging it. Unsupported media is ignored. Incoming
+message IDs deduplicate retries. The existing minute scheduler recovers pending
+work; Worker background processing can start immediately. Leases serialize each
+contact's conversation and fence stale processors. Generation retries are
+bounded. Sending is recorded before calling Meta, and an uncertain send is
+terminal rather than automatically repeated.
+
+`whatsapp_inbox` stores contact-specific history, saved replies, outbound message
+IDs, processing failures and delivery status. `whatsapp_delivery_receipts`
+preserves receipts arriving before the send response, and monotonic updates
+prevent delayed events from downgrading delivered/read messages. Check these
+records using tenant-scoped operational queries; do not export private message
+content or credentials to logs or public handoffs.
+
+Disable **Responder con IA** to stop the pilot without disconnecting Nango.
+Automatic free-form replies require a recent inbound message; expired pending
+messages do not trigger a send. No template, audio, attachment or human handoff
+workflow is implemented in this iteration.
+
+### Existing connection checks
 
 1. With `NANGO_WHATSAPP_INTEGRATION_ID` unset, confirm the WhatsApp tab shows
    **No disponible** and `POST /v1/whatsapp/connections/connect-session`

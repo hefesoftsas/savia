@@ -32,6 +32,19 @@ export type WhatsappConnectSession = {
   apiUrl: string;
 };
 
+export type WhatsappAssistantConfiguration = {
+  settings: {
+    connectionId: string;
+    tenantId: number;
+    employeeId: string;
+    enabled: boolean;
+    allowedContacts: string[];
+    updatedBy: string;
+  } | null;
+  employees: Array<{ id: string; name: string }>;
+  webhookReady: boolean;
+};
+
 type WhatsappProviderDocument = {
   id: "whatsapp";
   kind: "whatsapp-provider";
@@ -64,6 +77,29 @@ function agencyQuery(agencyId?: number): string {
 
 export class WhatsappClient {
   constructor(private readonly api: ApiClient) {}
+
+  async getAssistant(
+    agencyId: number,
+  ): Promise<WhatsappAssistantConfiguration> {
+    return (
+      await this.api.get<{ data: WhatsappAssistantConfiguration }>(
+        `/v1/whatsapp/assistant${agencyQuery(agencyId)}`,
+      )
+    ).data;
+  }
+
+  async updateAssistant(input: {
+    agencyId: number;
+    employeeId: string;
+    enabled: boolean;
+    allowedContacts: string[];
+  }): Promise<NonNullable<WhatsappAssistantConfiguration["settings"]>> {
+    return (
+      await this.api.put<{
+        data: NonNullable<WhatsappAssistantConfiguration["settings"]>;
+      }>("/v1/whatsapp/assistant", input)
+    ).data;
+  }
 
   async listProviders(agencyId?: number): Promise<WhatsappProvider[]> {
     const response = await this.api.get<{ data: WhatsappProviderDocument[] }>(

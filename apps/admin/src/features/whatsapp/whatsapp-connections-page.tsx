@@ -21,6 +21,7 @@ import {
   type IntegrationStatusTone,
 } from "@/features/personal-integrations/integration-ui";
 import { Skeleton } from "@/components/ui/skeleton";
+import { WhatsappAssistantSettings } from "./whatsapp-assistant-settings";
 
 type NangoConnectEvent = unknown;
 
@@ -449,6 +450,15 @@ export function WhatsappConnectionsPage({
               </p>
             </li>
           </IntegrationGroup>
+
+          {currentTenant.id !== null ? (
+            <WhatsappAssistantSettings
+              key={currentTenant.id}
+              services={services}
+              tenantId={currentTenant.id}
+              connected={connected}
+            />
+          ) : null}
 
           <IntegrationGroup title="Probar envío">
             <li className="space-y-3 px-5 py-4">

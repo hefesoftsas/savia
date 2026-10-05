@@ -1,5 +1,9 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it, vi } from "vitest";
+vi.mock("../src/whatsapp/inbound-processor", () => ({
+  processWhatsappInbox: vi.fn(async () => ({ processed: 0, failed: 0 })),
+}));
+import { processWhatsappInbox } from "../src/whatsapp/inbound-processor";
 vi.mock("../src/bookings/jobs", () => ({
   runBookingJobs: vi.fn(async () => ({ completed: 0, failed: 0, skipped: 0 })),
 }));
@@ -54,6 +58,19 @@ it("ticks workflows in preview without activating external CRM synchronization",
 });
 
 import { createApiRuntime } from "../src/runtime";
+it.each(["true", "false"])(
+  "recovers durable WhatsApp replies in scheduler mode %s",
+  async (mode) => {
+    vi.clearAllMocks();
+    await worker.scheduled({} as ScheduledController, {
+      ...env,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: mode,
+      WHATSAPP_META_APP_SECRET: "test-app-secret",
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-verify-token",
+    });
+    expect(processWhatsappInbox).toHaveBeenCalledTimes(1);
+  },
+);
 it("passes the native webhook transport to scheduled workflows", async () => {
   vi.clearAllMocks();
   const workflowFetch = vi.fn<typeof fetch>();

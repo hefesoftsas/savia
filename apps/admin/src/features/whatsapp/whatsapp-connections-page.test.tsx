@@ -61,6 +61,14 @@ function createServices() {
       }),
       updateNumber: vi.fn(),
       testSend: vi.fn(),
+      getAssistant: vi
+        .fn()
+        .mockResolvedValue({
+          settings: null,
+          employees: [],
+          webhookReady: false,
+        }),
+      updateAssistant: vi.fn(),
       disconnect: vi.fn().mockResolvedValue(undefined),
     },
   } as unknown as Pick<AppServices, "whatsapp">;
