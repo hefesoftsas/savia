@@ -11,9 +11,11 @@ import {
   apiOrigin as validateApiOrigin,
   companionRequest,
   canUploadRecording,
+  decodePreviewAudio,
   native,
   type Capabilities,
   type CaptureStatus,
+  type Source,
 } from "./client";
 import "./styles.css";
 
@@ -48,6 +50,10 @@ function App() {
   const [noticeIsError, setNoticeIsError] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<Source, string | null>>({
+    microphone: null,
+    system: null,
+  });
   const inFlight = useRef(false);
   const mounted = useRef(true);
 
@@ -89,6 +95,7 @@ function App() {
 
   const start = () =>
     run("Starting recording", async () => {
+      revokePreviews();
       const next = await native<CaptureStatus>("start_capture", {
         sessionId: crypto.randomUUID(),
         sources: { microphone, system },
@@ -109,10 +116,47 @@ function App() {
   const discard = () =>
     run("Discarding audio", async () => {
       setStatus(await native<CaptureStatus>("discard_capture"));
+      revokePreviews();
       setConsent(false);
       setSaved(false);
       setNotice("");
       setNoticeIsError(false);
+    });
+
+  const revokePreviews = () => {
+    setPreviews((current) => {
+      for (const url of Object.values(current)) {
+        if (url) URL.revokeObjectURL(url);
+      }
+      return { microphone: null, system: null };
+    });
+  };
+
+  const loadPreview = (source: Source) =>
+    run("Loading preview", async () => {
+      const segments = (status.chunks ?? [])
+        .filter((chunk) => chunk.source === source)
+        .sort((a, b) => a.sequence - b.sequence);
+      if (!segments.length) {
+        throw new Error("There is no captured audio to preview yet.");
+      }
+      const parts = await Promise.all(
+        segments.map((segment) =>
+          native<{ base64: string }>("read_capture_chunk", {
+            source,
+            sequence: segment.sequence,
+          }),
+        ),
+      );
+      const bytes = decodePreviewAudio(parts);
+      const url = URL.createObjectURL(
+        new Blob([bytes.buffer], { type: "audio/ogg" }),
+      );
+      setPreviews((current) => {
+        const previous = current[source];
+        if (previous) URL.revokeObjectURL(previous);
+        return { ...current, [source]: url };
+      });
     });
 
   const connect = (event: FormEvent) => {
@@ -226,6 +270,9 @@ function App() {
   const connected = Boolean(capabilities);
   const complete = ready && saved;
   const selectedSources = microphone || system;
+  const previewSources = [
+    ...new Set((status.chunks ?? []).map((chunk) => chunk.source)),
+  ];
   const reviewHref = recordingReviewHref(appOrigin);
   const locked = Boolean(busy) || status.state === "recording";
   const actionDisabled =
@@ -438,6 +485,38 @@ function App() {
                 </li>
               ))}
             </ul>
+          )}
+          {ready && previewSources.length > 0 && (
+            <div className="preview-panel" aria-label="Local audio preview">
+              <p className="preview-title">
+                Preview on this device before uploading
+              </p>
+              {previewSources.map((source) => {
+                const url = previews[source];
+                return (
+                  <div key={source} className="preview-row">
+                    <span>
+                      {source === "microphone" ? "Microphone" : "System audio"}
+                    </span>
+                    {url ? (
+                      <audio className="preview-audio" src={url} controls />
+                    ) : (
+                      <button
+                        className="discard-action"
+                        type="button"
+                        disabled={Boolean(busy)}
+                        onClick={() => void loadPreview(source)}
+                      >
+                        Preview{" "}
+                        {source === "microphone"
+                          ? "microphone"
+                          : "system audio"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
           {status.recovered && (
             <p className="notice" role="status">
