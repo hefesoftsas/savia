@@ -1,3 +1,9 @@
+import {
+  nativeConfigurationSchema,
+  nativeReplySchema,
+  type NativeReply,
+} from "./native";
+import { nativeInboundSchema } from "./native-input";
 import { dialectFor, type SqlDialect } from "@savia/db/dialect";
 import type { ActiveWhatsappConnection } from "./contracts";
 import type {
@@ -16,6 +22,7 @@ type BindingRow = {
   updated_by: string;
   created_at: string;
   updated_at: string;
+  native_config: string;
 };
 
 type ConnectionRow = {
@@ -50,7 +57,8 @@ export type WhatsappHistoryMessage = {
 const MAX_CONTACT_DIGITS = 32;
 const MAX_MESSAGE_LENGTH = 4096;
 const GENERATION_ATTEMPTS = 3;
-const PROCESSING_LEASE_MS = 2 * 60 * 1000;
+// Media download, transcription and completion run sequentially with bounded timeouts.
+const PROCESSING_LEASE_MS = 4 * 60 * 1000;
 const MESSAGE_AGE_LIMIT_MS = 24 * 60 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
 
@@ -76,6 +84,13 @@ function settingFromRow(row: BindingRow): WhatsappAssistantSettings {
     enabled: row.enabled === 1,
     allowedContacts: parseContacts(row.allowed_contacts),
     updatedBy: row.updated_by,
+    ...(row.native_config && row.native_config !== "{}"
+      ? {
+          native: nativeConfigurationSchema.parse(
+            JSON.parse(row.native_config),
+          ),
+        }
+      : {}),
   };
 }
 
@@ -169,7 +184,7 @@ export class WhatsappInboundRepository {
   ): Promise<WhatsappAssistantSettings | undefined> {
     const row = await this.db
       .prepare(
-        `SELECT tenant_id,connection_id,employee_id,enabled,allowed_contacts,updated_by,created_at,updated_at
+        `SELECT tenant_id,connection_id,employee_id,enabled,allowed_contacts,updated_by,created_at,updated_at,native_config
          FROM tenant_whatsapp_assistant_bindings WHERE tenant_id=?`,
       )
       .bind(tenantId)
@@ -202,6 +217,9 @@ export class WhatsappInboundRepository {
       throw new Error(
         "Enable WhatsApp assistant only with an explicit contact allowlist",
       );
+    const native = settings.native
+      ? nativeConfigurationSchema.parse(settings.native)
+      : undefined;
     const owner = await this.db
       .prepare(
         `SELECT 1
@@ -245,15 +263,16 @@ export class WhatsappInboundRepository {
     await this.db
       .prepare(
         `INSERT INTO tenant_whatsapp_assistant_bindings
-           (tenant_id,connection_id,employee_id,enabled,allowed_contacts,updated_by,created_at,updated_at)
-         VALUES(?,?,?,?,?,?,?,?)
+           (tenant_id,connection_id,employee_id,enabled,allowed_contacts,updated_by,created_at,updated_at,native_config)
+         VALUES(?,?,?,?,?,?,?,?,?)
          ON CONFLICT(tenant_id) DO UPDATE SET
            connection_id=excluded.connection_id,
            employee_id=excluded.employee_id,
            enabled=excluded.enabled,
            allowed_contacts=excluded.allowed_contacts,
            updated_by=excluded.updated_by,
-           updated_at=excluded.updated_at`,
+           updated_at=excluded.updated_at,
+           native_config=CASE WHEN ?=1 THEN excluded.native_config ELSE tenant_whatsapp_assistant_bindings.native_config END`,
       )
       .bind(
         settings.tenantId,
@@ -264,6 +283,8 @@ export class WhatsappInboundRepository {
         settings.updatedBy,
         now,
         now,
+        JSON.stringify(native ?? {}),
+        native ? 1 : 0,
       )
       .run();
   }
@@ -275,7 +296,7 @@ export class WhatsappInboundRepository {
     const result = await this.db
       .prepare(
         `SELECT b.tenant_id,b.connection_id,b.employee_id,b.enabled,b.allowed_contacts,
-                b.updated_by,b.created_at,b.updated_at,
+                b.updated_by,b.created_at,b.updated_at,b.native_config,
                 c.id,c.tenant_id AS connection_tenant_id,c.created_by_principal_id,
                 c.nango_connection_id,c.nango_integration_id,
                 c.status,c.phone_number_id,c.display_phone_number,c.waba_id,c.external_account_label,
@@ -338,8 +359,8 @@ export class WhatsappInboundRepository {
       .prepare(
         `INSERT INTO whatsapp_inbox
            (message_id,phone_number_id,waba_id,contact_phone,normalized_contact,message_text,
-            provider_timestamp,tenant_id,connection_id,state,received_at)
-         VALUES(?,?,?,?,?,?,?,?,?,'pending',?) ON CONFLICT(message_id) DO NOTHING`,
+            provider_timestamp,tenant_id,connection_id,state,received_at,input_payload)
+         VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?) ON CONFLICT(message_id) DO NOTHING`,
       )
       .bind(
         input.messageId,
@@ -352,6 +373,9 @@ export class WhatsappInboundRepository {
         binding.tenantId,
         binding.connectionId,
         new Date().toISOString(),
+        input.native
+          ? JSON.stringify(nativeInboundSchema.parse(input.native))
+          : null,
       )
       .run();
     return inserted.meta.changes === 1;
@@ -511,7 +535,7 @@ export class WhatsappInboundRepository {
     const row = await this.db
       .prepare(
         `SELECT message_id,phone_number_id,waba_id,contact_phone,message_text,provider_timestamp,
-           tenant_id,connection_id,normalized_contact,generation_attempts,lease_token
+           tenant_id,connection_id,normalized_contact,generation_attempts,lease_token,input_payload
          FROM whatsapp_inbox WHERE message_id=? AND lease_token=? AND state='generating'`,
       )
       .bind(messageId, token)
@@ -527,6 +551,7 @@ export class WhatsappInboundRepository {
         normalized_contact: string;
         generation_attempts: number;
         lease_token: string;
+        input_payload: string | null;
       }>();
     return row
       ? {
@@ -541,6 +566,13 @@ export class WhatsappInboundRepository {
           normalizedContact: row.normalized_contact,
           attempts: row.generation_attempts,
           leaseToken: row.lease_token,
+          ...(row.input_payload
+            ? {
+                native: nativeInboundSchema.parse(
+                  JSON.parse(row.input_payload),
+                ),
+              }
+            : {}),
         }
       : undefined;
   }
@@ -584,16 +616,25 @@ export class WhatsappInboundRepository {
     token: string,
     reply: string,
     now: string,
+    payload?: NativeReply,
   ): Promise<boolean> {
     const leaseUntil = new Date(
       Date.parse(now) + PROCESSING_LEASE_MS,
     ).toISOString();
     const result = await this.db
       .prepare(
-        `UPDATE whatsapp_inbox SET state='responding',reply_text=?,send_started_at=?,lease_until=?
+        `UPDATE whatsapp_inbox SET state='responding',reply_text=?,send_started_at=?,lease_until=?,reply_payload=?
          WHERE message_id=? AND state='generating' AND lease_token=? AND lease_until>?`,
       )
-      .bind(reply, now, leaseUntil, messageId, token, now)
+      .bind(
+        reply,
+        now,
+        leaseUntil,
+        payload ? JSON.stringify(nativeReplySchema.parse(payload)) : null,
+        messageId,
+        token,
+        now,
+      )
       .run();
     return result.meta.changes === 1;
   }

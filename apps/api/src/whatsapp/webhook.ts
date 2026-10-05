@@ -1,3 +1,4 @@
+import { parseWhatsappNativeInput } from "./native-input";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import type {
   WhatsappDeliveryInput,
@@ -245,13 +246,17 @@ export function registerWhatsappWebhook(
           for (const message of (messages ?? []) as unknown[]) {
             if (!isRecord(message) || !nonemptyString(message.type))
               return c.text("Invalid webhook payload", 400);
-            if (message.type !== "text") continue;
+            let parsed;
+            try {
+              parsed = parseWhatsappNativeInput(message);
+            } catch {
+              return c.text("Invalid webhook payload", 400);
+            }
+            if (!parsed) continue;
             if (
               !nonemptyString(message.id) ||
               !nonemptyString(message.from) ||
-              !nonemptyString(message.timestamp) ||
-              !isRecord(message.text) ||
-              typeof message.text.body !== "string"
+              !nonemptyString(message.timestamp)
             )
               return c.text("Invalid webhook payload", 400);
             acceptedInbound =
@@ -260,8 +265,8 @@ export function registerWhatsappWebhook(
                 wabaId,
                 messageId: message.id,
                 contactPhone: message.from,
-                text: message.text.body,
                 timestamp: message.timestamp,
+                ...parsed,
               })) || acceptedInbound;
           }
 

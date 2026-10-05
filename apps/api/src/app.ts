@@ -1,3 +1,5 @@
+import { createWhatsappNangoClient } from "./whatsapp/nango";
+import { registerWhatsappNativeRoutes } from "./whatsapp/native-routes";
 import { AssistantThreadRepository } from "./assistant/threads";
 import { PersonalApiKeys } from "./auth/personal-api-keys";
 import { registerPagesSearchSettingsRoutes } from "./routes/pages-search-settings";
@@ -267,6 +269,12 @@ export function createApp(
     app,
     db,
     Boolean(whatsappWebhook?.appSecret && whatsappWebhook?.verifyToken),
+  );
+  registerWhatsappNativeRoutes(
+    app,
+    db,
+    whatsapp?.nango ?? createWhatsappNangoClient({}),
+    whatsapp?.nativeContributions,
   );
   if (whatsappWebhook) registerWhatsappWebhook(app, whatsappWebhook);
   registerStudioRoutes(

@@ -1,3 +1,4 @@
+import { defaultNativeConfiguration } from "../src/whatsapp/native";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { upsertPrincipal } from "../src/auth/identity-repository";
@@ -548,4 +549,124 @@ describe("WhatsApp inbound persistence and processing", () => {
       failure_code: "generation_failed",
     });
   });
+});
+
+it("persists native input and a structured reply before sending, retaining readable history", async () => {
+  const s = await setup();
+  await s.repository.configure({
+    ...s.settings,
+    native: { ...defaultNativeConfiguration, replyButtons: true },
+  });
+  const input = {
+    ...inbound(s),
+    native: {
+      kind: "choice" as const,
+      choiceType: "button" as const,
+      id: "services",
+      title: "Servicios",
+    },
+  };
+  await s.repository.receive(input);
+  const reply = {
+    kind: "buttons" as const,
+    text: "Elige un servicio",
+    options: [{ id: "support", title: "Soporte" }],
+  };
+  const send = vi.fn(async (_binding, actual) => {
+    expect(actual).toEqual(reply);
+    const row = await env.DB.prepare(
+      "SELECT input_payload,reply_payload FROM whatsapp_inbox WHERE message_id=?",
+    )
+      .bind(input.messageId)
+      .first<{ input_payload: string; reply_payload: string }>();
+    expect(JSON.parse(row!.input_payload)).toEqual(input.native);
+    expect(JSON.parse(row!.reply_payload)).toEqual(reply);
+    return "wamid-native-out";
+  });
+  expect(
+    await processWhatsappInbox(s.repository, {
+      generate: async () => reply,
+      send,
+    }),
+  ).toEqual({ processed: 1, failed: 0 });
+  expect(await s.repository.getHistory(s.connectionId, "573001234567")).toEqual(
+    [
+      { role: "user", content: input.text },
+      {
+        role: "assistant",
+        content: expect.stringContaining("Elige un servicio"),
+      },
+    ],
+  );
+});
+
+it("does not send a generated button response after the tenant revokes the capability", async () => {
+  const s = await setup();
+  await s.repository.configure({
+    ...s.settings,
+    native: { ...defaultNativeConfiguration, replyButtons: true },
+  });
+  await s.repository.receive(inbound(s));
+  const send = vi.fn();
+  const result = await processWhatsappInbox(s.repository, {
+    generate: async () => {
+      await s.repository.configure({
+        ...s.settings,
+        native: defaultNativeConfiguration,
+      });
+      return {
+        kind: "buttons",
+        text: "Choose",
+        options: [{ id: "support", title: "Support" }],
+      };
+    },
+    send,
+  });
+  expect(result).toEqual({ processed: 0, failed: 1 });
+  expect(send).not.toHaveBeenCalled();
+  expect(
+    await env.DB.prepare(
+      "SELECT failure_code FROM whatsapp_inbox WHERE message_id=?",
+    )
+      .bind(`wamid-${s.tenantId}`)
+      .first("failure_code"),
+  ).toBe("assistant_binding_changed");
+});
+
+it("preserves native resources when the legacy assistant settings are updated", async () => {
+  const s = await setup();
+  const native = { ...defaultNativeConfiguration, listMessages: true };
+  await s.repository.configure({ ...s.settings, native });
+  await s.repository.configure({ ...s.settings, enabled: false });
+  expect((await s.repository.getSettings(s.tenantId))?.native).toEqual(native);
+});
+
+it("keeps the generation lease long enough for attachment transcription followed by AI completion", async () => {
+  const s = await setup();
+  const start = Date.now();
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(start);
+  try {
+    await s.repository.receive({
+      ...inbound(s),
+      native: {
+        kind: "media",
+        mediaType: "audio",
+        mediaId: "123456789",
+        mimeType: "audio/ogg",
+      },
+    });
+    const send = vi.fn().mockResolvedValue("wamid-after-transcription");
+    const result = await processWhatsappInbox(s.repository, {
+      generate: async () => {
+        vi.setSystemTime(start + 150000);
+        return "Here is the answer to your voice message.";
+      },
+      send,
+    });
+    expect(result).toEqual({ processed: 1, failed: 0 });
+    expect(send).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
 });

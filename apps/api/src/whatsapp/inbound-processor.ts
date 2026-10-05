@@ -1,3 +1,10 @@
+import {
+  nativeReplySchema,
+  nativeReplyText,
+  buildNativeMessage,
+  defaultNativeConfiguration,
+  type NativeReply,
+} from "./native";
 import type {
   WhatsappAssistantBinding,
   WhatsappInboundDependencies,
@@ -15,7 +22,8 @@ function sameBinding(
     left.tenantId === right.tenantId &&
     left.connectionId === right.connectionId &&
     left.employeeId === right.employeeId &&
-    left.ownerPrincipalId === right.ownerPrincipalId
+    left.ownerPrincipalId === right.ownerPrincipalId &&
+    JSON.stringify(left.native) === JSON.stringify(right.native)
   );
 }
 
@@ -60,18 +68,43 @@ export async function processWhatsappInbox(
       continue;
     }
 
+    if (dependencies.indicator) {
+      try {
+        await dependencies.indicator(binding, item.messageId);
+      } catch {
+        /* Metadata indicators must not block the conversation. */
+      }
+    }
     const history = await repository.getHistory(
       item.connectionId,
       item.normalizedContact,
     );
     let reply: string;
+    let outgoing: string | NativeReply;
     try {
       const generated = await dependencies.generate(
         binding,
         history,
         item.text,
+        item,
       );
-      reply = typeof generated === "string" ? generated.trim() : "";
+      if (typeof generated === "string") {
+        outgoing = generated.trim();
+        reply = outgoing;
+      } else {
+        outgoing = nativeReplySchema.parse(generated);
+        if (outgoing.kind === "template")
+          throw new Error("Automatic templates require an administrator send");
+        buildNativeMessage(
+          outgoing,
+          binding.native ?? defaultNativeConfiguration,
+          item.contactPhone,
+        );
+        reply = nativeReplyText(outgoing, binding.native).slice(
+          0,
+          MAX_REPLY_LENGTH,
+        );
+      }
       if (!reply || reply.length > MAX_REPLY_LENGTH)
         throw new Error("Generated reply is empty or too long");
     } catch {
@@ -100,7 +133,13 @@ export async function processWhatsappInbox(
 
     const startedAt = new Date().toISOString();
     if (
-      !(await repository.beginResponse(item.messageId, token, reply, startedAt))
+      !(await repository.beginResponse(
+        item.messageId,
+        token,
+        reply,
+        startedAt,
+        typeof outgoing === "string" ? undefined : outgoing,
+      ))
     )
       continue;
 
@@ -128,8 +167,9 @@ export async function processWhatsappInbox(
     try {
       const outboundId = await dependencies.send(
         beforeSend,
-        reply,
+        outgoing,
         item.contactPhone,
+        item,
       );
       if (!outboundId.trim())
         throw new Error("The provider returned no message id");

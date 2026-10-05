@@ -173,6 +173,10 @@
     {
       "filename": "0040_whatsapp_assistant.sql",
       "sha256": "d73b733959858f7288a4c0aadb24b4283551762d465a1a7831edf9e54c0e8f3c"
+    },
+    {
+      "filename": "0041_whatsapp_native.sql",
+      "sha256": "d8d581523cb932a483c0b5d51c5da2fe37c90248940637615170ce4f01f9c376"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1727,6 +1731,16 @@
       "type": "table",
       "name": "whatsapp_delivery_receipts",
       "table": "whatsapp_delivery_receipts"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_native_outbox_tenant_created",
+      "table": "whatsapp_native_outbox"
+    },
+    {
+      "type": "table",
+      "name": "whatsapp_native_outbox",
+      "table": "whatsapp_native_outbox"
     }
   ],
   "tables": [
@@ -14587,6 +14601,14 @@
           "notnull": 1,
           "dflt_value": null,
           "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "native_config",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'{}'",
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -14642,7 +14664,7 @@
           "origin": "pk"
         }
       ],
-      "checkCount": 2
+      "checkCount": 3
     },
     {
       "name": "whatsapp_inbox",
@@ -14830,6 +14852,22 @@
           "notnull": 0,
           "dflt_value": null,
           "pk": 0
+        },
+        {
+          "cid": 23,
+          "name": "input_payload",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 24,
+          "name": "reply_payload",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -14869,7 +14907,7 @@
           "origin": "pk"
         }
       ],
-      "checkCount": 4
+      "checkCount": 6
     },
     {
       "name": "whatsapp_delivery_receipts",
@@ -14937,6 +14975,117 @@
         {
           "columns": ["phone_number_id", "waba_id", "message_id"],
           "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "whatsapp_native_outbox",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "idempotency_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "contact_phone",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "reply_payload",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "outbound_message_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "completed_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenant_whatsapp_connections",
+          "from": "connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["idempotency_key"],
+          "origin": "pk"
+        },
+        {
+          "columns": ["outbound_message_id"],
+          "origin": "u"
         }
       ],
       "checkCount": 2

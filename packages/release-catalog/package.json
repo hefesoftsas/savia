@@ -10,6 +10,7 @@
     "./runtime": "./src/runtime.ts",
     "./assistant-contracts": "./src/assistant-contracts.ts",
     "./public-forms": "./src/public-forms.ts",
+    "./whatsapp": "./src/whatsapp.ts",
     "./public-ui": "./src/public-ui.ts"
   },
   "scripts": {

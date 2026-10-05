@@ -14,9 +14,11 @@ Owner: platform administrator. Review date: 2026-11-05.
   both a CRM connection and a WhatsApp connection at the same time.
 - Outbound calls go through the Nango proxy allowlist only
   (`apps/api/src/whatsapp/nango.ts`): `GET /v21.0/...` reads and
-  `POST /v21.0/<phone_number_id>/messages` sends. Any other provider path
+  `POST /v21.0/<phone_number_id>/messages` sends and
+  `POST /v21.0/<phone_number_id>/media` uploads. Verified media downloads
+  allow only the Meta attachment host `lookaside.fbsbx.com`, without redirects. Any other provider path
   is rejected with `WHATSAPP_UNAVAILABLE`.
-- Incoming text and delivery receipts can arrive directly from Meta at
+- Incoming text, native interactions, attachments and delivery receipts can arrive directly from Meta at
   `/webhooks/whatsapp`. Nango remains the outbound credential transport;
   Chatwoot is optional and is not part of the direct assistant flow.
 
@@ -144,10 +146,12 @@ employee belonging to that tenant. Shared senders with ambiguous enabled
 bindings fail closed. Other tenants do not inherit the pilot configuration.
 
 The webhook checks `X-Hub-Signature-256` against the raw body and durably stores
-accepted text before acknowledging it. Unsupported media is ignored. Incoming
+accepted messages before acknowledging them, including validated native payloads.
+Unsupported event types are ignored. Incoming
 message IDs deduplicate retries. The existing minute scheduler recovers pending
 work; Worker background processing can start immediately. Leases serialize each
-contact's conversation and fence stale processors. Generation retries are
+contact's conversation and fence stale processors. A four-minute processing
+lease accommodates media transcription followed by AI completion. Generation retries are
 bounded. Sending is recorded before calling Meta, and an uncertain send is
 terminal rather than automatically repeated.
 
@@ -160,8 +164,73 @@ content or credentials to logs or public handoffs.
 
 Disable **Responder con IA** to stop the pilot without disconnecting Nango.
 Automatic free-form replies require a recent inbound message; expired pending
-messages do not trigger a send. No template, audio, attachment or human handoff
-workflow is implemented in this iteration.
+messages do not trigger a send. Native capabilities are configured separately
+for each tenant; the existing text behavior remains available with all flags off.
+
+### Native messages and account resources
+
+Use the native WhatsApp panel after assigning an assistant and enabling the
+connection for explicitly allowed pilot contacts. Enable reply buttons (up to
+three choices), lists (up to ten options), read receipts, typing indication and
+attachment understanding individually. Meta combines typing indication with a
+read receipt; enabling typing also enables read receipts. Button and list selections preserve
+the option ID, title and reply context in the durable inbox. Locations, static
+Flow completions and catalog order requests become conversation context;
+these messages never authorize transactions or administrative operations.
+
+Register resources by a stable tenant key and label. The assistant receives
+those keys, rather than permission to invent provider IDs or arbitrary URLs:
+
+- **Flows:** create and publish a static Flow in WhatsApp Manager, then register
+  its Flow ID and initial screen. Resource discovery lists published Flows for
+  the connected WABA and excludes Flows configured with a data-exchange endpoint.
+  Completion data returns through the signed message
+  webhook. Encrypted dynamic data-exchange endpoints are not part of this path.
+- **Catalog:** attach a catalog to the WABA in Commerce Manager and register
+  the catalog ID and permitted product retailer IDs. Catalog messages show
+  selected products; inbound orders remain requests requiring a separate
+  authorized checkout implementation.
+- **Templates:** create and obtain approval for a template in Meta, then
+  register its name, language and body parameter count. Current sending
+  supports BODY and FOOTER components with positional body parameters. Named
+  placeholders and dynamic footer parameters are not supported. Administrators can send a configured
+  template with confirmed recipient consent outside the 24-hour reply window;
+  automatic AI replies cannot send templates.
+- **Media:** upload a supported file through the native panel, then register
+  its returned media ID and type. The assistant can send configured images,
+  documents, audio and video. Refresh expired provider media IDs as necessary.
+- **Locations:** register coordinates and optional name/address. Contacts can
+  also share locations with the assistant.
+
+Manual native sends use a unique idempotency key. Free-form native messages
+require a recent inbound message from the allowed contact. A repeated key with
+an uncertain send outcome never sends again automatically. Meta acceptance is
+not a delivery guarantee; inspect delivery receipts before deciding to retry.
+
+### Incoming attachments
+
+Attachment understanding is opt-in per tenant. The server verifies metadata,
+exact download host, SHA-256 checksum, MIME signature and an 8 MiB size limit.
+Files remain in private tenant-scoped R2 keys under `whatsapp/inbound/`; scheduled
+cleanup removes files older than seven days, including after webhook secrets
+are removed. Rendered preview/production configs supply the minute schedule.
+No public attachment URL is
+created. Images and PDFs require a compatible configured AI model. Plain text
+is included as untrusted context; audio uses the existing transcription
+configuration. Unsupported analysis formats, including video and DOCX, are
+acknowledged without claiming to inspect their contents. Outbound transport
+can still send a configured video. The default text-only model does not gain
+vision simply by enabling this setting.
+
+### Optional vehicle insurance intake
+
+The existing `insurance.quotes` plugin supplies a downloadable static WhatsApp
+Flow for light vehicle and applicant data. Publish that JSON in Meta and register
+its ID as a tenant resource. The contribution validates canonical quote inputs
+and consent, but does not call insurers. Future quote execution must use the
+installed plugin and its `insurance-auto-light` Savia Request bundle with tenant
+credentials, configured products and deterministic authorization. See
+[Insurance quoting](../insurance-quoting.md).
 
 ### Existing connection checks
 

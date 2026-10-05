@@ -1,3 +1,4 @@
+import { cleanupWhatsappMedia } from "./whatsapp/media-input";
 import { CompanionSessions } from "./companion/sessions";
 import { CompanionSessionJobs } from "./companion/session-jobs";
 import { CompanionService, CompanionError } from "./companion/service";
@@ -414,6 +415,13 @@ const runtime = {
   ): Promise<void> {
     const realtime = createRealtimeHubClient(environment.REALTIME_HUB);
     const runWhatsapp = async () => {
+      if (environment.DOCUMENTS) {
+        try {
+          await cleanupWhatsappMedia(environment.DOCUMENTS);
+        } catch {
+          console.error("WHATSAPP_MEDIA_CLEANUP_FAILED");
+        }
+      }
       if (
         !environment.WHATSAPP_META_APP_SECRET?.trim() ||
         !environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim()

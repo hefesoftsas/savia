@@ -23,6 +23,7 @@ import { createWhatsappRepository } from "../whatsapp/repository";
 export type WhatsappRouteDependencies = {
   nango: WhatsappNangoClient;
   provider: WhatsappProviderDefinition;
+  nativeContributions?: readonly unknown[];
 };
 
 const agencyIdSchema = z.coerce.number().int().positive();

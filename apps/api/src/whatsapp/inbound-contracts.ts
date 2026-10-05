@@ -1,3 +1,5 @@
+import type { NativeConfiguration, NativeReply } from "./native";
+import type { NativeInbound } from "./native-input";
 import type { ActiveWhatsappConnection } from "./contracts";
 
 export type WhatsappAssistantSettings = {
@@ -7,6 +9,7 @@ export type WhatsappAssistantSettings = {
   enabled: boolean;
   allowedContacts: string[];
   updatedBy: string;
+  native?: NativeConfiguration;
 };
 
 export type WhatsappAssistantBinding = WhatsappAssistantSettings & {
@@ -21,6 +24,7 @@ export type WhatsappInboundInput = {
   contactPhone: string;
   text: string;
   timestamp: string;
+  native?: NativeInbound;
 };
 
 export type WhatsappDeliveryInput = {
@@ -37,14 +41,20 @@ export type WhatsappChatMessage = {
 };
 
 export type WhatsappInboundDependencies = {
+  indicator?(
+    binding: WhatsappAssistantBinding,
+    messageId: string,
+  ): Promise<void>;
   generate(
     binding: WhatsappAssistantBinding,
     history: WhatsappChatMessage[],
     message: string,
-  ): Promise<string>;
+    input?: WhatsappInboundInput,
+  ): Promise<string | NativeReply>;
   send(
     binding: WhatsappAssistantBinding,
-    text: string,
+    text: string | NativeReply,
     contactPhone: string,
+    input?: WhatsappInboundInput,
   ): Promise<string>;
 };

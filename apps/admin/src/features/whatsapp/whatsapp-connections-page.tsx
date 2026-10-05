@@ -22,6 +22,7 @@ import {
 } from "@/features/personal-integrations/integration-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WhatsappAssistantSettings } from "./whatsapp-assistant-settings";
+import { WhatsappNativeSettings } from "./whatsapp-native-settings";
 
 type NangoConnectEvent = unknown;
 
@@ -457,6 +458,14 @@ export function WhatsappConnectionsPage({
               services={services}
               tenantId={currentTenant.id}
               connected={connected}
+            />
+          ) : null}
+
+          {currentTenant.id !== null ? (
+            <WhatsappNativeSettings
+              key={`native-${currentTenant.id}`}
+              services={services}
+              tenantId={currentTenant.id}
             />
           ) : null}
 

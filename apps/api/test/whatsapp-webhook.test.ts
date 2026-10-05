@@ -151,9 +151,9 @@ describe("WhatsApp webhook", () => {
     expect(receive).not.toHaveBeenCalled();
   });
 
-  it("records supported delivery receipts and ignores unsupported media", async () => {
+  it("records supported delivery receipts and ignores unsupported events", async () => {
     const { app, receive, receipt } = setup();
-    expect((await post(app, webhookBody(messageValue("image")))).status).toBe(
+    expect((await post(app, webhookBody(messageValue("sticker")))).status).toBe(
       200,
     );
     expect(receive).not.toHaveBeenCalled();
@@ -216,4 +216,29 @@ describe("WhatsApp webhook", () => {
     });
     expect((await post(app, body)).status).toBe(503);
   });
+});
+
+it("durably accepts signed button replies without invoking Graph during ingestion", async () => {
+  const { app, receive } = setup();
+  const value = messageValue();
+  value.messages = [
+    {
+      id: "wamid.choice",
+      from: "+15551234567",
+      timestamp: "1791200000",
+      type: "interactive",
+      interactive: {
+        type: "button_reply",
+        button_reply: { id: "services", title: "Servicios" },
+      },
+    },
+  ] as unknown as typeof value.messages;
+  expect((await post(app, webhookBody(value))).status).toBe(200);
+  expect(receive).toHaveBeenCalledWith(
+    expect.objectContaining({
+      messageId: "wamid.choice",
+      text: "Servicios",
+      native: expect.objectContaining({ kind: "choice", id: "services" }),
+    }),
+  );
 });

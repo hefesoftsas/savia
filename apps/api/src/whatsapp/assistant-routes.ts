@@ -1,3 +1,4 @@
+import { nativeConfigurationSchema } from "./native";
 import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import { actorFromContext } from "../auth/middleware";
 import type { AppActor } from "../auth/types";
@@ -30,6 +31,7 @@ const settingsOutput = z.object({
   enabled: z.boolean(),
   allowedContacts: z.array(z.string()),
   updatedBy: z.string(),
+  native: nativeConfigurationSchema.optional(),
 });
 const responseSchema = z.object({
   data: z.object({

@@ -632,6 +632,7 @@ export const tenantWhatsappAssistantBindings = sqliteTable(
       .references(() => assistantVirtualEmployees.id, { onDelete: "cascade" }),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
     allowedContacts: text("allowed_contacts").notNull().default("[]"),
+    nativeConfig: text("native_config").notNull().default("{}"),
     updatedBy: text("updated_by")
       .notNull()
       .references(() => identityPrincipals.id, { onDelete: "restrict" }),
@@ -646,6 +647,10 @@ export const tenantWhatsappAssistantBindings = sqliteTable(
     check(
       "tenant_whatsapp_assistant_bindings_contacts_check",
       sql`json_valid(${table.allowedContacts}) AND json_type(${table.allowedContacts}) = 'array'`,
+    ),
+    check(
+      "tenant_whatsapp_assistant_bindings_native_check",
+      sql`json_valid(${table.nativeConfig}) AND json_type(${table.nativeConfig}) = 'object'`,
     ),
     uniqueIndex("tenant_whatsapp_assistant_bindings_connection_unique").on(
       table.connectionId,
@@ -663,6 +668,8 @@ export const whatsappInbox = sqliteTable(
     normalizedContact: text("normalized_contact").notNull(),
     messageText: text("message_text").notNull(),
     providerTimestamp: text("provider_timestamp").notNull(),
+    inputPayload: text("input_payload"),
+    replyPayload: text("reply_payload"),
     tenantId: bigint("tenant_id")
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
@@ -701,6 +708,14 @@ export const whatsappInbox = sqliteTable(
       "whatsapp_inbox_errors_check",
       sql`json_valid(${table.deliveryErrorCodes}) AND json_type(${table.deliveryErrorCodes}) = 'array'`,
     ),
+    check(
+      "whatsapp_inbox_input_check",
+      sql`${table.inputPayload} IS NULL OR json_valid(${table.inputPayload})`,
+    ),
+    check(
+      "whatsapp_inbox_reply_check",
+      sql`${table.replyPayload} IS NULL OR json_valid(${table.replyPayload})`,
+    ),
     uniqueIndex("whatsapp_inbox_outbound_unique").on(table.outboundMessageId),
     index("whatsapp_inbox_pending_idx").on(
       table.state,
@@ -721,6 +736,39 @@ export const whatsappInbox = sqliteTable(
     uniqueIndex("whatsapp_inbox_active_contact_unique")
       .on(table.connectionId, table.normalizedContact)
       .where(sql`${table.state} IN ('generating', 'responding')`),
+  ],
+);
+
+export const whatsappNativeOutbox = sqliteTable(
+  "whatsapp_native_outbox",
+  {
+    idempotencyKey: text("idempotency_key").primaryKey().notNull(),
+    tenantId: bigint("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+    contactPhone: text("contact_phone").notNull(),
+    replyPayload: text("reply_payload").notNull(),
+    state: text("state").notNull(),
+    outboundMessageId: text("outbound_message_id").unique(),
+    createdAt: text("created_at").notNull(),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    check(
+      "whatsapp_native_outbox_reply_check",
+      sql`json_valid(${table.replyPayload})`,
+    ),
+    check(
+      "whatsapp_native_outbox_state_check",
+      sql`${table.state} IN ('responding','sent','failed')`,
+    ),
+    index("whatsapp_native_outbox_tenant_created").on(
+      table.tenantId,
+      table.createdAt,
+    ),
   ],
 );
 

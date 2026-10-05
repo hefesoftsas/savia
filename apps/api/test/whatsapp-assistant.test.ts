@@ -175,3 +175,56 @@ describe("restricted WhatsApp assistant", () => {
     ).rejects.toThrow();
   });
 });
+
+it("returns native buttons only when the tenant enabled them", async () => {
+  const { defaultNativeConfiguration } = await import("../src/whatsapp/native");
+  const s = setup({ allowedCollections: [] });
+  const reply = {
+    kind: "buttons",
+    text: "What would you like to do?",
+    options: [
+      { id: "quote", title: "Get a quote" },
+      { id: "support", title: "Support" },
+    ],
+  };
+  s.complete.mockResolvedValue(JSON.stringify(reply));
+  const native = { ...defaultNativeConfiguration, replyButtons: true };
+  expect(await s.generate({ ...binding, native }, [], "Hello")).toEqual(reply);
+  expect(s.complete.mock.calls[0][0].system).toContain("buttons");
+  await expect(
+    s.generate({ ...binding, native: defaultNativeConfiguration }, [], "Hello"),
+  ).rejects.toThrow();
+});
+
+it("does not allow the AI to initiate a template message", async () => {
+  const { defaultNativeConfiguration } = await import("../src/whatsapp/native");
+  const s = setup({ allowedCollections: [] });
+  s.complete.mockResolvedValue(
+    JSON.stringify({
+      kind: "template",
+      resourceKey: "followup",
+      parameters: [],
+    }),
+  );
+  await expect(
+    s.generate(
+      {
+        ...binding,
+        native: {
+          ...defaultNativeConfiguration,
+          templates: [
+            {
+              key: "followup",
+              label: "Follow up",
+              name: "follow_up",
+              language: "es",
+              parameterCount: 0,
+            },
+          ],
+        },
+      },
+      [],
+      "Hello",
+    ),
+  ).rejects.toThrow("WHATSAPP_AUTOMATIC_TEMPLATE_FORBIDDEN");
+});
