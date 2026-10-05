@@ -78,6 +78,7 @@ function renderApp(client: PersonalIntegrationsLike) {
 }
 
 beforeEach(() => {
+  // Keep the selected day aligned with the fixed calendar event fixtures.
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-04T12:00:00.000Z"));
 });

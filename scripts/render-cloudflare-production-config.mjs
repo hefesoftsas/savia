@@ -108,6 +108,7 @@ function apiConfig({
       NANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID: "one-drive-personal",
       NANGO_OUTLOOK_INTEGRATION_ID: "outlook",
       NANGO_LINEAR_INTEGRATION_ID: "linear",
+      NANGO_WHATSAPP_INTEGRATION_ID: "whatsapp-business",
       ...(zoomIntegrationId
         ? { NANGO_ZOOM_INTEGRATION_ID: zoomIntegrationId }
         : {}),

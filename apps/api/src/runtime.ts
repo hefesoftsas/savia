@@ -23,6 +23,11 @@ import {
   type CrmSecrets,
 } from "./external-crm/runtime";
 import {
+  whatsappNangoConfigurationFromEnvironment,
+  whatsappRoutesFromEnvironment,
+  type WhatsappSecrets,
+} from "./whatsapp/runtime";
+import {
   createSqlBridgeClient,
   sqlBridgeFromEnvironment,
   type SqlBridgeClient,
@@ -54,6 +59,11 @@ export {
   nangoConfigurationFromEnvironment,
   type CrmSecrets,
 } from "./external-crm/runtime";
+export {
+  whatsappNangoConfigurationFromEnvironment,
+  whatsappRoutesFromEnvironment,
+  type WhatsappSecrets,
+} from "./whatsapp/runtime";
 
 type AttachmentSecrets = {
   R2_ACCOUNT_ID?: string;
@@ -105,6 +115,7 @@ export type RuntimeEnvironment = {
   AuthServiceBinding &
   AssistantSecrets &
   CrmSecrets &
+  WhatsappSecrets &
   SqlBridgeSecrets &
   ConnectorGatewayEnvironment;
 
@@ -390,6 +401,7 @@ const runtime = {
         ).PAGES_VECTORIZE,
         ...(pagesSearchSchedule ? { schedule: pagesSearchSchedule } : {}),
       },
+      whatsappRoutesFromEnvironment(environment),
     ).fetch(request, environment);
     return response;
   },
