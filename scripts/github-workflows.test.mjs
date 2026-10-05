@@ -95,9 +95,18 @@ test("QuickJS PR previews require an explicit label on same-repository main PRs"
   assert.match(preview, /base\.ref == 'main'/);
   assert.match(preview, /environment: preview/);
   assert.match(preview, /PREVIEW_BRANCH: \$\{\{ github\.head_ref \}\}/);
-  assert.match(preview, /node scripts\/preview-deploy\.mjs --branch "\$PREVIEW_BRANCH"/);
-  assert.match(preview, /name: Verify QuickJS preview through authenticated service/);
-  assert.match(preview, /node scripts\/verify-quickjs-preview\.mjs --branch "\$PREVIEW_BRANCH"/);
+  assert.match(
+    preview,
+    /node scripts\/preview-deploy\.mjs --branch "\$PREVIEW_BRANCH"/,
+  );
+  assert.match(
+    preview,
+    /name: Verify QuickJS preview through authenticated service/,
+  );
+  assert.match(
+    preview,
+    /node scripts\/verify-quickjs-preview\.mjs --branch "\$PREVIEW_BRANCH"/,
+  );
   assert.ok(
     preview.indexOf("Deploy explicitly labeled QuickJS branch preview") <
       preview.indexOf("Verify QuickJS preview through authenticated service"),
@@ -182,6 +191,14 @@ test("environment deployments forward the private registry tenant map", async ()
       upload,
       /PLUGIN_REGISTRY_TENANTS: \$\{\{ secrets\.PLUGIN_REGISTRY_TENANTS \}\}/,
     );
+    assert.match(
+      upload,
+      /WHATSAPP_META_APP_SECRET: \$\{\{ secrets\.WHATSAPP_META_APP_SECRET \}\}/,
+    );
+    assert.match(
+      upload,
+      /WHATSAPP_WEBHOOK_VERIFY_TOKEN: \$\{\{ secrets\.WHATSAPP_WEBHOOK_VERIFY_TOKEN \}\}/,
+    );
   }
 });
 
@@ -208,4 +225,16 @@ test("registry deployment accepts only the current main commit", async () => {
     guard,
     /if \[ "\$approved_sha" != "\$current_sha" \]; then[\s\S]*exit 1/,
   );
+});
+
+test("coverage measures main and manual runs without duplicating required PR tests", async () => {
+  const coverage = await workflow("coverage.yml");
+  assert.match(coverage, /push:\n\s+branches: \[main\]/);
+  assert.match(coverage, /workflow_dispatch:/);
+  assert.doesNotMatch(coverage, /pull_request(?:_target)?:/);
+  assert.match(coverage, /pnpm test:coverage/);
+  assert.match(coverage, /needs: coverage/);
+  const ci = await workflow("ci.yml");
+  assert.match(ci, /pull_request:/);
+  assert.doesNotMatch(ci, /paths-ignore:|continue-on-error: true/);
 });

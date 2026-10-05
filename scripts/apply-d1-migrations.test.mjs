@@ -43,6 +43,59 @@ globalThis.fetch=async (_url,options)=>{const {sql,batch}=JSON.parse(options.bod
   };
 }
 
+test("recognizes the pre-applied assistant model migration without replaying it", () => {
+  const f = fixture();
+  try {
+    const filename = "0039_assistant_allowed_models.sql";
+    const db = new DatabaseSync(f.file);
+    db.exec("PRAGMA foreign_keys=ON");
+    db.exec(
+      "CREATE TABLE _savia_migrations (filename TEXT PRIMARY KEY, applied_at TEXT NOT NULL)",
+    );
+    for (const file of readdirSync("packages/db/migrations")
+      .filter((file) => file.endsWith(".sql") && file !== filename)
+      .sort()) {
+      db.exec(readFileSync(`packages/db/migrations/${file}`, "utf8"));
+      db.prepare(
+        "INSERT INTO _savia_migrations VALUES (?, 'already-applied')",
+      ).run(file);
+    }
+    db.exec(
+      "ALTER TABLE assistant_openrouter_settings ADD COLUMN allowed_models TEXT",
+    );
+    db.prepare(
+      "INSERT INTO _savia_migrations VALUES (?, 'already-applied')",
+    ).run(filename);
+    db.exec("UPDATE tenants SET name='Preserved preview' WHERE id=0");
+    const history = db
+      .prepare("SELECT * FROM _savia_migrations ORDER BY filename")
+      .all();
+    db.close();
+    const result = f.run();
+    assert.equal(result.status, 0, result.stderr);
+    const after = new DatabaseSync(f.file);
+    assert.deepEqual(
+      after.prepare("SELECT * FROM _savia_migrations ORDER BY filename").all(),
+      history,
+    );
+    assert.equal(
+      after.prepare("SELECT name FROM tenants WHERE id=0").get().name,
+      "Preserved preview",
+    );
+    assert.equal(
+      after
+        .prepare("PRAGMA table_info(assistant_openrouter_settings)")
+        .all()
+        .filter((column) => column.name === "allowed_models").length,
+      1,
+    );
+    assert.deepEqual(after.prepare("PRAGMA foreign_key_check").all(), []);
+    after.close();
+  } finally {
+    f.close();
+  }
+});
+
 test("initial D1 schema and bootstrap apply once with intact triggers", () => {
   const f = fixture();
   try {

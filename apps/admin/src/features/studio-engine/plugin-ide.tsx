@@ -44,6 +44,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { useAppServices } from "@/features/assistant/assistant-context";
 import { pluginApi } from "./api";
+import { ApiClientError } from "@/api/api-client";
+import { requestPluginAuthoring } from "./plugin-authoring-request";
 import { MonacoCodeEditor } from "./monaco-code-editor";
 import { pluginIdeMessages } from "./plugin-ide-messages";
 import { pluginIdeDeclarations } from "./plugin-ide-declarations";
@@ -122,9 +124,22 @@ export default function PluginIde({
   const [history, setHistory] = useState<ChatMessage[]>(initialHistory ?? []);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [undo, setUndo] = useState<IdeFiles | null>(null);
-  const [busy, setBusy] = useState<
-    "generate" | "compile" | "publish" | "import" | null
-  >(null);
+  const [busy, setBusy] = useState<"compile" | "publish" | "import" | null>(
+    null,
+  );
+  const [generating, setGenerating] = useState(false);
+  const [generationSeconds, setGenerationSeconds] = useState(0);
+  const locked = generating || !!busy;
+  useEffect(() => {
+    if (!generating) return;
+    const started = Date.now();
+    setGenerationSeconds(0);
+    const timer = window.setInterval(
+      () => setGenerationSeconds(Math.floor((Date.now() - started) / 1000)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [generating]);
   const [error, setError] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -162,7 +177,7 @@ export default function PluginIde({
   useEffect(() => {
     const element = conversation.current;
     if (element) element.scrollTop = element.scrollHeight;
-  }, [history, busy, proposal, chatError]);
+  }, [history, generating, proposal, chatError]);
   function openFile(name: keyof IdeFiles) {
     setSelected(name);
     setOpenFiles((current) =>
@@ -270,7 +285,7 @@ export default function PluginIde({
     setReviewFile(null);
   }
   async function generate(input = prompt) {
-    if (!input.trim() || busy) return;
+    if (!input.trim() || locked) return;
     const requestId = ++operation.current;
     const abort = new AbortController();
     controller.current = abort;
@@ -289,21 +304,29 @@ export default function PluginIde({
       ) as ChatMessage[],
     );
     setReviewFile(null);
-    setBusy("generate");
+    setGenerating(true);
     setError("");
     try {
-      const result = await apiClient.post<Proposal>(
-        "/api/assistant/plugin-authoring",
-        {
-          tenantId,
-          prompt: requestPrompt,
-          files: proposal?.files ?? files,
-          history: priorHistory
-            .slice(-10)
-            .map((item) => ({ ...item, content: item.content.slice(0, 4000) })),
-          diagnostics: [error, ...logs].filter(Boolean).join("\n").slice(-8000),
-        },
-        { signal: abort.signal },
+      const result = await requestPluginAuthoring(
+        (signal) =>
+          apiClient.post<Proposal>(
+            "/api/assistant/plugin-authoring",
+            {
+              tenantId,
+              prompt: requestPrompt,
+              files: proposal?.files ?? files,
+              history: priorHistory.slice(-10).map((item) => ({
+                ...item,
+                content: item.content.slice(0, 4000),
+              })),
+              diagnostics: [error, ...logs]
+                .filter(Boolean)
+                .join("\n")
+                .slice(-8000),
+            },
+            { signal },
+          ),
+        abort,
       );
       if (!active.current || operation.current !== requestId) return;
       if (currentSnapshot.current !== snapshot) throw new Error(t("stale"));
@@ -322,12 +345,55 @@ export default function PluginIde({
       if (
         active.current &&
         operation.current === requestId &&
-        !abort.signal.aborted
+        (!abort.signal.aborted || (reason as Error)?.name === "TimeoutError")
       )
-        setChatError(message(reason));
+        setChatError(
+          (reason as Error)?.name === "TimeoutError"
+            ? t("generationTimeout")
+            : authoringError(reason),
+        );
     } finally {
-      if (active.current && operation.current === requestId) setBusy(null);
+      if (active.current && operation.current === requestId)
+        setGenerating(false);
     }
+  }
+  function authoringError(reason: unknown): string {
+    if (!(reason instanceof ApiClientError)) return message(reason);
+    const keys = {
+      PLUGIN_AUTHORING_TIMEOUT: "generationTimeout",
+      PLUGIN_AUTHORING_INVALID_OUTPUT: "generationInvalid",
+      PLUGIN_AUTHORING_PROVIDER_AUTH_FAILED: "generationAuth",
+      PLUGIN_AUTHORING_RATE_LIMITED: "generationQuota",
+      PLUGIN_AUTHORING_PROVIDER_REQUEST_REJECTED: "generationRejected",
+      PLUGIN_AUTHORING_NOT_CONFIGURED: "generationNotConfigured",
+      PLUGIN_AUTHORING_METADATA_UNAVAILABLE: "generationMetadataUnavailable",
+      PLUGIN_AUTHORING_UNAVAILABLE: "generationUnavailable",
+    } as const;
+    const key = keys[reason.code as keyof typeof keys];
+    const summary = key ? t(key) : message(reason);
+    const envelope = reason.details as
+      { error?: { details?: unknown } } | undefined;
+    const issues = envelope?.error?.details;
+    if (!Array.isArray(issues)) return summary;
+    const details = issues.slice(0, 12).flatMap((issue) => {
+      if (
+        !issue ||
+        typeof issue !== "object" ||
+        ![
+          "entry.tsx",
+          "savia-extension.json",
+          "store.json",
+          "preview.json",
+        ].includes(issue.file) ||
+        typeof issue.path !== "string" ||
+        typeof issue.message !== "string"
+      )
+        return [];
+      return [
+        `${issue.file}${issue.path ? ` (${issue.path.slice(0, 160)})` : ""}: ${issue.message.slice(0, 240)}`,
+      ];
+    });
+    return [summary, ...details].join("\n");
   }
   async function runPreview() {
     setPane("preview");
@@ -362,7 +428,7 @@ export default function PluginIde({
     }
   }
   async function publish() {
-    if (busy || preview?.state !== "ready" || preview.snapshot !== snapshot)
+    if (locked || preview?.state !== "ready" || preview.snapshot !== snapshot)
       return;
     const revision = snapshot;
     setBusy("publish");
@@ -421,7 +487,7 @@ export default function PluginIde({
     }
   }
   async function importProject(file?: File) {
-    if (!file || busy) return;
+    if (!file || locked) return;
     setBusy("import");
     try {
       if (file.size > 512 * 1024) throw new Error(t("tooLarge"));
@@ -453,7 +519,7 @@ export default function PluginIde({
       )
     : [];
   const canPublish =
-    !busy &&
+    !locked &&
     preview?.state === "ready" &&
     preview.snapshot === snapshot &&
     (published?.snapshot !== snapshot || published.destination !== destination);
@@ -465,7 +531,7 @@ export default function PluginIde({
             variant="ghost"
             size="icon"
             aria-label={backLabel ?? t("back")}
-            disabled={!!busy}
+            disabled={locked}
             onClick={() => {
               if (
                 onDraftChange ||
@@ -509,7 +575,7 @@ export default function PluginIde({
                 variant="ghost"
                 size="icon"
                 aria-label={t("projectOptions")}
-                disabled={!!busy}
+                disabled={locked}
               >
                 <MoreHorizontal aria-hidden="true" />
               </Button>
@@ -780,7 +846,7 @@ export default function PluginIde({
                         }}
                         language={name === "entry.tsx" ? "typescript" : "json"}
                         ariaLabel={name}
-                        readOnly={!!busy}
+                        readOnly={locked}
                         contextDeclarations={pluginIdeDeclarations}
                         height={520}
                       />
@@ -870,7 +936,7 @@ export default function PluginIde({
                 role="log"
                 aria-label={t("conversation")}
                 aria-live="polite"
-                aria-busy={busy === "generate"}
+                aria-busy={generating}
               >
                 {!history.length && (
                   <div className="plugin-ide-chat-welcome">
@@ -909,19 +975,22 @@ export default function PluginIde({
                     )}
                   </article>
                 ))}
-                {busy === "generate" && (
+                {generating && (
                   <p className="plugin-ide-generating" role="status">
                     <LoaderCircle />
                     {t("generating")}
+                    <span aria-hidden="true">
+                      {t("elapsedSeconds", { seconds: generationSeconds })}
+                    </span>
                   </p>
                 )}
                 {chatError && (
                   <div className="plugin-ide-chat-error" role="alert">
-                    <p>{chatError}</p>
+                    <p style={{ whiteSpace: "pre-line" }}>{chatError}</p>
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={!!busy}
+                      disabled={locked}
                       onClick={() => void generate(lastPrompt)}
                     >
                       {t("retry")}
@@ -953,7 +1022,7 @@ export default function PluginIde({
                     <div className="plugin-ide-proposal-actions">
                       <Button
                         size="sm"
-                        disabled={!!busy || !changedFiles.length}
+                        disabled={locked || !changedFiles.length}
                         onClick={() => {
                           setUndo(files);
                           replaceFiles(proposal.files);
@@ -965,7 +1034,7 @@ export default function PluginIde({
                       <Button
                         size="sm"
                         variant="ghost"
-                        disabled={!!busy}
+                        disabled={locked}
                         onClick={() => {
                           setProposal(null);
                           setReviewFile(null);
@@ -993,7 +1062,7 @@ export default function PluginIde({
                     value={prompt}
                     maxLength={8000}
                     rows={3}
-                    disabled={!!busy}
+                    disabled={locked}
                     placeholder={t("placeholder")}
                     onChange={(event) => setPrompt(event.target.value)}
                     onKeyDown={(event) => {
@@ -1012,7 +1081,7 @@ export default function PluginIde({
                       <Files />
                       {t("projectContext")}
                     </span>
-                    {busy === "generate" ? (
+                    {generating ? (
                       <Button
                         type="button"
                         size="icon"
@@ -1021,7 +1090,7 @@ export default function PluginIde({
                         onClick={() => {
                           operation.current++;
                           controller.current?.abort();
-                          setBusy(null);
+                          setGenerating(false);
                           setPrompt(lastPrompt);
                         }}
                       >
@@ -1031,7 +1100,7 @@ export default function PluginIde({
                       <Button
                         type="submit"
                         size="icon"
-                        disabled={!!busy || !prompt.trim()}
+                        disabled={locked || !prompt.trim()}
                         aria-label={t("send")}
                       >
                         <ArrowUp />
@@ -1052,7 +1121,7 @@ export default function PluginIde({
         </span>
         {undo && (
           <button
-            disabled={!!busy}
+            disabled={locked}
             onClick={() => {
               replaceFiles(undo);
               setUndo(null);

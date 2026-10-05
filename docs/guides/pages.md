@@ -50,13 +50,15 @@ Jira, Linear, and GitHub block commands appear only when that provider is enable
 
 ### Personal ticket summaries
 
-With a personal Jira connection, type `/mis-tickets` (or search **My tickets** / `/my-tickets`) in an empty paragraph. The command inserts a live summary of tickets assigned to the current viewer. It loads when the page opens; **Refresh** reads the latest provider data without changing the document.
+With a personal Jira connection, type `/mis-tickets` (or search **My tickets** / `/my-tickets`) in an empty paragraph. The command inserts a summary of tickets assigned to the current viewer. Opening the page retrieves the viewer's saved summary from the backend. The first load for a set of filters and connections generates and saves it; subsequent openings reuse it without contacting Jira or GitHub. **Refresh** explicitly reads current provider data and replaces that summary without changing the document.
 
 Default status names are **To Do**, **In Code Review**, **Code Review**, **Ready for QA**, **QA**, and **QA / Acceptance**. Configure a project key and custom status names in the block when a Jira workflow uses different labels. Configuration changes follow the page's edit permissions; readers can refresh their own results but cannot change the saved filters.
 
 Tickets are grouped by status and include Jira comment counts and the latest comment excerpt, author, date, and source link. Connected GitHub accounts add discovered pull requests, open/draft/closed/merged state, review decisions, unresolved review-thread counts when complete, and discussion excerpts. A missing connection, inaccessible PR, or partial provider result is explicitly marked; it does not mean that no comments or PRs exist.
 
-Only the block configuration is stored in Page content, autosave, history, and exports. Provider results stay transient and are requested with the viewer's own connections. Sharing a Page does not share the author's Jira or GitHub results. Anonymous public pages show a private-content placeholder. No scheduled background refresh is created by inserting this block.
+Only the block configuration is stored in Page content, autosave, history, and exports. The backend encrypts saved provider results separately for each viewer, filter configuration and connection identity. It checks the viewer's active connections before returning a cached summary. Disconnecting or changing a source account removes its cached snapshots. Sharing a Page does not share the author's Jira or GitHub results. Anonymous public pages show a private-content placeholder. No scheduled background refresh is created by inserting this block, and the browser does not persist ticket data.
+
+The displayed update time belongs to the saved summary, so returning to the page does not make old data appear freshly fetched. Tickets stay visible while refreshing. If the update fails, the previous summary and its timestamp remain visible with an explicit warning; a failed initial load still reports that tickets are unavailable.
 
 ### Rich blocks
 
@@ -282,8 +284,30 @@ preview shows all three headings and translations; replace, insert, and copy use
 only the selected translation, without its heading or extra commentary. If the
 source is too ambiguous to translate reliably, the employee asks one brief
 clarifying question before returning the translations. Clarifications and unrecognized
-translation formats remain visible without replace, insert, or copy actions;
-adjust the instruction and generate again. An inactive existing translator must
+translation formats remain visible without replace, insert, or copy actions. Use
+**Clarification or format correction** and **Continue** to answer or request the
+required format; this retains the original selection and conversation. A failed,
+cancelled, or timed-out continuation preserves the question and your reply so you
+can retry. **Generate** starts a fresh conversation with the current instruction.
+The panel shows the employee model when configured and the effective server-selected
+model when generation starts. Expand **Assistant instructions** to inspect the
+selected employee’s custom system prompt; these can be edited in AI employees.
+Administrators can enable additional text models in **Credentials → OpenRouter → Available models for Ask AI**, globally
+or for an organization. The organization can inherit the global choices or keep
+its own list; an empty list exposes only the assistant default. Use **Save
+enabled models** to save the global choices independently of the API key and
+default model. **Choose model**
+offers the effective enabled choices available to the configured OpenRouter
+account. The assistant default still follows the employee, organization, and
+global settings. Model selection applies to the panel's request and does not
+change those administrative defaults. The server checks every explicit model
+choice against the administrator's list. If an administrator disables a model
+while the panel is open, the panel returns to the default and refreshes the
+choices so you can retry without changing the document. Model-catalog failure
+also leaves the default available.
+
+Generation shows elapsed seconds and can be cancelled. After 90 seconds, a stalled
+request stops with a retry message, leaving the document unchanged. An inactive existing translator must
 be reactivated in AI employees.
 If no employee uses the `traductor` handle, choose **Create translator** to add
 the active text-only employee and select it for the request. This action creates
@@ -335,3 +359,14 @@ destination. Local or unavailable-provider fallback links use `/s/p/{code}` on
 the current Savia host and are stored on the backend. A localhost link remains
 local to that machine; public sharing outside the machine requires a deployed
 public origin. Shortening failure leaves the original full link usable.
+
+Ask AI keeps model selection and employee instructions under **Options**. If no
+alternative models are enabled, it shows the current model without an inactive
+selector. Translator requests omit the generic task shortcuts. Translation
+results use **Regular**, **Professional**, and **Brief** style choices and preview
+only the chosen version; replace, insert, and copy still use that version.
+
+The sparkle icon opens Ask AI for a text selection or for the highlighted block
+from its block actions. A block request uses the whole block's text; empty blocks
+do not show the action. The original text changes only after an explicit replace
+or insert, and the saved range is checked before applying a response.

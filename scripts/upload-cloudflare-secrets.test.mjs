@@ -190,3 +190,76 @@ test("ChatGPT website clients require the registered authentication method", () 
     "client_secret_basic",
   );
 });
+
+test("optional Nango fallback stays with the matching API worker", () => {
+  for (const environment of ["preview", "production"]) {
+    const plans = buildSecretUploads(environment, {
+      ...values,
+      NANGO_FALLBACK_API_KEY: `fallback-${environment}`,
+    });
+    const api = plans.find((plan) => plan.app === "api");
+    assert.equal(api.secrets.NANGO_FALLBACK_API_KEY, `fallback-${environment}`);
+    for (const plan of plans.filter((item) => item.app !== "api"))
+      assert.equal("NANGO_FALLBACK_API_KEY" in plan.secrets, false);
+    const unconfigured = buildSecretUploads(environment, values).find(
+      (plan) => plan.app === "api",
+    );
+    assert.equal(unconfigured.secrets.NANGO_FALLBACK_API_KEY, null);
+    const cleared = buildSecretUploads(environment, {
+      ...values,
+      NANGO_FALLBACK_API_KEY: "   ",
+    }).find((plan) => plan.app === "api");
+    assert.equal(cleared.secrets.NANGO_FALLBACK_API_KEY, null);
+  }
+});
+
+test("WhatsApp webhook secrets are an optional API-only pair", () => {
+  for (const environment of ["preview", "production"]) {
+    const absentPlans = buildSecretUploads(environment, values);
+    const absentApi = absentPlans.find((plan) => plan.app === "api").secrets;
+    assert.equal("WHATSAPP_META_APP_SECRET" in absentApi, false);
+    assert.equal("WHATSAPP_WEBHOOK_VERIFY_TOKEN" in absentApi, false);
+
+    const emptyPlans = buildSecretUploads(environment, {
+      ...values,
+      WHATSAPP_META_APP_SECRET: "  ",
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "",
+    });
+    const emptyApi = emptyPlans.find((plan) => plan.app === "api").secrets;
+    assert.equal("WHATSAPP_META_APP_SECRET" in emptyApi, false);
+    assert.equal("WHATSAPP_WEBHOOK_VERIFY_TOKEN" in emptyApi, false);
+
+    const pair = {
+      WHATSAPP_META_APP_SECRET: "test-meta-app-secret",
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-webhook-verify-token",
+    };
+    const plans = buildSecretUploads(environment, { ...values, ...pair });
+    const api = plans.find((plan) => plan.app === "api").secrets;
+    assert.equal(api.WHATSAPP_META_APP_SECRET, pair.WHATSAPP_META_APP_SECRET);
+    assert.equal(
+      api.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+      pair.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+    );
+    for (const plan of plans.filter((item) => item.app !== "api")) {
+      assert.equal("WHATSAPP_META_APP_SECRET" in plan.secrets, false);
+      assert.equal("WHATSAPP_WEBHOOK_VERIFY_TOKEN" in plan.secrets, false);
+    }
+
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          WHATSAPP_META_APP_SECRET: pair.WHATSAPP_META_APP_SECRET,
+        }),
+      /WHATSAPP_META_APP_SECRET and WHATSAPP_WEBHOOK_VERIFY_TOKEN must be configured together/,
+    );
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: pair.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+        }),
+      /WHATSAPP_META_APP_SECRET and WHATSAPP_WEBHOOK_VERIFY_TOKEN must be configured together/,
+    );
+  }
+});

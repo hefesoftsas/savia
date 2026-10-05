@@ -304,7 +304,9 @@ export function VirtualEmployeesManagement({
           greeting: greeting || null,
           systemPrompt,
           allowedCollections: allowed,
-          model: model.trim() || null,
+          ...((model.trim() || null) !== (editingEmployee.model?.trim() || null)
+            ? { model: model.trim() || null }
+            : {}),
           status,
         });
         toast.success(t("Empleado virtual actualizado con éxito"));

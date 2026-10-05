@@ -10,9 +10,12 @@ export type AssistantConfigurationSetting = {
   tenantId?: number;
   keyState: AssistantConfigurationKeyState;
   model: string | null;
+  allowedModels?: string[] | null;
   transcriptionModel?: string | null;
   transcriptionEndpoint?: TranscriptionEndpoint | null;
   summaryModel?: string | null;
+  imageGenerationModel?: string | null;
+  speechModel?: string | null;
   updatedAt?: string;
   updatedBy?: string;
 };
@@ -35,9 +38,12 @@ export type AssistantConfigurationWrite = {
   apiKey?: string;
   clearApiKey?: boolean;
   model?: string | null;
+  allowedModels?: string[] | null;
   transcriptionModel?: string | null;
   transcriptionEndpoint?: TranscriptionEndpoint | null;
   summaryModel?: string | null;
+  imageGenerationModel?: string | null;
+  speechModel?: string | null;
 };
 
 export type AssistantModelModalities = {
@@ -45,6 +51,21 @@ export type AssistantModelModalities = {
   image: boolean;
   audio: boolean;
   file: boolean;
+  imageOutput?: boolean;
+  speechOutput?: boolean;
+};
+
+export type AssistantGenerationPricing = {
+  image?: {
+    price: number;
+    unit: "image" | "megapixel" | "token";
+    variant?: string;
+    providerSlug?: string;
+  };
+  speech?: {
+    prompt?: { price: number; unit: "character" | "token" };
+    completion?: { price: number; unit: "second" | "token" };
+  };
 };
 
 export type AssistantModel = {
@@ -56,6 +77,12 @@ export type AssistantModel = {
   modalities?: AssistantModelModalities;
   supportsTools?: boolean;
   transcriptionEndpoint?: TranscriptionEndpoint;
+  generationPricing?: AssistantGenerationPricing;
+};
+
+export type AssistantModelPolicy = {
+  defaultModel: string;
+  allowedModels: AssistantModel[];
 };
 
 export type AssistantActiveTenant = {
@@ -99,6 +126,10 @@ export class AssistantConfigurationClient {
         : `/v1/assistant/models?tenantId=${tenantId}`,
     );
     return response.models;
+  }
+
+  modelPolicy(): Promise<AssistantModelPolicy> {
+    return this.apiClient.get("/v1/assistant/model-policy");
   }
 
   activeTenant(): Promise<AssistantActiveTenant> {

@@ -45,3 +45,9 @@ unavailable/not-found result without substituting another employee.
 
 See [Remote MCP](../remote-mcp.md) for connecting external clients and the
 employee discovery and invocation tools.
+
+Only platform administrators and administrators of the employee's organization
+can assign an explicit model when creating an employee or change or clear its
+model assignment when editing it. Other users
+can keep the inherited model and choose administrator-enabled alternatives in
+Pages **Ask AI**. Enabling alternatives does not change the employee's default.

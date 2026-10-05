@@ -304,6 +304,58 @@ describe("assistant routes", () => {
     );
   });
 
+  it("forwards an explicit model choice for text-mode assistant chats", async () => {
+    const service = createAssistantService();
+    const response = await createAssistantApp(service).request(
+      "http://api.savia.test/api/assistant/chat",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer current-user-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          responseMode: "text",
+          model: "openai/gpt-5",
+          messages: [
+            {
+              id: "message-1",
+              role: "user",
+              parts: [{ type: "text", text: "Translate this into Spanish" }],
+            },
+          ],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(service.chat).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "openai/gpt-5", responseMode: "text" }),
+    );
+  });
+
+  it("rejects malformed explicit assistant model identifiers", async () => {
+    const service = createAssistantService();
+    const response = await createAssistantApp(service).request(
+      "http://api.savia.test/api/assistant/chat",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer current-user-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          responseMode: "text",
+          model: "not-a-provider-model",
+          messages: [],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(service.chat).not.toHaveBeenCalled();
+  });
+
   it("allows a read-scoped OAuth token to start an assistant chat", async () => {
     const service = createAssistantService();
     const response = await createReadScopedAssistantApp(service).request(
@@ -430,6 +482,69 @@ describe("assistant routes", () => {
     await expect(
       repository.effectiveConfigurationFor("test-platform-admin"),
     ).resolves.toMatchObject({ apiKey: "not-a-real-global-key" });
+  });
+
+  it("persists image generation and speech models through global and tenant settings routes", async () => {
+    await seedAssistantAgencyMember(129);
+    const repository = configurationRepository();
+    const app = createConfigurationApp(
+      platformAdministratorAuthenticator(),
+      repository,
+    );
+    const global = await app.request(
+      "http://api.savia.test/v1/assistant/configuration/global",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          imageGenerationModel: "openai/gpt-image-1",
+          speechModel: "openai/gpt-4o-mini-tts",
+        }),
+      },
+    );
+    expect(global.status).toBe(200);
+    await expect(global.json()).resolves.toMatchObject({
+      global: {
+        imageGenerationModel: "openai/gpt-image-1",
+        speechModel: "openai/gpt-4o-mini-tts",
+      },
+    });
+
+    const tenant = await app.request(
+      "http://api.savia.test/v1/assistant/configuration/tenants/129",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          imageGenerationModel: "bytedance/seedream-4.5",
+        }),
+      },
+    );
+    expect(tenant.status).toBe(200);
+    await expect(tenant.json()).resolves.toMatchObject({
+      tenants: [
+        expect.objectContaining({
+          tenantId: 129,
+          imageGenerationModel: "bytedance/seedream-4.5",
+          speechModel: null,
+        }),
+      ],
+    });
+    await expect(
+      repository.effectiveConfigurationForPlatformTenant(129),
+    ).resolves.toMatchObject({
+      imageGenerationModel: "bytedance/seedream-4.5",
+      speechModel: "openai/gpt-4o-mini-tts",
+    });
+    const invalid = await app.request(
+      "http://api.savia.test/v1/assistant/configuration/global",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ speechModel: "invalid" }),
+      },
+    );
+    expect(invalid.status).toBe(400);
   });
 
   it("persists the transcription endpoint as part of assistant configuration", async () => {
@@ -686,6 +801,157 @@ describe("assistant routes", () => {
     expect(deleted.status).toBe(204);
   });
 
+  it("allows only existing configuration admins to write model policy", async () => {
+    const memberApp = createConfigurationApp(agencyMemberAuthenticator());
+    const response = await memberApp.request(
+      "http://api.savia.test/v1/assistant/configuration/global",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ allowedModels: ["openai/gpt-5"] }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("persists a global model allowlist through the existing admin route", async () => {
+    const response = await createConfigurationApp().request(
+      "http://api.savia.test/v1/assistant/configuration/global",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "deepseek/deepseek-v4-flash",
+          allowedModels: ["openai/gpt-5", "openai/gpt-5"],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      global: {
+        model: "deepseek/deepseek-v4-flash",
+        allowedModels: ["openai/gpt-5"],
+      },
+    });
+  });
+
+  it("returns the principal's model policy filtered by allowed and account models", async () => {
+    await seedAssistantAgencyMember(117);
+    const repository = configurationRepository();
+    await repository.saveGlobal({
+      actorId: "test-platform-admin",
+      apiKey: "not-a-real-policy-key",
+      model: "deepseek/deepseek-v4-flash",
+      allowedModels: [
+        "openai/gpt-5",
+        "google/gemini-2.5-flash",
+        "openai/whisper-large-v3",
+      ],
+    });
+    const list = vi.fn(async () => [
+      {
+        id: "openai/gpt-5",
+        name: "GPT-5",
+        contextLength: 400_000,
+        modalities: { text: true, image: false, audio: false, file: false },
+      },
+      {
+        id: "google/gemini-2.5-flash",
+        name: "Gemini Flash",
+        contextLength: 1_000_000,
+        modalities: { text: true, image: false, audio: false, file: false },
+      },
+      {
+        id: "anthropic/claude-sonnet-4",
+        name: "Claude Sonnet",
+        contextLength: 200_000,
+        modalities: { text: true, image: false, audio: false, file: false },
+      },
+      {
+        id: "openai/whisper-large-v3",
+        name: "Whisper Large v3",
+        contextLength: 0,
+        modalities: { text: false, image: false, audio: true, file: false },
+      },
+    ]);
+    const response = await createConfigurationApp(
+      agencyMemberAuthenticator(),
+      repository,
+      { list },
+    ).request("http://api.savia.test/v1/assistant/model-policy");
+
+    expect(response.status).toBe(200);
+    const policy = await response.json();
+    expect(policy).toEqual({
+      defaultModel: "deepseek/deepseek-v4-flash",
+      allowedModels: [
+        {
+          id: "openai/gpt-5",
+          name: "GPT-5",
+          contextLength: 400_000,
+          modalities: { text: true, image: false, audio: false, file: false },
+        },
+        {
+          id: "google/gemini-2.5-flash",
+          name: "Gemini Flash",
+          contextLength: 1_000_000,
+          modalities: { text: true, image: false, audio: false, file: false },
+        },
+      ],
+    });
+    expect(JSON.stringify(policy)).not.toContain("not-a-real-policy-key");
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: "not-a-real-policy-key",
+        model: "deepseek/deepseek-v4-flash",
+        tenantId: 117,
+      }),
+      { includeGenerationPricing: false },
+    );
+  });
+
+  it("returns an empty selectable catalog without contacting OpenRouter", async () => {
+    const repository = configurationRepository();
+    await repository.saveGlobal({
+      actorId: "test-platform-admin",
+      model: "deepseek/deepseek-v4-flash",
+      allowedModels: [],
+    });
+    const list = vi.fn(async () => []);
+    const response = await createConfigurationApp(
+      platformAdministratorAuthenticator(),
+      repository,
+      { list },
+    ).request("http://api.savia.test/v1/assistant/model-policy");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      defaultModel: "deepseek/deepseek-v4-flash",
+      allowedModels: [],
+    });
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it("denies model-policy reads when a non-admin's tenant membership is revoked", async () => {
+    await seedAssistantAgencyMember(118);
+    await env.DB.prepare(
+      "DELETE FROM identity_tenant_membership WHERE principal_id = ?",
+    )
+      .bind("test-agency-member")
+      .run();
+    const list = vi.fn(async () => []);
+    const response = await createConfigurationApp(
+      agencyMemberAuthenticator(),
+      configurationRepository(),
+      { list },
+    ).request("http://api.savia.test/v1/assistant/model-policy");
+
+    expect(response.status).toBe(403);
+    expect(list).not.toHaveBeenCalled();
+  });
+
   it("returns a bounded model catalog without exposing its configuration", async () => {
     const repository = configurationRepository();
     await repository.saveGlobal({
@@ -823,41 +1089,43 @@ describe("assistant routes", () => {
   });
 
   it("returns tool-capable OpenRouter models with per-million token prices and modalities", async () => {
-    const fetcher = vi.fn(async () =>
-      Response.json({
-        data: [
-          {
-            id: "openai/gpt-5",
-            name: "GPT-5",
-            context_length: 400_000,
-            pricing: { prompt: "0.0000025", completion: "0.00001" },
-            architecture: {
-              input_modalities: ["text", "image", "audio"],
-              modality: "text+image+audio->text",
-            },
-            supported_parameters: ["tools"],
-          },
-          {
-            id: "audio/model",
-            name: "Audio Model",
-            architecture: {
-              input_modalities: ["audio"],
-              modality: "audio->text",
-            },
-            supported_parameters: [],
-          },
-          {
-            id: "openai/whisper-large-v3",
-            name: "Whisper Large v3",
-            architecture: {
-              input_modalities: ["audio"],
-              modality: "audio->transcription",
-            },
-            supported_parameters: [],
-          },
-          { id: "invalid model", name: "Invalid" },
-        ],
-      }),
+    const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).endsWith("/images/models")
+        ? Response.json({ data: [] })
+        : Response.json({
+            data: [
+              {
+                id: "openai/gpt-5",
+                name: "GPT-5",
+                context_length: 400_000,
+                pricing: { prompt: "0.0000025", completion: "0.00001" },
+                architecture: {
+                  input_modalities: ["text", "image", "audio"],
+                  modality: "text+image+audio->text",
+                },
+                supported_parameters: ["tools"],
+              },
+              {
+                id: "audio/model",
+                name: "Audio Model",
+                architecture: {
+                  input_modalities: ["audio"],
+                  modality: "audio->text",
+                },
+                supported_parameters: [],
+              },
+              {
+                id: "openai/whisper-large-v3",
+                name: "Whisper Large v3",
+                architecture: {
+                  input_modalities: ["audio"],
+                  modality: "audio->transcription",
+                },
+                supported_parameters: [],
+              },
+              { id: "invalid model", name: "Invalid" },
+            ],
+          }),
     );
 
     await expect(
@@ -877,6 +1145,8 @@ describe("assistant routes", () => {
           image: true,
           audio: true,
           file: true,
+          imageOutput: false,
+          speechOutput: false,
         },
         supportsTools: true,
         transcriptionEndpoint: "chat/completions",
@@ -892,6 +1162,8 @@ describe("assistant routes", () => {
           image: false,
           audio: true,
           file: false,
+          imageOutput: false,
+          speechOutput: false,
         },
         supportsTools: false,
         transcriptionEndpoint: "chat/completions",
@@ -907,39 +1179,81 @@ describe("assistant routes", () => {
           image: false,
           audio: true,
           file: false,
+          imageOutput: false,
+          speechOutput: false,
         },
         supportsTools: false,
         transcriptionEndpoint: "audio/transcriptions",
       },
     ]);
     expect(fetcher).toHaveBeenCalledWith(
-      "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
+      "https://openrouter.ai/api/v1/models/user?output_modalities=text,transcription,image,speech&sort=most-popular",
       expect.objectContaining({
         headers: { authorization: "Bearer not-a-real-catalog-key" },
       }),
     );
   });
 
-  it("retains transcription models beyond the first 200 popular catalog entries", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json({
-        data: [
-          ...Array.from({ length: 200 }, (_, index) => ({
-            id: `test/text-${index}`,
-            architecture: {
-              input_modalities: ["text"],
-              output_modalities: ["text"],
-            },
-          })),
-          {
-            id: "openai/whisper-large-v3",
-            architecture: {
-              input_modalities: ["audio"],
-              output_modalities: ["transcription"],
-            },
-          },
-        ],
+  it("does not fall back to the public model catalog when the account catalog fails", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 503 }));
+
+    await expect(
+      openRouterModelCatalog(fetcher).list({
+        apiKey: "not-a-real-catalog-key",
+        model: "deepseek/deepseek-v4-flash",
       }),
+    ).rejects.toThrow("OpenRouter models request failed");
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/models/user?output_modalities=text,transcription,image,speech&sort=most-popular",
+      expect.objectContaining({
+        headers: { authorization: "Bearer not-a-real-catalog-key" },
+      }),
+    );
+  });
+
+  it("skips dedicated generation pricing when listing models for chat policy", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ data: [{ id: "openai/gpt-5" }] }));
+
+    await openRouterModelCatalog(fetcher).list(
+      { model: "openai/gpt-5" },
+      { includeGenerationPricing: false },
+    );
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/models?output_modalities=text,transcription,image,speech&sort=most-popular",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("retains transcription models beyond the first 200 popular catalog entries", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input) =>
+      String(input).endsWith("/images/models")
+        ? Response.json({ data: [] })
+        : Response.json({
+            data: [
+              ...Array.from({ length: 200 }, (_, index) => ({
+                id: `test/text-${index}`,
+                architecture: {
+                  input_modalities: ["text"],
+                  output_modalities: ["text"],
+                },
+              })),
+              {
+                id: "openai/whisper-large-v3",
+                architecture: {
+                  input_modalities: ["audio"],
+                  output_modalities: ["transcription"],
+                },
+              },
+            ],
+          }),
     );
     const models = await openRouterModelCatalog(fetcher).list({
       model: "test/chat",
@@ -954,17 +1268,19 @@ describe("assistant routes", () => {
   });
 
   it("fetches the public model catalog when no API key is configured", async () => {
-    const fetcher = vi.fn().mockResolvedValue(
-      Response.json({
-        data: [
-          {
-            id: "deepseek/deepseek-v4-flash",
-            name: "DeepSeek V4 Flash",
-            context_length: 128_000,
-            pricing: { prompt: "0.000001", completion: "0.000002" },
-          },
-        ],
-      }),
+    const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).endsWith("/images/models")
+        ? Response.json({ data: [] })
+        : Response.json({
+            data: [
+              {
+                id: "deepseek/deepseek-v4-flash",
+                name: "DeepSeek V4 Flash",
+                context_length: 128_000,
+                pricing: { prompt: "0.000001", completion: "0.000002" },
+              },
+            ],
+          }),
     );
 
     await expect(
@@ -983,13 +1299,301 @@ describe("assistant routes", () => {
           image: false,
           audio: false,
           file: false,
+          imageOutput: false,
+          speechOutput: false,
         },
         supportsTools: false,
       },
     ]);
     expect(fetcher).toHaveBeenCalledWith(
-      "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
-      undefined,
+      "https://openrouter.ai/api/v1/models?output_modalities=text,transcription,image,speech&sort=most-popular",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("includes image and speech generation models with unit-safe pricing and isolates optional catalog failures", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (
+        url.endsWith(
+          "/models?output_modalities=text,transcription,image,speech&sort=most-popular",
+        )
+      ) {
+        return Response.json({
+          data: [
+            {
+              id: "openai/gpt-4o-mini-tts",
+              name: "GPT 4o Mini TTS",
+              pricing: { prompt: "0.0000006", completion: "0" },
+              architecture: {
+                tokenizer: "OpenAI",
+                input_modalities: ["text"],
+                output_modalities: ["speech"],
+              },
+            },
+            {
+              id: "google/gemini-2.5-flash-preview-tts",
+              name: "Gemini TTS",
+              pricing: { prompt: "0.000001", completion: "0.000002" },
+              architecture: {
+                tokenizer: "Gemini",
+                input_modalities: ["text"],
+                output_modalities: ["speech"],
+              },
+            },
+            {
+              id: "seed/seed-audio",
+              name: "Seed Audio",
+              pricing: { prompt: "0", completion: "0.00001" },
+              architecture: {
+                tokenizer: "Seed Audio",
+                input_modalities: ["text"],
+                output_modalities: ["speech"],
+              },
+            },
+            {
+              id: "openai/gpt-5",
+              name: "GPT-5",
+              pricing: { prompt: "0.000002", completion: "0.00001" },
+              architecture: {
+                input_modalities: ["text"],
+                output_modalities: ["text", "image"],
+              },
+            },
+            {
+              id: "test/edit-only",
+              name: "Edit-only model",
+              architecture: {
+                input_modalities: ["text", "image"],
+                output_modalities: ["image"],
+              },
+              supported_parameters: {
+                input_references: { min: 1 },
+              },
+            },
+            {
+              id: "test/unknown-speech-rate",
+              name: "Unknown speech rate",
+              pricing: { prompt: "", completion: null },
+              architecture: {
+                input_modalities: ["text"],
+                output_modalities: ["speech"],
+              },
+            },
+          ],
+        });
+      }
+      if (url.endsWith("/images/models")) {
+        return Response.json({
+          data: [
+            {
+              id: "recraft/recraft-v4.1-flash",
+              name: "Recraft V4.1 Flash",
+            },
+            { id: "unknown/price-unavailable", name: "Unknown Price" },
+            { id: "tiered/only", name: "Tiered Only" },
+            { id: "recraft/background-removal", name: "Background Removal" },
+          ],
+        });
+      }
+      if (url.endsWith("/images/models/recraft/recraft-v4.1-flash/endpoints")) {
+        return Response.json({
+          id: "recraft/recraft-v4.1-flash",
+          endpoints: [
+            {
+              provider_slug: "recraft",
+              pricing: [
+                {
+                  billable: "output_image",
+                  unit: "image",
+                  cost_usd: null,
+                },
+                {
+                  billable: "output_image",
+                  unit: "image",
+                  cost_usd: "",
+                },
+                {
+                  billable: "output_image",
+                  unit: "image",
+                  cost_usd: 0.007,
+                },
+              ],
+            },
+          ],
+        });
+      }
+      if (url.endsWith("/images/models/recraft/background-removal/endpoints")) {
+        return Response.json({
+          id: "recraft/background-removal",
+          endpoints: [
+            {
+              provider_slug: "recraft",
+              supported_parameters: { input_references: { min: 1 } },
+              pricing: [
+                {
+                  billable: "output_image",
+                  unit: "image",
+                  cost_usd: 0.001,
+                },
+              ],
+            },
+          ],
+        });
+      }
+      if (url.endsWith("/images/models/tiered/only/endpoints")) {
+        return Response.json({
+          id: "tiered/only",
+          endpoints: [
+            {
+              provider_slug: "tiered-provider",
+              pricing: [
+                {
+                  billable: "output_image",
+                  unit: "image",
+                  cost_usd: 0.001,
+                  tier: { min: 1, max: 10 },
+                },
+              ],
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 503 });
+    });
+
+    const models = await openRouterModelCatalog(fetcher).list({
+      model: "openai/gpt-5",
+    });
+    expect(models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "openai/gpt-4o-mini-tts",
+          inputPricePerMillion: null,
+          outputPricePerMillion: null,
+          modalities: expect.objectContaining({ speechOutput: true }),
+          generationPricing: {
+            speech: { prompt: { price: 0.0000006, unit: "character" } },
+          },
+        }),
+        expect.objectContaining({
+          id: "google/gemini-2.5-flash-preview-tts",
+          inputPricePerMillion: 1,
+          outputPricePerMillion: 2,
+          modalities: expect.objectContaining({ speechOutput: true }),
+          generationPricing: {
+            speech: {
+              prompt: { price: 0.000001, unit: "token" },
+              completion: { price: 0.000002, unit: "token" },
+            },
+          },
+        }),
+        expect.objectContaining({
+          id: "seed/seed-audio",
+          inputPricePerMillion: null,
+          outputPricePerMillion: null,
+          modalities: expect.objectContaining({ speechOutput: true }),
+          generationPricing: {
+            speech: {
+              prompt: { price: 0, unit: "character" },
+              completion: { price: 0.00001, unit: "second" },
+            },
+          },
+        }),
+        expect.objectContaining({
+          id: "openai/gpt-5",
+          inputPricePerMillion: 2,
+          outputPricePerMillion: 10,
+          modalities: expect.objectContaining({ imageOutput: false }),
+        }),
+        expect.objectContaining({
+          id: "test/edit-only",
+          modalities: expect.objectContaining({ imageOutput: false }),
+        }),
+        expect.objectContaining({
+          id: "test/unknown-speech-rate",
+          inputPricePerMillion: null,
+          outputPricePerMillion: null,
+        }),
+        expect.objectContaining({
+          id: "recraft/recraft-v4.1-flash",
+          inputPricePerMillion: null,
+          outputPricePerMillion: null,
+          modalities: expect.objectContaining({ imageOutput: true }),
+          generationPricing: {
+            image: {
+              price: 0.007,
+              unit: "image",
+              providerSlug: "recraft",
+            },
+          },
+        }),
+        expect.objectContaining({
+          id: "unknown/price-unavailable",
+          modalities: expect.objectContaining({ imageOutput: true }),
+        }),
+        expect.objectContaining({
+          id: "tiered/only",
+          modalities: expect.objectContaining({ imageOutput: true }),
+        }),
+      ]),
+    );
+    expect(models).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "recraft/background-removal" }),
+      ]),
+    );
+    expect(
+      models.find((model) => model.id === "tiered/only")?.generationPricing
+        ?.image,
+    ).toBeUndefined();
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/models?output_modalities=text,transcription,image,speech&sort=most-popular",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/images/models",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("bounds a stalled optional image pricing response body", async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/images/models")) {
+        return Response.json({ data: [{ id: "image/slow-pricing" }] });
+      }
+      if (url.endsWith("/images/models/image/slow-pricing/endpoints")) {
+        let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            stream = controller;
+            controller.enqueue(new TextEncoder().encode("{"));
+          },
+        });
+        init?.signal?.addEventListener("abort", () => {
+          stream?.error(new Error("aborted"));
+        });
+        return new Response(body);
+      }
+      return Response.json({ data: [] });
+    });
+
+    try {
+      const listing = openRouterModelCatalog(fetcher).list({
+        model: "openai/gpt-5",
+      });
+      await vi.advanceTimersByTimeAsync(8_000);
+      const models = await listing;
+      expect(models).toContainEqual(
+        expect.objectContaining({
+          id: "image/slow-pricing",
+          modalities: expect.objectContaining({ imageOutput: true }),
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

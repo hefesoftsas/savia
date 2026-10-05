@@ -56,6 +56,29 @@ describe("ApiClient", () => {
     }
   });
 
+  it("surfaces string-valued server error envelopes", async () => {
+    const client = new ApiClient({
+      baseUrl: "http://127.0.0.1:8787",
+      tokenSource: { getAccessToken: async () => null },
+      fetcher: vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { error: "Connected assistant required" },
+            { status: 409 },
+          ),
+        ),
+    });
+
+    await expect(
+      client.get("/v1/whatsapp/native/assets?agencyId=101"),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "HTTP_409",
+      message: "Connected assistant required",
+    });
+  });
+
   it("calls the browser fetch function with its global receiver", async () => {
     const browserFetch = vi.fn(function (this: typeof globalThis) {
       if (this !== globalThis) throw new Error("fetch lost its receiver");
@@ -96,6 +119,31 @@ describe("ApiClient", () => {
     const request = fetcher.mock.calls[0]?.[1] as RequestInit;
     expect(request.method).toBe("PUT");
     expect(request.body).toBe(JSON.stringify({ model: "openai/gpt-5" }));
+  });
+
+  it("sends authenticated multipart uploads without overriding the boundary content type", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(Response.json({ data: { mediaId: "123" } }));
+    const client = new ApiClient({
+      baseUrl: "http://127.0.0.1:8787",
+      tokenSource: { getAccessToken: async () => "access-token" },
+      fetcher,
+    });
+    const form = new FormData();
+    form.append("file", new File(["image"], "photo.png"));
+    await expect(
+      client.postForm("/v1/whatsapp/native/media", form),
+    ).resolves.toEqual({
+      data: { mediaId: "123" },
+    });
+    const request = fetcher.mock.calls[0]?.[1] as RequestInit;
+    expect(request.method).toBe("POST");
+    expect(request.body).toBe(form);
+    expect(new Headers(request.headers).get("Authorization")).toBe(
+      "Bearer access-token",
+    );
+    expect(new Headers(request.headers).has("Content-Type")).toBe(false);
   });
 
   it.each([

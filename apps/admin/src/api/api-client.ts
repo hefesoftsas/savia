@@ -9,7 +9,7 @@ export type ApiClientOptions = {
 };
 
 type ApiErrorEnvelope = {
-  error?: { code?: string; message?: string };
+  error?: string | { code?: string; message?: string };
 };
 
 export class ApiClientError extends Error {
@@ -57,6 +57,21 @@ export class ApiClient {
     });
   }
 
+  async postForm<T>(
+    path: string,
+    body: FormData,
+    init?: RequestInit,
+  ): Promise<T> {
+    const headers = new Headers(init?.headers);
+    headers.delete("Content-Type");
+    return this.request<T>(path, {
+      ...init,
+      method: "POST",
+      body,
+      headers,
+    });
+  }
+
   async patch<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
     return this.request<T>(path, {
       ...init,
@@ -100,10 +115,15 @@ export class ApiClient {
     const body = await responseBody(response);
     if (!response.ok) {
       const envelope = body as ApiErrorEnvelope | null;
+      const serverError = envelope?.error;
       throw new ApiClientError(
         response.status,
-        envelope?.error?.code ?? `HTTP_${response.status}`,
-        envelope?.error?.message ?? response.statusText ?? "Request failed",
+        serverError && typeof serverError === "object"
+          ? (serverError.code ?? `HTTP_${response.status}`)
+          : `HTTP_${response.status}`,
+        typeof serverError === "string"
+          ? serverError
+          : (serverError?.message ?? response.statusText ?? "Request failed"),
         body,
       );
     }
