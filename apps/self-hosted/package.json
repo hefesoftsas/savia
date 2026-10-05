@@ -18,7 +18,7 @@
     "@savia/studio-server": "workspace:*",
     "@savia/db": "workspace:*",
     "@savia/tenant-host": "workspace:*",
-    "hono": "^4.13.5",
+    "hono": "^4.13.7",
     "nodemailer": "^10.0.9",
     "pg": "^8.18.0",
     "quickjs-emscripten": "^0.31.0",
