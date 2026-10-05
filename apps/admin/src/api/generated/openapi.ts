@@ -13538,6 +13538,1022 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/whatsapp/assistant": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the tenant's WhatsApp assistant binding */
+    get: {
+      parameters: {
+        query: {
+          agencyId: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tenant assistant settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                settings: {
+                  connectionId: string;
+                  tenantId: number;
+                  employeeId: string;
+                  enabled: boolean;
+                  allowedContacts: string[];
+                  updatedBy: string;
+                  native?: {
+                    /** @default false */
+                    replyButtons: boolean;
+                    /** @default false */
+                    listMessages: boolean;
+                    /** @default false */
+                    mediaUnderstanding: boolean;
+                    /** @default false */
+                    readReceipts: boolean;
+                    /** @default false */
+                    typingIndicator: boolean;
+                    /** @default [] */
+                    flows: {
+                      key: string;
+                      label: string;
+                      flowId: string;
+                      screen: string;
+                    }[];
+                    /** @default [] */
+                    catalogs: {
+                      key: string;
+                      label: string;
+                      catalogId: string;
+                      products: {
+                        id: string;
+                        label: string;
+                      }[];
+                    }[];
+                    /** @default [] */
+                    templates: {
+                      key: string;
+                      label: string;
+                      name: string;
+                      language: string;
+                      parameterCount: number;
+                    }[];
+                    /** @default [] */
+                    media: {
+                      key: string;
+                      label: string;
+                      /** @enum {string} */
+                      type: "image" | "audio" | "video" | "document";
+                      mediaId: string;
+                      filename?: string;
+                    }[];
+                    /** @default [] */
+                    locations: {
+                      key: string;
+                      label: string;
+                      latitude: number;
+                      longitude: number;
+                      name?: string;
+                      address?: string;
+                    }[];
+                  };
+                } | null;
+                employees: {
+                  id: string;
+                  name: string;
+                }[];
+                webhookReady: boolean;
+              };
+            };
+          };
+        };
+        /** @description Tenant administrator required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    /** Configure the tenant's WhatsApp assistant and pilot contacts */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            agencyId: number;
+            employeeId: string;
+            enabled: boolean;
+            allowedContacts: string[];
+          };
+        };
+      };
+      responses: {
+        /** @description Updated settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                connectionId: string;
+                tenantId: number;
+                employeeId: string;
+                enabled: boolean;
+                allowedContacts: string[];
+                updatedBy: string;
+                native?: {
+                  /** @default false */
+                  replyButtons: boolean;
+                  /** @default false */
+                  listMessages: boolean;
+                  /** @default false */
+                  mediaUnderstanding: boolean;
+                  /** @default false */
+                  readReceipts: boolean;
+                  /** @default false */
+                  typingIndicator: boolean;
+                  /** @default [] */
+                  flows: {
+                    key: string;
+                    label: string;
+                    flowId: string;
+                    screen: string;
+                  }[];
+                  /** @default [] */
+                  catalogs: {
+                    key: string;
+                    label: string;
+                    catalogId: string;
+                    products: {
+                      id: string;
+                      label: string;
+                    }[];
+                  }[];
+                  /** @default [] */
+                  templates: {
+                    key: string;
+                    label: string;
+                    name: string;
+                    language: string;
+                    parameterCount: number;
+                  }[];
+                  /** @default [] */
+                  media: {
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    type: "image" | "audio" | "video" | "document";
+                    mediaId: string;
+                    filename?: string;
+                  }[];
+                  /** @default [] */
+                  locations: {
+                    key: string;
+                    label: string;
+                    latitude: number;
+                    longitude: number;
+                    name?: string;
+                    address?: string;
+                  }[];
+                };
+              };
+            };
+          };
+        };
+        /** @description Tenant administrator required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description A connected sender is required */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description The employee is unavailable for this tenant */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Webhook secrets are not configured */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/native": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read native WhatsApp tenant configuration */
+    get: {
+      parameters: {
+        query: {
+          agencyId: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description WhatsApp native operation completed */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                configuration: {
+                  /** @default false */
+                  replyButtons: boolean;
+                  /** @default false */
+                  listMessages: boolean;
+                  /** @default false */
+                  mediaUnderstanding: boolean;
+                  /** @default false */
+                  readReceipts: boolean;
+                  /** @default false */
+                  typingIndicator: boolean;
+                  /** @default [] */
+                  flows: {
+                    key: string;
+                    label: string;
+                    flowId: string;
+                    screen: string;
+                  }[];
+                  /** @default [] */
+                  catalogs: {
+                    key: string;
+                    label: string;
+                    catalogId: string;
+                    products: {
+                      id: string;
+                      label: string;
+                    }[];
+                  }[];
+                  /** @default [] */
+                  templates: {
+                    key: string;
+                    label: string;
+                    name: string;
+                    language: string;
+                    parameterCount: number;
+                  }[];
+                  /** @default [] */
+                  media: {
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    type: "image" | "audio" | "video" | "document";
+                    mediaId: string;
+                    filename?: string;
+                  }[];
+                  /** @default [] */
+                  locations: {
+                    key: string;
+                    label: string;
+                    latitude: number;
+                    longitude: number;
+                    name?: string;
+                    address?: string;
+                  }[];
+                };
+                configured: boolean;
+                contributions: unknown[];
+              };
+            };
+          };
+        };
+        /** @description Invalid native input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Tenant administrator or allowed recipient required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Connection, reply window or send state unavailable */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Uploaded media exceeds the bounded request size */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Native resource is unavailable or unapproved */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Provider request failed or has an uncertain outcome */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+      };
+    };
+    /** Configure approved native WhatsApp resources */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            agencyId: number;
+            configuration: {
+              /** @default false */
+              replyButtons?: boolean;
+              /** @default false */
+              listMessages?: boolean;
+              /** @default false */
+              mediaUnderstanding?: boolean;
+              /** @default false */
+              readReceipts?: boolean;
+              /** @default false */
+              typingIndicator?: boolean;
+              /** @default [] */
+              flows?: {
+                key: string;
+                label: string;
+                flowId: string;
+                screen: string;
+              }[];
+              /** @default [] */
+              catalogs?: {
+                key: string;
+                label: string;
+                catalogId: string;
+                products: {
+                  id: string;
+                  label: string;
+                }[];
+              }[];
+              /** @default [] */
+              templates?: {
+                key: string;
+                label: string;
+                name: string;
+                language: string;
+                parameterCount: number;
+              }[];
+              /** @default [] */
+              media?: {
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "image" | "audio" | "video" | "document";
+                mediaId: string;
+                filename?: string;
+              }[];
+              /** @default [] */
+              locations?: {
+                key: string;
+                label: string;
+                latitude: number;
+                longitude: number;
+                name?: string;
+                address?: string;
+              }[];
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description WhatsApp native operation completed */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @default false */
+                replyButtons: boolean;
+                /** @default false */
+                listMessages: boolean;
+                /** @default false */
+                mediaUnderstanding: boolean;
+                /** @default false */
+                readReceipts: boolean;
+                /** @default false */
+                typingIndicator: boolean;
+                /** @default [] */
+                flows: {
+                  key: string;
+                  label: string;
+                  flowId: string;
+                  screen: string;
+                }[];
+                /** @default [] */
+                catalogs: {
+                  key: string;
+                  label: string;
+                  catalogId: string;
+                  products: {
+                    id: string;
+                    label: string;
+                  }[];
+                }[];
+                /** @default [] */
+                templates: {
+                  key: string;
+                  label: string;
+                  name: string;
+                  language: string;
+                  parameterCount: number;
+                }[];
+                /** @default [] */
+                media: {
+                  key: string;
+                  label: string;
+                  /** @enum {string} */
+                  type: "image" | "audio" | "video" | "document";
+                  mediaId: string;
+                  filename?: string;
+                }[];
+                /** @default [] */
+                locations: {
+                  key: string;
+                  label: string;
+                  latitude: number;
+                  longitude: number;
+                  name?: string;
+                  address?: string;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Invalid native input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Tenant administrator or allowed recipient required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Connection, reply window or send state unavailable */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Uploaded media exceeds the bounded request size */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Native resource is unavailable or unapproved */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Provider request failed or has an uncertain outcome */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/native/assets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Discover published WhatsApp Flows and approved templates */
+    get: {
+      parameters: {
+        query: {
+          agencyId: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description WhatsApp native operation completed */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                flows: {
+                  id: string;
+                  name: string;
+                  /** @enum {string} */
+                  status: "PUBLISHED";
+                }[];
+                templates: {
+                  id: string;
+                  name: string;
+                  language: string;
+                  /** @enum {string} */
+                  status: "APPROVED";
+                  parameterCount: number;
+                  supported: boolean;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Invalid native input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Tenant administrator or allowed recipient required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Connection, reply window or send state unavailable */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Uploaded media exceeds the bounded request size */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Native resource is unavailable or unapproved */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Provider request failed or has an uncertain outcome */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/native/messages": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Send one tenant-approved native WhatsApp message */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            agencyId: number;
+            to: string;
+            reply:
+              | {
+                  /** @enum {string} */
+                  kind: "text";
+                  text: string;
+                }
+              | {
+                  /** @enum {string} */
+                  kind: "buttons";
+                  text: string;
+                  options: {
+                    id: string;
+                    title: string;
+                  }[];
+                }
+              | {
+                  /** @enum {string} */
+                  kind: "list";
+                  text: string;
+                  buttonLabel: string;
+                  options: {
+                    id: string;
+                    title: string;
+                    description?: string;
+                  }[];
+                }
+              | {
+                  /** @enum {string} */
+                  kind: "flow";
+                  text: string;
+                  resourceKey: string;
+                }
+              | {
+                  /** @enum {string} */
+                  kind: "catalog";
+                  text: string;
+                  resourceKey: string;
+                  productIds: string[];
+                }
+              | {
+                  /** @enum {string} */
+                  kind: "media";
+                  resourceKey: string;
+                  caption?: string;
+                }
+              | {
+                  /** @enum {string} */
+                  kind: "location";
+                  resourceKey: string;
+                }
+              | {
+                  /** @enum {string} */
+                  kind: "template";
+                  resourceKey: string;
+                  parameters: string[];
+                };
+            /** Format: uuid */
+            idempotencyKey: string;
+            /** @default false */
+            consent?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description WhatsApp native operation completed */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                messageId: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid native input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Tenant administrator or allowed recipient required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Connection, reply window or send state unavailable */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Uploaded media exceeds the bounded request size */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Native resource is unavailable or unapproved */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Provider request failed or has an uncertain outcome */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/native/media": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Upload media to the tenant's WhatsApp account */
+    post: {
+      parameters: {
+        query: {
+          agencyId: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "multipart/form-data": {
+            /** Format: binary */
+            file?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description WhatsApp native operation completed */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                mediaId: string;
+                type: string;
+                filename: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid native input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Tenant administrator or allowed recipient required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Connection, reply window or send state unavailable */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Uploaded media exceeds the bounded request size */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Native resource is unavailable or unapproved */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Provider request failed or has an uncertain outcome */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/tenant-workspaces": {
     parameters: {
       query?: never;

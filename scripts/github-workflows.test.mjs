@@ -95,9 +95,18 @@ test("QuickJS PR previews require an explicit label on same-repository main PRs"
   assert.match(preview, /base\.ref == 'main'/);
   assert.match(preview, /environment: preview/);
   assert.match(preview, /PREVIEW_BRANCH: \$\{\{ github\.head_ref \}\}/);
-  assert.match(preview, /node scripts\/preview-deploy\.mjs --branch "\$PREVIEW_BRANCH"/);
-  assert.match(preview, /name: Verify QuickJS preview through authenticated service/);
-  assert.match(preview, /node scripts\/verify-quickjs-preview\.mjs --branch "\$PREVIEW_BRANCH"/);
+  assert.match(
+    preview,
+    /node scripts\/preview-deploy\.mjs --branch "\$PREVIEW_BRANCH"/,
+  );
+  assert.match(
+    preview,
+    /name: Verify QuickJS preview through authenticated service/,
+  );
+  assert.match(
+    preview,
+    /node scripts\/verify-quickjs-preview\.mjs --branch "\$PREVIEW_BRANCH"/,
+  );
   assert.ok(
     preview.indexOf("Deploy explicitly labeled QuickJS branch preview") <
       preview.indexOf("Verify QuickJS preview through authenticated service"),
@@ -181,6 +190,14 @@ test("environment deployments forward the private registry tenant map", async ()
     assert.match(
       upload,
       /PLUGIN_REGISTRY_TENANTS: \$\{\{ secrets\.PLUGIN_REGISTRY_TENANTS \}\}/,
+    );
+    assert.match(
+      upload,
+      /WHATSAPP_META_APP_SECRET: \$\{\{ secrets\.WHATSAPP_META_APP_SECRET \}\}/,
+    );
+    assert.match(
+      upload,
+      /WHATSAPP_WEBHOOK_VERIFY_TOKEN: \$\{\{ secrets\.WHATSAPP_WEBHOOK_VERIFY_TOKEN \}\}/,
     );
   }
 });

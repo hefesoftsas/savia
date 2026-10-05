@@ -14,6 +14,8 @@ export type EffectiveAssistantConfiguration = {
   transcriptionModel?: string;
   transcriptionEndpoint?: AssistantTranscriptionEndpoint;
   summaryModel?: string;
+  imageGenerationModel?: string;
+  speechModel?: string;
   tenantId?: number;
 };
 
@@ -25,6 +27,24 @@ export type AssistantModelModalities = {
   image: boolean;
   audio: boolean;
   file: boolean;
+  imageOutput?: boolean;
+  speechOutput?: boolean;
+};
+
+export type AssistantImagePriceUnit = "image" | "megapixel" | "token";
+export type AssistantSpeechPriceUnit = "character" | "second" | "token";
+
+export type AssistantModelGenerationPricing = {
+  image?: {
+    price: number;
+    unit: AssistantImagePriceUnit;
+    variant?: string;
+    providerSlug?: string;
+  };
+  speech?: {
+    prompt?: { price: number; unit: "character" | "token" };
+    completion?: { price: number; unit: "second" | "token" };
+  };
 };
 
 export type AssistantModel = {
@@ -34,6 +54,7 @@ export type AssistantModel = {
   inputPricePerMillion: number | null;
   outputPricePerMillion: number | null;
   modalities?: AssistantModelModalities;
+  generationPricing?: AssistantModelGenerationPricing;
   supportsTools?: boolean;
   transcriptionEndpoint?: AssistantTranscriptionEndpoint;
 };
@@ -41,6 +62,7 @@ export type AssistantModel = {
 export type AssistantModelCatalog = {
   list(
     configuration: EffectiveAssistantConfiguration,
+    options?: { includeGenerationPricing?: boolean },
   ): Promise<AssistantModel[]>;
 };
 
@@ -53,6 +75,8 @@ export type AssistantConfigurationWrite = {
   transcriptionModel?: string | null;
   transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
   summaryModel?: string | null;
+  imageGenerationModel?: string | null;
+  speechModel?: string | null;
 };
 
 type AssistantSettingRow = {
@@ -66,6 +90,8 @@ type AssistantSettingRow = {
   transcription_model: string | null;
   transcription_endpoint: AssistantTranscriptionEndpoint | null;
   summary_model: string | null;
+  image_generation_model: string | null;
+  speech_model: string | null;
   updated_at: string;
   updated_by: string;
 };
@@ -93,6 +119,8 @@ export type AssistantConfigurationSettingSummary = {
   transcriptionModel?: string | null;
   transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
   summaryModel?: string | null;
+  imageGenerationModel?: string | null;
+  speechModel?: string | null;
   updatedAt?: string;
   updatedBy?: string;
 };
@@ -227,6 +255,8 @@ function summary(
         ? transcriptionEndpointForModel(row.transcription_model)
         : null),
     summaryModel: row.summary_model,
+    imageGenerationModel: row.image_generation_model,
+    speechModel: row.speech_model,
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
   };
@@ -402,7 +432,7 @@ export class AssistantConfigurationRepository {
   async summary(): Promise<AssistantConfigurationSummary> {
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, allowed_models, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, image_generation_model, speech_model, allowed_models, updated_at, updated_by
          FROM assistant_openrouter_settings
          ORDER BY CASE scope WHEN 'global' THEN 0 ELSE 1 END, agency_id`,
       )
@@ -498,6 +528,8 @@ export class AssistantConfigurationRepository {
           transcriptionEndpoint:
             fullSummary.global.transcriptionEndpoint ?? null,
           summaryModel: fullSummary.global.summaryModel ?? null,
+          imageGenerationModel: fullSummary.global.imageGenerationModel ?? null,
+          speechModel: fullSummary.global.speechModel ?? null,
           allowedModels: fullSummary.global.allowedModels,
         }
       : null;
@@ -689,7 +721,7 @@ export class AssistantConfigurationRepository {
   ): Promise<EffectiveAssistantConfiguration> {
     const rows = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, allowed_models, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, image_generation_model, speech_model, allowed_models, updated_at, updated_by
          FROM assistant_openrouter_settings
          WHERE id = ? OR id = 'global'`,
       )
@@ -732,6 +764,11 @@ export class AssistantConfigurationRepository {
         transcriptionSource?.transcription_endpoint ??
         transcriptionEndpointForModel(transcriptionModel),
       summaryModel: agency?.summary_model ?? global?.summary_model ?? model,
+      imageGenerationModel:
+        agency?.image_generation_model ??
+        global?.image_generation_model ??
+        undefined,
+      speechModel: agency?.speech_model ?? global?.speech_model ?? undefined,
       ...(agencyId === undefined ? {} : { tenantId: agencyId }),
     };
   }
@@ -744,7 +781,7 @@ export class AssistantConfigurationRepository {
     const id = settingId(scope, agencyId);
     const existing = await this.database
       .prepare(
-        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, allowed_models, updated_at, updated_by
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, image_generation_model, speech_model, allowed_models, updated_at, updated_by
          FROM assistant_openrouter_settings WHERE id = ?`,
       )
       .bind(id)
@@ -805,6 +842,14 @@ export class AssistantConfigurationRepository {
       input.summaryModel === undefined
         ? (existing?.summary_model ?? null)
         : (normalizeAssistantModel(input.summaryModel) ?? null);
+    const imageGenerationModel =
+      input.imageGenerationModel === undefined
+        ? (existing?.image_generation_model ?? null)
+        : (normalizeAssistantModel(input.imageGenerationModel) ?? null);
+    const speechModel =
+      input.speechModel === undefined
+        ? (existing?.speech_model ?? null)
+        : (normalizeAssistantModel(input.speechModel) ?? null);
     const allowedModels =
       input.allowedModels === undefined
         ? storedAllowedModels(existing?.allowed_models)
@@ -818,6 +863,8 @@ export class AssistantConfigurationRepository {
       transcriptionModel === null &&
       transcriptionEndpoint === null &&
       summaryModel === null &&
+      imageGenerationModel === null &&
+      speechModel === null &&
       allowedModelsJson === null
     ) {
       await this.clearAgencyOverride(agencyId!);
@@ -826,8 +873,8 @@ export class AssistantConfigurationRepository {
     await this.database
       .prepare(
         `INSERT INTO assistant_openrouter_settings (
-          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, allowed_models, updated_at, updated_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, image_generation_model, speech_model, allowed_models, updated_at, updated_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           api_key_ciphertext = excluded.api_key_ciphertext,
           api_key_iv = excluded.api_key_iv,
@@ -835,6 +882,8 @@ export class AssistantConfigurationRepository {
           transcription_model = excluded.transcription_model,
           transcription_endpoint = excluded.transcription_endpoint,
           summary_model = excluded.summary_model,
+          image_generation_model = excluded.image_generation_model,
+          speech_model = excluded.speech_model,
           allowed_models = excluded.allowed_models,
           updated_at = excluded.updated_at,
           updated_by = excluded.updated_by`,
@@ -849,6 +898,8 @@ export class AssistantConfigurationRepository {
         transcriptionModel,
         transcriptionEndpoint,
         summaryModel,
+        imageGenerationModel,
+        speechModel,
         allowedModelsJson,
         this.now().toISOString(),
         input.actorId,
@@ -873,19 +924,41 @@ export function openRouterModelCatalog(
   fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
 ): AssistantModelCatalog {
   return {
-    async list(configuration) {
+    async list(configuration, options = {}) {
+      const catalogDeadline = Date.now() + 20_000;
       const headers: Record<string, string> = {};
       if (configuration.apiKey) {
         headers.authorization = `Bearer ${configuration.apiKey}`;
       }
-      const response = await fetcher(
+      const request = async (
+        url: string,
+        timeoutMs = 12_000,
+      ): Promise<{ response: Response; decoded: unknown }> => {
+        const controller = new AbortController();
+        const remainingMs = Math.max(1, catalogDeadline - Date.now());
+        const timer = setTimeout(
+          () => controller.abort(),
+          Math.min(timeoutMs, remainingMs),
+        );
+        try {
+          const response = await fetcher(url, {
+            ...(Object.keys(headers).length ? { headers } : {}),
+            signal: controller.signal,
+          });
+          const decoded = response.ok
+            ? await response.json().catch(() => undefined)
+            : undefined;
+          return { response, decoded };
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      const { response, decoded } = await request(
         configuration.apiKey
-          ? "https://openrouter.ai/api/v1/models/user?output_modalities=text,transcription&sort=most-popular"
-          : "https://openrouter.ai/api/v1/models?output_modalities=text,transcription&sort=most-popular",
-        Object.keys(headers).length ? { headers } : undefined,
+          ? "https://openrouter.ai/api/v1/models/user?output_modalities=text,transcription,image,speech&sort=most-popular"
+          : "https://openrouter.ai/api/v1/models?output_modalities=text,transcription,image,speech&sort=most-popular",
       );
       if (!response.ok) throw new Error("OpenRouter models request failed");
-      const decoded: unknown = await response.json().catch(() => undefined);
       if (
         typeof decoded !== "object" ||
         decoded === null ||
@@ -894,7 +967,166 @@ export function openRouterModelCatalog(
       ) {
         throw new Error("OpenRouter model response is invalid");
       }
-      return decoded.data.flatMap((candidate): AssistantModel[] => {
+      const models = new Map<string, AssistantModel>();
+      const parsedModels = decoded.data.flatMap(
+        (candidate): AssistantModel[] => {
+          if (
+            typeof candidate !== "object" ||
+            candidate === null ||
+            !("id" in candidate) ||
+            typeof candidate.id !== "string"
+          ) {
+            return [];
+          }
+          try {
+            const id = normalizeAssistantModel(candidate.id);
+            if (!id) return [];
+            const name =
+              "name" in candidate && typeof candidate.name === "string"
+                ? candidate.name.slice(0, 240)
+                : id;
+            const pricing =
+              "pricing" in candidate &&
+              typeof candidate.pricing === "object" &&
+              candidate.pricing !== null
+                ? candidate.pricing
+                : undefined;
+            const pricePerMillion = (value: unknown): number | null => {
+              if (
+                typeof value !== "number" &&
+                (typeof value !== "string" || value.trim() === "")
+              ) {
+                return null;
+              }
+              const perToken =
+                typeof value === "string" || typeof value === "number"
+                  ? Number(value)
+                  : NaN;
+              const perMillion = perToken * 1_000_000;
+              return Number.isFinite(perMillion) && perMillion >= 0
+                ? perMillion
+                : null;
+            };
+            const contextLength =
+              "context_length" in candidate &&
+              typeof candidate.context_length === "number" &&
+              Number.isSafeInteger(candidate.context_length) &&
+              candidate.context_length > 0
+                ? candidate.context_length
+                : null;
+            const architecture =
+              "architecture" in candidate &&
+              typeof candidate.architecture === "object" &&
+              candidate.architecture !== null
+                ? (candidate.architecture as Record<string, unknown>)
+                : undefined;
+
+            const inputModalities = Array.isArray(
+              architecture?.input_modalities,
+            )
+              ? (architecture.input_modalities as string[])
+              : typeof architecture?.modality === "string"
+                ? (architecture.modality as string).split("->")[0].split("+")
+                : [];
+
+            const outputModalities = Array.isArray(
+              architecture?.output_modalities,
+            )
+              ? (architecture.output_modalities as string[])
+              : typeof architecture?.modality === "string"
+                ? ((architecture.modality as string)
+                    .split("->")
+                    .at(-1)
+                    ?.split("+") ?? [])
+                : [];
+
+            const supportedParams = Array.isArray(
+              (candidate as Record<string, unknown>).supported_parameters,
+            )
+              ? ((candidate as Record<string, unknown>)
+                  .supported_parameters as string[])
+              : [];
+
+            const modalities: AssistantModelModalities = {
+              text: outputModalities.includes("text"),
+              image: inputModalities.includes("image"),
+              audio: inputModalities.includes("audio"),
+              file:
+                inputModalities.includes("file") ||
+                inputModalities.includes("image"),
+              imageOutput: false,
+              speechOutput: outputModalities.includes("speech"),
+            };
+            const speechPricing = parseSpeechGenerationPricing(
+              id,
+              outputModalities.includes("speech"),
+              architecture?.tokenizer,
+              pricing,
+            );
+            const usesNonTokenSpeechMetering =
+              outputModalities.includes("speech") &&
+              !isTokenMeteredSpeech(id, architecture?.tokenizer);
+            const supportsTools = supportedParams.includes("tools");
+            const transcriptionEndpoint = outputModalities.includes(
+              "transcription",
+            )
+              ? "audio/transcriptions"
+              : inputModalities.includes("audio") &&
+                  outputModalities.includes("text")
+                ? "chat/completions"
+                : undefined;
+
+            return [
+              {
+                id,
+                name,
+                contextLength,
+                inputPricePerMillion: usesNonTokenSpeechMetering
+                  ? null
+                  : pricePerMillion(
+                      pricing && "prompt" in pricing
+                        ? pricing.prompt
+                        : undefined,
+                    ),
+                outputPricePerMillion: usesNonTokenSpeechMetering
+                  ? null
+                  : pricePerMillion(
+                      pricing && "completion" in pricing
+                        ? pricing.completion
+                        : undefined,
+                    ),
+                modalities,
+                supportsTools,
+                ...(speechPricing
+                  ? { generationPricing: { speech: speechPricing } }
+                  : {}),
+                ...(transcriptionEndpoint ? { transcriptionEndpoint } : {}),
+              },
+            ];
+          } catch {
+            return [];
+          }
+        },
+      );
+      for (const model of parsedModels) models.set(model.id, model);
+      if (options.includeGenerationPricing === false) {
+        return [...models.values()];
+      }
+
+      const imageCatalog = await request(
+        "https://openrouter.ai/api/v1/images/models",
+      ).catch(() => undefined);
+      const imageDecoded: unknown = imageCatalog?.response.ok
+        ? imageCatalog.decoded
+        : undefined;
+      const imageCandidates =
+        typeof imageDecoded === "object" &&
+        imageDecoded !== null &&
+        "data" in imageDecoded &&
+        Array.isArray(imageDecoded.data)
+          ? imageDecoded.data
+          : [];
+      const imageModels = imageCandidates.flatMap((candidate) => {
         if (
           typeof candidate !== "object" ||
           candidate === null ||
@@ -910,100 +1142,270 @@ export function openRouterModelCatalog(
             "name" in candidate && typeof candidate.name === "string"
               ? candidate.name.slice(0, 240)
               : id;
-          const pricing =
-            "pricing" in candidate &&
-            typeof candidate.pricing === "object" &&
-            candidate.pricing !== null
-              ? candidate.pricing
-              : undefined;
-          const pricePerMillion = (value: unknown): number | null => {
-            const perToken =
-              typeof value === "string" || typeof value === "number"
-                ? Number(value)
-                : NaN;
-            const perMillion = perToken * 1_000_000;
-            return Number.isFinite(perMillion) && perMillion >= 0
-              ? perMillion
-              : null;
-          };
-          const contextLength =
-            "context_length" in candidate &&
-            typeof candidate.context_length === "number" &&
-            Number.isSafeInteger(candidate.context_length) &&
-            candidate.context_length > 0
-              ? candidate.context_length
-              : null;
-          const architecture =
-            "architecture" in candidate &&
-            typeof candidate.architecture === "object" &&
-            candidate.architecture !== null
-              ? (candidate.architecture as Record<string, unknown>)
-              : undefined;
-
-          const inputModalities = Array.isArray(architecture?.input_modalities)
-            ? (architecture.input_modalities as string[])
-            : typeof architecture?.modality === "string"
-              ? (architecture.modality as string).split("->")[0].split("+")
-              : [];
-
-          const outputModalities = Array.isArray(
-            architecture?.output_modalities,
-          )
-            ? (architecture.output_modalities as string[])
-            : typeof architecture?.modality === "string"
-              ? ((architecture.modality as string)
-                  .split("->")
-                  .at(-1)
-                  ?.split("+") ?? [])
-              : [];
-
-          const supportedParams = Array.isArray(
-            (candidate as Record<string, unknown>).supported_parameters,
-          )
-            ? ((candidate as Record<string, unknown>)
-                .supported_parameters as string[])
-            : [];
-
-          const modalities: AssistantModelModalities = {
-            text: outputModalities.includes("text"),
-            image: inputModalities.includes("image"),
-            audio: inputModalities.includes("audio"),
-            file:
-              inputModalities.includes("file") ||
-              inputModalities.includes("image"),
-          };
-          const supportsTools = supportedParams.includes("tools");
-          const transcriptionEndpoint = outputModalities.includes(
-            "transcription",
-          )
-            ? "audio/transcriptions"
-            : inputModalities.includes("audio") &&
-                outputModalities.includes("text")
-              ? "chat/completions"
-              : undefined;
-
           return [
-            {
-              id,
-              name,
-              contextLength,
-              inputPricePerMillion: pricePerMillion(
-                pricing && "prompt" in pricing ? pricing.prompt : undefined,
-              ),
-              outputPricePerMillion: pricePerMillion(
-                pricing && "completion" in pricing
-                  ? pricing.completion
-                  : undefined,
-              ),
-              modalities,
-              supportsTools,
-              ...(transcriptionEndpoint ? { transcriptionEndpoint } : {}),
-            },
+            { id, name, isEditOnly: hasRequiredImageReferences(candidate) },
           ];
         } catch {
           return [];
         }
       });
+      const endpointResults = new Map<
+        string,
+        {
+          pricing?: AssistantModelGenerationPricing["image"];
+          isEditOnly: boolean;
+        }
+      >();
+      for (let index = 0; index < imageModels.length; index += 8) {
+        await Promise.all(
+          imageModels
+            .slice(index, index + 8)
+            .map(async ({ id, isEditOnly }) => {
+              if (isEditOnly) {
+                endpointResults.set(id, { isEditOnly: true });
+                return;
+              }
+              const path = id
+                .split("/")
+                .map((segment) => encodeURIComponent(segment))
+                .join("/");
+              const endpointResult = await request(
+                `https://openrouter.ai/api/v1/images/models/${path}/endpoints`,
+                8_000,
+              ).catch(() => undefined);
+              if (!endpointResult?.response.ok) return;
+              const endpointDecoded = endpointResult.decoded;
+              const endpoints =
+                typeof endpointDecoded === "object" &&
+                endpointDecoded !== null &&
+                "endpoints" in endpointDecoded &&
+                Array.isArray(endpointDecoded.endpoints)
+                  ? endpointDecoded.endpoints
+                  : [];
+              if (endpoints.length === 0) return;
+              const usable = endpoints.filter(
+                (endpoint) => !hasRequiredImageReferences(endpoint),
+              );
+              if (!usable.length) {
+                endpointResults.set(id, { isEditOnly: true });
+                return;
+              }
+              const rates = usable.flatMap((endpoint) => {
+                if (
+                  typeof endpoint !== "object" ||
+                  endpoint === null ||
+                  !("pricing" in endpoint) ||
+                  !Array.isArray(endpoint.pricing)
+                ) {
+                  return [];
+                }
+                const providerSlug =
+                  "provider_slug" in endpoint &&
+                  typeof endpoint.provider_slug === "string"
+                    ? endpoint.provider_slug.slice(0, 160)
+                    : undefined;
+                return (endpoint.pricing as unknown[]).flatMap(
+                  (price: unknown) => {
+                    if (
+                      typeof price !== "object" ||
+                      price === null ||
+                      !("billable" in price) ||
+                      price.billable !== "output_image" ||
+                      !("unit" in price) ||
+                      !isAssistantImagePriceUnit(price.unit) ||
+                      !("cost_usd" in price) ||
+                      (typeof price.cost_usd !== "number" &&
+                        (typeof price.cost_usd !== "string" ||
+                          price.cost_usd.trim() === ""))
+                    ) {
+                      return [];
+                    }
+                    const amount = Number(price.cost_usd);
+                    if (!Number.isFinite(amount) || amount < 0) return [];
+                    const variant =
+                      "variant" in price && typeof price.variant === "string"
+                        ? price.variant.slice(0, 120)
+                        : undefined;
+                    const tiered = "tier" in price && price.tier != null;
+                    return [
+                      {
+                        price: amount,
+                        unit: price.unit,
+                        ...(variant ? { variant } : {}),
+                        ...(providerSlug ? { providerSlug } : {}),
+                        ...(tiered ? { tiered: true } : {}),
+                      },
+                    ];
+                  },
+                );
+              });
+              const untiered = rates.filter((rate) => !("tiered" in rate));
+              const selectionPool = untiered;
+              const preferredUnit = (
+                ["image", "megapixel", "token"] as const
+              ).find((unit) =>
+                selectionPool.some((rate) => rate.unit === unit),
+              );
+              const chosen = selectionPool
+                .filter((rate) => rate.unit === preferredUnit)
+                .sort((left, right) => left.price - right.price)[0];
+              endpointResults.set(id, {
+                isEditOnly: false,
+                ...(chosen
+                  ? {
+                      pricing: {
+                        price: chosen.price,
+                        unit: chosen.unit,
+                        ...(chosen.variant ? { variant: chosen.variant } : {}),
+                        ...(chosen.providerSlug
+                          ? { providerSlug: chosen.providerSlug }
+                          : {}),
+                      },
+                    }
+                  : {}),
+              });
+            }),
+        );
+      }
+      for (const candidate of imageModels) {
+        const endpoint = endpointResults.get(candidate.id);
+        const previous = models.get(candidate.id);
+        if (candidate.isEditOnly || endpoint?.isEditOnly) {
+          if (previous) {
+            models.set(candidate.id, {
+              ...previous,
+              modalities: {
+                text: previous.modalities?.text ?? false,
+                image: previous.modalities?.image ?? false,
+                audio: previous.modalities?.audio ?? false,
+                file: previous.modalities?.file ?? false,
+                imageOutput: false,
+                speechOutput: previous.modalities?.speechOutput ?? false,
+              },
+            });
+          }
+          continue;
+        }
+        models.set(candidate.id, {
+          id: candidate.id,
+          name: previous?.name ?? candidate.name,
+          contextLength: previous?.contextLength ?? null,
+          inputPricePerMillion: previous?.inputPricePerMillion ?? null,
+          outputPricePerMillion: previous?.outputPricePerMillion ?? null,
+          modalities: {
+            text: previous?.modalities?.text ?? false,
+            image: previous?.modalities?.image ?? false,
+            audio: previous?.modalities?.audio ?? false,
+            file: previous?.modalities?.file ?? false,
+            imageOutput: true,
+            speechOutput: previous?.modalities?.speechOutput ?? false,
+          },
+          supportsTools: previous?.supportsTools ?? false,
+          ...(previous?.transcriptionEndpoint
+            ? { transcriptionEndpoint: previous.transcriptionEndpoint }
+            : {}),
+          ...(previous?.generationPricing?.speech
+            ? {
+                generationPricing: {
+                  speech: previous.generationPricing.speech,
+                },
+              }
+            : {}),
+          ...(endpoint?.pricing
+            ? {
+                generationPricing: {
+                  ...(previous?.generationPricing?.speech
+                    ? { speech: previous.generationPricing.speech }
+                    : {}),
+                  image: endpoint.pricing,
+                },
+              }
+            : {}),
+        });
+      }
+      return [...models.values()];
     },
   };
+}
+
+function parseSpeechGenerationPricing(
+  modelId: string,
+  outputsSpeech: boolean,
+  tokenizer: unknown,
+  pricing: unknown,
+): AssistantModelGenerationPricing["speech"] | undefined {
+  if (!outputsSpeech || typeof pricing !== "object" || pricing === null) {
+    return undefined;
+  }
+  const value = (key: "prompt" | "completion") => {
+    const raw = (pricing as Record<string, unknown>)[key];
+    if (
+      typeof raw !== "number" &&
+      (typeof raw !== "string" || raw.trim() === "")
+    ) {
+      return undefined;
+    }
+    const amount =
+      typeof raw === "string" || typeof raw === "number" ? Number(raw) : NaN;
+    return Number.isFinite(amount) && amount >= 0 ? amount : undefined;
+  };
+  const prompt = value("prompt");
+  const completion = value("completion");
+  const tokenMetered = isTokenMeteredSpeech(modelId, tokenizer);
+  const speech: NonNullable<AssistantModelGenerationPricing["speech"]> = {};
+  if (prompt !== undefined) {
+    speech.prompt = {
+      price: prompt,
+      unit: tokenMetered ? "token" : "character",
+    };
+  }
+  if (
+    completion !== undefined &&
+    (tokenMetered || completion > 0 || /seed/i.test(modelId))
+  ) {
+    speech.completion = {
+      price: completion,
+      unit: tokenMetered ? "token" : "second",
+    };
+  }
+  return Object.keys(speech).length ? speech : undefined;
+}
+
+function isTokenMeteredSpeech(modelId: string, tokenizer: unknown): boolean {
+  return (
+    (typeof tokenizer === "string" && /gemini/i.test(tokenizer)) ||
+    /gemini/i.test(modelId)
+  );
+}
+
+function isAssistantImagePriceUnit(
+  value: unknown,
+): value is AssistantImagePriceUnit {
+  return value === "image" || value === "megapixel" || value === "token";
+}
+
+function hasRequiredImageReferences(value: unknown): boolean {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("supported_parameters" in value)
+  ) {
+    return false;
+  }
+  const parameters = value.supported_parameters;
+  if (
+    typeof parameters !== "object" ||
+    parameters === null ||
+    !("input_references" in parameters)
+  ) {
+    return false;
+  }
+  const references = parameters.input_references;
+  return (
+    typeof references === "object" &&
+    references !== null &&
+    "min" in references &&
+    typeof references.min === "number" &&
+    references.min > 0
+  );
 }
