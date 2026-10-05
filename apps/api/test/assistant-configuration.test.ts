@@ -205,6 +205,12 @@ describe("assistant OpenRouter configuration", () => {
       canManageGlobal: true,
       manageableTenantIds: expect.any(Array),
     });
+    await expect(
+      settings.effectiveGlobalConfiguration(),
+    ).resolves.toMatchObject({
+      allowedModels: [],
+      model: "anthropic/claude-sonnet-4",
+    });
   });
 
   it("persists global meeting models across partial key and chat-model updates", async () => {
@@ -236,6 +242,93 @@ describe("assistant OpenRouter configuration", () => {
       transcriptionModel: "openai/whisper-large-v3-turbo",
       summaryModel: "openai/gpt-4o-mini",
     });
+  });
+
+  it("inherits global selectable models unless a tenant explicitly disables them", async () => {
+    const settings = repository();
+    await seedAgencyAndMember(116);
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      model: "deepseek/deepseek-v4-flash",
+      allowedModels: ["openai/gpt-5", "google/gemini-2.5-flash"],
+    });
+    await settings.saveAgencyOverride(116, {
+      actorId: "test-platform-admin",
+      model: "anthropic/claude-sonnet-4",
+      allowedModels: null,
+    });
+    await expect(settings.summary()).resolves.toMatchObject({
+      tenants: [
+        expect.objectContaining({ tenantId: 116, allowedModels: null }),
+      ],
+    });
+
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 116),
+    ).resolves.toMatchObject({
+      model: "anthropic/claude-sonnet-4",
+      allowedModels: ["openai/gpt-5", "google/gemini-2.5-flash"],
+    });
+
+    await settings.saveAgencyOverride(116, {
+      actorId: "test-platform-admin",
+      allowedModels: [],
+    });
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 116),
+    ).resolves.toMatchObject({
+      model: "anthropic/claude-sonnet-4",
+      allowedModels: [],
+    });
+    await expect(settings.summary()).resolves.toMatchObject({
+      global: { allowedModels: ["openai/gpt-5", "google/gemini-2.5-flash"] },
+      tenants: [expect.objectContaining({ tenantId: 116, allowedModels: [] })],
+    });
+    await env.DB.prepare(
+      "UPDATE assistant_openrouter_settings SET allowed_models = ? WHERE id = ?",
+    )
+      .bind("{invalid-json", "agency:116")
+      .run();
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 116),
+    ).resolves.toMatchObject({ allowedModels: [] });
+  });
+
+  it("normalizes and bounds allowed model identifiers", async () => {
+    const settings = repository();
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      allowedModels: [
+        " openai/gpt-5 ",
+        "openai/gpt-5",
+        "google/gemini-2.5-flash",
+      ],
+    });
+
+    await expect(settings.summary()).resolves.toMatchObject({
+      global: { allowedModels: ["openai/gpt-5", "google/gemini-2.5-flash"] },
+    });
+    await expect(
+      settings.saveGlobal({
+        actorId: "test-platform-admin",
+        allowedModels: ["not-a-provider-model"],
+      }),
+    ).rejects.toThrow("provider/model format");
+    await expect(
+      settings.saveGlobal({
+        actorId: "test-platform-admin",
+        allowedModels: Array.from(
+          { length: 101 },
+          (_, index) => `provider/model-${index}`,
+        ),
+      }),
+    ).rejects.toThrow("100");
+    await expect(
+      settings.saveGlobal({
+        actorId: "test-platform-admin",
+        allowedModels: [`provider/${"a".repeat(153)}`],
+      }),
+    ).rejects.toThrow("160 characters");
   });
 
   it("uses tenant meeting model overrides ahead of global defaults", async () => {
@@ -410,6 +503,7 @@ describe("assistant OpenRouter configuration", () => {
     ).resolves.toEqual({
       apiKey: "not-a-real-global-key",
       model: "openai/gpt-5",
+      allowedModels: [],
       transcriptionModel: "google/gemini-2.5-flash",
       transcriptionEndpoint: "chat/completions",
       summaryModel: "openai/gpt-5",

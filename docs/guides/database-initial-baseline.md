@@ -65,6 +65,12 @@ fingerprints afterward. See [Cloudflare's foreign-key documentation](https://dev
 
 ## Future schema changes
 
+Preview's `0039_assistant_allowed_models.sql` was applied before its source was
+integrated. Its nullable `assistant_openrouter_settings.allowed_models` column
+and exact migration filename are retained in the forward history. Deployments
+recognize and skip the existing entry; fresh installations apply it once.
+This reconciliation does not reset data or rewrite the migration ledger.
+
 Keep the baseline immutable after this reset. Add a small forward migration for
 each subsequent change. `pnpm --filter @savia/db generate <change_name>` creates
 an empty numbered SQL migration for review. Use `--> statement-breakpoint` between
