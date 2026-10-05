@@ -1,3 +1,4 @@
+import { cleanupWhatsappMedia } from "./whatsapp/media-input";
 import { CompanionSessions } from "./companion/sessions";
 import { CompanionSessionJobs } from "./companion/session-jobs";
 import { CompanionService, CompanionError } from "./companion/service";
@@ -25,6 +26,7 @@ import {
 import {
   whatsappNangoConfigurationFromEnvironment,
   whatsappRoutesFromEnvironment,
+  whatsappInboundFromEnvironment,
   type WhatsappSecrets,
 } from "./whatsapp/runtime";
 import {
@@ -402,7 +404,8 @@ const runtime = {
         ...(pagesSearchSchedule ? { schedule: pagesSearchSchedule } : {}),
       },
       whatsappRoutesFromEnvironment(environment),
-    ).fetch(request, environment);
+      whatsappInboundFromEnvironment(environment, assistant.configuration),
+    ).fetch(request, environment, context);
     return response;
   },
   async scheduled(
@@ -411,6 +414,29 @@ const runtime = {
     overrides: RuntimeOverrides = {},
   ): Promise<void> {
     const realtime = createRealtimeHubClient(environment.REALTIME_HUB);
+    const runWhatsapp = async () => {
+      if (environment.DOCUMENTS) {
+        try {
+          await cleanupWhatsappMedia(environment.DOCUMENTS);
+        } catch {
+          console.error("WHATSAPP_MEDIA_CLEANUP_FAILED");
+        }
+      }
+      if (
+        !environment.WHATSAPP_META_APP_SECRET?.trim() ||
+        !environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim()
+      )
+        return;
+      const inbound = whatsappInboundFromEnvironment(
+        environment,
+        assistantConfigurationFromEnvironment(environment),
+      );
+      const report = await inbound.process();
+      if (report.processed || report.failed)
+        console.info(
+          JSON.stringify({ event: "whatsapp_inbound_batch", ...report }),
+        );
+    };
     const runCompanion = async () => {
       if (environment.COMPANION_ENABLED !== "true" || !environment.DOCUMENTS)
         return;
@@ -513,6 +539,7 @@ const runtime = {
       const results = await Promise.allSettled([
         runBookings(),
         runCompanion(),
+        runWhatsapp(),
         runScheduledWorkflows(
           environment.DB,
           studioIntegrationKeyFromEnvironment(environment),
@@ -541,6 +568,7 @@ const runtime = {
     const results = await Promise.allSettled([
       runBookings(),
       runCompanion(),
+      runWhatsapp(),
       runScheduledWorkflows(
         environment.DB,
         studioIntegrationKeyFromEnvironment(environment),

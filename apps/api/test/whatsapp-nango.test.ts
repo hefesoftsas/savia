@@ -108,3 +108,52 @@ describe("WhatsApp Nango connection response", () => {
     },
   );
 });
+
+it("keeps attachment downloads on the Meta host and preserves multipart media uploads", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const nango = createWhatsappNangoClient(
+    {
+      baseUrl: "https://nango.test",
+      apiKey: "test-key",
+      whatsappIntegrationId: "whatsapp-business",
+    },
+    async (input, init) => {
+      calls.push({ url: String(input), init });
+      return Response.json({ id: "123456789" });
+    },
+  );
+  const connection = {
+    nangoConnectionId: "tenant-connection",
+    nangoIntegrationId: "whatsapp-business",
+  } as import("../src/whatsapp/contracts").ActiveWhatsappConnection;
+  await expect(
+    nango.proxy({
+      connection,
+      method: "GET",
+      baseUrl: "https://evil.example",
+      path: "/whatsapp_business/attachments/?mid=123",
+    } as any),
+  ).rejects.toThrow();
+  expect(calls).toHaveLength(0);
+  await nango.proxy({
+    connection,
+    method: "GET",
+    baseUrl: "https://lookaside.fbsbx.com",
+    path: "/whatsapp_business/attachments/?mid=123",
+  } as any);
+  expect(new Headers(calls[0].init?.headers).get("base-url-override")).toBe(
+    "https://lookaside.fbsbx.com",
+  );
+  expect(new Headers(calls[0].init?.headers).get("retries")).toBe("0");
+  const body = new FormData();
+  body.set("messaging_product", "whatsapp");
+  body.set("file", new Blob(["file"], { type: "text/plain" }), "file.txt");
+  await nango.proxy({
+    connection,
+    method: "POST",
+    path: "/v21.0/123456789/media",
+    body,
+  });
+  expect(calls[1].init?.body).toBe(body);
+  expect(new Headers(calls[1].init?.headers).has("content-type")).toBe(false);
+});

@@ -21,6 +21,8 @@ import {
   type IntegrationStatusTone,
 } from "@/features/personal-integrations/integration-ui";
 import { Skeleton } from "@/components/ui/skeleton";
+import { WhatsappAssistantSettings } from "./whatsapp-assistant-settings";
+import { WhatsappNativeSettings } from "./whatsapp-native-settings";
 
 type NangoConnectEvent = unknown;
 
@@ -397,6 +399,15 @@ export function WhatsappConnectionsPage({
         </IntegrationGroup>
       )}
 
+      {enabled && tenantDataIsCurrent && currentTenant.id !== null ? (
+        <WhatsappAssistantSettings
+          key={currentTenant.id}
+          services={services}
+          tenantId={currentTenant.id}
+          connected={connected}
+        />
+      ) : null}
+
       {enabled && connected && tenantDataIsCurrent ? (
         <>
           <IntegrationGroup title="Número de WhatsApp">
@@ -449,6 +460,14 @@ export function WhatsappConnectionsPage({
               </p>
             </li>
           </IntegrationGroup>
+
+          {currentTenant.id !== null ? (
+            <WhatsappNativeSettings
+              key={`native-${currentTenant.id}`}
+              services={services}
+              tenantId={currentTenant.id}
+            />
+          ) : null}
 
           <IntegrationGroup title="Probar envío">
             <li className="space-y-3 px-5 py-4">
