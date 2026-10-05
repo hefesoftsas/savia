@@ -52,6 +52,43 @@ describe("WhatsApp Nango connection response", () => {
     expect(summary.organizationId).toBe("user:principal-1");
   });
 
+  it("creates a reconnect session for the existing Nango connection", async () => {
+    let requestedUrl: URL | undefined;
+    let requestedBody: Record<string, unknown> | undefined;
+    const nango = createWhatsappNangoClient(
+      {
+        baseUrl: "https://nango.test",
+        apiKey: "test-key",
+        whatsappIntegrationId: "whatsapp-business",
+      },
+      async (input, init) => {
+        requestedUrl = new URL(String(input));
+        requestedBody = JSON.parse(String(init?.body)) as Record<
+          string,
+          unknown
+        >;
+        return new Response(
+          JSON.stringify({
+            data: { token: "reconnect-token", expires_at: "later" },
+          }),
+          { status: 201, headers: { "content-type": "application/json" } },
+        );
+      },
+    );
+
+    const session = await nango.createReconnectSession({
+      connectionId: "existing-connection",
+      integrationId: "whatsapp-business",
+    });
+
+    expect(requestedUrl?.pathname).toBe("/connect/sessions/reconnect");
+    expect(requestedBody).toEqual({
+      connection_id: "existing-connection",
+      integration_id: "whatsapp-business",
+    });
+    expect(session.token).toBe("reconnect-token");
+  });
+
   it("parses a positive integer tenant ID from the Nango agency tag", async () => {
     const summary = await clientFor({
       tags: { agency_id: "42" },

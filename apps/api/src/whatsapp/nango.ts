@@ -164,6 +164,36 @@ export function createWhatsappNangoClient(
       };
     },
 
+    async createReconnectSession({ connectionId, integrationId }) {
+      const nango = configuredNango(configuration);
+      const response = await fetcher(
+        nangoUrl(nango.baseUrl, "/connect/sessions/reconnect"),
+        {
+          method: "POST",
+          headers: {
+            ...Object.fromEntries(authorizationHeaders(nango.apiKey)),
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            connection_id: connectionId,
+            integration_id: integrationId,
+          }),
+        },
+      );
+      if (!response.ok) throw new WhatsappUpstreamError();
+      const payload = (await response.json().catch(() => undefined)) as
+        { data?: { token?: unknown; expires_at?: unknown } } | undefined;
+      const token = readString(payload?.data?.token);
+      const expiresAt = readString(payload?.data?.expires_at);
+      if (!token || !expiresAt) throw new WhatsappUpstreamError();
+      return {
+        token,
+        expiresAt,
+        connectUrl: nango.connectUrl,
+        apiUrl: nango.baseUrl,
+      };
+    },
+
     async getConnection(connectionId, integrationId) {
       const nango = configuredNango(configuration);
       const url = nangoUrl(

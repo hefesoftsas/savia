@@ -62,6 +62,15 @@ export type WhatsappNangoClient = {
     connectUrl: string;
     apiUrl: string;
   }>;
+  createReconnectSession(input: {
+    connectionId: string;
+    integrationId: string;
+  }): Promise<{
+    token: string;
+    expiresAt: string;
+    connectUrl: string;
+    apiUrl: string;
+  }>;
   getConnection(
     connectionId: string,
     integrationId: string,

@@ -83,6 +83,12 @@ async function setup() {
       connectUrl: "https://nango.test",
       apiUrl: "https://nango.test",
     })),
+    createReconnectSession: vi.fn(async () => ({
+      token: "reconnect-token",
+      expiresAt: "later",
+      connectUrl: "https://nango.test",
+      apiUrl: "https://nango.test",
+    })),
     getConnection: vi.fn(
       async (connectionId: string, integrationId: string) => ({
         connectionId,
@@ -265,6 +271,36 @@ describe("whatsapp routes", () => {
     const defaultList = await app.request("/v1/whatsapp/connections");
     expect(defaultList.status).toBe(200);
     expect((await defaultList.json()).data).toHaveLength(1);
+  });
+
+  it("uses Nango reconnect for the saved connection and integration", async () => {
+    const s = await setup();
+    const app = s.app();
+    const complete = await app.request("/v1/whatsapp/connections/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agencyId: s.tenant,
+        connectionId: "wa-reconnect-existing",
+      }),
+    });
+    expect(complete.status).toBe(200);
+
+    const response = await app.request(
+      "/v1/whatsapp/connections/reconnect-session",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ agencyId: s.tenant }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(s.nango.createReconnectSession).toHaveBeenCalledWith({
+      connectionId: "wa-reconnect-existing",
+      integrationId: "whatsapp-business",
+    });
+    expect(s.nango.createConnectSession).not.toHaveBeenCalled();
   });
 
   it("rejects a Nango connection owned by another user", async () => {
@@ -492,6 +528,191 @@ describe("whatsapp routes", () => {
     expect(body.data.attributes.phoneNumberId).toBe("123456789012345");
     expect(body.data.attributes.displayPhoneNumber).toBe("+573001234567");
     expect(body.data.attributes.externalAccountLabel).toBe("Acme");
+  });
+
+  it("marks the saved connection reconnect-required after number validation auth failure", async () => {
+    const s = await setup();
+    const app = s.app();
+    const complete = await app.request("/v1/whatsapp/connections/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agencyId: s.tenant,
+        connectionId: "wa-number-auth-existing",
+      }),
+    });
+    expect(complete.status).toBe(200);
+    s.nango.proxy.mockResolvedValueOnce(new Response(null, { status: 401 }));
+
+    const response = await app.request("/v1/whatsapp/connections/number", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agencyId: s.tenant,
+        phoneNumberId: "123456789012345",
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: "WHATSAPP_RECONNECT_REQUIRED" },
+    });
+    expect(
+      await s.repository.findActiveConnection(
+        s.tenant,
+        s.actors[0].principal.id,
+      ),
+    ).toMatchObject({ status: "reconnect_required" });
+  });
+
+  it("keeps the saved connection healthy when a different candidate fails validation transiently", async () => {
+    const s = await setup();
+    const app = s.app();
+    const complete = await app.request("/v1/whatsapp/connections/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agencyId: s.tenant,
+        connectionId: "wa-candidate-existing",
+      }),
+    });
+    expect(complete.status).toBe(200);
+    s.nango.proxy.mockResolvedValueOnce(new Response(null, { status: 502 }));
+
+    const response = await app.request("/v1/whatsapp/connections/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agencyId: s.tenant,
+        connectionId: "wa-candidate-new",
+        phoneNumberId: "123456789012345",
+      }),
+    });
+
+    expect(response.status).toBe(502);
+    expect(
+      await s.repository.findActiveConnection(
+        s.tenant,
+        s.actors[0].principal.id,
+      ),
+    ).toMatchObject({
+      status: "connected",
+      nangoConnectionId: "wa-candidate-existing",
+    });
+  });
+
+  it.each([400, 500])(
+    "preserves the same saved connection after non-auth phone validation status %i",
+    async (status) => {
+      const s = await setup();
+      const app = s.app();
+      const savedConnectionId = `wa-same-nonauth-${s.tenant}`;
+      const complete = await app.request("/v1/whatsapp/connections/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          agencyId: s.tenant,
+          connectionId: savedConnectionId,
+        }),
+      });
+      expect(complete.status).toBe(200);
+      s.nango.proxy.mockResolvedValueOnce(new Response(null, { status }));
+
+      const response = await app.request("/v1/whatsapp/connections/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          agencyId: s.tenant,
+          connectionId: savedConnectionId,
+          phoneNumberId: "123456789012345",
+        }),
+      });
+
+      expect(response.status).toBe(502);
+      expect(
+        await s.repository.findActiveConnection(
+          s.tenant,
+          s.actors[0].principal.id,
+        ),
+      ).toMatchObject({
+        status: "connected",
+        nangoConnectionId: savedConnectionId,
+      });
+    },
+  );
+
+  it("does not mark the saved connection reconnect-required for another candidate's auth failure", async () => {
+    const s = await setup();
+    const app = s.app();
+    const savedConnectionId = `wa-other-auth-saved-${s.tenant}`;
+    const complete = await app.request("/v1/whatsapp/connections/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agencyId: s.tenant,
+        connectionId: savedConnectionId,
+      }),
+    });
+    expect(complete.status).toBe(200);
+    s.nango.proxy.mockResolvedValueOnce(new Response(null, { status: 403 }));
+
+    const response = await app.request("/v1/whatsapp/connections/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agencyId: s.tenant,
+        connectionId: `wa-other-auth-candidate-${s.tenant}`,
+        phoneNumberId: "123456789012345",
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(
+      await s.repository.findActiveConnection(
+        s.tenant,
+        s.actors[0].principal.id,
+      ),
+    ).toMatchObject({
+      status: "connected",
+      nangoConnectionId: savedConnectionId,
+    });
+  });
+
+  it("marks the same saved connection reconnect-required after its own auth failure", async () => {
+    const s = await setup();
+    const app = s.app();
+    const savedConnectionId = `wa-same-auth-${s.tenant}`;
+    const complete = await app.request("/v1/whatsapp/connections/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agencyId: s.tenant,
+        connectionId: savedConnectionId,
+      }),
+    });
+    expect(complete.status).toBe(200);
+    s.nango.proxy.mockResolvedValueOnce(new Response(null, { status: 401 }));
+
+    const response = await app.request("/v1/whatsapp/connections/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agencyId: s.tenant,
+        connectionId: savedConnectionId,
+        phoneNumberId: "123456789012345",
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(
+      await s.repository.findActiveConnection(
+        s.tenant,
+        s.actors[0].principal.id,
+      ),
+    ).toMatchObject({
+      status: "reconnect_required",
+      nangoConnectionId: savedConnectionId,
+    });
   });
 
   it("disconnects and removes the Nango connection", async () => {

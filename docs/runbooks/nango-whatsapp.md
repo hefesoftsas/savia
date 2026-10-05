@@ -53,8 +53,20 @@ not deploy the WhatsApp code or update an existing Worker's configuration.
 Dashboard test connections are for diagnostics. Create actual tenant
 connections through Savia so Nango records the expected end-user identity.
 
-The `NANGO_API_KEY` needs the `environment:proxy` scope and stays a Worker
-secret. Local development forwards every `NANGO_*` variable automatically.
+The `NANGO_API_KEY` stays a Worker secret and needs these environment scopes:
+
+| Scope                                | Operation                                          |
+| ------------------------------------ | -------------------------------------------------- |
+| `environment:connect_sessions:write` | Create Connect and reconnect sessions              |
+| `environment:connections:read`       | Verify connection ownership and tenant tags        |
+| `environment:connections:delete`     | Disconnect the tenant's connection                 |
+| `environment:proxy`                  | Validate the sender and send messages through Meta |
+
+See the [Nango API key scopes reference](https://nango.dev/docs/reference/backend/http-api/api-keys).
+Savia does not read Meta credentials directly, so WhatsApp does not require
+`environment:connections:read_credentials`. A shared key used by other Savia
+integrations may need additional scopes. Local development forwards every
+`NANGO_*` variable automatically.
 
 ## Tenant connection flow
 
@@ -69,9 +81,10 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
    The browser receives only the session token and the public Nango URLs.
 3. The user authorizes the `whatsapp-business` integration in Nango with the
    Meta system-user token prepared by the platform administrator.
-4. Nango returns an opaque connection id. Optionally the user fills the
-   phone number id, visible number, and WABA id in the same step; otherwise
-   they link the number afterwards in the **Número de WhatsApp** panel.
+4. Nango returns an opaque connection id. After completion, the user fills
+   the phone number id, visible number, and WABA id in the **Número de
+   WhatsApp** panel. The completion API can also accept this metadata when
+   it is already available.
 5. Savia verifies the Nango connection belongs to `user:<principal-id>` and
    its `agency_id` tag matches the explicitly selected tenant. Missing or
    mismatched tenant tags are rejected; dashboard diagnostic connections
@@ -82,6 +95,12 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
    `POST /v21.0/<phone_number_id>/messages`. Delivery outside an open
    24-hour customer-service window requires a pre-approved template, which
    this endpoint does not send; the API then reports `WHATSAPP_SEND_FAILED`.
+
+**Reconectar** uses Nango's reconnect session endpoint with the existing
+connection and integration IDs, preserving the tenant binding. Authentication
+failures during sender validation mark that existing connection as requiring
+reconnection. Invalid phone IDs, temporary upstream errors, and rejected
+replacement connections do not invalidate an existing healthy connection.
 
 ## Verification after deployment
 

@@ -376,11 +376,20 @@ function whatsappErrorResponse(exception: unknown) {
       status: 503,
       body: errorBody(exception.code, exception.message),
     } as const;
-  if (exception instanceof WhatsappUpstreamError)
+  if (exception instanceof WhatsappUpstreamError) {
+    if (exception.code === "RECONNECT_REQUIRED")
+      return {
+        status: 409,
+        body: errorBody(
+          "WHATSAPP_RECONNECT_REQUIRED",
+          "The WhatsApp connection requires reconnection",
+        ),
+      } as const;
     return {
       status: 502,
       body: errorBody(exception.code, exception.message),
     } as const;
+  }
   if (exception instanceof WhatsappConnectionNotFoundError)
     return {
       status: 404,
@@ -533,9 +542,9 @@ export function registerWhatsappRoutes(
         503,
       );
     try {
-      const session = await dependencies.nango.createConnectSession({
-        actor,
-        agencyId,
+      const session = await dependencies.nango.createReconnectSession({
+        connectionId: existing.nangoConnectionId,
+        integrationId: existing.nangoIntegrationId,
       });
       return context.json({ data: session }, 200);
     } catch (exception) {
@@ -576,8 +585,9 @@ export function registerWhatsappRoutes(
         ),
         503,
       );
+    let integrationId: string | undefined;
     try {
-      const integrationId = whatsappIntegrationIdFor(
+      integrationId = whatsappIntegrationIdFor(
         whatsappNangoConfigurationFromEnvironment({
           NANGO_WHATSAPP_INTEGRATION_ID: dependencies.provider.integrationId,
         }),
@@ -651,33 +661,18 @@ export function registerWhatsappRoutes(
           nangoConnectionId: connectionId,
           nangoIntegrationId: integrationId,
         };
-        try {
-          const details = await validatePhoneNumber(
-            dependencies,
-            candidate,
-            resolvedPhoneNumberId,
-          );
-          if (
-            typeof details?.display_phone_number === "string" &&
-            !resolvedDisplayPhoneNumber
-          )
-            resolvedDisplayPhoneNumber = details.display_phone_number;
-          if (typeof details?.verified_name === "string" && !label)
-            label = details.verified_name;
-        } catch (validationError) {
-          if (validationError instanceof WhatsappUpstreamError) {
-            await repository.markReconnectRequired(
-              (
-                await repository.findActiveConnection(
-                  agencyId,
-                  actor.principal.id,
-                )
-              )?.id ?? "unpersisted-connection",
-              actor.principal.id,
-            );
-          }
-          throw validationError;
-        }
+        const details = await validatePhoneNumber(
+          dependencies,
+          candidate,
+          resolvedPhoneNumberId,
+        );
+        if (
+          typeof details?.display_phone_number === "string" &&
+          !resolvedDisplayPhoneNumber
+        )
+          resolvedDisplayPhoneNumber = details.display_phone_number;
+        if (typeof details?.verified_name === "string" && !label)
+          label = details.verified_name;
       }
       const connection = await repository.saveConnection({
         agencyId,
@@ -693,6 +688,24 @@ export function registerWhatsappRoutes(
       });
       return context.json({ data: connectionDocument(connection) }, 200);
     } catch (exception) {
+      if (
+        exception instanceof WhatsappUpstreamError &&
+        exception.code === "RECONNECT_REQUIRED" &&
+        integrationId
+      ) {
+        const existing = await repository.findActiveConnection(
+          agencyId,
+          actor.principal.id,
+        );
+        if (
+          existing?.nangoConnectionId === connectionId &&
+          existing.nangoIntegrationId === integrationId
+        )
+          await repository.markReconnectRequired(
+            existing.id,
+            actor.principal.id,
+          );
+      }
       const response = whatsappErrorResponse(exception);
       if (!response) throw exception;
       return context.json(response.body, response.status);
@@ -820,6 +833,14 @@ export function registerWhatsappRoutes(
         );
       return context.json({ data: connectionDocument(updated) }, 200);
     } catch (exception) {
+      if (
+        exception instanceof WhatsappUpstreamError &&
+        exception.code === "RECONNECT_REQUIRED"
+      )
+        await repository.markReconnectRequired(
+          connection.id,
+          actor.principal.id,
+        );
       const response = whatsappErrorResponse(exception);
       if (!response) throw exception;
       return context.json(response.body, response.status);
