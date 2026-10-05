@@ -874,6 +874,8 @@ export interface paths {
                     | "needs_attention"
                     | "cancelled"
                     | "failed";
+                  /** @default es */
+                  language: string;
                   completedChunks: number;
                   totalChunks: number;
                   error?: string;
@@ -1208,6 +1210,8 @@ export interface paths {
                   | "needs_attention"
                   | "cancelled"
                   | "failed";
+                /** @default es */
+                language: string;
                 completedChunks: number;
                 totalChunks: number;
                 error?: string;
@@ -1774,6 +1778,130 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/companion/sessions/{id}/audio": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Download one source as a single concatenated Ogg audio file */
+    get: {
+      parameters: {
+        query: {
+          source: "microphone" | "system";
+        };
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Concatenated Ogg Opus audio in timeline order */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "audio/ogg": string;
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/companion/sessions/{id}/notes": {
     parameters: {
       query?: never;
@@ -1799,6 +1927,8 @@ export interface paths {
             /** @enum {boolean} */
             consent: true;
             retryAmbiguous?: boolean;
+            language?: string;
+            retranscribe?: boolean;
           };
         };
       };
@@ -1852,6 +1982,8 @@ export interface paths {
                   | "needs_attention"
                   | "cancelled"
                   | "failed";
+                /** @default es */
+                language: string;
                 completedChunks: number;
                 totalChunks: number;
                 error?: string;
@@ -2042,6 +2174,8 @@ export interface paths {
                   | "needs_attention"
                   | "cancelled"
                   | "failed";
+                /** @default es */
+                language: string;
                 completedChunks: number;
                 totalChunks: number;
                 error?: string;
@@ -4170,6 +4304,8 @@ export interface paths {
           "application/json": {
             /** @enum {boolean} */
             consent: true;
+            language?: string;
+            retranscribe?: boolean;
           };
         };
       };

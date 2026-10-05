@@ -89,6 +89,14 @@ requires renewed consent and acknowledgment of possible additional charges.
 Each processing run has its own queue identity so cleanup of an older run cannot
 remove a later retry.
 
+Transcription defaults to Spanish (`es`). The processing request accepts an
+optional two-letter `language` (for example `en`, `pt`, `fr`, `de`, `it`),
+stored on the job and used for every chunk; the summary follows the transcript
+language. Switching language after transcripts exist requires explicit
+`retranscribe` consent, replaces saved transcripts and summaries, and may be
+billed again. Short audio-file notes accept the same `language`/`retranscribe`
+options.
+
 ## Review and questions
 
 Library listing returns metadata; individual session reads retrieve saved transcripts
@@ -97,6 +105,10 @@ and notes, keeping long recordings from expanding every list response.
 Recordings → Recording sessions shows one session with source-aware playback,
 processing state, partial transcripts, summary and questions. Audio plays by
 segment in sequence within the selected source; visible offsets preserve gaps.
+`GET /v1/companion/sessions/{id}/audio?source=` returns one source as a single
+concatenated Ogg file for listening and download; it requires a finalized
+session with Ogg-only segments (desktop captures) and is capped at 64 MB.
+Sessions with M4A segments keep per-segment playback only.
 A session with saved transcript segments can answer questions before all work is
 complete. Answers include the source/sequence/time references sent as evidence.
 For long transcripts, bounded lexical retrieval selects whole excerpts; the UI

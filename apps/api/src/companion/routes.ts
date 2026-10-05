@@ -818,7 +818,16 @@ export function registerCompanionRoutes(
     },
   );
   const notesParams = z.object({ id: recordingIdSchema });
-  const notesConsentSchema = z.object({ consent: z.literal(true) }).strict();
+  const notesConsentSchema = z
+    .object({
+      consent: z.literal(true),
+      language: z
+        .string()
+        .regex(/^[a-z]{2}$/)
+        .optional(),
+      retranscribe: z.boolean().optional(),
+    })
+    .strict();
   app.openapi(
     createRoute({
       ...base,
@@ -867,9 +876,13 @@ export function registerCompanionRoutes(
     async (c) => {
       const owner = await access(c);
       const id = c.req.valid("param").id;
+      const body = c.req.valid("json");
+      const requestedLanguage = body.language ?? "es";
       return recordings.withNotesLock(owner, id, async () => {
         let notes = await recordings.getNotes(owner, id);
-        if (notes.summary) return c.json(notes, 200);
+        if (body.retranscribe) {
+          notes = { transcript: null, summary: null };
+        } else if (notes.summary) return c.json(notes, 200);
 
         const config = await configuration(actorFromContext(c), owner);
         if (!notes.transcript) {
@@ -886,11 +899,14 @@ export function registerCompanionRoutes(
           }
           const transcript =
             audio.source === "upload"
-              ? await service.transcribeRecording(config, audio)
+              ? await service.transcribeRecording(config, {
+                  ...audio,
+                  language: requestedLanguage,
+                })
               : await service.transcribe(config, {
                   source: audio.source,
                   audio: { data: btoa(binary), format: "ogg" },
-                  language: "es",
+                  language: requestedLanguage,
                   consent: true,
                 });
           notes = { transcript, summary: null };

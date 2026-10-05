@@ -114,6 +114,59 @@ describe("saved Companion recording notes", () => {
     }
   });
 
+  it("transcribes in the requested language and redoes notes only with retranscribe consent", async () => {
+    const id = crypto.randomUUID();
+    const { service, transcribe, summarize } = makeService();
+    const instance = app(owner, service);
+    await saveSample(instance, id);
+    try {
+      const first = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consent: true, language: "pt" }),
+        },
+      );
+      expect(first.status).toBe(200);
+      expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(transcribe.mock.calls[0][1]).toMatchObject({ language: "pt" });
+
+      const cached = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consent: true, language: "pt" }),
+        },
+      );
+      expect(cached.status).toBe(200);
+      expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(summarize).toHaveBeenCalledTimes(1);
+
+      const redone = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            consent: true,
+            language: "en",
+            retranscribe: true,
+          }),
+        },
+      );
+      expect(redone.status).toBe(200);
+      expect(transcribe).toHaveBeenCalledTimes(2);
+      expect(transcribe.mock.calls[1][1]).toMatchObject({ language: "en" });
+      expect(summarize).toHaveBeenCalledTimes(2);
+    } finally {
+      await new CompanionRecordings(env.DOCUMENTS)
+        .remove(owner, id)
+        .catch(() => {});
+    }
+  });
+
   it("reuses durable cached transcript and summary after constructing a new repository", async () => {
     const id = crypto.randomUUID();
     const first = makeService();

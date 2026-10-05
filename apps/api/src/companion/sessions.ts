@@ -38,7 +38,15 @@ export const finalizeSessionSchema = z
   })
   .strict();
 export const processingRequestSchema = z
-  .object({ consent: z.literal(true), retryAmbiguous: z.boolean().optional() })
+  .object({
+    consent: z.literal(true),
+    retryAmbiguous: z.boolean().optional(),
+    language: z
+      .string()
+      .regex(/^[a-z]{2}$/)
+      .optional(),
+    retranscribe: z.boolean().optional(),
+  })
   .strict();
 
 const chunkSchema = z.object({
@@ -63,6 +71,10 @@ const jobStatusSchema = z.enum([
 const jobSchema = z.object({
   runId: z.string().uuid().nullable().default(null),
   status: jobStatusSchema,
+  language: z
+    .string()
+    .regex(/^[a-z]{2}$/)
+    .default("es"),
   completedChunks: z.number().int().min(0).max(240),
   totalChunks: z.number().int().min(0).max(240),
   error: z.string().max(80).optional(),
@@ -282,6 +294,7 @@ export class CompanionSessions {
       job: {
         runId: null,
         status: "idle",
+        language: "es",
         completedChunks: 0,
         totalChunks: 0,
         transcripts: {},
@@ -633,6 +646,64 @@ export class CompanionSessions {
       bytes,
     };
   }
+  /** Concatenated single-stream audio for one source, in timeline order. */
+  async getFullAudio(
+    access: RecordingAccess,
+    id: string,
+    source: z.infer<typeof sessionSourceSchema>,
+  ) {
+    const manifest = (await this.readManifest(access, id)).manifest;
+    if (manifest.state !== "ready")
+      throw new CompanionError(
+        "SESSION_INCOMPLETE",
+        "Finalize the session before downloading the full audio.",
+        409,
+      );
+    const timeline = manifest.chunks
+      .filter((candidate) => candidate.source === source)
+      .sort((a, b) => a.sequence - b.sequence);
+    if (!timeline.length)
+      throw new CompanionError(
+        "AUDIO_NOT_FOUND",
+        "This session has no audio for that source.",
+        404,
+      );
+    if (timeline.some((chunk, index) => chunk.sequence !== index))
+      throw new CompanionError(
+        "STORAGE_INVALID_RECORD",
+        "Stored session audio failed validation.",
+        503,
+      );
+    if (timeline.some((chunk) => chunk.format !== "ogg"))
+      throw new CompanionError(
+        "FULL_AUDIO_UNAVAILABLE",
+        "Full download is available for desktop Ogg recordings; this source has segments in another format.",
+        409,
+      );
+    const total = timeline.reduce((sum, chunk) => sum + chunk.bytes, 0);
+    if (total <= 0 || total > 64 * 1024 * 1024)
+      throw new CompanionError(
+        "AUDIO_TOO_LARGE",
+        "Full session audio exceeds the 64 MB download limit.",
+        413,
+      );
+    // Ogg pages chain cleanly, so byte concatenation yields one playable
+    // stream in timeline order.
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of timeline) {
+      const audio = await this.getAudio(access, id, source, chunk.sequence);
+      bytes.set(audio.bytes, offset);
+      offset += audio.bytes.length;
+    }
+    return {
+      source,
+      format: "ogg" as const,
+      chunks: timeline.length,
+      durationSeconds: manifest.durationSeconds,
+      bytes,
+    };
+  }
   async finalize(
     access: RecordingAccess,
     id: string,
@@ -733,13 +804,34 @@ export class CompanionSessions {
           "Finalize the session before processing.",
           409,
         );
-      if (manifest.job.status === "complete")
+      const currentLanguage = manifest.job.language ?? "es";
+      const requestedLanguage = parsed.data.language ?? currentLanguage;
+      const savedTranscripts = Object.keys(manifest.job.transcripts).length;
+      const switchLanguage =
+        savedTranscripts > 0 && requestedLanguage !== currentLanguage;
+      if (switchLanguage && !parsed.data.retranscribe)
+        throw new CompanionError(
+          "RETRANSCRIBE_REQUIRED",
+          `This session already has a transcript in ${currentLanguage}. Confirm retranscription to switch to ${requestedLanguage}; saved results are replaced and provider usage may be billed again.`,
+          409,
+        );
+      if (switchLanguage) {
+        manifest.job.transcripts = {};
+        manifest.job.completedChunks = 0;
+        manifest.job.summary = null;
+        manifest.job.summaryWork = [];
+        manifest.job.language = requestedLanguage;
+        manifest.job.runId = crypto.randomUUID();
+        manifest.job.status = "queued";
+        manifest.job.lease = null;
+        manifest.job.error = undefined;
+      } else if (manifest.job.status === "complete") {
         throw new CompanionError(
           "PROCESSING_CONFLICT",
           "This session cannot be processed in its current state.",
           409,
         );
-      if (
+      } else if (
         manifest.job.status === "needs_attention" ||
         manifest.job.status === "cancelled"
       ) {
@@ -760,6 +852,7 @@ export class CompanionSessions {
         manifest.job.status === "idle" ||
         manifest.job.status === "failed"
       ) {
+        manifest.job.language = requestedLanguage;
         manifest.job.runId = crypto.randomUUID();
         manifest.job.status =
           manifest.job.completedChunks < manifest.chunks.length

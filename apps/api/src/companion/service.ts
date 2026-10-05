@@ -401,6 +401,7 @@ export class CompanionService {
       format: z.infer<typeof importedAudioFormatSchema>;
       source: z.infer<typeof sourceSchema>;
       durationSeconds: number | null;
+      language?: string;
     },
   ) {
     if (
@@ -435,13 +436,17 @@ export class CompanionService {
     const endpoint =
       configuration.transcriptionEndpoint ??
       transcriptionEndpointForModel(model);
+    const language =
+      typeof input.language === "string" && /^[a-z]{2}$/.test(input.language)
+        ? input.language
+        : "es";
     const encoder = new TextEncoder();
     const prefix =
       endpoint === "audio/transcriptions"
-        ? `{"model":${JSON.stringify(model)},"input_audio":{"data":"`
+        ? `{"model":${JSON.stringify(model)},"language":${JSON.stringify(language)},"input_audio":{"data":"`
         : [
             `{"model":${JSON.stringify(model)},"messages":[{"role":"user","content":[`,
-            `{"type":"text","text":${JSON.stringify(transcriptionInstruction())}},`,
+            `{"type":"text","text":${JSON.stringify(transcriptionInstruction(language))}},`,
             `{"type":"input_audio","input_audio":{"data":"`,
           ].join("");
     const suffix =

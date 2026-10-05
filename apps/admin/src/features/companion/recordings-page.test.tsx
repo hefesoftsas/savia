@@ -122,6 +122,11 @@ it("shows safe provider diagnostics and recovers a transcript after summary proc
   const user = userEvent.setup();
   show(client);
   await user.click(
+    await screen.findByLabelText(
+      "I understand saved results will be replaced.",
+    ),
+  );
+  await user.click(
     await screen.findByRole("button", { name: "Generate summary" }),
   );
 

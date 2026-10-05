@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router-dom";
-import { RecordingSessions } from "./recording-sessions";
+import { RecordingSessions, TRANSCRIPT_LANGUAGES } from "./recording-sessions";
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
@@ -133,6 +133,8 @@ function AudioFilesPage({
     [deleting, setDeleting] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
   const [recordingPickerOpen, setRecordingPickerOpen] = useState(false);
+  const [language, setLanguage] = useState("es");
+  const [retranscribeAck, setRetranscribeAck] = useState(false);
   const recordingPickerTrigger = useRef<HTMLButtonElement>(null);
   const mounted = useRef(true),
     inFlight = useRef(false);
@@ -267,8 +269,15 @@ function AudioFilesPage({
     setProcessing(true);
     setError(null);
     try {
-      const result = await client.generate(selected.id);
-      if (mounted.current) setNotes(result);
+      const result = await client.generate(
+        selected.id,
+        language,
+        Boolean(notes?.transcript) && retranscribeAck,
+      );
+      if (mounted.current) {
+        setNotes(result);
+        setRetranscribeAck(false);
+      }
     } catch (error) {
       if (mounted.current) {
         setError(readProviderFailure(error) ?? processingFailure);
@@ -545,7 +554,49 @@ function AudioFilesPage({
                 <div className="mt-8 grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
                   <div className="min-w-0">
                     {!notes?.summary && (
-                      <div className="mt-6 border-t pt-5">
+                      <div className="mt-6 space-y-4 border-t pt-5">
+                        <label className="block max-w-xs text-sm font-medium">
+                          {t("Transcript language")}
+                          <select
+                            className="mt-2 block w-full rounded-md border bg-background p-2 font-normal"
+                            value={language}
+                            onChange={(event) =>
+                              setLanguage(event.target.value)
+                            }
+                            disabled={processing}
+                          >
+                            {TRANSCRIPT_LANGUAGES.map((item) => (
+                              <option key={item.code} value={item.code}>
+                                {item.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {notes?.transcript && (
+                          <>
+                            <p className="text-sm text-muted-foreground">
+                              {t(
+                                "Switching language replaces the saved transcript and summary. Provider usage may be billed again.",
+                              )}
+                            </p>
+                            <label className="flex items-start gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                className="mt-1 size-4 accent-primary"
+                                checked={retranscribeAck}
+                                onChange={(event) =>
+                                  setRetranscribeAck(event.target.checked)
+                                }
+                                disabled={processing}
+                              />
+                              <span>
+                                {t(
+                                  "I understand saved results will be replaced.",
+                                )}
+                              </span>
+                            </label>
+                          </>
+                        )}
                         <Button
                           className="max-sm:h-11 max-sm:w-full"
                           disabled={
@@ -553,7 +604,8 @@ function AudioFilesPage({
                             processing ||
                             uploading ||
                             deleting ||
-                            !audio
+                            !audio ||
+                            (Boolean(notes?.transcript) && !retranscribeAck)
                           }
                           onClick={() => void generate()}
                         >
