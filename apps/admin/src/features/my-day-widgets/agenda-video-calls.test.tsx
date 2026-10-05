@@ -8,7 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PersonalCalendarEvent } from "@/api/personal-integrations-client";
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import {
@@ -77,10 +77,17 @@ function renderApp(client: PersonalIntegrationsLike) {
   );
 }
 
+beforeEach(() => {
+  // Keep the selected day aligned with the fixed calendar event fixtures.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-04T12:00:00.000Z"));
+});
+
 afterEach(() => {
   cleanup();
   window.dispatchEvent(new Event("savia:session-cleared"));
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("My Day video calls", () => {
