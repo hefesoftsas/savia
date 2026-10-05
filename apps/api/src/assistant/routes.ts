@@ -15,7 +15,10 @@ import {
   PluginAuthoringError,
   type PluginAuthoringCollection,
 } from "./plugin-authoring";
-import { AssistantConfigurationUnavailableError } from "./configuration";
+import {
+  AssistantConfigurationUnavailableError,
+  normalizeAssistantModel,
+} from "./configuration";
 import {
   extractTextFromFile,
   indexDocument,
@@ -37,8 +40,49 @@ const chatRequestSchema = z.object({
   employeeHandle: z.string().optional(),
   inferEmployeeFromMentions: z.boolean().optional(),
   responseMode: z.literal("text").optional(),
+  model: z
+    .string()
+    .trim()
+    .min(1)
+    .max(160)
+    .refine((value) => {
+      try {
+        return Boolean(normalizeAssistantModel(value));
+      } catch {
+        return false;
+      }
+    }, "An OpenRouter model must use provider/model format")
+    .optional(),
   threadId: z.string().uuid().optional(),
 });
+
+function assertEmployeeModelAdministrator(
+  actor: ReturnType<typeof actorFromContext>,
+  tenantId: number | null,
+  model: string | null | undefined,
+  allowInherited = true,
+): void {
+  if (
+    model === undefined ||
+    (allowInherited && !model?.trim()) ||
+    actor.globalRoles.includes("platform_admin")
+  )
+    return;
+  if (
+    tenantId !== null &&
+    actor.memberships.some(
+      (membership) =>
+        membership.isActive &&
+        (membership.tenantId ?? membership.agencyId) === tenantId &&
+        ["tenant_admin", "agency_admin"].includes(membership.role),
+    )
+  )
+    return;
+  throw new AuthenticationError(
+    "AUTHORIZATION_FORBIDDEN",
+    "Only an administrator can assign an employee model. Use the inherited default.",
+  );
+}
 
 const createEmployeeSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
@@ -445,6 +489,7 @@ export function registerAssistantRoutes(
         employeeHandle: parsed.data.employeeHandle,
         inferEmployeeFromMentions: parsed.data.inferEmployeeFromMentions,
         responseMode: parsed.data.responseMode,
+        model: parsed.data.model,
         trustedContext,
       });
     } catch (chatError) {
@@ -573,6 +618,7 @@ export function registerAssistantRoutes(
       dependencies.configuration,
     );
 
+    assertEmployeeModelAdministrator(actor, agencyId, parsed.data.model);
     const repo = new VirtualEmployeesRepository(dependencies.db);
     try {
       const created = await repo.create({
@@ -644,6 +690,7 @@ export function registerAssistantRoutes(
       );
     }
 
+    assertEmployeeModelAdministrator(actor, agencyId, parsed.data.model, false);
     const repo = new VirtualEmployeesRepository(dependencies.db);
     const updated = await repo.update(
       context.req.param("id"),

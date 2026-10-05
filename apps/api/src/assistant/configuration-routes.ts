@@ -22,6 +22,11 @@ const configurationWriteSchema = z
     apiKey: z.string().trim().min(1).max(512).optional(),
     clearApiKey: z.boolean().optional(),
     model: z.string().trim().max(160).nullable().optional(),
+    allowedModels: z
+      .array(z.string().trim().min(1).max(160))
+      .max(100)
+      .nullable()
+      .optional(),
     transcriptionModel: z.string().trim().max(160).nullable().optional(),
     transcriptionEndpoint: transcriptionEndpointSchema.optional(),
     summaryModel: z.string().trim().max(160).nullable().optional(),
@@ -37,6 +42,7 @@ const configurationWriteSchema = z
       value.apiKey === undefined &&
       value.clearApiKey === undefined &&
       value.model === undefined &&
+      value.allowedModels === undefined &&
       value.transcriptionModel === undefined &&
       value.transcriptionEndpoint === undefined &&
       value.summaryModel === undefined
@@ -279,6 +285,46 @@ export function registerAssistantConfigurationRoutes(
         );
       }
       return context.json({ models: await modelCatalog.list(configuration) });
+    } catch (error) {
+      if (error instanceof AssistantConfigurationUnavailableError) {
+        return unavailableResponse();
+      }
+      if (error instanceof AuthenticationError) throw error;
+      return modelCatalogUnavailableResponse();
+    }
+  });
+
+  app.get("/v1/assistant/model-policy", async (context) => {
+    const actor = actorFromContext(context);
+    if (!repository) return unavailableResponse();
+    try {
+      const activeTenantId = await repository.activeTenantFor(
+        actor.principal.id,
+      );
+      if (activeTenantId === undefined && !isPlatformAdministrator(actor)) {
+        throw new AuthenticationError(
+          "AUTHORIZATION_FORBIDDEN",
+          "An active tenant membership is required",
+        );
+      }
+      const configuration = await repository.effectiveConfigurationFor(
+        actor.principal.id,
+      );
+      const allowedModels = new Set(configuration.allowedModels ?? []);
+      if (!allowedModels.size) {
+        return context.json({
+          defaultModel: configuration.model,
+          allowedModels: [],
+        });
+      }
+      const catalog = await modelCatalog.list(configuration);
+      return context.json({
+        defaultModel: configuration.model,
+        allowedModels: catalog.filter(
+          (model) =>
+            allowedModels.has(model.id) && model.modalities?.text === true,
+        ),
+      });
     } catch (error) {
       if (error instanceof AssistantConfigurationUnavailableError) {
         return unavailableResponse();
