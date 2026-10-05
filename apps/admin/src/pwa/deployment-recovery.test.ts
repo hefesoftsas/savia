@@ -113,6 +113,49 @@ it("keeps update failures retryable without unregistering", async () => {
   }
 });
 
+it("removes an unchanged active shell before reloading a failed module", async () => {
+  const active = new Worker();
+  active.transition("activated");
+  const unregister = vi.fn().mockResolvedValue(true);
+  environment({
+    update: vi.fn().mockResolvedValue(undefined),
+    installing: null,
+    waiting: null,
+    active,
+    unregister,
+  });
+  await prepareAppReload();
+  expect(unregister).toHaveBeenCalledOnce();
+});
+
+it("keeps recovery retryable when removing a stalled worker also hangs", async () => {
+  vi.useFakeTimers();
+  try {
+    environment({
+      update: vi.fn().mockResolvedValue(undefined),
+      installing: new Worker(),
+      unregister: vi.fn(() => new Promise(() => {})),
+    });
+    const assertion = expect(prepareAppReload()).rejects.toThrow(/reintenta/i);
+    await vi.advanceTimersByTimeAsync(35_000);
+    await assertion;
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("does not reload the broken shell when unregister fails", async () => {
+  const worker = new Worker();
+  worker.transition("redundant");
+  environment({
+    update: vi.fn().mockResolvedValue(undefined),
+    installing: worker,
+    unregister: vi.fn().mockRejectedValue(new Error("Removal failed")),
+  });
+  await expect(prepareAppReload()).rejects.toThrow(/reintenta/i);
+});
+
 it.each([
   "/public/forms/0123456789abcdef0123456789abcdef",
   "/register",
