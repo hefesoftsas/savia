@@ -445,7 +445,7 @@ describe("whatsapp routes", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         agencyId: s.tenant,
-        to: "+573001234567",
+        to: "+57 300 1234567",
         text: "Hola desde Savia",
       }),
     });
@@ -465,6 +465,24 @@ describe("whatsapp routes", () => {
       to: "+573001234567",
       type: "text",
     });
+  });
+
+  it("rejects non-whitespace characters in test-send destinations", async () => {
+    const s = await setup();
+    const response = await s
+      .app()
+      .request("/v1/whatsapp/connections/test-send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          agencyId: s.tenant,
+          to: "+57 (300) 123-4567",
+          text: "Hola",
+        }),
+      });
+
+    expect(response.status).toBe(400);
+    expect(s.nango.proxy).not.toHaveBeenCalled();
   });
 
   it("requires a linked number before test sends and isolates tenants", async () => {
