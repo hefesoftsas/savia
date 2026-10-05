@@ -362,6 +362,73 @@ describe("assistant OpenRouter configuration", () => {
     });
   });
 
+  it("inherits global image and speech models unless a tenant overrides or clears them", async () => {
+    const settings = repository();
+    await seedAgencyAndMember(121);
+    await settings.saveGlobal({
+      actorId: "test-platform-admin",
+      imageGenerationModel: "openai/gpt-image-1",
+      speechModel: "openai/gpt-4o-mini-tts",
+    });
+    await settings.saveAgencyOverride(121, {
+      actorId: "test-platform-admin",
+      imageGenerationModel: "bytedance/seedream-4.5",
+    });
+    await settings.saveAgencyOverride(121, {
+      actorId: "test-platform-admin",
+      imageGenerationModel: "bytedance/seedream-4.5",
+      apiKey: "tenant-key-preserved",
+    });
+
+    await expect(settings.summary()).resolves.toMatchObject({
+      global: {
+        imageGenerationModel: "openai/gpt-image-1",
+        speechModel: "openai/gpt-4o-mini-tts",
+      },
+      tenants: [
+        expect.objectContaining({
+          tenantId: 121,
+          imageGenerationModel: "bytedance/seedream-4.5",
+          speechModel: null,
+        }),
+      ],
+    });
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 121),
+    ).resolves.toMatchObject({
+      imageGenerationModel: "bytedance/seedream-4.5",
+      speechModel: "openai/gpt-4o-mini-tts",
+    });
+
+    await settings.saveAgencyOverride(121, {
+      actorId: "test-platform-admin",
+      imageGenerationModel: null,
+      speechModel: null,
+    });
+    await expect(
+      settings.effectiveConfigurationForTenant("test-agency-member", 121),
+    ).resolves.toMatchObject({
+      imageGenerationModel: "openai/gpt-image-1",
+      speechModel: "openai/gpt-4o-mini-tts",
+      apiKey: "tenant-key-preserved",
+    });
+  });
+
+  it("validates image generation and speech model identifiers", async () => {
+    await expect(
+      repository().saveGlobal({
+        actorId: "test-platform-admin",
+        imageGenerationModel: "invalid",
+      }),
+    ).rejects.toThrow("provider/model format");
+    await expect(
+      repository().saveGlobal({
+        actorId: "test-platform-admin",
+        speechModel: "invalid",
+      }),
+    ).rejects.toThrow("provider/model format");
+  });
+
   it("uses a tenant assistant model as the meeting summary fallback", async () => {
     const settings = repository();
     await seedAgencyAndMember(115);

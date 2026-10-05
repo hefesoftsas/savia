@@ -177,6 +177,10 @@
     {
       "filename": "0041_whatsapp_native.sql",
       "sha256": "d8d581523cb932a483c0b5d51c5da2fe37c90248940637615170ce4f01f9c376"
+    },
+    {
+      "filename": "0042_assistant_generation_models.sql",
+      "sha256": "0f9aca0c35db00da8ba4ab205c320bc88b172388529d2f52919b905b5eccfa68"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -2374,6 +2378,22 @@
         {
           "cid": 11,
           "name": "allowed_models",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "image_generation_model",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "speech_model",
           "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,

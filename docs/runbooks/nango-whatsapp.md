@@ -255,3 +255,13 @@ credentials, configured products and deterministic authorization. See
   DNS/TLS, and the redacted Nango logs. Never copy provider response bodies
   into logs or user feedback.
 - `WHATSAPP_NUMBER_NOT_LINKED` / `422`: link the phone number first.
+
+### OpenRouter generation model settings
+
+Tenant administrators can save an image-generation model and a text-to-speech
+model in the existing OpenRouter workspace settings; platform administrators can
+set shared defaults. The selectors suggest inexpensive compatible catalog models
+without replacing saved choices when prices change. Received audio still uses
+the transcription model, and received images use the assistant/employee model
+with vision support. These generation settings are preparatory configuration;
+they do not enable generated image or voice replies by themselves.

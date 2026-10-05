@@ -530,6 +530,8 @@ export const assistantOpenRouterSettings = sqliteTable(
     transcriptionModel: text("transcription_model"),
     transcriptionEndpoint: text("transcription_endpoint"),
     summaryModel: text("summary_model"),
+    imageGenerationModel: text("image_generation_model"),
+    speechModel: text("speech_model"),
     updatedAt: text("updated_at").notNull(),
     updatedBy: text("updated_by").notNull(),
   },
