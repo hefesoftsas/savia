@@ -15,6 +15,13 @@ import {
   type Capabilities,
   type CaptureStatus,
 } from "./client";
+import {
+  loadLocale,
+  saveLocale,
+  translate,
+  type Locale,
+  type MessageKey,
+} from "./i18n";
 import "./styles.css";
 
 const empty: CaptureStatus = {
@@ -48,6 +55,16 @@ function App() {
   const [noticeIsError, setNoticeIsError] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [locale, setLocale] = useState<Locale>(() => loadLocale());
+  const t = (key: MessageKey, vars?: Record<string, string | number>) =>
+    translate(locale, key, vars);
+  const changeLocale = (next: Locale) => {
+    saveLocale(next);
+    setLocale(next);
+  };
+  useEffect(() => {
+    document.documentElement.lang = locale === "pt" ? "pt-BR" : locale;
+  }, [locale]);
   const inFlight = useRef(false);
   const mounted = useRef(true);
 
@@ -88,7 +105,7 @@ function App() {
   };
 
   const start = () =>
-    run("Starting recording", async () => {
+    run(t("Starting recording"), async () => {
       const next = await native<CaptureStatus>("start_capture", {
         sessionId: crypto.randomUUID(),
         sources: { microphone, system },
@@ -99,7 +116,7 @@ function App() {
     });
 
   const stop = () =>
-    run("Finalizing audio", async () => {
+    run(t("Finalizing audio"), async () => {
       const next = await native<CaptureStatus>("stop_capture");
       setStatus(next);
       setConsent(false);
@@ -107,7 +124,7 @@ function App() {
     });
 
   const discard = () =>
-    run("Discarding audio", async () => {
+    run(t("Discarding audio"), async () => {
       setStatus(await native<CaptureStatus>("discard_capture"));
       setConsent(false);
       setSaved(false);
@@ -117,7 +134,7 @@ function App() {
 
   const connect = (event: FormEvent) => {
     event.preventDefault();
-    void run("Checking connection", async () => {
+    void run(t("Checking connection"), async () => {
       const result = await companionRequest<Capabilities>(
         apiOrigin,
         token,
@@ -126,8 +143,10 @@ function App() {
       setCapabilities(result);
       setNotice(
         result.storageAvailable
-          ? "Connected to Savia."
-          : "Connected, but private audio storage is unavailable on this server.",
+          ? t("Connected to Savia.")
+          : t(
+              "Connected, but private audio storage is unavailable on this server.",
+            ),
       );
       setNoticeIsError(false);
       if (result.storageAvailable) setSettingsOpen(false);
@@ -137,26 +156,26 @@ function App() {
   const openSavia = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!isTauri()) return;
     event.preventDefault();
-    void run("Opening Savia", async () => {
+    void run(t("Opening Savia"), async () => {
       const origin = validateApiOrigin(appOrigin);
       await native<void>("open_savia", { origin });
     });
   };
 
   const upload = () =>
-    run("Uploading to Savia", async () => {
+    run(t("Uploading to Savia"), async () => {
       if (!canUploadRecording(capabilities) || !consent)
         throw new Error(
-          "Connect storage and confirm permission before upload.",
+          t("Connect storage and confirm permission before upload."),
         );
       if (!status.sessionId || !status.chunks?.length)
-        throw new Error("No recoverable audio is available to upload.");
+        throw new Error(t("No recoverable audio is available to upload."));
       const session = await companionRequest<{
         state: string;
         chunks: { source: string; sequence: number }[];
       }>(apiOrigin, token, "sessioncreate", {
         id: status.sessionId,
-        name: `Recording ${status.sessionId.slice(0, 8)}`,
+        name: t("Recording name", { id: status.sessionId.slice(0, 8) }),
         sources: [...new Set(status.chunks.map((chunk) => chunk.source))],
         consent: true,
       });
@@ -184,7 +203,12 @@ function App() {
           });
         }
         uploaded++;
-        setBusy(`Uploading ${uploaded} of ${status.chunks.length}`);
+        setBusy(
+          t("Upload progress", {
+            uploaded,
+            total: status.chunks.length,
+          }),
+        );
       }
       await companionRequest(apiOrigin, token, "sessionfinalize", {
         sessionId: status.sessionId,
@@ -201,7 +225,7 @@ function App() {
         },
       });
       setSaved(true);
-      setNotice("Audio saved privately in Savia.");
+      setNotice(t("Audio saved privately in Savia."));
     });
 
   const changeConnection = (change: () => void) => {
@@ -244,12 +268,12 @@ function App() {
 
   const actionLabel =
     status.state === "recording"
-      ? "Stop recording"
+      ? t("Stop recording")
       : ready
         ? complete
-          ? "Saved to Savia"
-          : "Upload to Savia"
-        : "Start recording";
+          ? t("Saved to Savia")
+          : t("Upload to Savia")
+        : t("Start recording");
 
   return (
     <div className="app-shell">
@@ -263,7 +287,7 @@ function App() {
             className={`connection-state${connected ? " is-connected" : ""}`}
           >
             <i aria-hidden="true" />
-            {connected ? "Connected" : "Not connected"}
+            {connected ? t("Connected") : t("Not connected")}
           </span>
         </div>
         <div className="header-actions">
@@ -275,7 +299,7 @@ function App() {
               rel="noreferrer"
               onClick={openSavia}
             >
-              Open in Savia <span aria-hidden="true">↗</span>
+              {t("Open in Savia")} <span aria-hidden="true">↗</span>
             </a>
           )}
           <button
@@ -285,10 +309,10 @@ function App() {
             aria-controls="connection-settings"
             aria-label={
               settingsOpen
-                ? "Close connection settings"
-                : "Open connection settings"
+                ? t("Close connection settings")
+                : t("Open connection settings")
             }
-            title="Connection settings"
+            title={t("Connection settings")}
             onClick={() => setSettingsOpen((open) => !open)}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -301,7 +325,7 @@ function App() {
 
       {!isTauri() && (
         <p className="preview-note" role="status">
-          Preview only · Open the desktop app to record audio.
+          {t("Preview only · Open the desktop app to record audio.")}
         </p>
       )}
 
@@ -309,26 +333,39 @@ function App() {
         <section
           className="settings-panel"
           id="connection-settings"
-          aria-label="Connection settings"
+          aria-label={t("Connection settings")}
         >
           <div className="settings-heading">
             <div>
-              <h2>Connect to Savia</h2>
-              <p>Credentials stay in memory for this session.</p>
+              <h2>{t("Connect to Savia")}</h2>
+              <p>{t("Credentials stay in memory for this session.")}</p>
             </div>
             <button
               className="text-button"
               type="button"
               onClick={() => setSettingsOpen(false)}
-              aria-label="Close settings"
+              aria-label={t("Close settings")}
             >
-              Done
+              {t("Done")}
             </button>
           </div>
           <form onSubmit={connect}>
             <fieldset className="settings-fields" disabled={Boolean(busy)}>
               <label>
-                API address
+                {t("Language")}
+                <select
+                  value={locale}
+                  onChange={(event) =>
+                    changeLocale(event.target.value as Locale)
+                  }
+                >
+                  <option value="es">Español</option>
+                  <option value="en">English</option>
+                  <option value="pt">Português</option>
+                </select>
+              </label>
+              <label>
+                {t("API address")}
                 <input
                   type="url"
                   value={apiOrigin}
@@ -341,7 +378,7 @@ function App() {
                 />
               </label>
               <label>
-                Savia API key or access token
+                {t("Savia API key or access token")}
                 <input
                   type="password"
                   value={token}
@@ -349,11 +386,11 @@ function App() {
                     changeConnection(() => setToken(event.target.value))
                   }
                   autoComplete="off"
-                  placeholder="Paste your Savia credential"
+                  placeholder={t("Paste your Savia credential")}
                 />
               </label>
               <label>
-                Savia app address
+                {t("Savia app address")}
                 <input
                   type="url"
                   value={appOrigin}
@@ -364,14 +401,14 @@ function App() {
                 />
               </label>
               <p className="field-hint">
-                Opens the private recording review page.
+                {t("Opens the private recording review page.")}
               </p>
               <button
                 className="connect-button"
                 type="submit"
                 disabled={Boolean(busy) || !token.trim()}
               >
-                {capabilities ? "Reconnect" : "Connect"}
+                {capabilities ? t("Reconnect") : t("Connect")}
               </button>
             </fieldset>
           </form>
@@ -381,30 +418,30 @@ function App() {
       <main>
         <section
           className={`recording-stage${status.state === "recording" ? " is-recording" : ""}`}
-          aria-label="Recording status"
+          aria-label={t("Recording status")}
         >
           <div className="stage-status" role="status" aria-live="polite">
             <span className="status-light" aria-hidden="true" />
             <span>
               {status.state === "recording"
-                ? "Recording"
+                ? t("Recording")
                 : ready
                   ? complete
-                    ? "Saved to Savia"
-                    : "Ready to upload"
+                    ? t("Saved to Savia")
+                    : t("Ready to upload")
                   : status.state === "error" || status.state === "interrupted"
-                    ? "Capture needs attention"
-                    : "Ready to record"}
+                    ? t("Capture needs attention")
+                    : t("Ready to record")}
             </span>
           </div>
-          <p className="timer" aria-label={`${seconds} seconds recorded`}>
+          <p className="timer" aria-label={t("Seconds recorded", { seconds })}>
             {duration}
             <span> / 01:00:00</span>
           </p>
           <div
             className="time-track"
             role="progressbar"
-            aria-label="Recording time"
+            aria-label={t("Recording time")}
             aria-valuemin={0}
             aria-valuemax={3600}
             aria-valuenow={Math.min(seconds, 3600)}
@@ -415,25 +452,27 @@ function App() {
           </div>
           <p className="stage-hint">
             {status.state === "recording"
-              ? "Your audio stays on this device until you upload it."
+              ? t("Recording stays on device")
               : ready
-                ? "Check the captured sources, then upload when ready."
+                ? t("Review before upload")
                 : status.state === "error" || status.state === "interrupted"
-                  ? "Review the message below, then try another recording."
-                  : "Capture up to one hour from your selected sources."}
+                  ? t("Capture trouble")
+                  : t("Capture up to one hour")}
           </p>
           {ready && status.tracks.length > 0 && (
-            <ul className="captured-sources" aria-label="Captured audio">
+            <ul className="captured-sources" aria-label={t("Captured audio")}>
               {status.tracks.map((track) => (
                 <li key={track.source}>
                   <span>
                     {track.source === "microphone"
-                      ? "Microphone"
-                      : "System audio"}
+                      ? t("Microphone")
+                      : t("System audio")}
                   </span>
                   <span>
-                    {track.durationSeconds.toFixed(1)} sec ·{" "}
-                    {Math.ceil(track.bytes / 1024)} KB
+                    {t("Track details", {
+                      duration: track.durationSeconds.toFixed(1),
+                      size: Math.ceil(track.bytes / 1024),
+                    })}
                   </span>
                 </li>
               ))}
@@ -441,8 +480,7 @@ function App() {
           )}
           {status.recovered && (
             <p className="notice" role="status">
-              Recovered a saved recording from this device. Review it and upload
-              when ready.
+              {t("Recovered recording")}
             </p>
           )}
           {status.error && (
@@ -460,7 +498,7 @@ function App() {
           )}
           {!isTauri() && !notice && (
             <p className="stage-hint preview-hint">
-              Recording is available in the desktop app.
+              {t("Recording is available in the desktop app.")}
             </p>
           )}
         </section>
@@ -468,7 +506,7 @@ function App() {
 
       <footer className="capture-dock">
         <fieldset className="source-picker" disabled={locked}>
-          <legend>Capture sources</legend>
+          <legend>{t("Capture sources")}</legend>
           <label className="source-choice">
             <input
               type="checkbox"
@@ -478,7 +516,7 @@ function App() {
             <span className="switch" aria-hidden="true">
               <i />
             </span>
-            <span>Microphone</span>
+            <span>{t("Microphone")}</span>
           </label>
           <label className="source-choice">
             <input
@@ -489,7 +527,7 @@ function App() {
             <span className="switch" aria-hidden="true">
               <i />
             </span>
-            <span>System audio</span>
+            <span>{t("System audio")}</span>
           </label>
         </fieldset>
 
@@ -501,9 +539,7 @@ function App() {
               disabled={Boolean(busy)}
               onChange={(event) => setConsent(event.target.checked)}
             />
-            <span>
-              I have permission to record and store this recording in Savia.
-            </span>
+            <span>{t("Recording consent")}</span>
           </label>
         )}
 
@@ -533,27 +569,20 @@ function App() {
               disabled={Boolean(busy)}
               onClick={discard}
             >
-              Discard
+              {t("Discard")}
             </button>
           )}
         </div>
         {ready && !complete && !capabilities?.storageAvailable && (
-          <p className="action-guidance">
-            Connect a Savia server with recording storage enabled.
-          </p>
+          <p className="action-guidance">{t("Storage unavailable guidance")}</p>
         )}
         {connected &&
           capabilities?.storageAvailable &&
           !canUploadRecording(capabilities) && (
-            <p className="action-guidance">
-              This key cannot upload recordings. Connect with recordings:upload
-              permission.
-            </p>
+            <p className="action-guidance">{t("Upload permission guidance")}</p>
           )}
         {ready && !complete && canUploadRecording(capabilities) && !consent && (
-          <p className="action-guidance">
-            Confirm permission to enable upload.
-          </p>
+          <p className="action-guidance">{t("Consent guidance")}</p>
         )}
         {connected && reviewHref && complete && (
           <a
@@ -563,15 +592,11 @@ function App() {
             rel="noreferrer"
             onClick={openSavia}
           >
-            Review recording in Savia <span aria-hidden="true">↗</span>
+            {t("Review recording in Savia")} <span aria-hidden="true">↗</span>
           </a>
         )}
-        <p className="privacy-line">
-          No audio leaves this device until you choose Upload.
-        </p>
-        <p className="attribution-line">
-          Savia — Desarrollado por Hefesoft SAS, Colombia.
-        </p>
+        <p className="privacy-line">{t("Audio stays on device")}</p>
+        <p className="attribution-line">{t("Attribution")}</p>
       </footer>
     </div>
   );
