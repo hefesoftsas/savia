@@ -15282,11 +15282,14 @@ export interface paths {
     put?: never;
     /**
      * Summarize the caller's Jira tickets and GitHub reviews
-     * @description Reads assigned tickets through the current caller's personal connections. Results are transient and never stored in shared Pages.
+     * @description Returns the caller's encrypted saved summary, generating it from their personal connections when no matching snapshot exists. Use refresh=true to replace it with current provider data. Results are never stored in shared Pages.
      */
     post: {
       parameters: {
-        query?: never;
+        query?: {
+          /** @description Force a new provider read instead of using the saved private summary */
+          refresh?: "true" | "false";
+        };
         header?: never;
         path?: never;
         cookie?: never;

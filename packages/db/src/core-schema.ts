@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import {
   check,
   customType,
@@ -338,6 +338,34 @@ export const personalIntegrationConnections = sqliteTable(
     index("personal_integration_connections_principal_provider_index").on(
       table.principalId,
       table.provider,
+    ),
+  ],
+);
+
+export const personalTicketSummaryCache = sqliteTable(
+  "personal_ticket_summary_cache",
+  {
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "cascade" }),
+    cacheKey: text("cache_key").notNull(),
+    jiraConnectionId: text("jira_connection_id")
+      .notNull()
+      .references(() => personalIntegrationConnections.id, {
+        onDelete: "cascade",
+      }),
+    githubConnectionId: text("github_connection_id").references(
+      () => personalIntegrationConnections.id,
+      { onDelete: "cascade" },
+    ),
+    encryptedPayload: text("encrypted_payload").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.principalId, table.cacheKey] }),
+    index("personal_ticket_summary_cache_updated_at_index").on(
+      table.principalId,
+      desc(table.updatedAt),
     ),
   ],
 );

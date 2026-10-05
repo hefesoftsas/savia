@@ -37,6 +37,14 @@ Jira's POST issue search and GitHub GraphQL query operations. Authentication
 failures, rate limits, upstream errors, network errors and writes do not retry.
 Connect, reconnect and delete operations continue using the primary key.
 
+The **My tickets** Pages block saves its summary in an encrypted backend cache,
+scoped to the viewer, filters and active connection identities. Reopening the
+page reads that snapshot; only an initial cache miss or an explicit **Refresh**
+contacts Jira and GitHub. Refresh failures preserve the last saved snapshot.
+Connection changes remove dependent snapshots. These results are never embedded
+in shared Page content or persisted by the browser. Other personal-integration
+search results remain transient.
+
 This is temporary read compatibility, not a connection migration. Keep both
 keys restricted to their existing environments and move remaining connections
 through the normal user authorization flow before removing the fallback.

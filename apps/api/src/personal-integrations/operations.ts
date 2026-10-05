@@ -25,6 +25,7 @@ import { parseIssueLink } from "@savia/studio-shared/issue-links";
 import { createZoomMeetingService } from "./zoom";
 import type { TicketSummaryConfig } from "@savia/studio-shared/ticket-summary";
 import { fetchTicketSummary } from "./ticket-summary";
+import type { PersonalTicketSummaryCache } from "./ticket-summary-cache";
 
 export type PersonalFile = {
   id: string;
@@ -1354,6 +1355,7 @@ export class PersonalIntegrationOperations {
     private readonly repository: PersonalIntegrationRepository,
     private readonly nango: PersonalIntegrationNangoClient,
     database?: D1Database,
+    private readonly ticketSummaryCache?: PersonalTicketSummaryCache,
   ) {
     if (database) this.zoomMeetings = createZoomMeetingService(database, nango);
   }
@@ -1380,6 +1382,7 @@ export class PersonalIntegrationOperations {
     principalId: string;
     config: TicketSummaryConfig;
     githubEnabled?: boolean;
+    refresh?: boolean;
   }): Promise<import("@savia/studio-shared/ticket-summary").TicketSummary> {
     const jira = await this.connectedConnection(input.principalId, "jira");
     const github =
@@ -1395,7 +1398,19 @@ export class PersonalIntegrationOperations {
       github.status === "connected"
         ? github
         : null;
-    return fetchTicketSummary(this.nango, jira, activeGithub, input.config);
+    const fetcher = () =>
+      fetchTicketSummary(this.nango, jira, activeGithub, input.config);
+    if (!this.ticketSummaryCache) return fetcher();
+    return this.ticketSummaryCache.getOrFetch(
+      {
+        principalId: input.principalId,
+        jira,
+        github: activeGithub,
+        config: input.config,
+        refresh: input.refresh === true,
+      },
+      fetcher,
+    );
   }
 
   private async previewGitHubIssue(

@@ -171,6 +171,10 @@
       "sha256": "e6eafd41a53d954223452ee9eed1c09a5ed893aaa39c57744d004c18ac062131"
     },
     {
+      "filename": "0040_personal_ticket_summary_cache.sql",
+      "sha256": "a356642effb1fb33e60f268b500180827e760e08d975413bcdaa05b09f14eaaa"
+    },
+    {
       "filename": "0040_whatsapp_assistant.sql",
       "sha256": "d73b733959858f7288a4c0aadb24b4283551762d465a1a7831edf9e54c0e8f3c"
     },
@@ -1749,6 +1753,56 @@
       "type": "table",
       "name": "whatsapp_native_outbox",
       "table": "whatsapp_native_outbox"
+    },
+    {
+      "type": "index",
+      "name": "idx_plugin_authoring_projects_scope_updated",
+      "table": "plugin_authoring_projects"
+    },
+    {
+      "type": "index",
+      "name": "personal_ticket_summary_cache_updated_at_index",
+      "table": "personal_ticket_summary_cache"
+    },
+    {
+      "type": "table",
+      "name": "personal_ticket_summary_cache",
+      "table": "personal_ticket_summary_cache"
+    },
+    {
+      "type": "table",
+      "name": "plugin_authoring_projects",
+      "table": "plugin_authoring_projects"
+    },
+    {
+      "type": "table",
+      "name": "plugin_store_sources",
+      "table": "plugin_store_sources"
+    },
+    {
+      "type": "trigger",
+      "name": "personal_ticket_summary_cache_purge_connection_update",
+      "table": "personal_integration_connections"
+    },
+    {
+      "type": "table",
+      "name": "zoom_personal_meetings",
+      "table": "zoom_personal_meetings"
+    },
+    {
+      "type": "table",
+      "name": "tenant_page_search_index",
+      "table": "tenant_page_search_index"
+    },
+    {
+      "type": "table",
+      "name": "tenant_page_search_index_leases",
+      "table": "tenant_page_search_index_leases"
+    },
+    {
+      "type": "table",
+      "name": "tenant_pages_search_settings",
+      "table": "tenant_pages_search_settings"
     }
   ],
   "tables": [
@@ -15093,6 +15147,38 @@
           "notnull": 0,
           "dflt_value": null,
           "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "phone_number_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "waba_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "assigned_employee_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "assigned_owner_principal_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -15120,15 +15206,271 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["idempotency_key"],
-          "origin": "pk"
-        },
-        {
           "columns": ["outbound_message_id"],
           "origin": "u"
+        },
+        {
+          "columns": ["idempotency_key"],
+          "origin": "pk"
         }
       ],
       "checkCount": 2
+    },
+    {
+      "name": "personal_ticket_summary_cache",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "cache_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "jira_connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "github_connection_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "encrypted_payload",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "personal_integration_connections",
+          "from": "github_connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "personal_integration_connections",
+          "from": "jira_connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["principal_id", "cache_key"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "plugin_authoring_projects",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "label",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "files",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "history",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "version",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id", "principal_id", "id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "plugin_store_sources",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "files",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "plugin_store_artifacts",
+          "from": "tenant_id",
+          "to": "tenant_id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "table": "plugin_store_artifacts",
+          "from": "id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "table": "plugin_store_artifacts",
+          "from": "version",
+          "to": "version",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id", "id", "version"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
     }
   ],
   "mappingNotes": [
