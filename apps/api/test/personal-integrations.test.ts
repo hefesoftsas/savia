@@ -69,7 +69,10 @@ const configuredProviders = createPersonalIntegrationProviderRegistry({
 });
 const payloadCipher = new PersonalActionPayloadCipher("test-mcp-shared-secret");
 
-function configuredApp(nango = fakeNango()) {
+function configuredApp(
+  nango = fakeNango(),
+  cipher: PersonalActionPayloadCipher | null = payloadCipher,
+) {
   return createApp(
     env.DB,
     undefined,
@@ -89,7 +92,7 @@ function configuredApp(nango = fakeNango()) {
     {
       providers: configuredProviders,
       nango,
-      personalActionPayloadCipher: payloadCipher,
+      ...(cipher ? { personalActionPayloadCipher: cipher } : {}),
     } as never,
   );
 }
@@ -172,7 +175,7 @@ async function seedGoogleBooking(
 }
 
 describe("personal integration providers", () => {
-  it("returns a no-store personal ticket summary through the caller's connection", async () => {
+  it("reuses the private summary across app instances and refreshes only on demand", async () => {
     const nango = fakeNango();
     nango.proxy.mockImplementation(async (request: { path: string }) => {
       if (request.path === "/oauth/token/accessible-resources")
@@ -216,6 +219,63 @@ describe("personal integration providers", () => {
         ([request]) => request.connection.principalId === "test-agency-member",
       ),
     ).toBe(true);
+    const requestSummary = (refresh = false) =>
+      configuredApp(nango).request(
+        `https://savia.test/v1/personal-integrations/ticket-summary${refresh ? "?refresh=true" : ""}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ project: "OPS" }),
+        },
+      );
+    nango.proxy.mockClear();
+    const cached = await requestSummary();
+    expect(cached.status).toBe(200);
+    expect(await cached.json()).toEqual(body);
+    expect(cached.headers.get("cache-control")).toBe("no-store");
+    expect(nango.proxy).not.toHaveBeenCalled();
+    const refreshed = await requestSummary(true);
+    expect(refreshed.status).toBe(200);
+    const saved = await refreshed.json();
+    expect(nango.proxy).toHaveBeenCalled();
+    nango.proxy.mockResolvedValue(Response.json({}, { status: 502 }));
+    expect((await requestSummary(true)).status).toBe(502);
+    nango.proxy.mockClear();
+    expect(await (await requestSummary()).json()).toEqual(saved);
+    expect(nango.proxy).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid refresh flags before contacting providers", async () => {
+    const nango = fakeNango();
+    const response = await configuredApp(nango).request(
+      "https://savia.test/v1/personal-integrations/ticket-summary?refresh=yes",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(nango.proxy).not.toHaveBeenCalled();
+  });
+
+  it("does not fetch ticket data without private cache encryption", async () => {
+    const nango = fakeNango();
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections
+      (id, principal_id, provider, nango_connection_id, nango_integration_id, status, scopes, created_at, updated_at)
+      VALUES ('encryption-jira', 'test-agency-member', 'jira', 'encryption-nango-jira', 'jira-savia', 'connected', '[]', 'now', 'now')`,
+    ).run();
+    const response = await configuredApp(nango, null).request(
+      "https://savia.test/v1/personal-integrations/ticket-summary",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      },
+    );
+    expect(response.status).toBe(503);
+    expect(nango.proxy).not.toHaveBeenCalled();
   });
 
   it("rejects ticket summary identity overrides before contacting providers", async () => {
