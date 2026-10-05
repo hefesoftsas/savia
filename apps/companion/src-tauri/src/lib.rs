@@ -282,8 +282,10 @@ impl CaptureSession {
             .system
             .as_mut()
             .and_then(|system| system.request_stop().err());
+        // Explicit annotation: the unit-only Windows request_stop leaves
+        // `None` without an inferable payload type (E0282).
         #[cfg(target_os = "windows")]
-        let system_stop_error = {
+        let system_stop_error: Option<String> = {
             if let Some(system) = self.system.as_ref() {
                 system.request_stop();
             }
