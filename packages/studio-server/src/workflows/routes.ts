@@ -48,6 +48,12 @@ export const workflowRequests = {
       key: z.string().min(1).max(150),
     })
     .strict(),
+  approval: z
+    .object({
+      decision: z.enum(["approved", "rejected"]),
+      comment: z.string().max(500).optional(),
+    })
+    .strict(),
 };
 export function registerWorkflows(
   app: Hono<Env>,
@@ -285,6 +291,18 @@ export function registerWorkflows(
     await (
       await repository(c, "resolve")
     ).resolveTask(c.req.param("id"), c.get("principalId"));
+    return c.json({ data: { resolved: true } });
+  });
+  app.post("/api/workflow-approvals/:id/resolve", async (c) => {
+    const body = workflowRequests.approval.parse(await c.req.json());
+    await (
+      await repository(c, "resolve")
+    ).resolveApproval(
+      c.req.param("id"),
+      c.get("principalId"),
+      body.decision,
+      body.comment,
+    );
     return c.json({ data: { resolved: true } });
   });
 }

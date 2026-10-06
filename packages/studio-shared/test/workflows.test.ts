@@ -400,6 +400,191 @@ it("rejects open loops, nested loops, webhooks and jumps into the body", () => {
   ).toBe(false);
 });
 
+it("accepts interval or cron schedules but never both or neither", () => {
+  const nodes = [{ id: "tick", type: "transform", values: {} }];
+  const startAt = new Date(Date.now() + 60000).toISOString();
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "schedule", intervalMinutes: 60, startAt },
+      nodes,
+    }).success,
+  ).toBe(true);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "schedule", cron: "0 9 * * 1", startAt },
+      nodes,
+    }).success,
+  ).toBe(true);
+  for (const trigger of [
+    { type: "schedule", startAt },
+    { type: "schedule", intervalMinutes: 60, cron: "0 * * * *", startAt },
+    { type: "schedule", cron: "nope", startAt },
+    { type: "schedule", cron: "0 0 30 2 *", startAt },
+  ])
+    expect(workflowDefinitionSchema.safeParse({ trigger, nodes }).success).toBe(
+      false,
+    );
+});
+
+it("routes approvals to separate branches like conditions", () => {
+  const flow = {
+    trigger: { type: "manual" },
+    nodes: [
+      {
+        id: "gate",
+        type: "approval",
+        title: "Ship it?",
+        assignee: { ref: "system.owner" },
+        dueDays: 2,
+        next: "fast",
+        otherwise: "slow",
+      },
+      { id: "fast", type: "transform", values: {} },
+      {
+        id: "slow",
+        type: "transform",
+        values: { verdict: { ref: "steps.gate.decision" } },
+      },
+    ],
+  };
+  expect(workflowDefinitionSchema.safeParse(flow).success).toBe(true);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...flow,
+      nodes: [
+        flow.nodes[0],
+        flow.nodes[1],
+        {
+          id: "slow",
+          type: "transform",
+          values: { verdict: { ref: "steps.fast.skipped" } },
+        },
+      ],
+    }).success,
+  ).toBe(false);
+});
+
+it("joins straight-line branches and exposes every branch result", () => {
+  const flow = {
+    trigger: { type: "manual" },
+    nodes: [
+      { id: "fork", type: "parallel", branches: ["left", "right"] },
+      {
+        id: "left",
+        type: "transform",
+        values: { lane: "left" },
+        next: "join",
+      },
+      {
+        id: "right",
+        type: "transform",
+        values: { lane: "right" },
+        next: "join",
+      },
+      { id: "join", type: "merge", next: "done" },
+      {
+        id: "done",
+        type: "transform",
+        values: { both: { ref: "steps.join.branches" } },
+      },
+    ],
+  };
+  expect(workflowDefinitionSchema.safeParse(flow).success).toBe(true);
+  // A branch result is unavailable inside the sibling branch.
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...flow,
+      nodes: [
+        flow.nodes[0],
+        {
+          id: "left",
+          type: "transform",
+          values: { lane: { ref: "steps.right.lane" } },
+          next: "join",
+        },
+        flow.nodes[2],
+        flow.nodes[3],
+        flow.nodes[4],
+      ],
+    }).success,
+  ).toBe(false);
+});
+
+it("rejects open, uneven and nested parallel regions", () => {
+  const join = { id: "join", type: "merge" };
+  const end = (id: string, next = "join") => ({
+    id,
+    type: "transform",
+    values: {},
+    next,
+  });
+  const fork = (branches: string[]) => ({
+    id: "fork",
+    type: "parallel",
+    branches,
+  });
+  const base = (nodes: unknown[]) => ({ trigger: { type: "manual" }, nodes });
+  expect(
+    workflowDefinitionSchema.safeParse(
+      base([fork(["left", "right"]), end("left"), end("right"), join]),
+    ).success,
+  ).toBe(true);
+  const cases: unknown[][] = [
+    [fork(["left"]), end("left"), join],
+    [
+      fork(["left", "right"]),
+      end("left"),
+      end("right", "elsewhere"),
+      join,
+      { id: "elsewhere", type: "transform", values: {} },
+    ],
+    [
+      fork(["shared", "other"]),
+      end("shared"),
+      { ...end("other"), next: "shared" },
+      join,
+    ],
+    [
+      fork(["left", "right"]),
+      end("left"),
+      {
+        ...end("right"),
+        next: "join",
+        type: "condition",
+        left: "",
+        operator: "eq",
+        right: "",
+      },
+      join,
+    ],
+    [
+      fork(["left", "right"]),
+      end("left"),
+      end("right"),
+      { ...join, next: "join" },
+    ],
+  ];
+  for (const nodes of cases)
+    expect(workflowDefinitionSchema.safeParse(base(nodes)).success).toBe(false);
+  expect(
+    workflowDefinitionSchema.safeParse(
+      base([
+        {
+          id: "repeat",
+          type: "loop",
+          items: { ref: "trigger.tags" },
+          body: "fork",
+          next: "join",
+        },
+        fork(["left", "right"]),
+        end("left"),
+        end("right"),
+        join,
+      ]),
+    ).success,
+  ).toBe(false);
+});
+
 it("accepts pinned subflow calls with mapped inputs", () => {
   const node = {
     id: "child",

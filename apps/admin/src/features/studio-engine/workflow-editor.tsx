@@ -14,6 +14,7 @@ import type {
   WorkflowValue,
 } from "@savia/studio-shared/workflows";
 import type { WorkflowPiece } from "@savia/studio-shared/workflow-pieces";
+import { cronNextOccurrence } from "@savia/studio-shared/workflow-cron";
 
 export const stepLabels: Record<
   WorkflowNode["type"],
@@ -28,6 +29,9 @@ export const stepLabels: Record<
   http: "Petición HTTP",
   subflow: "Subflujo",
   piece: "Pieza",
+  approval: "Aprobación",
+  parallel: "Ramas paralelas",
+  merge: "Unir ramas",
   transform: "Transformar datos",
   query: "Consultar registros",
   create: "Crear registro",
@@ -85,6 +89,18 @@ export function newStep(
       return { ...base, type, workflowId: "", workflowVersion: "", input: {} };
     case "piece":
       return { ...base, type, pieceId: "", pieceVersion: 1, config: {} };
+    case "approval":
+      return {
+        ...base,
+        type,
+        title: "",
+        assignee: { ref: "system.owner" },
+        dueDays: 1,
+      };
+    case "parallel":
+      return { ...base, type, branches: [""] };
+    case "merge":
+      return { ...base, type };
     case "transform":
       return { ...base, type, values: {} };
     case "query":
@@ -364,6 +380,71 @@ function Mappings({
     </fieldset>
   );
 }
+const CRON_PRESETS = [
+  { label: "Cada hora", expression: "0 * * * *" },
+  { label: "Diario", expression: "0 0 * * *" },
+  { label: "Semanal", expression: "0 0 * * 1" },
+  { label: "Mensual", expression: "0 0 1 * *" },
+];
+function ScheduleCronEditor({
+  trigger,
+  onChange,
+}: {
+  trigger: Extract<WorkflowDefinition["trigger"], { type: "schedule" }>;
+  onChange: (v: WorkflowDefinition["trigger"]) => void;
+}) {
+  const t = useMessages(automationMessages);
+  const upcoming: string[] = [];
+  let invalid = trigger.cron === undefined || trigger.cron.trim() === "";
+  if (!invalid) {
+    try {
+      let from = Date.now();
+      for (let i = 0; i < 3; i++) {
+        const at = cronNextOccurrence(trigger.cron!, from);
+        if (at === null) break;
+        upcoming.push(
+          new Date(at).toISOString().slice(0, 16).replace("T", " "),
+        );
+        from = at;
+      }
+      invalid = upcoming.length === 0;
+    } catch {
+      invalid = true;
+    }
+  }
+  return (
+    <>
+      <label>
+        {t("Expresión cron")}
+        <Input
+          value={trigger.cron ?? ""}
+          placeholder="0 9 * * 1"
+          onChange={(e) => onChange({ ...trigger, cron: e.target.value })}
+        />
+      </label>
+      <div className="wf-actions">
+        {CRON_PRESETS.map((preset) => (
+          <Button
+            key={preset.expression}
+            variant="outline"
+            onClick={() => onChange({ ...trigger, cron: preset.expression })}
+          >
+            {t(preset.label as keyof typeof automationMessages & string)}
+          </Button>
+        ))}
+      </div>
+      {invalid ? (
+        <p className="wf-muted">
+          {t("La expresión cron no es válida o nunca ocurre.")}
+        </p>
+      ) : (
+        <p className="wf-muted">
+          {t("Próximas ejecuciones:")} {upcoming.join(" · ")}
+        </p>
+      )}
+    </>
+  );
+}
 export function TriggerEditor({
   definition,
   onChange,
@@ -454,16 +535,44 @@ export function TriggerEditor({
       ) : (
         <>
           <label>
-            {t("Intervalo en minutos")}
-            <Input
-              type="number"
-              min={1}
-              value={trigger.intervalMinutes}
+            {t("Modo de programación")}
+            <select
+              value={trigger.cron === undefined ? "interval" : "cron"}
               onChange={(e) =>
-                set({ ...trigger, intervalMinutes: Number(e.target.value) })
+                set(
+                  e.target.value === "cron"
+                    ? {
+                        type: "schedule",
+                        cron: "0 * * * *",
+                        startAt: trigger.startAt,
+                      }
+                    : {
+                        type: "schedule",
+                        intervalMinutes: 60,
+                        startAt: trigger.startAt,
+                      },
+                )
               }
-            />
+            >
+              <option value="interval">{t("Intervalo fijo")}</option>
+              <option value="cron">{t("Expresión cron")}</option>
+            </select>
           </label>
+          {trigger.cron === undefined ? (
+            <label>
+              {t("Intervalo en minutos")}
+              <Input
+                type="number"
+                min={1}
+                value={trigger.intervalMinutes ?? 60}
+                onChange={(e) =>
+                  set({ ...trigger, intervalMinutes: Number(e.target.value) })
+                }
+              />
+            </label>
+          ) : (
+            <ScheduleCronEditor trigger={trigger} onChange={set} />
+          )}
           <label>
             {t("Inicio (UTC)")}
             <Input
@@ -669,6 +778,10 @@ function PieceSection({
   const versions = (list.data?.data ?? []).filter(
     (piece) => piece.id === value.pieceId,
   );
+  const latest = versions.reduce<number | null>(
+    (max, piece) => (max === null || piece.version > max ? piece.version : max),
+    null,
+  );
   return (
     <section aria-label={t("Pieza")}>
       <label>
@@ -718,6 +831,14 @@ function PieceSection({
       ) : null}
       {selected?.description ? (
         <p className="wf-muted">{selected.description}</p>
+      ) : null}
+      {latest !== null && latest !== value.pieceVersion ? (
+        <Button
+          variant="outline"
+          onClick={() => onChange({ ...value, pieceVersion: latest })}
+        >
+          {t("Usar versión %{value0}", { value0: latest })}
+        </Button>
       ) : null}
       {(selected?.inputs ?? []).map((field) => (
         <div key={field.key}>
@@ -782,6 +903,10 @@ export function StepEditor({
 }) {
   const t = useMessages(automationMessages);
   const listId = useId();
+  const catalog = useQuery({
+    queryKey: ["workflow-pieces"],
+    queryFn: () => api<{ data: WorkflowPiece[] }>("/workflow-pieces"),
+  });
 
   const patch = (value: Partial<WorkflowNode>) =>
     onChange({ ...node, ...value } as WorkflowNode);
@@ -861,8 +986,39 @@ export function StepEditor({
                           : n.type === "condition"
                             ? [`steps.${n.id}.matches`, `steps.${n.id}.error`]
                             : n.type === "piece"
-                              ? [`steps.${n.id}.error`]
-                              : [`steps.${n.id}.id`, `steps.${n.id}.error`],
+                              ? [
+                                  ...(
+                                    (catalog.data?.data ?? []).find(
+                                      (piece) =>
+                                        piece.id === n.pieceId &&
+                                        piece.version === n.pieceVersion,
+                                    )?.outputs ?? []
+                                  ).map((output) => `steps.${n.id}.${output}`),
+                                  `steps.${n.id}.error`,
+                                ]
+                              : n.type === "parallel"
+                                ? [
+                                    `steps.${n.id}.branches`,
+                                    `steps.${n.id}.count`,
+                                    `steps.${n.id}.error`,
+                                  ]
+                                : n.type === "merge"
+                                  ? [
+                                      `steps.${n.id}.branches`,
+                                      `steps.${n.id}.count`,
+                                      `steps.${n.id}.error`,
+                                    ]
+                                  : n.type === "approval"
+                                    ? [
+                                        `steps.${n.id}.decision`,
+                                        `steps.${n.id}.by`,
+                                        `steps.${n.id}.comment`,
+                                        `steps.${n.id}.error`,
+                                      ]
+                                    : [
+                                        `steps.${n.id}.id`,
+                                        `steps.${n.id}.error`,
+                                      ],
       ),
   ];
   if (node.type === "map" || node.type === "bulkUpdate")
@@ -1245,6 +1401,105 @@ export function StepEditor({
           onChange={(v) => patch(v)}
         />
       ) : null}
+      {node.type === "parallel" ? (
+        <fieldset>
+          <legend>{t("Ramas")}</legend>
+          {node.branches.map((entry, index) => (
+            <div className="wf-mapping" key={index}>
+              <label>
+                {t("Rama %{value0}", { value0: index + 1 })}
+                <select
+                  value={entry}
+                  onChange={(e) =>
+                    patch({
+                      branches: node.branches.map((item, i) =>
+                        i === index ? e.target.value : item,
+                      ),
+                    })
+                  }
+                >
+                  <option value="">{t("Selecciona un paso")}</option>
+                  {definition.nodes
+                    .filter((n) => n.id !== node.id)
+                    .map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.label || t(stepLabels[n.type])} · {n.id}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <Button
+                variant="ghost"
+                disabled={node.branches.length <= 2}
+                onClick={() =>
+                  patch({
+                    branches: node.branches.filter((_, i) => i !== index),
+                  })
+                }
+                aria-label={t("Quitar rama %{value0}", { value0: index + 1 })}
+              >
+                {t("Quitar")}
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            disabled={node.branches.length >= 8}
+            onClick={() => patch({ branches: [...node.branches, ""] })}
+          >
+            {t("Añadir rama")}
+          </Button>
+          <p className="wf-muted">
+            {t(
+              "Cada rama es una línea recta hasta la misma unión. Sin decisiones ni loops dentro.",
+            )}
+          </p>
+        </fieldset>
+      ) : null}
+      {node.type === "merge" ? (
+        <p className="wf-muted">
+          {t(
+            "Espera a que todas las ramas entrantes terminen y combina sus resultados en steps.<id>.branches.",
+          )}
+        </p>
+      ) : null}
+      {node.type === "approval" ? (
+        <>
+          <ValueInput
+            label={t("Título")}
+            value={node.title}
+            onChange={(v) => patch({ title: v })}
+            variables={variables}
+          />
+          <ValueInput
+            label={t("ID del destinatario")}
+            value={node.assignee}
+            onChange={(v) => patch({ assignee: v })}
+            variables={variables}
+          />
+          <ValueInput
+            label={t("Descripción")}
+            value={node.description ?? ""}
+            onChange={(v) => patch({ description: v || undefined })}
+            variables={variables}
+          />
+          <label>
+            {t("Vence en días")}
+            <Input
+              type="number"
+              min={0}
+              max={365}
+              value={node.dueDays}
+              onChange={(e) => patch({ dueDays: Number(e.target.value) })}
+            />
+          </label>
+          <p className="wf-muted">
+            {t(
+              "Se aprueba sigue adelante; de lo contrario va a la otra rama, incluido el vencimiento.",
+            )}
+          </p>
+        </>
+      ) : null}
       {node.type === "subflow" ? (
         <>
           <SubflowPicker
@@ -1441,11 +1696,20 @@ export function StepEditor({
       {node.type === "switch"
         ? destination(t("Rama por defecto"), "otherwise")
         : destination(
-            node.type === "condition" ? t("Si se cumple") : t("Siguiente paso"),
+            node.type === "condition"
+              ? t("Si se cumple")
+              : node.type === "approval"
+                ? t("Si se aprueba")
+                : t("Siguiente paso"),
             "next",
           )}
-      {node.type === "condition"
-        ? destination(t("Si no se cumple"), "otherwise")
+      {node.type === "condition" || node.type === "approval"
+        ? destination(
+            node.type === "approval"
+              ? t("Si no se aprueba")
+              : t("Si no se cumple"),
+            "otherwise",
+          )
         : null}
     </section>
   );

@@ -3401,6 +3401,65 @@ export const automationMessages = {
     "Remover credencial",
   ],
   Subflujo: ["Subflujo", "Subflow", "Subfluxo"],
+  Aprobación: ["Aprobación", "Approval", "Aprovação"],
+  "Ramas paralelas": [
+    "Ramas paralelas",
+    "Parallel branches",
+    "Ramos paralelos",
+  ],
+  "Unir ramas": ["Unir ramas", "Join branches", "Unir ramos"],
+  "Rama %{value0}": ["Rama %{value0}", "Branch %{value0}", "Ramo %{value0}"],
+  "Quitar rama %{value0}": [
+    "Quitar rama %{value0}",
+    "Remove branch %{value0}",
+    "Remover ramo %{value0}",
+  ],
+  "Añadir rama": ["Añadir rama", "Add branch", "Adicionar ramo"],
+  "Cada rama es una línea recta hasta la misma unión. Sin decisiones ni loops dentro.":
+    [
+      "Cada rama es una línea recta hasta la misma unión. Sin decisiones ni loops dentro.",
+      "Each branch is a straight line to the same join. No decisions or loops inside.",
+      "Cada ramo é uma linha reta até a mesma junção. Sem decisões ou loops dentro.",
+    ],
+  "Espera a que todas las ramas entrantes terminen y combina sus resultados en steps.<id>.branches.":
+    [
+      "Espera a que todas las ramas entrantes terminen y combina sus resultados en steps.<id>.branches.",
+      "Waits for every incoming branch to finish and combines their results in steps.<id>.branches.",
+      "Aguarda todos os ramos de entrada terminarem e combina seus resultados em steps.<id>.branches.",
+    ],
+  "Si se aprueba": ["Si se aprueba", "If approved", "Se aprovado"],
+  "Si no se aprueba": ["Si no se aprueba", "If rejected", "Se não aprovado"],
+  Aprobado: ["Aprobado", "Approved", "Aprovado"],
+  Rechazado: ["Rechazado", "Rejected", "Rejeitado"],
+  Aprobar: ["Aprobar", "Approve", "Aprovar"],
+  Rechazar: ["Rechazar", "Reject", "Rejeitar"],
+  "Modo de programación": [
+    "Modo de programación",
+    "Schedule mode",
+    "Modo de agendamento",
+  ],
+  "Intervalo fijo": ["Intervalo fijo", "Fixed interval", "Intervalo fixo"],
+  "Expresión cron": ["Expresión cron", "Cron expression", "Expressão cron"],
+  "Cada hora": ["Cada hora", "Hourly", "A cada hora"],
+  Diario: ["Diario", "Daily", "Diário"],
+  Semanal: ["Semanal", "Weekly", "Semanal"],
+  Mensual: ["Mensual", "Monthly", "Mensal"],
+  "Próximas ejecuciones:": [
+    "Próximas ejecuciones:",
+    "Upcoming runs:",
+    "Próximas execuções:",
+  ],
+  "La expresión cron no es válida o nunca ocurre.": [
+    "La expresión cron no es válida o nunca ocurre.",
+    "The cron expression is invalid or never occurs.",
+    "A expressão cron é inválida ou nunca ocorre.",
+  ],
+  "Se aprueba sigue adelante; de lo contrario va a la otra rama, incluido el vencimiento.":
+    [
+      "Se aprueba sigue adelante; de lo contrario va a la otra rama, incluido el vencimiento.",
+      "Approval continues forward; otherwise it takes the other branch, including on expiry.",
+      "Se aprovado segue adiante; caso contrário vai para o outro ramo, inclusive no vencimento.",
+    ],
   Pieza: ["Pieza", "Piece", "Peça"],
   "Selecciona una pieza": [
     "Selecciona una pieza",
@@ -3439,6 +3498,11 @@ export const automationMessages = {
     "Usar versión publicada",
     "Use published version",
     "Usar versão publicada",
+  ],
+  "Usar versión %{value0}": [
+    "Usar versión %{value0}",
+    "Use version %{value0}",
+    "Usar versão %{value0}",
   ],
   Entrada: ["Entrada", "Input", "Entrada"],
   "El hijo corre su versión fijada y devuelve sus pasos en steps.<id>.steps.": [

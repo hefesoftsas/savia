@@ -738,7 +738,8 @@ function WorkspaceWorkflows({
                             if (patched.next === node.id)
                               patched = { ...patched, next: node.next };
                             if (
-                              patched.type === "condition" &&
+                              (patched.type === "condition" ||
+                                patched.type === "approval") &&
                               patched.otherwise === node.id
                             )
                               patched = {
@@ -768,6 +769,14 @@ function WorkspaceWorkflows({
                                 ...patched,
                                 body: node.next ?? "",
                               };
+                            if (patched.type === "parallel") {
+                              patched = {
+                                ...patched,
+                                branches: patched.branches.map((entry) =>
+                                  entry === node.id ? (node.next ?? "") : entry,
+                                ),
+                              };
+                            }
                             return patched;
                           });
                         change({
@@ -1046,7 +1055,11 @@ function WorkspaceWorkflows({
                 <span className="wf-inbox-title">{item.title}</span>
                 <span className="wf-inbox-meta">
                   <span className="wf-badge wf-badge-muted">
-                    {item.kind === "task" ? t("Tarea") : t("Notificación")}
+                    {item.kind === "task"
+                      ? t("Tarea")
+                      : item.kind === "approval"
+                        ? t("Aprobación")
+                        : t("Notificación")}
                   </span>
                   <span
                     className={
@@ -1059,7 +1072,43 @@ function WorkspaceWorkflows({
                   </span>
                 </span>
               </span>
-              {item.status !== "done" ? (
+              {item.status !== "done" && item.kind === "approval" ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      request(async () => {
+                        await api(
+                          `/workflow-approvals/${item.id}/resolve`,
+                          "POST",
+                          { decision: "approved" },
+                        );
+                      })
+                    }
+                  >
+                    {t("Aprobar")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      request(async () => {
+                        await api(
+                          `/workflow-approvals/${item.id}/resolve`,
+                          "POST",
+                          { decision: "rejected" },
+                        );
+                      })
+                    }
+                  >
+                    {t("Rechazar")}
+                  </Button>
+                </>
+              ) : null}
+              {item.status !== "done" && item.kind !== "approval" ? (
                 <Button
                   size="sm"
                   variant="outline"

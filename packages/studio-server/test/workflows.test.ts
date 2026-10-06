@@ -1076,6 +1076,28 @@ describe("general workflows on real D1", () => {
     expect(await repo.executions(id)).toHaveLength(2);
     await repo.setEnabled(id, false);
   });
+  it("fires cron schedules once and coalesces missed occurrences", async () => {
+    // A Monday 09:30 window around 2026-03-02T09:30Z.
+    const now = Date.parse("2026-03-02T09:30:00Z");
+    const { repo, id } = await published({
+      trigger: {
+        type: "schedule",
+        cron: "30 9 * * 1",
+        startAt: new Date(now - 60000).toISOString(),
+      },
+      nodes: [{ id: "value", type: "transform", values: {} }],
+    });
+    await processWorkflows(db, async () => true, { now });
+    expect(await repo.executions(id)).toHaveLength(1);
+    const advanced = await db
+      .prepare(
+        "SELECT next_run_at FROM workflows WHERE workspace_id=? AND id=?",
+      )
+      .bind(tenant, id)
+      .first<{ next_run_at: number }>();
+    expect(advanced?.next_run_at).toBe(Date.parse("2026-03-09T09:30:00Z"));
+    await repo.setEnabled(id, false);
+  });
   it("calls realtime transition hooks with committed workspace execution IDs", async () => {
     const { repo, id } = await published(valueFlow("realtime"));
     const run = await repo.start(id, {}, owner, "realtime-transition");

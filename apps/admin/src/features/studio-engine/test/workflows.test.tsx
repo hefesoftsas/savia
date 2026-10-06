@@ -103,6 +103,48 @@ it("preserves partial numeric input and only accepts complete numeric filters", 
   }
   expect(saved![0].value).toBe(-1.5);
 });
+it("switches a schedule between fixed interval and cron", () => {
+  let saved: WorkflowDefinition;
+  function Editor() {
+    const [definition, setDefinition] = React.useState<WorkflowDefinition>({
+      trigger: {
+        type: "schedule",
+        intervalMinutes: 60,
+        startAt: new Date("2026-03-02T09:00:00Z").toISOString(),
+      },
+      nodes: [{ id: "done", type: "transform", values: {} }],
+    });
+    saved = definition;
+    return (
+      <TriggerEditor
+        definition={definition}
+        onChange={setDefinition}
+        objects={[]}
+      />
+    );
+  }
+  render(<Editor />);
+  fireEvent.change(screen.getByLabelText("Modo de programación"), {
+    target: { value: "cron" },
+  });
+  expect(saved!.trigger).toMatchObject({ type: "schedule", cron: "0 * * * *" });
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: saved!.trigger,
+      nodes: [{ id: "done", type: "transform", values: {} }],
+    }).success,
+  ).toBe(true);
+  fireEvent.change(screen.getByLabelText("Expresión cron"), {
+    target: { value: "nope" },
+  });
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: saved!.trigger,
+      nodes: [{ id: "done", type: "transform", values: {} }],
+    }).success,
+  ).toBe(false);
+});
+
 it("edits collection filters and clears fields when switching collections", () => {
   let saved: WorkflowDefinition;
   function Editor() {
@@ -503,12 +545,14 @@ it("edits the per-step error policy and attempt budget", () => {
     const [node, setNode] = React.useState<WorkflowNode>(definition.nodes[0]);
     saved = node;
     return (
-      <StepEditor
-        node={node}
-        definition={definition}
-        objects={[]}
-        onChange={setNode}
-      />
+      <QueryClientProvider client={new QueryClient()}>
+        <StepEditor
+          node={node}
+          definition={definition}
+          objects={[]}
+          onChange={setNode}
+        />
+      </QueryClientProvider>
     );
   }
   render(<Editor />);
@@ -544,12 +588,14 @@ it("edits the source list of a loop step", () => {
     const [node, setNode] = React.useState<WorkflowNode>(definition.nodes[0]);
     saved = node;
     return (
-      <StepEditor
-        node={node}
-        definition={definition}
-        objects={[]}
-        onChange={setNode}
-      />
+      <QueryClientProvider client={new QueryClient()}>
+        <StepEditor
+          node={node}
+          definition={definition}
+          objects={[]}
+          onChange={setNode}
+        />
+      </QueryClientProvider>
     );
   }
   render(<Editor />);
@@ -563,9 +609,12 @@ it("derives canvas edges with one handle per destination", () => {
     start: "Start",
     yes: "Yes",
     no: "No",
+    approved: "Approved",
+    rejected: "Rejected",
     defect: "Default",
     body: "Body",
     stepCase: (index: number) => `Case ${index}`,
+    branch: (index: number) => `Branch ${index}`,
   };
   const definition = {
     trigger: { type: "manual" },
@@ -875,6 +924,219 @@ it("lists catalog pieces and edits their inputs", async () => {
   expect(saved).toMatchObject({ config: { message: "hello" } });
 });
 
+it("suggests piece outputs as variables downstream", async () => {
+  vi.mocked(api).mockImplementation(async (url: string) => ({
+    data:
+      url === "/workflow-pieces"
+        ? [
+            {
+              id: "log",
+              version: 1,
+              label: "Log message",
+              inputs: [
+                {
+                  key: "message",
+                  label: "Message",
+                  type: "text",
+                  required: true,
+                },
+              ],
+              outputs: ["message"],
+            },
+          ]
+        : [],
+  }));
+  const definition: WorkflowDefinition = {
+    trigger: { type: "manual" },
+    nodes: [
+      {
+        id: "note",
+        type: "piece",
+        pieceId: "log",
+        pieceVersion: 1,
+        config: { message: "hi" },
+        next: "done",
+      },
+      { id: "done", type: "transform", values: {} },
+    ],
+  };
+  function Editor() {
+    const [current, setCurrent] =
+      React.useState<WorkflowDefinition>(definition);
+    const node = current.nodes[1];
+    return (
+      <QueryClientProvider client={new QueryClient()}>
+        <StepEditor
+          node={node}
+          definition={current}
+          objects={[]}
+          onChange={(next) =>
+            setCurrent({
+              ...current,
+              nodes: current.nodes.map((entry) =>
+                entry.id === node.id ? next : entry,
+              ),
+            })
+          }
+        />
+      </QueryClientProvider>
+    );
+  }
+  const view = render(<Editor />);
+  fireEvent.click(screen.getByRole("button", { name: "Añadir valor" }));
+  fireEvent.change(screen.getByLabelText("Tipo de Valor 1"), {
+    target: { value: "ref" },
+  });
+  await waitFor(() =>
+    expect(
+      [...view.container.querySelectorAll("datalist option")].map((option) =>
+        option.getAttribute("value"),
+      ),
+    ).toContain("steps.note.message"),
+  );
+});
+
+it("offers adopting a newer pinned piece version", async () => {
+  vi.mocked(api).mockImplementation(async (url: string) => ({
+    data:
+      url === "/workflow-pieces"
+        ? [
+            { id: "log", version: 1, label: "Log", inputs: [], outputs: [] },
+            { id: "log", version: 2, label: "Log", inputs: [], outputs: [] },
+          ]
+        : [],
+  }));
+  let saved: WorkflowNode | undefined;
+  const definition: WorkflowDefinition = {
+    trigger: { type: "manual" },
+    nodes: [
+      {
+        id: "note",
+        type: "piece",
+        pieceId: "log",
+        pieceVersion: 1,
+        config: {},
+      },
+    ],
+  };
+  function Editor() {
+    const [node, setNode] = React.useState<WorkflowNode>(definition.nodes[0]);
+    saved = node;
+    return (
+      <QueryClientProvider client={new QueryClient()}>
+        <StepEditor
+          node={node}
+          definition={definition}
+          objects={[]}
+          onChange={setNode}
+        />
+      </QueryClientProvider>
+    );
+  }
+  render(<Editor />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Usar versión 2" }),
+  );
+  expect(saved).toMatchObject({ pieceVersion: 2 });
+});
+
+it("edits the branches of an approval step", () => {
+  let saved: WorkflowNode | undefined;
+  const definition: WorkflowDefinition = {
+    trigger: { type: "manual" },
+    nodes: [
+      {
+        id: "gate",
+        type: "approval",
+        title: "Ship it?",
+        assignee: "owner",
+        dueDays: 2,
+        next: "fast",
+        otherwise: "slow",
+      },
+      { id: "fast", type: "transform", values: {} },
+      { id: "slow", type: "transform", values: {} },
+    ],
+  };
+  function Editor() {
+    const [node, setNode] = React.useState<WorkflowNode>(definition.nodes[0]);
+    saved = node;
+    return (
+      <QueryClientProvider client={new QueryClient()}>
+        <StepEditor
+          node={node}
+          definition={definition}
+          objects={[]}
+          onChange={setNode}
+        />
+      </QueryClientProvider>
+    );
+  }
+  render(<Editor />);
+  fireEvent.change(screen.getByLabelText("Vence en días"), {
+    target: { value: "7" },
+  });
+  expect(saved).toMatchObject({ dueDays: 7 });
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: definition.trigger,
+      nodes: [saved, definition.nodes[1], definition.nodes[2]],
+    }).success,
+  ).toBe(true);
+});
+
+it("edits parallel branches and renders one edge per branch", async () => {
+  let saved: WorkflowNode | undefined;
+  const definition: WorkflowDefinition = {
+    trigger: { type: "manual" },
+    nodes: [
+      { id: "fork", type: "parallel", branches: ["left", ""] },
+      { id: "left", type: "transform", values: {}, next: "join" },
+      { id: "join", type: "merge", next: "done" },
+      { id: "done", type: "transform", values: {} },
+    ],
+  };
+  function Editor() {
+    const [node, setNode] = React.useState<WorkflowNode>(definition.nodes[0]);
+    saved = node;
+    return (
+      <QueryClientProvider client={new QueryClient()}>
+        <StepEditor
+          node={node}
+          definition={definition}
+          objects={[]}
+          onChange={setNode}
+        />
+      </QueryClientProvider>
+    );
+  }
+  render(<Editor />);
+  fireEvent.change(screen.getByLabelText("Rama 2"), {
+    target: { value: "join" },
+  });
+  expect(saved).toMatchObject({ branches: ["left", "join"] });
+  const { buildWorkflowEdges: buildEdges } = await import("../workflow-canvas");
+  const edges = buildEdges(definition, {
+    start: "Start",
+    yes: "Yes",
+    no: "No",
+    approved: "Approved",
+    rejected: "Rejected",
+    defect: "Default",
+    body: "Body",
+    stepCase: (index: number) => `Case ${index}`,
+    branch: (index: number) => `Branch ${index}`,
+  });
+  expect(edges).toContainEqual(
+    expect.objectContaining({
+      source: "fork",
+      target: "left",
+      sourceHandle: "branch:0",
+      label: "Branch 1",
+    }),
+  );
+});
+
 it("edits the body and budget of a loop step", () => {
   let saved: WorkflowNode | undefined;
   const definition: WorkflowDefinition = {
@@ -894,12 +1156,14 @@ it("edits the body and budget of a loop step", () => {
     const [node, setNode] = React.useState<WorkflowNode>(definition.nodes[0]);
     saved = node;
     return (
-      <StepEditor
-        node={node}
-        definition={definition}
-        objects={[]}
-        onChange={setNode}
-      />
+      <QueryClientProvider client={new QueryClient()}>
+        <StepEditor
+          node={node}
+          definition={definition}
+          objects={[]}
+          onChange={setNode}
+        />
+      </QueryClientProvider>
     );
   }
   render(<Editor />);

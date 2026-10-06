@@ -416,11 +416,63 @@ export class WorkflowRepository {
     return (
       await this.db
         .prepare(
-          "SELECT * FROM workflow_tasks WHERE workspace_id=? AND assignee=? ORDER BY created_at DESC,id LIMIT 200",
+          "SELECT id,title,kind,status,created_at FROM workflow_tasks WHERE workspace_id=? AND assignee=? UNION ALL SELECT id,title,'approval' AS kind,CASE status WHEN 'open' THEN 'open' ELSE 'done' END AS status,created_at FROM workflow_approvals WHERE workspace_id=? AND assignee=? ORDER BY created_at DESC,id LIMIT 200",
         )
-        .bind(this.workspace, user)
+        .bind(this.workspace, user, this.workspace, user)
         .all<{ id: string; status: string; title: string; kind: string }>()
     ).results;
+  }
+  async resolveApproval(
+    id: string,
+    user: string,
+    decision: string,
+    comment?: string,
+  ) {
+    if (decision !== "approved" && decision !== "rejected")
+      fail("Approval decision must be approved or rejected", 422);
+    if (
+      comment !== undefined &&
+      (typeof comment !== "string" || comment.length > 500)
+    )
+      fail("Approval comment must be text up to 500 characters", 422);
+    const row = await this.db
+      .prepare(
+        "SELECT execution_id,node_id FROM workflow_approvals WHERE workspace_id=? AND id=? AND assignee=? AND status='open'",
+      )
+      .bind(this.workspace, id, user)
+      .first<{ execution_id: string; node_id: string }>();
+    if (!row) fail("Assigned approval not found", 404);
+    const execution = await this.db
+      .prepare(
+        "SELECT status,node_id FROM workflow_executions WHERE workspace_id=? AND id=?",
+      )
+      .bind(this.workspace, row.execution_id)
+      .first<{ status: string; node_id: string | null }>();
+    if (
+      !execution ||
+      execution.status !== "waiting" ||
+      execution.node_id !== row.node_id
+    )
+      fail("Assigned approval not found", 404);
+    const g = guard(
+      this.db,
+      "SELECT EXISTS(SELECT 1 FROM workflow_executions WHERE workspace_id=? AND id=? AND node_id=? AND status='waiting')",
+      [this.workspace, row.execution_id, row.node_id],
+    );
+    await transaction(this.db, [
+      g.start,
+      this.db
+        .prepare(
+          "UPDATE workflow_approvals SET status='decided',decision=?,comment=?,decided_by=?,decided_at=? WHERE workspace_id=? AND id=? AND status='open'",
+        )
+        .bind(decision, comment ?? null, user, Date.now(), this.workspace, id),
+      this.db
+        .prepare(
+          "UPDATE workflow_executions SET status='queued',wake_at=0,attempts=0 WHERE workspace_id=? AND id=?",
+        )
+        .bind(this.workspace, row.execution_id),
+      g.end,
+    ]);
   }
   async resolveTask(id: string, user: string) {
     const result = await this.db

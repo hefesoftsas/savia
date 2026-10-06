@@ -15,10 +15,12 @@ import { fail } from "../context";
 import { workflowResumeAt } from "@savia/studio-shared/workflows";
 import { workflowTaskNotice } from "../notifications/collection-events";
 import { historyDatabase } from "../record-history-storage";
+import { cronNextOccurrence } from "@savia/studio-shared/workflow-cron";
 import {
   evaluateWorkflowCondition,
   loopBodyMembers,
   matchWorkflowSwitchCase,
+  parallelRegions,
   resolveWorkflowValue,
   workflowDefinitionSchema,
   type LoopHead,
@@ -62,6 +64,22 @@ async function schedule(db: D1Database, now: number) {
       JSON.parse(row.published_definition),
     );
     if (definition.trigger.type !== "schedule") continue;
+    let following: number | null;
+    try {
+      following =
+        definition.trigger.cron !== undefined
+          ? cronNextOccurrence(
+              definition.trigger.cron,
+              Math.max(row.next_run_at, now),
+            )
+          : Math.max(
+              row.next_run_at + definition.trigger.intervalMinutes! * 60000,
+              now + definition.trigger.intervalMinutes! * 60000,
+            );
+    } catch {
+      continue;
+    }
+    if (following === null) continue;
     const g = guard(
       db,
       "SELECT enabled=1 AND next_run_at=? AND published_version=? FROM workflows WHERE workspace_id=? AND id=?",
@@ -94,14 +112,7 @@ async function schedule(db: D1Database, now: number) {
           .prepare(
             "UPDATE workflows SET next_run_at=? WHERE workspace_id=? AND id=?",
           )
-          .bind(
-            Math.max(
-              row.next_run_at + definition.trigger.intervalMinutes * 60000,
-              now + definition.trigger.intervalMinutes * 60000,
-            ),
-            row.workspace_id,
-            row.id,
-          ),
+          .bind(following, row.workspace_id, row.id),
         g.end,
       ]);
     } catch (error) {
@@ -148,7 +159,7 @@ export async function processWorkflows(
     notifyTransition(run.workspace_id, run.id);
     let failedNode: WorkflowNode | null = null;
     let failedContext: WorkflowContext | null = null;
-    let failedMeta: LoopMeta | null = null;
+    let failedMeta: GraphMeta | null = null;
     try {
       if (
         !(await authorize({
@@ -167,6 +178,7 @@ export async function processWorkflows(
       }
       const context = JSON.parse(run.context) as WorkflowContext;
       const pending = context.calls ?? [];
+      const currentId = context.branches?.[0] ?? run.node_id;
       const ownerVersion = pending.length
         ? pending[pending.length - 1].version
         : run.version_id;
@@ -181,7 +193,7 @@ export async function processWorkflows(
         JSON.parse(version.definition),
       );
       await new WorkflowRepository(db, run.workspace_id).validate(definition);
-      const node = definition.nodes.find((n) => n.id === run.node_id);
+      const node = definition.nodes.find((n) => n.id === currentId);
       if (!node) {
         if (!pending.length) {
           await db
@@ -237,7 +249,7 @@ export async function processWorkflows(
       }
       failedNode = node;
       failedContext = context;
-      failedMeta = loopMetaFor(definition);
+      failedMeta = graphMetaFor(definition);
       if (node.type === "webhook")
         await executeWebhookNode(
           db,
@@ -320,7 +332,9 @@ type LoopMeta = {
   sets: Map<string, Set<string>>;
   owner: Map<string, string>;
 };
-function loopMetaFor(definition: WorkflowDefinition): LoopMeta {
+type ParallelMeta = ReturnType<typeof parallelRegions>;
+type GraphMeta = { loops: LoopMeta; parallel: ParallelMeta };
+function graphMetaFor(definition: WorkflowDefinition): GraphMeta {
   const heads = new Map<string, LoopHead>(),
     sets = new Map<string, Set<string>>(),
     owner = new Map<string, string>();
@@ -332,7 +346,60 @@ function loopMetaFor(definition: WorkflowDefinition): LoopMeta {
     for (const member of members)
       if (!owner.has(member)) owner.set(member, node.id);
   }
-  return { heads, sets, owner };
+  return {
+    loops: { heads, sets, owner },
+    parallel: parallelRegions(definition),
+  };
+}
+
+/**
+ * Synchronous parallel routing for a completing step. Null branches/merges
+ * mean omit the key. The merge barrier counts down in context instead of
+ * reading jobs: each branch end decrements its merge counter, and the join
+ * enters the active set at zero. The current node's own job commits in the
+ * same transaction, so an end counts itself as done.
+ */
+function routeParallelFinish(
+  regions: ParallelMeta,
+  context: WorkflowContext,
+  node: WorkflowNode,
+  next: string | null,
+): {
+  branches: string[] | null;
+  merges: Record<string, number> | null;
+  next: string | null;
+} {
+  if (node.type === "parallel") {
+    const region = regions.regions.get(node.id);
+    if (!region || !region.merge || region.branches.length === 0)
+      return { branches: null, merges: null, next };
+    return {
+      branches: [...region.branches],
+      merges: { ...(context.merges ?? {}), [region.merge]: region.ends.length },
+      next: region.branches[0],
+    };
+  }
+  if (node.type === "merge" || (context.branches?.length ?? 0) === 0)
+    return { branches: null, merges: null, next };
+  const active = (context.branches ?? []).filter((id) => id !== node.id);
+  const merges = { ...(context.merges ?? {}) };
+  const owner = regions.owner.get(node.id);
+  if (owner && next !== null) {
+    const region = regions.regions.get(owner);
+    if (region?.merge && next === region.merge) {
+      const left = (merges[region.merge] ?? 1) - 1;
+      if (left <= 0) {
+        delete merges[region.merge];
+        return { branches: [...active, region.merge], merges, next };
+      }
+      merges[region.merge] = left;
+      return { branches: active, merges, next };
+    }
+    active.push(next);
+    return { branches: active, merges, next };
+  }
+  if (next !== null) active.push(next);
+  return { branches: active, merges, next };
 }
 
 /**
@@ -348,7 +415,7 @@ async function continueAfterError(
   token: string,
   now: number,
   message: string,
-  meta: LoopMeta | null,
+  meta: GraphMeta | null,
 ) {
   let target = defaultContinueTarget(node);
   let loops: Record<string, { index: number; delayed?: boolean }> = {
@@ -358,16 +425,24 @@ async function continueAfterError(
   let steps = { ...context.steps, [node.id]: { error: message } };
   let returned = context.returned;
   let calls = context.calls;
-  const owner = meta?.owner.get(node.id);
+  const owner = meta?.loops.owner.get(node.id);
   if (node.type === "loop") {
     delete loops[node.id];
   } else if (owner && loops[owner] !== undefined) {
     // A failed body step keeps iterating when its default edge stays inside
     // the body; leaving the body abandons the loop at the break edge.
-    if (target === null || !meta!.sets.get(owner)!.has(target)) {
-      if (target === null) target = meta!.heads.get(owner)!.next ?? null;
+    if (target === null || !meta!.loops.sets.get(owner)!.has(target)) {
+      if (target === null) target = meta!.loops.heads.get(owner)!.next ?? null;
       delete loops[owner];
     }
+  }
+  let branches = context.branches;
+  let merges = context.merges;
+  if (node.type !== "parallel" && meta) {
+    const routing = routeParallelFinish(meta.parallel, context, node, target);
+    target = routing.next;
+    branches = routing.branches ?? undefined;
+    merges = routing.merges ?? undefined;
   }
   if (target === null && (calls?.length ?? 0) > 0) {
     // Continuing past a chain end inside a subflow returns partial results.
@@ -377,6 +452,8 @@ async function continueAfterError(
     steps = { ...frame.saved.steps, [frame.returnNode]: output };
     returned = { ...(frame.saved.returned ?? {}), [frame.returnNode]: output };
     loops = { ...(frame.saved.loops ?? {}) };
+    branches = frame.saved.branches;
+    merges = frame.saved.merges;
     calls = calls!.slice(0, -1);
     target = frame.returnNode;
   }
@@ -386,6 +463,8 @@ async function continueAfterError(
     ...(Object.keys(loops).length > 0 ? { loops } : {}),
     ...(returned ? { returned } : {}),
     ...(calls ? { calls } : {}),
+    ...(branches?.length ? { branches } : {}),
+    ...(merges && Object.keys(merges).length > 0 ? { merges } : {}),
   };
   const g = guard(
     db,
@@ -427,9 +506,9 @@ async function continueAfterError(
         "UPDATE workflow_executions SET node_id=?,context=?,status=?,wake_at=0,attempts=0,error=NULL,lease_token=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=?",
       )
       .bind(
-        target,
+        branches?.length ? branches[0] : target,
         json(updated),
-        target ? "queued" : "completed",
+        branches?.length || target ? "queued" : "completed",
         run.workspace_id,
         run.id,
       ),
@@ -444,7 +523,7 @@ async function executeNode(
   context: WorkflowContext,
   token: string,
   now: number,
-  meta: LoopMeta,
+  meta: GraphMeta,
   webhooks: WebhookDependencies = {},
   pieces: WorkflowPieceHandler[] = resolveWorkflowPieces(),
 ) {
@@ -470,17 +549,17 @@ async function executeNode(
     | { id: string; drop: true }
     | null = null;
   const finish = (output: unknown, unmark?: string) => {
-    const owner = meta.owner.get(node.id);
+    const owner = meta.loops.owner.get(node.id);
     const active = owner ? context.loops?.[owner] : undefined;
     if (owner && active !== undefined && frameOp === null) {
-      const members = meta.sets.get(owner)!;
+      const members = meta.loops.sets.get(owner)!;
       if (next === null) {
         if (node.type === "delay" && !active.delayed) {
           // Wait first; the resume pass iterates. The frame stays.
           next = node.id;
           frameOp = { id: owner, index: active.index, delayed: true };
         } else {
-          const head = meta.heads.get(owner)!;
+          const head = meta.loops.heads.get(owner)!;
           const raw = resolveWorkflowValue(head.items, context);
           if (!Array.isArray(raw))
             throw new Error("Loop source changed during iteration");
@@ -498,6 +577,8 @@ async function executeNode(
         frameOp = { id: owner, drop: true };
       }
     }
+    const parallel = routeParallelFinish(meta.parallel, context, node, next);
+    next = parallel.next;
     const returning = next === null && (context.calls?.length ?? 0) > 0;
     if (returning && node.type === "delay") {
       // Wait first; the resume pass returns. The call stack stays.
@@ -519,6 +600,8 @@ async function executeNode(
       steps: { ...context.steps, [node.id]: output },
       ...(Object.keys(loops).length > 0 ? { loops } : {}),
       ...(unmark ? { returned } : {}),
+      branches: parallel.branches ?? undefined,
+      merges: parallel.merges ?? undefined,
     };
     if (json(updated).length > 256000)
       throw new Error("Execution context exceeds 256 KB");
@@ -544,11 +627,11 @@ async function executeNode(
           "UPDATE workflow_executions SET node_id=?,context=?,status=?,wake_at=?,attempts=0,error=NULL,lease_token=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=?",
         )
         .bind(
-          next,
+          parallel.branches?.length ? parallel.branches[0] : next,
           json(updated),
           node.type === "delay"
             ? "waiting"
-            : next !== null || returning
+            : parallel.branches?.length || next !== null || returning
               ? "queued"
               : "completed",
           node.type === "delay" ? workflowResumeAt(node, context, now) : 0,
@@ -740,6 +823,130 @@ async function executeNode(
     case "transform":
       output = mapped(node.values);
       break;
+    case "parallel": {
+      const region = meta.parallel.regions.get(node.id);
+      output = {
+        branches: region?.branches ?? [],
+        count: region?.branches.length ?? 0,
+      };
+      break;
+    }
+    case "merge": {
+      const ends =
+        [...meta.parallel.regions.values()].find(
+          (region) => region.merge === node.id,
+        )?.ends ?? [];
+      output = {
+        branches: Object.fromEntries(
+          ends.map((end) => [end, context.steps[end]]),
+        ),
+        count: ends.length,
+      };
+      break;
+    }
+    case "approval": {
+      const title = value(node.title),
+        assignee = value(node.assignee);
+      if (
+        typeof title !== "string" ||
+        !title.trim() ||
+        title.length > 500 ||
+        typeof assignee !== "string" ||
+        !assignee ||
+        assignee.length > 200
+      )
+        throw new Error("Approval requires a title and assignee");
+      const description =
+        node.description === undefined ? null : value(node.description);
+      if (description !== null && typeof description !== "string")
+        throw new Error("Approval description must be text");
+      const loopOwner = meta.loops.owner.get(node.id);
+      const iteration = loopOwner
+        ? (context.loops?.[loopOwner]?.index ?? 0)
+        : 0;
+      const dueAt = now + node.dueDays * 86400000;
+      const request = await db
+        .prepare(
+          "SELECT * FROM workflow_approvals WHERE workspace_id=? AND execution_id=? AND node_id=? AND iteration=?",
+        )
+        .bind(run.workspace_id, run.id, node.id, iteration)
+        .first<{
+          id: string;
+          title: string;
+          assignee: string;
+          status: string;
+          decision: string | null;
+          comment: string | null;
+          decided_by: string | null;
+          decided_at: number | null;
+          due_at: number;
+        }>();
+      const suspend = (wakeAt: number) =>
+        db
+          .prepare(
+            "UPDATE workflow_executions SET node_id=?,status='waiting',wake_at=?,attempts=0,error=NULL,lease_token=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=?",
+          )
+          .bind(node.id, wakeAt, run.workspace_id, run.id);
+      if (!request) {
+        const id = crypto.randomUUID();
+        await transaction(db, [
+          g.start,
+          db
+            .prepare(
+              "INSERT INTO workflow_approvals(workspace_id,id,execution_id,node_id,title,assignee,due_at,iteration) VALUES (?,?,?,?,?,?,?,?)",
+            )
+            .bind(
+              run.workspace_id,
+              id,
+              run.id,
+              node.id,
+              title,
+              assignee,
+              dueAt,
+              iteration,
+            ),
+          suspend(dueAt),
+          g.end,
+        ]);
+        return;
+      }
+      if (request.status === "open") {
+        if (now < request.due_at) {
+          await transaction(db, [g.start, suspend(request.due_at), g.end]);
+          return;
+        }
+        next = node.otherwise ?? null;
+        await transaction(db, [
+          g.start,
+          db
+            .prepare(
+              "UPDATE workflow_approvals SET status='expired' WHERE workspace_id=? AND id=? AND status='open'",
+            )
+            .bind(run.workspace_id, request.id),
+          ...finish({
+            decision: "expired",
+            by: null,
+            comment: null,
+            decidedAt: null,
+          }),
+        ]);
+        return;
+      }
+      output = {
+        decision: request.decision,
+        by: request.decided_by,
+        comment: request.comment,
+        decidedAt:
+          request.decided_at != null
+            ? new Date(request.decided_at).toISOString()
+            : null,
+      };
+      next =
+        request.decision === "approved"
+          ? (node.next ?? null)
+          : (node.otherwise ?? null);
+      break;
+    }
     case "piece": {
       const piece = findWorkflowPiece(pieces, node.pieceId, node.pieceVersion);
       output = await executeWorkflowPiece(piece, node.config ?? {}, value, {
@@ -1000,7 +1207,7 @@ async function executeNode(
       )
         throw new Error("Task requires a title and assignee");
       const id = crypto.randomUUID();
-      const loopOwner = meta.owner.get(node.id);
+      const loopOwner = meta.loops.owner.get(node.id);
       const iteration = loopOwner
         ? (context.loops?.[loopOwner]?.index ?? 0)
         : 0;

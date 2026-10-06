@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cronNextOccurrence } from "./workflow-cron";
 import { reservedHeaderName } from "./workflow-webhooks";
 
 function httpsLiteralOk(raw: string): boolean {
@@ -219,6 +220,29 @@ export const workflowNodeSchema = z.discriminatedUnion("type", [
   z
     .object({
       ...base,
+      type: z.literal("approval"),
+      title: workflowValueSchema,
+      assignee: workflowValueSchema,
+      description: workflowValueSchema.optional(),
+      dueDays: z.number().int().min(0).max(365).default(1),
+      otherwise: key.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      type: z.literal("parallel"),
+      branches: z.array(key).min(2).max(8),
+    })
+    .strict()
+    .refine((node) => node.next === undefined, {
+      message: "Parallel uses branches, not next",
+      path: ["next"],
+    }),
+  z.object({ ...base, type: z.literal("merge") }).strict(),
+  z
+    .object({
+      ...base,
       type: z.literal("http"),
       method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("GET"),
       url: workflowValueSchema,
@@ -399,10 +423,33 @@ const trigger = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("schedule"),
-      intervalMinutes: z.number().int().min(1).max(525600),
+      intervalMinutes: z.number().int().min(1).max(525600).optional(),
+      cron: z.string().trim().min(1).max(100).optional(),
       startAt: z.iso.datetime(),
     })
-    .strict(),
+    .strict()
+    .superRefine((trigger, ctx) => {
+      const mode = [
+        trigger.intervalMinutes !== undefined,
+        trigger.cron !== undefined,
+      ].filter(Boolean).length;
+      if (mode !== 1)
+        ctx.addIssue({
+          code: "custom",
+          message: "Schedule needs either an interval or a cron expression",
+        });
+      if (trigger.cron !== undefined) {
+        try {
+          if (cronNextOccurrence(trigger.cron, Date.now()) === null)
+            ctx.addIssue({
+              code: "custom",
+              message: "Cron expression never occurs",
+            });
+        } catch {
+          ctx.addIssue({ code: "custom", message: "Invalid cron expression" });
+        }
+      }
+    }),
 ]);
 
 function references(value: unknown): string[] {
@@ -440,12 +487,15 @@ export const workflowDefinitionSchema = z
       }
       visiting.add(id);
       const outgoing: (string | undefined)[] = [node.next];
-      if (node.type === "condition") outgoing.push(node.otherwise);
+      if (node.type === "condition" || node.type === "approval")
+        outgoing.push(node.otherwise);
       if (node.type === "switch") {
         for (const entry of node.cases) outgoing.push(entry.next);
         outgoing.push(node.otherwise);
       }
       if (node.type === "loop") outgoing.push(node.body);
+      if (node.type === "parallel")
+        for (const entry of node.branches) outgoing.push(entry);
       for (const next of outgoing) {
         if (!next) continue;
         predecessors.set(next, [...(predecessors.get(next) ?? []), id]);
@@ -463,10 +513,14 @@ export const workflowDefinitionSchema = z
       const parents = (predecessors.get(id) ?? []).map(
         (parent) => new Set([parent, ...(dominators.get(parent) ?? [])]),
       );
-      const available = new Set(parents[0] ?? []);
-      for (const candidate of available)
-        if (!parents.every((p) => p.has(candidate)))
-          available.delete(candidate);
+      const available =
+        nodes.get(id)?.type === "merge"
+          ? new Set(parents.flatMap((parent) => [...parent]))
+          : new Set(parents[0] ?? []);
+      if (nodes.get(id)?.type !== "merge")
+        for (const candidate of available)
+          if (!parents.every((p) => p.has(candidate)))
+            available.delete(candidate);
       dominators.set(id, available);
       for (const ref of references(nodes.get(id))) {
         if (ref.startsWith("steps.") && !available.has(ref.split(".")[1]))
@@ -509,10 +563,181 @@ export const workflowDefinitionSchema = z
           issue(`Step ${member} jumps into loop ${head.id}`);
       }
     }
+    const parallel = parallelRegions(definition);
+    for (const node of definition.nodes) {
+      if (node.type !== "merge") continue;
+      if (
+        ![...parallel.regions.values()].some(
+          (region) => region.merge === node.id,
+        )
+      )
+        issue(`Merge ${node.id} does not join any parallel branches`);
+    }
+    for (const [headId, region] of parallel.regions) {
+      for (const error of region.errors) issue(error);
+      if (!region.merge) continue;
+      for (const parent of predecessors.get(region.merge) ?? []) {
+        if (!region.ends.includes(parent))
+          issue(`Step ${region.merge} only joins parallel ${headId}`);
+      }
+      for (const member of region.members) {
+        const outsiders = (predecessors.get(member) ?? []).filter(
+          (parent) => parent !== headId && !region.members.has(parent),
+        );
+        if (outsiders.length > 0)
+          issue(`Step ${member} jumps into parallel ${headId}`);
+      }
+    }
+    for (const head of definition.nodes) {
+      if (head.type !== "loop") continue;
+      const body = loopBodyMembers(definition, head.id);
+      const looped = new Set([head.id, ...body.members]);
+      const clash = [...parallel.owner.keys()].some((id) => looped.has(id));
+      const parallelClash = [...parallel.heads.keys()].some(
+        (id) =>
+          looped.has(id) ||
+          (parallel.regions.get(id)?.merge &&
+            looped.has(parallel.regions.get(id)!.merge!)),
+      );
+      if (clash || parallelClash)
+        issue(`Loop ${head.id} cannot nest parallel branches`);
+    }
     if (JSON.stringify(definition).length > 64_000)
       issue("Workflow definition is too large");
   });
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
+
+export type ParallelHead = Extract<
+  WorkflowDefinition["nodes"][number],
+  { type: "parallel" }
+>;
+export type ParallelRegion = {
+  /** Branch entries in declaration order. */
+  branches: string[];
+  /** The single merge every branch ends at. Empty when invalid. */
+  merge: string | null;
+  /** Last node of each branch (whose next is the merge). */
+  ends: string[];
+  /** Every node enclosed by the branches, entries included. */
+  members: Set<string>;
+  /** Structural problems; the caller turns them into issues. */
+  errors: string[];
+};
+const LINEAR_BRANCH_TYPES = new Set([
+  "transform",
+  "map",
+  "query",
+  "create",
+  "update",
+  "bulkUpdate",
+  "task",
+  "notification",
+  "delay",
+  "webhook",
+  "http",
+  "piece",
+  "approval",
+]);
+/**
+ * Statically enclosed parallel region: straight-line branches from each
+ * entry to a common merge. Always terminates; invalid graphs yield errors
+ * instead of members.
+ */
+export function parallelRegion(
+  definition: WorkflowDefinition,
+  headId: string,
+): ParallelRegion {
+  const empty: ParallelRegion = {
+    branches: [],
+    merge: null,
+    ends: [],
+    members: new Set(),
+    errors: [],
+  };
+  const head = definition.nodes.find((node) => node.id === headId);
+  if (!head || head.type !== "parallel") return empty;
+  const byId = new Map<string, WorkflowNode>(
+    definition.nodes.map((node) => [node.id, node]),
+  );
+  const branches = [...new Set(head.branches)];
+  if (branches.length !== head.branches.length)
+    return { ...empty, errors: [`Parallel ${headId} repeats a branch`] };
+  if (branches.some((entry) => entry === headId))
+    return { ...empty, errors: [`Parallel ${headId} cannot branch to itself`] };
+  const members = new Set<string>(),
+    ends: string[] = [];
+  let merge: string | null = null;
+  for (const entry of branches) {
+    const chain = new Set<string>();
+    let current: string | undefined = entry;
+    for (;;) {
+      const node: WorkflowNode | undefined = current
+        ? byId.get(current)
+        : undefined;
+      if (!node) break;
+      if (node.id === headId || chain.has(node.id)) {
+        return {
+          ...empty,
+          errors: [`Parallel ${headId} branches cannot cycle`],
+        };
+      }
+      if (node.type === "merge") {
+        if (merge === null) merge = node.id;
+        if (node.id !== merge)
+          return {
+            ...empty,
+            errors: [`Parallel ${headId} branches must join at one merge`],
+          };
+        break;
+      }
+      if (!LINEAR_BRANCH_TYPES.has(node.type))
+        return {
+          ...empty,
+          errors: [`Step ${node.id} cannot run inside parallel branches yet`],
+        };
+      chain.add(node.id);
+      if (members.has(node.id))
+        return {
+          ...empty,
+          errors: [`Parallel ${headId} branches must not share steps`],
+        };
+      members.add(node.id);
+      if (node.next === undefined)
+        return {
+          ...empty,
+          errors: [`Parallel ${headId} branches must end at the merge`],
+        };
+      current = node.next;
+    }
+    const last = [...chain].pop();
+    if (last === undefined || merge === null)
+      return {
+        ...empty,
+        errors: [`Parallel ${headId} branches must end at the merge`],
+      };
+    ends.push(last);
+  }
+  return { branches, merge, ends, members, errors: [] };
+}
+/** All regions by head id. Later heads win overlapping members defensively. */
+export function parallelRegions(definition: WorkflowDefinition): {
+  heads: Map<string, ParallelHead>;
+  regions: Map<string, ParallelRegion>;
+  owner: Map<string, string>;
+} {
+  const heads = new Map<string, ParallelHead>(),
+    regions = new Map<string, ParallelRegion>(),
+    owner = new Map<string, string>();
+  for (const node of definition.nodes) {
+    if (node.type !== "parallel") continue;
+    heads.set(node.id, node);
+    const region = parallelRegion(definition, node.id);
+    regions.set(node.id, region);
+    for (const member of region.members)
+      if (!owner.has(member)) owner.set(member, node.id);
+  }
+  return { heads, regions, owner };
+}
 
 export type LoopHead = Extract<
   WorkflowDefinition["nodes"][number],
@@ -563,7 +788,10 @@ export function loopBodyMembers(
     if (node.type === "webhook" && !webhooks.includes(id)) webhooks.push(id);
     members.add(id);
     const outgoing: (string | undefined)[] = [node.next];
-    if (node.type === "condition") outgoing.push(node.otherwise);
+    if (node.type === "condition" || node.type === "approval")
+      outgoing.push(node.otherwise);
+    if (node.type === "parallel")
+      for (const entry of node.branches) outgoing.push(entry);
     if (node.type === "switch") {
       for (const entry of node.cases) outgoing.push(entry.next);
       outgoing.push(node.otherwise);
@@ -595,6 +823,10 @@ export type WorkflowContext = {
   loops?: Record<string, { index: number; delayed?: boolean }>;
   /** Pending subflow calls, innermost last. Runtime-managed. */
   calls?: WorkflowCall[];
+  /** Pending parallel branch nodes. Empty or absent means single flow. */
+  branches?: string[];
+  /** Remaining branch ends per merge barrier. Runtime-managed. */
+  merges?: Record<string, number>;
   /** Completed subflow results awaiting pickup. Runtime-managed. */
   returned?: Record<string, unknown>;
 };

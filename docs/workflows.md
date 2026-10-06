@@ -17,7 +17,9 @@ Open **Build → Workflows** in the sidebar, or the **Flujos de trabajo** tab in
 5. Run manual workflows from the editor, or wait for the event/schedule. Inspect
    the execution list and expand each completed step to see its result.
 
-Native steps: condition, subflow calls, piece actions from the reviewed
+Native steps: condition, approval with assignee decision, parallel branches
+with a merge join, subflow calls,
+piece actions from the reviewed
 catalog, switch (up to 10 ordered cases plus default branch),
 transform, map over a referenced list (up to 100 items), bulk update of a
 referenced record list (up to 100 records), loop over a referenced list with
@@ -157,6 +159,19 @@ webhooks. Existing definitions require no rewrite. Preview runs a workflow-only
 scheduler once per minute. Other hosts with cron disabled need an intentional
 scheduler tick.
 
+## Scheduled runs
+
+A **Programación** trigger fires either every fixed interval in minutes or
+on a UTC cron expression (five fields: minute, hour, day of month, month,
+day of week; values, lists, ranges and steps plus `JAN`–`DEC`/`SUN`–`SAT`
+names; no seconds or years). Days of month and week follow the standard OR
+rule. `startAt` is the earliest fire time in both modes. Missed occurrences
+coalesce into one run and the next due time advances past the present, so an
+outage never replays an unbounded backlog. An expression that parses but
+never occurs (such as February 30th) is rejected at publication. The input
+carries `trigger.scheduledAt`; scheduling granularity is one tick, normally
+one minute.
+
 ## Persistence, recovery and authorization
 
 - Definitions, published versions, events, executions, jobs and inbox items live in D1.
@@ -230,11 +245,39 @@ a fixed test identity and must never be deployed or pointed at user data.
 - At most 50 acyclic steps, 50 mappings per step, 100 query results, 64 KB definitions,
   32 KB manual input and 256 KB execution context. Lists show the latest 200 definitions
   or inbox items and 100 executions. Retention/archival tooling is not yet included.
-- Approvals, blocking human tasks, arbitrary cron expressions and parallel
-  branches remain future capabilities. Multi-way routing uses one switch
-  instead of chained true/false steps; reusable logic uses subflows instead
-  of duplicated branches; external services arrive as catalog pieces instead
-  of inline secrets.
+- Arbitrary DAG branches remain future
+  capabilities. Multi-way routing uses one switch instead of chained
+  true/false steps; reusable logic uses subflows instead of duplicated
+  branches; external services arrive as catalog pieces instead of inline
+  secrets.
+
+## Parallel branches
+
+A **Ramas paralelas** step fans out into 2–8 straight-line branches that
+run interleaved, and **Unir ramas** waits for every branch before
+continuing with their combined outputs in `steps.<id>.branches`. Each
+branch is a straight line of single steps to the same merge: no
+conditions, loops, subflows, nested parallels or jumps in or out. A branch
+failure fails the execution; per-step error continuation stays inside its
+branch. Steps after the merge can reference any branch result, since every
+branch always runs exactly once. Waiting steps (delays, approvals, webhook
+retries) pause the whole execution until they resume. Loops and parallel
+regions cannot nest in either direction.
+
+## Human approvals
+
+An **Aprobación** step suspends the execution until one assigned user
+approves or rejects it from the workflow inbox, or until its due date
+passes. Approval continues on the approved branch; rejection and expiry
+take the other branch, with `{ decision, by, comment, decidedAt }`
+available downstream (`expired` carries nulls). Only the assignee can
+decide, even within a workspace; a second or late response is rejected
+instead of resuming twice. Expiry is computed by the normal scheduler
+tick, so it has scheduler granularity like delays. Retrying a suspended
+approval reuses its inbox item instead of duplicating it, and cancelling
+the execution voids later decisions. Approval tasks do not post personal
+notices; the inbox entry is the channel. A task step still never waits —
+use an approval when the flow must block for a human.
 
 ## Generic HTTPS requests
 
@@ -270,12 +313,14 @@ mistyped references fail the execution visibly. Outputs are available as
 records a debugging message in the execution history.
 
 Optional solution packages contribute pieces through `WorkflowOptions`
-(`workflowPieces`); descriptors are validated, custom pieces override
-built-ins only on exact id and version, and execution receives scoped
-services (workspace database, owner, execution identity, fetch, clock) —
-never raw user credentials. Pieces run in-process as trusted reviewed code:
-they must be idempotent or guard their own side effects, and they must not
-retain personal data beyond their declared outputs.
+(`workflowPieces`); descriptors are schema-validated at registration,
+custom pieces override built-ins only on exact id and version, and execution
+receives scoped services (workspace database, owner, execution identity,
+fetch, clock) — never raw user credentials. Pieces run in-process as
+trusted reviewed code: they must be idempotent or guard their own side
+effects, and they must not retain personal data beyond their declared
+outputs. A newer catalog version never moves existing pins; the editor
+offers adopting it per step, and publishing revalidates the config.
 
 ## Subflows (reusable flows)
 

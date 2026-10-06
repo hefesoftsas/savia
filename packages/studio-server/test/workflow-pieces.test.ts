@@ -93,6 +93,31 @@ describe("catalog piece actions", () => {
     expect(() => findWorkflowPiece(resolved, "missing", 1)).toThrow();
   });
 
+  it("rejects malformed custom pieces at registration", () => {
+    expect(() =>
+      resolveWorkflowPieces([
+        {
+          descriptor: { id: "Bad!", version: 1 } as never,
+          execute: async () => ({}),
+        },
+      ]),
+    ).toThrow();
+    expect(() =>
+      resolveWorkflowPieces([
+        {
+          descriptor: {
+            id: "no-handler",
+            version: 1,
+            label: "No handler",
+            inputs: [],
+            outputs: [],
+          },
+          execute: undefined as never,
+        },
+      ]),
+    ).toThrow();
+  });
+
   it("runs the log piece and records its message", async () => {
     const { repo, id } = await published(
       manual([

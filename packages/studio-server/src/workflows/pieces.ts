@@ -52,14 +52,15 @@ export function builtinWorkflowPieceDescriptors(): WorkflowPiece[] {
 export function resolveWorkflowPieceDescriptors(
   custom: readonly WorkflowPiece[] = [],
 ): WorkflowPiece[] {
+  const parsed = custom.map((piece) => workflowPieceSchema.parse(piece));
   const overridden = new Set(
-    custom.map((piece) => `${piece.id}:${piece.version}`),
+    parsed.map((piece) => `${piece.id}:${piece.version}`),
   );
   return [
     ...builtinWorkflowPieceDescriptors().filter(
       (piece) => !overridden.has(`${piece.id}:${piece.version}`),
     ),
-    ...custom,
+    ...parsed,
   ];
 }
 
@@ -67,6 +68,14 @@ export function resolveWorkflowPieceDescriptors(
 export function resolveWorkflowPieces(
   custom: readonly WorkflowPieceHandler[] = [],
 ): WorkflowPieceHandler[] {
+  const parsed = custom.map((piece) => {
+    if (typeof piece.execute !== "function")
+      fail("Piece is missing its handler", 422);
+    return {
+      execute: piece.execute,
+      descriptor: workflowPieceSchema.parse(piece.descriptor),
+    };
+  });
   const overridden = new Set(
     custom.map((piece) => `${piece.descriptor.id}:${piece.descriptor.version}`),
   );
@@ -75,7 +84,7 @@ export function resolveWorkflowPieces(
       (piece) =>
         !overridden.has(`${piece.descriptor.id}:${piece.descriptor.version}`),
     ),
-    ...custom,
+    ...parsed,
   ];
 }
 

@@ -30,9 +30,12 @@ type EdgeText = {
   start: string;
   yes: string;
   no: string;
+  approved: string;
+  rejected: string;
   defect: string;
   body: string;
   stepCase: (index: number) => string;
+  branch: (index: number) => string;
 };
 
 function edgePairs(definition: WorkflowDefinition): [string, string][] {
@@ -42,13 +45,15 @@ function edgePairs(definition: WorkflowDefinition): [string, string][] {
   if (first) pairs.push([TRIGGER_NODE_ID, first]);
   for (const node of definition.nodes) {
     const targets: (string | undefined)[] =
-      node.type === "condition"
+      node.type === "condition" || node.type === "approval"
         ? [node.next, node.otherwise]
-        : node.type === "switch"
-          ? [...node.cases.map((entry) => entry.next), node.otherwise]
-          : node.type === "loop"
-            ? [node.body, node.next]
-            : [node.next];
+        : node.type === "parallel"
+          ? node.branches
+          : node.type === "switch"
+            ? [...node.cases.map((entry) => entry.next), node.otherwise]
+            : node.type === "loop"
+              ? [node.body, node.next]
+              : [node.next];
     for (const target of targets)
       if (target && ids.has(target)) pairs.push([node.id, target]);
   }
@@ -112,6 +117,9 @@ export function buildWorkflowEdges(
     if (node.type === "condition") {
       push(node.id, node.next, "next", text.yes);
       push(node.id, node.otherwise, "otherwise", text.no);
+    } else if (node.type === "approval") {
+      push(node.id, node.next, "next", text.approved);
+      push(node.id, node.otherwise, "otherwise", text.rejected);
     } else if (node.type === "switch") {
       node.cases.forEach((entry, index) =>
         push(node.id, entry.next, `case:${index}`, text.stepCase(index + 1)),
@@ -120,15 +128,21 @@ export function buildWorkflowEdges(
     } else if (node.type === "loop") {
       push(node.id, node.body, "body", text.body);
       push(node.id, node.next, "next");
+    } else if (node.type === "parallel") {
+      node.branches.forEach((entry, index) =>
+        push(node.id, entry, `branch:${index}`, text.branch(index + 1)),
+      );
     } else if (node.next) {
       push(node.id, node.next, "next");
     }
   }
   return edges;
 }
-
 function sourceHandles(node: WorkflowNode): { id: string; label?: string }[] {
-  if (node.type === "condition") return [{ id: "next" }, { id: "otherwise" }];
+  if (node.type === "condition" || node.type === "approval")
+    return [{ id: "next" }, { id: "otherwise" }];
+  if (node.type === "parallel")
+    return node.branches.map((_, index) => ({ id: `branch:${index}` }));
   if (node.type === "switch")
     return [
       ...node.cases.map((_, index) => ({ id: `case:${index}` })),
@@ -144,7 +158,7 @@ export function connectStepTarget(
   sourceHandle: string | null | undefined,
   target: string,
 ): WorkflowNode | null {
-  if (node.type === "condition")
+  if (node.type === "condition" || node.type === "approval")
     return {
       ...node,
       ...(sourceHandle === "otherwise"
@@ -168,6 +182,15 @@ export function connectStepTarget(
       ...node,
       ...(sourceHandle === "body" ? { body: target } : { next: target }),
     };
+  if (node.type === "parallel") {
+    const match = /^branch:(\d+)$/.exec(sourceHandle ?? "");
+    if (!match || !node.branches[Number(match[1])]) return null;
+    const index = Number(match[1]);
+    return {
+      ...node,
+      branches: node.branches.map((entry, i) => (i === index ? target : entry)),
+    };
+  }
   return { ...node, next: target };
 }
 
@@ -292,9 +315,12 @@ export default function WorkflowCanvas({
     start: t("Inicio"),
     yes: t("Sí"),
     no: t("No"),
+    approved: t("Aprobado"),
+    rejected: t("Rechazado"),
     defect: t("Defecto"),
     body: t("Cuerpo"),
     stepCase: (index: number) => t("Caso %{value0}", { value0: index }),
+    branch: (index: number) => t("Rama %{value0}", { value0: index }),
   };
   const auto = useMemo(() => layoutWorkflow(definition), [definition]);
   const nodes = useMemo<Node[]>(() => {
