@@ -195,6 +195,9 @@ details or claiming a handoff occurred. Tenant administrators can set the option
 **Contacto de atención humana** field in WhatsApp task-menu settings to a phone
 number or HTTPS support link. The backend validates and stores it in the scoped
 channel configuration; leaving it empty retains the generic advisor message.
+Changing only this contact preserves selected employees, open menus and pending
+or queued operations. Routing and access configuration changes retain their
+existing invalidation behavior.
 Employees use the current contact when explaining failures, and exhausted
 completion recovery uses the same configured destination before authorized
 dispatch. Tool failures never expose provider

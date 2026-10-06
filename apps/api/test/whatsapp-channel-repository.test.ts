@@ -101,7 +101,10 @@ describe("WhatsApp channel state", () => {
     await s.repo.configure(
       s.tenantId,
       s.connectionId,
-      s.config,
+      {
+        ...s.config,
+        tasks: [{ ...s.config.tasks[0], title: "Updated task label" }],
+      },
       s.principal.id,
     );
     const access = await s.repo.getAccess(s.key);
@@ -109,12 +112,35 @@ describe("WhatsApp channel state", () => {
     expect(
       await s.repo.selectTask(access, "quote", "wrong-revision"),
     ).toBeNull();
-    expect(await s.repo.selectTask(access, "quote", menu.id)).toMatchObject({
-      employeeId: s.employeeId,
-    });
+    const session = (await s.repo.selectTask(access, "quote", menu.id))!;
+    expect(session).toMatchObject({ employeeId: s.employeeId });
     expect(await s.repo.getSession(s.key)).toMatchObject({
       employeeId: s.employeeId,
     });
+    const createdAt = new Date().toISOString();
+    for (const [id, status] of [
+      ["routing-pending", "pending"],
+      ["routing-queued", "queued"],
+    ] as const)
+      await env.DB.prepare(
+        `INSERT INTO whatsapp_channel_actions
+         (id,connection_id,tenant_id,contact,generation,employee_id,selection_revision,
+          action_json,token_hash,status,expires_at,created_at)
+         VALUES(?,?,?,?,?,?,?,'{}','test-hash',?,?,?)`,
+      )
+        .bind(
+          `${id}-${s.tenantId}`,
+          s.connectionId,
+          s.tenantId,
+          s.key.contact,
+          access.generation,
+          session.employeeId,
+          session.selectionRevision,
+          status,
+          new Date(Date.now() + 60_000).toISOString(),
+          createdAt,
+        )
+        .run();
     await s.repo.configure(
       s.tenantId,
       s.connectionId,
@@ -123,6 +149,95 @@ describe("WhatsApp channel state", () => {
     );
     expect(await s.repo.getSession(s.key)).toBeNull();
     expect(await s.repo.selectTask(access, "quote", menu.id)).toBeNull();
+    const actionStatuses = await env.DB.prepare(
+      "SELECT status FROM whatsapp_channel_actions WHERE connection_id=? ORDER BY id",
+    )
+      .bind(s.connectionId)
+      .all<{ status: string }>();
+    expect(actionStatuses.results.map((row) => row.status)).toEqual([
+      "cancelled",
+      "cancelled",
+    ]);
+  });
+
+  it("preserves selected employees, menu revisions, and pending actions when only the support contact changes", async () => {
+    const s = await fixture();
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      s.config,
+      s.principal.id,
+    );
+    const access = await s.repo.getAccess(s.key);
+    const menu = await s.repo.issueMenu(access);
+    const session = (await s.repo.selectTask(access, "quote", menu.id))!;
+    const stillValidMenu = await s.repo.issueMenu(access);
+    const createdAt = new Date().toISOString();
+    for (const [id, status] of [
+      ["support-pending", "pending"],
+      ["support-queued", "queued"],
+    ] as const)
+      await env.DB.prepare(
+        `INSERT INTO whatsapp_channel_actions
+         (id,connection_id,tenant_id,contact,generation,employee_id,selection_revision,
+          action_json,token_hash,status,expires_at,created_at)
+         VALUES(?,?,?,?,?,?,?,'{}','test-hash',?,?,?)`,
+      )
+        .bind(
+          `${id}-${s.tenantId}`,
+          s.connectionId,
+          s.tenantId,
+          s.key.contact,
+          access.generation,
+          session.employeeId,
+          session.selectionRevision,
+          status,
+          new Date(Date.now() + 60_000).toISOString(),
+          createdAt,
+        )
+        .run();
+    const originalRevision = (await s.repo.settings(
+      s.tenantId,
+      s.connectionId,
+    ))!.revision;
+
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      { ...s.config, humanSupportContact: "+57 300 123 4567" },
+      s.principal.id,
+    );
+
+    expect((await s.repo.settings(s.tenantId, s.connectionId))?.revision).toBe(
+      originalRevision,
+    );
+    expect(await s.repo.getSession(s.key)).toMatchObject({
+      employeeId: s.employeeId,
+    });
+    expect(
+      await s.repo.selectTask(access, "quote", stillValidMenu.id),
+    ).toMatchObject({ employeeId: s.employeeId });
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      { ...s.config, humanSupportContact: "+57 300 123 4567" },
+      s.principal.id,
+    );
+    expect((await s.repo.settings(s.tenantId, s.connectionId))?.revision).toBe(
+      originalRevision,
+    );
+    expect(await s.repo.getSession(s.key)).toMatchObject({
+      employeeId: s.employeeId,
+    });
+    const statuses = await env.DB.prepare(
+      "SELECT status FROM whatsapp_channel_actions WHERE connection_id=? ORDER BY id",
+    )
+      .bind(s.connectionId)
+      .all<{ status: string }>();
+    expect(statuses.results.map((row) => row.status).sort()).toEqual([
+      "pending",
+      "queued",
+    ]);
   });
 
   it("does not publish inactive or cross-tenant employees", async () => {
@@ -302,7 +417,7 @@ describe("WhatsApp channel state", () => {
       s.connectionId,
       {
         ...s.config,
-        tasks: [{ ...s.config.tasks[0], title: "Nueva etiqueta" }],
+        tasks: [{ ...s.config.tasks[0], title: "Updated task label" }],
       },
       s.principal.id,
     );
