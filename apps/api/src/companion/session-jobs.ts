@@ -232,11 +232,18 @@ export class CompanionSessionJobs {
                 format: "m4a",
                 source: chunk.source,
                 durationSeconds: chunk.durationSeconds,
+                language:
+                  claimed.job.language === "auto"
+                    ? undefined
+                    : (claimed.job.language ?? "es"),
               })
             : await this.service.transcribe(config, {
                 source: chunk.source,
                 audio: { data: base64, format: "ogg" },
-                language: "es",
+                language:
+                  claimed.job.language === "auto"
+                    ? undefined
+                    : (claimed.job.language ?? "es"),
                 consent: true,
               });
         await this.sessions.writeJob(access, id, (manifest) => {

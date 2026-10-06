@@ -46,27 +46,38 @@
 .tenant-branding-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.85fr);
-  gap: clamp(1.5rem, 4vw, 3.5rem);
+  column-gap: clamp(1.5rem, 4vw, 3.5rem);
+  row-gap: 0.5rem;
   align-items: start;
 }
+/* Fixed header width: the tab strip always spans the full row, so switching
+   between identity/login (with preview) and API keys (without preview) does
+   not shift the title/tabs. Tabs uses display:contents so its children take
+   part directly in the layout grid. */
 .tenant-branding-tabs {
-  min-width: 0;
+  display: contents;
 }
 .tenant-branding-tabs-scroll {
+  grid-column: 1 / -1;
+  grid-row: 1;
   width: 100%;
   min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
+  overflow: visible;
 }
 .tenant-branding-tabs [data-slot="tabs-list"] {
-  width: max-content;
-  min-width: max-content;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
 }
 .tenant-branding-tabs [data-slot="tabs-trigger"] {
   min-height: 44px;
   min-width: 0;
-  flex: 0 0 auto;
-  padding-inline: 0.5rem;
+  flex: 0 1 auto;
+  padding-inline: 0.75rem;
 }
 .tenant-branding-tabs [data-slot="tabs-content"][data-state="inactive"] {
   display: none;
@@ -77,9 +88,11 @@
   min-width: 0;
 }
 .tenant-branding-api-keys {
+  grid-column: 1 / -1;
+  grid-row: 2;
   width: 100%;
   min-width: 0;
-  max-width: 56rem;
+  max-width: none;
   padding-top: 1.25rem;
   border-top: 1px solid var(--border);
 }
@@ -87,17 +100,15 @@
 .tenant-branding-preview[hidden] {
   display: none;
 }
-.tenant-branding-layout[data-active-tab="api-keys"] {
-  grid-template-columns: minmax(0, 1fr);
-}
-.tenant-branding-layout[data-active-tab="api-keys"] .tenant-branding-tabs {
-  grid-column: 1 / -1;
-}
 .tenant-branding-editor,
 .tenant-branding-editor fieldset {
   display: grid;
   gap: 1.25rem;
   min-width: 0;
+}
+.tenant-branding-editor {
+  grid-column: 1;
+  grid-row: 2;
 }
 .tenant-branding-editor fieldset {
   margin: 0;
@@ -161,6 +172,8 @@
   line-height: 1.6;
 }
 .tenant-branding-preview {
+  grid-column: 2;
+  grid-row: 2;
   position: sticky;
   top: 1.25rem;
   display: grid;
@@ -309,11 +322,18 @@
 }
 @media (max-width: 800px) {
   .tenant-branding-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tenant-branding-editor,
+  .tenant-branding-preview,
+  .tenant-branding-api-keys {
+    grid-column: 1 / -1;
+    grid-row: auto;
   }
   .tenant-branding-preview {
     position: static;
     max-width: 36rem;
+    margin-top: 1rem;
   }
 }
 @media (max-width: 480px) {

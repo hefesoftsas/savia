@@ -12,6 +12,13 @@ file do not synchronize with the saved recording.
 4. To generate a transcript and meeting notes, grant processing consent and choose
    **Generate summary**. Uploading alone does not send audio to the AI provider.
 
+The transcript language remains selectable after processing. Retrying a summary
+in the saved language reuses the saved transcript. Changing the language asks you
+to confirm that the transcript and summary will be replaced and transcription may
+incur another provider charge. **Automatic** is the saved language choice when no
+explicit language was selected; Savia does not claim a detected-language result
+unless the transcription provider supplies one.
+
 On mobile, the selected audio leads the page. When multiple recordings are available,
 use **Select a recording** to switch; desktop keeps the list beside the player.
 Consent and the possible processing charge remain visible beside **Generate summary**.

@@ -14,7 +14,22 @@ import {
   native,
   type Capabilities,
   type CaptureStatus,
+  type Source,
 } from "./client";
+import {
+  captureErrorMessage,
+  localizedOperationError,
+  operationErrorMessage,
+  type LocalizedMessage,
+} from "./capture-errors";
+import {
+  loadLocale,
+  translate,
+  formatDuration,
+  type Locale,
+  type MessageKey,
+} from "./i18n";
+import { loadPreviewAudio } from "./preview-audio";
 import "./styles.css";
 
 const empty: CaptureStatus = {
@@ -44,43 +59,66 @@ function App() {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [consent, setConsent] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [noticeIsError, setNoticeIsError] = useState(false);
+  const [notice, setNotice] = useState<{
+    message: LocalizedMessage;
+    isError: boolean;
+  } | null>(null);
   const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<LocalizedMessage | null>(null);
+  const [locale, setLocale] = useState<Locale>(() => loadLocale());
+  const t = (key: MessageKey, vars?: Record<string, string | number>) =>
+    translate(locale, key, vars);
+  const message = (key: MessageKey, vars?: Record<string, string | number>) =>
+    ({ key, vars }) satisfies LocalizedMessage;
+  const changeLocale = (next: Locale) => setLocale(next);
+  useEffect(() => {
+    document.documentElement.lang = locale === "pt" ? "pt-BR" : locale;
+  }, [locale]);
+  const [previews, setPreviews] = useState<Record<Source, string | null>>({
+    microphone: null,
+    system: null,
+  });
+  const previewUrls = useRef<Record<Source, string | null>>({
+    microphone: null,
+    system: null,
+  });
   const inFlight = useRef(false);
   const mounted = useRef(true);
 
   useEffect(() => {
     mounted.current = true;
-    if (!isTauri()) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
     const poll = async () => {
       try {
         const next = await native<CaptureStatus>("capture_status");
         if (mounted.current) setStatus(next);
       } catch (error) {
-        if (mounted.current) setNotice(errorMessage(error));
+        if (mounted.current)
+          setNotice({ message: operationErrorMessage(error), isError: true });
       }
     };
-    void poll();
-    const timer = setInterval(() => void poll(), 1000);
+    if (isTauri()) {
+      void poll();
+      timer = setInterval(() => void poll(), 1000);
+    }
     return () => {
       mounted.current = false;
-      clearInterval(timer);
+      if (timer !== undefined) clearInterval(timer);
+      for (const url of Object.values(previewUrls.current))
+        if (url) URL.revokeObjectURL(url);
+      previewUrls.current = { microphone: null, system: null };
     };
   }, []);
 
-  const run = async (label: string, action: () => Promise<void>) => {
+  const run = async (label: LocalizedMessage, action: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(label);
-    setNotice("");
-    setNoticeIsError(false);
+    setNotice(null);
     try {
       await action();
     } catch (error) {
-      setNotice(errorMessage(error));
-      setNoticeIsError(true);
+      setNotice({ message: operationErrorMessage(error), isError: true });
     } finally {
       inFlight.current = false;
       setBusy(null);
@@ -88,7 +126,8 @@ function App() {
   };
 
   const start = () =>
-    run("Starting recording", async () => {
+    run(message("Starting recording"), async () => {
+      revokePreviews();
       const next = await native<CaptureStatus>("start_capture", {
         sessionId: crypto.randomUUID(),
         sources: { microphone, system },
@@ -99,37 +138,92 @@ function App() {
     });
 
   const stop = () =>
-    run("Finalizing audio", async () => {
+    run(message("Finalizing audio"), async () => {
       const next = await native<CaptureStatus>("stop_capture");
       setStatus(next);
       setConsent(false);
       setSaved(false);
     });
 
-  const discard = () =>
-    run("Discarding audio", async () => {
-      setStatus(await native<CaptureStatus>("discard_capture"));
+  const pause = () =>
+    run(message("Pause"), async () => {
+      const next = await native<CaptureStatus>("pause_capture");
+      setStatus(next);
+    });
+
+  const resume = () =>
+    run(message("Resume recording"), async () => {
+      const next = await native<CaptureStatus>("resume_capture");
+      setStatus(next);
       setConsent(false);
       setSaved(false);
-      setNotice("");
-      setNoticeIsError(false);
+    });
+
+  const discard = () =>
+    run(message("Discarding audio"), async () => {
+      setStatus(await native<CaptureStatus>("discard_capture"));
+      revokePreviews();
+      setConsent(false);
+      setSaved(false);
+      setNotice(null);
+    });
+
+  function revokePreviewUrls() {
+    for (const url of Object.values(previewUrls.current))
+      if (url) URL.revokeObjectURL(url);
+    previewUrls.current = { microphone: null, system: null };
+  }
+
+  const revokePreviews = () => {
+    revokePreviewUrls();
+    setPreviews({ microphone: null, system: null });
+  };
+
+  const loadPreview = (source: Source) =>
+    run(message("Loading preview"), async () => {
+      const segments = (status.chunks ?? [])
+        .filter((chunk) => chunk.source === source)
+        .sort((a, b) => a.sequence - b.sequence);
+      if (!segments.length) {
+        throw new Error("There is no captured audio to preview yet.");
+      }
+      const bytes = await loadPreviewAudio(segments, (sequence) =>
+        native<{ base64: string; format: string }>("read_capture_chunk", {
+          source,
+          sequence,
+        }),
+      );
+      if (!mounted.current) return;
+      const url = URL.createObjectURL(
+        new Blob([bytes.buffer], { type: "audio/ogg" }),
+      );
+      if (!mounted.current) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const previous = previewUrls.current[source];
+      if (previous) URL.revokeObjectURL(previous);
+      previewUrls.current = { ...previewUrls.current, [source]: url };
+      setPreviews(previewUrls.current);
     });
 
   const connect = (event: FormEvent) => {
     event.preventDefault();
-    void run("Checking connection", async () => {
+    void run(message("Checking connection"), async () => {
       const result = await companionRequest<Capabilities>(
         apiOrigin,
         token,
         "capabilities",
       );
       setCapabilities(result);
-      setNotice(
-        result.storageAvailable
-          ? "Connected to Savia."
-          : "Connected, but private audio storage is unavailable on this server.",
-      );
-      setNoticeIsError(false);
+      setNotice({
+        message: message(
+          result.storageAvailable
+            ? "Connected to Savia."
+            : "Connected, but private audio storage is unavailable on this server.",
+        ),
+        isError: false,
+      });
       if (result.storageAvailable) setSettingsOpen(false);
     });
   };
@@ -137,26 +231,28 @@ function App() {
   const openSavia = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!isTauri()) return;
     event.preventDefault();
-    void run("Opening Savia", async () => {
+    void run(message("Opening Savia"), async () => {
       const origin = validateApiOrigin(appOrigin);
       await native<void>("open_savia", { origin });
     });
   };
 
   const upload = () =>
-    run("Uploading to Savia", async () => {
+    run(message("Uploading to Savia"), async () => {
       if (!canUploadRecording(capabilities) || !consent)
-        throw new Error(
+        throw localizedOperationError(
           "Connect storage and confirm permission before upload.",
         );
       if (!status.sessionId || !status.chunks?.length)
-        throw new Error("No recoverable audio is available to upload.");
+        throw localizedOperationError(
+          "No recoverable audio is available to upload.",
+        );
       const session = await companionRequest<{
         state: string;
         chunks: { source: string; sequence: number }[];
       }>(apiOrigin, token, "sessioncreate", {
         id: status.sessionId,
-        name: `Recording ${status.sessionId.slice(0, 8)}`,
+        name: t("Recording name", { id: status.sessionId.slice(0, 8) }),
         sources: [...new Set(status.chunks.map((chunk) => chunk.source))],
         consent: true,
       });
@@ -184,7 +280,12 @@ function App() {
           });
         }
         uploaded++;
-        setBusy(`Uploading ${uploaded} of ${status.chunks.length}`);
+        setBusy(
+          message("Upload progress", {
+            uploaded,
+            total: status.chunks.length,
+          }),
+        );
       }
       await companionRequest(apiOrigin, token, "sessionfinalize", {
         sessionId: status.sessionId,
@@ -201,7 +302,10 @@ function App() {
         },
       });
       setSaved(true);
-      setNotice("Audio saved privately in Savia.");
+      setNotice({
+        message: message("Audio saved privately in Savia."),
+        isError: false,
+      });
     });
 
   const changeConnection = (change: () => void) => {
@@ -209,8 +313,7 @@ function App() {
     setCapabilities(null);
     setConsent(false);
     setSaved(false);
-    setNotice("");
-    setNoticeIsError(false);
+    setNotice(null);
   };
 
   const seconds = Math.floor(status.elapsedSeconds);
@@ -219,6 +322,8 @@ function App() {
     .padStart(2, "0")}:${Math.floor((seconds % 3600) / 60)
     .toString()
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+  const isRecording = status.state === "recording";
+  const isPaused = status.state === "paused";
   const ready =
     status.state === "ready" ||
     (["error", "interrupted"].includes(status.state) &&
@@ -226,30 +331,35 @@ function App() {
   const connected = Boolean(capabilities);
   const complete = ready && saved;
   const selectedSources = microphone || system;
+  const previewSources = [
+    ...new Set((status.chunks ?? []).map((chunk) => chunk.source)),
+  ];
   const reviewHref = recordingReviewHref(appOrigin);
-  const locked = Boolean(busy) || status.state === "recording";
+  const locked = Boolean(busy) || isRecording || isPaused;
   const actionDisabled =
     Boolean(busy) ||
-    (status.state === "recording"
+    (isRecording || isPaused
       ? false
       : ready
         ? complete || !canUploadRecording(capabilities) || !consent
         : !isTauri() || !selectedSources);
 
   const primaryAction = () => {
-    if (status.state === "recording") return stop();
+    if (isRecording) return stop();
+    if (isPaused) return resume();
     if (ready) return upload();
     return start();
   };
 
-  const actionLabel =
-    status.state === "recording"
-      ? "Stop recording"
+  const actionLabel = isRecording
+    ? t("Stop recording")
+    : isPaused
+      ? t("Resume recording")
       : ready
         ? complete
-          ? "Saved to Savia"
-          : "Upload to Savia"
-        : "Start recording";
+          ? t("Saved to Savia")
+          : t("Upload to Savia")
+        : t("Start recording");
 
   return (
     <div className="app-shell">
@@ -263,7 +373,7 @@ function App() {
             className={`connection-state${connected ? " is-connected" : ""}`}
           >
             <i aria-hidden="true" />
-            {connected ? "Connected" : "Not connected"}
+            {connected ? t("Connected") : t("Not connected")}
           </span>
         </div>
         <div className="header-actions">
@@ -275,7 +385,7 @@ function App() {
               rel="noreferrer"
               onClick={openSavia}
             >
-              Open in Savia <span aria-hidden="true">↗</span>
+              {t("Open in Savia")} <span aria-hidden="true">↗</span>
             </a>
           )}
           <button
@@ -285,10 +395,10 @@ function App() {
             aria-controls="connection-settings"
             aria-label={
               settingsOpen
-                ? "Close connection settings"
-                : "Open connection settings"
+                ? t("Close connection settings")
+                : t("Open connection settings")
             }
-            title="Connection settings"
+            title={t("Connection settings")}
             onClick={() => setSettingsOpen((open) => !open)}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -301,7 +411,7 @@ function App() {
 
       {!isTauri() && (
         <p className="preview-note" role="status">
-          Preview only · Open the desktop app to record audio.
+          {t("Preview only · Open the desktop app to record audio.")}
         </p>
       )}
 
@@ -309,26 +419,39 @@ function App() {
         <section
           className="settings-panel"
           id="connection-settings"
-          aria-label="Connection settings"
+          aria-label={t("Connection settings")}
         >
           <div className="settings-heading">
             <div>
-              <h2>Connect to Savia</h2>
-              <p>Credentials stay in memory for this session.</p>
+              <h2>{t("Connect to Savia")}</h2>
+              <p>{t("Credentials stay in memory for this session.")}</p>
             </div>
             <button
               className="text-button"
               type="button"
               onClick={() => setSettingsOpen(false)}
-              aria-label="Close settings"
+              aria-label={t("Close settings")}
             >
-              Done
+              {t("Done")}
             </button>
           </div>
           <form onSubmit={connect}>
             <fieldset className="settings-fields" disabled={Boolean(busy)}>
               <label>
-                API address
+                {t("Language")}
+                <select
+                  value={locale}
+                  onChange={(event) =>
+                    changeLocale(event.target.value as Locale)
+                  }
+                >
+                  <option value="es">Español</option>
+                  <option value="en">English</option>
+                  <option value="pt">Português</option>
+                </select>
+              </label>
+              <label>
+                {t("API address")}
                 <input
                   type="url"
                   value={apiOrigin}
@@ -341,7 +464,7 @@ function App() {
                 />
               </label>
               <label>
-                Savia API key or access token
+                {t("Savia API key or access token")}
                 <input
                   type="password"
                   value={token}
@@ -349,11 +472,11 @@ function App() {
                     changeConnection(() => setToken(event.target.value))
                   }
                   autoComplete="off"
-                  placeholder="Paste your Savia credential"
+                  placeholder={t("Paste your Savia credential")}
                 />
               </label>
               <label>
-                Savia app address
+                {t("Savia app address")}
                 <input
                   type="url"
                   value={appOrigin}
@@ -364,14 +487,14 @@ function App() {
                 />
               </label>
               <p className="field-hint">
-                Opens the private recording review page.
+                {t("Opens the private recording review page.")}
               </p>
               <button
                 className="connect-button"
                 type="submit"
                 disabled={Boolean(busy) || !token.trim()}
               >
-                {capabilities ? "Reconnect" : "Connect"}
+                {capabilities ? t("Reconnect") : t("Connect")}
               </button>
             </fieldset>
           </form>
@@ -380,31 +503,33 @@ function App() {
 
       <main>
         <section
-          className={`recording-stage${status.state === "recording" ? " is-recording" : ""}`}
-          aria-label="Recording status"
+          className={`recording-stage${isRecording ? " is-recording" : ""}${isPaused ? " is-paused" : ""}`}
+          aria-label={t("Recording status")}
         >
           <div className="stage-status" role="status" aria-live="polite">
             <span className="status-light" aria-hidden="true" />
             <span>
-              {status.state === "recording"
-                ? "Recording"
-                : ready
-                  ? complete
-                    ? "Saved to Savia"
-                    : "Ready to upload"
-                  : status.state === "error" || status.state === "interrupted"
-                    ? "Capture needs attention"
-                    : "Ready to record"}
+              {isRecording
+                ? t("Recording")
+                : isPaused
+                  ? t("Paused")
+                  : ready
+                    ? complete
+                      ? t("Saved to Savia")
+                      : t("Ready to upload")
+                    : status.state === "error" || status.state === "interrupted"
+                      ? t("Capture needs attention")
+                      : t("Ready to record")}
             </span>
           </div>
-          <p className="timer" aria-label={`${seconds} seconds recorded`}>
+          <p className="timer" aria-label={t("Seconds recorded", { seconds })}>
             {duration}
             <span> / 01:00:00</span>
           </p>
           <div
             className="time-track"
             role="progressbar"
-            aria-label="Recording time"
+            aria-label={t("Recording time")}
             aria-valuemin={0}
             aria-valuemax={3600}
             aria-valuenow={Math.min(seconds, 3600)}
@@ -414,53 +539,96 @@ function App() {
             />
           </div>
           <p className="stage-hint">
-            {status.state === "recording"
-              ? "Your audio stays on this device until you upload it."
-              : ready
-                ? "Check the captured sources, then upload when ready."
-                : status.state === "error" || status.state === "interrupted"
-                  ? "Review the message below, then try another recording."
-                  : "Capture up to one hour from your selected sources."}
+            {isRecording
+              ? t("Recording stays on device")
+              : isPaused
+                ? t(
+                    "Recording is paused. Resume to keep adding to the same take.",
+                  )
+                : ready
+                  ? t("Review before upload")
+                  : status.state === "error" || status.state === "interrupted"
+                    ? t("Capture trouble")
+                    : t("Capture up to one hour")}
           </p>
           {ready && status.tracks.length > 0 && (
-            <ul className="captured-sources" aria-label="Captured audio">
+            <ul className="captured-sources" aria-label={t("Captured audio")}>
               {status.tracks.map((track) => (
                 <li key={track.source}>
                   <span>
                     {track.source === "microphone"
-                      ? "Microphone"
-                      : "System audio"}
+                      ? t("Microphone")
+                      : t("System audio")}
                   </span>
                   <span>
-                    {track.durationSeconds.toFixed(1)} sec ·{" "}
-                    {Math.ceil(track.bytes / 1024)} KB
+                    {t("Track details", {
+                      duration: formatDuration(locale, track.durationSeconds),
+                      size: Math.ceil(track.bytes / 1024),
+                    })}
                   </span>
                 </li>
               ))}
             </ul>
           )}
+          {ready && previewSources.length > 0 && (
+            <div
+              className="preview-panel"
+              aria-label={t("Preview on this device before uploading")}
+            >
+              <p className="preview-title">
+                {t("Preview on this device before uploading")}
+              </p>
+              {previewSources.map((source) => {
+                const url = previews[source];
+                return (
+                  <div key={source} className="preview-row">
+                    <span>
+                      {source === "microphone"
+                        ? t("Microphone")
+                        : t("System audio")}
+                    </span>
+                    {url ? (
+                      <audio className="preview-audio" src={url} controls />
+                    ) : (
+                      <button
+                        className="discard-action"
+                        type="button"
+                        disabled={Boolean(busy)}
+                        onClick={() => void loadPreview(source)}
+                      >
+                        {t(
+                          source === "microphone"
+                            ? "Preview microphone"
+                            : "Preview system audio",
+                        )}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {status.recovered && (
             <p className="notice" role="status">
-              Recovered a saved recording from this device. Review it and upload
-              when ready.
+              {t("Recovered recording")}
             </p>
           )}
           {status.error && (
             <p className="notice is-error" role="alert">
-              {status.error}
+              {t(captureErrorMessage(status.errorCode).key)}
             </p>
           )}
           {notice && (
             <p
-              className={`notice${noticeIsError ? " is-error" : ""}`}
-              role={noticeIsError ? "alert" : "status"}
+              className={`notice${notice.isError ? " is-error" : ""}`}
+              role={notice.isError ? "alert" : "status"}
             >
-              {notice}
+              {t(notice.message.key, notice.message.vars)}
             </p>
           )}
           {!isTauri() && !notice && (
             <p className="stage-hint preview-hint">
-              Recording is available in the desktop app.
+              {t("Recording is available in the desktop app.")}
             </p>
           )}
         </section>
@@ -468,7 +636,7 @@ function App() {
 
       <footer className="capture-dock">
         <fieldset className="source-picker" disabled={locked}>
-          <legend>Capture sources</legend>
+          <legend>{t("Capture sources")}</legend>
           <label className="source-choice">
             <input
               type="checkbox"
@@ -478,7 +646,7 @@ function App() {
             <span className="switch" aria-hidden="true">
               <i />
             </span>
-            <span>Microphone</span>
+            <span>{t("Microphone")}</span>
           </label>
           <label className="source-choice">
             <input
@@ -489,7 +657,7 @@ function App() {
             <span className="switch" aria-hidden="true">
               <i />
             </span>
-            <span>System audio</span>
+            <span>{t("System audio")}</span>
           </label>
         </fieldset>
 
@@ -501,9 +669,7 @@ function App() {
               disabled={Boolean(busy)}
               onChange={(event) => setConsent(event.target.checked)}
             />
-            <span>
-              I have permission to record and store this recording in Savia.
-            </span>
+            <span>{t("Recording consent")}</span>
           </label>
         )}
 
@@ -518,12 +684,33 @@ function App() {
               <span className="button-spinner" aria-hidden="true" />
             ) : (
               <span className="action-glyph" aria-hidden="true">
-                {status.state === "recording" ? "■" : ready ? "↑" : "●"}
+                {isRecording ? "■" : isPaused ? "●" : ready ? "↑" : "●"}
               </span>
             )}
-            {busy ?? actionLabel}
+            {busy ? t(busy.key, busy.vars) : actionLabel}
           </button>
-          {(status.state === "recording" ||
+          {isRecording && (
+            <button
+              className="discard-action"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={pause}
+            >
+              {t("Pause")}
+            </button>
+          )}
+          {isPaused && (
+            <button
+              className="discard-action"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={stop}
+            >
+              {t("Finish")}
+            </button>
+          )}
+          {(isRecording ||
+            isPaused ||
             ready ||
             status.state === "error" ||
             status.state === "interrupted") && (
@@ -533,27 +720,20 @@ function App() {
               disabled={Boolean(busy)}
               onClick={discard}
             >
-              Discard
+              {t("Discard")}
             </button>
           )}
         </div>
         {ready && !complete && !capabilities?.storageAvailable && (
-          <p className="action-guidance">
-            Connect a Savia server with recording storage enabled.
-          </p>
+          <p className="action-guidance">{t("Storage unavailable guidance")}</p>
         )}
         {connected &&
           capabilities?.storageAvailable &&
           !canUploadRecording(capabilities) && (
-            <p className="action-guidance">
-              This key cannot upload recordings. Connect with recordings:upload
-              permission.
-            </p>
+            <p className="action-guidance">{t("Upload permission guidance")}</p>
           )}
         {ready && !complete && canUploadRecording(capabilities) && !consent && (
-          <p className="action-guidance">
-            Confirm permission to enable upload.
-          </p>
+          <p className="action-guidance">{t("Consent guidance")}</p>
         )}
         {connected && reviewHref && complete && (
           <a
@@ -563,30 +743,14 @@ function App() {
             rel="noreferrer"
             onClick={openSavia}
           >
-            Review recording in Savia <span aria-hidden="true">↗</span>
+            {t("Review recording in Savia")} <span aria-hidden="true">↗</span>
           </a>
         )}
-        <p className="privacy-line">
-          No audio leaves this device until you choose Upload.
-        </p>
-        <p className="attribution-line">
-          Savia — Desarrollado por Hefesoft SAS, Colombia.
-        </p>
+        <p className="privacy-line">{t("Audio stays on device")}</p>
+        <p className="attribution-line">{t("Attribution")}</p>
       </footer>
     </div>
   );
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  )
-    return error.message;
-  return String(error);
 }
 
 createRoot(document.getElementById("root")!).render(

@@ -16,7 +16,11 @@ tabs. Identity contains the display name, colors, and logo. Login screen contain
 the title, welcome message, animation, cover image, and the selected organization's
 assigned Savia URL in a selectable, read-only field. API keys are available only
 to administrators who can manage the tenant's branding. Switching tabs keeps
-branding drafts and local upload previews in place.
+branding drafts and local upload previews in place. The tab strip always spans
+the full content width, so switching between tabs never shifts the header;
+tabs wrap onto additional lines instead of scrolling horizontally. Identity
+and Login screen show the editor next to the live preview, while API keys uses
+the full width because it has no preview.
 
 **Open in new window** opens the assigned URL
 in a separate browsing context without replacing the admin page. **Copy link** copies the URL with confirmation;

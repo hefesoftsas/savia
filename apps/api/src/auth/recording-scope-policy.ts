@@ -16,13 +16,15 @@ export function requiredSessionRecordingScope(
     return null;
   }
   const match = path.match(
-    /^\/v1\/companion\/sessions\/[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}(?:\/(chunks|finalize|notes|cancel|questions)(?:\/(microphone|system)\/(0|[1-9][0-9]{0,2}))?)?$/i,
+    /^\/v1\/companion\/sessions\/[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}(?:\/(audio|chunks|finalize|notes|cancel|questions)(?:\/(microphone|system)\/(0|[1-9][0-9]{0,2}))?)?$/i,
   );
   if (!match) return null;
   const action = match[1];
   if (
     method === "GET" &&
-    (!action || (action === "chunks" && match[2] && Number(match[3]) < 120))
+    (!action ||
+      action === "audio" ||
+      (action === "chunks" && match[2] && Number(match[3]) < 120))
   )
     return RECORDING_READ_SCOPE;
   if (method === "POST" && !match[2]) {

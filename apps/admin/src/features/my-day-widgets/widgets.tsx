@@ -690,7 +690,7 @@ export function WidgetCard({
               {title}
             </CardTitle>
             <p
-              className={`mt-0.5 truncate text-xs text-muted-foreground ${isSystem ? "hidden sm:block" : ""}`}
+              className={`mt-0.5 truncate text-xs text-muted-foreground ${isSystem ? "hidden" : ""}`}
             >
               {collectionLabel} · {pluginTitle ?? kindLabel}
             </p>
