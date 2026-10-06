@@ -78,8 +78,8 @@ export function whatsappInboundFromEnvironment(
   return {
     repository,
     processActions: async () => {
-      await cleanupChannelState(channelRepository);
       if (!operations?.actions) return { completed: 0, uncertain: 0 };
+      await cleanupChannelState(channelRepository);
       const report = await processChannelActions(
         operations.actions,
         async (action) => {
