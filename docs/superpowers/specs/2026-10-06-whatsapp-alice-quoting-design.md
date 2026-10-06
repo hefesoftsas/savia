@@ -1,6 +1,6 @@
 # WhatsApp assistant quoting for customers and advisers
 
-Status: proposed specification, awaiting written-spec review.
+Status: superseded by [WhatsApp as a general virtual employee channel](2026-10-06-whatsapp-virtual-employee-channel-design.md).
 Date: 2026-10-06.
 
 ## Intent and agreed scope
