@@ -15,7 +15,7 @@ import "./personal-integrations.css";
 
 export function IntegrationsPageShell({ children }: { children: ReactNode }) {
   return (
-    <main className="integrations-page mx-auto w-full max-w-3xl pb-10">
+    <main className="integrations-page mx-auto w-full max-w-6xl px-4 sm:px-6 pb-10">
       {children}
     </main>
   );

@@ -26,6 +26,7 @@ import {
   Search,
   Cpu,
   Loader2,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,13 +35,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type {
   VirtualEmployee,
@@ -517,8 +518,8 @@ export function VirtualEmployeesManagement({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-52 flex-1 sm:max-w-md">
           <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
           <Input
             placeholder={t("Buscar empleado por nombre o @handle...")}
@@ -533,12 +534,16 @@ export function VirtualEmployeesManagement({
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="overflow-hidden rounded-xl border bg-card divide-y">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-44 rounded-xl border bg-card/50 animate-pulse"
-            />
+            <div key={i} className="flex items-center gap-4 p-4 animate-pulse">
+              <div className="size-11 shrink-0 rounded-xl bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-40 rounded bg-muted" />
+                <div className="h-3 w-64 max-w-full rounded bg-muted/70" />
+              </div>
+              <div className="hidden sm:block h-8 w-20 rounded-md bg-muted" />
+            </div>
           ))}
         </div>
       ) : filteredEmployees.length === 0 ? (
@@ -558,160 +563,165 @@ export function VirtualEmployeesManagement({
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredEmployees.map((emp) => {
-            const Icon = getEmployeeAvatarIcon(emp.avatar);
-            const isTextOnly = emp.allowedCollections.length === 0;
-            const isAll = emp.allowedCollections.includes("*");
+        <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
+          <ul className="divide-y">
+            {filteredEmployees.map((emp) => {
+              const Icon = getEmployeeAvatarIcon(emp.avatar);
+              const isTextOnly = emp.allowedCollections.length === 0;
+              const isAll = emp.allowedCollections.includes("*");
 
-            return (
-              <div
-                key={emp.id}
-                className="group relative flex flex-col justify-between rounded-xl border bg-card p-5 shadow-xs transition hover:border-primary/40 hover:shadow-md"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-                        <Icon className="size-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-sm leading-tight text-foreground">
-                          {emp.name}
-                        </h4>
-                        <span className="font-mono text-xs text-primary font-medium">
-                          @{emp.handle}
-                        </span>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={
-                        emp.status === "active" ? "default" : "secondary"
-                      }
-                      className="text-[10px] uppercase font-semibold tracking-wider"
-                    >
-                      {emp.status === "active" ? t("Activo") : t("Inactivo")}
-                    </Badge>
+              return (
+                <li
+                  key={emp.id}
+                  onClick={() => void openEdit(emp)}
+                  className="group flex cursor-pointer items-center gap-3 p-4 transition-colors hover:bg-muted/40 sm:gap-4 sm:px-5"
+                >
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                    <Icon className="size-5" />
                   </div>
 
-                  {emp.position && (
-                    <p className="text-xs text-muted-foreground font-medium mb-3 line-clamp-1">
-                      {emp.position}
-                    </p>
-                  )}
-
-                  <p className="text-xs text-muted-foreground line-clamp-2 mb-4 italic">
-                    "{emp.greeting || emp.systemPrompt}"
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t text-[11px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1 font-medium">
-                      <Database className="size-3.5 text-muted-foreground" />
-                      {isTextOnly ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-normal py-0"
-                        >
-                          {t("Solo texto")}
-                        </Badge>
-                      ) : isAll ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-normal py-0"
-                        >
-                          {t("Todas las colecciones")}
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-normal py-0"
-                        >
-                          {t("%{count} colecciones", {
-                            count: emp.allowedCollections.length,
-                          })}
-                        </Badge>
-                      )}
-                    </span>
-
-                    {!isTextOnly && (
-                      <span className="inline-flex items-center gap-1 font-medium">
-                        <FileCode className="size-3.5 text-muted-foreground" />
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-normal py-0"
-                        >
-                          {t("%{count} docs RAG", {
-                            count: emp.filesCount ?? 0,
-                          })}
-                        </Badge>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="truncate text-sm font-semibold text-foreground">
+                        {emp.name}
                       </span>
-                    )}
-                  </div>
-
-                  {emp.model ? (
-                    <div className="flex flex-wrap items-center gap-1.5 pt-2 mt-2 border-t text-[11px] text-muted-foreground">
-                      <Cpu className="size-3.5 text-primary shrink-0" />
-                      <span
-                        className="font-mono text-[11px] font-medium text-foreground/80 truncate max-w-[130px]"
-                        title={emp.model}
+                      <span className="truncate font-mono text-xs font-medium text-primary">
+                        @{emp.handle}
+                      </span>
+                      <Badge
+                        variant={
+                          emp.status === "active" ? "default" : "secondary"
+                        }
+                        className="text-[10px] font-semibold uppercase tracking-wider"
                       >
-                        {emp.model}
-                      </span>
-                      <ModelCapabilityBadges
-                        model={models.find((m) => m.id === emp.model)}
-                        size="xs"
-                      />
+                        {emp.status === "active" ? t("Activo") : t("Inactivo")}
+                      </Badge>
                     </div>
-                  ) : null}
-                </div>
 
-                <div className="flex items-center justify-end gap-1.5 mt-4 pt-3 border-t">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2.5 text-xs gap-1 max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-                    onClick={() => void openEdit(emp)}
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {emp.position ? (
+                        <>
+                          <span className="font-medium">{emp.position}</span>
+                          <span aria-hidden="true"> · </span>
+                        </>
+                      ) : null}
+                      <span className="italic">
+                        "{emp.greeting || emp.systemPrompt}"
+                      </span>
+                    </p>
+
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Database className="size-3.5" aria-hidden="true" />
+                        <span className="font-medium">
+                          {isTextOnly
+                            ? t("Solo texto")
+                            : isAll
+                              ? t("Todas las colecciones")
+                              : t("%{count} colecciones", {
+                                  count: emp.allowedCollections.length,
+                                })}
+                        </span>
+                      </span>
+                      {!isTextOnly ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <FileCode className="size-3.5" aria-hidden="true" />
+                          <span className="font-medium">
+                            {t("%{count} docs RAG", {
+                              count: emp.filesCount ?? 0,
+                            })}
+                          </span>
+                        </span>
+                      ) : null}
+                      {emp.model ? (
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <Cpu
+                            className="size-3.5 shrink-0 text-primary"
+                            aria-hidden="true"
+                          />
+                          <span
+                            className="max-w-[180px] truncate font-mono text-[11px] font-medium text-foreground/80 lg:max-w-[240px]"
+                            title={emp.model}
+                          >
+                            {emp.model}
+                          </span>
+                          <ModelCapabilityBadges
+                            model={models.find((m) => m.id === emp.model)}
+                            size="xs"
+                          />
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div
+                    className="flex shrink-0 items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Pencil className="size-3.5" />
-                    <span className="sr-only sm:not-sr-only">
-                      {t("Editar")}
-                    </span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-                    aria-label={`${t("Quitar")} ${emp.name}`}
-                    onClick={() => void handleDelete(emp)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 gap-1 px-2.5 text-xs max-sm:size-11 max-sm:p-0"
+                      onClick={() => void openEdit(emp)}
+                    >
+                      <Pencil className="size-3.5" />
+                      <span className="sr-only sm:not-sr-only">
+                        {t("Editar")}
+                      </span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive max-sm:size-11 max-sm:p-0"
+                      aria-label={`${t("Quitar")} ${emp.name}`}
+                      onClick={() => void handleDelete(emp)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                    <ChevronRight
+                      className="hidden size-4 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground sm:block"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
-      {/* Modal Dialog: Crear / Editar Empleado Virtual */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-4 overflow-hidden p-4 sm:max-w-2xl sm:p-6 [&>button:last-child]:top-2 [&>button:last-child]:right-2 [&>button:last-child]:flex [&>button:last-child]:size-11 [&>button:last-child]:items-center [&>button:last-child]:justify-center">
-          <DialogHeader className="shrink-0 pr-8 text-left">
-            <DialogTitle className="leading-snug">
-              {editingEmployee
-                ? t("Editar Empleado Virtual: @%{handle}", {
-                    handle: editingEmployee.handle,
-                  })
-                : t("Nuevo Empleado Virtual de IA")}
-            </DialogTitle>
-          </DialogHeader>
+      {/* Side drawer: Crear / Editar Empleado Virtual */}
+      <Sheet open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <SheetContent
+          side="right"
+          className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        >
+          <SheetHeader className="shrink-0 border-b bg-card px-5 py-4 pr-12 text-left">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                {(() => {
+                  const DrawerIcon = getEmployeeAvatarIcon(avatar);
+                  return <DrawerIcon className="size-5" />;
+                })()}
+              </div>
+              <div className="min-w-0">
+                <SheetTitle className="truncate leading-snug">
+                  {editingEmployee
+                    ? t("Editar Empleado Virtual: @%{handle}", {
+                        handle: editingEmployee.handle,
+                      })
+                    : t("Nuevo Empleado Virtual de IA")}
+                </SheetTitle>
+                <SheetDescription className="mt-0.5 line-clamp-2 text-xs">
+                  {t(
+                    "Elige si el empleado usará solo el texto que recibe o también las herramientas y los datos de trabajo que autorices.",
+                  )}
+                </SheetDescription>
+              </div>
+            </div>
+          </SheetHeader>
 
-          <div className="min-h-0 overflow-y-auto overscroll-contain pr-1 space-y-4">
-            <DialogDescription>
-              {t(
-                "Elige si el empleado usará solo el texto que recibe o también las herramientas y los datos de trabajo que autorices.",
-              )}
-            </DialogDescription>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4">
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">
                 {t("Modo del empleado")}
@@ -1027,7 +1037,7 @@ export function VirtualEmployeesManagement({
                           )}
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto p-1 rounded-md border bg-background/50">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[260px] overflow-y-auto p-1 rounded-md border bg-background/50">
                           {filteredCollections.map((col) => {
                             const checked = selectedCollections.includes(
                               col.name,
@@ -1299,7 +1309,7 @@ export function VirtualEmployeesManagement({
             </Tabs>
           </div>
 
-          <DialogFooter className="shrink-0 pt-4 border-t gap-2 [&>button]:min-h-11">
+          <SheetFooter className="shrink-0 flex-row items-center justify-end gap-2 border-t bg-card px-5 py-4 sm:justify-end [&>button]:min-h-11">
             <Button
               variant="outline"
               onClick={() => setIsCreateOpen(false)}
@@ -1314,9 +1324,9 @@ export function VirtualEmployeesManagement({
                   ? t("Guardar Cambios")
                   : t("Crear Empleado")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
