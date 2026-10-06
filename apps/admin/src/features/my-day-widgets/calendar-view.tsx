@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  CalendarDays,
+  CalendarRange,
+  Calendar,
+  CalendarCheck,
   CircleAlert,
   ChevronLeft,
   ChevronRight,
@@ -8,6 +12,16 @@ import {
   RefreshCw,
   Settings2,
 } from "lucide-react";
+import GoogleMeet from "@thesvg/react/google-meet";
+import MicrosoftTeams from "@thesvg/react/microsoft-teams";
+import Zoom from "@thesvg/react/zoom";
+import Jitsi from "@thesvg/react/jitsi";
+import { IconButtonWithTooltip } from "@/components/admin/icon-button-with-tooltip";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import GoogleCalendar from "@thesvg/react/google-calendar";
 import MicrosoftOutlook from "@thesvg/react/microsoft-outlook";
 import type {
@@ -48,6 +62,13 @@ import {
   type MessageParams,
 } from "@/i18n/core";
 import { calendarMessages } from "./calendar-messages";
+
+const meetingIcons = {
+  google_meet: GoogleMeet,
+  teams: MicrosoftTeams,
+  zoom: Zoom,
+  jitsi: Jitsi,
+};
 
 const sourceColors: Record<CalendarColor, string> = {
   blue: "bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100",
@@ -321,6 +342,7 @@ export function CalendarView({
           : null;
     const conference = event.conference;
     const joinUrl = safeEventConferenceLink(conference);
+    const MeetingIcon = meetingIcons[conference?.provider ?? "teams"];
     const meetingProvider =
       conference?.provider === "jitsi"
         ? "Jitsi"
@@ -349,14 +371,12 @@ export function CalendarView({
             setDeleteConfirmation(false);
             setDetail(event);
           }}
-          className="w-full min-w-0 rounded-sm text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={`relative w-full min-w-0 rounded-sm text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${ProviderIcon ? "pr-8" : ""}`}
           aria-label={`${event.title || t("Untitled event")}, ${eventTime(event, locale, t("All day"))}, ${sourceName(event.sourceId)}`}
         >
           {compact ? (
             <span className="block truncate font-medium">
-              {event.allDay
-                ? ""
-                : `${eventTime(event, locale, t("All day"))} · `}
+              {`${eventTime(event, locale, t("All day"))} · `}
               {event.title || t("Untitled event")}
             </span>
           ) : (
@@ -369,18 +389,28 @@ export function CalendarView({
               </span>
             </>
           )}
-          <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span
+            className={
+              ProviderIcon
+                ? "absolute right-0 top-0 inline-flex"
+                : "mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+            }
+          >
             {ProviderIcon ? (
               <>
-                {compact && event.allDay ? <span>{t("All day")}</span> : null}
-                <span
-                  role="img"
-                  aria-label={sourceName(event.sourceId)}
-                  title={sourceName(event.sourceId)}
-                  className="inline-flex shrink-0"
-                >
-                  <ProviderIcon aria-hidden="true" className="size-4" />
-                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      role="img"
+                      aria-label={sourceName(event.sourceId)}
+                      title={sourceName(event.sourceId)}
+                      className="inline-flex shrink-0"
+                    >
+                      <ProviderIcon aria-hidden="true" className="size-5" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{sourceName(event.sourceId)}</TooltipContent>
+                </Tooltip>
               </>
             ) : (
               <>
@@ -397,10 +427,7 @@ export function CalendarView({
                     }[sourceColor(event.sourceId)]
                   }`}
                 />
-                <span className="truncate">
-                  {compact && event.allDay ? `${t("All day")} · ` : ""}
-                  {sourceName(event.sourceId)}
-                </span>
+                <span className="truncate">{sourceName(event.sourceId)}</span>
               </>
             )}
           </span>
@@ -413,21 +440,33 @@ export function CalendarView({
         {conference ? (
           <div className="mt-1 text-xs text-muted-foreground">
             {conference.status === "ready" && joinUrl ? (
-              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                <a
-                  href={joinUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={agendaText("Unirse a %{provider}", {
-                    provider: meetingProvider,
-                  })}
-                  className={`inline-flex items-center gap-1.5 rounded-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? "text-[11px]" : "min-h-11 text-sm"}`}
-                >
-                  {agendaText("Unirse a %{provider}", {
-                    provider: meetingProvider,
-                  })}
-                  <ExternalLink className="size-3" />
-                </a>
+              <div className="flex flex-wrap items-center gap-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href={joinUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={agendaText("Unirse a %{provider}", {
+                        provider: meetingProvider,
+                      })}
+                      className={`inline-flex shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? "size-8" : "size-11"}`}
+                    >
+                      <MeetingIcon
+                        aria-hidden="true"
+                        className="size-6 text-foreground"
+                        {...(conference.provider === "jitsi"
+                          ? { fill: "currentColor" }
+                          : {})}
+                      />
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {agendaText("Unirse a %{provider}", {
+                      provider: meetingProvider,
+                    })}
+                  </TooltipContent>
+                </Tooltip>
                 {!compact ? <MeetingLinkActions url={joinUrl} compact /> : null}
               </div>
             ) : (
@@ -528,45 +567,42 @@ export function CalendarView({
           className="flex min-w-0 flex-1 rounded-lg border border-border/60 bg-card p-0.5 @min-[28rem]/calendar:flex-none"
           aria-label={t("Calendar view")}
         >
-          {(["day", "week", "month"] as const).map((mode) => (
-            <Button
-              key={mode}
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={`h-11 min-w-0 flex-1 px-2 @min-[28rem]/calendar:h-8 @min-[28rem]/calendar:px-3 ${view === mode ? "bg-muted font-semibold text-foreground" : "text-muted-foreground"}`}
-              aria-pressed={view === mode}
-              onClick={() => setView(mode)}
-            >
-              {t(mode === "day" ? "Day" : mode === "week" ? "Week" : "Month")}
-            </Button>
-          ))}
+          {(["day", "week", "month"] as const).map((mode) => {
+            const ViewIcon =
+              mode === "day"
+                ? CalendarDays
+                : mode === "week"
+                  ? CalendarRange
+                  : Calendar;
+            return (
+              <IconButtonWithTooltip
+                key={mode}
+                label={t(
+                  mode === "day" ? "Day" : mode === "week" ? "Week" : "Month",
+                )}
+                className={`size-11 flex-1 @min-[28rem]/calendar:size-9 ${view === mode ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+                aria-pressed={view === mode}
+                onClick={() => setView(mode)}
+              >
+                <ViewIcon aria-hidden="true" className="size-4" />
+              </IconButtonWithTooltip>
+            );
+          })}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
+        <IconButtonWithTooltip
+          label={t("Refresh agenda")}
           className="size-11 @min-[28rem]/calendar:size-9"
-          aria-label={t("Refresh agenda")}
-          title={t("Refresh agenda")}
           onClick={() => void agenda.refresh()}
         >
-          <RefreshCw className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="size-11 @min-[28rem]/calendar:ml-auto @min-[28rem]/calendar:h-8 @min-[28rem]/calendar:w-auto"
-          aria-label={t("Manage calendars")}
-          title={t("Manage calendars")}
+          <RefreshCw aria-hidden="true" className="size-4" />
+        </IconButtonWithTooltip>
+        <IconButtonWithTooltip
+          label={t("Manage calendars")}
+          className="size-11 @min-[28rem]/calendar:ml-auto @min-[28rem]/calendar:size-9"
           onClick={() => setManagerOpen(true)}
         >
-          <Settings2 className="size-4" />
-          <span className="sr-only @min-[28rem]/calendar:not-sr-only">
-            {t("Manage calendars")}
-          </span>
-        </Button>
+          <Settings2 aria-hidden="true" className="size-4" />
+        </IconButtonWithTooltip>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1">
         <h3
@@ -581,39 +617,31 @@ export function CalendarView({
           {timeZone.replaceAll("_", " ")}
         </p>
         <div className="col-start-2 row-start-2 flex items-center gap-0.5 @min-[28rem]/calendar:row-span-2 @min-[28rem]/calendar:row-start-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
+          <IconButtonWithTooltip
+            label={t("Previous period")}
             className="size-11 @min-[28rem]/calendar:size-9"
-            aria-label={t("Previous period")}
             onClick={() =>
               setSelectedDay(moveCalendarDate(selectedDay, view, -1))
             }
           >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-11 @min-[28rem]/calendar:h-8"
+            <ChevronLeft aria-hidden="true" className="size-4" />
+          </IconButtonWithTooltip>
+          <IconButtonWithTooltip
+            label={t("Today")}
+            className="size-11 @min-[28rem]/calendar:size-9"
             onClick={() => setSelectedDay(new Date())}
           >
-            {t("Today")}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
+            <CalendarCheck aria-hidden="true" className="size-4" />
+          </IconButtonWithTooltip>
+          <IconButtonWithTooltip
+            label={t("Next period")}
             className="size-11 @min-[28rem]/calendar:size-9"
-            aria-label={t("Next period")}
             onClick={() =>
               setSelectedDay(moveCalendarDate(selectedDay, view, 1))
             }
           >
-            <ChevronRight className="size-4" />
-          </Button>
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </IconButtonWithTooltip>
         </div>
       </div>
       {Object.entries(sources.errors).map(([id, error]) => (
@@ -879,6 +907,8 @@ export function CalendarView({
                           : conference.provider === "google_meet"
                             ? agendaText("Google Meet")
                             : agendaText("Microsoft Teams");
+                    const DetailMeetingIcon =
+                      meetingIcons[conference?.provider ?? "teams"];
                     return joinUrl ? (
                       <div className="flex flex-wrap items-center gap-2">
                         <Button asChild variant="outline">
@@ -890,13 +920,17 @@ export function CalendarView({
                               provider: providerName,
                             })}
                           >
+                            <DetailMeetingIcon
+                              aria-hidden="true"
+                              className="size-5"
+                            />
                             {agendaText("Unirse a %{provider}", {
                               provider: providerName,
                             })}
                             <ExternalLink className="size-4" />
                           </a>
                         </Button>
-                        <MeetingLinkActions url={joinUrl} />
+                        <MeetingLinkActions url={joinUrl} compact />
                       </div>
                     ) : (
                       <p className="text-muted-foreground">

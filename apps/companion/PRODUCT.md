@@ -3,8 +3,10 @@
 ## Platform
 
 Desktop application for macOS and Windows with a React WebView and native capture.
-The preview supports manually started sessions up to one hour; real-device support
-claims require the platform validation protocol.
+The preview supports manually started sessions up to one hour of recorded audio,
+with pause/resume that keeps one take; paused wall-clock time is excluded from
+the one-hour budget and the timeline continues where audio stopped.
+Real-device support claims require the platform validation protocol.
 
 ## Purpose and users
 

@@ -101,8 +101,13 @@ it("keeps configuration entry in the view controls instead of duplicating it in 
 
   render(<Root embedded search="object=agency_profiles&view=records" />);
 
+  const records = await screen.findByRole(
+    "region",
+    { name: "Registros de Perfiles de agencia" },
+    { timeout: 5000 },
+  );
   expect(
-    await screen.findByRole("button", { name: "Configurar vista" }),
+    screen.getByRole("button", { name: "Configurar vista" }),
   ).toBeVisible();
   expect(
     screen.queryByRole("button", { name: "Configurar" }),
@@ -111,7 +116,7 @@ it("keeps configuration entry in the view controls instead of duplicating it in 
   expect(
     screen.queryByRole("button", { name: "Nuevo registro" }),
   ).not.toBeInTheDocument();
-  expect(await screen.findByText("Savia")).toBeVisible();
+  expect(within(records).getByText("Savia")).toBeVisible();
   expect(
     screen.queryByRole("checkbox", { name: "Seleccionar página" }),
   ).not.toBeInTheDocument();
