@@ -547,7 +547,13 @@ describe("My Day video calls", () => {
       const client = createClient([meeting], "outlook");
       renderApp(client);
 
-      expect(await screen.findByRole("link", { name: label })).toBeVisible();
+      const joinAction = await screen.findByRole("link", { name: label });
+      expect(joinAction).toHaveAttribute("href", joinUrl);
+      expect(joinAction.querySelector("svg")).toBeInTheDocument();
+      expect(joinAction).not.toHaveTextContent(label);
+      await user.hover(joinAction);
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(label);
+      await user.unhover(joinAction);
       await user.click(screen.getByRole("button", { name: "Week" }));
       expect(await screen.findByRole("link", { name: label })).toBeVisible();
       await user.click(
@@ -557,7 +563,8 @@ describe("My Day video calls", () => {
       expect(
         screen.getByRole("dialog").querySelector(`a[aria-label="${label}"]`),
       ).toHaveAttribute("href", joinUrl);
-      await user.keyboard("{Escape}");
+      // Escape dismisses the focused action's tooltip before the dialog.
+      await user.keyboard("{Escape}{Escape}");
       await user.click(screen.getByRole("button", { name: "Month" }));
       expect(await screen.findByRole("link", { name: label })).toBeVisible();
     },

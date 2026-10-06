@@ -36,8 +36,32 @@ const events = [
       joinUrl: "https://zoom.us/j/123456789",
     },
   },
+  {
+    id: "synthetic-jitsi",
+    title: "Seguimiento del proyecto",
+    startsAt: "2026-10-04T19:00:00Z",
+    endsAt: "2026-10-04T19:30:00Z",
+    webLink: null,
+    conference: {
+      provider: "jitsi",
+      status: "ready",
+      joinUrl: "https://meet.jit.si/savia-preview",
+    },
+  },
+  {
+    id: "synthetic-teams",
+    title: "Revisión semanal",
+    startsAt: "2026-10-04T20:00:00Z",
+    endsAt: "2026-10-04T20:30:00Z",
+    webLink: null,
+    conference: {
+      provider: "teams",
+      status: "ready",
+      joinUrl: "https://teams.microsoft.com/l/meetup-join/abc",
+    },
+  },
 ];
-let deleted = new Set<string>();
+const deleted = new Set<string>();
 const client = {
   listConnections: async () => [
     {
@@ -45,8 +69,16 @@ const client = {
       provider: "google_calendar",
       status: "connected",
     },
+    { id: "synthetic-outlook", provider: "outlook", status: "connected" },
   ],
-  listEvents: async () => events.filter((event) => !deleted.has(event.id)),
+  listEvents: async ({ provider }: { provider: string }) =>
+    events.filter(
+      (event) =>
+        !deleted.has(event.id) &&
+        (provider === "outlook"
+          ? ["synthetic-jitsi", "synthetic-teams"].includes(event.id)
+          : !["synthetic-jitsi", "synthetic-teams"].includes(event.id)),
+    ),
   listBookingAgenda: async () => [],
   createCalendarEvent: async () => {
     throw new Error("Synthetic preview only");
@@ -67,7 +99,7 @@ function Preview() {
   }, []);
   return (
     <main className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-8">
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto max-w-3xl space-y-4">
         <p className="text-xs text-muted-foreground">
           Vista local · datos de prueba
         </p>
