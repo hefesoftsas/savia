@@ -15,11 +15,17 @@ export function useIssueProviders(api: ApiClient): IssueProvider[] {
     let controller: AbortController | undefined;
     let active = true;
     let pending: Promise<void> | null = null;
-    async function refresh() {
-      if (pending) return pending;
+    let requestSequence = 0;
+    async function refresh(force = false) {
+      if (pending && !force) return pending;
+      if (force) {
+        controller?.abort();
+        pending = null;
+      }
       controller?.abort();
       const request = new AbortController();
       controller = request;
+      const sequence = ++requestSequence;
       const task = (async () => {
         try {
           const [catalog, connections] = await Promise.all([
@@ -59,33 +65,38 @@ export function useIssueProviders(api: ApiClient): IssueProvider[] {
           // Inaccessible, expired, or unavailable connections must not be offered.
           if (active && !request.signal.aborted) setProviders([]);
         } finally {
-          pending = null;
+          if (requestSequence === sequence) pending = null;
         }
       })();
       pending = task;
       return task;
     }
     const reload = () => void refresh();
+    const invalidate = () => void refresh(true);
     const visible = () => {
       if (document.visibilityState === "visible") reload();
     };
     const clear = () => {
+      requestSequence += 1;
       pending = null;
       controller?.abort();
       setProviders([]);
     };
     reload();
     window.addEventListener("focus", reload);
-    window.addEventListener("savia:personal-integrations-changed", reload);
-    window.addEventListener("savia:identity-changed", reload);
+    window.addEventListener("savia:personal-integrations-changed", invalidate);
+    window.addEventListener("savia:identity-changed", invalidate);
     window.addEventListener("savia:session-cleared", clear);
     document.addEventListener("visibilitychange", visible);
     return () => {
       active = false;
       controller?.abort();
       window.removeEventListener("focus", reload);
-      window.removeEventListener("savia:personal-integrations-changed", reload);
-      window.removeEventListener("savia:identity-changed", reload);
+      window.removeEventListener(
+        "savia:personal-integrations-changed",
+        invalidate,
+      );
+      window.removeEventListener("savia:identity-changed", invalidate);
       window.removeEventListener("savia:session-cleared", clear);
       document.removeEventListener("visibilitychange", visible);
     };
