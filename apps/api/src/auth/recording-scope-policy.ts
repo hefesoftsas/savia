@@ -3,6 +3,7 @@ import type { RecordingScope } from "./personal-api-keys";
 const RECORDING_READ_SCOPE = "recordings:read" as const;
 const RECORDING_UPLOAD_SCOPE = "recordings:upload" as const;
 const RECORDING_PROCESS_SCOPE = "recordings:process" as const;
+const RECORDING_DELETE_SCOPE = "recordings:delete" as const;
 
 /** Narrow allowlist for bounded long-recording session operations. */
 export function requiredSessionRecordingScope(
@@ -28,6 +29,7 @@ export function requiredSessionRecordingScope(
   )
     return RECORDING_READ_SCOPE;
   if (method === "PATCH" && !action) return RECORDING_UPLOAD_SCOPE;
+  if (method === "DELETE" && !action) return RECORDING_DELETE_SCOPE;
   if (method === "POST" && !match[2]) {
     if (action === "chunks" || action === "finalize")
       return RECORDING_UPLOAD_SCOPE;

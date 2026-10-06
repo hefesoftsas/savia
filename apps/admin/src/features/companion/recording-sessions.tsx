@@ -1,8 +1,16 @@
 import "./recording-sessions.css";
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { AudioLines, Download, Pencil, RefreshCw } from "lucide-react";
+import { AudioLines, Download, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAppLocale, intlLocale, useMessages } from "@/i18n/core";
 import { companionMessages } from "@/i18n/locales/companion";
 import {
@@ -190,6 +198,13 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
                   ),
                 )
               }
+              onDeleted={(id) => {
+                const remaining = sessions.filter((item) => item.id !== id);
+                setSessions(remaining);
+                setSelected((current) =>
+                  current === id ? (remaining[0]?.id ?? null) : current,
+                );
+              }}
             />
           )}
         </div>
@@ -201,10 +216,12 @@ function SessionDetail({
   initial,
   client,
   onRenamed,
+  onDeleted,
 }: {
   initial: RecordingSession;
   client: CompanionSessionsClient;
   onRenamed: (id: string, name: string) => void;
+  onDeleted: (id: string) => void;
 }) {
   const t = useMessages(companionMessages);
   const locale = useAppLocale();
@@ -216,6 +233,9 @@ function SessionDetail({
   const [draftName, setDraftName] = useState(initial.name);
   const [savingName, setSavingName] = useState(false);
   const [renameError, setRenameError] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
   const [language, setLanguage] = useState(initial.job.language ?? "auto");
   const [retranscribeAck, setRetranscribeAck] = useState(false);
   const inFlight = useRef(false),
@@ -345,6 +365,22 @@ function SessionDetail({
       if (mounted.current) setSavingName(false);
     }
   }
+  async function remove() {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError(false);
+    try {
+      await client.remove(session.id);
+      if (mounted.current) {
+        setDeleteOpen(false);
+        onDeleted(session.id);
+      }
+    } catch {
+      if (mounted.current) setDeleteError(true);
+    } finally {
+      if (mounted.current) setDeleting(false);
+    }
+  }
   return (
     <article className="min-w-0">
       <div className="flex items-start justify-between gap-3">
@@ -422,24 +458,80 @@ function SessionDetail({
                 })()}
               </time>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || savingName}
-              onClick={() => {
-                setDraftName(session.name);
-                setRenameError(false);
-                setEditing(true);
-              }}
-              aria-label={t("Rename session")}
-              title={t("Rename session")}
-            >
-              <Pencil className="size-4" aria-hidden="true" />
-              {t("Rename")}
-            </Button>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || savingName}
+                onClick={() => {
+                  setDraftName(session.name);
+                  setRenameError(false);
+                  setEditing(true);
+                }}
+                aria-label={t("Rename session")}
+                title={t("Rename session")}
+              >
+                <Pencil className="size-4" aria-hidden="true" />
+                {t("Rename")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || savingName || deleting}
+                onClick={() => {
+                  setDeleteError(false);
+                  setDeleteOpen(true);
+                }}
+                aria-label={t("Delete session")}
+                title={t("Delete session")}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                {t("Delete session")}
+              </Button>
+            </div>
           </>
         )}
       </div>
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!deleting) setDeleteOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("Delete session")}</DialogTitle>
+            <DialogDescription>
+              {session.name}.{" "}
+              {t(
+                "This permanently deletes the session audio, transcript and summary saved in Savia.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {t("Unable to delete this session. Try again.")}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setDeleteOpen(false)}
+              autoFocus
+            >
+              {t("Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void remove()}
+            >
+              {t(deleting ? "Deleting…" : "Delete permanently")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <SessionPlayer session={session} client={client} />
       <section className="mt-8 border-t pt-6">
         <h3 className="text-lg font-medium">{t("Transcript and summary")}</h3>
@@ -669,13 +761,9 @@ function SessionPlayer({
   client: CompanionSessionsClient;
 }) {
   const t = useMessages(companionMessages);
-  const [chunk, setChunk] = useState<SessionChunk | undefined>(
-    session.chunks[0],
-  );
-  const [url, setUrl] = useState<string | null>(null),
-    [error, setError] = useState(false);
-  const [playNext, setPlayNext] = useState(false);
-  const [audioRevision, setAudioRevision] = useState(0);
+  const [combined, setCombined] = useState<string[] | null>(null);
+  const [combinedLoading, setCombinedLoading] = useState(false);
+  const [combinedFailed, setCombinedFailed] = useState(false);
   const [full, setFull] = useState<{
     source: SessionChunk["source"];
     url: string;
@@ -687,38 +775,24 @@ function SessionPlayer({
     null,
   );
   const fullUrl = useRef<string | null>(null);
+  const combinedUrls = useRef<string[]>([]);
+  const masterRef = useRef<HTMLAudioElement>(null);
+  const slavesRef = useRef<Array<HTMLAudioElement | null>>([]);
   useEffect(
     () => () => {
       if (fullUrl.current) URL.revokeObjectURL(fullUrl.current);
+      for (const url of combinedUrls.current) URL.revokeObjectURL(url);
+      combinedUrls.current = [];
     },
     [],
   );
   useEffect(() => {
-    if (!chunk) return;
-    const abort = new AbortController();
-    let objectUrl: string | null = null;
-    setUrl(null);
-    setError(false);
-    void client
-      .audio(session.id, chunk, abort.signal)
-      .then((blob) => {
-        if (abort.signal.aborted) return;
-        objectUrl = URL.createObjectURL(blob);
-        setUrl(objectUrl);
-      })
-      .catch(() => {
-        if (!abort.signal.aborted) setError(true);
-      });
-    return () => {
-      abort.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [client, session.id, chunk, audioRevision]);
-  if (!chunk) return null;
-  const ordered = session.chunks
-    .filter((item) => item.source === chunk.source)
-    .sort((a, b) => a.sequence - b.sequence);
-  const previous = ordered.find((item) => item.sequence === chunk.sequence - 1);
+    setCombined(null);
+    setCombinedFailed(false);
+    setFull(null);
+    setFullFailed(null);
+  }, [session.id]);
+  if (!session.chunks.length) return null;
   const sources = [...new Set(session.chunks.map((item) => item.source))];
   const fullEligible = (source: SessionChunk["source"]) => {
     const items = session.chunks.filter((item) => item.source === source);
@@ -742,71 +816,102 @@ function SessionPlayer({
       setFullLoading(null);
     }
   };
+  const loadCombined = async () => {
+    setCombinedLoading(true);
+    setCombinedFailed(false);
+    try {
+      const blobs = await Promise.all(
+        sources.map((source) => client.fullAudio(session.id, source)),
+      );
+      const urls = blobs.map((blob) => URL.createObjectURL(blob));
+      for (const url of combinedUrls.current) URL.revokeObjectURL(url);
+      combinedUrls.current = urls;
+      slavesRef.current = [];
+      setCombined(urls);
+    } catch {
+      setCombinedFailed(true);
+    } finally {
+      setCombinedLoading(false);
+    }
+  };
+  /** Keep every slave source in lockstep with the visible master player. */
+  const syncSlaves = () => {
+    const master = masterRef.current;
+    if (!master) return;
+    for (const slave of slavesRef.current) {
+      if (!slave) continue;
+      if (Math.abs(slave.currentTime - master.currentTime) > 0.15)
+        slave.currentTime = master.currentTime;
+      slave.playbackRate = master.playbackRate;
+      if (master.paused) slave.pause();
+      else void slave.play().catch(() => {});
+    }
+  };
+  const pauseSlaves = () => {
+    for (const slave of slavesRef.current) slave?.pause();
+  };
+  const combinedReady = sources.length > 1 && sources.every(fullEligible);
   return (
     <div className="mt-5 space-y-3">
-      <label className="block text-sm font-medium">
-        {t("Listen from")}
-        <select
-          className="mt-2 block w-full rounded-md border bg-background p-2"
-          value={`${chunk.source}:${chunk.sequence}`}
-          onChange={(event) => {
-            setPlayNext(false);
-            setChunk(
-              session.chunks.find(
-                (item) =>
-                  `${item.source}:${item.sequence}` === event.target.value,
-              ),
-            );
-          }}
-        >
-          {session.chunks.map((item) => (
-            <option
-              key={`${item.source}:${item.sequence}`}
-              value={`${item.source}:${item.sequence}`}
-            >
-              {sessionTime(item.startSeconds)} ·{" "}
-              {t(item.source === "microphone" ? "Microphone" : "System audio")}
-            </option>
-          ))}
-        </select>
-      </label>
-      {previous &&
-        chunk.startSeconds - previous.startSeconds - previous.durationSeconds >
-          0.1 && (
+      {combinedReady && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t("Combined call")}</p>
           <p className="text-sm text-muted-foreground">
-            {t("There is a gap before this part of the recording.")}
+            {t("Microphone and system audio, played together.")}
           </p>
-        )}
-      {url ? (
-        <audio
-          className="w-full"
-          src={url}
-          controls
-          autoPlay={playNext}
-          onEnded={() => {
-            const next = ordered.find(
-              (item) => item.sequence === chunk.sequence + 1,
-            );
-            if (next) {
-              setPlayNext(true);
-              setChunk(next);
-            }
-          }}
-        />
-      ) : (
-        <p className="text-sm" role={error ? "alert" : "status"}>
-          {t(error ? "Audio unavailable" : "Loading audio…")}
-          {error && (
+          {combined ? (
+            <>
+              <audio
+                ref={masterRef}
+                className="w-full"
+                src={combined[0]}
+                controls
+                onPlay={syncSlaves}
+                onPause={pauseSlaves}
+                onSeeked={syncSlaves}
+                onRateChange={syncSlaves}
+                onEnded={pauseSlaves}
+              />
+              {combined.slice(1).map((url, index) => (
+                <audio
+                  key={index}
+                  ref={(element) => {
+                    slavesRef.current[index] = element;
+                  }}
+                  src={url}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  className="hidden"
+                  preload="auto"
+                />
+              ))}
+            </>
+          ) : (
             <Button
-              className="ml-3"
-              size="sm"
               variant="outline"
-              onClick={() => setAudioRevision((value) => value + 1)}
+              disabled={combinedLoading}
+              onClick={() => void loadCombined()}
             >
-              {t("Retry audio")}
+              {t(
+                combinedLoading
+                  ? "Loading combined audio…"
+                  : "Play combined call",
+              )}
             </Button>
           )}
-        </p>
+          {combinedFailed && (
+            <p className="text-sm" role="alert">
+              {t("Audio unavailable")}{" "}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void loadCombined()}
+              >
+                {t("Retry audio")}
+              </Button>
+            </p>
+          )}
+        </div>
       )}
       <div className="space-y-4 border-t pt-4">
         <p className="text-sm font-medium">{t("Full audio")}</p>

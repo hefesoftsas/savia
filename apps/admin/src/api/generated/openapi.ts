@@ -1330,7 +1330,111 @@ export interface paths {
     };
     put?: never;
     post?: never;
-    delete?: never;
+    /** Permanently delete an owned recording session and its audio */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Recording session deleted */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
     options?: never;
     head?: never;
     /** Rename an owned recording session */
@@ -10195,7 +10299,10 @@ export interface paths {
                 slug: string;
               }[];
               grantedRecordingScopes: (
-                "recordings:read" | "recordings:upload" | "recordings:process"
+                | "recordings:read"
+                | "recordings:upload"
+                | "recordings:process"
+                | "recordings:delete"
               )[];
             };
           };
@@ -13861,6 +13968,183 @@ export interface paths {
         };
       };
     };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/whatsapp/channel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read task roster and staff registry */
+    get: {
+      parameters: {
+        query: {
+          agencyId: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Channel configuration */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                configuration: {
+                  routingEnabled: boolean;
+                  /** @default  */
+                  humanSupportContact: string;
+                  defaultTaskId?: string | null;
+                  tasks: {
+                    id: string;
+                    employeeId: string;
+                    title: string;
+                    description: string;
+                    order: number;
+                    audiences: ("external" | "internal")[];
+                  }[];
+                  staff: {
+                    phone: string;
+                    label: string;
+                    active: boolean;
+                    principalId: string | null;
+                  }[];
+                  internalCapabilities: string[];
+                  externalCapabilities: string[];
+                } | null;
+                employees: {
+                  id: string;
+                  name: string;
+                }[];
+                members: {
+                  id: string;
+                  name: string;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Tenant administrator required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Sender unavailable */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    /** Configure published tasks and staff phone assignments */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            agencyId: number;
+            configuration: {
+              routingEnabled: boolean;
+              /** @default  */
+              humanSupportContact?: string;
+              defaultTaskId?: string | null;
+              tasks: {
+                id: string;
+                employeeId: string;
+                title: string;
+                description: string;
+                order: number;
+                audiences: ("external" | "internal")[];
+              }[];
+              staff: {
+                phone: string;
+                label: string;
+                active: boolean;
+                principalId: string | null;
+              }[];
+              internalCapabilities: string[];
+              externalCapabilities: string[];
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description Saved */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                routingEnabled: boolean;
+                /** @default  */
+                humanSupportContact: string;
+                defaultTaskId?: string | null;
+                tasks: {
+                  id: string;
+                  employeeId: string;
+                  title: string;
+                  description: string;
+                  order: number;
+                  audiences: ("external" | "internal")[];
+                }[];
+                staff: {
+                  phone: string;
+                  label: string;
+                  active: boolean;
+                  principalId: string | null;
+                }[];
+                internalCapabilities: string[];
+                externalCapabilities: string[];
+              };
+            };
+          };
+        };
+        /** @description Tenant administrator required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Sender unavailable or a legacy message is processing */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid employee or staff assignment */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;

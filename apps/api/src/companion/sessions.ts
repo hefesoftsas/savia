@@ -833,6 +833,35 @@ export class CompanionSessions {
     });
     return publicSession(result);
   }
+  /** Permanently delete an owned session, its audio chunks and job schedule. */
+  async remove(access: RecordingAccess, id: string): Promise<void> {
+    const { manifest } = await this.readManifest(access, id);
+    await this.deleteSchedule(access, id, manifest.job.runId);
+    const sessionPrefix = `${await this.prefix(access)}${id}/`;
+    const bucket = this.storage();
+    let cursor: string | undefined;
+    do {
+      let page: R2Objects;
+      try {
+        page = await bucket.list({
+          prefix: sessionPrefix,
+          limit: 1000,
+          ...(cursor ? { cursor } : {}),
+        });
+      } catch {
+        throw storageUnavailable();
+      }
+      const keys = page.objects.map((object) => object.key);
+      if (keys.length) {
+        try {
+          await bucket.delete(keys);
+        } catch {
+          throw storageUnavailable();
+        }
+      }
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+  }
   async requestProcessing(
     access: RecordingAccess,
     id: string,

@@ -67,6 +67,34 @@ export const companionMessages = {
     "Há um intervalo sem áudio antes desta parte da gravação.",
   ],
   "Listen from": ["Escuchar desde", "Listen from", "Ouvir a partir de"],
+  "Combined call": ["Llamada completa", "Combined call", "Chamada completa"],
+  "Microphone and system audio, played together.": [
+    "Micrófono y audio del sistema, sonando juntos.",
+    "Microphone and system audio, played together.",
+    "Microfone e áudio do sistema, tocando juntos.",
+  ],
+  "Play combined call": [
+    "Reproducir llamada completa",
+    "Play combined call",
+    "Ouvir chamada completa",
+  ],
+  "Loading combined audio…": [
+    "Cargando llamada completa…",
+    "Loading combined audio…",
+    "Carregando chamada completa…",
+  ],
+  "Delete session": ["Eliminar sesión", "Delete session", "Excluir sessão"],
+  "Unable to delete this session. Try again.": [
+    "No se pudo eliminar esta sesión. Inténtalo de nuevo.",
+    "Unable to delete this session. Try again.",
+    "Não foi possível excluir esta sessão. Tente novamente.",
+  ],
+  "This permanently deletes the session audio, transcript and summary saved in Savia.":
+    [
+      "Esto elimina definitivamente el audio, la transcripción y el resumen de la sesión guardados en Savia.",
+      "This permanently deletes the session audio, transcript and summary saved in Savia.",
+      "Isso exclui permanentemente o áudio, a transcrição e o resumo da sessão salvos no Savia.",
+    ],
   "Full audio": ["Audio completo", "Full audio", "Áudio completo"],
   "Play full audio": [
     "Reproducir audio completo",

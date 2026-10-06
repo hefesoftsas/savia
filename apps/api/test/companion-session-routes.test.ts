@@ -268,6 +268,76 @@ describe("Companion long recording routes", () => {
     expect(unavailableWithoutWorkspace.status).toBe(403);
   });
 
+  it("deletes an owned session with its audio and enforces the delete scope", async () => {
+    const fixture = opusFixture();
+    const audioData = btoa(
+      Array.from(fixture, (byte) => String.fromCharCode(byte)).join(""),
+    );
+    const service = {} as unknown as CompanionService;
+    const instance = app(service, [
+      "recordings:read",
+      "recordings:upload",
+      "recordings:delete",
+    ]);
+    const id = crypto.randomUUID();
+    const headers = {
+      ...tenantHeaders(101),
+      "content-type": "application/json",
+    };
+    const create = await instance.request("/v1/companion/sessions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        id,
+        name: "Delete me",
+        sources: ["microphone"],
+        consent: true,
+      }),
+    });
+    expect(create.status).toBe(200);
+    const upload = await instance.request(
+      `/v1/companion/sessions/${id}/chunks`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          source: "microphone",
+          sequence: 0,
+          startSeconds: 0,
+          audio: { data: audioData, format: "ogg" },
+        }),
+      },
+    );
+    expect(upload.status).toBe(200);
+
+    const readOnly = app(service, ["recordings:read"]);
+    const forbidden = await readOnly.request(`/v1/companion/sessions/${id}`, {
+      method: "DELETE",
+      headers: tenantHeaders(101),
+    });
+    expect(forbidden.status).toBe(403);
+
+    const remove = await instance.request(`/v1/companion/sessions/${id}`, {
+      method: "DELETE",
+      headers: tenantHeaders(101),
+    });
+    expect(remove.status).toBe(204);
+    const missing = await instance.request(`/v1/companion/sessions/${id}`, {
+      headers: tenantHeaders(101),
+    });
+    expect(missing.status).toBe(404);
+    const missingAudio = await instance.request(
+      `/v1/companion/sessions/${id}/chunks/microphone/0`,
+      { headers: tenantHeaders(101) },
+    );
+    expect(missingAudio.status).toBe(404);
+    const repeat = await instance.request(`/v1/companion/sessions/${id}`, {
+      method: "DELETE",
+      headers: tenantHeaders(101),
+    });
+    expect(repeat.status).toBe(404);
+  });
+
   it("maps route operations to their required recording scopes", () => {
     const request = new Request("https://savia.test/v1/companion/sessions", {
       method: "POST",

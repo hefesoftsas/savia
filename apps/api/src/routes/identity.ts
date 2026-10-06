@@ -115,6 +115,7 @@ const companionSessionRoute = createRoute({
                 "recordings:read",
                 "recordings:upload",
                 "recordings:process",
+                "recordings:delete",
               ]),
             ),
           }),
@@ -776,10 +777,14 @@ export function registerIdentityRoutes(
           (
             scope,
           ): scope is
-            "recordings:read" | "recordings:upload" | "recordings:process" =>
+            | "recordings:read"
+            | "recordings:upload"
+            | "recordings:process"
+            | "recordings:delete" =>
             scope === "recordings:read" ||
             scope === "recordings:upload" ||
-            scope === "recordings:process",
+            scope === "recordings:process" ||
+            scope === "recordings:delete",
         ),
       },
       200,
