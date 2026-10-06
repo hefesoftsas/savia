@@ -50,15 +50,19 @@ function createIco(pngBuffers) {
 }
 
 export async function generateFavicons() {
+  // The touch and maskable icons live at v5: v3/v4 previously shipped opaque
+  // bytes under immutable caching, so the transparent artwork needs fresh
+  // URLs. Never reuse a retired versioned name for different bytes, and keep
+  // previously deployed files in public/ so old manifests keep resolving.
   const targets = [
     ["favicon-16-v3.png", 16, false],
     ["favicon-32-v3.png", 32, false],
     ["favicon-48-v3.png", 48, false],
-    ["apple-touch-icon-v3.png", 180, false],
+    ["apple-touch-icon-v5.png", 180, false],
     ["savia-icon-192-v3.png", 192, false],
     ["savia-icon-512-v3.png", 512, false],
-    ["savia-maskable-192-v3.png", 192, true],
-    ["savia-maskable-512-v3.png", 512, true],
+    ["savia-maskable-192-v5.png", 192, true],
+    ["savia-maskable-512-v5.png", 512, true],
   ];
   for (const [name, size, maskable] of targets) {
     await sharp(Buffer.from(iconSvg(maskable)), { density: 384 })

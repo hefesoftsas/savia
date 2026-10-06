@@ -17,6 +17,9 @@ icon as maskable.
 
 `apps/admin/index.html` and `apps/admin/public/site.webmanifest` reference the
 versioned assets. When changing their artwork, bump those asset URLs so browsers
-and installed applications can discover the new icons. Keep the manifest `id`,
+and installed applications can discover the new icons. Never reuse a retired
+versioned name for different bytes: the gateway serves these PNGs as immutable
+for a year, so clients would keep the old bytes. Retain previously deployed
+files in `public/` so older manifests keep resolving. Keep the manifest `id`,
 start URL, scope and shortcuts stable. Installed launchers may refresh their
 icons later than browser tabs; reinstalling the PWA refreshes the installed icon.
