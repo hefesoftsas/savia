@@ -1,6 +1,6 @@
 # Recording sessions: phase 2
 
-Status: implementation under validation, 2026-10-03. Preview installers remain
+Status: implementation under validation, 2026-10-05. Preview installers remain
 experimental; physical-device hour-long qualification is separate from automated
 synthetic validation.
 
@@ -102,6 +102,15 @@ notes accept the same `language`/`retranscribe` options.
 
 Library listing returns metadata; individual session reads retrieve saved transcripts
 and notes, keeping long recordings from expanding every list response.
+
+Before upload, the desktop app can explicitly preview each source in the current
+stopped, interrupted, or recovered draft. It reads completed Ogg/Opus chunks from the private
+native spool, validates them, and remuxes them in sequence into a local preview
+capped at 64 MiB per source. This path requires no Savia API connection, key,
+upload permission, upload consent, or provider request; it does not upload audio.
+Starting a new recording or discarding the draft clears its previews. The app
+releases temporary preview URLs when replacing a preview and when the view is
+closed.
 
 Recordings → Recording sessions shows one session with source-aware playback,
 processing state, partial transcripts, summary and questions. Audio plays by

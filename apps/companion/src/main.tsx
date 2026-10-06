@@ -14,7 +14,9 @@ import {
   native,
   type Capabilities,
   type CaptureStatus,
+  type Source,
 } from "./client";
+import { loadPreviewAudio } from "./preview-audio";
 import "./styles.css";
 
 const empty: CaptureStatus = {
@@ -48,12 +50,20 @@ function App() {
   const [noticeIsError, setNoticeIsError] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<Source, string | null>>({
+    microphone: null,
+    system: null,
+  });
+  const previewUrls = useRef<Record<Source, string | null>>({
+    microphone: null,
+    system: null,
+  });
   const inFlight = useRef(false);
   const mounted = useRef(true);
 
   useEffect(() => {
     mounted.current = true;
-    if (!isTauri()) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
     const poll = async () => {
       try {
         const next = await native<CaptureStatus>("capture_status");
@@ -62,11 +72,16 @@ function App() {
         if (mounted.current) setNotice(errorMessage(error));
       }
     };
-    void poll();
-    const timer = setInterval(() => void poll(), 1000);
+    if (isTauri()) {
+      void poll();
+      timer = setInterval(() => void poll(), 1000);
+    }
     return () => {
       mounted.current = false;
-      clearInterval(timer);
+      if (timer !== undefined) clearInterval(timer);
+      for (const url of Object.values(previewUrls.current))
+        if (url) URL.revokeObjectURL(url);
+      previewUrls.current = { microphone: null, system: null };
     };
   }, []);
 
@@ -89,6 +104,7 @@ function App() {
 
   const start = () =>
     run("Starting recording", async () => {
+      revokePreviews();
       const next = await native<CaptureStatus>("start_capture", {
         sessionId: crypto.randomUUID(),
         sources: { microphone, system },
@@ -123,10 +139,50 @@ function App() {
   const discard = () =>
     run("Discarding audio", async () => {
       setStatus(await native<CaptureStatus>("discard_capture"));
+      revokePreviews();
       setConsent(false);
       setSaved(false);
       setNotice("");
       setNoticeIsError(false);
+    });
+
+  function revokePreviewUrls() {
+    for (const url of Object.values(previewUrls.current))
+      if (url) URL.revokeObjectURL(url);
+    previewUrls.current = { microphone: null, system: null };
+  }
+
+  const revokePreviews = () => {
+    revokePreviewUrls();
+    setPreviews({ microphone: null, system: null });
+  };
+
+  const loadPreview = (source: Source) =>
+    run("Loading preview", async () => {
+      const segments = (status.chunks ?? [])
+        .filter((chunk) => chunk.source === source)
+        .sort((a, b) => a.sequence - b.sequence);
+      if (!segments.length) {
+        throw new Error("There is no captured audio to preview yet.");
+      }
+      const bytes = await loadPreviewAudio(segments, (sequence) =>
+        native<{ base64: string; format: string }>("read_capture_chunk", {
+          source,
+          sequence,
+        }),
+      );
+      if (!mounted.current) return;
+      const url = URL.createObjectURL(
+        new Blob([bytes.buffer], { type: "audio/ogg" }),
+      );
+      if (!mounted.current) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const previous = previewUrls.current[source];
+      if (previous) URL.revokeObjectURL(previous);
+      previewUrls.current = { ...previewUrls.current, [source]: url };
+      setPreviews(previewUrls.current);
     });
 
   const connect = (event: FormEvent) => {
@@ -242,6 +298,9 @@ function App() {
   const connected = Boolean(capabilities);
   const complete = ready && saved;
   const selectedSources = microphone || system;
+  const previewSources = [
+    ...new Set((status.chunks ?? []).map((chunk) => chunk.source)),
+  ];
   const reviewHref = recordingReviewHref(appOrigin);
   const locked = Boolean(busy) || isRecording || isPaused;
   const actionDisabled =
@@ -460,6 +519,38 @@ function App() {
                 </li>
               ))}
             </ul>
+          )}
+          {ready && previewSources.length > 0 && (
+            <div className="preview-panel" aria-label="Local audio preview">
+              <p className="preview-title">
+                Preview on this device before uploading
+              </p>
+              {previewSources.map((source) => {
+                const url = previews[source];
+                return (
+                  <div key={source} className="preview-row">
+                    <span>
+                      {source === "microphone" ? "Microphone" : "System audio"}
+                    </span>
+                    {url ? (
+                      <audio className="preview-audio" src={url} controls />
+                    ) : (
+                      <button
+                        className="discard-action"
+                        type="button"
+                        disabled={Boolean(busy)}
+                        onClick={() => void loadPreview(source)}
+                      >
+                        Preview{" "}
+                        {source === "microphone"
+                          ? "microphone"
+                          : "system audio"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
           {status.recovered && (
             <p className="notice" role="status">
