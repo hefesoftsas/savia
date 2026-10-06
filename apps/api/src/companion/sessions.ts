@@ -604,6 +604,11 @@ export class CompanionSessions {
     } catch (error) {
       // Immutable chunk writes may precede a racing manifest update. Keep only a valid exact retry.
       if (error instanceof CompanionError && error.status === 409) throw error;
+      if (error instanceof CompanionError && error.status === 404) {
+        // The session was deleted concurrently after the audio object was
+        // written. Remove the orphan so private audio never outlives its session.
+        await bucket.delete(audioKey).catch(() => {});
+      }
       throw error;
     }
   }
@@ -839,28 +844,34 @@ export class CompanionSessions {
     await this.deleteSchedule(access, id, manifest.job.runId);
     const sessionPrefix = `${await this.prefix(access)}${id}/`;
     const bucket = this.storage();
-    let cursor: string | undefined;
-    do {
-      let page: R2Objects;
-      try {
-        page = await bucket.list({
-          prefix: sessionPrefix,
-          limit: 1000,
-          ...(cursor ? { cursor } : {}),
-        });
-      } catch {
-        throw storageUnavailable();
-      }
-      const keys = page.objects.map((object) => object.key);
-      if (keys.length) {
+    // Two passes: a chunk uploaded concurrently with the first pass lands
+    // after its snapshot, so list again to catch stragglers. Anything still
+    // racing is reaped by putChunk's orphan cleanup once its manifest write
+    // fails against the deleted session.
+    for (let pass = 0; pass < 2; pass++) {
+      let cursor: string | undefined;
+      do {
+        let page: R2Objects;
         try {
-          await bucket.delete(keys);
+          page = await bucket.list({
+            prefix: sessionPrefix,
+            limit: 1000,
+            ...(cursor ? { cursor } : {}),
+          });
         } catch {
           throw storageUnavailable();
         }
-      }
-      cursor = page.truncated ? page.cursor : undefined;
-    } while (cursor);
+        const keys = page.objects.map((object) => object.key);
+        if (keys.length) {
+          try {
+            await bucket.delete(keys);
+          } catch {
+            throw storageUnavailable();
+          }
+        }
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor);
+    }
   }
   async requestProcessing(
     access: RecordingAccess,

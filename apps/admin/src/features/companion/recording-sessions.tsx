@@ -794,6 +794,22 @@ function SessionPlayer({
   }, [session.id]);
   if (!session.chunks.length) return null;
   const sources = [...new Set(session.chunks.map((item) => item.source))];
+  const timelineStart = (source: SessionChunk["source"]) =>
+    Math.min(
+      ...session.chunks
+        .filter((item) => item.source === source)
+        .map((item) => item.startSeconds),
+    );
+  const timelineEnd = (source: SessionChunk["source"]) =>
+    Math.max(
+      ...session.chunks
+        .filter((item) => item.source === source)
+        .map((item) => item.startSeconds + item.durationSeconds),
+    );
+  // Longest timeline first so the visible master outlives every slave.
+  const orderedSources = [...sources].sort(
+    (a, b) => timelineEnd(b) - timelineEnd(a),
+  );
   const fullEligible = (source: SessionChunk["source"]) => {
     const items = session.chunks.filter((item) => item.source === source);
     return (
@@ -821,7 +837,7 @@ function SessionPlayer({
     setCombinedFailed(false);
     try {
       const blobs = await Promise.all(
-        sources.map((source) => client.fullAudio(session.id, source)),
+        orderedSources.map((source) => client.fullAudio(session.id, source)),
       );
       const urls = blobs.map((blob) => URL.createObjectURL(blob));
       for (const url of combinedUrls.current) URL.revokeObjectURL(url);
@@ -834,18 +850,28 @@ function SessionPlayer({
       setCombinedLoading(false);
     }
   };
-  /** Keep every slave source in lockstep with the visible master player. */
+  /**
+   * Keep every slave source in lockstep with the visible master player.
+   * Chained full-audio files start at each source's first chunk, so a slave
+   * seeks to the same session time, not the same media time.
+   */
   const syncSlaves = () => {
     const master = masterRef.current;
     if (!master) return;
-    for (const slave of slavesRef.current) {
-      if (!slave) continue;
-      if (Math.abs(slave.currentTime - master.currentTime) > 0.15)
-        slave.currentTime = master.currentTime;
+    const masterStart = timelineStart(orderedSources[0]);
+    orderedSources.slice(1).forEach((source, index) => {
+      const slave = slavesRef.current[index];
+      if (!slave) return;
+      const target = master.currentTime + (masterStart - timelineStart(source));
+      const clamped = Number.isFinite(slave.duration)
+        ? Math.min(Math.max(target, 0), slave.duration)
+        : Math.max(target, 0);
+      if (Math.abs(slave.currentTime - clamped) > 0.15)
+        slave.currentTime = clamped;
       slave.playbackRate = master.playbackRate;
       if (master.paused) slave.pause();
       else void slave.play().catch(() => {});
-    }
+    });
   };
   const pauseSlaves = () => {
     for (const slave of slavesRef.current) slave?.pause();
@@ -947,9 +973,11 @@ function SessionPlayer({
                 </Button>
               )
             ) : (
-              <p className="text-sm text-muted-foreground">
-                {t("Full download is only available for desktop recordings.")}
-              </p>
+              <SegmentSourcePlayer
+                session={session}
+                source={source}
+                client={client}
+              />
             )}
             {fullFailed === source && (
               <p className="text-sm" role="alert">
@@ -966,6 +994,121 @@ function SessionPlayer({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+/** Per-segment fallback for sources without chained full audio (mobile M4A). */
+function SegmentSourcePlayer({
+  session,
+  source,
+  client,
+}: {
+  session: RecordingSession;
+  client: CompanionSessionsClient;
+  source: SessionChunk["source"];
+}) {
+  const t = useMessages(companionMessages);
+  const items = session.chunks
+    .filter((item) => item.source === source)
+    .sort((a, b) => a.sequence - b.sequence);
+  const [selected, setSelected] = useState<SessionChunk | undefined>(items[0]);
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const [playNext, setPlayNext] = useState(false);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    if (!selected) return;
+    const abort = new AbortController();
+    let objectUrl: string | null = null;
+    setUrl(null);
+    setError(false);
+    void client
+      .audio(session.id, selected, abort.signal)
+      .then((blob) => {
+        if (abort.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setError(true);
+      });
+    return () => {
+      abort.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [client, session.id, selected, revision]);
+  if (!selected) return null;
+  const previous = items.find(
+    (item) => item.sequence === selected.sequence - 1,
+  );
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium">
+        {t("Listen from")}
+        <select
+          className="mt-2 block w-full rounded-md border bg-background p-2"
+          value={`${selected.source}:${selected.sequence}`}
+          onChange={(event) => {
+            setPlayNext(false);
+            setSelected(
+              items.find(
+                (item) =>
+                  `${item.source}:${item.sequence}` === event.target.value,
+              ),
+            );
+          }}
+        >
+          {items.map((item) => (
+            <option
+              key={`${item.source}:${item.sequence}`}
+              value={`${item.source}:${item.sequence}`}
+            >
+              {sessionTime(item.startSeconds)} ·{" "}
+              {t(item.source === "microphone" ? "Microphone" : "System audio")}
+            </option>
+          ))}
+        </select>
+      </label>
+      {previous &&
+        selected.startSeconds -
+          previous.startSeconds -
+          previous.durationSeconds >
+          0.1 && (
+          <p className="text-sm text-muted-foreground">
+            {t("There is a gap before this part of the recording.")}
+          </p>
+        )}
+      {url ? (
+        <audio
+          className="w-full"
+          src={url}
+          controls
+          autoPlay={playNext}
+          onEnded={() => {
+            const next = items.find(
+              (item) => item.sequence === selected.sequence + 1,
+            );
+            if (next) {
+              setPlayNext(true);
+              setSelected(next);
+            }
+          }}
+        />
+      ) : (
+        <p className="text-sm" role={error ? "alert" : "status"}>
+          {t(error ? "Audio unavailable" : "Loading audio…")}
+          {error && (
+            <Button
+              className="ml-3"
+              size="sm"
+              variant="outline"
+              onClick={() => setRevision((value) => value + 1)}
+            >
+              {t("Retry audio")}
+            </Button>
+          )}
+        </p>
+      )}
     </div>
   );
 }

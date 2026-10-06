@@ -336,6 +336,10 @@ describe("Companion long recording routes", () => {
       headers: tenantHeaders(101),
     });
     expect(repeat.status).toBe(404);
+    const orphaned = await env.DOCUMENTS.list();
+    expect(
+      orphaned.objects.filter((object) => object.key.includes(id)),
+    ).toEqual([]);
   });
 
   it("maps route operations to their required recording scopes", () => {
