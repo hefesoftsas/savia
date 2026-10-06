@@ -31,6 +31,8 @@ jobs:
     name: Preview ${{ inputs.action }} (${{ inputs.branch }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    environment:
+      name: preview
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
     steps:

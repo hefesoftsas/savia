@@ -165,6 +165,52 @@ it("loads the selected release source into a new project and clears the deep lin
   ).toBe(true);
   expect(sourceOpened).toHaveBeenCalledOnce();
 });
+it("lists published store versions and opens the selected one as a new project", async () => {
+  const calls: string[] = [];
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path, init) => {
+      calls.push(path);
+      if (path === "/api/plugin-projects") return Response.json({ data: [] });
+      if (path === "/api/plugin-store")
+        return Response.json({
+          data: [
+            {
+              manifest: { id: "custom.demo", label: "Demo" },
+              version: "1.0.0",
+            },
+          ],
+        });
+      if (path.startsWith("/api/plugin-store/custom.demo/source?"))
+        return Response.json({ data: { files, history: [] } });
+      if (path.endsWith("/registry"))
+        return Response.json({ canPublish: false });
+      if (init?.method === "PUT") {
+        return Response.json({
+          data: {
+            id: "store-draft",
+            label: "Demo",
+            files: JSON.parse(String(init.body)).files,
+            history: [],
+            version: 1,
+            updatedAt: "today",
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    },
+  });
+  render(<Workspace tenantId={1} onClose={() => {}} onPublished={() => {}} />);
+  expect(await screen.findByText("Abrir un plugin existente")).toBeVisible();
+  fireEvent.click(await screen.findByRole("button", { name: "Editar" }));
+  expect(await screen.findByLabelText("source")).toHaveValue("original");
+  expect(
+    calls.some(
+      (path) => path === "/api/plugin-store/custom.demo/source?version=1.0.0",
+    ),
+  ).toBe(true);
+});
 it("lists and reopens a newly created project after returning from the IDE", async () => {
   const draftId = "new-draft";
   let exists = false;

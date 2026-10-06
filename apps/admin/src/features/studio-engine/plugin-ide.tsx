@@ -45,7 +45,11 @@ import { useAppLocale, useMessages } from "@/i18n/core";
 import { useAppServices } from "@/features/assistant/assistant-context";
 import { pluginApi } from "./api";
 import { ApiClientError } from "@/api/api-client";
-import { requestPluginAuthoring } from "./plugin-authoring-request";
+import {
+  readAuthoringStream,
+  requestPluginAuthoring,
+  type AuthoringStreamEvent,
+} from "./plugin-authoring-request";
 import { MonacoCodeEditor } from "./monaco-code-editor";
 import { pluginIdeMessages } from "./plugin-ide-messages";
 import { pluginIdeDeclarations } from "./plugin-ide-declarations";
@@ -64,7 +68,11 @@ import "./plugin-ide.css";
 
 import type { ProjectDraft } from "./plugin-project-session";
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  usage?: { input: number; output: number };
+};
 type Proposal = { message: string; files: IdeFiles };
 type Preview = {
   document: string;
@@ -128,6 +136,22 @@ export default function PluginIde({
     null,
   );
   const [generating, setGenerating] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState("");
+  const [liveUsage, setLiveUsage] = useState<{
+    input: number;
+    output: number;
+  } | null>(null);
+  const [estimatedInput, setEstimatedInput] = useState(0);
+
+  function formatTokens(value: number): string {
+    const amount = Math.max(0, Math.round(value));
+    if (amount < 1000) return String(amount);
+    if (amount < 10000)
+      return `${(amount / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+    return `${Math.round(amount / 1000)}k`;
+  }
+  const [queue, setQueue] = useState<string[]>([]);
+  const queueRef = useRef<string[]>([]);
   const [generationSeconds, setGenerationSeconds] = useState(0);
   const locked = generating || !!busy;
   useEffect(() => {
@@ -154,9 +178,10 @@ export default function PluginIde({
   useEffect(() => {
     draftCallback.current?.({
       files,
-      history: history
-        .slice(-10)
-        .map((item) => ({ ...item, content: item.content.slice(0, 4000) })),
+      history: history.slice(-10).map((item) => ({
+        role: item.role,
+        content: item.content.slice(0, 4000),
+      })),
     });
   }, [files, history]);
   const snapshot = JSON.stringify(files);
@@ -177,7 +202,7 @@ export default function PluginIde({
   useEffect(() => {
     const element = conversation.current;
     if (element) element.scrollTop = element.scrollHeight;
-  }, [history, generating, proposal, chatError]);
+  }, [history, generating, proposal, chatError, streamingMessage, queue]);
   function openFile(name: keyof IdeFiles) {
     setSelected(name);
     setOpenFiles((current) =>
@@ -284,20 +309,53 @@ export default function PluginIde({
     setProposal(null);
     setReviewFile(null);
   }
+  function enqueuePrompt(requestPrompt: string): boolean {
+    if (
+      queueRef.current.length >= 5 ||
+      queueRef.current.includes(requestPrompt)
+    )
+      return false;
+    queueRef.current = [...queueRef.current, requestPrompt];
+    setQueue(queueRef.current);
+    return true;
+  }
+  function shiftQueue(): string | undefined {
+    const next = queueRef.current[0];
+    if (next === undefined) return undefined;
+    queueRef.current = queueRef.current.slice(1);
+    setQueue(queueRef.current);
+    return next;
+  }
+  function removeQueued(index: number) {
+    queueRef.current = queueRef.current.filter((_, item) => item !== index);
+    setQueue(queueRef.current);
+  }
   async function generate(input = prompt) {
-    if (!input.trim() || locked) return;
+    const requestPrompt = input.trim();
+    if (!requestPrompt || busy) return;
+    if (generating) {
+      if (enqueuePrompt(requestPrompt) && input === prompt) setPrompt("");
+      return;
+    }
+    if (input === prompt) setPrompt("");
+    await runGeneration(requestPrompt);
+  }
+  async function runGeneration(
+    requestPrompt: string,
+    context?: { history: ChatMessage[]; files: IdeFiles },
+  ) {
     const requestId = ++operation.current;
     const abort = new AbortController();
     controller.current = abort;
-    const requestPrompt = input.trim();
     const priorHistory =
-      history.at(-1)?.role === "user" &&
+      context?.history ??
+      (history.at(-1)?.role === "user" &&
       history.at(-1)?.content === requestPrompt
         ? history.slice(0, -1)
-        : history;
+        : history);
+    const baseFiles = context?.files ?? proposal?.files ?? files;
     setLastPrompt(requestPrompt);
     setChatError("");
-    setPrompt("");
     setHistory(
       [...priorHistory, { role: "user", content: requestPrompt }].slice(
         -10,
@@ -305,56 +363,130 @@ export default function PluginIde({
     );
     setReviewFile(null);
     setGenerating(true);
+    setStreamingMessage("");
+    setLiveUsage(null);
+    setEstimatedInput(
+      Math.ceil((requestPrompt.length + JSON.stringify(baseFiles).length) / 4),
+    );
     setError("");
+    let streamedText = "";
+    let usage: { input: number; output: number } | null = null;
+    let succeeded = false;
+    let successfulContext: { history: ChatMessage[]; files: IdeFiles } | null =
+      null;
     try {
-      const result = await requestPluginAuthoring(
-        (signal) =>
-          apiClient.post<Proposal>(
-            "/api/assistant/plugin-authoring",
-            {
+      const result = await requestPluginAuthoring(async (signal) => {
+        const response = await apiClient.requestResponse(
+          "/api/assistant/plugin-authoring/stream",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
               tenantId,
               prompt: requestPrompt,
-              files: proposal?.files ?? files,
+              files: baseFiles,
               history: priorHistory.slice(-10).map((item) => ({
-                ...item,
+                role: item.role,
                 content: item.content.slice(0, 4000),
               })),
               diagnostics: [error, ...logs]
                 .filter(Boolean)
                 .join("\n")
                 .slice(-8000),
-            },
-            { signal },
-          ),
-        abort,
-      );
+            }),
+            signal,
+          },
+        );
+        if (!response.ok) {
+          const envelope = (await response.json().catch(() => null)) as {
+            error?: { code?: string; message?: string };
+          } | null;
+          throw new ApiClientError(
+            response.status,
+            envelope?.error?.code ?? `HTTP_${response.status}`,
+            envelope?.error?.message ?? response.statusText ?? "Request failed",
+            envelope,
+          );
+        }
+        // Boxed so closure assignments stay visible to the type checker.
+        const outcome: {
+          current: {
+            message: string;
+            files: Record<string, string>;
+          } | null;
+        } = { current: null };
+        await readAuthoringStream(
+          response,
+          signal,
+          (event: AuthoringStreamEvent) => {
+            if (operation.current !== requestId || !active.current) return;
+            if (event.type === "message") {
+              streamedText += event.delta;
+              setStreamingMessage(streamedText);
+            } else if (event.type === "usage") {
+              usage = { input: event.input, output: event.output };
+              setLiveUsage(usage);
+            } else if (event.type === "result") {
+              outcome.current = {
+                message: event.message,
+                files: event.files,
+              };
+            } else if (event.type === "error") {
+              throw new ApiClientError(
+                event.code === "PLUGIN_AUTHORING_TIMEOUT" ? 504 : 502,
+                event.code ?? "PLUGIN_AUTHORING_UNAVAILABLE",
+                event.message,
+                event.details
+                  ? { error: { details: event.details } }
+                  : undefined,
+              );
+            }
+          },
+        );
+        if (!outcome.current) throw new Error(t("failed"));
+        return outcome.current;
+      }, abort);
       if (!active.current || operation.current !== requestId) return;
       if (currentSnapshot.current !== snapshot) throw new Error(t("stale"));
       // Treat the response as data, including when returned by a proxy.
       const proposedFiles = pluginAuthoringResultSchema.parse(result).files;
       setProposal({ message: result.message, files: proposedFiles });
-      setHistory(
-        [
-          ...priorHistory,
-          { role: "user", content: requestPrompt },
-          { role: "assistant", content: result.message },
-        ].slice(-10) as ChatMessage[],
-      );
-      setPrompt("");
+      const nextHistory = [
+        ...priorHistory,
+        { role: "user" as const, content: requestPrompt },
+        {
+          role: "assistant" as const,
+          content: result.message,
+          ...(usage ? { usage } : {}),
+        },
+      ].slice(-10) as ChatMessage[];
+      setHistory(nextHistory);
+      successfulContext = { history: nextHistory, files: proposedFiles };
+      setStreamingMessage("");
+      setLiveUsage(null);
+      succeeded = true;
     } catch (reason) {
       if (
         active.current &&
         operation.current === requestId &&
         (!abort.signal.aborted || (reason as Error)?.name === "TimeoutError")
-      )
+      ) {
         setChatError(
           (reason as Error)?.name === "TimeoutError"
             ? t("generationTimeout")
             : authoringError(reason),
         );
+        setStreamingMessage("");
+        setLiveUsage(null);
+      }
     } finally {
-      if (active.current && operation.current === requestId)
-        setGenerating(false);
+      if (active.current && operation.current === requestId) {
+        // Drain one queued follow-up per successful generation, keeping the
+        // pending indicator across the chain instead of flashing it.
+        const next = succeeded ? shiftQueue() : undefined;
+        if (!next) setGenerating(false);
+        if (next) void runGeneration(next, successfulContext ?? undefined);
+      }
     }
   }
   function authoringError(reason: unknown): string {
@@ -846,6 +978,31 @@ export default function PluginIde({
                         }}
                         language={name === "entry.tsx" ? "typescript" : "json"}
                         ariaLabel={name}
+                        inlineCompletion={
+                          name === "entry.tsx"
+                            ? {
+                                filename: "entry.tsx",
+                                fetchCompletion: async (prefix, suffix) => {
+                                  try {
+                                    const result = await apiClient.post<{
+                                      completion: string;
+                                    }>("/api/assistant/plugin-completion", {
+                                      tenantId,
+                                      filename: "entry.tsx",
+                                      prefix,
+                                      suffix,
+                                    });
+                                    return result.completion?.trim()
+                                      ? result.completion
+                                      : null;
+                                  } catch {
+                                    // Inline completions are best-effort.
+                                    return null;
+                                  }
+                                },
+                              }
+                            : undefined
+                        }
                         readOnly={locked}
                         contextDeclarations={pluginIdeDeclarations}
                         height={520}
@@ -973,14 +1130,75 @@ export default function PluginIde({
                     ) : (
                       <p>{item.content}</p>
                     )}
+                    {item.role === "assistant" && item.usage && (
+                      <p
+                        className="plugin-ide-usage"
+                        title={t("tokenUsage")}
+                        aria-label={t("tokenUsage")}
+                      >
+                        <span aria-hidden="true">
+                          ↑{formatTokens(item.usage.input)}
+                        </span>{" "}
+                        <span aria-hidden="true">
+                          ↓{formatTokens(item.usage.output)}
+                        </span>
+                      </p>
+                    )}
                   </article>
                 ))}
+                {queue.map((item, index) => (
+                  <article
+                    key={`queued-${index}`}
+                    className="plugin-ide-message plugin-ide-message-user"
+                  >
+                    <span className="plugin-ide-message-author">
+                      {t("you")} · {t("queued")}
+                    </span>
+                    <p>{item}</p>
+                    <button
+                      type="button"
+                      className="plugin-ide-queue-remove"
+                      aria-label={`${t("removeQueued")} ${item.slice(0, 80)}`}
+                      onClick={() => removeQueued(index)}
+                    >
+                      <X aria-hidden="true" />
+                    </button>
+                  </article>
+                ))}
+                {generating && !!streamingMessage && (
+                  <article className="plugin-ide-message plugin-ide-message-assistant">
+                    <span className="plugin-ide-message-author">
+                      {t("assistant")}
+                    </span>
+                    <AssistantMarkdown text={streamingMessage} />
+                  </article>
+                )}
                 {generating && (
                   <p className="plugin-ide-generating" role="status">
                     <LoaderCircle />
                     {t("generating")}
                     <span aria-hidden="true">
                       {t("elapsedSeconds", { seconds: generationSeconds })}
+                    </span>
+                    <span
+                      className="plugin-ide-usage"
+                      title={t("tokenUsage")}
+                      aria-label={t("tokenUsage")}
+                    >
+                      {liveUsage ? (
+                        <>
+                          <span aria-hidden="true">
+                            ↑{formatTokens(liveUsage.input)}
+                          </span>{" "}
+                          <span aria-hidden="true">
+                            ↓{formatTokens(liveUsage.output)}
+                          </span>
+                        </>
+                      ) : (
+                        <span aria-hidden="true">
+                          ↑~{formatTokens(estimatedInput)}
+                        </span>
+                      )}
                     </span>
                   </p>
                 )}
@@ -1062,8 +1280,10 @@ export default function PluginIde({
                     value={prompt}
                     maxLength={8000}
                     rows={3}
-                    disabled={locked}
-                    placeholder={t("placeholder")}
+                    disabled={!!busy}
+                    placeholder={
+                      generating ? t("queuePlaceholder") : t("placeholder")
+                    }
                     onChange={(event) => setPrompt(event.target.value)}
                     onKeyDown={(event) => {
                       if (
@@ -1081,7 +1301,7 @@ export default function PluginIde({
                       <Files />
                       {t("projectContext")}
                     </span>
-                    {generating ? (
+                    {generating && (
                       <Button
                         type="button"
                         size="icon"
@@ -1090,22 +1310,26 @@ export default function PluginIde({
                         onClick={() => {
                           operation.current++;
                           controller.current?.abort();
-                          setGenerating(false);
+                          setStreamingMessage("");
+                          setLiveUsage(null);
                           setPrompt(lastPrompt);
+                          const next = shiftQueue();
+                          setGenerating(Boolean(next));
+                          if (next) void runGeneration(next);
                         }}
                       >
                         <Square />
                       </Button>
-                    ) : (
-                      <Button
-                        type="submit"
-                        size="icon"
-                        disabled={locked || !prompt.trim()}
-                        aria-label={t("send")}
-                      >
-                        <ArrowUp />
-                      </Button>
                     )}
+                    <Button
+                      type="submit"
+                      size="icon"
+                      disabled={!!busy || !prompt.trim()}
+                      aria-label={generating ? t("queueSend") : t("send")}
+                      title={generating ? t("queueSend") : undefined}
+                    >
+                      <ArrowUp />
+                    </Button>
                   </div>
                 </form>
                 <p className="plugin-ide-hint">{t("aiHint")}</p>

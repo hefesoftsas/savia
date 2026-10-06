@@ -12,10 +12,17 @@ const mocks = vi.hoisted(() => ({
   model: vi.fn(),
   applyTheme: vi.fn(),
 }));
-vi.mock("../monaco-cdn", () => ({
-  loadMonacoFromCdn: mocks.load,
+const copilotMocks = vi.hoisted(() => ({
+  register: vi.fn(),
+  deregister: vi.fn(),
+}));
+vi.mock("../monaco", () => ({
+  loadMonaco: mocks.load,
   resolveMonacoTheme: () => "vs",
   applyMonacoTheme: mocks.applyTheme,
+}));
+vi.mock("monacopilot", () => ({
+  registerCompletion: copilotMocks.register,
 }));
 afterEach(() => {
   cleanup();
@@ -25,6 +32,14 @@ afterEach(() => {
 function monaco() {
   return {
     Uri: { parse: (value: string) => value },
+    languages: {
+      typescript: {
+        typescriptDefaults: {
+          setCompilerOptions: vi.fn(),
+          addExtraLib: vi.fn(),
+        },
+      },
+    },
     editor: {
       defineTheme: vi.fn(),
       setTheme: vi.fn(),
@@ -75,6 +90,58 @@ it("does not report an AI/programmatic replacement as a manual edit", async () =
   );
   expect(change).not.toHaveBeenCalled();
   expect(mocks.create.mock.results[0].value.getValue()).toBe("new");
+});
+
+it("delegates inline completions to the provided fetcher and stays silent on failure", async () => {
+  copilotMocks.register.mockReturnValue({
+    trigger: vi.fn(),
+    deregister: copilotMocks.deregister,
+    updateOptions: vi.fn(),
+  });
+  mocks.load.mockResolvedValue(monaco());
+  const fetchCompletion = vi.fn(async () => "useState(0)");
+  render(
+    <MonacoCodeEditor
+      value="source"
+      language="typescript"
+      ariaLabel="code"
+      onChange={vi.fn()}
+      inlineCompletion={{ filename: "entry.tsx", fetchCompletion }}
+    />,
+  );
+  await waitFor(() => expect(copilotMocks.register).toHaveBeenCalled());
+  const requestHandler = copilotMocks.register.mock.calls[0][2]
+    .requestHandler as (params: {
+    body: {
+      completionMetadata: {
+        textBeforeCursor: string;
+        textAfterCursor: string;
+      };
+    };
+  }) => Promise<{ completion: string | null }>;
+  await expect(
+    requestHandler({
+      body: {
+        completionMetadata: {
+          textBeforeCursor: "a".repeat(9000) + "const x = ",
+          textAfterCursor: " suffix",
+        },
+      },
+    }),
+  ).resolves.toEqual({ completion: "useState(0)" });
+  expect(fetchCompletion).toHaveBeenCalledWith(
+    "a".repeat(8000 - "const x = ".length) + "const x = ",
+    " suffix",
+  );
+
+  fetchCompletion.mockRejectedValueOnce(new Error("offline"));
+  await expect(
+    requestHandler({
+      body: {
+        completionMetadata: { textBeforeCursor: "a", textAfterCursor: "b" },
+      },
+    }),
+  ).resolves.toEqual({ completion: null });
 });
 
 it("initializes with the latest content if it changes during lazy loading", async () => {

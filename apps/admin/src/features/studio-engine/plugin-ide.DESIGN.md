@@ -19,6 +19,24 @@ answer, proposed files and apply/discard. The composer stays at the bottom and
 supports Enter to send and Shift+Enter for new lines. Proposed files open an inline
 Monaco diff; no generated code is applied silently.
 
+Monaco is bundled from npm (never a CDN) so the editor boots offline from the
+app shell. The `entry.tsx` editor additionally offers ghost-text inline
+completions (monacopilot) served by the tenant-scoped
+`POST /api/assistant/plugin-completion` route: short, import-free continuations
+from the workspace's configured model, best-effort and silent on failure.
+Completion traffic carries no provider keys; the API key stays server-side
+like the chat authoring route.
+
+The assistant streams over SSE (`POST /api/assistant/plugin-authoring/stream`):
+message deltas render live, a `usage` event reports input/output tokens (shown
+as ↑/↓ beside the pending indicator and under the finished answer; usage is
+client-side only and never persisted to the project), and the validated files
+arrive as a final `result` event. Pre-stream failures (auth, configuration,
+collection metadata) keep regular JSON error responses; mid-stream failures
+arrive as `error` events. While a generation runs, the composer stays enabled
+and further prompts join a visible capped queue that drains in order after
+each successful generation; cancel stops only the running request.
+
 Tokens derive from the active Savia palette:
 
 - Canvas/ink: `--background`, `--foreground`.
