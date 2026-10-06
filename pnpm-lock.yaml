@@ -359,7 +359,7 @@ importers:
         version: 1.7.6(@better-auth/core@1.7.6(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.0)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.6(@opentelemetry/api@1.9.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260901.1)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(kysely@0.29.5)(mysql2@3.24.4(@types/node@24.13.3))(pg@8.23.0))(mongodb@7.6.0)(mysql2@3.24.4(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11)(vue@3.5.42(typescript@5.9.3)))(better-call@1.4.0(zod@4.5.4))
       '@hono/zod-openapi':
         specifier: ^1.6.1
-        version: 1.6.1(hono@4.13.5)(zod@4.5.4)
+        version: 1.6.1(hono@4.13.11)(zod@4.5.4)
       '@openrouter/ai-sdk-provider':
         specifier: 3.0.0
         version: 3.0.0(ai@7.0.91(zod@4.5.4))(zod@4.5.4)
@@ -386,13 +386,13 @@ importers:
         version: link:../../packages/tenant-host
       '@scalar/hono-api-reference':
         specifier: ^0.12.0
-        version: 0.12.0(hono@4.13.5)
+        version: 0.12.0(hono@4.13.11)
       ai:
         specifier: 7.0.91
         version: 7.0.91(zod@4.5.4)
       altcha-lib:
         specifier: 2.5.0
-        version: 2.5.0(cors@2.8.6)(express@5.2.1(supports-color@10.2.2))(hono@4.13.5)
+        version: 2.5.0(cors@2.8.6)(express@5.2.1(supports-color@10.2.2))(hono@4.13.11)
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
@@ -403,8 +403,8 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260901.1)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(kysely@0.29.5)(mysql2@3.24.4(@types/node@24.13.3))(pg@8.23.0)
       hono:
-        specifier: ^4.13.5
-        version: 4.13.5
+        specifier: ^4.13.11
+        version: 4.13.11
       ical.js:
         specifier: ^2.2.1
         version: 2.2.1
@@ -550,8 +550,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/studio-shared
       hono:
-        specifier: ^4.13.5
-        version: 4.13.5
+        specifier: ^4.13.11
+        version: 4.13.11
     devDependencies:
       '@cloudflare/vitest-plugin':
         specifier: ^1.1.2
@@ -573,13 +573,13 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.19.9
-        version: 1.19.17(hono@4.13.5)
+        version: 1.19.17(hono@4.13.11)
       '@savia/studio-shared':
         specifier: workspace:*
         version: link:../../packages/studio-shared
       hono:
-        specifier: ^4.13.5
-        version: 4.13.5
+        specifier: ^4.13.11
+        version: 4.13.11
       mongodb:
         specifier: ^7.6.0
         version: 7.6.0
@@ -660,7 +660,7 @@ importers:
     dependencies:
       '@prefecthq/fastmcp-ts':
         specifier: ^1.7.0
-        version: 1.7.0(hono@4.13.5)(supports-color@10.2.2)
+        version: 1.7.0(hono@4.13.11)(supports-color@10.2.2)
       '@savia/release-catalog':
         specifier: workspace:*
         version: link:../../packages/release-catalog
@@ -693,8 +693,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/studio-shared
       hono:
-        specifier: ^4.13.5
-        version: 4.13.5
+        specifier: ^4.13.11
+        version: 4.13.11
     devDependencies:
       '@cloudflare/vitest-plugin':
         specifier: ^1.1.2
@@ -721,8 +721,8 @@ importers:
         specifier: ^5.2.5
         version: 5.11.1
       hono:
-        specifier: ^4.9.0
-        version: 4.13.5
+        specifier: ^4.13.11
+        version: 4.13.11
     devDependencies:
       '@cloudflare/workers-types':
         specifier: 5.20260901.1
@@ -750,7 +750,7 @@ importers:
         version: 3.1135.0
       '@hono/node-server':
         specifier: ^1.19.9
-        version: 1.19.17(hono@4.13.5)
+        version: 1.19.17(hono@4.13.11)
       '@savia/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -761,8 +761,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/tenant-host
       hono:
-        specifier: ^4.13.5
-        version: 4.13.5
+        specifier: ^4.13.11
+        version: 4.13.11
       nodemailer:
         specifier: 10.0.14
         version: 10.0.14
@@ -1737,8 +1737,8 @@ importers:
         specifier: workspace:*
         version: link:../studio-shared
       hono:
-        specifier: ^4.13.5
-        version: 4.13.5
+        specifier: ^4.13.11
+        version: 4.13.11
       zod:
         specifier: ^4.1.0
         version: 4.5.4
@@ -7455,8 +7455,8 @@ packages:
     resolution: {integrity: sha512-nbfWpyRMcMrPMmDwJB+dhX/eiaPKtc2RB+0QZskqJ3WjRA/FDS0e9hZrx8EC/lbEv8gXy98FcDbNa/dspAaJMg==}
     engines: {node: '>=12.0.0'}
 
-  hono@4.13.5:
-    resolution: {integrity: sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==}
+  hono@4.13.11:
+    resolution: {integrity: sha512-/SMX/RQNJn7oNmFwH6DtwDqcrzZU2otm1FD6OJe2cWF6cfy/F8hq0XVBv7xW3FTJshRQwuBnXHDq2kNsdZnshg==}
     engines: {node: '>=16.9.0'}
 
   hookable@6.1.1:
@@ -12392,21 +12392,21 @@ snapshots:
 
   '@hey-api/types@0.1.4': {}
 
-  '@hono/node-server@1.19.17(hono@4.13.5)':
+  '@hono/node-server@1.19.17(hono@4.13.11)':
     dependencies:
-      hono: 4.13.5
+      hono: 4.13.11
 
-  '@hono/zod-openapi@1.6.1(hono@4.13.5)(zod@4.5.4)':
+  '@hono/zod-openapi@1.6.1(hono@4.13.11)(zod@4.5.4)':
     dependencies:
       '@asteasolutions/zod-to-openapi': 9.1.0(zod@4.5.4)
-      '@hono/zod-validator': 0.9.0(hono@4.13.5)(zod@4.5.4)
-      hono: 4.13.5
+      '@hono/zod-validator': 0.9.0(hono@4.13.11)(zod@4.5.4)
+      hono: 4.13.11
       openapi3-ts: 4.6.1
       zod: 4.5.4
 
-  '@hono/zod-validator@0.9.0(hono@4.13.5)(zod@4.5.4)':
+  '@hono/zod-validator@0.9.0(hono@4.13.11)(zod@4.5.4)':
     dependencies:
-      hono: 4.13.5
+      hono: 4.13.11
       zod: 4.5.4
 
   '@ibm-cloud/openapi-ruleset-utilities@1.9.2': {}
@@ -12779,12 +12779,12 @@ snapshots:
     dependencies:
       zod: 4.5.4
 
-  '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.5)':
+  '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.11)':
     dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.5)
+      '@hono/node-server': 1.19.17(hono@4.13.11)
       '@modelcontextprotocol/server': 2.0.0
     optionalDependencies:
-      hono: 4.13.5
+      hono: 4.13.11
 
   '@modelcontextprotocol/server-legacy@2.0.0(express@5.2.1(supports-color@10.2.2))(supports-color@10.2.2)':
     dependencies:
@@ -13088,12 +13088,12 @@ snapshots:
 
   '@poppinss/exception@1.2.3': {}
 
-  '@prefecthq/fastmcp-ts@1.7.0(hono@4.13.5)(supports-color@10.2.2)':
+  '@prefecthq/fastmcp-ts@1.7.0(hono@4.13.11)(supports-color@10.2.2)':
     dependencies:
       '@clack/prompts': 1.7.0
       '@modelcontextprotocol/client': 2.0.0
       '@modelcontextprotocol/core': 2.0.0
-      '@modelcontextprotocol/node': 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.5)
+      '@modelcontextprotocol/node': 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.11)
       '@modelcontextprotocol/server': 2.0.0
       '@modelcontextprotocol/server-legacy': 2.0.0(express@5.2.1(supports-color@10.2.2))(supports-color@10.2.2)
       '@standard-schema/spec': 1.1.0
@@ -14277,10 +14277,10 @@ snapshots:
 
   '@scalar/helpers@0.11.2': {}
 
-  '@scalar/hono-api-reference@0.12.0(hono@4.13.5)':
+  '@scalar/hono-api-reference@0.12.0(hono@4.13.11)':
     dependencies:
       '@scalar/client-side-rendering': 0.3.10
-      hono: 4.13.5
+      hono: 4.13.11
 
   '@scalar/icons@0.7.6(typescript@5.9.3)':
     dependencies:
@@ -15364,11 +15364,11 @@ snapshots:
       react-dom: 19.2.8(react@19.2.8)
       usehooks-ts: 3.1.1(react@19.2.8)
 
-  altcha-lib@2.5.0(cors@2.8.6)(express@5.2.1(supports-color@10.2.2))(hono@4.13.5):
+  altcha-lib@2.5.0(cors@2.8.6)(express@5.2.1(supports-color@10.2.2))(hono@4.13.11):
     optionalDependencies:
       cors: 2.8.6
       express: 5.2.1(supports-color@10.2.2)
-      hono: 4.13.5
+      hono: 4.13.11
 
   altcha@3.2.2:
     dependencies:
@@ -16774,7 +16774,7 @@ snapshots:
 
   highlight.js@11.12.0: {}
 
-  hono@4.13.5: {}
+  hono@4.13.11: {}
 
   hookable@6.1.1: {}
 
