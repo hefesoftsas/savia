@@ -1,3 +1,4 @@
+import { humanSupportContactText } from "./human-support";
 import type { ActionOutcome } from "./channel-contracts";
 import type { WhatsappAssistantBinding } from "./inbound-contracts";
 import { WhatsappChannelRepository } from "./channel-repository";
@@ -6,17 +7,22 @@ export function actionResultText(
   employee: string,
   command: string,
   outcome: ActionOutcome,
+  humanSupportContact = "",
 ): string {
   const label = `${employee} · Asistente virtual\n\n`;
   if (outcome.state !== "completed")
-    return `${label}${outcome.message}\nEscribe menú para elegir otra tarea.`;
+    return `${label}${outcome.message}\n${humanSupportContactText(humanSupportContact)}\nEscribe menú para elegir otra tarea.`;
   const value = outcome.result as Record<string, unknown> | null;
   if (command !== "quote-auto" || !value?.reference)
     return `${label}${({ "create-record": "Registro creado.", "update-record": "Registro actualizado.", "delete-record": "Registro eliminado.", "send-email": "Correo enviado.", "create-event": "Evento creado.", "upload-file": "Archivo guardado." } as Record<string, string>)[command] ?? "Solicitud completada."}\nEscribe menú para elegir otra tarea.`;
   const offers = Array.isArray(value.lowestPriceOffers)
     ? (value.lowestPriceOffers as Array<{ product: string; premium: number }>)
     : [];
-  return `${label}Resultados de ${value.reference}\nOfertas con precio: ${value.pricedOffers ?? 0}. Respuestas fallidas: ${value.failedOffers ?? 0}.\n${offers.map((o) => `${o.product}: $${Number(o.premium).toLocaleString("es-CO")}`).join("\n")}\n${value.recommendation ?? "Consulta las coberturas antes de elegir una oferta."}\nEscribe menú para elegir otra tarea.`.slice(
+  const support =
+    Number(value.pricedOffers ?? 0) === 0
+      ? `\nNo recibí ofertas con precio. ${humanSupportContactText(humanSupportContact)}`
+      : "";
+  return `${label}Resultados de ${value.reference}\nOfertas con precio: ${value.pricedOffers ?? 0}. Respuestas fallidas: ${value.failedOffers ?? 0}.\n${offers.map((o) => `${o.product}: $${Number(o.premium).toLocaleString("es-CO")}`).join("\n")}\n${value.recommendation ?? "Consulta las coberturas antes de elegir una oferta."}${support}\nEscribe menú para elegir otra tarea.`.slice(
     0,
     4096,
   );
@@ -122,9 +128,17 @@ export async function deliverChannelActionResults(
             message:
               "El resultado requiere revisión. No repitas automáticamente esta solicitud.",
           };
+      const supportContact =
+        (await repository.settings(row.tenant_id, row.connection_id))?.config
+          .humanSupportContact ?? "";
       const id = await send(
         finalBinding,
-        actionResultText(employee.name, action.command, outcome),
+        actionResultText(
+          employee.name,
+          action.command,
+          outcome,
+          supportContact,
+        ),
         row.contact,
       );
       await db

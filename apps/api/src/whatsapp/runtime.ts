@@ -24,6 +24,7 @@ import type { WhatsappRouteDependencies } from "../routes/whatsapp";
 import { WhatsappInboundRepository } from "./inbound-repository";
 import { drainWhatsappInbox, processWhatsappInbox } from "./inbound-processor";
 import { createWhatsappAssistant, sendWhatsappReply } from "./assistant";
+import { humanSupportRecoveryReply } from "./human-support";
 import { VirtualEmployeesRepository } from "../assistant/virtual-employees";
 import { retrieveRelevantChunks, type RagEnvironment } from "../assistant/rag";
 import type { AssistantConfigurationRepository } from "../assistant/configuration";
@@ -58,7 +59,24 @@ export function whatsappInboundFromEnvironment(
         repository: channelRepository,
       })
     : undefined;
+  const humanSupportContact = async (
+    binding: import("./inbound-contracts").WhatsappAssistantBinding,
+  ) => {
+    try {
+      return (
+        (
+          await channelRepository.settings(
+            binding.tenantId,
+            binding.connectionId,
+          )
+        )?.config.humanSupportContact ?? ""
+      );
+    } catch {
+      return "";
+    }
+  };
   const generate = createWhatsappAssistant({
+    humanSupportContact,
     ...(operations ? { capabilities: operations.capabilities } : {}),
     configuration,
     prepareInput: createWhatsappMediaInput(
@@ -125,6 +143,8 @@ export function whatsappInboundFromEnvironment(
     deferProcessing: environment.WHATSAPP_PROCESSING_MODE === "scheduled",
     process: async (options?: { scheduled?: boolean }) => {
       const processingDependencies = {
+        recoveryReply: async (binding) =>
+          humanSupportRecoveryReply(await humanSupportContact(binding)),
         generate: routed.generate,
         authorizeReply: routed.authorizeReply,
         afterReply: routed.afterReply,

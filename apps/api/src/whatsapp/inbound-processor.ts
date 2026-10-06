@@ -14,6 +14,8 @@ import {
   WhatsappInboundRepository,
 } from "./inbound-repository";
 
+import { humanSupportRecoveryReply } from "./human-support";
+
 const MAX_REPLY_LENGTH = 4096;
 const DEFAULT_BATCH_SIZE = 10;
 const DRAIN_BATCH_SIZE = 2;
@@ -128,7 +130,10 @@ export async function processWhatsappInbox(
       }
       // Persist and authorize the recovery reply through the same send path.
       outgoing =
-        "Tuve un problema y no pude completar tu solicitud. Por favor, contacta directamente a un asesor para continuar.";
+        (await dependencies
+          .recoveryReply?.(binding)
+          .catch(() => humanSupportRecoveryReply())) ??
+        humanSupportRecoveryReply();
       reply = outgoing;
     }
 

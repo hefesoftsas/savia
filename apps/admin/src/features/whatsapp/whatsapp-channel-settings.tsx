@@ -13,6 +13,7 @@ const empty: WhatsappChannelConfiguration = {
   staff: [],
   internalCapabilities: ["*"],
   externalCapabilities: ["insurance"],
+  humanSupportContact: "",
 };
 export function WhatsappChannelSettings({
   whatsapp,
@@ -32,7 +33,13 @@ export function WhatsappChannelSettings({
       .then((value) => {
         if (current) {
           setState(value);
-          setConfig(value.configuration ?? { ...empty, tasks: [], staff: [] });
+          setConfig({
+            ...empty,
+            ...value.configuration,
+            tasks: value.configuration?.tasks ?? [],
+            staff: value.configuration?.staff ?? [],
+            humanSupportContact: value.configuration?.humanSupportContact ?? "",
+          });
         }
       })
       .catch(() => {
@@ -67,7 +74,7 @@ export function WhatsappChannelSettings({
       setFeedback("Menú y personal guardados.");
     } catch {
       setFeedback(
-        "No se pudo guardar. Revisa las tareas, los números y las cuentas vinculadas. Si hay un mensaje en curso, espera a que termine.",
+        "No se pudo guardar. Revisa las tareas, los números, las cuentas vinculadas y el contacto de atención humana (teléfono o enlace HTTPS). Si hay un mensaje en curso, espera a que termine.",
       );
     } finally {
       setBusy(false);
@@ -91,6 +98,26 @@ export function WhatsappChannelSettings({
                 }
               />
               Activar menú de tareas
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium">
+                Contacto de atención humana (opcional)
+              </span>
+              <input
+                className="block w-full rounded border bg-background p-2"
+                maxLength={240}
+                value={config.humanSupportContact ?? ""}
+                onChange={(e) =>
+                  setConfig((c) => ({
+                    ...c,
+                    humanSupportContact: e.target.value,
+                  }))
+                }
+              />
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Teléfono o enlace HTTPS que se mostrará cuando el asistente no
+                pueda continuar. No inicia una transferencia automática.
+              </span>
             </label>
             {config.tasks.map((t, index) => (
               <div key={t.id} className="space-y-2 rounded-md border p-3">

@@ -26,7 +26,12 @@ it("routes the selected employee and revokes a reply if staff/profile changes be
   };
   await repo.configure(s.tenantId, s.connectionId, config, s.principal.id);
   const generate = vi.fn(async () => {
-    await repo.configure(s.tenantId, s.connectionId, config, s.principal.id);
+    await repo.configure(
+      s.tenantId,
+      s.connectionId,
+      { ...config, externalCapabilities: ["studio.records.read"] },
+      s.principal.id,
+    );
     return "Respuesta";
   });
   const routed = createRoutedWhatsappGenerator(repo, generate);

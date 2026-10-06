@@ -63,7 +63,18 @@ export class WhatsappChannelRepository {
       )
         throw new Error("CHANNEL_STAFF_UNAVAILABLE");
     }
-    const revision = crypto.randomUUID();
+    const withoutSupportContact = (candidate: ChannelConfiguration) => {
+      const { humanSupportContact: _humanSupportContact, ...operational } =
+        candidate;
+      return JSON.stringify(operational);
+    };
+    const configurationChanged =
+      previous === null ||
+      withoutSupportContact(previous.config) !== withoutSupportContact(config);
+    const revision =
+      previous && !configurationChanged
+        ? previous.revision
+        : crypto.randomUUID();
     const accessShape = (candidate: ChannelConfiguration) =>
       JSON.stringify({
         staff: candidate.staff
@@ -78,7 +89,7 @@ export class WhatsappChannelRepository {
       });
     const accessChanged =
       previous !== null && accessShape(previous.config) !== accessShape(config);
-    await this.db.batch([
+    const statements = [
       this.db
         .prepare(
           "INSERT INTO whatsapp_channel_settings(connection_id,tenant_id,config_json,revision,updated_by,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(connection_id) DO UPDATE SET config_json=excluded.config_json,revision=excluded.revision,updated_by=excluded.updated_by,updated_at=excluded.updated_at",
@@ -91,17 +102,21 @@ export class WhatsappChannelRepository {
           principalId,
           new Date().toISOString(),
         ),
-      this.db
-        .prepare(
-          "UPDATE whatsapp_channel_contacts SET employee_id=NULL,selection_revision=selection_revision+1,menu_json=NULL,buffered_text=NULL,access_fingerprint=CASE WHEN ? THEN NULL ELSE access_fingerprint END WHERE connection_id=?",
-        )
-        .bind(accessChanged ? 1 : 0, connectionId),
-      this.db
-        .prepare(
-          "UPDATE whatsapp_channel_actions SET status='cancelled' WHERE connection_id=? AND status IN ('pending','queued')",
-        )
-        .bind(connectionId),
-    ]);
+    ];
+    if (configurationChanged)
+      statements.push(
+        this.db
+          .prepare(
+            "UPDATE whatsapp_channel_contacts SET employee_id=NULL,selection_revision=selection_revision+1,menu_json=NULL,buffered_text=NULL,access_fingerprint=CASE WHEN ? THEN NULL ELSE access_fingerprint END WHERE connection_id=?",
+          )
+          .bind(accessChanged ? 1 : 0, connectionId),
+        this.db
+          .prepare(
+            "UPDATE whatsapp_channel_actions SET status='cancelled' WHERE connection_id=? AND status IN ('pending','queued')",
+          )
+          .bind(connectionId),
+      );
+    await this.db.batch(statements);
   }
 
   async getAccess(key: ContactKey): Promise<ContactAccess> {

@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import { isHumanSupportContact } from "./human-support";
 
 const phone = z
   .string()
@@ -8,6 +9,14 @@ const phone = z
 export const channelConfigurationSchema = z
   .object({
     routingEnabled: z.boolean(),
+    humanSupportContact: z
+      .string()
+      .trim()
+      .max(240)
+      .refine(isHumanSupportContact, {
+        message: "Enter a phone number or HTTPS support link",
+      })
+      .default(""),
     defaultTaskId: z.string().max(120).nullable().optional(),
     tasks: z
       .array(
