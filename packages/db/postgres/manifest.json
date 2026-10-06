@@ -189,6 +189,22 @@
     {
       "filename": "0043_whatsapp_inbox_binding_snapshot.sql",
       "sha256": "1f10cc3461c53b65a912eb5c53dcd46c028638740e9d1e08d219ada1151819ce"
+    },
+    {
+      "filename": "0044_whatsapp_employee_channel.sql",
+      "sha256": "4be6bca1cf4892e0ef61bad56a92854a09b9a49b4a77437c19a9d42e300c79b4"
+    },
+    {
+      "filename": "0045_whatsapp_routing_snapshot.sql",
+      "sha256": "b056982619ceec7b75b8a16eeb6cd9aa9c80567501d8b5cd00fdc6d5635a6e00"
+    },
+    {
+      "filename": "0046_whatsapp_action_dispatches.sql",
+      "sha256": "fa560ae193ca093a4a42b096e23fa0e52885bfcbc006e2f7b0d1f8711732b8fb"
+    },
+    {
+      "filename": "0047_whatsapp_contact_access_fingerprint.sql",
+      "sha256": "e0b621a39e98db1bd9f9c7aa4d7608bc1740410e1225162b075ad47313bec7bf"
     }
   ],
   "sqliteOnlyDerivedTables": [
