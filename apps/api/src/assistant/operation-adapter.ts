@@ -540,7 +540,7 @@ export function createChannelOperationAdapter(
         const now = new Date().toISOString();
         const existingRows = await deps.repository.db
           .prepare(
-            "SELECT id,status,action_json FROM whatsapp_channel_actions WHERE connection_id=? AND contact=? AND generation=? AND employee_id=? AND selection_revision=? AND (status IN ('queued','dispatching','completed','uncertain') OR (status='pending' AND expires_at>?)) ORDER BY created_at DESC LIMIT 10",
+            "SELECT id,status,action_json FROM whatsapp_channel_actions WHERE connection_id=? AND contact=? AND generation=? AND employee_id=? AND selection_revision=? AND (status IN ('queued','dispatching','completed','uncertain') OR (status='pending' AND expires_at>?)) ORDER BY created_at DESC",
           )
           .bind(
             session.access.connectionId,

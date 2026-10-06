@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { expect, it } from "vitest";
 import { createChannelOperationAdapter } from "../src/assistant/operation-adapter";
+import { PersonalActionPayloadCipher } from "../src/assistant/personal-action-payload";
 import { ChannelDrafts } from "../src/whatsapp/drafts";
 import { WhatsappChannelRepository } from "../src/whatsapp/channel-repository";
 import { defaultNativeConfiguration } from "../src/whatsapp/native";
@@ -224,11 +225,12 @@ it("prepares a staff quote after AUTORIZO using the same validated draft", async
   expect(afterAuthorization!.reply).toBeUndefined();
 
   const rows = await env.DB.prepare(
-    "SELECT status FROM whatsapp_channel_actions WHERE connection_id=? AND contact=?",
+    "SELECT id,status FROM whatsapp_channel_actions WHERE connection_id=? AND contact=?",
   )
     .bind(session.access.connectionId, session.access.contact)
-    .all<{ status: string }>();
+    .all<{ id: string; status: string }>();
   expect(rows.results.map((row) => row.status)).toEqual(["pending"]);
+  const quoteActionId = rows.results[0]!.id;
 
   const repeatedAuthorization = await adapter.capabilities(
     { ...binding, channelSession: session },
@@ -268,14 +270,79 @@ it("prepares a staff quote after AUTORIZO using the same validated draft", async
         .first("count"),
     ).toBe(1);
   }
+
+  const cipher = new PersonalActionPayloadCipher("test-secret");
+  const unrelatedActionIds: string[] = [];
+  const oldQuoteTimestamp = new Date(Date.now() - 21 * 60_000).toISOString();
   await env.DB.prepare(
-    "UPDATE whatsapp_channel_actions SET status='pending',expires_at=? WHERE connection_id=? AND contact=?",
+    "UPDATE whatsapp_channel_actions SET created_at=? WHERE id=?",
   )
-    .bind(
-      new Date(Date.now() - 1000).toISOString(),
-      session.access.connectionId,
-      session.access.contact,
+    .bind(oldQuoteTimestamp, quoteActionId)
+    .run();
+  for (let index = 0; index < 11; index++) {
+    const id = crypto.randomUUID();
+    unrelatedActionIds.push(id);
+    const createdAt = new Date(
+      Date.parse(oldQuoteTimestamp) + (index + 1) * 1000,
+    ).toISOString();
+    const input = await cipher.seal({
+      actionId: id,
+      principalId: session.access.principalId ?? session.access.contact,
+      payload: { collection: `unrelated-${index}` },
+    });
+    const actionJson = JSON.stringify({
+      id,
+      session,
+      revision: 1,
+      domain: "studio",
+      command: "create-record",
+      input: { sealedPayload: input },
+    });
+    await env.DB.prepare(
+      "INSERT INTO whatsapp_channel_actions(id,connection_id,tenant_id,contact,generation,employee_id,selection_revision,action_json,token_hash,status,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,'queued',?,?)",
     )
+      .bind(
+        id,
+        session.access.connectionId,
+        session.access.tenantId,
+        session.access.contact,
+        session.access.generation,
+        session.employeeId,
+        session.selectionRevision,
+        actionJson,
+        `unused-${index}`,
+        new Date(Date.now() + 60_000).toISOString(),
+        createdAt,
+      )
+      .run();
+  }
+  const oldUncertainAuthorization = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: "AUTORIZO" } as any,
+  );
+  expect(oldUncertainAuthorization?.directReply).toMatch(/asesor/i);
+  expect(
+    await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM whatsapp_channel_actions WHERE connection_id=? AND contact=?",
+    )
+      .bind(session.access.connectionId, session.access.contact)
+      .first("count"),
+  ).toBe(12);
+  for (const id of unrelatedActionIds) {
+    await env.DB.prepare("DELETE FROM whatsapp_channel_actions WHERE id=?")
+      .bind(id)
+      .run();
+  }
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_actions SET created_at=? WHERE id=?",
+  )
+    .bind(new Date().toISOString(), quoteActionId)
+    .run();
+
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_actions SET status='pending',expires_at=? WHERE id=?",
+  )
+    .bind(new Date(Date.now() - 1000).toISOString(), quoteActionId)
     .run();
   const expiredAuthorization = await adapter.capabilities(
     { ...binding, channelSession: session },
