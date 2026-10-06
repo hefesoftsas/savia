@@ -14,8 +14,28 @@ type Snapshot = {
   session: EmployeeSession | null;
   text: string;
   configurationRevision?: string;
+  employeeName?: string;
   reply?: NativeReply | string;
 };
+
+function stripLeadingEmployeeHeaders(value: string, employeeName: string) {
+  const header = `${employeeName} · Asistente virtual`;
+  let result = value;
+  while (result) {
+    const lineEnd = result.indexOf("\n");
+    const line = (lineEnd === -1 ? result : result.slice(0, lineEnd)).replace(
+      /\r$/,
+      "",
+    );
+    if (line.toLocaleLowerCase() !== header.toLocaleLowerCase()) break;
+    if (lineEnd === -1) return "";
+    result = result.slice(lineEnd + 1);
+    while (result.startsWith("\n") || result.startsWith("\r\n"))
+      result = result.startsWith("\r\n") ? result.slice(2) : result.slice(1);
+  }
+  return result;
+}
+
 export function createRoutedWhatsappGenerator(
   repository: WhatsappChannelRepository,
   complete: WhatsappInboundDependencies["generate"],
@@ -100,9 +120,19 @@ export function createRoutedWhatsappGenerator(
         .bind(saved.session.employeeId, access.tenantId)
         .first<{ name: string }>();
       if (!employee) throw new Error("CHANNEL_EMPLOYEE_UNAVAILABLE");
+      saved.employeeName = employee.name;
+      await repository.db
+        .prepare(
+          "UPDATE whatsapp_inbox SET routing_snapshot=? WHERE message_id=? AND connection_id=?",
+        )
+        .bind(JSON.stringify(saved), input.messageId, binding.connectionId)
+        .run();
       const scopedHistory = rows.results.reverse().flatMap((r) => [
         { role: "user" as const, content: r.user_text },
-        { role: "assistant" as const, content: r.assistant_text },
+        {
+          role: "assistant" as const,
+          content: stripLeadingEmployeeHeaders(r.assistant_text, employee.name),
+        },
       ]);
       const reply = await complete(
         {
@@ -115,26 +145,34 @@ export function createRoutedWhatsappGenerator(
         { ...input, text: saved.text },
       );
       const choice =
-        input.native?.kind === "choice" ? input.native.id : input.text;
+        input.native?.kind === "choice" ? input.native.id : input.text.trim();
       const label = `${employee.name} · Asistente virtual\n\n`;
       const labeledReply: NativeReply | string =
         typeof reply === "string"
-          ? (label + reply).slice(0, 4096)
+          ? (label + stripLeadingEmployeeHeaders(reply, employee.name)).slice(
+              0,
+              4096,
+            )
           : "text" in reply
             ? {
                 ...reply,
-                text: (label + reply.text).slice(
-                  0,
-                  reply.kind === "text" ? 4096 : 1024,
-                ),
+                text: (
+                  label + stripLeadingEmployeeHeaders(reply.text, employee.name)
+                ).slice(0, reply.kind === "text" ? 4096 : 1024),
               }
             : reply.kind === "media"
               ? {
                   ...reply,
-                  caption: (label + (reply.caption ?? "")).slice(0, 1024),
+                  caption: (
+                    label +
+                    stripLeadingEmployeeHeaders(
+                      reply.caption ?? "",
+                      employee.name,
+                    )
+                  ).slice(0, 1024),
                 }
               : reply;
-      if (/^(confirm:|cancel:|CONFIRMAR |CANCELAR$)/.test(choice)) {
+      if (/^(confirm:|cancel:|CONFIRMAR |CANCELAR$)/i.test(choice)) {
         saved.text = "[Action confirmation]";
         saved.reply = labeledReply;
         await repository.db
@@ -204,6 +242,23 @@ export function createRoutedWhatsappGenerator(
     ) {
       const saved = await snapshot(input.messageId);
       if (!saved?.session) return;
+      const assistantText =
+        typeof reply === "string"
+          ? reply
+          : reply.kind === "media" && saved.employeeName
+            ? nativeReplyText(
+                {
+                  ...reply,
+                  caption: reply.caption
+                    ? stripLeadingEmployeeHeaders(
+                        reply.caption,
+                        saved.employeeName,
+                      ) || undefined
+                    : undefined,
+                },
+                binding.native,
+              )
+            : nativeReplyText(reply, binding.native);
       await repository.db
         .prepare(
           "INSERT INTO whatsapp_channel_history(message_id,connection_id,contact,generation,employee_id,user_text,assistant_text,created_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(message_id) DO NOTHING",
@@ -215,10 +270,10 @@ export function createRoutedWhatsappGenerator(
           saved.generation,
           saved.session.employeeId,
           saved.text,
-          (typeof reply === "string"
-            ? reply
-            : nativeReplyText(reply, binding.native)
-          ).replace(/CONFIRMAR [A-Z2-7]{10}/g, "[Confirmación pendiente]"),
+          assistantText.replace(
+            /CONFIRMAR [A-Z2-7]{10}/gi,
+            "[Confirmación pendiente]",
+          ),
           new Date().toISOString(),
         )
         .run();
