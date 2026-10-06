@@ -521,35 +521,23 @@ const oauthUiScript = String.raw`(() => {
     }
   }
 
-  function isTenantSubdomain(hostname) {
-    const host = String(hostname || "").trim().toLowerCase();
-    if (!host || host === "localhost" || /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host) || host.includes("[") || host.includes(":")) return false;
-    const known = ["savia.app.hefesoft.com", "savia-preview.hefesoft.com"];
-    for (const canonical of known) {
-      if (host === canonical) return false;
-      if (host.endsWith("." + canonical)) {
-        const slug = host.slice(0, -(canonical.length + 1));
-        if (slug && !slug.includes(".") && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) return true;
-        return false;
-      }
-    }
-    return false;
-  }
-
   function isIpOrLocalhost(hostname) {
     const host = String(hostname || "").trim().toLowerCase();
     return !host || host === "localhost" || /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host) || host.includes(":") || host.includes("[");
   }
 
+  function tenantSlugPattern(value) {
+    return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value.trim().toLowerCase()) ? value.trim().toLowerCase() : "";
+  }
+
   let tenantHomeCheckedEmail = "";
   let tenantHomeRedirecting = false;
-  async function redirectToTenantHome(email) {
+  async function redirectToTenantHome(email, emailInput) {
     const normalized = validEmail(email);
     if (!normalized || tenantHomeRedirecting) return;
-    if (normalized.toLowerCase() === tenantHomeCheckedEmail) return;
-    tenantHomeCheckedEmail = normalized.toLowerCase();
-    if (isTenantSubdomain(window.location.hostname)) return;
-    if (isIpOrLocalhost(window.location.hostname) && window.location.hostname !== "localhost") return;
+    const queried = normalized.toLowerCase();
+    if (queried === tenantHomeCheckedEmail) return;
+    tenantHomeCheckedEmail = queried;
     let result = null;
     try {
       const response = await fetch("/api/auth/tenant-home?email=" + encodeURIComponent(normalized), { credentials: "same-origin", headers: { accept: "application/json" } });
@@ -558,15 +546,38 @@ const oauthUiScript = String.raw`(() => {
     } catch {
       return;
     }
-    const slug = result && result.found === true && typeof result.slug === "string" ? result.slug.trim().toLowerCase() : "";
-    if (!slug || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) return;
+    // Ignore stale responses: another lookup may have started, or the user
+    // may have edited the field while this request was in flight.
+    if (tenantHomeRedirecting) return;
+    const currentValue = emailInput ? validEmail(emailInput.value) : "";
+    if (!currentValue || currentValue.toLowerCase() !== queried) return;
+    const slug = result && result.found === true ? tenantSlugPattern(result.slug) : "";
+    if (!slug) return;
+    const hostname = window.location.hostname || "";
+    const lowerHost = hostname.toLowerCase();
+    if (lowerHost === slug || lowerHost.startsWith(slug + ".")) return;
+    // Already on this tenant's own hostname: nothing to do.
+    if (Number.isSafeInteger(result.tenantId) && result.currentTenantId === result.tenantId) return;
+    if (isIpOrLocalhost(hostname) && lowerHost !== "localhost") return;
+    // The server resolves the tenant serving the current hostname with the
+    // deployment's canonical host (never a client-side hard-coded list). When
+    // on a tenant hostname, swap its first label; otherwise prepend the slug.
+    let currentSlug = tenantSlugPattern(result.currentSlug);
+    if (!currentSlug && lowerHost.endsWith(".localhost")) {
+      currentSlug = tenantSlugPattern(lowerHost.slice(0, -".localhost".length));
+      if (currentSlug.includes(".")) currentSlug = "";
+    }
+    let base = lowerHost;
+    if (currentSlug && lowerHost.startsWith(currentSlug + ".")) {
+      base = lowerHost.slice(currentSlug.length + 1);
+    } else if (currentSlug) {
+      return;
+    }
     const currentHost = (window.location.host || "").toLowerCase();
-    const hostWithoutPort = window.location.hostname.toLowerCase() + (window.location.port ? ":" + window.location.port : "");
-    const fullTargetHost = slug + "." + hostWithoutPort;
+    const fullTargetHost = (slug + "." + base + (window.location.port ? ":" + window.location.port : "")).toLowerCase();
     if (fullTargetHost === currentHost) return;
-    if (window.location.hostname.toLowerCase() === slug || window.location.hostname.toLowerCase().startsWith(slug + ".")) return;
     const target = new URL(window.location.href);
-    target.hostname = slug + "." + window.location.hostname;
+    target.hostname = slug + "." + base;
     target.searchParams.set("email", normalized);
     tenantHomeRedirecting = true;
     setStatus("Redirigiendo a tu espacio de trabajo…");
@@ -580,7 +591,7 @@ const oauthUiScript = String.raw`(() => {
     emailInput.addEventListener("blur", () => {
       const value = emailInput.value;
       if (!validEmail(value)) return;
-      void redirectToTenantHome(value);
+      void redirectToTenantHome(value, emailInput);
     });
   }
 

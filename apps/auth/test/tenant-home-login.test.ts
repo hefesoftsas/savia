@@ -30,4 +30,22 @@ describe("tenant-home login redirect", () => {
     expect(script).toContain('searchParams.set("email"');
     expect(script).toContain("Redirigiendo a tu espacio de trabajo");
   });
+
+  it("relies on server-resolved host context without hard-coded domains", async () => {
+    const script = await oauthPageResponse(
+      new Request("https://savia.app.hefesoft.com/api/auth/oauth-ui.js"),
+    )!.text();
+    expect(script).not.toContain("savia.app.hefesoft.com");
+    expect(script).not.toContain("savia-preview.hefesoft.com");
+    expect(script).toContain("currentTenantId");
+  });
+
+  it("ignores stale lookup responses edited before they arrive", async () => {
+    const script = await oauthPageResponse(
+      new Request("https://savia.app.hefesoft.com/api/auth/oauth-ui.js"),
+    )!.text();
+    expect(script).toContain("tenantHomeRedirecting");
+    // The input value is re-verified against the queried email after await.
+    expect(script).toContain("currentValue");
+  });
 });

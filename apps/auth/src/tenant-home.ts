@@ -6,6 +6,12 @@ type ScopedUser = {
   role?: string | null;
 };
 
+type TenantHome = {
+  slug: string;
+  currentSlug: string | null;
+  currentTenantId: number | null;
+};
+
 function normalizeEmail(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
@@ -14,10 +20,11 @@ function normalizeEmail(value: unknown): string | null {
   return email;
 }
 
-async function resolveTenantSlug(
+async function resolveTenantHome(
   environment: AuthWorkerEnvironment,
   tenantId: number,
-): Promise<string | null> {
+  host: string,
+): Promise<TenantHome | null> {
   if (
     !environment.SAVIA_IDENTITY ||
     !environment.SAVIA_INTERNAL_BRIDGE_KEY?.trim()
@@ -27,7 +34,7 @@ async function resolveTenantSlug(
   try {
     const response = await environment.SAVIA_IDENTITY.fetch(
       new Request(
-        `https://savia-api.internal/_internal/tenants/${tenantId}/home`,
+        `https://savia-api.internal/_internal/tenants/${tenantId}/home?host=${encodeURIComponent(host)}`,
         {
           headers: {
             "x-savia-bridge-key": environment.SAVIA_INTERNAL_BRIDGE_KEY,
@@ -38,11 +45,24 @@ async function resolveTenantSlug(
     if (!response.ok) return null;
     const payload = (await response.json().catch(() => null)) as {
       slug?: unknown;
+      currentSlug?: unknown;
+      currentTenantId?: unknown;
     } | null;
     if (!payload || typeof payload.slug !== "string" || !payload.slug.trim()) {
       return null;
     }
-    return payload.slug.trim().toLowerCase();
+    return {
+      slug: payload.slug.trim().toLowerCase(),
+      currentSlug:
+        typeof payload.currentSlug === "string" && payload.currentSlug.trim()
+          ? payload.currentSlug.trim().toLowerCase()
+          : null,
+      currentTenantId:
+        Number.isSafeInteger(payload.currentTenantId) &&
+        (payload.currentTenantId as number) > 0
+          ? (payload.currentTenantId as number)
+          : null,
+    };
   } catch {
     return null;
   }
@@ -51,10 +71,14 @@ async function resolveTenantSlug(
 /**
  * Public tenant-home discovery for the login page.
  *
- * `GET /api/auth/tenant-home?email=a@b.com` returns `{ found: true, slug }`
- * when the account belongs to an active commercial tenant with its own
- * subdomain, otherwise `{ found: false }`. Fail-closed: unknown emails,
- * platform admins and lookup failures never redirect.
+ * `GET /api/auth/tenant-home?email=a@b.com` returns
+ * `{ found: true, slug, tenantId, currentSlug, currentTenantId }` when the
+ * account belongs to an active commercial tenant with its own subdomain.
+ * `currentSlug`/`currentTenantId` describe the tenant (if any) serving the
+ * current hostname, resolved server-side with the deployment's canonical
+ * host, so the login page never has to guess tenant hosts client-side.
+ * Unknown emails, platform admins and lookup failures return
+ * `{ found: false }` and never redirect (fail-closed).
  */
 export async function tenantHomeResponse(
   request: Request,
@@ -65,12 +89,10 @@ export async function tenantHomeResponse(
   if (url.pathname !== "/api/auth/tenant-home" || request.method !== "GET") {
     return null;
   }
+  const noStore = { headers: { "cache-control": "no-store" } };
   const email = normalizeEmail(url.searchParams.get("email"));
   if (!email) {
-    return Response.json(
-      { found: false },
-      { headers: { "cache-control": "no-store" } },
-    );
+    return Response.json({ found: false }, noStore);
   }
   const user = await adapter
     .findOne<ScopedUser>({
@@ -80,26 +102,18 @@ export async function tenantHomeResponse(
     .catch(() => null);
   const tenantId = user?.emailTenantId;
   if (!Number.isSafeInteger(tenantId) || (tenantId as number) <= 0) {
-    return Response.json(
-      { found: false },
-      { headers: { "cache-control": "no-store" } },
-    );
+    return Response.json({ found: false }, noStore);
   }
   if (user?.role?.split(",").includes("admin")) {
-    return Response.json(
-      { found: false },
-      { headers: { "cache-control": "no-store" } },
-    );
+    return Response.json({ found: false }, noStore);
   }
-  const slug = await resolveTenantSlug(environment, tenantId as number);
-  if (!slug) {
-    return Response.json(
-      { found: false },
-      { headers: { "cache-control": "no-store" } },
-    );
-  }
-  return Response.json(
-    { found: true, slug },
-    { headers: { "cache-control": "no-store" } },
+  const home = await resolveTenantHome(
+    environment,
+    tenantId as number,
+    url.hostname,
   );
+  if (!home) {
+    return Response.json({ found: false }, noStore);
+  }
+  return Response.json({ found: true, tenantId, ...home }, noStore);
 }

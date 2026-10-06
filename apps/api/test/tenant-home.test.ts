@@ -33,20 +33,64 @@ function app() {
   return api;
 }
 
+async function createTenant(id: number, slug: string) {
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO tenants(id,id_slug,name,kind,is_active,created_at,updated_at) VALUES(?,?,?,'commercial',1,?,?) ON CONFLICT(id) DO NOTHING",
+  )
+    .bind(id, slug, "Home Tenant", now, now)
+    .run();
+}
+
 describe("internal tenant home", () => {
   it("returns the slug for an active commercial tenant", async () => {
-    const id = 992001;
-    const now = new Date().toISOString();
-    await env.DB.prepare(
-      "INSERT INTO tenants(id,id_slug,name,kind,is_active,created_at,updated_at) VALUES(?,?,?,'commercial',1,?,?) ON CONFLICT(id) DO NOTHING",
-    )
-      .bind(id, "home-tenant", "Home Tenant", now, now)
-      .run();
-    const response = await app().request(`/_internal/tenants/${id}/home`, {
+    await createTenant(992001, "home-tenant");
+    const response = await app().request("/_internal/tenants/992001/home", {
       headers: { "x-savia-bridge-key": "test-bridge-key" },
     });
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ id, slug: "home-tenant" });
+    expect(await response.json()).toEqual({
+      id: 992001,
+      slug: "home-tenant",
+      currentSlug: null,
+      currentTenantId: null,
+    });
+  });
+
+  it("resolves the tenant serving the current hostname", async () => {
+    await createTenant(992002, "current-home");
+    const canonical = await app().request(
+      "/_internal/tenants/992002/home?host=savia.app.hefesoft.com",
+      { headers: { "x-savia-bridge-key": "test-bridge-key" } },
+    );
+    expect(await canonical.json()).toEqual({
+      id: 992002,
+      slug: "current-home",
+      currentSlug: null,
+      currentTenantId: null,
+    });
+
+    const dedicated = await app().request(
+      "/_internal/tenants/992002/home?host=current-home.savia.app.hefesoft.com",
+      { headers: { "x-savia-bridge-key": "test-bridge-key" } },
+    );
+    expect(await dedicated.json()).toEqual({
+      id: 992002,
+      slug: "current-home",
+      currentSlug: "current-home",
+      currentTenantId: 992002,
+    });
+
+    const unknown = await app().request(
+      "/_internal/tenants/992002/home?host=unknown.savia.app.hefesoft.com",
+      { headers: { "x-savia-bridge-key": "test-bridge-key" } },
+    );
+    expect(await unknown.json()).toEqual({
+      id: 992002,
+      slug: "current-home",
+      currentSlug: "unknown",
+      currentTenantId: null,
+    });
   });
 
   it("rejects missing bridge key and unknown tenants", async () => {

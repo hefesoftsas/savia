@@ -224,7 +224,12 @@ export function createApp(
     resolvedAuthService,
     identityBridgeKey,
   );
-  registerTenantHomeRoutes(app, db, identityBridgeKey);
+  registerTenantHomeRoutes(
+    app,
+    db,
+    identityBridgeKey,
+    canonicalHostForApi(oauthUrls.authorizationUrl),
+  );
   installRequestResultEnvelope(app);
   registerPublicPluginEntryRoutes(app, db, studioIntegrationKey);
   registerAccessControlRoutes(app, db, realtime);
