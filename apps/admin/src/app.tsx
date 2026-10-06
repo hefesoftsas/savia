@@ -303,6 +303,10 @@ const TenantBrandingPage = lazy(() =>
   })),
 );
 
+function AuthLoadingFallback() {
+  return <PwaSplash recoveryHref="/api/auth/admin/authorize" />;
+}
+
 export function App(props: { services?: AppServices } = {}) {
   return (
     <TenantBrandingProvider>
@@ -407,7 +411,7 @@ function AppContent({ services }: { services?: AppServices } = {}) {
             error={TenantHostMismatchError}
             // Same branded splash as the boot sequence: cold start shows a
             // single continuous visual through the auth check.
-            loading={PwaSplash}
+            loading={AuthLoadingFallback}
             requireAuth
             queryClient={queryClient}
             store={adminStore}
@@ -597,7 +601,7 @@ function BetterAuthCallback({
     };
   }, [onComplete, services, translate]);
 
-  if (!error) return <PwaSplash />;
+  if (!error) return <PwaSplash recoveryHref="/api/auth/admin/authorize" />;
 
   return (
     <main className="flex min-h-svh items-center justify-center bg-secondary p-6 text-foreground">

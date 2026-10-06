@@ -67,6 +67,7 @@ export function ApplicationRoot({
     <Suspense
       fallback={
         <PwaSplash
+          recoveryHref="/api/auth/admin/authorize"
           message={translateMessage(
             publicFormsMessages,
             "Cargando…",

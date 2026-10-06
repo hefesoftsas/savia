@@ -46,6 +46,7 @@ export const LoginPage = (_props: { redirectTo?: string }) => {
   return (
     <>
       <PwaSplash
+        recoveryHref="/api/auth/admin/authorize"
         message={translate("savia.auth.signingIn", {
           _: "Iniciando sesión con Savia…",
         })}

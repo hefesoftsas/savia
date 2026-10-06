@@ -2,12 +2,9 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableSkeleton } from "./table-skeleton";
 import { CardsGridSkeleton, ScreenListSkeleton } from "./page-skeletons";
+import { LoadingRecovery, useLoadingTimeout } from "./loading-recovery";
 
-export type RouteLoadingVariant =
-  | "default"
-  | "table"
-  | "cards"
-  | "screens";
+export type RouteLoadingVariant = "default" | "table" | "cards" | "screens";
 
 export function RouteLoading({
   label,
@@ -20,6 +17,16 @@ export function RouteLoading({
   variant?: RouteLoadingVariant;
   className?: string;
 }) {
+  const timedOut = useLoadingTimeout(`${label ?? ""}:${variant}:${compact}`);
+  if (timedOut) {
+    return (
+      <LoadingRecovery
+        signInHref="/api/auth/admin/authorize"
+        className={cn("my-6", className)}
+      />
+    );
+  }
+
   if (compact) {
     return (
       <div
@@ -44,10 +51,7 @@ export function RouteLoading({
       <div
         role="status"
         aria-live="polite"
-        className={cn(
-          "mx-auto w-full max-w-6xl space-y-6 py-6",
-          className,
-        )}
+        className={cn("mx-auto w-full max-w-6xl space-y-6 py-6", className)}
       >
         {label ? (
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -68,10 +72,7 @@ export function RouteLoading({
       <div
         role="status"
         aria-live="polite"
-        className={cn(
-          "mx-auto w-full max-w-6xl space-y-6 py-6",
-          className,
-        )}
+        className={cn("mx-auto w-full max-w-6xl space-y-6 py-6", className)}
       >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-2">
@@ -98,10 +99,7 @@ export function RouteLoading({
       <div
         role="status"
         aria-live="polite"
-        className={cn(
-          "mx-auto w-full max-w-6xl space-y-6 py-6",
-          className,
-        )}
+        className={cn("mx-auto w-full max-w-6xl space-y-6 py-6", className)}
       >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-2">
@@ -128,10 +126,7 @@ export function RouteLoading({
     <div
       role="status"
       aria-live="polite"
-      className={cn(
-        "mx-auto w-full max-w-6xl space-y-6 py-6",
-        className,
-      )}
+      className={cn("mx-auto w-full max-w-6xl space-y-6 py-6", className)}
     >
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-2">
