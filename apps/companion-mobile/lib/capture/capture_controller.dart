@@ -45,7 +45,6 @@ class CaptureController extends ChangeNotifier {
     this.timerFactory = Timer.new,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now {
-
     _interruption = native.interruptions.listen((_) {
       unawaited(stop());
     });

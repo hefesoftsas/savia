@@ -260,9 +260,7 @@ class _DraftEditorState extends State<_DraftEditor> {
   @override
   void initState() {
     super.initState();
-    _name = TextEditingController(
-      text: widget.controller.draft?.name ?? '',
-    );
+    _name = TextEditingController(text: widget.controller.draft?.name ?? '');
   }
 
   @override
@@ -308,8 +306,7 @@ class _DraftEditorState extends State<_DraftEditor> {
               textInputAction: TextInputAction.done,
               onChanged: (value) {
                 final next = value.trim();
-                final valid =
-                    next.isNotEmpty && next.length <= 255;
+                final valid = next.isNotEmpty && next.length <= 255;
                 widget.onValidityChanged(valid);
                 if (valid) c.renameDraft(value);
                 setState(() {});
