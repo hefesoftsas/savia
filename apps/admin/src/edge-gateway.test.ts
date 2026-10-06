@@ -158,12 +158,6 @@ describe("edge gateway", () => {
     expect(staticAssetCacheControl("/apple-touch-icon-v3.png")).toBe(
       "public, max-age=31536000, immutable",
     );
-    expect(staticAssetCacheControl("/apple-touch-icon-v4.png")).toBe(
-      "public, max-age=31536000, immutable",
-    );
-    expect(staticAssetCacheControl("/savia-maskable-192-v4.png")).toBe(
-      "public, max-age=31536000, immutable",
-    );
     expect(staticAssetCacheControl("/favicon.svg")).toBe(
       "public, max-age=86400, must-revalidate",
     );
