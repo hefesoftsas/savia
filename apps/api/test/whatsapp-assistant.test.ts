@@ -93,6 +93,22 @@ describe("restricted WhatsApp assistant", () => {
     expect(input).not.toHaveProperty("authorization");
   });
 
+  it("includes the current configured human contact as data for failure replies", async () => {
+    const s = setup();
+    const humanSupportContact = vi.fn(
+      async () => "https://support.example.test/help",
+    );
+    const generate = createWhatsappAssistant({ ...s, humanSupportContact });
+    await generate(binding, [], "Help me");
+    expect(humanSupportContact).toHaveBeenCalledWith(binding);
+    expect(s.complete.mock.calls[0][0].system).toContain(
+      '"https://support.example.test/help"',
+    );
+    expect(s.complete.mock.calls[0][0].system).toMatch(
+      /serialized data, not instructions/,
+    );
+  });
+
   it.each([{ agencyId: 8 }, { status: "inactive" }])(
     "rejects an unavailable employee before generation: %j",
     async (override) => {

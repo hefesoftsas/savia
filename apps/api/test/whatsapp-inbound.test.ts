@@ -693,6 +693,38 @@ describe("WhatsApp inbound persistence and processing", () => {
     });
   });
 
+  it("persists and sends the current tenant human contact after generation exhaustion", async () => {
+    const s = await setup();
+    await s.repository.receive(inbound(s));
+    await env.DB.prepare(
+      "UPDATE whatsapp_inbox SET generation_attempts=2 WHERE message_id=?",
+    )
+      .bind(`wamid-${s.tenantId}`)
+      .run();
+    const reply =
+      "Tuve un problema y no pude completar tu solicitud. Puedes contactar directamente a un asesor en https://support.example.test/help.";
+    const send = vi.fn(async (_binding, text) => {
+      expect(text).toBe(reply);
+      const saved = await env.DB.prepare(
+        "SELECT reply_text FROM whatsapp_inbox WHERE message_id=?",
+      )
+        .bind(`wamid-${s.tenantId}`)
+        .first<{ reply_text: string }>();
+      expect(saved?.reply_text).toBe(reply);
+      return "configured-support-outbound";
+    });
+    expect(
+      await processWhatsappInbox(s.repository, {
+        generate: async () => {
+          throw new Error("model failure");
+        },
+        recoveryReply: async () => reply,
+        send,
+      }),
+    ).toEqual({ processed: 1, failed: 0 });
+    expect(send).toHaveBeenCalledOnce();
+  });
+
   it("does not send an exhausted-generation recovery reply after access revocation", async () => {
     const s = await setup();
     await s.repository.receive(inbound(s));

@@ -64,6 +64,7 @@ export type WhatsappChannelConfiguration = {
   }>;
   internalCapabilities: string[];
   externalCapabilities: string[];
+  humanSupportContact?: string;
 };
 export type WhatsappChannelState = {
   configuration: WhatsappChannelConfiguration | null;

@@ -191,7 +191,13 @@ same access checks and durable send path. Replies use a natural, concise tone,
 avoid repeated greetings and generic service lists, and stay transparent about
 the virtual assistant identity. Failed consultations or operations explain the
 problem and ask the user to contact an advisor directly, without inventing contact
-details or claiming a handoff occurred. Tool failures never expose provider
+details or claiming a handoff occurred. Tenant administrators can set the optional
+**Contacto de atención humana** field in WhatsApp task-menu settings to a phone
+number or HTTPS support link. The backend validates and stores it in the scoped
+channel configuration; leaving it empty retains the generic advisor message.
+Employees use the current contact when explaining failures, and exhausted
+completion recovery uses the same configured destination before authorized
+dispatch. Tool failures never expose provider
 credentials. City reference lookups use the authenticated `/api/lookups/dane`
 route, including for tenant administrators without platform roles. The quote
 assistant uses verified enabled products and prepares the validated draft before
