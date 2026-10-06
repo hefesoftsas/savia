@@ -185,7 +185,10 @@ it("shows a saved language outside the preset list instead of displaying Automat
   show(client);
 
   const language = await screen.findByLabelText("Transcript language");
-  expect(language).toHaveValue("zh");
+  await waitFor(() => {
+    expect(language).toBeEnabled();
+    expect(language).toHaveValue("zh");
+  });
   expect(screen.getByRole("option", { name: /zh/ })).toBeInTheDocument();
 });
 
@@ -200,7 +203,10 @@ it("keeps language changes disabled while saved notes are loading", async () => 
   const language = await screen.findByLabelText("Transcript language");
   expect(language).toBeDisabled();
   resolveNotes({ ...result, language: "zh" });
-  await waitFor(() => expect(language).toBeEnabled());
+  await waitFor(() => {
+    expect(language).toBeEnabled();
+    expect(language).toHaveValue("zh");
+  });
 });
 
 it("ignores unrecognized provider diagnostic values", async () => {
