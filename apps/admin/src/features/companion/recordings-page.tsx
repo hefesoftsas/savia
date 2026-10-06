@@ -8,6 +8,7 @@ import {
   LockKeyhole,
   ChevronRight,
   LoaderCircle,
+  Mic,
   RefreshCw,
   Upload,
   Trash2,
@@ -31,6 +32,7 @@ import {
 } from "./client";
 
 import { RecordingUpload } from "./recording-upload";
+import { RecordingCapture } from "./recording-capture";
 import {
   processingFailure,
   providerFailureMessage,
@@ -139,6 +141,7 @@ function AudioFilesPage({
     [processing, setProcessing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false),
     [uploading, setUploading] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false),
     [deleting, setDeleting] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
@@ -325,6 +328,16 @@ function AudioFilesPage({
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
+            variant="outline"
+            className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+            disabled={loading || processing || uploading || deleting}
+            onClick={() => setCaptureOpen(true)}
+          >
+            <Mic className="size-4" aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">{t("Record audio")}</span>
+          </Button>
+          <Button
+            size="sm"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={loading || processing || uploading || deleting}
             onClick={() => setUploadOpen(true)}
@@ -347,6 +360,22 @@ function AudioFilesPage({
           </Button>
         </div>
       </header>
+      {captureOpen && (
+        <RecordingCapture
+          client={client}
+          onBusy={setUploading}
+          onClose={() => setCaptureOpen(false)}
+          onSaved={(recording) => {
+            setRecordings((previous) => [
+              recording,
+              ...previous.filter((r) => r.id !== recording.id),
+            ]);
+            setSelected(recording);
+            setCaptureOpen(false);
+            setError(null);
+          }}
+        />
+      )}
       {uploadOpen && (
         <RecordingUpload
           client={client}

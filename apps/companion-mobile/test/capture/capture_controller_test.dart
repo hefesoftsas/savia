@@ -170,6 +170,19 @@ void main() {
       await source.delete();
     },
   );
+  test('renaming an imported draft preserves its audio extension', () async {
+    final source = await File('${root.path}/interview.wav')
+        .writeAsBytes([1, 2]);
+    picker.pending.complete(
+      PickedAudio(path: source.path, name: 'interview.wav'),
+    );
+
+    await capture.importAudio();
+    expect(capture.renameDraft('Customer interview'), isTrue);
+
+    expect(capture.draft!.name, 'Customer interview.wav');
+    expect(audioFormatForName(capture.draft!.name), AudioFormat.wav);
+  });
   test('confirmed upload removes only app-owned draft', () async {
     await capture.start();
     await capture.stop();
@@ -196,6 +209,9 @@ void main() {
     await uncertain.upload(consent: true);
     expect(uncertain.phase, CapturePhase.unknownOutcome);
     expect(uncertain.draft!.id, id);
+    final originalName = uncertain.draft!.name;
+    expect(uncertain.renameDraft('changed after uncertain upload'), isFalse);
+    expect(uncertain.draft!.name, originalName);
     expect(await File(path).exists(), true);
     expect(calls, 1);
     await uncertain.reconcile({id});

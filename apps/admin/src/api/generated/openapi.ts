@@ -891,6 +891,7 @@ export interface paths {
                   };
                   /** @default null */
                   summary: {
+                    title?: string;
                     summary: string;
                     decisions: string[];
                     actions: {
@@ -1227,6 +1228,7 @@ export interface paths {
                 };
                 /** @default null */
                 summary: {
+                  title?: string;
                   summary: string;
                   decisions: string[];
                   actions: {
@@ -1331,7 +1333,190 @@ export interface paths {
     delete?: never;
     options?: never;
     head?: never;
-    patch?: never;
+    /** Rename an owned recording session */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            name: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Recording session */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              tenantId?: number;
+              name: string;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+              sources: ("microphone" | "system")[];
+              /** @enum {string} */
+              state: "uploading" | "ready";
+              durationSeconds: number | null;
+              chunks: {
+                /**
+                 * @default ogg
+                 * @enum {string}
+                 */
+                format: "ogg" | "m4a";
+                /** @enum {string} */
+                source: "microphone" | "system";
+                sequence: number;
+                startSeconds: number;
+                durationSeconds: number;
+                bytes: number;
+                sha256: string;
+              }[];
+              job: {
+                /**
+                 * Format: uuid
+                 * @default null
+                 */
+                runId: string | null;
+                /** @enum {string} */
+                status:
+                  | "idle"
+                  | "queued"
+                  | "transcribing"
+                  | "summarizing"
+                  | "complete"
+                  | "needs_attention"
+                  | "cancelled"
+                  | "failed";
+                /** @default es */
+                language: string;
+                completedChunks: number;
+                totalChunks: number;
+                error?: string;
+                /** @default {} */
+                transcripts: {
+                  [key: string]: {
+                    text: string;
+                    /** @enum {string} */
+                    source: "microphone" | "system" | "upload";
+                    model: string;
+                    durationSeconds: number | null;
+                  };
+                };
+                /** @default null */
+                summary: {
+                  title?: string;
+                  summary: string;
+                  decisions: string[];
+                  actions: {
+                    description: string;
+                    owner: string | null;
+                    dueDate: string | null;
+                  }[];
+                  openQuestions: string[];
+                } | null;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
     trace?: never;
   };
   "/v1/companion/sessions/{id}/chunks": {
@@ -1999,6 +2184,7 @@ export interface paths {
                 };
                 /** @default null */
                 summary: {
+                  title?: string;
                   summary: string;
                   decisions: string[];
                   actions: {
@@ -2191,6 +2377,7 @@ export interface paths {
                 };
                 /** @default null */
                 summary: {
+                  title?: string;
                   summary: string;
                   decisions: string[];
                   actions: {
@@ -4120,6 +4307,7 @@ export interface paths {
                 durationSeconds: number | null;
               } | null;
               summary: {
+                title?: string;
                 summary: string;
                 decisions: string[];
                 actions: {
@@ -4129,6 +4317,8 @@ export interface paths {
                 }[];
                 openQuestions: string[];
               } | null;
+              /** @default auto */
+              language: string;
             };
           };
         };
@@ -4324,6 +4514,7 @@ export interface paths {
                 durationSeconds: number | null;
               } | null;
               summary: {
+                title?: string;
                 summary: string;
                 decisions: string[];
                 actions: {
@@ -4333,6 +4524,8 @@ export interface paths {
                 }[];
                 openQuestions: string[];
               } | null;
+              /** @default auto */
+              language: string;
             };
           };
         };
@@ -4737,6 +4930,7 @@ export interface paths {
           };
           content: {
             "application/json": {
+              title?: string;
               summary: string;
               decisions: string[];
               actions: {

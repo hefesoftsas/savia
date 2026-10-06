@@ -260,7 +260,14 @@ class _DraftEditorState extends State<_DraftEditor> {
   @override
   void initState() {
     super.initState();
-    _name = TextEditingController(text: widget.controller.draft?.name ?? '');
+    final draft = widget.controller.draft;
+    final name = draft == null || draft.isCapture
+        ? draft?.name ?? ''
+        : draft.name.replaceFirst(
+            RegExp(r'\.(mp3|wav|m4a|ogg|opus|oga)$', caseSensitive: false),
+            '',
+          );
+    _name = TextEditingController(text: name);
   }
 
   @override
@@ -274,8 +281,9 @@ class _DraftEditorState extends State<_DraftEditor> {
     final l = AppLocalizations.of(context)!;
     final c = widget.controller;
     final draft = c.draft!;
+    final nameLimit = draft.isCapture ? 255 : 255 - draft.format.length - 1;
     final trimmed = _name.text.trim();
-    final invalid = trimmed.isEmpty || trimmed.length > 255;
+    final invalid = trimmed.isEmpty || trimmed.length > nameLimit;
     final size =
         '${NumberFormat('0.00', l.localeName).format(draft.bytes / 1000000)} MB';
     final duration = draft.durationSeconds == null
@@ -301,12 +309,12 @@ class _DraftEditorState extends State<_DraftEditor> {
                 errorText: invalid ? l.sessionNameInvalid : null,
                 border: const OutlineInputBorder(),
               ),
-              maxLength: 255,
-              enabled: !c.busy,
+              maxLength: nameLimit,
+              enabled: !c.busy && c.phase != CapturePhase.unknownOutcome,
               textInputAction: TextInputAction.done,
               onChanged: (value) {
                 final next = value.trim();
-                final valid = next.isNotEmpty && next.length <= 255;
+                final valid = next.isNotEmpty && next.length <= nameLimit;
                 widget.onValidityChanged(valid);
                 if (valid) c.renameDraft(value);
                 setState(() {});
