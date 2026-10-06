@@ -100,6 +100,16 @@ test("routes preview short booking URLs through the API before SPA fallback", ()
   assert.ok(config.assets.run_worker_first.includes("/s/*"));
 });
 
+test("routes preview WhatsApp webhooks through the worker before SPA fallback", () => {
+  const config = workerConfig(
+    "gateway",
+    previewNames("whatsapp-webhooks"),
+    {},
+    "https://preview.example.test",
+  );
+  assert.ok(config.assets.run_worker_first.includes("/webhooks/whatsapp"));
+});
+
 test("binds the private branch hook executor to Savia request", () => {
   const names = previewNames("quickjs-hooks");
   const executor = workerConfig(

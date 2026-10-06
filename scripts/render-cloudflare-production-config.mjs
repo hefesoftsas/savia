@@ -239,6 +239,7 @@ function gatewayConfig({ publicOrigin, documentsBucket }) {
         "/office/*",
         "/api/*",
         "/v1/*",
+        "/webhooks/whatsapp",
         "/s/*",
         "/.well-known/*",
         "/mcp",
