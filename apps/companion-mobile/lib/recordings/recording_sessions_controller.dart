@@ -20,6 +20,10 @@ typedef AskRecordingSession = Future<SessionAnswer> Function(
   String question, {
   required bool consent,
 });
+typedef RenameRecordingSession = Future<RecordingSession> Function(
+  String id,
+  String name,
+);
 typedef SessionPollTimerFactory = Timer Function(
   Duration duration,
   void Function() callback,
@@ -32,6 +36,7 @@ class RecordingSessionsController extends ChangeNotifier {
     required ProcessRecordingSession process,
     required this.cancel,
     required this.answer,
+    this.renamer,
     this.timerFactory = _periodicTimer,
     this.pollingInterval = const Duration(seconds: 3),
   }) : processor = process;
@@ -41,6 +46,7 @@ class RecordingSessionsController extends ChangeNotifier {
   final ProcessRecordingSession processor;
   final CancelRecordingSession cancel;
   final AskRecordingSession answer;
+  final RenameRecordingSession? renamer;
   final SessionPollTimerFactory timerFactory;
   final Duration pollingInterval;
 
@@ -54,6 +60,7 @@ class RecordingSessionsController extends ChangeNotifier {
   bool detailLoading = false;
   bool processing = false;
   bool asking = false;
+  bool renaming = false;
   bool _disposed = false;
   int _generation = 0;
   int _selection = 0;
@@ -100,6 +107,7 @@ class RecordingSessionsController extends ChangeNotifier {
     detailLoading = true;
     processing = false;
     asking = false;
+    renaming = false;
     _notify();
     try {
       final session = await get(id);
@@ -267,6 +275,48 @@ class RecordingSessionsController extends ChangeNotifier {
     }
   }
 
+  Future<void> rename({required String name}) async {
+    final session = selectedSession;
+    final trimmed = name.trim();
+    final renameFn = renamer;
+    if (renaming ||
+        session == null ||
+        trimmed.isEmpty ||
+        trimmed.length > 255 ||
+        renameFn == null) {
+      return;
+    }
+    if (trimmed == session.name) return;
+    final generation = _generation;
+    final selection = _selection;
+    renaming = true;
+    failure = null;
+    _notify();
+    try {
+      final updated = await renameFn(session.id, trimmed);
+      if (generation == _generation && selection == _selection) {
+        _sessionRevision++;
+        selectedSession = updated;
+        final index = sessions.indexWhere((item) => item.id == updated.id);
+        if (index >= 0) {
+          final next = [...sessions];
+          next[index] = updated;
+          sessions = next;
+        }
+        _syncPolling();
+      }
+    } catch (error) {
+      if (generation == _generation && selection == _selection) {
+        failure = _safe(error);
+      }
+    } finally {
+      if (generation == _generation && selection == _selection) {
+        renaming = false;
+        _notify();
+      }
+    }
+  }
+
   void closeDetail() {
     _selection++;
     _sessionRevision++;
@@ -278,6 +328,7 @@ class RecordingSessionsController extends ChangeNotifier {
     detailLoading = false;
     processing = false;
     asking = false;
+    renaming = false;
     _notify();
   }
 
@@ -296,6 +347,7 @@ class RecordingSessionsController extends ChangeNotifier {
     detailLoading = false;
     processing = false;
     asking = false;
+    renaming = false;
     _notify();
   }
 

@@ -125,6 +125,7 @@ class MobileServices {
       process: api.processSession,
       cancel: api.cancelSession,
       answer: api.answerSession,
+      renamer: api.renameSession,
     );
     final sessionUploader = CapturedSessionUploader(
       api: api,

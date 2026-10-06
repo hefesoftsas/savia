@@ -22,7 +22,12 @@ vi.mock("../assistant/recording-assistant", () => ({
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  URL.createObjectURL = originalCreateObjectURL;
+  URL.revokeObjectURL = originalRevokeObjectURL;
 });
+const originalCreateObjectURL = URL.createObjectURL;
+const originalRevokeObjectURL = URL.revokeObjectURL;
 const session = (id: string): RecordingSession => ({
   id,
   name: `Interview ${id}`,
@@ -32,6 +37,7 @@ const session = (id: string): RecordingSession => ({
   chunks: [],
   job: {
     status: "needs_attention",
+    language: "es",
     completedChunks: 1,
     totalChunks: 120,
     transcripts: {
@@ -94,13 +100,153 @@ it("keeps retry acknowledgement for ambiguous processing and passes session cont
   expect(submissions).toEqual([
     {
       path: "/v1/companion/sessions/one/notes",
-      body: { consent: true, retryAmbiguous: true },
+      body: {
+        consent: true,
+        retryAmbiguous: true,
+        language: "es",
+        retranscribe: false,
+      },
     },
   ]);
   await user.click(screen.getByRole("button", { name: /Interview two/ }));
   expect(await screen.findByTestId("recording-assistant")).toHaveAttribute(
     "data-id",
     "two",
+  );
+});
+
+it("requires acknowledgement to switch transcript language", async () => {
+  const submissions: { path: string; body: unknown }[] = [];
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (request.method === "GET")
+        return Response.json(
+          path === "/v1/companion/sessions"
+            ? { sessions: [session("one")], cursor: null }
+            : session("one"),
+        );
+      submissions.push({ path, body: await request.json() });
+      return Response.json({
+        ...session("one"),
+        job: { ...session("one").job, status: "queued" },
+      });
+    },
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+  const generate = await screen.findByRole("button", {
+    name: "Generate transcript and summary",
+  });
+  await user.click(
+    screen.getByLabelText("I accept that retrying may incur another charge."),
+  );
+  const language = screen.getByLabelText("Transcript language");
+  await user.selectOptions(language, "en");
+  expect(
+    screen.getByText(
+      "Switching language replaces the saved transcript and summary. Provider usage may be billed again.",
+    ),
+  ).toBeVisible();
+  expect(generate).toBeDisabled();
+  await user.click(
+    screen.getByLabelText("I understand saved results will be replaced."),
+  );
+  await user.click(generate);
+  expect(await screen.findByText(/^Queued/)).toBeVisible();
+  expect(submissions).toEqual([
+    {
+      path: "/v1/companion/sessions/one/notes",
+      body: {
+        consent: true,
+        retryAmbiguous: true,
+        language: "en",
+        retranscribe: true,
+      },
+    },
+  ]);
+});
+
+it("plays and downloads the full concatenated audio per source", async () => {
+  const withChunks: RecordingSession = {
+    ...session("full"),
+    chunks: [
+      {
+        source: "microphone",
+        sequence: 0,
+        startSeconds: 0,
+        durationSeconds: 30,
+        bytes: 4,
+        format: "ogg",
+      },
+      {
+        source: "microphone",
+        sequence: 1,
+        startSeconds: 30,
+        durationSeconds: 30,
+        bytes: 4,
+        format: "ogg",
+      },
+    ],
+    job: {
+      ...session("full").job,
+      status: "complete",
+      completedChunks: 2,
+      totalChunks: 2,
+      summary: {
+        summary: "All good.",
+        decisions: [],
+        actions: [],
+        openQuestions: [],
+      },
+    },
+  };
+  const requested: string[] = [];
+  URL.createObjectURL = vi.fn(
+    () => "blob:full-audio",
+  ) as unknown as typeof URL.createObjectURL;
+  URL.revokeObjectURL = vi.fn() as unknown as typeof URL.revokeObjectURL;
+  // The list and detail endpoints return the session with chunks.
+  const fetchingApi = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      const url = new URL(String(input));
+      requested.push(`${url.pathname}${url.search}`);
+      if (url.pathname === "/v1/companion/sessions")
+        return Response.json({ sessions: [withChunks], cursor: null });
+      if (url.pathname.endsWith("/audio"))
+        return new Response("full-audio-bytes", {
+          headers: { "content-type": "audio/ogg" },
+        });
+      if (url.pathname.includes("/chunks/"))
+        return new Response("part-audio-bytes", {
+          headers: { "content-type": "audio/ogg" },
+        });
+      return Response.json(withChunks);
+    },
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={fetchingApi} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Play full audio" }),
+  );
+  expect(
+    await screen.findByRole("link", { name: "Download full audio" }),
+  ).toHaveAttribute("download", "savia-full-microphone.ogg");
+  expect(requested).toContain(
+    "/v1/companion/sessions/full/audio?source=microphone",
   );
 });
 
@@ -125,4 +271,53 @@ it("opens the desktop review link directly on recording sessions", async () => {
   );
   expect(await screen.findByText("No recording sessions yet")).toBeVisible();
   expect(paths).toEqual(["/v1/companion/sessions"]);
+});
+
+it("renames a session from its detail header", async () => {
+  const patched: { path: string; method: string; body: unknown }[] = [];
+  let name = "Interview one";
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (request.method === "GET")
+        return Response.json(
+          path === "/v1/companion/sessions"
+            ? { sessions: [{ ...session("one"), name }], cursor: null }
+            : { ...session("one"), name },
+        );
+      if (request.method === "PATCH") {
+        const body = (await request.json()) as { name: string };
+        name = body.name;
+        patched.push({ path, method: "PATCH", body });
+        return Response.json({ ...session("one"), name });
+      }
+      return Response.json({ ...session("one"), name });
+    },
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Rename session" }),
+  );
+  const field = screen.getByLabelText("Session name");
+  await user.clear(field);
+  await user.type(field, "Budget review");
+  await user.click(screen.getByRole("button", { name: "Save name" }));
+  expect(
+    await screen.findByRole("heading", { name: "Budget review" }),
+  ).toBeVisible();
+  expect(patched).toEqual([
+    {
+      path: "/v1/companion/sessions/one",
+      method: "PATCH",
+      body: { name: "Budget review" },
+    },
+  ]);
 });

@@ -58,7 +58,7 @@ export type WhatsappHistoryMessage = {
 
 const MAX_CONTACT_DIGITS = 32;
 const MAX_MESSAGE_LENGTH = 4096;
-const GENERATION_ATTEMPTS = 3;
+export const GENERATION_ATTEMPTS = 3;
 // Media download, transcription and completion run sequentially with bounded timeouts.
 const PROCESSING_LEASE_MS = 4 * 60 * 1000;
 const MESSAGE_AGE_LIMIT_MS = 24 * 60 * 60 * 1000;
@@ -297,7 +297,7 @@ export class WhatsappInboundRepository {
   ): Promise<WhatsappAssistantBinding | undefined> {
     const result = await this.db
       .prepare(
-        `SELECT b.tenant_id,b.connection_id,b.employee_id,b.enabled,b.allowed_contacts,
+        `SELECT e.id AS active_employee_id,b.tenant_id,b.connection_id,b.employee_id,b.enabled,b.allowed_contacts,
                 b.updated_by,b.created_at,b.updated_at,b.native_config,
                 c.id,c.tenant_id AS connection_tenant_id,c.created_by_principal_id,
                 c.nango_connection_id,c.nango_integration_id,
@@ -309,7 +309,7 @@ export class WhatsappInboundRepository {
          JOIN identity_principal p ON p.id=c.created_by_principal_id AND p.is_active=1
          JOIN identity_tenant_membership m
            ON m.principal_id=p.id AND m.tenant_id=b.tenant_id AND m.is_active=1
-         JOIN assistant_virtual_employees e
+         LEFT JOIN assistant_virtual_employees e
            ON e.id=b.employee_id AND e.agency_id=b.tenant_id AND e.status='active'
          WHERE b.enabled=1 AND c.status='connected' AND c.disconnected_at IS NULL
            AND c.phone_number_id=? AND c.waba_id=?`,
@@ -325,6 +325,18 @@ export class WhatsappInboundRepository {
       >();
     if (result.results.length !== 1) return undefined;
     const row = result.results[0];
+    if (
+      !(row as typeof row & { active_employee_id?: string }).active_employee_id
+    ) {
+      const channel = await this.db
+        .prepare(
+          "SELECT config_json FROM whatsapp_channel_settings WHERE connection_id=? AND tenant_id=?",
+        )
+        .bind(row.connection_id, row.tenant_id)
+        .first<{ config_json: string }>();
+      if (!channel || JSON.parse(channel.config_json).routingEnabled !== true)
+        return undefined;
+    }
     const settings = settingFromRow(row);
     return {
       ...settings,
@@ -488,8 +500,22 @@ export class WhatsappInboundRepository {
     const rows = await this.db
       .prepare(
         `SELECT message_id FROM whatsapp_inbox
-         WHERE state='pending' AND (retry_at IS NULL OR retry_at<=?)
-            OR (state='generating' AND lease_until<=? AND generation_attempts<?)
+         WHERE ((state='pending' AND (retry_at IS NULL OR retry_at<=?))
+            OR (state='generating' AND lease_until<=? AND generation_attempts<?))
+         AND NOT EXISTS (
+           SELECT 1 FROM whatsapp_inbox active
+           WHERE active.connection_id=whatsapp_inbox.connection_id
+             AND active.normalized_contact=whatsapp_inbox.normalized_contact
+             AND active.message_id<>whatsapp_inbox.message_id
+             AND active.state IN ('generating','responding')
+         ) AND NOT EXISTS (
+           SELECT 1 FROM whatsapp_inbox prior
+           WHERE prior.connection_id=whatsapp_inbox.connection_id
+             AND prior.normalized_contact=whatsapp_inbox.normalized_contact
+             AND prior.state IN ('pending','generating','responding')
+             AND (prior.received_at<whatsapp_inbox.received_at OR
+               (prior.received_at=whatsapp_inbox.received_at AND prior.message_id<whatsapp_inbox.message_id))
+         )
          ORDER BY received_at,message_id LIMIT ?`,
       )
       .bind(now, now, GENERATION_ATTEMPTS, batchLimit)
@@ -682,10 +708,15 @@ export class WhatsappInboundRepository {
          WHERE message_id=? AND state='generating' AND lease_token=? AND lease_until>?`,
       )
       .bind(
-        reply,
+        reply.replace(/CONFIRMAR [A-Z2-7]{10}/g, "[Confirmation pending]"),
         now,
         leaseUntil,
-        payload ? JSON.stringify(nativeReplySchema.parse(payload)) : null,
+        payload
+          ? JSON.stringify(nativeReplySchema.parse(payload)).replace(
+              /(?:confirm|cancel):[a-f\d-]{36}:[a-f\d]{32}/g,
+              "[Confirmation pending]",
+            )
+          : null,
         messageId,
         token,
         now,

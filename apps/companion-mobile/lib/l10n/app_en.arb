@@ -92,5 +92,10 @@
         "type": "int"
       }
     }
-  }
+  },
+  "save": "Save",
+  "sessionRename": "Rename",
+  "sessionNameLabel": "Recording name",
+  "sessionNameHint": "e.g. Weekly planning 2026-10-06 14:30",
+  "sessionNameInvalid": "Enter a name between 1 and 255 characters."
 }

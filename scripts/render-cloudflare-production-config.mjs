@@ -98,6 +98,7 @@ function apiConfig({
     ],
     r2_buckets: [{ binding: "DOCUMENTS", bucket_name: documentsBucket }],
     vars: {
+      WHATSAPP_PROCESSING_MODE: "scheduled",
       NANGO_BASE_URL: "https://nango.cloud.hefesoft.com",
       NANGO_CONNECT_URL: "https://nango-connect.cloud.hefesoft.com",
       NANGO_HUBSPOT_INTEGRATION_ID: "hubspot",
@@ -239,6 +240,7 @@ function gatewayConfig({ publicOrigin, documentsBucket }) {
         "/office/*",
         "/api/*",
         "/v1/*",
+        "/webhooks/whatsapp",
         "/s/*",
         "/.well-known/*",
         "/mcp",

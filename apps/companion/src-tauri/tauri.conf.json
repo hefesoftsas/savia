@@ -39,7 +39,8 @@
     "shortDescription": "Manual microphone and system audio capture",
     "longDescription": "Savia Companion creates short local audio captures when started by the user.",
     "macOS": {
-      "minimumSystemVersion": "14.2"
+      "minimumSystemVersion": "14.2",
+      "entitlements": "entitlements.plist"
     }
   }
 }

@@ -26,6 +26,7 @@ import {
   Search,
   Cpu,
   Loader2,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,13 +35,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type {
   VirtualEmployee,
@@ -517,8 +518,8 @@ export function VirtualEmployeesManagement({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-52 flex-1 sm:max-w-md">
           <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
           <Input
             placeholder={t("Buscar empleado por nombre o @handle...")}
@@ -533,12 +534,16 @@ export function VirtualEmployeesManagement({
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="overflow-hidden rounded-xl border bg-card divide-y">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-44 rounded-xl border bg-card/50 animate-pulse"
-            />
+            <div key={i} className="flex items-center gap-4 p-4 animate-pulse">
+              <div className="size-11 shrink-0 rounded-xl bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-40 rounded bg-muted" />
+                <div className="h-3 w-64 max-w-full rounded bg-muted/70" />
+              </div>
+              <div className="hidden sm:block h-8 w-20 rounded-md bg-muted" />
+            </div>
           ))}
         </div>
       ) : filteredEmployees.length === 0 ? (
@@ -558,727 +563,752 @@ export function VirtualEmployeesManagement({
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredEmployees.map((emp) => {
-            const Icon = getEmployeeAvatarIcon(emp.avatar);
-            const isTextOnly = emp.allowedCollections.length === 0;
-            const isAll = emp.allowedCollections.includes("*");
+        <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
+          <ul className="divide-y">
+            {filteredEmployees.map((emp) => {
+              const Icon = getEmployeeAvatarIcon(emp.avatar);
+              const isTextOnly = emp.allowedCollections.length === 0;
+              const isAll = emp.allowedCollections.includes("*");
 
-            return (
-              <div
-                key={emp.id}
-                className="group relative flex flex-col justify-between rounded-xl border bg-card p-5 shadow-xs transition hover:border-primary/40 hover:shadow-md"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-                        <Icon className="size-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-sm leading-tight text-foreground">
-                          {emp.name}
-                        </h4>
-                        <span className="font-mono text-xs text-primary font-medium">
-                          @{emp.handle}
-                        </span>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={
-                        emp.status === "active" ? "default" : "secondary"
-                      }
-                      className="text-[10px] uppercase font-semibold tracking-wider"
-                    >
-                      {emp.status === "active" ? t("Activo") : t("Inactivo")}
-                    </Badge>
+              return (
+                <li
+                  key={emp.id}
+                  onClick={() => void openEdit(emp)}
+                  className="group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-x-3 p-4 transition-colors hover:bg-muted/40 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-x-4 sm:px-5"
+                >
+                  <div className="col-start-1 row-start-1 flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary sm:row-span-3 sm:self-center">
+                    <Icon className="size-5" />
                   </div>
 
-                  {emp.position && (
-                    <p className="text-xs text-muted-foreground font-medium mb-3 line-clamp-1">
-                      {emp.position}
-                    </p>
-                  )}
+                  <div className="col-start-2 row-start-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="truncate text-sm font-semibold text-foreground">
+                        {emp.name}
+                      </span>
+                      <span className="truncate font-mono text-xs font-medium text-primary">
+                        @{emp.handle}
+                      </span>
+                      <Badge
+                        variant={
+                          emp.status === "active" ? "default" : "secondary"
+                        }
+                        className="text-[10px] font-semibold uppercase tracking-wider"
+                      >
+                        {emp.status === "active" ? t("Activo") : t("Inactivo")}
+                      </Badge>
+                    </div>
+                  </div>
 
-                  <p className="text-xs text-muted-foreground line-clamp-2 mb-4 italic">
-                    "{emp.greeting || emp.systemPrompt}"
+                  <p className="col-span-2 col-start-1 row-start-2 mt-2 line-clamp-2 text-xs text-muted-foreground sm:col-span-1 sm:col-start-2 sm:mt-0.5 sm:truncate">
+                    {emp.position ? (
+                      <>
+                        <span className="font-medium">{emp.position}</span>
+                        <span aria-hidden="true"> · </span>
+                      </>
+                    ) : null}
+                    <span className="italic">
+                      "{emp.greeting || emp.systemPrompt}"
+                    </span>
                   </p>
 
-                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t text-[11px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1 font-medium">
-                      <Database className="size-3.5 text-muted-foreground" />
-                      {isTextOnly ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-normal py-0"
-                        >
-                          {t("Solo texto")}
-                        </Badge>
-                      ) : isAll ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-normal py-0"
-                        >
-                          {t("Todas las colecciones")}
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-normal py-0"
-                        >
-                          {t("%{count} colecciones", {
-                            count: emp.allowedCollections.length,
-                          })}
-                        </Badge>
-                      )}
+                  <div className="col-span-2 col-start-1 row-start-3 mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground sm:col-span-1 sm:col-start-2 sm:mt-1.5">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Database className="size-3.5" aria-hidden="true" />
+                      <span className="font-medium">
+                        {isTextOnly
+                          ? t("Solo texto")
+                          : isAll
+                            ? t("Todas las colecciones")
+                            : t("%{count} colecciones", {
+                                count: emp.allowedCollections.length,
+                              })}
+                      </span>
                     </span>
-
-                    {!isTextOnly && (
-                      <span className="inline-flex items-center gap-1 font-medium">
-                        <FileCode className="size-3.5 text-muted-foreground" />
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-normal py-0"
-                        >
+                    {!isTextOnly ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <FileCode className="size-3.5" aria-hidden="true" />
+                        <span className="font-medium">
                           {t("%{count} docs RAG", {
                             count: emp.filesCount ?? 0,
                           })}
-                        </Badge>
+                        </span>
                       </span>
-                    )}
+                    ) : null}
+                    {emp.model ? (
+                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                        <Cpu
+                          className="size-3.5 shrink-0 text-primary"
+                          aria-hidden="true"
+                        />
+                        <span
+                          className="max-w-[180px] truncate font-mono text-[11px] font-medium text-foreground/80 lg:max-w-[240px]"
+                          title={emp.model}
+                        >
+                          {emp.model}
+                        </span>
+                        <ModelCapabilityBadges
+                          model={models.find((m) => m.id === emp.model)}
+                          size="xs"
+                        />
+                      </span>
+                    ) : null}
                   </div>
 
-                  {emp.model ? (
-                    <div className="flex flex-wrap items-center gap-1.5 pt-2 mt-2 border-t text-[11px] text-muted-foreground">
-                      <Cpu className="size-3.5 text-primary shrink-0" />
-                      <span
-                        className="font-mono text-[11px] font-medium text-foreground/80 truncate max-w-[130px]"
-                        title={emp.model}
-                      >
-                        {emp.model}
-                      </span>
-                      <ModelCapabilityBadges
-                        model={models.find((m) => m.id === emp.model)}
-                        size="xs"
-                      />
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="flex items-center justify-end gap-1.5 mt-4 pt-3 border-t">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2.5 text-xs gap-1 max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-                    onClick={() => void openEdit(emp)}
+                  <div
+                    className="col-span-2 col-start-1 row-start-4 mt-3 flex items-center justify-end gap-2 border-t pt-3 sm:col-span-1 sm:col-start-3 sm:row-span-3 sm:row-start-1 sm:mt-0 sm:self-center sm:shrink-0 sm:gap-1 sm:border-0 sm:pt-0"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Pencil className="size-3.5" />
-                    <span className="sr-only sm:not-sr-only">
-                      {t("Editar")}
-                    </span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-                    aria-label={`${t("Quitar")} ${emp.name}`}
-                    onClick={() => void handleDelete(emp)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-11 gap-1.5 px-3 text-xs sm:h-8 sm:min-h-0 sm:px-2.5 sm:gap-1"
+                      onClick={() => void openEdit(emp)}
+                    >
+                      <Pencil className="size-3.5" />
+                      <span>{t("Editar")}</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-11 gap-1.5 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:min-h-0 sm:gap-1 sm:px-2"
+                      aria-label={`${t("Quitar")} ${emp.name}`}
+                      onClick={() => void handleDelete(emp)}
+                    >
+                      <Trash2 className="size-3.5" />
+                      <span className="sm:sr-only">{t("Eliminar")}</span>
+                    </Button>
+                    <ChevronRight
+                      className="hidden size-4 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground sm:block"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
-      {/* Modal Dialog: Crear / Editar Empleado Virtual */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingEmployee
-                ? t("Editar Empleado Virtual: @%{handle}", {
-                    handle: editingEmployee.handle,
-                  })
-                : t("Nuevo Empleado Virtual de IA")}
-            </DialogTitle>
-            <DialogDescription>
-              {t(
-                "Elige si el empleado usará solo el texto que recibe o también las herramientas y los datos de trabajo que autorices.",
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">
-              {t("Modo del empleado")}
-            </legend>
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  ["text", "Solo texto"],
-                  ["workspace", "Workspace tools"],
-                ] as const
-              ).map(([mode, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  aria-pressed={accessMode === mode}
-                  onClick={() => changeAccessMode(mode)}
-                  className={`min-h-11 rounded-md border px-3 py-2 text-sm font-medium transition ${
-                    accessMode === mode
-                      ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/40"
-                      : "border-border bg-card text-muted-foreground hover:border-primary/40"
-                  }`}
-                >
-                  {t(label)}
-                </button>
-              ))}
+      {/* Side drawer: Crear / Editar Empleado Virtual */}
+      <Sheet open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <SheetContent
+          side="right"
+          className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        >
+          <SheetHeader className="shrink-0 border-b bg-card px-5 py-4 pr-12 text-left">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                {(() => {
+                  const DrawerIcon = getEmployeeAvatarIcon(avatar);
+                  return <DrawerIcon className="size-5" />;
+                })()}
+              </div>
+              <div className="min-w-0">
+                <SheetTitle className="truncate leading-snug">
+                  {editingEmployee
+                    ? t("Editar Empleado Virtual: @%{handle}", {
+                        handle: editingEmployee.handle,
+                      })
+                    : t("Nuevo Empleado Virtual de IA")}
+                </SheetTitle>
+                <SheetDescription className="mt-0.5 line-clamp-2 text-xs">
+                  {t(
+                    "Elige si el empleado usará solo el texto que recibe o también las herramientas y los datos de trabajo que autorices.",
+                  )}
+                </SheetDescription>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {accessMode === "text"
-                ? t(
-                    "Solo se procesa el texto y las instrucciones proporcionadas. No se usan colecciones, documentos ni herramientas del espacio de trabajo.",
-                  )
-                : t(
-                    "El empleado puede usar las colecciones y los documentos que autorices en las pestañas de acceso del espacio de trabajo.",
-                  )}
-            </p>
-          </fieldset>
+          </SheetHeader>
 
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
-          >
-            <TabsList
-              className={`grid h-auto w-full ${
-                accessMode === "text"
-                  ? "grid-cols-1 sm:grid-cols-3"
-                  : "grid-cols-2 sm:grid-cols-5"
-              } sm:h-9`}
-            >
-              <TabsTrigger className="min-h-11 sm:min-h-0" value="profile">
-                {t("Perfil")}
-              </TabsTrigger>
-              <TabsTrigger className="min-h-11 sm:min-h-0" value="prompt">
-                {t("Rol & Prompt")}
-              </TabsTrigger>
-              {accessMode === "workspace" && (
-                <>
-                  <TabsTrigger
-                    className="min-h-11 sm:min-h-0"
-                    value="collections"
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4">
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">
+                {t("Modo del empleado")}
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ["text", "Solo texto"],
+                    ["workspace", "Workspace tools"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={accessMode === mode}
+                    onClick={() => changeAccessMode(mode)}
+                    className={`min-h-11 rounded-md border px-3 py-2 text-sm font-medium transition ${
+                      accessMode === mode
+                        ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/40"
+                        : "border-border bg-card text-muted-foreground hover:border-primary/40"
+                    }`}
                   >
-                    {t("Colecciones")}
-                  </TabsTrigger>
-                  <TabsTrigger className="min-h-11 sm:min-h-0" value="rag">
-                    {t("Base RAG")}
-                  </TabsTrigger>
-                </>
-              )}
-              <TabsTrigger className="min-h-11 sm:min-h-0" value="model">
-                {t("Modelo")}
-              </TabsTrigger>
-            </TabsList>
-
-            {/* TAB 1: PERFIL */}
-            <TabsContent value="profile" className="space-y-4 pt-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="emp-name">{t("Nombre Visible")}</Label>
-                  <Input
-                    id="emp-name"
-                    placeholder={t("Ej. Laura - Ventas")}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="emp-handle">
-                    {t("Identificador para Mención (@handle)")}
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-muted-foreground font-mono">
-                      @
-                    </span>
-                    <Input
-                      id="emp-handle"
-                      placeholder={t("ventas")}
-                      value={handle}
-                      onChange={(e) =>
-                        setHandle(e.target.value.replace(/[@\s]/g, ""))
-                      }
-                      className="pl-7 font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="emp-pos">{t("Cargo o Rol de Negocio")}</Label>
-                <Input
-                  id="emp-pos"
-                  placeholder={t(
-                    "Ej. Asesora Comercial y Especialista en Cotizaciones",
-                  )}
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>{t("Avatar / Icono Representativo")}</Label>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {Object.entries(AVATAR_ICONS).map(([key, IconComponent]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setAvatar(key)}
-                      aria-label={key}
-                      aria-pressed={avatar === key}
-                      className={`flex size-11 items-center justify-center rounded-xl border transition ${
-                        avatar === key
-                          ? "border-primary bg-primary/15 text-primary shadow-xs ring-2 ring-primary/30"
-                          : "border-border bg-card text-muted-foreground hover:border-primary/50"
-                      }`}
-                    >
-                      <IconComponent className="size-5" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="emp-greeting">
-                  {t("Mensaje de Saludo (Greeting)")}
-                </Label>
-                <Input
-                  id="emp-greeting"
-                  placeholder={t(
-                    "Ej. ¡Hola! Soy Laura. ¿Qué oportunidad o cotización deseas revisar hoy?",
-                  )}
-                  value={greeting}
-                  onChange={(e) => setGreeting(e.target.value)}
-                />
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-medium">
-                    {t("Estado del Empleado")}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {t(
-                      "Los empleados inactivos no pueden ser invocados con @ en el chat.",
-                    )}
-                  </p>
-                </div>
-                <Switch
-                  checked={status === "active"}
-                  onCheckedChange={(checked) =>
-                    setStatus(checked ? "active" : "inactive")
-                  }
-                />
-              </div>
-            </TabsContent>
-
-            {/* TAB 2: ROL & PROMPT */}
-            <TabsContent value="prompt" className="space-y-3 pt-3">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="emp-prompt" className="text-sm font-medium">
-                    {t("Instrucciones de Rol (System Prompt)")}
-                  </Label>
-                  <span className="text-xs text-muted-foreground">
-                    {t("Define identidad, límites y tono de respuesta")}
-                  </span>
-                </div>
-                <Textarea
-                  id="emp-prompt"
-                  rows={9}
-                  placeholder={t("Ejemplo de prompt de ventas")}
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  className="font-mono text-xs leading-relaxed"
-                />
+                    {t(label)}
+                  </button>
+                ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                {t(
-                  "Tip: delimita claramente el ámbito del empleado para que no responda sobre áreas ajenas a su especialidad.",
-                )}
+                {accessMode === "text"
+                  ? t(
+                      "Solo se procesa el texto y las instrucciones proporcionadas. No se usan colecciones, documentos ni herramientas del espacio de trabajo.",
+                    )
+                  : t(
+                      "El empleado puede usar las colecciones y los documentos que autorices en las pestañas de acceso del espacio de trabajo.",
+                    )}
               </p>
-            </TabsContent>
+            </fieldset>
 
-            {/* TAB 3: COLECCIONES CRM */}
-            {accessMode === "workspace" && (
-              <TabsContent value="collections" className="space-y-4 pt-3">
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
+              <TabsList
+                className={`grid w-full gap-1 group-data-[orientation=horizontal]/tabs:h-auto ${
+                  accessMode === "text"
+                    ? "grid-cols-3"
+                    : "grid-cols-2 sm:grid-cols-5"
+                }`}
+              >
+                <TabsTrigger
+                  className="h-auto min-h-11 min-w-0 whitespace-normal text-center leading-snug"
+                  value="profile"
+                >
+                  {t("Perfil")}
+                </TabsTrigger>
+                <TabsTrigger
+                  className="h-auto min-h-11 min-w-0 whitespace-normal text-center leading-snug"
+                  value="prompt"
+                >
+                  {t("Rol & Prompt")}
+                </TabsTrigger>
+                {accessMode === "workspace" && (
+                  <>
+                    <TabsTrigger
+                      className="h-auto min-h-11 min-w-0 whitespace-normal text-center leading-snug"
+                      value="collections"
+                    >
+                      {t("Colecciones")}
+                    </TabsTrigger>
+                    <TabsTrigger
+                      className="h-auto min-h-11 min-w-0 whitespace-normal text-center leading-snug"
+                      value="rag"
+                    >
+                      {t("Base RAG")}
+                    </TabsTrigger>
+                  </>
+                )}
+                <TabsTrigger
+                  className={`h-auto min-h-11 min-w-0 whitespace-normal text-center leading-snug ${accessMode === "workspace" ? "col-span-2 sm:col-span-1" : ""}`}
+                  value="model"
+                >
+                  {t("Modelo")}
+                </TabsTrigger>
+              </TabsList>
+
+              {/* TAB 1: PERFIL */}
+              <TabsContent value="profile" className="space-y-4 pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="emp-name">{t("Nombre Visible")}</Label>
+                    <Input
+                      id="emp-name"
+                      placeholder={t("Ej. Laura - Ventas")}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="emp-handle">
+                      {t("Identificador para Mención (@handle)")}
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-muted-foreground font-mono">
+                        @
+                      </span>
+                      <Input
+                        id="emp-handle"
+                        placeholder={t("ventas")}
+                        value={handle}
+                        onChange={(e) =>
+                          setHandle(e.target.value.replace(/[@\s]/g, ""))
+                        }
+                        className="pl-7 font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="emp-pos">{t("Cargo o Rol de Negocio")}</Label>
+                  <Input
+                    id="emp-pos"
+                    placeholder={t(
+                      "Ej. Asesora Comercial y Especialista en Cotizaciones",
+                    )}
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>{t("Avatar / Icono Representativo")}</Label>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {Object.entries(AVATAR_ICONS).map(
+                      ([key, IconComponent]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setAvatar(key)}
+                          aria-label={key}
+                          aria-pressed={avatar === key}
+                          className={`flex size-11 items-center justify-center rounded-xl border transition ${
+                            avatar === key
+                              ? "border-primary bg-primary/15 text-primary shadow-xs ring-2 ring-primary/30"
+                              : "border-border bg-card text-muted-foreground hover:border-primary/50"
+                          }`}
+                        >
+                          <IconComponent className="size-5" />
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="emp-greeting">
+                    {t("Mensaje de Saludo (Greeting)")}
+                  </Label>
+                  <Input
+                    id="emp-greeting"
+                    placeholder={t(
+                      "Ej. ¡Hola! Soy Laura. ¿Qué oportunidad o cotización deseas revisar hoy?",
+                    )}
+                    value={greeting}
+                    onChange={(e) => setGreeting(e.target.value)}
+                  />
+                </div>
+
                 <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5 pr-4">
+                  <div className="space-y-0.5">
                     <Label className="text-sm font-medium">
-                      {t("Acceso a Todas las Colecciones de Studio")}
+                      {t("Estado del Empleado")}
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       {t(
-                        "Si está activo, el empleado puede consultar cualquier colección de Studio sin restricciones.",
+                        "Los empleados inactivos no pueden ser invocados con @ en el chat.",
                       )}
                     </p>
                   </div>
                   <Switch
-                    checked={allCollections}
-                    onCheckedChange={(checked) => setAllCollections(checked)}
+                    checked={status === "active"}
+                    onCheckedChange={(checked) =>
+                      setStatus(checked ? "active" : "inactive")
+                    }
                   />
                 </div>
+              </TabsContent>
 
-                {!allCollections && (
-                  <div className="space-y-3 pt-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Label className="text-sm font-medium">
-                          {t("Colecciones Permitidas (Acceso Scoped)")}
-                        </Label>
-                        <Badge variant="outline" className="text-xs font-mono">
-                          {t("%{count} seleccionadas", {
-                            count: selectedCollections.length,
-                          })}
-                        </Badge>
-                      </div>
+              {/* TAB 2: ROL & PROMPT */}
+              <TabsContent value="prompt" className="space-y-3 pt-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="emp-prompt" className="text-sm font-medium">
+                      {t("Instrucciones de Rol (System Prompt)")}
+                    </Label>
+                    <span className="text-xs text-muted-foreground">
+                      {t("Define identidad, límites y tono de respuesta")}
+                    </span>
+                  </div>
+                  <Textarea
+                    id="emp-prompt"
+                    rows={9}
+                    placeholder={t("Ejemplo de prompt de ventas")}
+                    value={systemPrompt}
+                    onChange={(e) => setSystemPrompt(e.target.value)}
+                    className="font-mono text-xs leading-relaxed"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "Tip: delimita claramente el ámbito del empleado para que no responda sobre áreas ajenas a su especialidad.",
+                  )}
+                </p>
+              </TabsContent>
 
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs px-2 max-sm:h-11"
-                          onClick={selectAllCollections}
-                          disabled={filteredCollections.length === 0}
-                        >
-                          {t("Seleccionar visibles")}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs px-2 text-muted-foreground hover:text-destructive max-sm:h-11"
-                          onClick={clearSelectedCollections}
-                          disabled={selectedCollections.length === 0}
-                        >
-                          {t("Limpiar selección")}
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Buscador de colecciones */}
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                      <Input
-                        placeholder={t(
-                          "Buscar por nombre o identificador (ej. Empresas, Contactos, cotizaciones)...",
-                        )}
-                        value={collectionSearch}
-                        onChange={(e) => setCollectionSearch(e.target.value)}
-                        className="pl-9 text-xs h-9"
-                      />
-                    </div>
-
-                    {/* Listado de colecciones disponibles */}
-                    {loadingCollections ? (
-                      <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2">
-                        <Loader2 className="size-4 animate-spin text-primary" />
-                        <span>{t("Cargando colecciones del sistema...")}</span>
-                      </div>
-                    ) : filteredCollections.length === 0 ? (
-                      <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground bg-muted/10">
-                        {collectionSearch.trim() ? (
-                          <p>
-                            {t(
-                              'No se encontraron colecciones que coincidan con "%{query}".',
-                              { query: collectionSearch },
-                            )}
-                          </p>
-                        ) : (
-                          <p>
-                            {t(
-                              "No hay colecciones disponibles en este tenant. Puedes añadir una abajo.",
-                            )}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto p-1 rounded-md border bg-background/50">
-                        {filteredCollections.map((col) => {
-                          const checked = selectedCollections.includes(
-                            col.name,
-                          );
-                          return (
-                            <button
-                              key={col.name}
-                              type="button"
-                              onClick={() => toggleCollection(col.name)}
-                              className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-left transition ${
-                                checked
-                                  ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/40 shadow-xs"
-                                  : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/40"
-                              }`}
-                            >
-                              <div className="pt-0.5 shrink-0">
-                                {checked ? (
-                                  <CheckCircle2 className="size-4 text-primary" />
-                                ) : (
-                                  <Database className="size-4 text-muted-foreground/60" />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs font-semibold text-foreground truncate">
-                                  {col.label}
-                                </div>
-                                <div className="font-mono text-[10px] text-muted-foreground truncate">
-                                  {col.name}
-                                </div>
-                                {col.description && (
-                                  <div
-                                    className="text-[10px] text-muted-foreground/80 truncate mt-0.5"
-                                    title={col.description}
-                                  >
-                                    {col.description}
-                                  </div>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Añadir colección personalizada */}
-                    <div className="pt-2">
-                      <Label className="text-xs text-muted-foreground">
-                        {t("Añadir colección personalizada:")}
+              {/* TAB 3: COLECCIONES CRM */}
+              {accessMode === "workspace" && (
+                <TabsContent value="collections" className="space-y-4 pt-3">
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5 pr-4">
+                      <Label className="text-sm font-medium">
+                        {t("Acceso a Todas las Colecciones de Studio")}
                       </Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          placeholder={t("nombre_coleccion")}
-                          value={customCollectionInput}
-                          onChange={(e) =>
-                            setCustomCollectionInput(e.target.value)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              addCustomCollection();
-                            }
-                          }}
-                          className="font-mono text-xs h-8"
-                        />
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          className="h-8 text-xs"
-                          onClick={addCustomCollection}
-                        >
-                          {t("Añadir")}
-                        </Button>
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {t(
+                          "Si está activo, el empleado puede consultar cualquier colección de Studio sin restricciones.",
+                        )}
+                      </p>
                     </div>
+                    <Switch
+                      checked={allCollections}
+                      onCheckedChange={(checked) => setAllCollections(checked)}
+                    />
+                  </div>
 
-                    {/* Resumen de colecciones seleccionadas */}
-                    {selectedCollections.length > 0 && (
-                      <div className="pt-2">
-                        <Label className="text-xs text-muted-foreground mb-1.5 block">
-                          {t("Colecciones seleccionadas (%{count}):", {
-                            count: selectedCollections.length,
-                          })}
-                        </Label>
-                        <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto">
-                          {selectedCollections.map((colName) => {
-                            const item = allKnownCollections.find(
-                              (c) => c.name === colName,
+                  {!allCollections && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Label className="text-sm font-medium">
+                            {t("Colecciones Permitidas (Acceso Scoped)")}
+                          </Label>
+                          <Badge
+                            variant="outline"
+                            className="text-xs font-mono"
+                          >
+                            {t("%{count} seleccionadas", {
+                              count: selectedCollections.length,
+                            })}
+                          </Badge>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs px-2 max-sm:h-11"
+                            onClick={selectAllCollections}
+                            disabled={filteredCollections.length === 0}
+                          >
+                            {t("Seleccionar visibles")}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs px-2 text-muted-foreground hover:text-destructive max-sm:h-11"
+                            onClick={clearSelectedCollections}
+                            disabled={selectedCollections.length === 0}
+                          >
+                            {t("Limpiar selección")}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Buscador de colecciones */}
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                        <Input
+                          placeholder={t(
+                            "Buscar por nombre o identificador (ej. Empresas, Contactos, cotizaciones)...",
+                          )}
+                          value={collectionSearch}
+                          onChange={(e) => setCollectionSearch(e.target.value)}
+                          className="pl-9 text-xs h-9"
+                        />
+                      </div>
+
+                      {/* Listado de colecciones disponibles */}
+                      {loadingCollections ? (
+                        <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2">
+                          <Loader2 className="size-4 animate-spin text-primary" />
+                          <span>
+                            {t("Cargando colecciones del sistema...")}
+                          </span>
+                        </div>
+                      ) : filteredCollections.length === 0 ? (
+                        <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground bg-muted/10">
+                          {collectionSearch.trim() ? (
+                            <p>
+                              {t(
+                                'No se encontraron colecciones que coincidan con "%{query}".',
+                                { query: collectionSearch },
+                              )}
+                            </p>
+                          ) : (
+                            <p>
+                              {t(
+                                "No hay colecciones disponibles en este tenant. Puedes añadir una abajo.",
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[260px] overflow-y-auto p-1 rounded-md border bg-background/50">
+                          {filteredCollections.map((col) => {
+                            const checked = selectedCollections.includes(
+                              col.name,
                             );
                             return (
-                              <Badge
-                                key={colName}
-                                variant="secondary"
-                                className="text-xs gap-1.5 py-1 px-2 border"
+                              <button
+                                key={col.name}
+                                type="button"
+                                onClick={() => toggleCollection(col.name)}
+                                className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-left transition ${
+                                  checked
+                                    ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/40 shadow-xs"
+                                    : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/40"
+                                }`}
                               >
-                                <span className="font-medium text-[11px]">
-                                  {item?.label || colName}
-                                </span>
-                                <span className="font-mono text-[10px] text-muted-foreground">
-                                  ({colName})
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleCollection(colName)}
-                                  className="ml-1 hover:text-destructive text-muted-foreground transition max-sm:ml-0 max-sm:flex max-sm:size-11 max-sm:shrink-0 max-sm:items-center max-sm:justify-center"
-                                  title={t("Quitar")}
-                                  aria-label={`${t("Quitar")} ${colName}`}
-                                >
-                                  ×
-                                </button>
-                              </Badge>
+                                <div className="pt-0.5 shrink-0">
+                                  {checked ? (
+                                    <CheckCircle2 className="size-4 text-primary" />
+                                  ) : (
+                                    <Database className="size-4 text-muted-foreground/60" />
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs font-semibold text-foreground truncate">
+                                    {col.label}
+                                  </div>
+                                  <div className="font-mono text-[10px] text-muted-foreground truncate">
+                                    {col.name}
+                                  </div>
+                                  {col.description && (
+                                    <div
+                                      className="text-[10px] text-muted-foreground/80 truncate mt-0.5"
+                                      title={col.description}
+                                    >
+                                      {col.description}
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
                             );
                           })}
                         </div>
+                      )}
+
+                      {/* Añadir colección personalizada */}
+                      <div className="pt-2">
+                        <Label className="text-xs text-muted-foreground">
+                          {t("Añadir colección personalizada:")}
+                        </Label>
+                        <div className="flex gap-2 mt-1">
+                          <Input
+                            placeholder={t("nombre_coleccion")}
+                            value={customCollectionInput}
+                            onChange={(e) =>
+                              setCustomCollectionInput(e.target.value)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addCustomCollection();
+                              }
+                            }}
+                            className="font-mono text-xs h-8"
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={addCustomCollection}
+                          >
+                            {t("Añadir")}
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                )}
-              </TabsContent>
-            )}
 
-            {/* TAB 4: BASE DE CONOCIMIENTO (CLOUDFLARE RAG) */}
-            {accessMode === "workspace" && (
-              <TabsContent value="rag" className="space-y-4 pt-3">
-                <div>
-                  <Label className="text-sm font-medium">
-                    {t("Documentos de Referencia (Cloudflare RAG)")}
-                  </Label>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    {t(
-                      "Sube manuales, políticas, tarifas o catálogos (PDF, MD, TXT, CSV, JSON). El motor RAG de Cloudflare generará embeddings para recuperar contexto relevante.",
-                    )}
-                  </p>
-                </div>
+                      {/* Resumen de colecciones seleccionadas */}
+                      {selectedCollections.length > 0 && (
+                        <div className="pt-2">
+                          <Label className="text-xs text-muted-foreground mb-1.5 block">
+                            {t("Colecciones seleccionadas (%{count}):", {
+                              count: selectedCollections.length,
+                            })}
+                          </Label>
+                          <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto">
+                            {selectedCollections.map((colName) => {
+                              const item = allKnownCollections.find(
+                                (c) => c.name === colName,
+                              );
+                              return (
+                                <Badge
+                                  key={colName}
+                                  variant="secondary"
+                                  className="text-xs gap-1.5 py-1 px-2 border"
+                                >
+                                  <span className="font-medium text-[11px]">
+                                    {item?.label || colName}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-muted-foreground">
+                                    ({colName})
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCollection(colName)}
+                                    className="ml-1 hover:text-destructive text-muted-foreground transition max-sm:ml-0 max-sm:flex max-sm:size-11 max-sm:shrink-0 max-sm:items-center max-sm:justify-center"
+                                    title={t("Quitar")}
+                                    aria-label={`${t("Quitar")} ${colName}`}
+                                  >
+                                    ×
+                                  </button>
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
+              )}
 
-                {!editingEmployee ? (
-                  <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground bg-muted/20">
-                    <p>
+              {/* TAB 4: BASE DE CONOCIMIENTO (CLOUDFLARE RAG) */}
+              {accessMode === "workspace" && (
+                <TabsContent value="rag" className="space-y-4 pt-3">
+                  <div>
+                    <Label className="text-sm font-medium">
+                      {t("Documentos de Referencia (Cloudflare RAG)")}
+                    </Label>
+                    <p className="text-xs text-muted-foreground mb-3">
                       {t(
-                        "Guarda el empleado primero para habilitar la carga de documentos RAG.",
+                        "Sube manuales, políticas, tarifas o catálogos (PDF, MD, TXT, CSV, JSON). El motor RAG de Cloudflare generará embeddings para recuperar contexto relevante.",
                       )}
                     </p>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <label className="cursor-pointer">
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept=".pdf,.txt,.md,.markdown,.csv,.json"
-                          onChange={(e) => void handleFileUpload(e)}
-                          disabled={uploadingFile}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5 pointer-events-none"
-                          disabled={uploadingFile}
-                        >
-                          <Upload className="size-4" />
-                          {uploadingFile
-                            ? t("Indexando RAG...")
-                            : t("Subir Documento")}
-                        </Button>
-                      </label>
-                      <span className="text-xs text-muted-foreground">
-                        {t(
-                          "Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)",
-                        )}
-                      </span>
-                    </div>
 
-                    {currentFiles.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">
+                  {!editingEmployee ? (
+                    <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground bg-muted/20">
+                      <p>
                         {t(
-                          "No hay documentos cargados para este empleado virtual.",
+                          "Guarda el empleado primero para habilitar la carga de documentos RAG.",
                         )}
                       </p>
-                    ) : (
-                      <div className="rounded-lg border divide-y">
-                        {currentFiles.map((file) => (
-                          <div
-                            key={file.id}
-                            className="flex items-center justify-between p-3 text-xs"
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.txt,.md,.markdown,.csv,.json"
+                            onChange={(e) => void handleFileUpload(e)}
+                            disabled={uploadingFile}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 pointer-events-none"
+                            disabled={uploadingFile}
                           >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <FileText className="size-4 text-primary shrink-0" />
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">
-                                  {file.name}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">
-                                  {(file.sizeBytes / 1024).toFixed(1)} KB •{" "}
-                                  {new Date(
-                                    file.createdAt,
-                                  ).toLocaleDateString()}
-                                </p>
+                            <Upload className="size-4" />
+                            {uploadingFile
+                              ? t("Indexando RAG...")
+                              : t("Subir Documento")}
+                          </Button>
+                        </label>
+                        <span className="text-xs text-muted-foreground">
+                          {t(
+                            "Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)",
+                          )}
+                        </span>
+                      </div>
+
+                      {currentFiles.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">
+                          {t(
+                            "No hay documentos cargados para este empleado virtual.",
+                          )}
+                        </p>
+                      ) : (
+                        <div className="rounded-lg border divide-y">
+                          {currentFiles.map((file) => (
+                            <div
+                              key={file.id}
+                              className="flex items-center justify-between p-3 text-xs"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <FileText className="size-4 text-primary shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="font-medium truncate">
+                                    {file.name}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {(file.sizeBytes / 1024).toFixed(1)} KB •{" "}
+                                    {new Date(
+                                      file.createdAt,
+                                    ).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                {file.ragStatus === "indexed" && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20"
+                                  >
+                                    <CheckCircle2 className="size-3 mr-1" />
+                                    {t("Indexado RAG")}
+                                  </Badge>
+                                )}
+                                {file.ragStatus === "pending" && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] text-amber-600 border-amber-300 bg-amber-50"
+                                  >
+                                    <Clock className="size-3 mr-1" />
+                                    {t("Procesando")}
+                                  </Badge>
+                                )}
+                                {file.ragStatus === "failed" && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] text-destructive border-destructive/30"
+                                  >
+                                    <AlertCircle className="size-3 mr-1" />
+                                    {t("Error")}
+                                  </Badge>
+                                )}
+
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="size-7 p-0 text-destructive hover:bg-destructive/10 max-sm:size-11"
+                                  aria-label={`${t("Quitar")} ${file.name}`}
+                                  onClick={() => void handleDeleteFile(file.id)}
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
                               </div>
                             </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
+              )}
 
-                            <div className="flex items-center gap-2 shrink-0">
-                              {file.ragStatus === "indexed" && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20"
-                                >
-                                  <CheckCircle2 className="size-3 mr-1" />
-                                  {t("Indexado RAG")}
-                                </Badge>
-                              )}
-                              {file.ragStatus === "pending" && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] text-amber-600 border-amber-300 bg-amber-50"
-                                >
-                                  <Clock className="size-3 mr-1" />
-                                  {t("Procesando")}
-                                </Badge>
-                              )}
-                              {file.ragStatus === "failed" && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] text-destructive border-destructive/30"
-                                >
-                                  <AlertCircle className="size-3 mr-1" />
-                                  {t("Error")}
-                                </Badge>
-                              )}
-
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="size-7 p-0 text-destructive hover:bg-destructive/10 max-sm:size-11"
-                                aria-label={`${t("Quitar")} ${file.name}`}
-                                onClick={() => void handleDeleteFile(file.id)}
-                              >
-                                <Trash2 className="size-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+              {/* TAB 5: MODELO LLM */}
+              <TabsContent value="model" className="space-y-4 pt-3">
+                <ModelInput
+                  id="emp-model"
+                  label={t("Modelo LLM Específico (Opcional)")}
+                  value={model}
+                  onChange={setModel}
+                  models={models}
+                  fallbackModel=""
+                  fallbackLabel={t("Hereda de la organización o global")}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "Si especificas un modelo aquí, este empleado utilizará este modelo cuando sea invocado en el chat. Sus capacidades se activarán automáticamente.",
+                  )}
+                </p>
               </TabsContent>
-            )}
+            </Tabs>
+          </div>
 
-            {/* TAB 5: MODELO LLM */}
-            <TabsContent value="model" className="space-y-4 pt-3">
-              <ModelInput
-                id="emp-model"
-                label={t("Modelo LLM Específico (Opcional)")}
-                value={model}
-                onChange={setModel}
-                models={models}
-                fallbackModel=""
-                fallbackLabel={t("Hereda de la organización o global")}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  "Si especificas un modelo aquí, este empleado utilizará este modelo cuando sea invocado en el chat. Sus capacidades se activarán automáticamente.",
-                )}
-              </p>
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter className="pt-4 border-t gap-2">
+          <SheetFooter className="shrink-0 flex-row items-center justify-end gap-2 border-t bg-card px-5 py-4 sm:justify-end [&>button]:min-h-11">
             <Button
               variant="outline"
               onClick={() => setIsCreateOpen(false)}
@@ -1293,9 +1323,9 @@ export function VirtualEmployeesManagement({
                   ? t("Guardar Cambios")
                   : t("Crear Empleado")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

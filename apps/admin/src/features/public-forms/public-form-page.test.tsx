@@ -108,7 +108,7 @@ it("uses only the anonymous definition and requires captcha before posting allow
     values: { name: "Ana", age: 32, consent: true },
   });
   expect(reset).toHaveBeenCalledWith("widget-id");
-  expect(remove).toHaveBeenCalledWith("widget-id");
+  await waitFor(() => expect(remove).toHaveBeenCalledWith("widget-id"));
 });
 it("prevents duplicate clicks and reuses submission identity after an uncertain response", async () => {
   render(<PublicFormPage token="public-token" />);

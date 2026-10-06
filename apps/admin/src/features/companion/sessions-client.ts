@@ -6,6 +6,7 @@ export type SessionChunk = {
   startSeconds: number;
   durationSeconds: number;
   bytes: number;
+  format: "ogg" | "m4a";
 };
 export type RecordingSession = {
   id: string;
@@ -24,6 +25,7 @@ export type RecordingSession = {
       | "needs_attention"
       | "cancelled"
       | "failed";
+    language: string;
     completedChunks: number;
     totalChunks: number;
     error?: string;
@@ -45,16 +47,26 @@ export class CompanionSessionsClient {
       signal,
     });
   }
-  process(id: string, retryAmbiguous: boolean): Promise<RecordingSession> {
+  process(
+    id: string,
+    retryAmbiguous: boolean,
+    language?: string,
+    retranscribe?: boolean,
+  ): Promise<RecordingSession> {
     return this.api.post(
       `/v1/companion/sessions/${encodeURIComponent(id)}/notes`,
-      { consent: true, retryAmbiguous },
+      { consent: true, retryAmbiguous, language, retranscribe },
     );
   }
   cancel(id: string): Promise<RecordingSession> {
     return this.api.post(
       `/v1/companion/sessions/${encodeURIComponent(id)}/cancel`,
     );
+  }
+  rename(id: string, name: string): Promise<RecordingSession> {
+    return this.api.patch(`/v1/companion/sessions/${encodeURIComponent(id)}`, {
+      name,
+    });
   }
   async audio(
     id: string,
@@ -63,6 +75,19 @@ export class CompanionSessionsClient {
   ): Promise<Blob> {
     const response = await this.api.requestResponse(
       `/v1/companion/sessions/${encodeURIComponent(id)}/chunks/${chunk.source}/${chunk.sequence}`,
+      { signal },
+    );
+    if (!response.ok) throw new Error("Audio unavailable");
+    return response.blob();
+  }
+  /** Single concatenated Ogg file for one source, in timeline order. */
+  async fullAudio(
+    id: string,
+    source: SessionChunk["source"],
+    signal?: AbortSignal,
+  ): Promise<Blob> {
+    const response = await this.api.requestResponse(
+      `/v1/companion/sessions/${encodeURIComponent(id)}/audio?source=${source}`,
       { signal },
     );
     if (!response.ok) throw new Error("Audio unavailable");

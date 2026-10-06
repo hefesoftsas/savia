@@ -7,6 +7,12 @@ const whatsappTables = [
   "tenant_whatsapp_assistant_bindings",
   "whatsapp_inbox",
   "whatsapp_delivery_receipts",
+  "whatsapp_channel_settings",
+  "whatsapp_channel_contacts",
+  "whatsapp_channel_history",
+  "whatsapp_channel_actions",
+  "whatsapp_channel_resources",
+  "whatsapp_channel_dispatches",
 ];
 
 it("keeps WhatsApp PostgreSQL inventory aligned with the migrated tables", async () => {

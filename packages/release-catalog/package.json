@@ -11,7 +11,9 @@
     "./assistant-contracts": "./src/assistant-contracts.ts",
     "./public-forms": "./src/public-forms.ts",
     "./whatsapp": "./src/whatsapp.ts",
-    "./public-ui": "./src/public-ui.ts"
+    "./public-ui": "./src/public-ui.ts",
+    "./assistant-api-client": "./src/assistant-api-client.ts",
+    "./assistant-operations": "./src/assistant-operations.ts"
   },
   "scripts": {
     "test": "vitest run",

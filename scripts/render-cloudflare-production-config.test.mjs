@@ -153,6 +153,7 @@ test("writes only the supported production workers and retains their runtime set
     );
     assert.equal("TURNSTILE_SECRET_KEY" in api.vars, false);
     assert.equal(api.keep_vars, true);
+    assert.equal(api.vars.WHATSAPP_PROCESSING_MODE, "scheduled");
     assert.deepEqual(api.triggers, { crons: ["* * * * *"] });
     assert.deepEqual(api.observability, {
       enabled: true,
@@ -241,6 +242,7 @@ test("writes only the supported production workers and retains their runtime set
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
     ]);
     assert.ok(admin.assets.run_worker_first.includes("/health"));
+    assert.ok(admin.assets.run_worker_first.includes("/webhooks/whatsapp"));
     assert.ok(
       admin.assets.run_worker_first.includes("/companion-downloads.json"),
     );
@@ -319,6 +321,7 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
       if (app === "api") {
         assert.deepEqual(conf.triggers, { crons: ["* * * * *"] });
         assert.equal(conf.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE, "true");
+        assert.equal(conf.vars.WHATSAPP_PROCESSING_MODE, "scheduled");
         assert.equal(conf.vars.COMPANION_ENABLED, "true");
         assert.equal(conf.r2_buckets[0].bucket_name, "savia-documents-preview");
         assert.equal(
@@ -352,6 +355,7 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
         ]);
       if (app === "admin") {
         assert.equal(conf.vars.CANONICAL_HOST, "savia-preview.hefesoft.com");
+        assert.ok(conf.assets.run_worker_first.includes("/webhooks/whatsapp"));
         assert.deepEqual(conf.routes, [
           { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
         ]);

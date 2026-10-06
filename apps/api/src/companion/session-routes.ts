@@ -17,6 +17,7 @@ import {
   chunkInputSchema,
   finalizeSessionSchema,
   processingRequestSchema,
+  renameSessionSchema,
 } from "./sessions";
 import { selectSessionEvidence } from "./session-evidence";
 
@@ -148,6 +149,32 @@ export function registerCompanionSessionRoutes(
   );
   app.openapi(
     createRoute({
+      method: "patch",
+      path: "/v1/companion/sessions/{id}",
+      tags: ["Companion"],
+      security: security("recordings:upload"),
+      summary: "Rename an owned recording session",
+      request: {
+        params,
+        body: {
+          required: true,
+          content: { "application/json": { schema: renameSessionSchema } },
+        },
+      },
+      responses: { 200: success, ...failures },
+    }),
+    async (c) =>
+      c.json(
+        await options.sessions.rename(
+          await access(c),
+          c.req.valid("param").id,
+          c.req.valid("json"),
+        ),
+        200,
+      ),
+  );
+  app.openapi(
+    createRoute({
       method: "post",
       path: "/v1/companion/sessions/{id}/chunks",
       tags: ["Companion"],
@@ -239,6 +266,45 @@ export function registerCompanionSessionRoutes(
       return new Response(new Uint8Array(audio.bytes), {
         headers: {
           "Content-Type": audio.format === "m4a" ? "audio/mp4" : "audio/ogg",
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    },
+  );
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/v1/companion/sessions/{id}/audio",
+      tags: ["Companion"],
+      security: security("recordings:read"),
+      summary: "Download one source as a single concatenated Ogg audio file",
+      request: {
+        params,
+        query: z.object({ source: sessionSourceSchema }),
+      },
+      responses: {
+        200: {
+          description: "Concatenated Ogg Opus audio in timeline order",
+          content: {
+            "audio/ogg": { schema: z.string().openapi({ format: "binary" }) },
+          },
+        },
+        ...failures,
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid("param");
+      const { source } = c.req.valid("query");
+      const audio = await options.sessions.getFullAudio(
+        await access(c),
+        id,
+        source,
+      );
+      return new Response(audio.bytes, {
+        headers: {
+          "Content-Type": "audio/ogg",
+          "Content-Disposition": `inline; filename="savia-session-${id}-${source}.ogg"`,
           "Cache-Control": "private, no-store",
           "X-Content-Type-Options": "nosniff",
         },

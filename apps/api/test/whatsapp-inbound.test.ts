@@ -3,7 +3,10 @@ import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { upsertPrincipal } from "../src/auth/identity-repository";
 import { WhatsappInboundRepository } from "../src/whatsapp/inbound-repository";
-import { processWhatsappInbox } from "../src/whatsapp/inbound-processor";
+import {
+  drainWhatsappInbox,
+  processWhatsappInbox,
+} from "../src/whatsapp/inbound-processor";
 import type {
   WhatsappAssistantSettings,
   WhatsappInboundDependencies,
@@ -265,6 +268,36 @@ describe("WhatsApp inbound persistence and processing", () => {
       delivery_rank: 3,
       delivery_error_codes: '["131042"]',
     });
+  });
+
+  it("drains more than ten inbox items in one scheduled invocation", async () => {
+    const s = await setup();
+    const firstReceivedAt = Date.now() - 12_000;
+    for (let index = 0; index < 12; index++) {
+      expect(
+        await s.repository.receive(
+          inbound(
+            s,
+            `wamid-scheduled-${s.tenantId}-${String(index).padStart(2, "0")}`,
+            new Date(firstReceivedAt + index * 1_000).toISOString(),
+          ),
+        ),
+      ).toBe(true);
+    }
+
+    const generate = vi.fn(async () => "A reply");
+    const send = vi.fn(
+      async (_binding, _text, _contact, item) => `out-${item?.messageId}`,
+    );
+    const result = await drainWhatsappInbox(
+      s.repository,
+      { generate, send },
+      { maxBatches: 50 },
+    );
+
+    expect(result).toEqual({ processed: 12, failed: 0 });
+    expect(generate).toHaveBeenCalledTimes(12);
+    expect(send).toHaveBeenCalledTimes(12);
   });
 
   it("does not resend when the provider send result is uncertain", async () => {
@@ -660,18 +693,47 @@ describe("WhatsApp inbound persistence and processing", () => {
     });
   });
 
-  it("bounds generation retries and never sends a failed generation", async () => {
+  it("does not send an exhausted-generation recovery reply after access revocation", async () => {
+    const s = await setup();
+    await s.repository.receive(inbound(s));
+    await env.DB.prepare(
+      "UPDATE whatsapp_inbox SET generation_attempts=2 WHERE message_id=?",
+    )
+      .bind(`wamid-${s.tenantId}`)
+      .run();
+    const send = vi.fn(async () => "unused");
+    const result = await processWhatsappInbox(s.repository, {
+      generate: async () => {
+        throw new Error("model failure");
+      },
+      authorizeReply: async () => false,
+      send,
+    });
+    expect(result).toEqual({ processed: 0, failed: 1 });
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      await env.DB.prepare(
+        "SELECT state,failure_code FROM whatsapp_inbox WHERE message_id=?",
+      )
+        .bind(`wamid-${s.tenantId}`)
+        .first(),
+    ).toEqual({ state: "failed", failure_code: "channel_access_revoked" });
+  });
+
+  it("bounds generation retries and sends a safe recovery reply after exhaustion", async () => {
     const s = await setup();
     await s.repository.receive(inbound(s));
     const generate = vi.fn(async () => {
-      throw new Error("temporary model failure");
+      throw new Error("temporary model failure: Bearer private-provider-token");
     });
-    const send = vi.fn(async () => "unused");
+    const send = vi.fn(async () => "recovery-outbound");
 
     for (let attempt = 0; attempt < 3; attempt++) {
       expect(
         await processWhatsappInbox(s.repository, { generate, send }),
-      ).toEqual({ processed: 0, failed: 1 });
+      ).toEqual(
+        attempt < 2 ? { processed: 0, failed: 1 } : { processed: 1, failed: 0 },
+      );
       if (attempt < 2)
         await env.DB.prepare(
           "UPDATE whatsapp_inbox SET retry_at=NULL WHERE message_id=?",
@@ -681,7 +743,10 @@ describe("WhatsApp inbound persistence and processing", () => {
     }
 
     expect(generate).toHaveBeenCalledTimes(3);
-    expect(send).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[1]).toBe(
+      "Tuve un problema y no pude completar tu solicitud. Por favor, contacta directamente a un asesor para continuar.",
+    );
     expect(
       await env.DB.prepare(
         "SELECT state,generation_attempts,failure_code FROM whatsapp_inbox WHERE message_id=?",
@@ -689,9 +754,9 @@ describe("WhatsApp inbound persistence and processing", () => {
         .bind(`wamid-${s.tenantId}`)
         .first(),
     ).toEqual({
-      state: "failed",
+      state: "completed",
       generation_attempts: 3,
-      failure_code: "generation_failed",
+      failure_code: null,
     });
   });
 });

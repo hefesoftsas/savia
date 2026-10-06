@@ -3,6 +3,7 @@ import { z } from "@hono/zod-openapi";
 import { CompanionError, summarySchema, transcriptSchema } from "./service";
 import { decodeAudio } from "./service";
 import { inspectOggOpus, MAX_OPUS_BYTES } from "./ogg";
+import { appendOggOpusLink, MAX_OGG_CHAIN_BYTES } from "./ogg-chain";
 import type { RecordingAccess } from "./recordings";
 
 export const sessionIdSchema = z.string().uuid();
@@ -37,8 +38,35 @@ export const finalizeSessionSchema = z
     durationSeconds: z.number().finite().positive().max(3600),
   })
   .strict();
+export const renameSessionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(255),
+  })
+  .strict();
+
+export const isGenericSessionName = (name: string): boolean => {
+  const trimmed = name.trim();
+  if (!trimmed) return true;
+  return /^(recording|grabaci[oó]n|grava[cç][aã]o)(\s+[a-f0-9]{8})?(\.m4a)?$/i.test(
+    trimmed,
+  );
+};
+
+export const sessionNameForDate = (date: Date | string): string => {
+  const parsed = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(parsed.getTime())) return "Recording";
+  // UTC day + hour minimum so every unnamed session stays identifiable.
+  const iso = parsed.toISOString();
+  return `Recording ${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+};
+const languageSchema = z.string().regex(/^([a-z]{2}|auto)$/);
 export const processingRequestSchema = z
-  .object({ consent: z.literal(true), retryAmbiguous: z.boolean().optional() })
+  .object({
+    consent: z.literal(true),
+    retryAmbiguous: z.boolean().optional(),
+    language: languageSchema.optional(),
+    retranscribe: z.boolean().optional(),
+  })
   .strict();
 
 const chunkSchema = z.object({
@@ -63,6 +91,9 @@ const jobStatusSchema = z.enum([
 const jobSchema = z.object({
   runId: z.string().uuid().nullable().default(null),
   status: jobStatusSchema,
+  // "auto" lets the provider detect the spoken language; a two-letter code
+  // forces it. An explicit user choice always wins over detection.
+  language: languageSchema.default("es"),
   completedChunks: z.number().int().min(0).max(240),
   totalChunks: z.number().int().min(0).max(240),
   error: z.string().max(80).optional(),
@@ -282,6 +313,7 @@ export class CompanionSessions {
       job: {
         runId: null,
         status: "idle",
+        language: "auto",
         completedChunks: 0,
         totalChunks: 0,
         transcripts: {},
@@ -633,6 +665,78 @@ export class CompanionSessions {
       bytes,
     };
   }
+  /** Concatenated single-stream audio for one source, in timeline order. */
+  async getFullAudio(
+    access: RecordingAccess,
+    id: string,
+    source: z.infer<typeof sessionSourceSchema>,
+  ) {
+    const manifest = (await this.readManifest(access, id)).manifest;
+    if (manifest.state !== "ready")
+      throw new CompanionError(
+        "SESSION_INCOMPLETE",
+        "Finalize the session before downloading the full audio.",
+        409,
+      );
+    const timeline = manifest.chunks
+      .filter((candidate) => candidate.source === source)
+      .sort((a, b) => a.sequence - b.sequence);
+    if (!timeline.length)
+      throw new CompanionError(
+        "AUDIO_NOT_FOUND",
+        "This session has no audio for that source.",
+        404,
+      );
+    if (timeline.some((chunk, index) => chunk.sequence !== index))
+      throw new CompanionError(
+        "STORAGE_INVALID_RECORD",
+        "Stored session audio failed validation.",
+        503,
+      );
+    if (timeline.some((chunk) => chunk.format !== "ogg"))
+      throw new CompanionError(
+        "FULL_AUDIO_UNAVAILABLE",
+        "Full download is available for desktop Ogg recordings; this source has segments in another format.",
+        409,
+      );
+    const total = timeline.reduce((sum, chunk) => sum + chunk.bytes, 0);
+    if (total <= 0 || total > MAX_OGG_CHAIN_BYTES)
+      throw new CompanionError(
+        "AUDIO_TOO_LARGE",
+        "Full session audio exceeds the 64 MB download limit.",
+        413,
+      );
+    const bytes: Uint8Array<ArrayBuffer> = new Uint8Array(total);
+    let offset = 0;
+    try {
+      for (const chunk of timeline) {
+        const audio = await this.getAudio(access, id, source, chunk.sequence);
+        offset = appendOggOpusLink(
+          bytes,
+          offset,
+          audio.bytes,
+          chunk.sequence + 1,
+        );
+      }
+      if (offset !== total)
+        throw new Error(
+          "Stored session audio size did not match its manifest.",
+        );
+    } catch {
+      throw new CompanionError(
+        "STORAGE_INVALID_RECORD",
+        "Stored session audio failed validation.",
+        503,
+      );
+    }
+    return {
+      source,
+      format: "ogg" as const,
+      chunks: timeline.length,
+      durationSeconds: manifest.durationSeconds,
+      bytes,
+    };
+  }
   async finalize(
     access: RecordingAccess,
     id: string,
@@ -715,6 +819,20 @@ export class CompanionSessions {
     });
     return publicSession(result);
   }
+  async rename(
+    access: RecordingAccess,
+    id: string,
+    input: z.input<typeof renameSessionSchema>,
+  ): Promise<Session> {
+    const parsed = renameSessionSchema.safeParse(input);
+    if (!parsed.success)
+      throw new CompanionError("INVALID_REQUEST", "Invalid session name.");
+    const result = await this.mutate(access, id, (manifest) => {
+      manifest.name = parsed.data.name;
+      return manifest;
+    });
+    return publicSession(result);
+  }
   async requestProcessing(
     access: RecordingAccess,
     id: string,
@@ -733,13 +851,38 @@ export class CompanionSessions {
           "Finalize the session before processing.",
           409,
         );
-      if (manifest.job.status === "complete")
+      const currentLanguage = manifest.job.language ?? "es";
+      const savedTranscripts = Object.keys(manifest.job.transcripts).length;
+      const requestedLanguage =
+        parsed.data.language ??
+        (savedTranscripts > 0 ? currentLanguage : "auto");
+      const switchLanguage =
+        savedTranscripts > 0 && requestedLanguage !== currentLanguage;
+      if (switchLanguage && !parsed.data.retranscribe)
+        throw new CompanionError(
+          "RETRANSCRIBE_REQUIRED",
+          currentLanguage === "auto"
+            ? `This session already has an automatically detected transcript. Confirm retranscription to force ${requestedLanguage}; saved results are replaced and provider usage may be billed again.`
+            : `This session already has a transcript in ${currentLanguage}. Confirm retranscription to switch to ${requestedLanguage}; saved results are replaced and provider usage may be billed again.`,
+          409,
+        );
+      if (switchLanguage) {
+        manifest.job.transcripts = {};
+        manifest.job.completedChunks = 0;
+        manifest.job.summary = null;
+        manifest.job.summaryWork = [];
+        manifest.job.language = requestedLanguage;
+        manifest.job.runId = crypto.randomUUID();
+        manifest.job.status = "queued";
+        manifest.job.lease = null;
+        manifest.job.error = undefined;
+      } else if (manifest.job.status === "complete") {
         throw new CompanionError(
           "PROCESSING_CONFLICT",
           "This session cannot be processed in its current state.",
           409,
         );
-      if (
+      } else if (
         manifest.job.status === "needs_attention" ||
         manifest.job.status === "cancelled"
       ) {
@@ -766,6 +909,11 @@ export class CompanionSessions {
             ? "queued"
             : "summarizing";
         manifest.job.error = undefined;
+      }
+      if (!switchLanguage && savedTranscripts === 0) {
+        // No transcripts yet: an explicit choice is honored immediately,
+        // otherwise a fresh run starts in detection mode.
+        manifest.job.language = requestedLanguage;
       }
       manifest.job.totalChunks = manifest.chunks.length;
       return manifest;

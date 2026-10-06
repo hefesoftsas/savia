@@ -4,7 +4,7 @@
 > for one-hour capture, native draft recovery and durable processing. Short-sample
 > limits and earlier verification results below describe the preceding increment.
 
-Owner: Savia platform maintainers. Reviewed: 2026-10-01.
+Owner: Savia platform maintainers. Reviewed: 2026-10-05.
 Status: bounded desktop/API validation implementation; hardware and live-provider gates pending.
 
 Savia Companion is a proposed optional desktop application for manually recording
@@ -20,7 +20,10 @@ publishing installers or registering application identifiers.
 source processing through Savia. Active tenant members and platform administrators
 can use their own recordings. Provider requests are opt-in and keep credentials on
 the backend. Stopped tracks use mono Opus at a target
-32 kbps. Explicit Upload stores private samples in R2; unsaved capture is temporary.
+32 kbps. Stopped sources can be previewed locally from the native draft before
+upload. Explicit Upload stores private samples in R2; Discard removes the local
+draft. The desktop interface detects the OS/WebView language at launch; a manual
+selection lasts only for the current window.
 The desktop is a compact capture window. The main Savia app has a Recordings
 page with authenticated playback/download and consented transcript/summary
 generation. Notes persist on the backend and can be reviewed after reloading.
@@ -31,6 +34,7 @@ unpassed hardware/provider gates and the remaining epic scope.
 | Document                                                                              | Purpose                                                                           |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | [Workspace instructions](../../apps/companion/README.md)                              | Run the available CLI and tests; understand current limits.                       |
+| [Desktop language](desktop-language.md)                                               | OS/WebView detection, Spanish fallback, and window-only language selection.       |
 | [OpenRouter model configuration](model-configuration.md)                              | Configure independent OpenRouter transcription, summary, image, and voice models. |
 | [Live-flow smoke test](live-flow-smoke.md)                                            | Real storage, playback, OpenRouter notes and the remaining macOS capture failure. |
 | [Implementation status](implementation-status.md)                                     | Implemented prototype scope and remaining epic gates.                             |

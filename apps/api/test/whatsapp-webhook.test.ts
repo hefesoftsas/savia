@@ -57,6 +57,7 @@ function setup(
     receipt?: (input: WhatsappDeliveryInput) => Promise<void>;
     process?: () => Promise<unknown>;
     configured?: boolean;
+    deferProcessing?: boolean;
   } = {},
 ) {
   const receive = vi.fn(options.receive ?? (async () => true));
@@ -67,6 +68,7 @@ function setup(
     repository: { receive, receipt },
     ...(options.configured === false ? {} : { appSecret, verifyToken }),
     process,
+    deferProcessing: options.deferProcessing,
   });
   return { app, receive, receipt, process };
 }
@@ -189,6 +191,13 @@ describe("WhatsApp webhook", () => {
     const { app, receive, process } = setup({
       receive: async () => false,
     });
+    expect((await post(app, webhookBody(messageValue()))).status).toBe(200);
+    expect(receive).toHaveBeenCalledOnce();
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it("persists accepted events without HTTP background generation in scheduled mode", async () => {
+    const { app, receive, process } = setup({ deferProcessing: true });
     expect((await post(app, webhookBody(messageValue()))).status).toBe(200);
     expect(receive).toHaveBeenCalledOnce();
     expect(process).not.toHaveBeenCalled();

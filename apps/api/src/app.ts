@@ -88,6 +88,7 @@ import type {
 import { registerAssistantConfigurationRoutes } from "./assistant/configuration-routes";
 import type { AssistantService } from "./assistant/contracts";
 import { registerAssistantRoutes } from "./assistant/routes";
+import { registerWhatsappChannelRoutes } from "./whatsapp/channel-routes";
 import { registerWhatsappAssistantRoutes } from "./whatsapp/assistant-routes";
 import {
   registerWhatsappWebhook,
@@ -265,6 +266,7 @@ export function createApp(
   registerRequestResultRoutes(app, saviaRequestService);
   registerCrmRoutes(app, db, crm);
   registerWhatsappRoutes(app, db, whatsapp);
+  registerWhatsappChannelRoutes(app, db);
   registerWhatsappAssistantRoutes(
     app,
     db,

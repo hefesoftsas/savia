@@ -136,12 +136,77 @@ it("shows safe provider diagnostics and recovers a transcript after summary proc
     ),
   ).toBeInTheDocument();
   expect(client.notes).toHaveBeenCalledWith("one");
+  expect(
+    screen.queryByLabelText("I understand saved results will be replaced."),
+  ).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Generate summary" }));
+  expect(client.generate).toHaveBeenNthCalledWith(2, "one", "auto", false);
   await user.click(screen.getByRole("button", { name: "Español" }));
   expect(
     await screen.findByText(
       "El proveedor de resúmenes respondió HTTP 429. Revisa el consumo del proveedor antes de reintentar.",
     ),
   ).toBeVisible();
+});
+
+it("keeps the saved language selector available and asks consent only to change it", async () => {
+  const client = mockClient();
+  client.notes.mockResolvedValue({ ...result, language: "pt" });
+  client.generate.mockResolvedValue({ ...result, language: "en" });
+  const user = userEvent.setup();
+  show(client);
+
+  const language = await screen.findByLabelText("Transcript language");
+  await waitFor(() => {
+    expect(language).toBeEnabled();
+    expect(language).toHaveValue("pt");
+  });
+  expect(
+    screen.queryByLabelText("I understand saved results will be replaced."),
+  ).not.toBeInTheDocument();
+
+  await user.selectOptions(language, "en");
+  const consent = await screen.findByLabelText(
+    "I understand saved results will be replaced.",
+  );
+  const generate = screen.getByRole("button", { name: "Generate summary" });
+  expect(generate).toBeDisabled();
+  await user.click(consent);
+  expect(generate).toBeEnabled();
+  await user.click(generate);
+  await waitFor(() =>
+    expect(client.generate).toHaveBeenCalledWith("one", "en", true),
+  );
+});
+
+it("shows a saved language outside the preset list instead of displaying Automatic", async () => {
+  const client = mockClient();
+  client.notes.mockResolvedValue({ ...result, language: "zh" });
+  show(client);
+
+  const language = await screen.findByLabelText("Transcript language");
+  await waitFor(() => {
+    expect(language).toBeEnabled();
+    expect(language).toHaveValue("zh");
+  });
+  expect(screen.getByRole("option", { name: /zh/ })).toBeInTheDocument();
+});
+
+it("keeps language changes disabled while saved notes are loading", async () => {
+  const client = mockClient();
+  let resolveNotes!: (notes: any) => void;
+  client.notes.mockImplementation(
+    () => new Promise((resolve) => (resolveNotes = resolve)),
+  );
+  show(client);
+
+  const language = await screen.findByLabelText("Transcript language");
+  expect(language).toBeDisabled();
+  resolveNotes({ ...result, language: "zh" });
+  await waitFor(() => {
+    expect(language).toBeEnabled();
+    expect(language).toHaveValue("zh");
+  });
 });
 
 it("ignores unrecognized provider diagnostic values", async () => {

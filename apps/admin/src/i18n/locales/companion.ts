@@ -67,6 +67,44 @@ export const companionMessages = {
     "Há um intervalo sem áudio antes desta parte da gravação.",
   ],
   "Listen from": ["Escuchar desde", "Listen from", "Ouvir a partir de"],
+  "Full audio": ["Audio completo", "Full audio", "Áudio completo"],
+  "Play full audio": [
+    "Reproducir audio completo",
+    "Play full audio",
+    "Ouvir áudio completo",
+  ],
+  "Loading full audio…": [
+    "Cargando audio completo…",
+    "Loading full audio…",
+    "Carregando áudio completo…",
+  ],
+  "Download full audio": [
+    "Descargar audio completo",
+    "Download full audio",
+    "Baixar áudio completo",
+  ],
+  "Full download is only available for desktop recordings.": [
+    "La descarga completa solo está disponible para grabaciones de escritorio.",
+    "Full download is only available for desktop recordings.",
+    "O download completo está disponível apenas para gravações de desktop.",
+  ],
+  "Transcript language": [
+    "Idioma de transcripción",
+    "Transcript language",
+    "Idioma da transcrição",
+  ],
+  Automatic: ["Automático", "Automatic", "Automático"],
+  "Switching language replaces the saved transcript and summary. Provider usage may be billed again.":
+    [
+      "Cambiar de idioma reemplaza la transcripción y el resumen guardados. El uso del proveedor puede facturarse de nuevo.",
+      "Switching language replaces the saved transcript and summary. Provider usage may be billed again.",
+      "Trocar de idioma substitui a transcrição e o resumo salvos. O uso do provedor pode ser cobrado novamente.",
+    ],
+  "I understand saved results will be replaced.": [
+    "Entiendo que los resultados guardados serán reemplazados.",
+    "I understand saved results will be replaced.",
+    "Entendo que os resultados salvos serão substituídos.",
+  ],
   "Unable to update this session. Refresh and try again.": [
     "No se pudo actualizar esta sesión. Actualiza e inténtalo de nuevo.",
     "Unable to update this session. Refresh and try again.",
@@ -269,6 +307,16 @@ export const companionMessages = {
     "Nenhuma fala detectada.",
   ],
   "Download audio": ["Descargar audio", "Download audio", "Baixar áudio"],
+  "Session name": ["Nombre de la sesión", "Session name", "Nome da sessão"],
+  "Rename session": ["Renombrar sesión", "Rename session", "Renomear sessão"],
+  Rename: ["Renombrar", "Rename", "Renomear"],
+  "Save name": ["Guardar nombre", "Save name", "Salvar nome"],
+  "Saving…": ["Guardando…", "Saving…", "Salvando…"],
+  "Unable to rename this session. Try again.": [
+    "No se pudo renombrar esta sesión. Inténtalo de nuevo.",
+    "Unable to rename this session. Try again.",
+    "Não foi possível renomear esta sessão. Tente novamente.",
+  ],
   "Loading recordings…": [
     "Cargando grabaciones…",
     "Loading recordings…",

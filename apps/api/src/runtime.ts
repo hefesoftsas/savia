@@ -1,3 +1,6 @@
+import { PersonalIntegrationOperations } from "./personal-integrations/operations";
+import { createPersonalIntegrationRepository } from "./personal-integrations/repository";
+import type { ChannelOperationDependencies } from "./assistant/operation-adapter";
 import { cleanupWhatsappMedia } from "./whatsapp/media-input";
 import { CompanionSessions } from "./companion/sessions";
 import { CompanionSessionJobs } from "./companion/session-jobs";
@@ -142,6 +145,67 @@ export function personalIntegrationRoutesFromEnvironment(
           ),
         }
       : {}),
+  };
+}
+
+function whatsappChannelOptions(
+  environment: RuntimeEnvironment,
+  configuration: AssistantConfigurationRepository,
+): Omit<ChannelOperationDependencies, "repository"> {
+  const personal = personalIntegrationRoutesFromEnvironment(environment);
+  return {
+    secret: environment.SAVIA_MCP_SHARED_SECRET,
+    ...(personal.nango
+      ? {
+          personal: new PersonalIntegrationOperations(
+            createPersonalIntegrationRepository(environment.DB),
+            personal.nango,
+          ),
+        }
+      : {}),
+    backendForActor: async (actor) => {
+      const backend = createApp(
+        environment.DB,
+        environment.DOCUMENTS,
+        signingCredentials(environment),
+        { authenticate: async () => actor },
+        undefined,
+        undefined,
+        environment.AUTH,
+        undefined,
+        undefined,
+        publicAuthUrls(
+          "https://channel.savia.invalid",
+          environment.SAVIA_PUBLIC_ORIGIN,
+        ),
+        undefined,
+        crmRoutesFromEnvironment(environment),
+        configuration,
+        undefined,
+        environment.SAVIA_REQUEST,
+        personal,
+        studioIntegrationKeyFromEnvironment(environment),
+        undefined,
+        sqlBridgeFromEnvironment(environment),
+        connectorExecutorFromEnvironment(environment),
+        extensionConnectionsEncryptionKeyFromEnvironment(environment),
+        undefined,
+        undefined,
+        (context) =>
+          createCollectionGateway({
+            ...context,
+            pluginRegistry: runtimePluginRegistryForTenant(
+              environment.PLUGIN_REGISTRY_TENANTS,
+              context.tenant,
+            ),
+          }),
+      );
+      return async (input, init) =>
+        backend.fetch(
+          input instanceof Request ? input : new Request(input, init),
+          environment,
+        );
+    },
   };
 }
 
@@ -404,7 +468,11 @@ const runtime = {
         ...(pagesSearchSchedule ? { schedule: pagesSearchSchedule } : {}),
       },
       whatsappRoutesFromEnvironment(environment),
-      whatsappInboundFromEnvironment(environment, assistant.configuration),
+      whatsappInboundFromEnvironment(
+        environment,
+        assistant.configuration,
+        whatsappChannelOptions(environment, assistant.configuration),
+      ),
     ).fetch(request, environment, context);
     return response;
   },
@@ -427,11 +495,14 @@ const runtime = {
         !environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim()
       )
         return;
+      const configuration = assistantConfigurationFromEnvironment(environment);
       const inbound = whatsappInboundFromEnvironment(
         environment,
-        assistantConfigurationFromEnvironment(environment),
+        configuration,
+        whatsappChannelOptions(environment, configuration),
       );
-      const report = await inbound.process();
+      const report = await inbound.process({ scheduled: true });
+      await inbound.processActions();
       if (report.processed || report.failed)
         console.info(
           JSON.stringify({ event: "whatsapp_inbound_batch", ...report }),

@@ -13,6 +13,7 @@ import {
   MAX_RECORDING_BYTES,
 } from "./imported-audio";
 export const recordingIdSchema = z.string().uuid();
+export const recordingLanguageSchema = z.string().regex(/^([a-z]{2}|auto)$/);
 export const saveRecordingSchema = z
   .object({
     id: recordingIdSchema,
@@ -51,6 +52,7 @@ export const recordingNotesSchema = z
   .object({
     transcript: transcriptSchema.nullable(),
     summary: summarySchema.nullable(),
+    language: recordingLanguageSchema.default("auto"),
   })
   .strict();
 export type Recording = z.infer<typeof recordingSchema>;
@@ -414,7 +416,7 @@ export class CompanionRecordings {
   async getNotes(owner: RecordingOwner, id: string): Promise<RecordingNotes> {
     await this.get(owner, id);
     const object = await this.storage().get(await this.notesKey(owner, id));
-    if (!object) return { transcript: null, summary: null };
+    if (!object) return { transcript: null, summary: null, language: "auto" };
     if (object.size > MAX_NOTES_BYTES)
       throw new CompanionError(
         "STORAGE_INVALID_RECORD",
