@@ -222,6 +222,12 @@ it("prepares a staff quote after AUTORIZO using the same validated draft", async
   );
   expect(afterAuthorization!.tools).not.toHaveProperty("savia_prepare_command");
   expect(afterAuthorization!.directReply).toMatchObject({ kind: "buttons" });
+  expect((afterAuthorization!.directReply as any).text).not.toMatch(
+    /"plate"|fasecoldaCode|documentNumber|Productos:/,
+  );
+  expect((afterAuthorization!.directReply as any).text).toContain(
+    "Valor asegurado:",
+  );
   expect(afterAuthorization!.reply).toBeUndefined();
 
   const rows = await env.DB.prepare(
