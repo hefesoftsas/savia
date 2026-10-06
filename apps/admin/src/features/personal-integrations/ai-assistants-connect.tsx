@@ -30,10 +30,10 @@ export function AiAssistantsConnect({ mcpUrl }: { mcpUrl?: string }) {
 
   const chatGptSteps = [
     t(
-      "Activa el modo Desarrollador en Ajustes → Seguridad e inicio de sesión → Seguridad avanzada.",
+      "En ChatGPT Business, un administrador activa el modo Desarrollador en Configuración del espacio de trabajo → Apps → Crear. En Enterprise/Edu, actívalo en Configuración → Apps → Configuración avanzada.",
     ),
     t(
-      "Abre Plugins, pulsa Crear app (+) e introduce el nombre de Savia y la URL de conexión.",
+      "Abre Apps/Aplicaciones, elige Crear (+) e introduce el nombre de Savia y la URL de conexión.",
     ),
     t(
       "Elige OAuth, acepta el aviso de servidor personalizado y deja seleccionado el Registro dinámico de cliente (DCR).",
@@ -119,7 +119,7 @@ export function AiAssistantsConnect({ mcpUrl }: { mcpUrl?: string }) {
           <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
             <li>
               {t(
-                "Acceso a ChatGPT con modo Desarrollador o a Claude con conectores personalizados habilitados.",
+                "ChatGPT web con modo Desarrollador (las acciones MCP de escritura requieren Business, Enterprise o Edu), o Claude con conectores personalizados habilitados.",
               )}
             </li>
             <li>
@@ -178,18 +178,25 @@ export function AiAssistantsConnect({ mcpUrl }: { mcpUrl?: string }) {
       >
         <li className="px-5 py-4">
           <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
-            <li>{t("Lectura para descubrir y leer colecciones y empleados.")}</li>
+            <li>
+              {t("Lectura para descubrir y leer colecciones y empleados.")}
+            </li>
             <li>
               {t(
                 "Escritura para mutaciones autorizadas y confirmación de acciones pendientes.",
               )}
             </li>
-            <li>{t("Acceso sin conexión para renovar tokens (offline_access).")}</li>
+            <li>
+              {t("Acceso sin conexión para renovar tokens (offline_access).")}
+            </li>
           </ul>
         </li>
       </IntegrationGroup>
 
-      <IntegrationGroup title={t("Si algo falla")} headingId="ai-assistants-help">
+      <IntegrationGroup
+        title={t("Si algo falla")}
+        headingId="ai-assistants-help"
+      >
         <li className="px-5 py-4">
           <ul className="list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground">
             <li>

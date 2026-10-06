@@ -573,7 +573,11 @@ export const personalIntegrationsMessages = {
     "Error deleting file",
     "Erro ao excluir arquivo",
   ],
-  "ChatGPT y Claude": ["ChatGPT y Claude", "ChatGPT and Claude", "ChatGPT e Claude"],
+  "ChatGPT y Claude": [
+    "ChatGPT y Claude",
+    "ChatGPT and Claude",
+    "ChatGPT e Claude",
+  ],
   "Conecta Savia con ChatGPT y Claude para consultar tus colecciones y pedir tareas a tus empleados virtuales desde esos asistentes.":
     [
       "Conecta Savia con ChatGPT y Claude para consultar tus colecciones y pedir tareas a tus empleados virtuales desde esos asistentes.",
@@ -598,11 +602,11 @@ export const personalIntegrationsMessages = {
     "What do you need before starting?",
     "Do que você precisa antes de começar?",
   ],
-  "Acceso a ChatGPT con modo Desarrollador o a Claude con conectores personalizados habilitados.":
+  "ChatGPT web con modo Desarrollador (las acciones MCP de escritura requieren Business, Enterprise o Edu), o Claude con conectores personalizados habilitados.":
     [
-      "Acceso a ChatGPT con modo Desarrollador o a Claude con conectores personalizados habilitados.",
-      "Access to ChatGPT with Developer mode or to Claude with custom connectors enabled.",
-      "Acesso ao ChatGPT com modo Desenvolvedor ou ao Claude com conectores personalizados habilitados.",
+      "ChatGPT web con modo Desarrollador (las acciones MCP de escritura requieren Business, Enterprise o Edu), o Claude con conectores personalizados habilitados.",
+      "ChatGPT web with Developer mode (MCP write actions require Business, Enterprise, or Edu), or Claude with custom connectors enabled.",
+      "ChatGPT web com modo Desenvolvedor (ações de escrita MCP exigem Business, Enterprise ou Edu), ou Claude com conectores personalizados habilitados.",
     ],
   "Tu usuario de Savia con acceso a la organización que quieres consultar.": [
     "Tu usuario de Savia con acceso a la organización que quieres consultar.",
@@ -625,17 +629,17 @@ export const personalIntegrationsMessages = {
     "How to connect Claude",
     "Como conectar o Claude",
   ],
-  "Activa el modo Desarrollador en Ajustes → Seguridad e inicio de sesión → Seguridad avanzada.":
+  "En ChatGPT Business, un administrador activa el modo Desarrollador en Configuración del espacio de trabajo → Apps → Crear. En Enterprise/Edu, actívalo en Configuración → Apps → Configuración avanzada.":
     [
-      "Activa el modo Desarrollador en Ajustes → Seguridad e inicio de sesión → Seguridad avanzada.",
-      "Enable Developer mode in Settings → Security and login → Advanced security.",
-      "Ative o modo Desenvolvedor em Ajustes → Segurança e login → Segurança avançada.",
+      "En ChatGPT Business, un administrador activa el modo Desarrollador en Configuración del espacio de trabajo → Apps → Crear. En Enterprise/Edu, actívalo en Configuración → Apps → Configuración avanzada.",
+      "On ChatGPT Business, an admin enables Developer mode from Workspace settings → Apps → Create. On Enterprise/Edu, enable it under Settings → Apps → Advanced Settings.",
+      "No ChatGPT Business, um administrador ativa o modo Desenvolvedor em Configurações do espaço de trabalho → Apps → Criar. No Enterprise/Edu, ative-o em Configurações → Apps → Configurações avançadas.",
     ],
-  "Abre Plugins, pulsa Crear app (+) e introduce el nombre de Savia y la URL de conexión.":
+  "Abre Apps/Aplicaciones, elige Crear (+) e introduce el nombre de Savia y la URL de conexión.":
     [
-      "Abre Plugins, pulsa Crear app (+) e introduce el nombre de Savia y la URL de conexión.",
-      "Open Plugins, click Create app (+) and enter the Savia name and the connection URL.",
-      "Abra Plugins, clique em Criar app (+) e informe o nome do Savia e a URL de conexão.",
+      "Abre Apps/Aplicaciones, elige Crear (+) e introduce el nombre de Savia y la URL de conexión.",
+      "Open Apps and select Create (+), then enter Savia and the connection URL.",
+      "Abra Apps/Aplicativos, escolha Criar (+) e informe o nome Savia e a URL de conexão.",
     ],
   "Elige OAuth, acepta el aviso de servidor personalizado y deja seleccionado el Registro dinámico de cliente (DCR).":
     [
