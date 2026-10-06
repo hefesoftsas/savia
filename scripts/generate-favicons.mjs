@@ -13,10 +13,19 @@ const mark = source.replace(/<svg[^>]*>/, "").replace("</svg>", "");
 
 // Normal icons use almost the entire canvas. Maskable icons reserve the
 // central 80%-diameter safe circle; the OS supplies the outer silhouette.
-function iconSvg(maskable = false) {
+//
+// PWA note: `apple-touch-icon` must be opaque (Apple HIG: no transparency).
+// iOS composites transparent pixels onto black, which produced a black
+// rounded square behind the leaves on the white PWA launch splash. The same
+// applies to maskable icons, which must fully bleed. Both get a white canvas
+// so the dark lower leaves (#163440) stay visible in light and dark splash.
+function iconSvg(maskable = false, opaque = false) {
   const scale = maskable ? 0.6 : 0.96;
   const inset = (64 - 64 * scale) / 2;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g transform="translate(${inset} ${inset}) scale(${scale})">${mark}</g></svg>`;
+  const background = opaque
+    ? `<rect width="64" height="64" fill="#ffffff"/>`
+    : ``;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${background}<g transform="translate(${inset} ${inset}) scale(${scale})">${mark}</g></svg>`;
 }
 
 function createIco(pngBuffers) {
@@ -51,20 +60,29 @@ function createIco(pngBuffers) {
 
 export async function generateFavicons() {
   const targets = [
-    ["favicon-16-v3.png", 16, false],
-    ["favicon-32-v3.png", 32, false],
-    ["favicon-48-v3.png", 48, false],
-    ["apple-touch-icon-v3.png", 180, false],
-    ["savia-icon-192-v3.png", 192, false],
-    ["savia-icon-512-v3.png", 512, false],
-    ["savia-maskable-192-v3.png", 192, true],
-    ["savia-maskable-512-v3.png", 512, true],
+    // [name, size, maskable, opaque]
+    ["favicon-16-v3.png", 16, false, false],
+    ["favicon-32-v3.png", 32, false, false],
+    ["favicon-48-v3.png", 48, false, false],
+    ["apple-touch-icon-v3.png", 180, false, true],
+    ["savia-icon-192-v3.png", 192, false, false],
+    ["savia-icon-512-v3.png", 512, false, false],
+    ["savia-maskable-192-v3.png", 192, true, true],
+    ["savia-maskable-512-v3.png", 512, true, true],
   ];
-  for (const [name, size, maskable] of targets) {
-    await sharp(Buffer.from(iconSvg(maskable)), { density: 384 })
-      .resize(size, size)
-      .png()
-      .toFile(join(publicDir, name));
+  for (const [name, size, maskable, opaque] of targets) {
+    const svg = iconSvg(maskable, opaque);
+    const pipeline = sharp(Buffer.from(svg), { density: 384 }).resize(
+      size,
+      size,
+    );
+    // Opaque PWA icons must not carry an alpha channel: flatten onto white
+    // so iOS/Android never composite transparency onto black.
+    if (opaque) {
+      await pipeline.flatten({ background: "#ffffff" }).png().toFile(join(publicDir, name));
+    } else {
+      await pipeline.png().toFile(join(publicDir, name));
+    }
     console.log(`Generated ${name}`);
   }
   writeFileSync(join(publicDir, "favicon.svg"), iconSvg() + "\n");

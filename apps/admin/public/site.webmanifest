@@ -22,6 +22,10 @@
   "orientation": "any",
   "theme_color": "#0d9488",
   "background_color": "#ffffff",
+  "color_scheme_dark": {
+    "theme_color": "#171717",
+    "background_color": "#171717"
+  },
   "categories": ["business", "productivity", "finance"],
   "icons": [
     {

@@ -15,7 +15,8 @@
       href="/apple-touch-icon-v3.png"
     />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#0d9488" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#0d9488" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#171717" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -54,6 +55,9 @@
         width: 4rem;
         height: 4rem;
         border-radius: 1rem;
+      }
+      html.dark .savia-boot-mark img {
+        background: #fff;
       }
       .savia-boot-ring {
         position: absolute;
