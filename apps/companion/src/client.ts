@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 export type Source = "microphone" | "system";
 export type CaptureStatus = {
-  state: "idle" | "recording" | "ready" | "interrupted" | "error";
+  state: "idle" | "recording" | "paused" | "ready" | "interrupted" | "error";
   elapsedSeconds: number;
   sessionId?: string | null;
   recovered?: boolean;
