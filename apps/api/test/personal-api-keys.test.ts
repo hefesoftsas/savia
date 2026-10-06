@@ -50,7 +50,7 @@ describe("personal API key lifecycle", () => {
       }),
     ).rejects.toThrow("commercial tenant");
   });
-  it("reveals only once, stores a digest, audits metadata and revokes idempotently", async () => {
+  it("reveals only once, stores a digest, audits metadata, revokes then deletes", async () => {
     const actor = await fixture(),
       repo = new PersonalApiKeys(env.DB, "https://preview.example", () =>
         Date.parse("2026-10-03T00:00:00Z"),
@@ -77,6 +77,12 @@ describe("personal API key lifecycle", () => {
       "2026-10-03T00:00:00.000Z",
     );
     await repo.revoke(actor.principal.id, created.key.id);
+    expect(
+      (await repo.list(actor.principal.id))[0].revokedAt,
+    ).not.toBeNull();
+    await expect(repo.authenticate(created.secret)).rejects.toThrow();
+    await repo.revoke(actor.principal.id, created.key.id);
+    expect(await repo.list(actor.principal.id)).toEqual([]);
     await repo.revoke(actor.principal.id, created.key.id);
     await expect(repo.authenticate(created.secret)).rejects.toThrow();
     const audit = await env.DB.prepare(
@@ -84,7 +90,7 @@ describe("personal API key lifecycle", () => {
     )
       .bind(created.key.id)
       .all();
-    expect(audit.results).toHaveLength(2);
+    expect(audit.results).toHaveLength(3);
     expect(JSON.stringify(audit)).not.toContain(created.secret);
     expect(JSON.stringify(audit)).not.toContain(raw.secret_digest);
   });

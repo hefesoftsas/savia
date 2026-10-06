@@ -233,3 +233,55 @@ it("clears collection permissions when a reload falls back to the platform tenan
   await waitFor(() => expect(platformRead).not.toBeChecked());
   expect(platformRead).toBeDisabled();
 });
+
+it("deletes a revoked key after confirmation", async () => {
+  const user = userEvent.setup();
+  let rows: any[] = [
+    {
+      id: "key-revoked",
+      name: "Companion",
+      prefix: "savia_pat_4353fb9e",
+      tenantId: 1,
+      scopes: ["recordings:read"],
+      createdAt: "2026-10-03",
+      expiresAt: "2027-03-01",
+      revokedAt: "2026-10-05",
+      lastUsedAt: null,
+    },
+  ];
+  const deletions: string[] = [];
+  const api = new ApiClient({
+    baseUrl: "https://preview.test",
+    tokenSource: {
+      async getAccessToken() {
+        return "jwt";
+      },
+    },
+    fetcher: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith("/tenants"))
+        return Response.json({ tenants: [{ id: 1, name: "My workspace" }] });
+      if (init?.method === "DELETE") {
+        deletions.push(path);
+        rows = [];
+        return new Response(null, { status: 204 });
+      }
+      return Response.json({ keys: rows });
+    },
+  });
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "es" })}>
+      <PersonalApiKeysPanel api={api} />
+    </StoreContextProvider>,
+  );
+  await screen.findByText("Revocada");
+  await user.click(screen.getByRole("button", { name: "Eliminar Companion" }));
+  expect(confirm).toHaveBeenCalled();
+  expect(deletions).toHaveLength(0);
+  expect(screen.getByText("Companion")).toBeTruthy();
+  confirm.mockReturnValue(true);
+  await user.click(screen.getByRole("button", { name: "Eliminar Companion" }));
+  await waitFor(() => expect(deletions).toHaveLength(1));
+  await waitFor(() => expect(screen.queryByText("Companion")).toBeNull());
+});

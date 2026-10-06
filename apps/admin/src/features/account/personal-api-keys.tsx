@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ShieldOff } from "lucide-react";
+import { ShieldOff, Trash2 } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -357,7 +357,34 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                     </p>
                   </div>
                   {key.revokedAt ? (
-                    <span className="text-sm">{t("Revoked")}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">{t("Revoked")}</span>
+                      <Button
+                        variant="outline"
+                        className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+                        disabled={busy}
+                        aria-label={`${t("Delete key")} ${key.name}`}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              t("Delete key confirmation", {
+                                name: key.name,
+                              }),
+                            )
+                          )
+                            return;
+                          void run(async () => {
+                            await client.delete(key.id);
+                            setKeys((await client.list()).keys);
+                          });
+                        }}
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                        <span className="sr-only sm:not-sr-only">
+                          {t("Delete key")}
+                        </span>
+                      </Button>
+                    </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       {Date.parse(key.expiresAt) <= Date.now() && (

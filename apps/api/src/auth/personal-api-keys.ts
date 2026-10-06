@@ -251,6 +251,36 @@ export class PersonalApiKeys {
   async revoke(ownerId: string, keyId: string): Promise<void> {
     this.requireDeployment();
     const now = new Date(this.now()).toISOString();
+    const existing = await this.db
+      .prepare(
+        "SELECT revoked_at FROM personal_api_keys WHERE id=? AND principal_id=? AND deployment_id=?",
+      )
+      .bind(keyId, ownerId, this.deploymentId)
+      .first<{ revoked_at: string | null }>();
+    if (!existing) return;
+    if (existing.revoked_at) {
+      await this.db.batch([
+        this.db
+          .prepare(
+            `INSERT INTO access_audit(id,scope,actor_id,action,target_id,before_state,after_state,created_at) SELECT ?, 'tenant:' || tenant_id, ?, 'personal_api_key.delete',id,?,NULL,? FROM personal_api_keys WHERE id=? AND principal_id=? AND deployment_id=? AND revoked_at IS NOT NULL`,
+          )
+          .bind(
+            crypto.randomUUID(),
+            ownerId,
+            JSON.stringify({ revokedAt: existing.revoked_at }),
+            now,
+            keyId,
+            ownerId,
+            this.deploymentId,
+          ),
+        this.db
+          .prepare(
+            "DELETE FROM personal_api_keys WHERE id=? AND principal_id=? AND deployment_id=? AND revoked_at IS NOT NULL",
+          )
+          .bind(keyId, ownerId, this.deploymentId),
+      ]);
+      return;
+    }
     await this.db.batch([
       this.db
         .prepare(
@@ -343,6 +373,36 @@ export class PersonalApiKeys {
   ): Promise<void> {
     await this.requireTenantAdministrator(actor, tenantId);
     const now = new Date(this.now()).toISOString();
+    const existing = await this.db
+      .prepare(
+        "SELECT revoked_at FROM personal_api_keys WHERE id=? AND tenant_id=? AND deployment_id=?",
+      )
+      .bind(keyId, tenantId, this.deploymentId)
+      .first<{ revoked_at: string | null }>();
+    if (!existing) return;
+    if (existing.revoked_at) {
+      await this.db.batch([
+        this.db
+          .prepare(
+            `INSERT INTO access_audit(id,scope,actor_id,action,target_id,before_state,after_state,created_at) SELECT ?, 'tenant:' || tenant_id, ?, 'personal_api_key.delete',id,?,NULL,? FROM personal_api_keys WHERE id=? AND tenant_id=? AND deployment_id=? AND revoked_at IS NOT NULL`,
+          )
+          .bind(
+            crypto.randomUUID(),
+            actor.principal.id,
+            JSON.stringify({ revokedAt: existing.revoked_at }),
+            now,
+            keyId,
+            tenantId,
+            this.deploymentId,
+          ),
+        this.db
+          .prepare(
+            "DELETE FROM personal_api_keys WHERE id=? AND tenant_id=? AND deployment_id=? AND revoked_at IS NOT NULL",
+          )
+          .bind(keyId, tenantId, this.deploymentId),
+      ]);
+      return;
+    }
     await this.db.batch([
       this.db
         .prepare(

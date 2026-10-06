@@ -8,7 +8,9 @@ The secret appears once. Copy it into Companion's **Savia API key or access toke
 field, then close the reveal panel. Savia stores only its digest; a lost secret
 cannot be recovered. Create a replacement and revoke the old key to rotate it.
 The list shows metadata, expiry and last successful use. Revocation takes effect
-on the next request. Removing the user's active membership also disables access.
+on the next request. A revoked key can be permanently deleted with Delete; the
+same DELETE endpoint revokes an active key and hard-deletes it once revoked.
+Removing the user's active membership also disables access.
 
 ## Tenant administration
 
@@ -25,7 +27,9 @@ that member's permitted recordings and native collection records in the selected
 become the recording owner when issuing a key for someone else.
 
 Confirm **Revoke** to disable a key on its next request. Revoked metadata remains
-visible for history. Creation and revocation record the acting administrator in
+visible for history until it is permanently removed with **Delete**. A second
+DELETE on an already revoked key hard-deletes its row. Creation, revocation and
+deletion record the acting administrator in
 the access audit without storing secrets. Ordinary members and Companion API keys
 cannot administer tenant keys. Tenant administrators cannot manage another
 tenant's keys or keys from a different deployment. Inactive members cannot receive
