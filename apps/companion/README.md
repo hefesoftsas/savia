@@ -1,6 +1,6 @@
 # Savia Companion validation application
 
-Owner: Savia platform maintainers. Reviewed: 2026-10-01.
+Owner: Savia platform maintainers. Reviewed: 2026-10-05.
 
 A Tauri desktop preview for manually recorded microphone/system audio,
 connected to Savia's opt-in OpenRouter processing adapter. Sessions are limited to
@@ -37,9 +37,11 @@ pnpm --filter @savia/companion desktop:build
 
 `desktop:dev` runs Vite on **5181**, independently of Savia admin on 5173. The
 application only records after a user clicks Start recording. Choose sources,
-start, stop, then inspect the capture state. Discard before creating another sample.
-Normal application exit discards temporary native media; forced termination is
-not crash recovery and may leave disposable files. Do not assume secure erasure.
+start, stop, then inspect the capture state. Completed chunks stay in a private
+native app-data spool so an interrupted draft can be recovered after restart;
+recording does not resume automatically. Discard removes the current local draft,
+and starting a new recording replaces it. The spool is not a local recording
+history, and deletion is not guaranteed secure erasure.
 
 For browser layout preview and checks:
 
@@ -53,9 +55,14 @@ cargo test --manifest-path apps/companion/src-tauri/Cargo.toml
 
 Browser preview cannot record audio. Native capture and HTTP forwarding use
 narrow host commands. There is no generic filesystem or HTTP plugin exposed to
-the renderer. Unsaved audio is temporary. Explicitly uploaded audio persists
-in private backend R2 objects; browser storage is not used for meetings, credentials
-or settings.
+the renderer. A stopped, interrupted, or recovered capture can be previewed one
+source at a time from its native Ogg/Opus chunks. Preview assembles chunks in order, validates
+the stored segments, and is capped at 64 MiB per source. It runs on the device;
+it needs no Savia API key, connection, upload permission, provider call, or
+network transfer. Preview does not upload audio. Upload remains a separate action
+that requires explicit permission and consent. Explicitly uploaded audio persists
+in private backend R2 objects; browser storage is not used for meeting history,
+credentials, or settings.
 
 ## Connect to Savia
 
@@ -78,11 +85,15 @@ or settings.
    must have no path, credentials, query or fragment. Native forwarding rejects
    redirects to avoid disclosing the access token to another host.
 5. Enter the main Savia application origin in Connection settings (normally
-   `http://localhost:5173` locally). The compact 380 × 540 desktop window is only
-   for capture and upload; transcription and summaries live in Savia.
-6. Stop capture, confirm permission, then choose Upload to Savia. Each selected
-   source is uploaded separately as private compressed audio; upload itself does
-   not call OpenRouter. Use Open in Savia to open the recording library.
+   `http://localhost:5173` locally). The compact 380 × 540 desktop window supports
+   capture, local source preview, and explicit upload; transcription and summaries
+   live in Savia.
+6. Stop capture and, if useful, choose Preview for each source to listen on this
+   device before uploading. Preview reads the current draft from the native spool;
+   it does not require a connection or send audio. To upload, confirm permission
+   and choose Upload to Savia. Each selected source is uploaded separately as
+   private compressed audio; upload itself does not call OpenRouter. Use Open in
+   Savia to open the recording library.
 7. Sign in to the main Savia app with the same user account.
    Open **Recordings** in the Work menu, or `/#/companion-recordings`. Select a
    recording to listen or download its Ogg/Opus file. If your browser cannot
@@ -128,9 +139,11 @@ and samples at the integer limits per channel. These metrics cannot prove audio
 intelligibility, permissions, absence of echo or speaker identity. The inspector
 is a bounded diagnostic, not the future streaming upload path.
 
-Keep real samples outside Git. Sources are not speakers. Long-session chunking,
-frame alignment, playback, full saved meetings, tenant ACL rollout, encrypted offline
-recovery and signed distribution remain separate epics.
+Keep real samples outside Git. Sources are not speakers. The desktop app keeps
+only the current draft, not a local history across multiple takes; use Savia for
+saved-session history, playback, and downloads. Encryption at rest for the native
+spool and real-device qualification remain outstanding before production support
+claims. The local preview is only for the current native draft.
 
 ## Licensing
 
@@ -143,9 +156,10 @@ has been imported. Keep required Savia attribution in distributed UI and artifac
 
 Desktop capture keeps devices open and encodes bounded 30-second Ogg/Opus segments
 for up to one hour. A private native spool preserves completed segments on close;
-Discard deletes the local draft. Upload resumes missing immutable segments in an
-owner/workspace session. Savia provides playback, durable background processing,
-summary and evidence-grounded questions with separate provider consent.
+the desktop app can preview each current source locally before upload. Discard
+deletes the local draft. Upload resumes missing immutable segments in an
+owner/workspace session. Savia provides durable playback and downloads, background
+processing, summary and evidence-grounded questions with separate provider consent.
 
 See [phase 2](../../docs/companion/long-recording-next-phase.md) for limits,
 recovery semantics and the distinction between synthetic and real-device validation.

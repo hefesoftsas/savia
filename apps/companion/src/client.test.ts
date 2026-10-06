@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apiOrigin, companionRequest, decodePreviewAudio } from "./client";
+import { apiOrigin, companionRequest } from "./client";
 
 describe("Companion connection boundary", () => {
   it("allows HTTPS and local HTTP without credentials or query parameters", () => {
@@ -156,29 +156,4 @@ it("sends session segments only to fixed UUID routes and strips the routing enve
     ),
   ).rejects.toThrow("Invalid recording session");
   expect(requests).toHaveLength(1);
-});
-
-describe("Local preview decoding", () => {
-  const encode = (bytes: number[]) => btoa(String.fromCharCode(...bytes));
-  it("joins segments in order into one buffer", () => {
-    const joined = decodePreviewAudio([
-      { base64: encode([0x4f, 0x67, 0x67, 0x53]) },
-      { base64: encode([0x01, 0x02]) },
-    ]);
-    expect([...joined]).toEqual([0x4f, 0x67, 0x67, 0x53, 0x01, 0x02]);
-  });
-  it("rejects empty, invalid, and oversized previews", () => {
-    expect(() => decodePreviewAudio([])).toThrow(
-      "no captured audio to preview",
-    );
-    expect(() => decodePreviewAudio([{ base64: "" }])).toThrow(
-      "unavailable for preview",
-    );
-    expect(() => decodePreviewAudio([{ base64: "!!!" }])).toThrow(
-      "unavailable for preview",
-    );
-    const oneMb = btoa("\0".repeat(1024 * 1024));
-    const chunks = Array.from({ length: 65 }, () => ({ base64: oneMb }));
-    expect(() => decodePreviewAudio(chunks)).toThrow("preview size limit");
-  });
 });

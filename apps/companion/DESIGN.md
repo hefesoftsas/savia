@@ -72,9 +72,10 @@ components:
 **Creative North Star: “One capture, one handoff.”**
 
 Savia Companion is a small desktop utility for recording a short sample and
-choosing when to upload it for review in Savia. Its quiet white surface keeps
-the capture state and large real timer central, with source selection and the
-current action grouped in a compact dock.
+previewing each captured source locally before choosing whether to upload it for
+review in Savia. Its quiet white surface keeps the capture state and large real
+timer central, with source selection and the current action grouped in a compact
+dock.
 
 The interface uses familiar system typography, restrained green controls, and
 thin dividers. A red recording indicator and track make active capture easy to
@@ -188,6 +189,21 @@ for keyboard focus.
   waveform analysis or audio quality.
 - The recording light may pulse gently; respect reduced-motion preferences.
 
+### Local Source Preview
+
+- After capture stops, offer an explicit Preview action for each source with
+  completed chunks, including a recovered draft. Show a loading state while the
+  app reads and assembles that source from the native spool.
+- Keep preview local and source-specific. It does not require API credentials,
+  upload permission, upload consent, or a provider call, and it never uploads
+  automatically.
+- Bound each assembled preview to 64 MiB. Preserve chunk order and validate the
+  stored native segments before making the local audio player available.
+- Treat preview URLs as temporary. Release them when a new recording replaces
+  the draft, when the user discards it, and when the view is destroyed.
+- Keep durable recording history, cross-session playback, transcripts, and
+  summaries in Savia's authenticated review surface.
+
 ### Source Controls
 
 - Present microphone and system audio as independently labeled switches.
@@ -211,7 +227,7 @@ for keyboard focus.
 - Show the upload-permission checkbox when a recording is ready, next to its
   explicit consent statement.
 - Keep a short privacy reminder near the action area to clarify that audio is
-  not sent until the user chooses Upload.
+  not sent until the user chooses Upload. Local preview does not send audio.
 - Keep “Savia — Desarrollado por Hefesoft SAS, Colombia.” in the persistent
   capture footer, including while recording and at the minimum window size.
 
@@ -230,8 +246,9 @@ for keyboard focus.
 
 ### Don't:
 
-- **Don't** place transcripts, summaries, recording history, or playback tools
-  in this capture utility; Savia is the review surface.
+- **Don't** place transcripts, summaries, recording history, or cross-session
+  playback in this capture utility; Savia is the review surface. A preview of
+  the current stopped draft, separated by source, is allowed.
 - **Don't** hide connection settings in the first view behind a large setup
   form.
 - **Don't** show invented waveform activity or decorate the timer with

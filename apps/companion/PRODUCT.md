@@ -13,8 +13,10 @@ Real-device support claims require the platform validation protocol.
 Savia users record their own permitted meetings, inspect source tracks and request
 remote transcription and a reviewable summary. Audio, transcripts, processing progress and notes persist privately in Savia.
 A bounded native draft spool preserves completed segments after interruption.
-After stopping, each source can be previewed on the device before upload; past
-takes live in Savia, not in a local history.
+After stopping or recovering an interrupted draft, each source can be explicitly
+previewed on the device from the current native draft before upload. Preview needs no API connection, upload
+permission, upload consent, or provider call, and never uploads automatically.
+Past takes live in Savia, not in a local history.
 
 ## Constraints
 
