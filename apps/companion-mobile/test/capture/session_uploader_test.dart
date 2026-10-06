@@ -56,7 +56,7 @@ void main() {
           RecordingDraft(
             id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
             path: sourcePath,
-            name: 'Recording.m4a',
+            name: 'Recording 2026-10-03 12:00',
             format: 'm4a',
             bytes: 3,
             durationSeconds: overshoot,
@@ -92,7 +92,7 @@ void main() {
             RecordingDraft(
               id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
               path: sourcePath,
-              name: 'Recording.m4a',
+              name: 'Recording 2026-10-03 12:00',
               format: 'm4a',
               bytes: 3,
               durationSeconds: duration,
@@ -131,7 +131,7 @@ void main() {
         RecordingDraft(
           id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
           path: sourcePath,
-          name: 'Recording.m4a',
+          name: 'Recording 2026-10-03 12:00',
           format: 'm4a',
           bytes: 3,
           durationSeconds: 42,
@@ -179,7 +179,7 @@ void main() {
         RecordingDraft(
           id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
           path: sourcePath,
-          name: 'Recording.m4a',
+          name: 'Recording 2026-10-03 12:00',
           format: 'm4a',
           bytes: 3,
           durationSeconds: 30,
@@ -217,7 +217,7 @@ void main() {
           RecordingDraft(
             id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
             path: sourcePath,
-            name: 'Recording.m4a',
+            name: 'Recording 2026-10-03 12:00',
             format: 'm4a',
             bytes: 3,
             durationSeconds: 30,
@@ -237,7 +237,7 @@ void main() {
         RecordingDraft(
           id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
           path: sourcePath,
-          name: 'Recording.m4a',
+          name: 'Recording 2026-10-03 12:00',
           format: 'm4a',
           bytes: 3,
           durationSeconds: 30,
@@ -318,7 +318,8 @@ class FakeSessionUploadApi implements RecordingSessionUploadApi {
   }) async {
     createIds.add(id);
     onCreate?.call();
-    expect(name, 'Recording.m4a');
+    expect(name.trim().isNotEmpty, isTrue);
+    expect(name.trim().length, lessThanOrEqualTo(255));
     expect(consent, true);
     return created;
   }
@@ -373,7 +374,7 @@ RecordingSession recordingSession({
   List<RecordingSessionChunk> chunks = const [],
 }) => RecordingSession(
   id: '8b87d175-a584-4e3d-95cb-e96c84248e15',
-  name: 'Recording.m4a',
+  name: 'Recording 2026-10-03 12:00',
   createdAt: DateTime.utc(2026, 10, 3),
   state: state,
   durationSeconds: durationSeconds,

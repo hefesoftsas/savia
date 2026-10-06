@@ -38,6 +38,27 @@ export const finalizeSessionSchema = z
     durationSeconds: z.number().finite().positive().max(3600),
   })
   .strict();
+export const renameSessionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(255),
+  })
+  .strict();
+
+export const isGenericSessionName = (name: string): boolean => {
+  const trimmed = name.trim();
+  if (!trimmed) return true;
+  return /^(recording|grabaci[oó]n|grava[cç][aã]o)(\s+[a-f0-9]{8})?(\.m4a)?$/i.test(
+    trimmed,
+  );
+};
+
+export const sessionNameForDate = (date: Date | string): string => {
+  const parsed = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(parsed.getTime())) return "Recording";
+  // UTC day + hour minimum so every unnamed session stays identifiable.
+  const iso = parsed.toISOString();
+  return `Recording ${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+};
 const languageSchema = z.string().regex(/^([a-z]{2}|auto)$/);
 export const processingRequestSchema = z
   .object({
@@ -794,6 +815,20 @@ export class CompanionSessions {
         );
       manifest.state = "ready";
       manifest.durationSeconds = parsed.data.durationSeconds;
+      return manifest;
+    });
+    return publicSession(result);
+  }
+  async rename(
+    access: RecordingAccess,
+    id: string,
+    input: z.input<typeof renameSessionSchema>,
+  ): Promise<Session> {
+    const parsed = renameSessionSchema.safeParse(input);
+    if (!parsed.success)
+      throw new CompanionError("INVALID_REQUEST", "Invalid session name.");
+    const result = await this.mutate(access, id, (manifest) => {
+      manifest.name = parsed.data.name;
       return manifest;
     });
     return publicSession(result);

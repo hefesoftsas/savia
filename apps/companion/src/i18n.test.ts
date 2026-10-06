@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  defaultSessionName,
   detectLocale,
   formatDuration,
   isLocale,
+  isValidSessionName,
   loadLocale,
   messageKeys,
+  normalizeSessionName,
   translate,
   type MessageKey,
 } from "./i18n";
@@ -46,6 +49,27 @@ describe("Companion desktop locale catalog", () => {
     expect(translate("en", "Connect")).toBe("Connect");
     expect(translate("pt", "Connect")).toBe("Conectar");
     expect(translate("es", "Start recording")).toBe("Iniciar grabación");
+  });
+
+  it("provides editable session-name labels and keeps the legacy recording name", () => {
+    expect(translate("en", "Session name")).toBe("Session name");
+    expect(translate("es", "Session name")).toBe("Nombre de la sesión");
+    expect(translate("pt", "Session name")).toBe("Nome da sessão");
+    expect(translate("en", "Name this recording")).toBe("Name this recording");
+    expect(translate("es", "Name this recording")).toBe(
+      "Nombra esta grabación",
+    );
+    expect(translate("pt", "Name this recording")).toBe("Nomeie esta gravação");
+    // Legacy key stays for backward compat.
+    expect(translate("en", "Recording name", { id: "abc12345" })).toBe(
+      "Recording abc12345",
+    );
+    expect(translate("es", "Recording name", { id: "abc12345" })).toBe(
+      "Grabación abc12345",
+    );
+    expect(translate("pt", "Recording name", { id: "abc12345" })).toBe(
+      "Gravação abc12345",
+    );
   });
 });
 
@@ -131,5 +155,37 @@ describe("Companion desktop locale resolution", () => {
   it("keeps manual locale selection valid for the current window", () => {
     expect(isLocale("pt")).toBe(true);
     expect(isLocale("fr")).toBe(false);
+  });
+});
+
+describe("Companion desktop session names", () => {
+  it("defaults to local day and hour, never Recording {id}", () => {
+    const fixed = new Date("2026-02-14T15:45:00Z");
+    for (const locale of ["es", "en", "pt"] as const) {
+      const expected = fixed.toLocaleString(locale, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+      expect(defaultSessionName(locale, fixed)).toBe(expected);
+      expect(defaultSessionName(locale, fixed).trim().length).toBeGreaterThan(
+        0,
+      );
+      expect(defaultSessionName(locale, fixed)).not.toMatch(
+        /^Recording [0-9a-f]{8}$/,
+      );
+    }
+    expect(defaultSessionName("en").trim().length).toBeGreaterThan(0);
+  });
+
+  it("validates trimmed session names 1..255 chars", () => {
+    expect(normalizeSessionName("  hello  ")).toBe("hello");
+    expect(isValidSessionName("hello")).toBe(true);
+    expect(isValidSessionName("  hello  ")).toBe(true);
+    expect(isValidSessionName("")).toBe(false);
+    expect(isValidSessionName("   ")).toBe(false);
+    expect(isValidSessionName("a")).toBe(true);
+    expect(isValidSessionName("x".repeat(255))).toBe(true);
+    expect(isValidSessionName(`  ${"x".repeat(255)}  `)).toBe(true);
+    expect(isValidSessionName("x".repeat(256))).toBe(false);
   });
 });

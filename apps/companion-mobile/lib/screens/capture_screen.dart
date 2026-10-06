@@ -28,6 +28,8 @@ class CaptureScreen extends StatefulWidget {
 
 class _CaptureScreenState extends State<CaptureScreen> {
   bool consent = false;
+  bool _draftNameValid = true;
+  String? _draftId;
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
@@ -108,17 +110,25 @@ class _CaptureScreenState extends State<CaptureScreen> {
                         label: Text(l.importAudio),
                       ),
                     ] else ...[
-                      _DraftMetadata(
-                        name: c.draft!.name,
-                        size:
-                            '${NumberFormat('0.00', l.localeName).format(c.draft!.bytes / 1000000)} MB',
-                        duration: c.draft!.durationSeconds == null
-                            ? null
-                            : formatCaptureDuration(
-                                Duration(
-                                  seconds: c.draft!.durationSeconds!.round(),
-                                ),
-                              ),
+                      Builder(
+                        builder: (context) {
+                          final draft = c.draft;
+                          if (draft == null) return const SizedBox.shrink();
+                          final draftId = draft.id;
+                          if (_draftId != draftId) {
+                            _draftId = draftId;
+                            _draftNameValid = true;
+                          }
+                          return _DraftEditor(
+                            key: ValueKey(draftId),
+                            controller: c,
+                            onValidityChanged: (valid) {
+                              if (valid != _draftNameValid && mounted) {
+                                setState(() => _draftNameValid = valid);
+                              }
+                            },
+                          );
+                        },
                       ),
                       const SizedBox(height: 16),
                       _DraftNotice(
@@ -141,12 +151,22 @@ class _CaptureScreenState extends State<CaptureScreen> {
                         LinearProgressIndicator(value: c.progress),
                       const SizedBox(height: 12),
                       FilledButton.icon(
-                        onPressed: c.busy || !consent || !widget.canUpload
+                        onPressed:
+                            c.busy ||
+                                !consent ||
+                                !widget.canUpload ||
+                                !_draftNameValid
                             ? null
                             : () async {
                                 await c.upload(consent: consent);
                                 if (c.draft == null) {
-                                  if (mounted) setState(() => consent = false);
+                                  if (mounted) {
+                                    setState(() {
+                                      consent = false;
+                                      _draftNameValid = true;
+                                      _draftId = null;
+                                    });
+                                  }
                                   widget.onUploaded();
                                 }
                               },
@@ -221,38 +241,92 @@ class _CaptureSurface extends StatelessWidget {
   );
 }
 
-class _DraftMetadata extends StatelessWidget {
-  const _DraftMetadata({required this.name, required this.size, this.duration});
-  final String name;
-  final String size;
-  final String? duration;
+class _DraftEditor extends StatefulWidget {
+  const _DraftEditor({
+    super.key,
+    required this.controller,
+    required this.onValidityChanged,
+  });
+  final CaptureController controller;
+  final ValueChanged<bool> onValidityChanged;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(name, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 16,
-            runSpacing: 4,
-            children: [
-              _MetadataItem(icon: Icons.audio_file_outlined, value: size),
-              if (duration != null)
-                _MetadataItem(icon: Icons.schedule, value: duration!),
-            ],
-          ),
-        ],
+  State<_DraftEditor> createState() => _DraftEditorState();
+}
+
+class _DraftEditorState extends State<_DraftEditor> {
+  late final TextEditingController _name;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.controller.draft?.name ?? '');
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final c = widget.controller;
+    final draft = c.draft!;
+    final trimmed = _name.text.trim();
+    final invalid = trimmed.isEmpty || trimmed.length > 255;
+    final size =
+        '${NumberFormat('0.00', l.localeName).format(draft.bytes / 1000000)} MB';
+    final duration = draft.durationSeconds == null
+        ? null
+        : formatCaptureDuration(
+            Duration(seconds: draft.durationSeconds!.round()),
+          );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
       ),
-    ),
-  );
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _name,
+              decoration: InputDecoration(
+                labelText: l.sessionNameLabel,
+                hintText: l.sessionNameHint,
+                errorText: invalid ? l.sessionNameInvalid : null,
+                border: const OutlineInputBorder(),
+              ),
+              maxLength: 255,
+              enabled: !c.busy,
+              textInputAction: TextInputAction.done,
+              onChanged: (value) {
+                final next = value.trim();
+                final valid = next.isNotEmpty && next.length <= 255;
+                widget.onValidityChanged(valid);
+                if (valid) c.renameDraft(value);
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 16,
+              runSpacing: 4,
+              children: [
+                _MetadataItem(icon: Icons.audio_file_outlined, value: size),
+                if (duration != null)
+                  _MetadataItem(icon: Icons.schedule, value: duration),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _MetadataItem extends StatelessWidget {

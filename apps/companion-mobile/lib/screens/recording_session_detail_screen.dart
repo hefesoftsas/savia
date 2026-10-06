@@ -48,6 +48,59 @@ class _RecordingSessionDetailScreenState
     super.dispose();
   }
 
+  Future<void> _showRenameDialog(BuildContext context) async {
+    final c = widget.controller;
+    final session = c.selectedSession;
+    if (session == null) return;
+    final l = AppLocalizations.of(context)!;
+    final name = TextEditingController(text: session.name);
+    try {
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final trimmed = name.text.trim();
+            final invalid = trimmed.isEmpty || trimmed.length > 255;
+            return AlertDialog(
+              title: Text(l.sessionRename),
+              content: TextField(
+                controller: name,
+                autofocus: true,
+                maxLength: 255,
+                decoration: InputDecoration(
+                  labelText: l.sessionNameLabel,
+                  hintText: l.sessionNameHint,
+                  errorText: invalid ? l.sessionNameInvalid : null,
+                  border: const OutlineInputBorder(),
+                ),
+                textInputAction: TextInputAction.done,
+                onChanged: (_) => setDialogState(() {}),
+                onSubmitted: (_) {
+                  if (!invalid) Navigator.pop(ctx, true);
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(l.cancel),
+                ),
+                FilledButton(
+                  onPressed: invalid ? null : () => Navigator.pop(ctx, true),
+                  child: Text(l.save),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (saved == true && mounted) {
+        await c.rename(name: name.text);
+      }
+    } finally {
+      name.dispose();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
@@ -123,12 +176,23 @@ class _RecordingSessionDetailScreenState
                   ),
                 ),
                 IconButton(
+                  tooltip: l.sessionRename,
+                  onPressed: c.detailLoading || c.renaming
+                      ? null
+                      : () => _showRenameDialog(context),
+                  icon: const Icon(Icons.edit),
+                ),
+                IconButton(
                   tooltip: l.refresh,
                   onPressed: c.detailLoading ? null : c.refreshSelected,
                   icon: const Icon(Icons.refresh),
                 ),
               ],
             ),
+            if (c.renaming) ...[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(),
+            ],
             Text(
               '${session.state == RecordingSessionState.uploading ? l.sessionUploading : status}${session.durationSeconds == null ? '' : ' · ${l.sessionDuration((session.durationSeconds! / 60).ceil())}'}',
             ),

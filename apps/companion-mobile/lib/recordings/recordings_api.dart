@@ -90,6 +90,20 @@ class RecordingsApi implements RecordingSessionUploadApi {
         decode: RecordingSession.fromJson,
       );
 
+  Future<RecordingSession> renameSession(String id, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed.length > 255) {
+      throw const CompanionFailure('INVALID_NAME');
+    }
+    return _requestJson(
+      'PATCH',
+      '/v1/companion/sessions/${Uri.encodeComponent(id)}',
+      body: {'name': trimmed},
+      mutation: true,
+      decode: RecordingSession.fromJson,
+    );
+  }
+
   @override
   Future<RecordingSession> createSession({
     required String id,
