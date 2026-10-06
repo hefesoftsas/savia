@@ -36,7 +36,7 @@ it("returns a safe actionable read failure instead of throwing provider details"
   });
 
   const result = await tools.savia_lookup_quote_vehicle.execute!({
-    plate: "RHO121",
+    plate: "TESTCAR",
   });
   expect(result).toMatchObject({
     isError: true,
@@ -44,7 +44,7 @@ it("returns a safe actionable read failure instead of throwing provider details"
   });
   expect(JSON.stringify(result)).not.toContain("private-token");
   expect(JSON.stringify(result)).not.toContain("internal.invalid");
-  expect(JSON.stringify(result)).toMatch(/reintentar|reintento/i);
+  expect(JSON.stringify(result)).toMatch(/contact.*directamente.*asesor/i);
   expect(JSON.stringify(result)).toMatch(/no invent|no verificado/i);
   expect(read).toHaveBeenCalledTimes(1);
 });

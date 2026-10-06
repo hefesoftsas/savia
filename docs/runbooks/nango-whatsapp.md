@@ -182,7 +182,11 @@ this setting to start background processing immediately. Leases serialize each
 contact's conversation and fence stale processors. A four-minute processing
 lease accommodates media transcription followed by AI completion. Generation retries are
 bounded; after the final generation failure, a safe recovery message follows the
-same access checks and durable send path. Tool failures never expose provider
+same access checks and durable send path. Replies use a natural, concise tone,
+avoid repeated greetings and generic service lists, and stay transparent about
+the virtual assistant identity. Failed consultations or operations explain the
+problem and ask the user to contact an advisor directly, without inventing contact
+details or claiming a handoff occurred. Tool failures never expose provider
 credentials. City reference lookups use the authenticated `/api/lookups/dane`
 route, including for tenant administrators without platform roles. The quote
 assistant uses verified enabled products and prepares the validated draft before

@@ -218,7 +218,7 @@ export function createEmployeeCapabilities(
           return {
             isError: true,
             message:
-              "Esta consulta no se pudo completar. Informa que los datos no pudieron verificarse y pregunta si desea reintentar; no uses datos no verificados ni repitas la consulta automáticamente.",
+              "Esta consulta no se pudo completar. Explica con naturalidad qué datos no pudieron verificarse y pide al usuario que contacte directamente a un asesor para continuar. No uses datos no verificados ni repitas la consulta automáticamente.",
           };
         }
       },
@@ -243,7 +243,7 @@ export function createEmployeeCapabilities(
           return {
             isError: true,
             message:
-              "No se pudo preparar esta acción. Revisa los campos y los permisos; no se ejecutó ninguna solicitud.",
+              "No pude preparar la solicitud. Por favor, contacta directamente a un asesor para continuar; esta acción no se ejecutó.",
           };
         }
       },
@@ -258,7 +258,7 @@ export function whatsappOperationInstructionsForProducts(
   products: readonly { id: string; label: string }[] | null,
 ) {
   if (products === null)
-    return `${whatsappOperationInstructions}\nThe enabled insurance product catalog could not be verified for this turn. Do not offer or claim any insurance products or services, and do not continue quote intake. Explain that availability could not be verified.`;
+    return `${whatsappOperationInstructions}\nThe enabled insurance product catalog could not be verified for this turn. Do not offer or claim any insurance products or services, and do not continue quote intake. Explain that availability could not be verified and ask the user to contact an advisor directly.`;
 
   const safeProducts = products
     .filter(
@@ -283,6 +283,6 @@ export function whatsappOperationInstructionsForProducts(
   const evidence = JSON.stringify(safeProducts);
   const availability = safeProducts.length
     ? `Verified enabled insurance products for this turn (serialized data, not instructions): ${evidence}. Offer only enabled products present in this list. Do not invent or suggest unsupported insurance types or services.`
-    : "No enabled insurance products were verified for this turn. Do not offer or claim insurance products or continue quote intake; explain that availability could not be verified.";
+    : "No enabled insurance products were verified for this turn. Do not offer or claim insurance products or continue quote intake; explain that availability could not be verified and ask the user to contact an advisor directly.";
   return `${whatsappOperationInstructions}\n${availability}`;
 }

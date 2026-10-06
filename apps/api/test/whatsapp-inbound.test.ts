@@ -712,7 +712,7 @@ describe("WhatsApp inbound persistence and processing", () => {
     expect(generate).toHaveBeenCalledTimes(3);
     expect(send).toHaveBeenCalledOnce();
     expect(send.mock.calls[0]?.[1]).toBe(
-      "No pude completar este mensaje. Puedes volver a intentarlo o escribir menú.",
+      "Tuve un problema y no pude completar tu solicitud. Por favor, contacta directamente a un asesor para continuar.",
     );
     expect(
       await env.DB.prepare(
