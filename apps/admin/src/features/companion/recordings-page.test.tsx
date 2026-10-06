@@ -157,7 +157,10 @@ it("keeps the saved language selector available and asks consent only to change 
   show(client);
 
   const language = await screen.findByLabelText("Transcript language");
-  expect(language).toHaveValue("pt");
+  await waitFor(() => {
+    expect(language).toBeEnabled();
+    expect(language).toHaveValue("pt");
+  });
   expect(
     screen.queryByLabelText("I understand saved results will be replaced."),
   ).not.toBeInTheDocument();
