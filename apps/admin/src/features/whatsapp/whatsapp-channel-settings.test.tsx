@@ -4,35 +4,33 @@ import { WhatsappChannelSettings } from "./whatsapp-channel-settings";
 
 it("loads published task labels and keeps staff registry separate from admission", async () => {
   const whatsapp = {
-    getChannel: vi
-      .fn()
-      .mockResolvedValue({
-        configuration: {
-          routingEnabled: true,
-          tasks: [
-            {
-              id: "quotes",
-              employeeId: "alice",
-              title: "Consultar seguros",
-              description: "Seguros",
-              order: 0,
-              audiences: ["external"],
-            },
-          ],
-          staff: [
-            {
-              phone: "573001234567",
-              label: "Adviser",
-              active: true,
-              principalId: "staff",
-            },
-          ],
-          internalCapabilities: ["*"],
-          externalCapabilities: ["insurance"],
-        },
-        employees: [{ id: "alice", name: "Alice" }],
-        members: [{ id: "staff", name: "Adviser" }],
-      }),
+    getChannel: vi.fn().mockResolvedValue({
+      configuration: {
+        routingEnabled: true,
+        tasks: [
+          {
+            id: "quotes",
+            employeeId: "alice",
+            title: "Consultar seguros",
+            description: "Seguros",
+            order: 0,
+            audiences: ["external"],
+          },
+        ],
+        staff: [
+          {
+            phone: "573001234567",
+            label: "Adviser",
+            active: true,
+            principalId: "staff",
+          },
+        ],
+        internalCapabilities: ["*"],
+        externalCapabilities: ["insurance"],
+      },
+      employees: [{ id: "alice", name: "Alice" }],
+      members: [{ id: "staff", name: "Adviser" }],
+    }),
     updateChannel: vi.fn(),
   };
   render(<WhatsappChannelSettings whatsapp={whatsapp} tenantId={7} />);

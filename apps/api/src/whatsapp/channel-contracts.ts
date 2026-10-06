@@ -92,5 +92,10 @@ export type ChannelAction = {
 };
 export type ActionOutcome =
   | { state: "completed"; result: unknown }
-  | { state: "failed" | "uncertain"; message: string };
-export type ChannelMenu = { id: string; tasks: PublishedTask[]; page: number };
+  | { state: "failed" | "uncertain"; message: string; result?: unknown };
+export type ChannelMenu = {
+  id: string;
+  revision: string;
+  tasks: PublishedTask[];
+  page: number;
+};

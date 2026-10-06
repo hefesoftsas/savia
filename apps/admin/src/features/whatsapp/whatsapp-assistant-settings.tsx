@@ -167,7 +167,7 @@ export function WhatsappAssistantSettings({
           ) : null}
         </li>
       </IntegrationGroup>
-      {services.whatsapp.getChannel ? (
+      {typeof services.whatsapp.getChannel === "function" ? (
         <WhatsappChannelSettings
           whatsapp={services.whatsapp}
           tenantId={tenantId}

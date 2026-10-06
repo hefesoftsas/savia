@@ -33,6 +33,7 @@ export class WhatsappChannelRepository {
     principalId: string,
   ) {
     const config = channelConfigurationSchema.parse(value);
+    const previous = await this.settings(tenantId, connectionId);
     if (
       !(await this.db
         .prepare(
@@ -63,6 +64,20 @@ export class WhatsappChannelRepository {
         throw new Error("CHANNEL_STAFF_UNAVAILABLE");
     }
     const revision = crypto.randomUUID();
+    const accessShape = (candidate: ChannelConfiguration) =>
+      JSON.stringify({
+        staff: candidate.staff
+          .map(({ phone, active, principalId }) => ({
+            phone,
+            active,
+            principalId,
+          }))
+          .sort((a, b) => a.phone.localeCompare(b.phone)),
+        internalCapabilities: [...candidate.internalCapabilities].sort(),
+        externalCapabilities: [...candidate.externalCapabilities].sort(),
+      });
+    const accessChanged =
+      previous !== null && accessShape(previous.config) !== accessShape(config);
     await this.db.batch([
       this.db
         .prepare(
@@ -78,9 +93,9 @@ export class WhatsappChannelRepository {
         ),
       this.db
         .prepare(
-          "UPDATE whatsapp_channel_contacts SET generation=?,employee_id=NULL,selection_revision=selection_revision+1,menu_json=NULL,buffered_text=NULL,draft_json=NULL WHERE connection_id=?",
+          "UPDATE whatsapp_channel_contacts SET employee_id=NULL,selection_revision=selection_revision+1,menu_json=NULL,buffered_text=NULL,access_fingerprint=CASE WHEN ? THEN NULL ELSE access_fingerprint END WHERE connection_id=?",
         )
-        .bind(revision, connectionId),
+        .bind(accessChanged ? 1 : 0, connectionId),
       this.db
         .prepare(
           "UPDATE whatsapp_channel_actions SET status='cancelled' WHERE connection_id=? AND status IN ('pending','queued')",
@@ -107,21 +122,58 @@ export class WhatsappChannelRepository {
       const membership = actor?.memberships.find(
         (m) => m.isActive && (m.tenantId ?? m.agencyId) === key.tenantId,
       );
-      if (!membership) throw new Error("CHANNEL_STAFF_REVOKED");
-      membershipStamp = `${membership.id}:${membership.role}:${membership.updatedAt}`;
+      if (!membership) {
+        await this.db
+          .prepare(
+            "UPDATE whatsapp_channel_contacts SET access_fingerprint=NULL WHERE connection_id=? AND contact=?",
+          )
+          .bind(key.connectionId, key.contact)
+          .run();
+        throw new Error("CHANNEL_STAFF_REVOKED");
+      }
+      membershipStamp = `${principal!.updatedAt}:${membership.id}:${membership.role}:${membership.updatedAt}`;
     }
-    const generation = `${settings.revision}:${membershipStamp}`;
     const audience = staff ? "internal" : "external";
+    const capabilities =
+      audience === "internal"
+        ? settings.config.internalCapabilities
+        : settings.config.externalCapabilities;
+    const material = JSON.stringify({
+      principalId,
+      membershipStamp,
+      audience,
+      capabilities: [...capabilities].sort(),
+    });
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(material),
+    );
+    const accessFingerprint = Array.from(new Uint8Array(digest), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+    const candidateGeneration = crypto.randomUUID();
     await this.db
       .prepare(
-        "INSERT INTO whatsapp_channel_contacts(connection_id,contact,generation) VALUES(?,?,?) ON CONFLICT(connection_id,contact) DO UPDATE SET generation=excluded.generation,employee_id=NULL,selection_revision=whatsapp_channel_contacts.selection_revision+1,menu_json=NULL,buffered_text=NULL,draft_json=NULL WHERE whatsapp_channel_contacts.generation<>excluded.generation",
+        "INSERT INTO whatsapp_channel_contacts(connection_id,contact,generation,access_fingerprint) VALUES(?,?,?,?) ON CONFLICT(connection_id,contact) DO UPDATE SET generation=excluded.generation,access_fingerprint=excluded.access_fingerprint,employee_id=NULL,selection_revision=whatsapp_channel_contacts.selection_revision+1,menu_json=NULL,buffered_text=NULL,draft_json=NULL WHERE whatsapp_channel_contacts.access_fingerprint IS NULL OR whatsapp_channel_contacts.access_fingerprint<>excluded.access_fingerprint",
       )
-      .bind(key.connectionId, key.contact, generation)
+      .bind(
+        key.connectionId,
+        key.contact,
+        candidateGeneration,
+        accessFingerprint,
+      )
       .run();
+    const contactState = await this.db
+      .prepare(
+        "SELECT generation FROM whatsapp_channel_contacts WHERE connection_id=? AND contact=?",
+      )
+      .bind(key.connectionId, key.contact)
+      .first<{ generation: string }>();
+    if (!contactState) throw new Error("CHANNEL_CONTACT_STATE_UNAVAILABLE");
     return {
       ...key,
       audience,
-      generation,
+      generation: contactState.generation,
       principalId,
       profileId: audience,
       capabilities:
@@ -131,8 +183,15 @@ export class WhatsappChannelRepository {
     };
   }
 
-  async listTasks(access: ContactAccess) {
-    const settings = await this.settings(access.tenantId, access.connectionId);
+  async listTasks(
+    access: ContactAccess,
+    currentSettings?: Awaited<
+      ReturnType<WhatsappChannelRepository["settings"]>
+    >,
+  ) {
+    const settings =
+      currentSettings ??
+      (await this.settings(access.tenantId, access.connectionId));
     if (!settings?.config.routingEnabled) return [];
     const active = await this.db
       .prepare(
@@ -149,9 +208,13 @@ export class WhatsappChannelRepository {
   }
 
   async issueMenu(access: ContactAccess, page = 0): Promise<ChannelMenu> {
+    const settings = await this.settings(access.tenantId, access.connectionId);
+    if (!settings?.config.routingEnabled)
+      throw new Error("CHANNEL_ROUTING_DISABLED");
     const menu = {
       id: crypto.randomUUID(),
-      tasks: await this.listTasks(access),
+      revision: settings.revision,
+      tasks: await this.listTasks(access, settings),
       page,
     };
     await this.db
@@ -185,11 +248,22 @@ export class WhatsappChannelRepository {
   ): Promise<EmployeeSession | null> {
     const current = await this.getAccess(access);
     if (current.generation !== access.generation) return null;
+    const currentSettings = await this.settings(
+      access.tenantId,
+      access.connectionId,
+    );
+    if (!currentSettings?.config.routingEnabled) return null;
     const menu = await this.menu(access);
-    const task = (await this.listTasks(access)).find((t) => t.id === taskId);
+    const tasks = await this.listTasks(access, currentSettings);
+    const task = tasks.find((t) => t.id === taskId);
+    const savedTaskIds = menu?.tasks.map((item) => item.id).sort() ?? [];
+    const currentTaskIds = tasks.map((item) => item.id).sort();
     if (
       !task ||
       menu?.id !== menuId ||
+      menu.revision !== currentSettings.revision ||
+      savedTaskIds.length !== currentTaskIds.length ||
+      !savedTaskIds.every((id, index) => id === currentTaskIds[index]) ||
       !menu.tasks.some((t) => t.id === taskId)
     )
       return null;

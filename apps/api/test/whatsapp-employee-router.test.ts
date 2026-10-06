@@ -46,7 +46,7 @@ it("buffers the initial task once and navigates from any selected employee", asy
     wabaId: s.wabaId,
     messageId: "route-1",
     contactPhone: access.contact,
-    text: "RHO121",
+    text: "TESTCAR",
     timestamp: new Date().toISOString(),
   };
   expect(await routeEmployeeInput(access, input, repo)).toMatchObject({
@@ -54,7 +54,7 @@ it("buffers the initial task once and navigates from any selected employee", asy
   });
   expect(
     await routeEmployeeInput(access, { ...input, text: "1" }, repo),
-  ).toMatchObject({ kind: "employee", text: "RHO121" });
+  ).toMatchObject({ kind: "employee", text: "TESTCAR" });
   expect(
     await routeEmployeeInput(access, { ...input, text: "MENÚ" }, repo),
   ).toMatchObject({ kind: "reply" });
@@ -65,4 +65,31 @@ it("buffers the initial task once and navigates from any selected employee", asy
     kind: "employee",
     text: "Presenta brevemente cómo puedes ayudarme con esta tarea.",
   });
+  expect(
+    await routeEmployeeInput(
+      access,
+      { ...input, text: "cambiar asistente" },
+      repo,
+    ),
+  ).toMatchObject({ kind: "reply" });
+  expect(await repo.getSession(access)).toBeNull();
+  expect(
+    await routeEmployeeInput(access, { ...input, text: "@test" }, repo),
+  ).toMatchObject({ kind: "employee" });
+  expect(
+    await routeEmployeeInput(
+      access,
+      {
+        ...input,
+        text: "old choice",
+        native: {
+          kind: "choice",
+          choiceType: "list",
+          id: `${crypto.randomUUID()}:0`,
+          title: "Old",
+        },
+      },
+      repo,
+    ),
+  ).toMatchObject({ kind: "reply" });
 });

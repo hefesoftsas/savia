@@ -48,3 +48,114 @@ it("routes the selected employee and revokes a reply if staff/profile changes be
   expect(generate).toHaveBeenCalled();
   expect(send).not.toHaveBeenCalled();
 });
+
+it("rejects an outgoing menu rendered from an older channel configuration", async () => {
+  const s = await setupChannelFixture();
+  const repo = new WhatsappChannelRepository(env.DB);
+  const config = {
+    routingEnabled: true,
+    tasks: [
+      {
+        id: "support",
+        employeeId: s.employeeId,
+        title: "Soporte",
+        description: "",
+        order: 0,
+        audiences: ["external"],
+      },
+    ],
+    staff: [],
+    internalCapabilities: [],
+    externalCapabilities: [],
+  };
+  await repo.configure(s.tenantId, s.connectionId, config, s.principal.id);
+  const routed = createRoutedWhatsappGenerator(
+    repo,
+    vi.fn(async () => "Respuesta"),
+  );
+  const input = {
+    phoneNumberId: s.phoneNumberId,
+    wabaId: s.wabaId,
+    messageId: "stale-menu-message",
+    contactPhone: "573001234567",
+    text: "Hola",
+    timestamp: new Date().toISOString(),
+  };
+  await s.repository.receive(input);
+  await routed.generate(
+    {
+      tenantId: s.tenantId,
+      connectionId: s.connectionId,
+      employeeId: s.employeeId,
+    },
+    [],
+    input.text,
+    input,
+  );
+  await repo.configure(
+    s.tenantId,
+    s.connectionId,
+    {
+      ...config,
+      tasks: [{ ...config.tasks[0], title: "Nuevo nombre" }],
+    },
+    s.principal.id,
+  );
+  expect(
+    await routed.authorizeReply(
+      {
+        tenantId: s.tenantId,
+        connectionId: s.connectionId,
+        employeeId: s.employeeId,
+      },
+      input,
+    ),
+  ).toBe(false);
+});
+
+it("rejects an outgoing menu when its employee is no longer on the active roster", async () => {
+  const s = await setupChannelFixture();
+  const repo = new WhatsappChannelRepository(env.DB);
+  const config = {
+    routingEnabled: true,
+    tasks: [
+      {
+        id: "support",
+        employeeId: s.employeeId,
+        title: "Soporte",
+        description: "",
+        order: 0,
+        audiences: ["external"],
+      },
+    ],
+    staff: [],
+    internalCapabilities: [],
+    externalCapabilities: [],
+  };
+  await repo.configure(s.tenantId, s.connectionId, config, s.principal.id);
+  const routed = createRoutedWhatsappGenerator(
+    repo,
+    vi.fn(async () => "Respuesta"),
+  );
+  const input = {
+    phoneNumberId: s.phoneNumberId,
+    wabaId: s.wabaId,
+    messageId: "inactive-roster-menu-message",
+    contactPhone: "573001234567",
+    text: "Hola",
+    timestamp: new Date().toISOString(),
+  };
+  await s.repository.receive(input);
+  const binding = {
+    tenantId: s.tenantId,
+    connectionId: s.connectionId,
+    employeeId: s.employeeId,
+  };
+  await routed.generate(binding, [], input.text, input);
+  await env.DB.prepare(
+    "UPDATE assistant_virtual_employees SET status='inactive' WHERE id=?",
+  )
+    .bind(s.employeeId)
+    .run();
+  expect(await routed.authorizeReply(binding, input)).toBe(false);
+});

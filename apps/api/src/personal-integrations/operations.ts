@@ -27,6 +27,32 @@ import type { TicketSummaryConfig } from "@savia/studio-shared/ticket-summary";
 import { fetchTicketSummary } from "./ticket-summary";
 import type { PersonalTicketSummaryCache } from "./ticket-summary-cache";
 
+/** Validate a prepared action using the same field validators as execution. */
+export function validatePersonalConfirmedAction(
+  command: string,
+  input: Record<string, unknown>,
+) {
+  const action = actionObject(input);
+  if (command === "send-email") {
+    emailProvider(action.provider);
+    emailRecipients(action, "to", true);
+    requiredActionText(action, "subject", 2000);
+    requiredActionText(action, "body", 10000);
+  } else if (command === "create-event") {
+    calendarProvider(action.provider);
+    requiredActionText(action, "title", 2000);
+    if (eventDate(action, "endsAt") <= eventDate(action, "startsAt"))
+      invalidAction("The event end must be after its start");
+    emailRecipients(action, "attendees", false);
+  } else if (command === "upload-file") {
+    uploadProvider(action.provider);
+    uploadName(action);
+    uploadContent(action);
+    uploadMimeType(action);
+  } else invalidAction("The personal integration action is not supported");
+  return input;
+}
+
 export type PersonalFile = {
   id: string;
   name: string;
@@ -2713,7 +2739,9 @@ export class PersonalIntegrationOperations {
     command: string;
     input: Record<string, unknown>;
   }): Promise<PersonalIntegrationActionResult> {
-    const action = actionObject(input.input);
+    const action = actionObject(
+      validatePersonalConfirmedAction(input.command, input.input),
+    );
     if (input.command === "send-email") {
       return this.sendMail({
         principalId: input.principalId,

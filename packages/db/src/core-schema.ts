@@ -1052,6 +1052,7 @@ export const whatsappChannelContacts = sqliteTable(
     menuJson: text("menu_json"),
     bufferedText: text("buffered_text"),
     draftJson: text("draft_json"),
+    accessFingerprint: text("access_fingerprint"),
   },
   (table) => [primaryKey({ columns: [table.connectionId, table.contact] })],
 );
@@ -1115,4 +1116,16 @@ export const whatsappChannelResources = sqliteTable(
       ],
     }),
   ],
+);
+
+export const whatsappChannelDispatches = sqliteTable(
+  "whatsapp_channel_dispatches",
+  {
+    actionId: text("action_id")
+      .notNull()
+      .references(() => whatsappChannelActions.id, { onDelete: "cascade" }),
+    productId: text("product_id").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.actionId, table.productId] })],
 );

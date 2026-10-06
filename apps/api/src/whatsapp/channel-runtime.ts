@@ -13,6 +13,7 @@ type Snapshot = {
   generation: string;
   session: EmployeeSession | null;
   text: string;
+  configurationRevision?: string;
   reply?: NativeReply | string;
 };
 export function createRoutedWhatsappGenerator(
@@ -63,6 +64,8 @@ export function createRoutedWhatsappGenerator(
                 generation: access.generation,
                 session: null,
                 text,
+                configurationRevision: (await repository.menu(access))
+                  ?.revision,
                 reply: route.reply,
               }
             : {
@@ -111,22 +114,37 @@ export function createRoutedWhatsappGenerator(
         saved.text,
         { ...input, text: saved.text },
       );
+      const choice =
+        input.native?.kind === "choice" ? input.native.id : input.text;
       const label = `${employee.name} · Asistente virtual\n\n`;
-      if (typeof reply === "string") return (label + reply).slice(0, 4096);
-      if ("text" in reply)
-        return {
-          ...reply,
-          text: (label + reply.text).slice(
-            0,
-            reply.kind === "text" ? 4096 : 1024,
-          ),
-        };
-      if (reply.kind === "media")
-        return {
-          ...reply,
-          caption: (label + (reply.caption ?? "")).slice(0, 1024),
-        };
-      return reply;
+      const labeledReply: NativeReply | string =
+        typeof reply === "string"
+          ? (label + reply).slice(0, 4096)
+          : "text" in reply
+            ? {
+                ...reply,
+                text: (label + reply.text).slice(
+                  0,
+                  reply.kind === "text" ? 4096 : 1024,
+                ),
+              }
+            : reply.kind === "media"
+              ? {
+                  ...reply,
+                  caption: (label + (reply.caption ?? "")).slice(0, 1024),
+                }
+              : reply;
+      if (/^(confirm:|cancel:|CONFIRMAR |CANCELAR$)/.test(choice)) {
+        saved.text = "[Action confirmation]";
+        saved.reply = labeledReply;
+        await repository.db
+          .prepare(
+            "UPDATE whatsapp_inbox SET message_text='[Action confirmation]',input_payload=NULL,routing_snapshot=? WHERE message_id=?",
+          )
+          .bind(JSON.stringify(saved), input.messageId)
+          .run();
+      }
+      return labeledReply;
     },
     async authorizeReply(
       binding: WhatsappAssistantBinding,
@@ -144,7 +162,32 @@ export function createRoutedWhatsappGenerator(
           contact: input.contactPhone.replace(/\D/g, ""),
         });
         if (access.generation !== saved.generation) return false;
-        if (!saved.session) return true;
+        if (!saved.session) {
+          if (!saved.reply) return true;
+          const currentSettings = await repository.settings(
+            binding.tenantId,
+            binding.connectionId,
+          );
+          if (
+            !currentSettings?.config.routingEnabled ||
+            !saved.configurationRevision ||
+            currentSettings.revision !== saved.configurationRevision
+          )
+            return false;
+          const menu = await repository.menu(access);
+          if (!menu || menu.revision !== saved.configurationRevision)
+            return false;
+          const currentTasks = await repository.listTasks(
+            access,
+            currentSettings,
+          );
+          const menuTaskIds = menu.tasks.map((task) => task.id).sort();
+          const currentTaskIds = currentTasks.map((task) => task.id).sort();
+          return (
+            menuTaskIds.length === currentTaskIds.length &&
+            menuTaskIds.every((id, index) => id === currentTaskIds[index])
+          );
+        }
         const current = await repository.getSession(access);
         return (
           current?.employeeId === saved.session.employeeId &&
@@ -172,9 +215,10 @@ export function createRoutedWhatsappGenerator(
           saved.generation,
           saved.session.employeeId,
           saved.text,
-          typeof reply === "string"
+          (typeof reply === "string"
             ? reply
-            : nativeReplyText(reply, binding.native),
+            : nativeReplyText(reply, binding.native)
+          ).replace(/CONFIRMAR [A-Z2-7]{10}/g, "[Confirmación pendiente]"),
           new Date().toISOString(),
         )
         .run();

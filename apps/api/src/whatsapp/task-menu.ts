@@ -2,7 +2,7 @@ import type { ChannelMenu } from "./channel-contracts";
 import type { NativeReply } from "./native";
 
 export function isMainMenuCommand(text: string): boolean {
-  return ["menu", "inicio"].includes(
+  return ["menu", "inicio", "cambiar asistente"].includes(
     text
       .trim()
       .normalize("NFD")
@@ -14,13 +14,11 @@ export function isMainMenuCommand(text: string): boolean {
 export function menuOptions(menu: ChannelMenu) {
   const pages = Math.max(1, Math.ceil(menu.tasks.length / 9));
   const page = Math.max(0, Math.min(menu.page, pages - 1));
-  const options = menu.tasks
-    .slice(page * 9, page * 9 + 9)
-    .map((t, index) => ({
-      id: `${menu.id}:${page * 9 + index}`,
-      title: t.title,
-      ...(t.description ? { description: t.description } : {}),
-    }));
+  const options = menu.tasks.slice(page * 9, page * 9 + 9).map((t, index) => ({
+    id: `${menu.id}:${page * 9 + index}`,
+    title: t.title,
+    ...(t.description ? { description: t.description } : {}),
+  }));
   if (pages > 1)
     options.push({
       id: `${menu.id}:page:${(page + 1) % pages}`,

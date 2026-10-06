@@ -297,7 +297,7 @@ export class WhatsappInboundRepository {
   ): Promise<WhatsappAssistantBinding | undefined> {
     const result = await this.db
       .prepare(
-        `SELECT b.tenant_id,b.connection_id,b.employee_id,b.enabled,b.allowed_contacts,
+        `SELECT e.id AS active_employee_id,b.tenant_id,b.connection_id,b.employee_id,b.enabled,b.allowed_contacts,
                 b.updated_by,b.created_at,b.updated_at,b.native_config,
                 c.id,c.tenant_id AS connection_tenant_id,c.created_by_principal_id,
                 c.nango_connection_id,c.nango_integration_id,
@@ -309,7 +309,7 @@ export class WhatsappInboundRepository {
          JOIN identity_principal p ON p.id=c.created_by_principal_id AND p.is_active=1
          JOIN identity_tenant_membership m
            ON m.principal_id=p.id AND m.tenant_id=b.tenant_id AND m.is_active=1
-         JOIN assistant_virtual_employees e
+         LEFT JOIN assistant_virtual_employees e
            ON e.id=b.employee_id AND e.agency_id=b.tenant_id AND e.status='active'
          WHERE b.enabled=1 AND c.status='connected' AND c.disconnected_at IS NULL
            AND c.phone_number_id=? AND c.waba_id=?`,
@@ -325,6 +325,18 @@ export class WhatsappInboundRepository {
       >();
     if (result.results.length !== 1) return undefined;
     const row = result.results[0];
+    if (
+      !(row as typeof row & { active_employee_id?: string }).active_employee_id
+    ) {
+      const channel = await this.db
+        .prepare(
+          "SELECT config_json FROM whatsapp_channel_settings WHERE connection_id=? AND tenant_id=?",
+        )
+        .bind(row.connection_id, row.tenant_id)
+        .first<{ config_json: string }>();
+      if (!channel || JSON.parse(channel.config_json).routingEnabled !== true)
+        return undefined;
+    }
     const settings = settingFromRow(row);
     return {
       ...settings,
@@ -682,10 +694,15 @@ export class WhatsappInboundRepository {
          WHERE message_id=? AND state='generating' AND lease_token=? AND lease_until>?`,
       )
       .bind(
-        reply,
+        reply.replace(/CONFIRMAR [A-Z2-7]{10}/g, "[Confirmation pending]"),
         now,
         leaseUntil,
-        payload ? JSON.stringify(nativeReplySchema.parse(payload)) : null,
+        payload
+          ? JSON.stringify(nativeReplySchema.parse(payload)).replace(
+              /(?:confirm|cancel):[a-f\d-]{36}:[a-f\d]{32}/g,
+              "[Confirmation pending]",
+            )
+          : null,
         messageId,
         token,
         now,

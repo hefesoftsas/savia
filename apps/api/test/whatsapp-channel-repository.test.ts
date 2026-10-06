@@ -136,4 +136,154 @@ describe("WhatsApp channel state", () => {
       s.repo.configure(s.tenantId, s.connectionId, s.config, s.principal.id),
     ).rejects.toThrow();
   });
+
+  it("uses a fresh access generation when a previously revoked staff profile returns", async () => {
+    const s = await fixture();
+    const staff = [
+      {
+        phone: s.key.contact,
+        label: "Staff",
+        active: true,
+        principalId: s.principal.id,
+      },
+    ];
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      { ...s.config, staff },
+      s.principal.id,
+    );
+    const original = await s.repo.getAccess(s.key);
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      s.config,
+      s.principal.id,
+    );
+    const external = await s.repo.getAccess(s.key);
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      { ...s.config, staff },
+      s.principal.id,
+    );
+    const restored = await s.repo.getAccess(s.key);
+    expect(external.generation).not.toBe(original.generation);
+    expect(restored.generation).not.toBe(original.generation);
+    expect(restored.generation).not.toBe(external.generation);
+  });
+
+  it("persists access revocation across staff changes even when no message arrives between edits", async () => {
+    const s = await fixture();
+    const staff = [
+      {
+        phone: s.key.contact,
+        label: "Staff",
+        active: true,
+        principalId: s.principal.id,
+      },
+    ];
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      { ...s.config, staff },
+      s.principal.id,
+    );
+    const original = await s.repo.getAccess(s.key);
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      s.config,
+      s.principal.id,
+    );
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      { ...s.config, staff },
+      s.principal.id,
+    );
+    expect((await s.repo.getAccess(s.key)).generation).not.toBe(
+      original.generation,
+    );
+  });
+
+  it("rotates staff access after a principal is revoked and restored", async () => {
+    const s = await fixture();
+    const staff = [
+      {
+        phone: s.key.contact,
+        label: "Staff",
+        active: true,
+        principalId: s.principal.id,
+      },
+    ];
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      { ...s.config, staff },
+      s.principal.id,
+    );
+    const original = await s.repo.getAccess(s.key);
+    await env.DB.prepare(
+      "UPDATE identity_principal SET is_active=0,updated_at=? WHERE id=?",
+    )
+      .bind(new Date(Date.now() + 1000).toISOString(), s.principal.id)
+      .run();
+    await expect(s.repo.getAccess(s.key)).rejects.toThrow(
+      "CHANNEL_STAFF_REVOKED",
+    );
+    await env.DB.prepare(
+      "UPDATE identity_principal SET is_active=1,updated_at=? WHERE id=?",
+    )
+      .bind(new Date(Date.now() + 2000).toISOString(), s.principal.id)
+      .run();
+    const restored = await s.repo.getAccess(s.key);
+    expect(restored.generation).not.toBe(original.generation);
+  });
+
+  it("keeps access history generation across task label edits while issuing a new menu revision", async () => {
+    const s = await fixture();
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      s.config,
+      s.principal.id,
+    );
+    const access = await s.repo.getAccess(s.key);
+    const first = await s.repo.issueMenu(access);
+    await env.DB.prepare(
+      "INSERT INTO whatsapp_channel_history(message_id,connection_id,contact,generation,employee_id,user_text,assistant_text,created_at) VALUES(?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        "label-edit-history",
+        s.connectionId,
+        s.key.contact,
+        access.generation,
+        s.employeeId,
+        "Hi",
+        "Hello",
+        new Date().toISOString(),
+      )
+      .run();
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      {
+        ...s.config,
+        tasks: [{ ...s.config.tasks[0], title: "Nueva etiqueta" }],
+      },
+      s.principal.id,
+    );
+    const refreshedAccess = await s.repo.getAccess(s.key);
+    const refreshedMenu = await s.repo.issueMenu(refreshedAccess);
+    expect(refreshedAccess.generation).toBe(access.generation);
+    expect(refreshedMenu.revision).not.toBe(first.revision);
+    expect(
+      await env.DB.prepare(
+        "SELECT message_id FROM whatsapp_channel_history WHERE message_id=? AND generation=?",
+      )
+        .bind("label-edit-history", refreshedAccess.generation)
+        .first(),
+    ).toBeTruthy();
+  });
 });
