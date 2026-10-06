@@ -2,6 +2,10 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { opusFixture } from "./fixtures/companion-tone";
 import { CompanionSessions } from "../src/companion/sessions";
+import {
+  isGenericSessionName,
+  sessionNameForDate,
+} from "../src/companion/sessions";
 import { CompanionSessionJobs } from "../src/companion/session-jobs";
 import {
   CompanionError,
@@ -492,6 +496,97 @@ describe("private Companion sessions", () => {
         if (session) await repo.deleteSchedule(access, id, session.job.runId);
       }
       await clean(owner, 91);
+    }
+  });
+
+  it("renames sessions and rejects blank names", async () => {
+    const owner = crypto.randomUUID();
+    const access = ownerAccess(owner, 92);
+    const id = crypto.randomUUID();
+    const repo = new CompanionSessions(env.DOCUMENTS);
+    try {
+      await repo.create(access, {
+        id,
+        name: "Recording fee82c71",
+        sources: ["microphone"],
+        consent: true,
+      });
+      const renamed = await repo.rename(access, id, {
+        name: "  Budget review  ",
+      });
+      expect(renamed.name).toBe("Budget review");
+      await expect(repo.get(ownerAccess(owner, 93), id)).rejects.toMatchObject({
+        status: 404,
+      });
+      await expect(
+        repo.rename(access, id, { name: "   " }),
+      ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    } finally {
+      await clean(owner, 92);
+    }
+  });
+
+  it("detects generic default names and formats a day-hour fallback", () => {
+    expect(isGenericSessionName("Recording fee82c71")).toBe(true);
+    expect(isGenericSessionName("Grabación fee82c71")).toBe(true);
+    expect(isGenericSessionName("Recording.m4a")).toBe(true);
+    expect(isGenericSessionName("Budget review")).toBe(false);
+    expect(sessionNameForDate("2026-10-06T09:47:00.000Z")).toBe(
+      "Recording 2026-10-06 09:47",
+    );
+  });
+
+  it("applies the AI title on completion when the name is still generic", async () => {
+    const owner = crypto.randomUUID();
+    const access = ownerAccess(owner, 94);
+    const id = crypto.randomUUID();
+    const repo = new CompanionSessions(env.DOCUMENTS);
+    const service = {
+      async transcribe() {
+        return {
+          text: "We agreed on the launch date.",
+          source: "microphone",
+          model: "test/model",
+          durationSeconds: 0.1,
+        };
+      },
+      async summarize() {
+        return {
+          title: "Launch date decision",
+          summary: "We agreed on the launch date.",
+          decisions: [],
+          actions: [],
+          openQuestions: [],
+        };
+      },
+    } as unknown as CompanionService;
+    const engine = new CompanionSessionJobs(
+      repo,
+      service,
+      async () => ({}) as EffectiveAssistantConfiguration,
+    );
+    try {
+      await repo.create(access, {
+        id,
+        name: "Recording fee82c71",
+        sources: ["microphone"],
+        consent: true,
+      });
+      await repo.putChunk(access, id, chunk());
+      await repo.finalize(access, id, {
+        expectedChunks: 1,
+        durationSeconds: 1,
+      });
+      await repo.requestProcessing(access, id, { consent: true });
+      await engine.processOne();
+      await engine.processOne();
+      const done = await repo.get(access, id);
+      expect(done.job.status).toBe("complete");
+      expect(done.name).toBe("Launch date decision");
+    } finally {
+      const session = await repo.get(access, id).catch(() => null);
+      if (session) await repo.deleteSchedule(access, id, session.job.runId);
+      await clean(owner, 94);
     }
   });
 });

@@ -92,5 +92,10 @@
         "type": "int"
       }
     }
-  }
+  },
+  "save": "Salvar",
+  "sessionRename": "Renomear",
+  "sessionNameLabel": "Nome da gravação",
+  "sessionNameHint": "ex.: Planejamento semanal 2026-10-06 14:30",
+  "sessionNameInvalid": "Digite um nome de 1 a 255 caracteres."
 }

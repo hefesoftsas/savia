@@ -26,6 +26,8 @@ import {
   loadLocale,
   translate,
   formatDuration,
+  defaultSessionName,
+  isValidSessionName,
   type Locale,
   type MessageKey,
 } from "./i18n";
@@ -66,6 +68,8 @@ function App() {
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState<LocalizedMessage | null>(null);
   const [locale, setLocale] = useState<Locale>(() => loadLocale());
+  const [sessionName, setSessionName] = useState("");
+  const lastSessionId = useRef<string | null | undefined>(undefined);
   const t = (key: MessageKey, vars?: Record<string, string | number>) =>
     translate(locale, key, vars);
   const message = (key: MessageKey, vars?: Record<string, string | number>) =>
@@ -110,6 +114,33 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const current = status.sessionId ?? null;
+    const previous = lastSessionId.current;
+    lastSessionId.current = current;
+    const isReady =
+      status.state === "ready" ||
+      (["error", "interrupted"].includes(status.state) &&
+        Boolean(status.chunks?.length));
+    if (current && current !== previous) {
+      if (isReady) {
+        // New session that is already ready (e.g. recovered recording):
+        // reset to a fresh date default, never leak the previous name.
+        setSessionName(defaultSessionName(locale));
+      } else {
+        // New recording in progress: clear so stop/ready populates a fresh default.
+        setSessionName("");
+      }
+    } else if (!current) {
+      if (previous) setSessionName("");
+    } else if (isReady) {
+      // Same session became ready (stop): ensure a date default when empty.
+      setSessionName((prev) =>
+        prev.trim() ? prev : defaultSessionName(locale),
+      );
+    }
+  }, [status.sessionId, status.state, status.chunks, status.recovered, locale]);
+
   const run = async (label: LocalizedMessage, action: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -135,6 +166,7 @@ function App() {
       setStatus(next);
       setConsent(false);
       setSaved(false);
+      setSessionName("");
     });
 
   const stop = () =>
@@ -143,6 +175,9 @@ function App() {
       setStatus(next);
       setConsent(false);
       setSaved(false);
+      setSessionName((prev) =>
+        prev.trim() ? prev : defaultSessionName(locale),
+      );
     });
 
   const pause = () =>
@@ -166,6 +201,7 @@ function App() {
       setConsent(false);
       setSaved(false);
       setNotice(null);
+      setSessionName("");
     });
 
   function revokePreviewUrls() {
@@ -247,12 +283,17 @@ function App() {
         throw localizedOperationError(
           "No recoverable audio is available to upload.",
         );
+      const trimmedName = sessionName.trim();
+      if (!isValidSessionName(trimmedName))
+        throw localizedOperationError(
+          "No recoverable audio is available to upload.",
+        );
       const session = await companionRequest<{
         state: string;
         chunks: { source: string; sequence: number }[];
       }>(apiOrigin, token, "sessioncreate", {
         id: status.sessionId,
-        name: t("Recording name", { id: status.sessionId.slice(0, 8) }),
+        name: trimmedName,
         sources: [...new Set(status.chunks.map((chunk) => chunk.source))],
         consent: true,
       });
@@ -336,12 +377,17 @@ function App() {
   ];
   const reviewHref = recordingReviewHref(appOrigin);
   const locked = Boolean(busy) || isRecording || isPaused;
+  const trimmedSessionName = sessionName.trim();
+  const sessionNameValid = isValidSessionName(trimmedSessionName);
   const actionDisabled =
     Boolean(busy) ||
     (isRecording || isPaused
       ? false
       : ready
-        ? complete || !canUploadRecording(capabilities) || !consent
+        ? complete ||
+          !canUploadRecording(capabilities) ||
+          !consent ||
+          !sessionNameValid
         : !isTauri() || !selectedSources);
 
   const primaryAction = () => {
@@ -660,6 +706,41 @@ function App() {
             <span>{t("System audio")}</span>
           </label>
         </fieldset>
+
+        {ready && (
+          <label
+            className="session-name-field"
+            style={{
+              display: "grid",
+              gap: "4px",
+              color: "#35413a",
+              fontSize: "11px",
+              fontWeight: 600,
+              textAlign: "left",
+            }}
+          >
+            <span>{t("Session name")}</span>
+            <input
+              type="text"
+              value={sessionName}
+              onChange={(event) => setSessionName(event.target.value)}
+              placeholder={t("Name this recording")}
+              maxLength={255}
+              disabled={Boolean(busy) || complete}
+              aria-label={t("Session name")}
+              style={{
+                width: "100%",
+                height: "34px",
+                minWidth: 0,
+                padding: "0 9px",
+                border: "1px solid #ccd6d0",
+                borderRadius: "7px",
+                background: "#fff",
+                fontSize: "12px",
+              }}
+            />
+          </label>
+        )}
 
         {ready && (
           <label className="consent-row">

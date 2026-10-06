@@ -17,6 +17,7 @@ import {
   chunkInputSchema,
   finalizeSessionSchema,
   processingRequestSchema,
+  renameSessionSchema,
 } from "./sessions";
 import { selectSessionEvidence } from "./session-evidence";
 
@@ -143,6 +144,32 @@ export function registerCompanionSessionRoutes(
     async (c) =>
       c.json(
         await options.sessions.get(await access(c), c.req.valid("param").id),
+        200,
+      ),
+  );
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/v1/companion/sessions/{id}",
+      tags: ["Companion"],
+      security: security("recordings:upload"),
+      summary: "Rename an owned recording session",
+      request: {
+        params,
+        body: {
+          required: true,
+          content: { "application/json": { schema: renameSessionSchema } },
+        },
+      },
+      responses: { 200: success, ...failures },
+    }),
+    async (c) =>
+      c.json(
+        await options.sessions.rename(
+          await access(c),
+          c.req.valid("param").id,
+          c.req.valid("json"),
+        ),
         200,
       ),
   );

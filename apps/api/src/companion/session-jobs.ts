@@ -1,6 +1,11 @@
 import type { EffectiveAssistantConfiguration } from "../assistant/configuration";
 import { CompanionError, type CompanionService } from "./service";
-import { CompanionSessions, chunkIdentity } from "./sessions";
+import {
+  CompanionSessions,
+  chunkIdentity,
+  isGenericSessionName,
+  sessionNameForDate,
+} from "./sessions";
 import type { RecordingAccess } from "./recordings";
 
 type ResolveConfiguration = (
@@ -302,6 +307,13 @@ export class CompanionSessionJobs {
             manifest.job.summary = result;
             manifest.job.status = "complete";
             manifest.job.summaryWork = [];
+            if (isGenericSessionName(manifest.name)) {
+              const aiTitle = result.title?.trim().slice(0, 80);
+              manifest.name =
+                aiTitle && aiTitle.length > 0
+                  ? aiTitle
+                  : sessionNameForDate(manifest.createdAt);
+            }
           } else {
             manifest.job.summaryWork = [
               { source: inputs[0].source, text: JSON.stringify(result) },
