@@ -204,7 +204,11 @@ dispatch. Tool failures never expose provider
 credentials. City reference lookups use the authenticated `/api/lookups/dane`
 route, including for tenant administrators without platform roles. The quote
 assistant uses verified enabled products and prepares the validated draft before
-requesting data-processing consent. Sending is recorded before calling Meta, and an uncertain send is
+requesting data-processing consent. Explicit `AUTORIZO` continues from the
+server-validated authorized snapshot rather than model-generated input; any
+subsequent quote-field change requires renewed consent. The resulting operation
+still requires the separate server-issued confirmation before insurer execution.
+Sending is recorded before calling Meta, and an uncertain send is
 terminal rather than automatically repeated.
 
 `whatsapp_inbox` stores contact-specific history, saved replies, outbound message

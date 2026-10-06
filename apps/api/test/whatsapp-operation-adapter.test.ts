@@ -1,11 +1,13 @@
 import { env } from "cloudflare:workers";
 import { expect, it } from "vitest";
 import { createChannelOperationAdapter } from "../src/assistant/operation-adapter";
+import { PersonalActionPayloadCipher } from "../src/assistant/personal-action-payload";
+import { ChannelDrafts } from "../src/whatsapp/drafts";
 import { WhatsappChannelRepository } from "../src/whatsapp/channel-repository";
 import { defaultNativeConfiguration } from "../src/whatsapp/native";
 import { setupChannelFixture } from "./whatsapp-channel-fixture";
 
-async function selectedSession() {
+async function selectedSession(staffMode = false) {
   const fixture = await setupChannelFixture();
   const repo = new WhatsappChannelRepository(env.DB);
   await env.DB.prepare(
@@ -29,12 +31,21 @@ async function selectedSession() {
           title: "Consultar seguros",
           description: "",
           order: 0,
-          audiences: ["external"],
+          audiences: staffMode ? ["external", "internal"] : ["external"],
         },
       ],
-      staff: [],
-      internalCapabilities: [],
-      externalCapabilities: ["insurance"],
+      staff: staffMode
+        ? [
+            {
+              phone: "573001234567",
+              label: "Tenant administrator",
+              active: true,
+              principalId: fixture.principal.id,
+            },
+          ]
+        : [],
+      internalCapabilities: staffMode ? ["insurance"] : [],
+      externalCapabilities: staffMode ? [] : ["insurance"],
     },
     fixture.principal.id,
   );
@@ -135,4 +146,240 @@ it("removes quote tools and product claims when preflight cannot verify a catalo
   expect(capabilities?.tools).not.toHaveProperty("savia_lookup_quote_vehicle");
   expect(capabilities?.system).toMatch(/catalog could not be verified/i);
   expect(capabilities?.system).not.toMatch(/Hogar|Vida|Salud/i);
+});
+
+it("prepares a staff quote after AUTORIZO using the same validated draft", async () => {
+  const { repo, session, binding } = await selectedSession(true);
+  const backend: typeof fetch = async (url) => {
+    if (new URL(String(url)).pathname.endsWith("/settings"))
+      return Response.json({
+        data: {
+          value: {
+            vehicleLookup: { enabled: true, flowId: "sura-autos-provider" },
+            products: [
+              { id: "sura-auto", label: "Auto Integral", enabled: true },
+            ],
+          },
+        },
+      });
+    throw new Error(`Unexpected request ${String(url)}`);
+  };
+  const adapter = createChannelOperationAdapter({
+    repository: repo,
+    secret: "test-secret",
+    backendForActor: async () => backend,
+  });
+  const quote = {
+    vehicle: {
+      plate: "TESTCAR",
+      fasecoldaCode: "12345678",
+      productionYear: 2011,
+      isNew: false,
+      circulationCity: "11001",
+      accessoriesValue: 0,
+      declaredValue: 16000000,
+    },
+    applicant: {
+      documentType: "CC",
+      documentNumber: "123456789",
+      firstName: "Test",
+      surname: "User",
+      gender: "F",
+      birthDate: "1990-01-01",
+      city: "11001",
+      address: "Calle 1",
+      phone: "3001234567",
+      email: "test@example.test",
+    },
+  };
+  const firstTurn = await adapter.capabilities({
+    ...binding,
+    channelSession: session,
+  });
+  await (firstTurn!.tools.savia_update_task_draft as any).execute({
+    fields: {
+      vehicle: quote.vehicle,
+      applicant: {
+        ...quote.applicant,
+        name: "Test User",
+        residenceCity: "Bogotá",
+      },
+    },
+  });
+  const consentRequest = await (
+    firstTurn!.tools.savia_prepare_command as any
+  ).execute({
+    domain: "insurance",
+    command: "quote-auto",
+    input: { ...quote, consent: false },
+  });
+  expect(consentRequest).toMatchObject({ isError: true });
+  expect(firstTurn!.reply!()).toContain("Responde AUTORIZO");
+
+  const afterAuthorization = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: "AUTORIZO" } as any,
+  );
+  expect(afterAuthorization!.tools).not.toHaveProperty("savia_prepare_command");
+  expect(afterAuthorization!.directReply).toMatchObject({ kind: "buttons" });
+  expect(afterAuthorization!.reply).toBeUndefined();
+
+  const rows = await env.DB.prepare(
+    "SELECT id,status FROM whatsapp_channel_actions WHERE connection_id=? AND contact=?",
+  )
+    .bind(session.access.connectionId, session.access.contact)
+    .all<{ id: string; status: string }>();
+  expect(rows.results.map((row) => row.status)).toEqual(["pending"]);
+  const quoteActionId = rows.results[0]!.id;
+
+  const repeatedAuthorization = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: "AUTORIZO" } as any,
+  );
+  expect(repeatedAuthorization?.directReply).toMatch(
+    /pendiente de confirmación/i,
+  );
+  expect(
+    await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM whatsapp_channel_actions WHERE connection_id=? AND contact=? AND status='pending'",
+    )
+      .bind(session.access.connectionId, session.access.contact)
+      .first("count"),
+  ).toBe(1);
+
+  for (const status of ["queued", "dispatching", "completed", "uncertain"]) {
+    await env.DB.prepare(
+      "UPDATE whatsapp_channel_actions SET status=? WHERE connection_id=? AND contact=?",
+    )
+      .bind(status, session.access.connectionId, session.access.contact)
+      .run();
+    const repeated = await adapter.capabilities(
+      { ...binding, channelSession: session },
+      { text: "AUTORIZO" } as any,
+    );
+    if (status === "uncertain")
+      expect(repeated?.directReply).toMatch(/asesor/i);
+    else if (status === "completed")
+      expect(repeated?.directReply).toMatch(/ya fue procesada/i);
+    else expect(repeated?.directReply).toMatch(/en procesamiento/i);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM whatsapp_channel_actions WHERE connection_id=? AND contact=?",
+      )
+        .bind(session.access.connectionId, session.access.contact)
+        .first("count"),
+    ).toBe(1);
+  }
+
+  const cipher = new PersonalActionPayloadCipher("test-secret");
+  const unrelatedActionIds: string[] = [];
+  const oldQuoteTimestamp = new Date(Date.now() - 21 * 60_000).toISOString();
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_actions SET created_at=? WHERE id=?",
+  )
+    .bind(oldQuoteTimestamp, quoteActionId)
+    .run();
+  for (let index = 0; index < 11; index++) {
+    const id = crypto.randomUUID();
+    unrelatedActionIds.push(id);
+    const createdAt = new Date(
+      Date.parse(oldQuoteTimestamp) + (index + 1) * 1000,
+    ).toISOString();
+    const input = await cipher.seal({
+      actionId: id,
+      principalId: session.access.principalId ?? session.access.contact,
+      payload: { collection: `unrelated-${index}` },
+    });
+    const actionJson = JSON.stringify({
+      id,
+      session,
+      revision: 1,
+      domain: "studio",
+      command: "create-record",
+      input: { sealedPayload: input },
+    });
+    await env.DB.prepare(
+      "INSERT INTO whatsapp_channel_actions(id,connection_id,tenant_id,contact,generation,employee_id,selection_revision,action_json,token_hash,status,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,'queued',?,?)",
+    )
+      .bind(
+        id,
+        session.access.connectionId,
+        session.access.tenantId,
+        session.access.contact,
+        session.access.generation,
+        session.employeeId,
+        session.selectionRevision,
+        actionJson,
+        `unused-${index}`,
+        new Date(Date.now() + 60_000).toISOString(),
+        createdAt,
+      )
+      .run();
+  }
+  const oldUncertainAuthorization = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: "AUTORIZO" } as any,
+  );
+  expect(oldUncertainAuthorization?.directReply).toMatch(/asesor/i);
+  expect(
+    await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM whatsapp_channel_actions WHERE connection_id=? AND contact=?",
+    )
+      .bind(session.access.connectionId, session.access.contact)
+      .first("count"),
+  ).toBe(12);
+  for (const id of unrelatedActionIds) {
+    await env.DB.prepare("DELETE FROM whatsapp_channel_actions WHERE id=?")
+      .bind(id)
+      .run();
+  }
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_actions SET created_at=? WHERE id=?",
+  )
+    .bind(new Date().toISOString(), quoteActionId)
+    .run();
+
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_actions SET status='pending',expires_at=? WHERE id=?",
+  )
+    .bind(new Date(Date.now() - 1000).toISOString(), quoteActionId)
+    .run();
+  const expiredAuthorization = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: "AUTORIZO" } as any,
+  );
+  expect(expiredAuthorization?.directReply).toMatchObject({ kind: "buttons" });
+  expect(
+    await env.DB.prepare(
+      "SELECT status FROM whatsapp_channel_actions WHERE connection_id=? AND contact=? ORDER BY created_at",
+    )
+      .bind(session.access.connectionId, session.access.contact)
+      .all<{ status: string }>(),
+  ).toMatchObject({
+    results: [{ status: "cancelled" }, { status: "pending" }],
+  });
+
+  await (afterAuthorization!.tools.savia_update_task_draft as any).execute({
+    fields: { applicant: { firstName: "Changed" } },
+  });
+  expect(
+    await new ChannelDrafts(repo, "test-secret").get(session),
+  ).toMatchObject({
+    consent: false,
+    consentPrompt: null,
+  });
+  const authorizationAfterEdit = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: "AUTORIZO" } as any,
+  );
+  expect(authorizationAfterEdit!.tools).toHaveProperty("savia_prepare_command");
+  expect(
+    await env.DB.prepare(
+      "SELECT status FROM whatsapp_channel_actions WHERE connection_id=? AND contact=?",
+    )
+      .bind(session.access.connectionId, session.access.contact)
+      .all<{ status: string }>(),
+  ).toMatchObject({
+    results: [{ status: "cancelled" }, { status: "cancelled" }],
+  });
 });
