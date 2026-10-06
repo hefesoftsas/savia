@@ -16,6 +16,25 @@ type Snapshot = {
   configurationRevision?: string;
   reply?: NativeReply | string;
 };
+
+function stripLeadingEmployeeHeaders(value: string, employeeName: string) {
+  const header = `${employeeName} · Asistente virtual`;
+  let result = value;
+  while (result) {
+    const lineEnd = result.indexOf("\n");
+    const line = (lineEnd === -1 ? result : result.slice(0, lineEnd)).replace(
+      /\r$/,
+      "",
+    );
+    if (line.toLocaleLowerCase() !== header.toLocaleLowerCase()) break;
+    if (lineEnd === -1) return "";
+    result = result.slice(lineEnd + 1);
+    while (result.startsWith("\n") || result.startsWith("\r\n"))
+      result = result.startsWith("\r\n") ? result.slice(2) : result.slice(1);
+  }
+  return result;
+}
+
 export function createRoutedWhatsappGenerator(
   repository: WhatsappChannelRepository,
   complete: WhatsappInboundDependencies["generate"],
@@ -102,7 +121,10 @@ export function createRoutedWhatsappGenerator(
       if (!employee) throw new Error("CHANNEL_EMPLOYEE_UNAVAILABLE");
       const scopedHistory = rows.results.reverse().flatMap((r) => [
         { role: "user" as const, content: r.user_text },
-        { role: "assistant" as const, content: r.assistant_text },
+        {
+          role: "assistant" as const,
+          content: stripLeadingEmployeeHeaders(r.assistant_text, employee.name),
+        },
       ]);
       const reply = await complete(
         {
@@ -115,26 +137,34 @@ export function createRoutedWhatsappGenerator(
         { ...input, text: saved.text },
       );
       const choice =
-        input.native?.kind === "choice" ? input.native.id : input.text;
+        input.native?.kind === "choice" ? input.native.id : input.text.trim();
       const label = `${employee.name} · Asistente virtual\n\n`;
       const labeledReply: NativeReply | string =
         typeof reply === "string"
-          ? (label + reply).slice(0, 4096)
+          ? (label + stripLeadingEmployeeHeaders(reply, employee.name)).slice(
+              0,
+              4096,
+            )
           : "text" in reply
             ? {
                 ...reply,
-                text: (label + reply.text).slice(
-                  0,
-                  reply.kind === "text" ? 4096 : 1024,
-                ),
+                text: (
+                  label + stripLeadingEmployeeHeaders(reply.text, employee.name)
+                ).slice(0, reply.kind === "text" ? 4096 : 1024),
               }
             : reply.kind === "media"
               ? {
                   ...reply,
-                  caption: (label + (reply.caption ?? "")).slice(0, 1024),
+                  caption: (
+                    label +
+                    stripLeadingEmployeeHeaders(
+                      reply.caption ?? "",
+                      employee.name,
+                    )
+                  ).slice(0, 1024),
                 }
               : reply;
-      if (/^(confirm:|cancel:|CONFIRMAR |CANCELAR$)/.test(choice)) {
+      if (/^(confirm:|cancel:|CONFIRMAR |CANCELAR$)/i.test(choice)) {
         saved.text = "[Action confirmation]";
         saved.reply = labeledReply;
         await repository.db
@@ -218,7 +248,7 @@ export function createRoutedWhatsappGenerator(
           (typeof reply === "string"
             ? reply
             : nativeReplyText(reply, binding.native)
-          ).replace(/CONFIRMAR [A-Z2-7]{10}/g, "[Confirmación pendiente]"),
+          ).replace(/CONFIRMAR [A-Z2-7]{10}/gi, "[Confirmación pendiente]"),
           new Date().toISOString(),
         )
         .run();

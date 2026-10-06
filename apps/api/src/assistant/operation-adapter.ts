@@ -23,7 +23,10 @@ import type {
 import type { NativeReply } from "../whatsapp/native";
 import { WhatsappChannelRepository } from "../whatsapp/channel-repository";
 import { WhatsappChannelActions } from "../whatsapp/confirmations";
-import { humanSupportRecoveryReply } from "../whatsapp/human-support";
+import {
+  humanSupportContactText,
+  humanSupportRecoveryReply,
+} from "../whatsapp/human-support";
 import { formatQuotePreview } from "../whatsapp/quote-preview";
 import {
   validatePersonalConfirmedAction,
@@ -275,8 +278,102 @@ export function createChannelOperationAdapter(
       input?.native?.kind === "choice"
         ? input.native.id
         : (input?.text?.trim() ?? "");
-    if (/^(confirm:|cancel:|CONFIRMAR |CANCELAR$)/.test(choice)) {
-      const consumed = await actions?.consume(session, choice);
+    const normalized =
+      input?.text
+        ?.trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase() ?? "";
+    const upperText = normalized.toUpperCase();
+    const nativeAction =
+      input?.native?.kind === "choice" && /^(confirm|cancel):/i.test(choice);
+    const cancelText = upperText === "CANCELAR";
+    const confirmationLike = /^(confirmar|confirmo)(?:\b|$)/i.test(normalized);
+    if (nativeAction || cancelText || confirmationLike) {
+      let consumeChoice: string | null = null;
+      if (nativeAction) consumeChoice = choice;
+      else if (cancelText) consumeChoice = "CANCELAR";
+      else {
+        const code = /^confirmar\s+([A-Z2-7]{10})$/i.exec(upperText)?.[1];
+        if (code) consumeChoice = `CONFIRMAR ${code.toUpperCase()}`;
+      }
+      let consumed = null;
+      if (consumeChoice) {
+        try {
+          consumed = await actions?.consume(session, consumeChoice);
+        } catch {
+          consumed = null;
+        }
+      }
+      let expiredQuoteCanRetry = false;
+      let latestActionStatus: string | null = null;
+      if (!consumed && !cancelText && actions) {
+        try {
+          const latest = await deps.repository.db
+            .prepare(
+              "SELECT status,action_json,expires_at FROM whatsapp_channel_actions WHERE connection_id=? AND contact=? AND generation=? AND employee_id=? AND selection_revision=? AND status IN ('pending','queued','dispatching','completed','failed','uncertain','expired','cancelled') ORDER BY created_at DESC LIMIT 1",
+            )
+            .bind(
+              session.access.connectionId,
+              session.access.contact,
+              session.access.generation,
+              session.employeeId,
+              session.selectionRevision,
+            )
+            .first<{
+              status: string;
+              action_json: string;
+              expires_at: string;
+            }>();
+          latestActionStatus =
+            latest?.status === "pending" &&
+            latest.expires_at <= new Date().toISOString()
+              ? "expired"
+              : (latest?.status ?? null);
+          if (latest && latestActionStatus === "expired") {
+            const action = await actions.open(latest.action_json);
+            const draft = await drafts?.get(session);
+            if (
+              action.domain === "insurance" &&
+              action.command === "quote-auto" &&
+              action.input.consent === true &&
+              draft?.consent === true &&
+              typeof draft.consentPrompt === "string" &&
+              draft.consentPrompt.length > 0
+            ) {
+              expiredQuoteCanRetry = true;
+            }
+          }
+        } catch {
+          expiredQuoteCanRetry = false;
+        }
+      }
+      const humanSupport =
+        latestActionStatus === "uncertain" || latestActionStatus === "failed"
+          ? await deps.repository
+              .settings(session.access.tenantId, session.access.connectionId)
+              .then((settings) =>
+                humanSupportContactText(
+                  settings?.config.humanSupportContact ?? "",
+                ),
+              )
+              .catch(() => humanSupportContactText())
+          : "";
+      const failedConfirmationMessage = expiredQuoteCanRetry
+        ? "Esta confirmación de cotización venció. Si autorizas estos mismos datos, escribe AUTORIZO para generar una nueva confirmación; también puedes escribir menú."
+        : latestActionStatus === "pending"
+          ? "Usa el botón de confirmación si aparece. Si recibiste una solicitud por texto, escribe CONFIRMAR seguido del código que está al final de ese mensaje."
+          : latestActionStatus === "queued" ||
+              latestActionStatus === "dispatching"
+            ? "Esta solicitud ya está confirmada y en procesamiento. Escribe menú para elegir otra tarea."
+            : latestActionStatus === "completed"
+              ? "Esta solicitud ya fue procesada. Escribe menú para elegir otra tarea."
+              : latestActionStatus === "uncertain" ||
+                  latestActionStatus === "failed"
+                ? `No puedo confirmar el resultado de esta solicitud. ${humanSupport} Escribe menú para elegir otra tarea.`
+                : latestActionStatus === "expired"
+                  ? "Esta confirmación venció. Solicita una nueva confirmación o escribe menú."
+                  : "No hay una confirmación disponible. Solicita una nueva confirmación o escribe menú.";
       return {
         tools: {},
         system: whatsappOperationInstructions,
@@ -285,15 +382,11 @@ export function createChannelOperationAdapter(
             ? "Solicitud confirmada. Estoy procesándola; puedes escribir menú para elegir otra tarea."
             : consumed?.state === "cancelled"
               ? "Solicitud cancelada. Escribe menú para elegir otra tarea."
-              : "La confirmación no está disponible o el código no es válido. Revisa la solicitud antes de volver a confirmarla.",
+              : cancelText
+                ? "No hay una confirmación vigente para cancelar. Escribe menú para elegir otra tarea."
+                : failedConfirmationMessage,
       };
     }
-    const normalized =
-      input?.text
-        .trim()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase() ?? "";
     let authorizedConsentPrompt: string | null = null;
     if (
       /^(si[, ]+)?autorizo( el tratamiento de mis datos( personales)?)?[.!]?$/.test(
