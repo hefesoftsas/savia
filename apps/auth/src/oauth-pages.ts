@@ -58,6 +58,13 @@ function htmlResponse(content: string): Response {
   });
 }
 
+function initialEmailFromUrl(url: URL): string | undefined {
+  const raw = url.searchParams.get("email")?.trim().toLowerCase();
+  if (!raw || raw.length > 254) return undefined;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return undefined;
+  return raw;
+}
+
 function loginPage(
   restartUrl?: string,
   tenantSlug?: string | null,
@@ -65,6 +72,7 @@ function loginPage(
   accountState?: { panel: "forgot" | "verify"; notice?: string },
   emailAvailable = false,
   allowEmailRegistration = false,
+  initialEmail?: string,
 ): Response {
   const title = branding
     ? `${branding.loginTitle} | ${branding.displayName}`
@@ -79,6 +87,7 @@ function loginPage(
         branding,
         emailAvailable,
         allowEmailRegistration,
+        initialEmail,
         initialPanel:
           accountState?.panel === "forgot" && !emailAvailable
             ? undefined
@@ -169,6 +178,7 @@ export function oauthPageResponse(
   const url = new URL(request.url);
   const tenantSlug = parseTenantSlugFromHostname(url.hostname);
   const branding = parseTenantBranding(options?.branding) ?? undefined;
+  const initialEmail = initialEmailFromUrl(url);
   switch (url.pathname) {
     case "/api/auth/sso-complete":
       return htmlResponse(
@@ -189,6 +199,7 @@ export function oauthPageResponse(
             },
             options?.emailAvailable,
             options?.allowEmailRegistration,
+            initialEmail,
           )
         : loginPage(
             options?.restartUrl,
@@ -197,6 +208,7 @@ export function oauthPageResponse(
             undefined,
             options?.emailAvailable,
             options?.allowEmailRegistration,
+            initialEmail,
           );
     case "/api/auth/forgot-password":
       return loginPage(
@@ -208,6 +220,7 @@ export function oauthPageResponse(
         },
         options?.emailAvailable,
         options?.allowEmailRegistration,
+        initialEmail,
       );
     case "/api/auth/mfa-enroll":
       return mfaEnrollmentPage(branding, options?.restartUrl);
@@ -487,6 +500,88 @@ const oauthUiScript = String.raw`(() => {
   function formValue(form, name) {
     const value = new FormData(form).get(name);
     return typeof value === "string" ? value : "";
+  }
+
+  function validEmail(value) {
+    const email = String(value || "").trim();
+    return email.length > 0 && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
+  }
+
+  function prefillEmailFromQuery() {
+    let email = "";
+    try {
+      email = validEmail(new URLSearchParams(window.location.search).get("email"));
+    } catch {
+      email = "";
+    }
+    if (!email) return;
+    for (const selector of ["#email", "#sso-email", "#recovery-email", "#verification-email"]) {
+      const input = document.querySelector(selector);
+      if (input && !input.value) input.value = email;
+    }
+  }
+
+  function isTenantSubdomain(hostname) {
+    const host = String(hostname || "").trim().toLowerCase();
+    if (!host || host === "localhost" || /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host) || host.includes("[") || host.includes(":")) return false;
+    const known = ["savia.app.hefesoft.com", "savia-preview.hefesoft.com"];
+    for (const canonical of known) {
+      if (host === canonical) return false;
+      if (host.endsWith("." + canonical)) {
+        const slug = host.slice(0, -(canonical.length + 1));
+        if (slug && !slug.includes(".") && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) return true;
+        return false;
+      }
+    }
+    return false;
+  }
+
+  function isIpOrLocalhost(hostname) {
+    const host = String(hostname || "").trim().toLowerCase();
+    return !host || host === "localhost" || /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host) || host.includes(":") || host.includes("[");
+  }
+
+  let tenantHomeCheckedEmail = "";
+  let tenantHomeRedirecting = false;
+  async function redirectToTenantHome(email) {
+    const normalized = validEmail(email);
+    if (!normalized || tenantHomeRedirecting) return;
+    if (normalized.toLowerCase() === tenantHomeCheckedEmail) return;
+    tenantHomeCheckedEmail = normalized.toLowerCase();
+    if (isTenantSubdomain(window.location.hostname)) return;
+    if (isIpOrLocalhost(window.location.hostname) && window.location.hostname !== "localhost") return;
+    let result = null;
+    try {
+      const response = await fetch("/api/auth/tenant-home?email=" + encodeURIComponent(normalized), { credentials: "same-origin", headers: { accept: "application/json" } });
+      if (!response.ok) return;
+      result = await response.json().catch(() => null);
+    } catch {
+      return;
+    }
+    const slug = result && result.found === true && typeof result.slug === "string" ? result.slug.trim().toLowerCase() : "";
+    if (!slug || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) return;
+    const currentHost = (window.location.host || "").toLowerCase();
+    const hostWithoutPort = window.location.hostname.toLowerCase() + (window.location.port ? ":" + window.location.port : "");
+    const fullTargetHost = slug + "." + hostWithoutPort;
+    if (fullTargetHost === currentHost) return;
+    if (window.location.hostname.toLowerCase() === slug || window.location.hostname.toLowerCase().startsWith(slug + ".")) return;
+    const target = new URL(window.location.href);
+    target.hostname = slug + "." + window.location.hostname;
+    target.searchParams.set("email", normalized);
+    tenantHomeRedirecting = true;
+    setStatus("Redirigiendo a tu espacio de trabajo…");
+    navigateTo(target.toString());
+  }
+
+  function bindTenantHome() {
+    prefillEmailFromQuery();
+    const emailInput = document.querySelector("#email");
+    if (!emailInput) return;
+    emailInput.addEventListener("blur", () => {
+      const value = emailInput.value;
+      if (!validEmail(value)) return;
+      void redirectToTenantHome(value);
+    });
   }
 
   let redirecting = false;
@@ -782,6 +877,7 @@ const oauthUiScript = String.raw`(() => {
   renderConsentDetails();
   bindPasswordVisibility();
   bindForms();
+  bindTenantHome();
 })();`;
 
 export function tenantBrandingFromHeader(

@@ -60,6 +60,7 @@ import {
   type ScalarOAuthClient,
 } from "./oauth";
 import { oauthPageResponse, tenantBrandingFromHeader } from "./oauth-pages";
+import { tenantHomeResponse } from "./tenant-home";
 import type { SMTPEmail } from "./smtp";
 import {
   accountEmailAvailable,
@@ -932,6 +933,12 @@ export function createAuthHandler(
         dependencies,
       );
       if (social) return social;
+      const tenantHome = await tenantHomeResponse(
+        request,
+        environment,
+        (await auth.$context).adapter,
+      );
+      if (tenantHome) return tenantHome;
       const loginUiRequest =
         request.method === "GET" &&
         ["/api/auth/login", "/api/auth/forgot-password"].includes(pathname);
