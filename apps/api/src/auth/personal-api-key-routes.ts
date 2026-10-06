@@ -136,9 +136,9 @@ export function registerPersonalApiKeyRoutes(
       method: "delete",
       path: `${path}/{id}`,
       tags: ["Personal API keys"],
-      summary: "Revoke your personal key",
+      summary: "Revoke an active key, or permanently delete it once revoked",
       request: { params: z.object({ id: z.string().uuid() }) },
-      responses: { 204: { description: "Revoked or already absent" } },
+      responses: { 204: { description: "Revoked, deleted, or already absent" } },
     }),
     async (c) => {
       await repo.revoke(
@@ -256,9 +256,9 @@ export function registerPersonalApiKeyRoutes(
       method: "delete",
       path: `${tenantBase}/{id}`,
       tags: ["Tenant API keys"],
-      summary: "Revoke a personal key in this tenant",
+      summary: "Revoke an active tenant key, or delete it once revoked",
       request: { params: tenantParams.extend({ id: z.string().uuid() }) },
-      responses: { 204: { description: "Revoked or already absent" } },
+      responses: { 204: { description: "Revoked, deleted, or already absent" } },
     }),
     async (c) => {
       const { tenantId, id } = c.req.valid("param");

@@ -100,6 +100,12 @@ export const personalApiKeyMessages = {
   ],
   Revoke: ["Revocar", "Revoke", "Revogar"],
   Revoked: ["Revocada", "Revoked", "Revogada"],
+  "Delete key": ["Eliminar", "Delete", "Excluir"],
+  "Delete key confirmation": [
+    "¿Eliminar definitivamente la clave revocada %{name}? Esta acción no se puede deshacer.",
+    "Permanently delete revoked key %{name}? This cannot be undone.",
+    "Excluir definitivamente a chave revogada %{name}? Esta ação não pode ser desfeita.",
+  ],
   Expired: ["Caducada", "Expired", "Expirada"],
   "Last used": ["Último uso", "Last used", "Último uso"],
   Never: ["Nunca", "Never", "Nunca"],
