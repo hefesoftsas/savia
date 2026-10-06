@@ -30,7 +30,7 @@
     "aws4fetch": "^1.0.20",
     "better-auth": "1.7.6",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.13.7",
+    "hono": "^4.13.11",
     "ical.js": "^2.2.1",
     "jose": "^6.2.10",
     "openapi-fetch": "^0.17.0"

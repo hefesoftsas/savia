@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@savia/studio-shared": "workspace:*",
-    "hono": "^4.13.7",
+    "hono": "^4.13.11",
     "zod": "^4.1.0",
     "@savia/db": "workspace:*"
   },

@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",
-    "hono": "^4.13.7",
+    "hono": "^4.13.11",
     "@savia/db": "workspace:*"
   },
   "devDependencies": {
