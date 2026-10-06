@@ -81,6 +81,9 @@ describe("restricted WhatsApp assistant", () => {
     expect(s.knowledge).toHaveBeenCalledWith("employee", "Hola");
     const input = s.complete.mock.calls[0][0];
     expect(input.system).toContain("Answer in Spanish.");
+    expect(input.system).toMatch(/natural.*conversational/i);
+    expect(input.system).toMatch(/contact.*directly/i);
+    expect(input.system).toMatch(/never pretend.*human/i);
     expect(input.system).toContain("Tenant knowledge");
     expect(input.messages).toEqual([
       ...history,

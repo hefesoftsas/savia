@@ -22,13 +22,14 @@ import {
 import { createWhatsappProviderRegistry } from "./providers";
 import type { WhatsappRouteDependencies } from "../routes/whatsapp";
 import { WhatsappInboundRepository } from "./inbound-repository";
-import { processWhatsappInbox } from "./inbound-processor";
+import { drainWhatsappInbox, processWhatsappInbox } from "./inbound-processor";
 import { createWhatsappAssistant, sendWhatsappReply } from "./assistant";
 import { VirtualEmployeesRepository } from "../assistant/virtual-employees";
 import { retrieveRelevantChunks, type RagEnvironment } from "../assistant/rag";
 import type { AssistantConfigurationRepository } from "../assistant/configuration";
 
 export type WhatsappSecrets = {
+  WHATSAPP_PROCESSING_MODE?: string;
   WHATSAPP_META_APP_SECRET?: string;
   WHATSAPP_WEBHOOK_VERIFY_TOKEN?: string;
   NANGO_BASE_URL?: string;
@@ -121,56 +122,56 @@ export function whatsappInboundFromEnvironment(
     },
     appSecret: environment.WHATSAPP_META_APP_SECRET?.trim(),
     verifyToken: environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim(),
-    process: async () => {
-      return processWhatsappInbox(
-        repository,
-        {
-          generate: routed.generate,
-          authorizeReply: routed.authorizeReply,
-          afterReply: routed.afterReply,
-          indicator: async (binding, messageId) => {
-            if (binding.native?.readReceipts || binding.native?.typingIndicator)
-              await sendReadIndicator(
+    deferProcessing: environment.WHATSAPP_PROCESSING_MODE === "scheduled",
+    process: async (options?: { scheduled?: boolean }) => {
+      const processingDependencies = {
+        generate: routed.generate,
+        authorizeReply: routed.authorizeReply,
+        afterReply: routed.afterReply,
+        indicator: async (binding, messageId) => {
+          if (binding.native?.readReceipts || binding.native?.typingIndicator)
+            await sendReadIndicator(
+              nango,
+              binding,
+              messageId,
+              Boolean(binding.native.typingIndicator),
+            );
+        },
+        send: (binding, text, contactPhone, input) =>
+          typeof text === "string"
+            ? sendWhatsappReply(nango, binding, text, contactPhone)
+            : sendNativeMessage(
                 nango,
                 binding,
-                messageId,
-                Boolean(binding.native.typingIndicator),
-              );
-          },
-          send: (binding, text, contactPhone, input) =>
-            typeof text === "string"
-              ? sendWhatsappReply(nango, binding, text, contactPhone)
-              : sendNativeMessage(
-                  nango,
-                  binding,
-                  text,
-                  binding.native ?? defaultNativeConfiguration,
-                  contactPhone,
-                  async () => {
-                    const current = await repository.resolve(
-                      binding.connection.phoneNumberId!,
-                      binding.connection.wabaId!,
-                    );
-                    if (
-                      !current ||
-                      current.tenantId !== binding.tenantId ||
-                      current.connectionId !== binding.connectionId ||
-                      current.employeeId !== binding.employeeId ||
-                      current.ownerPrincipalId !== binding.ownerPrincipalId ||
-                      JSON.stringify(current.native) !==
-                        JSON.stringify(binding.native) ||
-                      !current.allowedContacts.includes(
-                        contactPhone.replace(/\D/g, ""),
-                      ) ||
-                      !input ||
-                      !(await repository.isWithinReplyWindow(input))
-                    )
-                      throw new Error("WHATSAPP_NATIVE_DISPATCH_REVOKED");
-                  },
-                ),
-        },
-        5,
-      );
+                text,
+                binding.native ?? defaultNativeConfiguration,
+                contactPhone,
+                async () => {
+                  const current = await repository.resolve(
+                    binding.connection.phoneNumberId!,
+                    binding.connection.wabaId!,
+                  );
+                  if (
+                    !current ||
+                    current.tenantId !== binding.tenantId ||
+                    current.connectionId !== binding.connectionId ||
+                    current.employeeId !== binding.employeeId ||
+                    current.ownerPrincipalId !== binding.ownerPrincipalId ||
+                    JSON.stringify(current.native) !==
+                      JSON.stringify(binding.native) ||
+                    !current.allowedContacts.includes(
+                      contactPhone.replace(/\D/g, ""),
+                    ) ||
+                    !input ||
+                    !(await repository.isWithinReplyWindow(input))
+                  )
+                    throw new Error("WHATSAPP_NATIVE_DISPATCH_REVOKED");
+                },
+              ),
+      } satisfies import("./inbound-contracts").WhatsappInboundDependencies;
+      return options?.scheduled
+        ? drainWhatsappInbox(repository, processingDependencies)
+        : processWhatsappInbox(repository, processingDependencies, 5);
     },
   };
 }

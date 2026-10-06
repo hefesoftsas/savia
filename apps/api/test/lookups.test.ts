@@ -4,6 +4,7 @@ import { createTestApp } from "./test-app";
 import { AuthenticationError, type Authenticator } from "../src/auth/types";
 import {
   agencyAdministratorAuthenticator,
+  agencyOperatorAuthenticator,
   platformAdministratorAuthenticator,
 } from "./auth-fixtures";
 import type { SaviaRequestService } from "../src/routes/savia-request";
@@ -72,6 +73,28 @@ describe("DANE city lookups endpoint", () => {
       status: "matched",
       matches: [{ code: "05001", city: "MEDELLÍN", department: "ANTIOQUIA" }],
       totalMatches: 1,
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows tenant staff to use only the official DANE reference GET", async () => {
+    const fetcher = vi.fn(async (request: Request) => {
+      expect(request.url).toBe(
+        "https://savia-request.internal/api/lookups/dane?city=Bogota&department=Cundinamarca",
+      );
+      expect(request.method).toBe("GET");
+      return Response.json({
+        status: "matched",
+        matches: [{ code: "11001", city: "BOGOTÁ", department: "BOGOTÁ D.C." }],
+      });
+    });
+    const app = appFor(agencyOperatorAuthenticator(), { fetch: fetcher });
+    const response = await app.request(
+      "/api/lookups/dane?city=Bogota&department=Cundinamarca",
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      matches: [{ code: "11001" }],
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });

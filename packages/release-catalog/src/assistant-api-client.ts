@@ -455,7 +455,7 @@ export class SaviaApiClient {
       throw new Error("Indica una ciudad válida.");
     const params = new URLSearchParams({ city: city.trim() });
     if (department?.trim()) params.set("department", department.trim());
-    return this.request(`/v1/savia-request/api/lookups/dane?${params}`);
+    return this.request(`/api/lookups/dane?${params}`);
   }
 
   private insuranceOperations() {
