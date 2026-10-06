@@ -1018,3 +1018,100 @@ export const userCalendarPreferences = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
 );
+
+// Generic employee channel state; industry authorization lives in solution adapters.
+export const whatsappChannelSettings = sqliteTable(
+  "whatsapp_channel_settings",
+  {
+    connectionId: text("connection_id")
+      .primaryKey()
+      .notNull()
+      .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+    tenantId: bigint("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    configJson: text("config_json").notNull(),
+    revision: text("revision").notNull(),
+    updatedBy: text("updated_by")
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "restrict" }),
+    updatedAt: text("updated_at").notNull(),
+  },
+);
+export const whatsappChannelContacts = sqliteTable(
+  "whatsapp_channel_contacts",
+  {
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+    contact: text("contact").notNull(),
+    generation: text("generation").notNull(),
+    employeeId: text("employee_id"),
+    selectionRevision: integer("selection_revision").notNull().default(0),
+    menuJson: text("menu_json"),
+    bufferedText: text("buffered_text"),
+    draftJson: text("draft_json"),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.contact] })],
+);
+export const whatsappChannelHistory = sqliteTable("whatsapp_channel_history", {
+  messageId: text("message_id").primaryKey().notNull(),
+  connectionId: text("connection_id")
+    .notNull()
+    .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+  contact: text("contact").notNull(),
+  generation: text("generation").notNull(),
+  employeeId: text("employee_id").notNull(),
+  userText: text("user_text").notNull(),
+  assistantText: text("assistant_text").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+export const whatsappChannelActions = sqliteTable("whatsapp_channel_actions", {
+  id: text("id").primaryKey().notNull(),
+  connectionId: text("connection_id")
+    .notNull()
+    .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+  tenantId: bigint("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  contact: text("contact").notNull(),
+  generation: text("generation").notNull(),
+  employeeId: text("employee_id").notNull(),
+  selectionRevision: integer("selection_revision").notNull(),
+  actionJson: text("action_json").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  status: text("status").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  resultJson: text("result_json"),
+  outboundMessageId: text("outbound_message_id"),
+  deliveryState: text("delivery_state"),
+  leaseToken: text("lease_token"),
+  leaseUntil: text("lease_until"),
+});
+export const whatsappChannelResources = sqliteTable(
+  "whatsapp_channel_resources",
+  {
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+    contact: text("contact").notNull(),
+    generation: text("generation").notNull(),
+    solutionId: text("solution_id").notNull(),
+    resourceType: text("resource_type").notNull(),
+    resourceId: text("resource_id").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [
+        table.connectionId,
+        table.contact,
+        table.generation,
+        table.solutionId,
+        table.resourceType,
+        table.resourceId,
+      ],
+    }),
+  ],
+);
