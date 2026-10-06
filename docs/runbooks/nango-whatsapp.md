@@ -208,6 +208,10 @@ requesting data-processing consent. Explicit `AUTORIZO` continues from the
 server-validated authorized snapshot rather than model-generated input; any
 subsequent quote-field change requires renewed consent. The resulting operation
 still requires the separate server-issued confirmation before insurer execution.
+Quote confirmations show a concise Spanish summary with formatted COP amounts,
+the applicant's contact details and the number of enabled products. Provider
+codes, raw JSON and the expanded product catalog stay out of the customer message;
+the complete validated payload remains encrypted in the prepared operation.
 Sending is recorded before calling Meta, and an uncertain send is
 terminal rather than automatically repeated.
 

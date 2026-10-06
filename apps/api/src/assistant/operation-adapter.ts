@@ -24,6 +24,7 @@ import type { NativeReply } from "../whatsapp/native";
 import { WhatsappChannelRepository } from "../whatsapp/channel-repository";
 import { WhatsappChannelActions } from "../whatsapp/confirmations";
 import { humanSupportRecoveryReply } from "../whatsapp/human-support";
+import { formatQuotePreview } from "../whatsapp/quote-preview";
 import {
   validatePersonalConfirmedAction,
   type PersonalIntegrationOperations,
@@ -400,7 +401,7 @@ export function createChannelOperationAdapter(
           consent: true,
           products: form.products.map((p) => p.id),
         };
-        summary = `Cotización de ${parsed.data.vehicle.plate}\nDatos del vehículo: ${JSON.stringify(parsed.data.vehicle)}\nDatos del tomador: ${JSON.stringify(parsed.data.applicant)}\nProductos: ${form.products.map((p) => p.label).join(", ")}`;
+        summary = formatQuotePreview(parsed.data, form.products.length);
       } else if (domain === "studio") {
         const collection = String(value.collection ?? value.object);
         if (command !== "create-record") {
