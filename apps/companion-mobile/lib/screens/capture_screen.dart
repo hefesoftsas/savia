@@ -329,40 +329,6 @@ class _DraftEditorState extends State<_DraftEditor> {
   }
 }
 
-class _DraftMetadata extends StatelessWidget {
-  const _DraftMetadata({required this.name, required this.size, this.duration});
-  final String name;
-  final String size;
-  final String? duration;
-
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(name, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 16,
-            runSpacing: 4,
-            children: [
-              _MetadataItem(icon: Icons.audio_file_outlined, value: size),
-              if (duration != null)
-                _MetadataItem(icon: Icons.schedule, value: duration!),
-            ],
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
 class _MetadataItem extends StatelessWidget {
   const _MetadataItem({required this.icon, required this.value});
   final IconData icon;
