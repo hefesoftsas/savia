@@ -90,7 +90,11 @@ describe("saved Companion recording notes", () => {
         `/v1/companion/recordings/${id}/notes`,
       );
       expect(empty.status).toBe(200);
-      expect(await empty.json()).toEqual({ transcript: null, summary: null });
+      expect(await empty.json()).toEqual({
+        transcript: null,
+        summary: null,
+        language: "auto",
+      });
 
       const response = await instance.request(
         `/v1/companion/recordings/${id}/notes`,
@@ -105,6 +109,138 @@ describe("saved Companion recording notes", () => {
         transcript: { text: "Discuss the launch date.", source: "system" },
         summary: { summary: "The team discussed the launch date." },
       });
+      expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(transcribe.mock.calls[0][1].language).toBeUndefined();
+      expect(summarize).toHaveBeenCalledTimes(1);
+    } finally {
+      await new CompanionRecordings(env.DOCUMENTS)
+        .remove(owner, id)
+        .catch(() => {});
+    }
+  });
+
+  it("transcribes in the requested language and redoes notes only with retranscribe consent", async () => {
+    const id = crypto.randomUUID();
+    const { service, transcribe, summarize } = makeService();
+    const instance = app(owner, service);
+    await saveSample(instance, id);
+    try {
+      const first = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consent: true, language: "pt" }),
+        },
+      );
+      expect(first.status).toBe(200);
+      expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(transcribe.mock.calls[0][1]).toMatchObject({ language: "pt" });
+      const cached = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consent: true, language: "pt" }),
+        },
+      );
+      expect(cached.status).toBe(200);
+      expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(summarize).toHaveBeenCalledTimes(1);
+
+      const redone = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            consent: true,
+            language: "en",
+            retranscribe: true,
+          }),
+        },
+      );
+      expect(redone.status).toBe(200);
+      expect(transcribe).toHaveBeenCalledTimes(2);
+      expect(transcribe.mock.calls[1][1]).toMatchObject({ language: "en" });
+      expect(summarize).toHaveBeenCalledTimes(2);
+    } finally {
+      await new CompanionRecordings(env.DOCUMENTS)
+        .remove(owner, id)
+        .catch(() => {});
+    }
+  });
+
+  it("persists the selected language and requires consent before replacing cached notes", async () => {
+    const id = crypto.randomUUID();
+    const { service, transcribe, summarize } = makeService();
+    const instance = app(owner, service);
+    await saveSample(instance, id);
+    try {
+      const first = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consent: true, language: "pt" }),
+        },
+      );
+      expect(first.status).toBe(200);
+
+      const changedWithoutConsent = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consent: true, language: "en" }),
+        },
+      );
+      expect(changedWithoutConsent.status).toBe(409);
+      expect(await first.json()).toMatchObject({ language: "pt" });
+      expect(await changedWithoutConsent.json()).toMatchObject({
+        error: { code: "LANGUAGE_CHANGE_REQUIRES_CONSENT" },
+      });
+      expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(summarize).toHaveBeenCalledTimes(1);
+
+      const unchanged = await (
+        await instance.request(`/v1/companion/recordings/${id}/notes`)
+      ).json();
+      expect(unchanged.language).toBe("pt");
+      expect(unchanged.transcript.text).toBe("Discuss the launch date.");
+    } finally {
+      await new CompanionRecordings(env.DOCUMENTS)
+        .remove(owner, id)
+        .catch(() => {});
+    }
+  });
+
+  it("keeps the saved language when a legacy retry omits the language field", async () => {
+    const id = crypto.randomUUID();
+    const { service, transcribe, summarize } = makeService();
+    const instance = app(owner, service);
+    await saveSample(instance, id);
+    try {
+      const first = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consent: true, language: "pt" }),
+        },
+      );
+      expect(first.status).toBe(200);
+
+      const retry = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consent: true }),
+        },
+      );
+      expect(retry.status).toBe(200);
+      expect(await retry.json()).toMatchObject({ language: "pt" });
       expect(transcribe).toHaveBeenCalledTimes(1);
       expect(summarize).toHaveBeenCalledTimes(1);
     } finally {
@@ -149,6 +285,58 @@ describe("saved Companion recording notes", () => {
     }
   });
 
+  it("treats legacy notes without language metadata as automatic and keeps their cache", async () => {
+    const id = crypto.randomUUID();
+    const { service, transcribe, summarize } = makeService();
+    const instance = app(owner, service);
+    await saveSample(instance, id);
+    const ownerDigest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(owner),
+    );
+    const ownerPrefix = Array.from(new Uint8Array(ownerDigest), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+    const key = `companion/samples/${ownerPrefix}/${id}.notes.json`;
+    const legacyNotes = {
+      transcript: {
+        text: "A transcript from an earlier release.",
+        source: "system",
+        model: "test/stt",
+        durationSeconds: 0.1,
+      },
+      summary: {
+        summary: "Earlier saved notes.",
+        decisions: [],
+        actions: [],
+        openQuestions: [],
+      },
+    };
+    try {
+      await env.DOCUMENTS.put(key, JSON.stringify(legacyNotes));
+      const response = await instance.request(
+        `/v1/companion/recordings/${id}/notes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consent: true, language: "auto" }),
+        },
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        language: "auto",
+        transcript: { text: legacyNotes.transcript.text },
+        summary: { summary: legacyNotes.summary.summary },
+      });
+      expect(transcribe).not.toHaveBeenCalled();
+      expect(summarize).not.toHaveBeenCalled();
+    } finally {
+      await new CompanionRecordings(env.DOCUMENTS)
+        .remove(owner, id)
+        .catch(() => {});
+    }
+  });
+
   it("persists a transcript when summary fails and retries only summarization", async () => {
     const id = crypto.randomUUID();
     const first = makeService({ failSummary: true });
@@ -160,7 +348,7 @@ describe("saved Companion recording notes", () => {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(consent),
+          body: JSON.stringify({ consent: true, language: "fr" }),
         },
       );
       expect(failed.status).toBe(500);
@@ -169,6 +357,7 @@ describe("saved Companion recording notes", () => {
           await instance.request(`/v1/companion/recordings/${id}/notes`)
         ).json(),
       ).toMatchObject({
+        language: "fr",
         transcript: { text: "Discuss the launch date." },
         summary: null,
       });
@@ -180,7 +369,7 @@ describe("saved Companion recording notes", () => {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(consent),
+          body: JSON.stringify({ consent: true, language: "fr" }),
         },
       );
       expect(retried.status).toBe(200);
