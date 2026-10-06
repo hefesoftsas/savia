@@ -14,25 +14,26 @@ export function useIssueProviders(api: ApiClient): IssueProvider[] {
   useEffect(() => {
     let controller: AbortController | undefined;
     let active = true;
+    let pending: Promise<void> | null = null;
     async function refresh() {
+      if (pending) return pending;
       controller?.abort();
       const request = new AbortController();
       controller = request;
-      setProviders([]);
-      try {
-        const [catalog, connections] = await Promise.all([
-          api.get<{ data: Resource<PersonalIntegrationProvider>[] }>(
-            "/v1/personal-integrations/providers",
-            { signal: request.signal },
-          ),
-          api.get<{ data: Resource<PersonalIntegrationConnection>[] }>(
-            "/v1/personal-integrations/connections",
-            { signal: request.signal },
-          ),
-        ]);
-        if (!active || request.signal.aborted) return;
-        setProviders(
-          (["jira", "linear", "github"] as const).filter(
+      const task = (async () => {
+        try {
+          const [catalog, connections] = await Promise.all([
+            api.get<{ data: Resource<PersonalIntegrationProvider>[] }>(
+              "/v1/personal-integrations/providers",
+              { signal: request.signal },
+            ),
+            api.get<{ data: Resource<PersonalIntegrationConnection>[] }>(
+              "/v1/personal-integrations/connections",
+              { signal: request.signal },
+            ),
+          ]);
+          if (!active || request.signal.aborted) return;
+          const next = (["jira", "linear", "github"] as const).filter(
             (provider) =>
               catalog.data.some(
                 (item) =>
@@ -44,18 +45,32 @@ export function useIssueProviders(api: ApiClient): IssueProvider[] {
                   item.attributes.provider === provider &&
                   item.attributes.status === "connected",
               ),
-          ),
-        );
-      } catch {
-        // Inaccessible, expired, or unavailable connections must not be offered.
-        if (active && !request.signal.aborted) setProviders([]);
-      }
+          );
+          setProviders((current) => {
+            if (
+              current.length === next.length &&
+              current.every((p, i) => p === next[i])
+            ) {
+              return current;
+            }
+            return next;
+          });
+        } catch {
+          // Inaccessible, expired, or unavailable connections must not be offered.
+          if (active && !request.signal.aborted) setProviders([]);
+        } finally {
+          pending = null;
+        }
+      })();
+      pending = task;
+      return task;
     }
     const reload = () => void refresh();
     const visible = () => {
       if (document.visibilityState === "visible") reload();
     };
     const clear = () => {
+      pending = null;
       controller?.abort();
       setProviders([]);
     };

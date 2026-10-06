@@ -117,4 +117,32 @@ describe("page issue provider visibility", () => {
     });
     expect(result.current).toEqual([]);
   });
+
+  it("preserves active providers during background revalidation without wiping to empty", async () => {
+    let resolvePending: ((value: any) => void) | undefined;
+    const source = fixture();
+    const { result } = renderHook(() => useIssueProviders(source.api));
+    await waitFor(() => expect(result.current).toEqual(["jira", "github"]));
+
+    source.get.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePending = resolve;
+        }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    // While inflight, active providers MUST NOT be wiped out to []
+    expect(result.current).toEqual(["jira", "github"]);
+
+    // Now resolve
+    await act(async () => {
+      resolvePending!({
+        data: [{ id: "jira", attributes: { availability: "enabled" } }],
+      });
+    });
+  });
 });
