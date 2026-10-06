@@ -14,25 +14,32 @@ export function useIssueProviders(api: ApiClient): IssueProvider[] {
   useEffect(() => {
     let controller: AbortController | undefined;
     let active = true;
-    async function refresh() {
+    let pending: Promise<void> | null = null;
+    let requestSequence = 0;
+    async function refresh(force = false) {
+      if (pending && !force) return pending;
+      if (force) {
+        controller?.abort();
+        pending = null;
+      }
       controller?.abort();
       const request = new AbortController();
       controller = request;
-      setProviders([]);
-      try {
-        const [catalog, connections] = await Promise.all([
-          api.get<{ data: Resource<PersonalIntegrationProvider>[] }>(
-            "/v1/personal-integrations/providers",
-            { signal: request.signal },
-          ),
-          api.get<{ data: Resource<PersonalIntegrationConnection>[] }>(
-            "/v1/personal-integrations/connections",
-            { signal: request.signal },
-          ),
-        ]);
-        if (!active || request.signal.aborted) return;
-        setProviders(
-          (["jira", "linear", "github"] as const).filter(
+      const sequence = ++requestSequence;
+      const task = (async () => {
+        try {
+          const [catalog, connections] = await Promise.all([
+            api.get<{ data: Resource<PersonalIntegrationProvider>[] }>(
+              "/v1/personal-integrations/providers",
+              { signal: request.signal },
+            ),
+            api.get<{ data: Resource<PersonalIntegrationConnection>[] }>(
+              "/v1/personal-integrations/connections",
+              { signal: request.signal },
+            ),
+          ]);
+          if (!active || request.signal.aborted) return;
+          const next = (["jira", "linear", "github"] as const).filter(
             (provider) =>
               catalog.data.some(
                 (item) =>
@@ -44,33 +51,52 @@ export function useIssueProviders(api: ApiClient): IssueProvider[] {
                   item.attributes.provider === provider &&
                   item.attributes.status === "connected",
               ),
-          ),
-        );
-      } catch {
-        // Inaccessible, expired, or unavailable connections must not be offered.
-        if (active && !request.signal.aborted) setProviders([]);
-      }
+          );
+          setProviders((current) => {
+            if (
+              current.length === next.length &&
+              current.every((p, i) => p === next[i])
+            ) {
+              return current;
+            }
+            return next;
+          });
+        } catch {
+          // Inaccessible, expired, or unavailable connections must not be offered.
+          if (active && !request.signal.aborted) setProviders([]);
+        } finally {
+          if (requestSequence === sequence) pending = null;
+        }
+      })();
+      pending = task;
+      return task;
     }
     const reload = () => void refresh();
+    const invalidate = () => void refresh(true);
     const visible = () => {
       if (document.visibilityState === "visible") reload();
     };
     const clear = () => {
+      requestSequence += 1;
+      pending = null;
       controller?.abort();
       setProviders([]);
     };
     reload();
     window.addEventListener("focus", reload);
-    window.addEventListener("savia:personal-integrations-changed", reload);
-    window.addEventListener("savia:identity-changed", reload);
+    window.addEventListener("savia:personal-integrations-changed", invalidate);
+    window.addEventListener("savia:identity-changed", invalidate);
     window.addEventListener("savia:session-cleared", clear);
     document.addEventListener("visibilitychange", visible);
     return () => {
       active = false;
       controller?.abort();
       window.removeEventListener("focus", reload);
-      window.removeEventListener("savia:personal-integrations-changed", reload);
-      window.removeEventListener("savia:identity-changed", reload);
+      window.removeEventListener(
+        "savia:personal-integrations-changed",
+        invalidate,
+      );
+      window.removeEventListener("savia:identity-changed", invalidate);
       window.removeEventListener("savia:session-cleared", clear);
       document.removeEventListener("visibilitychange", visible);
     };
