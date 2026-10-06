@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { applyMonacoTheme, loadMonacoFromCdn } from "./monaco-cdn";
+import { applyMonacoTheme, loadMonaco } from "./monaco";
 import { observePluginIdeTheme } from "./plugin-ide-theme";
 
 export function PluginDiffEditor({
@@ -20,7 +20,7 @@ export function PluginDiffEditor({
   useEffect(() => {
     let disposed = false;
     let cleanup = () => {};
-    void loadMonacoFromCdn()
+    void loadMonaco()
       .then((monaco) => {
         if (disposed || !container.current) return;
         const language = filename.endsWith("tsx") ? "typescript" : "json";

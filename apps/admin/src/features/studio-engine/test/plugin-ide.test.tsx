@@ -5,17 +5,81 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import PluginIde from "../plugin-ide";
-import { ApiClientError } from "@/api/api-client";
 
 const mocks = vi.hoisted(() => ({
   post: vi.fn(),
+  requestResponse: vi.fn(),
   publish: vi.fn(),
   compile: vi.fn(),
   pack: vi.fn(),
 }));
 vi.mock("@/features/assistant/assistant-context", () => ({
-  useAppServices: () => ({ apiClient: { post: mocks.post } }),
+  useAppServices: () => ({
+    apiClient: {
+      post: mocks.post,
+      requestResponse: mocks.requestResponse,
+    },
+  }),
 }));
+
+function sseResponse(frames: unknown[], status = 200) {
+  const text = frames
+    .map((frame) => `data: ${JSON.stringify(frame)}\n\n`)
+    .join("");
+  return new Response(text, {
+    status,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
+function sseSuccess(
+  message: string,
+  files: Record<string, string>,
+  usage = { input: 120, output: 45 },
+) {
+  const mid = Math.ceil(message.length / 2);
+  return sseResponse([
+    { type: "message", delta: message.slice(0, mid) },
+    { type: "message", delta: message.slice(mid) },
+    { type: "usage", ...usage },
+    { type: "result", message, files },
+  ]);
+}
+
+function sseErrorResponse(
+  code: string,
+  message: string,
+  details?: unknown,
+  status = 502,
+) {
+  return new Response(JSON.stringify({ error: { code, message, details } }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function streamController() {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const response = new Response(
+    new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c;
+      },
+    }),
+    { headers: { "Content-Type": "text/event-stream" } },
+  );
+  const send = (frame: unknown) =>
+    controller.enqueue(
+      new TextEncoder().encode(`data: ${JSON.stringify(frame)}\n\n`),
+    );
+  return { response, send, close: () => controller.close() };
+}
+
+function streamPayload(callIndex = 0) {
+  return JSON.parse(
+    String(mocks.requestResponse.mock.calls[callIndex][1].body),
+  );
+}
 vi.mock("../api", () => ({ pluginApi: mocks.publish }));
 vi.mock("../monaco-code-editor", () => ({
   MonacoCodeEditor: ({ value, onChange, ariaLabel, readOnly }: any) => (
@@ -134,7 +198,7 @@ it("keeps AI changes as a proposal until applied and supports undo", async () =>
     "store.json": "{}",
     "preview.json": "{}",
   };
-  mocks.post.mockResolvedValue({ message: "Added a report", files });
+  mocks.requestResponse.mockResolvedValue(sseSuccess("Added a report", files));
   render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
     target: { value: "Create a report" },
@@ -236,7 +300,7 @@ it("ignores readiness messages from another frame and blocks publication after r
 
 it("discards a cancelled AI response even if the transport completes later", async () => {
   let finish!: (value: unknown) => void;
-  mocks.post.mockImplementation(
+  mocks.requestResponse.mockImplementation(
     () =>
       new Promise((resolve) => {
         finish = resolve;
@@ -248,7 +312,14 @@ it("discards a cancelled AI response even if the transport completes later", asy
   });
   fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
   fireEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
-  finish({ message: "Late response", files: {} });
+  finish(
+    sseSuccess("Late response", {
+      "entry.tsx": "export function render() {}",
+      "savia-extension.json": "{}",
+      "store.json": "{}",
+      "preview.json": "{}",
+    }),
+  );
   await waitFor(() =>
     expect(
       screen.getByRole("button", { name: "Enviar a la IA" }),
@@ -343,7 +414,7 @@ it("switches focused views and file selection without discarding source", () => 
 
 it("shows the user message while generating and retries failure without duplicating history", async () => {
   let fail!: (reason: Error) => void;
-  mocks.post.mockImplementationOnce(
+  mocks.requestResponse.mockImplementationOnce(
     () =>
       new Promise((_resolve, reject) => {
         fail = reject;
@@ -360,24 +431,23 @@ it("shows the user message while generating and retries failure without duplicat
   expect(screen.getByText("Build a counter")).toBeInTheDocument();
   expect(screen.getByText("Generando propuesta…")).toBeInTheDocument();
   expect(screen.getByLabelText("Describe tu plugin")).toHaveValue("");
-  await waitFor(() => expect(mocks.post).toHaveBeenCalled());
+  await waitFor(() => expect(mocks.requestResponse).toHaveBeenCalled());
   fail(new Error("The model is temporarily unavailable"));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "The model is temporarily unavailable",
   );
-  mocks.post.mockResolvedValue({
-    message: "Ready",
-    files: {
+  mocks.requestResponse.mockResolvedValue(
+    sseSuccess("Ready", {
       "entry.tsx": "export function render() {}",
       "savia-extension.json": "{}",
       "store.json": "{}",
       "preview.json": "{}",
-    },
-  });
+    }),
+  );
   fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
   await screen.findByText("Ready");
   expect(screen.getAllByText("Build a counter")).toHaveLength(1);
-  expect(mocks.post.mock.calls[1][1]).toMatchObject({
+  expect(streamPayload(1)).toMatchObject({
     prompt: "Build a counter",
     history: [],
   });
@@ -390,10 +460,9 @@ it("keeps a pending proposal when a follow-up request fails and sends its code a
     "store.json": "{}",
     "preview.json": "{}",
   };
-  mocks.post.mockResolvedValueOnce({
-    message: "First proposal",
-    files: proposed,
-  });
+  mocks.requestResponse.mockResolvedValueOnce(
+    sseSuccess("First proposal", proposed),
+  );
   render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
   fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
@@ -401,13 +470,13 @@ it("keeps a pending proposal when a follow-up request fails and sends its code a
   });
   fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
   await screen.findByRole("button", { name: "Aplicar cambios" });
-  mocks.post.mockRejectedValueOnce(new Error("Try again later"));
+  mocks.requestResponse.mockRejectedValueOnce(new Error("Try again later"));
   fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
     target: { value: "Add a title" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
   await screen.findByRole("alert");
-  expect(mocks.post.mock.calls[1][1].files).toEqual(proposed);
+  expect(streamPayload(1).files).toEqual(proposed);
   fireEvent.click(screen.getByRole("button", { name: "Aplicar cambios" }));
   expect(
     screen.getByLabelText("entry.tsx", { selector: "textarea" }),
@@ -428,7 +497,7 @@ it("moves editor tab selection with arrow keys", () => {
 });
 
 it("runs preview while AI is pending without clearing the generation state", async () => {
-  mocks.post.mockReturnValue(new Promise(() => {}));
+  mocks.requestResponse.mockReturnValue(new Promise(() => {}));
   mocks.compile.mockResolvedValue({
     entryJs: "compiled",
     fixtures: {},
@@ -457,22 +526,17 @@ it("runs preview while AI is pending without clearing the generation state", asy
 });
 
 it("shows localized validation failure with file diagnostics and allows retry", async () => {
-  mocks.post.mockRejectedValue(
-    new ApiClientError(
-      502,
+  mocks.requestResponse.mockResolvedValue(
+    sseErrorResponse(
       "PLUGIN_AUTHORING_INVALID_OUTPUT",
       "Generated files failed validation",
-      {
-        error: {
-          details: [
-            {
-              file: "store.json",
-              path: "collections.0",
-              message: "Invalid collection declaration",
-            },
-          ],
+      [
+        {
+          file: "store.json",
+          path: "collections.0",
+          message: "Invalid collection declaration",
         },
-      },
+      ],
     ),
   );
   render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
@@ -492,4 +556,77 @@ it("shows localized validation failure with file diagnostics and allows retry", 
   expect(
     screen.getByRole("button", { name: "Ejecutar vista previa" }),
   ).toBeEnabled();
+});
+
+it("streams the assistant message live and records token usage", async () => {
+  const first = streamController();
+  mocks.requestResponse.mockResolvedValue(first.response);
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Build a board" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
+  first.send({ type: "message", delta: "Drafting" });
+  await screen.findByText("Drafting");
+  first.send({ type: "usage", input: 120, output: 5 });
+  first.send({
+    type: "result",
+    message: "Drafting the board",
+    files: {
+      "entry.tsx": "export function render() {}",
+      "savia-extension.json": "{}",
+      "store.json": "{}",
+      "preview.json": "{}",
+    },
+  });
+  first.close();
+  await screen.findByRole("button", { name: "Aplicar cambios" });
+  expect(await screen.findByText("Drafting the board")).toBeInTheDocument();
+  expect(screen.getByText("↑120")).toBeInTheDocument();
+  expect(screen.getByText("↓5")).toBeInTheDocument();
+  const payload = streamPayload(0);
+  expect(payload.prompt).toBe("Build a board");
+  for (const entry of payload.history) {
+    expect(Object.keys(entry).sort()).toEqual(["content", "role"]);
+  }
+});
+
+it("queues follow-ups while generating and sends them in order", async () => {
+  const first = streamController();
+  mocks.requestResponse.mockResolvedValueOnce(first.response);
+  mocks.requestResponse.mockResolvedValueOnce(
+    sseSuccess("Second done", {
+      "entry.tsx": "export function render() {}",
+      "savia-extension.json": "{}",
+      "store.json": "{}",
+      "preview.json": "{}",
+    }),
+  );
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "First request" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Second request" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Encolar mensaje" }));
+  expect(screen.getByText("Tú · En cola")).toBeInTheDocument();
+  expect(screen.getByLabelText("Describe tu plugin")).toHaveValue("");
+  first.send({
+    type: "result",
+    message: "First done",
+    files: {
+      "entry.tsx": "export function render() {}",
+      "savia-extension.json": "{}",
+      "store.json": "{}",
+      "preview.json": "{}",
+    },
+  });
+  first.close();
+  await waitFor(() => expect(mocks.requestResponse).toHaveBeenCalledTimes(2));
+  expect(streamPayload(0).prompt).toBe("First request");
+  expect(streamPayload(1).prompt).toBe("Second request");
+  await screen.findByText("Second done");
+  expect(screen.queryByText("Tú · En cola")).not.toBeInTheDocument();
 });

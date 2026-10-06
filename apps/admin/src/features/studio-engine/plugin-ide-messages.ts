@@ -89,6 +89,19 @@ export const pluginIdeMessages = {
   you: ["Tú", "You", "Você"],
   assistant: ["Savia", "Savia", "Savia"],
   retry: ["Reintentar", "Retry", "Tentar novamente"],
+  queued: ["En cola", "Queued", "Na fila"],
+  removeQueued: ["Quitar de la cola", "Remove from queue", "Remover da fila"],
+  queueSend: ["Encolar mensaje", "Queue message", "Enfileirar mensagem"],
+  queuePlaceholder: [
+    "Escribe un seguimiento; se enviará al terminar…",
+    "Type a follow-up; it will send when done…",
+    "Digite um acompanhamento; será enviado ao terminar…",
+  ],
+  tokenUsage: [
+    "Tokens de entrada y salida",
+    "Input and output tokens",
+    "Tokens de entrada e saída",
+  ],
   projectContext: [
     "Archivos del proyecto",
     "Project files",

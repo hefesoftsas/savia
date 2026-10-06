@@ -7,7 +7,10 @@ import {
   pluginAuthoringResultSchema,
 } from "@savia/studio-shared/plugin-authoring";
 import { APICallError, NoObjectGeneratedError } from "ai";
-import { createPluginAuthoringService } from "../src/assistant/plugin-authoring";
+import {
+  createPluginAuthoringService,
+  PluginAuthoringError,
+} from "../src/assistant/plugin-authoring";
 import { summarizePluginAuthoringCollections } from "../src/assistant/routes";
 import { createApp } from "../src/app";
 import { AuthenticationError, type Authenticator } from "../src/auth/types";
@@ -602,6 +605,51 @@ describe("plugin authoring service", () => {
     );
   });
 
+  it("returns validation diagnostics instead of a timeout when the repair call times out", async () => {
+    const invalidFiles = {
+      ...files,
+      "entry.tsx": "console.log('missing render export');",
+    };
+    const generate = vi
+      .fn()
+      .mockResolvedValueOnce({
+        object: { message: "Initial attempt", files: invalidFiles },
+      })
+      .mockRejectedValueOnce(
+        new PluginAuthoringError(
+          504,
+          "PLUGIN_AUTHORING_TIMEOUT",
+          "Plugin authoring took too long.",
+        ),
+      );
+    const service = createPluginAuthoringService(
+      {
+        effectiveConfigurationForTenant: vi.fn(async () => ({
+          apiKey: "server-only-key",
+          model: "selected/model",
+        })),
+        assertTenantAdministrator: vi.fn(async () => undefined),
+      } as never,
+      { generateObject: generate as never },
+    );
+
+    const error = await service
+      .generate({
+        principalId: "author-1",
+        tenantId: 4,
+        prompt: "Add a view",
+        files,
+      })
+      .catch((reason: unknown) => reason as PluginAuthoringError);
+    expect(error).toMatchObject({
+      code: "PLUGIN_AUTHORING_INVALID_OUTPUT",
+      status: 502,
+    });
+    expect(error.details).toEqual([
+      expect.objectContaining({ file: "entry.tsx" }),
+    ]);
+  });
+
   it("accepts a valid store.json when optional arrays use schema defaults", async () => {
     const defaultedFiles = {
       ...files,
@@ -881,5 +929,154 @@ describe("plugin authoring route authentication", () => {
         .bind(tenantId)
         .run();
     }
+  });
+
+  it("streams message deltas, usage, and the validated result over SSE", async () => {
+    const tenantId = 987_655;
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO tenants(id,id_slug,name,kind,is_active,created_at,updated_at) VALUES(?,?,?,'commercial',1,?,?)",
+    )
+      .bind(
+        tenantId,
+        "plugin-authoring-stream",
+        "Streaming workspace",
+        "2026-10-04",
+        "2026-10-04",
+      )
+      .run();
+
+    const authenticator: Authenticator = {
+      async authenticate() {
+        return {
+          principal: {
+            id: "stream-workspace-admin",
+            issuer: "savia:test",
+            subject: "stream-workspace-admin",
+            email: "admin@savia.test",
+            displayName: "Workspace Admin",
+            isActive: true,
+            createdAt: "2026-10-04",
+            updatedAt: "2026-10-04",
+          },
+          globalRoles: [],
+          memberships: [
+            {
+              id: "stream-workspace-membership",
+              principalId: "stream-workspace-admin",
+              tenantId,
+              role: "tenant_admin",
+              isActive: true,
+              createdAt: "2026-10-04",
+              updatedAt: "2026-10-04",
+            },
+          ],
+        };
+      },
+    };
+    const configuration = {
+      assertTenantAdministrator: vi.fn(async () => undefined),
+      effectiveConfigurationForTenant: vi.fn(async () => ({
+        apiKey: "server-only-key",
+        model: "openai/gpt-4o-mini",
+      })),
+    };
+    const generated = { message: "Streamed plugin", files };
+    const payload = JSON.stringify(generated);
+    const half = Math.ceil(payload.length / 2);
+    const chunk = (content: string, finish: string | null) =>
+      `data: ${JSON.stringify({
+        id: "chatcmpl-stream",
+        object: "chat.completion.chunk",
+        created: 1,
+        model: "openai/gpt-4o-mini",
+        choices: [
+          {
+            index: 0,
+            delta: content ? { content } : {},
+            finish_reason: finish,
+          },
+        ],
+      })}\n\n`;
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          chunk(payload.slice(0, half), null) +
+            chunk(payload.slice(half), null) +
+            chunk("", "stop") +
+            "data: [DONE]\n\n",
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const app = createTestApp({
+        documents: env.DOCUMENTS,
+        auth: authenticator,
+        assistantConfiguration: configuration as never,
+      });
+      const response = await app.request(
+        "http://api.test/api/assistant/plugin-authoring/stream",
+        {
+          method: "POST",
+          headers: {
+            authorization: "Bearer test-token",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ ...body, tenantId }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain(
+        "text/event-stream",
+      );
+      const frames = (await response.text())
+        .split("\n\n")
+        .map((frame) => frame.trim())
+        .filter(Boolean)
+        .map((frame) => JSON.parse(frame.replace(/^data:\s*/, "")));
+      expect(
+        frames.filter((frame) => frame.type === "message"),
+      ).not.toHaveLength(0);
+      expect(
+        frames
+          .filter((frame) => frame.type === "message")
+          .map((frame) => frame.delta)
+          .join(""),
+      ).toBe("Streamed plugin");
+      expect(frames.find((frame) => frame.type === "usage")).toMatchObject({
+        type: "usage",
+      });
+      expect(frames.at(-1)).toEqual({
+        type: "result",
+        message: "Streamed plugin",
+        files,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      await env.DB.prepare("DELETE FROM tenants WHERE id=?")
+        .bind(tenantId)
+        .run();
+    }
+  });
+
+  it("keeps JSON errors for pre-stream failures on the stream route", async () => {
+    const { app } = routeApp();
+    const response = await app.request(
+      "http://api.test/api/assistant/plugin-authoring/stream",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ tenantId: 4, prompt: "x" }),
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: { code: "VALIDATION_ERROR", message: "Invalid request" },
+    });
   });
 });

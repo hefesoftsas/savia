@@ -16,6 +16,11 @@ import {
   type PluginAuthoringCollection,
 } from "./plugin-authoring";
 import {
+  createPluginCompletionService,
+  PluginCompletionError,
+} from "./plugin-completion";
+import { pluginCompletionRequestSchema } from "@savia/studio-shared/plugin-completion";
+import {
   AssistantConfigurationUnavailableError,
   normalizeAssistantModel,
 } from "./configuration";
@@ -210,6 +215,136 @@ export function registerAssistantRoutes(
         return unavailableResponse();
       throw error;
     }
+  });
+  app.post("/api/assistant/plugin-completion", async (context) => {
+    if (!dependencies?.configuration) return unavailableResponse();
+    const parsed = pluginCompletionRequestSchema.safeParse(
+      await context.req.json().catch(() => undefined),
+    );
+    if (!parsed.success) {
+      return context.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid request" } },
+        400,
+      );
+    }
+    const actor = actorFromContext(context);
+    const completions = createPluginCompletionService(
+      dependencies.configuration,
+    );
+    try {
+      const result = await completions.complete({
+        ...parsed.data,
+        principalId: actor.principal.id,
+        isPlatformAdministrator: actor.globalRoles.includes("platform_admin"),
+        signal: context.req.raw.signal,
+      });
+      return context.json(result);
+    } catch (error) {
+      if (error instanceof PluginCompletionError) {
+        return context.json(
+          {
+            error: {
+              code: error.code,
+              message: error.message,
+            },
+          },
+          error.status,
+        );
+      }
+      if (error instanceof AssistantConfigurationUnavailableError)
+        return unavailableResponse();
+      throw error;
+    }
+  });
+  app.post("/api/assistant/plugin-authoring/stream", async (context) => {
+    if (!dependencies?.configuration) return unavailableResponse();
+    const parsed = pluginAuthoringRequestSchema.safeParse(
+      await context.req.json().catch(() => undefined),
+    );
+    if (!parsed.success) {
+      return context.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid request" } },
+        400,
+      );
+    }
+    const actor = actorFromContext(context);
+    const pluginAuthoring = createPluginAuthoringService(
+      dependencies.configuration,
+    );
+    const runAbort = new AbortController();
+    const runSignal = context.req.raw.signal
+      ? AbortSignal.any([context.req.raw.signal, runAbort.signal])
+      : runAbort.signal;
+    // Resolve authentication, configuration, and collection metadata before
+    // the first byte so those failures keep regular JSON error responses.
+    let prepared;
+    try {
+      prepared = await pluginAuthoring.prepareStream({
+        ...parsed.data,
+        principalId: actor.principal.id,
+        isPlatformAdministrator: actor.globalRoles.includes("platform_admin"),
+        signal: runSignal,
+      });
+    } catch (error) {
+      if (error instanceof PluginAuthoringError) {
+        return context.json(
+          {
+            error: {
+              code: error.code,
+              message: error.message,
+              ...(error.details ? { details: error.details } : {}),
+            },
+          },
+          error.status,
+        );
+      }
+      if (error instanceof AssistantConfigurationUnavailableError)
+        return unavailableResponse();
+      throw error;
+    }
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = async (event: unknown) => {
+          try {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+            );
+          } catch {
+            // The reader went away; the aborted run below ends the loop.
+          }
+        };
+        try {
+          await pluginAuthoring.runStream(prepared, send);
+        } catch {
+          await send({
+            type: "error",
+            code: "PLUGIN_AUTHORING_UNAVAILABLE",
+            message: "AI plugin authoring is temporarily unavailable.",
+          });
+        } finally {
+          try {
+            controller.close();
+          } catch {
+            // Already closed by cancellation.
+          }
+        }
+      },
+      cancel() {
+        try {
+          runAbort.abort();
+        } catch {
+          // Best effort; the request signal still bounds the run.
+        }
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+      },
+    });
   });
   app.get("/api/assistant/threads", async (context) => {
     if (!dependencies?.db) return unavailableResponse();

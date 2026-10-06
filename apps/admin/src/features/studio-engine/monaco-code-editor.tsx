@@ -2,12 +2,13 @@ import { useMessages } from "@/i18n/core";
 import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import type { editor as MonacoEditorNamespace } from "monaco-editor/esm/vs/editor/editor.api";
 import {
   applyMonacoTheme,
-  loadMonacoFromCdn,
+  loadMonaco,
   resolveMonacoTheme,
   type MonacoEditorInstance,
-} from "./monaco-cdn";
+} from "./monaco";
 import { observePluginIdeTheme, readPluginIdeTheme } from "./plugin-ide-theme";
 
 function readMonacoFontFamily(element: Element) {
@@ -39,6 +40,7 @@ export function MonacoCodeEditor({
   ariaLabel,
   readOnly = false,
   contextDeclarations,
+  inlineCompletion,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -48,6 +50,10 @@ export function MonacoCodeEditor({
   height?: number;
   placeholder?: string;
   ariaLabel: string;
+  inlineCompletion?: {
+    filename: string;
+    fetchCompletion: (prefix: string, suffix: string) => Promise<string | null>;
+  };
 }) {
   const t = useMessages(recordsMessages);
 
@@ -55,6 +61,8 @@ export function MonacoCodeEditor({
   const editorRef = useRef<MonacoEditorInstance | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const inlineCompletionRef = useRef(inlineCompletion);
+  inlineCompletionRef.current = inlineCompletion;
   const valueRef = useRef(value);
   valueRef.current = value;
   const readOnlyRef = useRef(readOnly);
@@ -68,11 +76,12 @@ export function MonacoCodeEditor({
     let disposed = false;
     let editor: MonacoEditorInstance | null = null;
     let stopThemeObservation: (() => void) | undefined;
-    let model: { dispose: () => void } | undefined;
+    let stopInlineCompletion: (() => void) | undefined;
+    let model: MonacoEditorNamespace.ITextModel | undefined;
     let declarations: { dispose: () => void } | undefined;
 
-    loadMonacoFromCdn()
-      .then((monaco) => {
+    loadMonaco()
+      .then(async (monaco) => {
         if (disposed || !containerRef.current) return;
         if (language === "typescript") {
           monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
@@ -133,7 +142,51 @@ export function MonacoCodeEditor({
           if (!programmaticChange.current)
             onChangeRef.current(editor!.getValue());
         });
-        setStatus("ready");
+        const inline = inlineCompletionRef.current;
+        if (inline && !disposed) {
+          try {
+            const { registerCompletion } = await import("monacopilot");
+            if (disposed) return;
+            const registration = registerCompletion(
+              monaco,
+              editor as unknown as MonacoEditorNamespace.IStandaloneCodeEditor,
+              {
+                language,
+                filename: inline.filename,
+                technologies: ["react"],
+                maxContextLines: 60,
+                // Inline completions are best-effort: never surface errors
+                // from the network or an unconfigured workspace.
+                onError: () => {},
+                requestHandler: ({ body }) => {
+                  const fetchInline =
+                    inlineCompletionRef.current?.fetchCompletion;
+                  if (!fetchInline)
+                    return Promise.resolve({ completion: null });
+                  const pending = fetchInline(
+                    body.completionMetadata.textBeforeCursor.slice(-8000),
+                    body.completionMetadata.textAfterCursor.slice(0, 8000),
+                  ).then(
+                    (completion) => ({ completion: completion ?? null }),
+                    () => ({ completion: null as string | null }),
+                  );
+                  const timedOut = new Promise<{ completion: null }>(
+                    (resolve) =>
+                      window.setTimeout(
+                        () => resolve({ completion: null }),
+                        15000,
+                      ),
+                  );
+                  return Promise.race([pending, timedOut]);
+                },
+              },
+            );
+            stopInlineCompletion = () => registration.deregister();
+          } catch {
+            // The editor stays fully usable without inline completions.
+          }
+        }
+        if (!disposed) setStatus("ready");
       })
       .catch(() => {
         if (!disposed) setStatus("error");
@@ -142,6 +195,7 @@ export function MonacoCodeEditor({
     return () => {
       disposed = true;
       stopThemeObservation?.();
+      stopInlineCompletion?.();
       editor?.dispose();
       model?.dispose();
       declarations?.dispose();
