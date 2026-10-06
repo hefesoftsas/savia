@@ -1,3 +1,4 @@
+import { WhatsappChannelSettings } from "./whatsapp-channel-settings";
 import { useEffect, useState } from "react";
 import type { AppServices } from "@/app-services";
 import type { WhatsappAssistantConfiguration } from "@/api/whatsapp-client";
@@ -86,84 +87,92 @@ export function WhatsappAssistantSettings({
   }
 
   return (
-    <IntegrationGroup title="Asistente de WhatsApp">
-      <li className="space-y-4 px-5 py-4">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Cargando asistente…</p>
-        ) : configuration ? (
-          <>
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium">Asistente</span>
-              <select
-                className="h-9 w-full rounded-md border bg-background px-3"
-                value={employeeId}
-                onChange={(event) => setEmployeeId(event.target.value)}
-                disabled={busy}
+    <>
+      <IntegrationGroup title="Asistente de WhatsApp">
+        <li className="space-y-4 px-5 py-4">
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Cargando asistente…</p>
+          ) : configuration ? (
+            <>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Asistente</span>
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-3"
+                  value={employeeId}
+                  onChange={(event) => setEmployeeId(event.target.value)}
+                  disabled={busy}
+                >
+                  <option value="">Selecciona un empleado virtual</option>
+                  {configuration.employees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {configuration.employees.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Crea un empleado virtual en este tenant para asignarlo a
+                  WhatsApp.
+                </p>
+              ) : null}
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">
+                  Contactos de prueba
+                </span>
+                <textarea
+                  className="min-h-20 w-full rounded-md border bg-background px-3 py-2"
+                  value={contacts}
+                  onChange={(event) => setContacts(event.target.value)}
+                  placeholder="+57 300 1234567"
+                  disabled={busy}
+                  maxLength={1000}
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Solo responderá a estos números. Incluye el código de país y
+                escribe un contacto por línea. Cada contacto conserva su propia
+                conversación.
+              </p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(event) => setEnabled(event.target.checked)}
+                  disabled={
+                    busy ||
+                    (!enabled && (!connected || !configuration.webhookReady))
+                  }
+                />
+                Responder con IA
+              </label>
+              {!configuration.webhookReady ? (
+                <p className="text-sm text-muted-foreground">
+                  Recepción de WhatsApp pendiente de configurar.
+                </p>
+              ) : null}
+              <Button
+                size="sm"
+                onClick={() => void save()}
+                disabled={busy || !employeeId}
               >
-                <option value="">Selecciona un empleado virtual</option>
-                {configuration.employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {configuration.employees.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Crea un empleado virtual en este tenant para asignarlo a
-                WhatsApp.
-              </p>
-            ) : null}
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium">
-                Contactos de prueba
-              </span>
-              <textarea
-                className="min-h-20 w-full rounded-md border bg-background px-3 py-2"
-                value={contacts}
-                onChange={(event) => setContacts(event.target.value)}
-                placeholder="+57 300 1234567"
-                disabled={busy}
-                maxLength={1000}
-              />
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Solo responderá a estos números. Incluye el código de país y
-              escribe un contacto por línea. Cada contacto conserva su propia
-              conversación.
+                {busy ? "Guardando…" : "Guardar asistente"}
+              </Button>
+            </>
+          ) : null}
+          {feedback ? (
+            <p role="status" className="text-sm">
+              {feedback}
             </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(event) => setEnabled(event.target.checked)}
-                disabled={
-                  busy ||
-                  (!enabled && (!connected || !configuration.webhookReady))
-                }
-              />
-              Responder con IA
-            </label>
-            {!configuration.webhookReady ? (
-              <p className="text-sm text-muted-foreground">
-                Recepción de WhatsApp pendiente de configurar.
-              </p>
-            ) : null}
-            <Button
-              size="sm"
-              onClick={() => void save()}
-              disabled={busy || !employeeId}
-            >
-              {busy ? "Guardando…" : "Guardar asistente"}
-            </Button>
-          </>
-        ) : null}
-        {feedback ? (
-          <p role="status" className="text-sm">
-            {feedback}
-          </p>
-        ) : null}
-      </li>
-    </IntegrationGroup>
+          ) : null}
+        </li>
+      </IntegrationGroup>
+      {services.whatsapp.getChannel ? (
+        <WhatsappChannelSettings
+          whatsapp={services.whatsapp}
+          tenantId={tenantId}
+        />
+      ) : null}
+    </>
   );
 }
