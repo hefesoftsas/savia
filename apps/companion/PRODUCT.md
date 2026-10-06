@@ -24,4 +24,7 @@ Provider keys belong to the backend. No automatic recording or business writes.
 Microphone and output sources are not speaker identities. Keep Savia attribution.
 The monorepo's current monochrome interface and emerald theme are the visual
 reference; this app extends that family. Controls must work with keyboard input
-and report native/backend failures clearly. Initial UI language is English.
+and report native/backend failures clearly. The interface ships in Spanish,
+English and Portuguese: it detects the OS/WebView language at each launch and
+falls back to Spanish. A manual choice in connection settings lasts for the
+current window only; the app does not persist that preference.

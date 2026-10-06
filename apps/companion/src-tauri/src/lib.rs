@@ -1,5 +1,6 @@
 pub mod backend;
 pub mod capture;
+mod capture_error;
 
 use std::{
     path::PathBuf,
@@ -15,6 +16,7 @@ use capture::{
     spool::{CaptureSpool, ChunkInfo, DraftState},
     SystemCapture,
 };
+use capture_error::{classify_capture_error, CaptureErrorCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager, RunEvent, State as TauriState};
@@ -145,6 +147,7 @@ pub struct CaptureStatus {
     elapsed_seconds: f64,
     tracks: Vec<TrackInfo>,
     error: Option<String>,
+    error_code: Option<CaptureErrorCode>,
     session_id: Option<String>,
     chunks: Vec<ChunkInfo>,
     recovered: bool,
@@ -184,14 +187,16 @@ impl CaptureSession {
             }
         }
         let elapsed = self.lifecycle.elapsed_at(Instant::now());
+        let error = self
+            .storage_error
+            .clone()
+            .or_else(|| self.lifecycle.error.clone());
         CaptureStatus {
             state: if interrupted { "interrupted" } else { state },
             elapsed_seconds: elapsed.as_secs_f64(),
             tracks,
-            error: self
-                .storage_error
-                .clone()
-                .or_else(|| self.lifecycle.error.clone()),
+            error_code: error.as_deref().map(classify_capture_error),
+            error,
             session_id: spool.as_ref().map(|spool| spool.session_id().to_string()),
             chunks: spool
                 .map(|spool| spool.chunks().to_vec())

@@ -64,6 +64,11 @@ that requires explicit permission and consent. Explicitly uploaded audio persist
 in private backend R2 objects; browser storage is not used for meeting history,
 credentials, or settings.
 
+The interface supports Spanish, English, and Portuguese. It detects the current
+OS/WebView language at each launch and falls back to Spanish for other languages.
+A manual language choice in Connection settings applies only to the current
+window and is not saved. See the [desktop language guide](../../docs/companion/desktop-language.md).
+
 ## Connect to Savia
 
 1. Run your existing Savia API/auth stack and migrations. Configure OpenRouter
