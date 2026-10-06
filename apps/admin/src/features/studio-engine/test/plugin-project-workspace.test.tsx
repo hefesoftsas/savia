@@ -211,6 +211,69 @@ it("lists published store versions and opens the selected one as a new project",
     ),
   ).toBe(true);
 });
+it("shows a compact localized date instead of the raw timestamp", async () => {
+  const updatedAt = "2026-10-04T21:40:44.008Z";
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path) =>
+      Response.json(
+        path === "/api/plugin-projects"
+          ? { data: [{ id, label: "Draft", updatedAt }] }
+          : path.endsWith("/registry")
+            ? { canPublish: false }
+            : { data: { id, files, history: [], version: 1 } },
+      ),
+  });
+  render(<Workspace tenantId={1} onClose={() => {}} onPublished={() => {}} />);
+  await screen.findByText("Draft");
+  expect(screen.queryByText(updatedAt)).not.toBeInTheDocument();
+  expect(screen.getByTitle(updatedAt)).toHaveTextContent(/2026/);
+});
+it("shows a dismissible notice when the store source was synthesized", async () => {
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path, init) => {
+      if (path === "/api/plugin-projects") return Response.json({ data: [] });
+      if (path.startsWith("/api/plugin-store/custom.demo/source?"))
+        return Response.json({
+          data: { files, history: [], synthesized: true },
+        });
+      if (path.endsWith("/registry"))
+        return Response.json({ canPublish: false });
+      if (init?.method === "PUT") {
+        return Response.json({
+          data: {
+            id: "new-draft",
+            label: "Demo source",
+            files: JSON.parse(String(init.body)).files,
+            history: [],
+            version: 1,
+            updatedAt: "today",
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    },
+  });
+  render(
+    <Workspace
+      tenantId={1}
+      source={{ id: "custom.demo", version: "1.0.0" }}
+      onSourceOpened={() => {}}
+      onClose={() => {}}
+      onPublished={() => {}}
+    />,
+  );
+  expect(await screen.findByLabelText("source")).toHaveValue("original");
+  const notice = await screen.findByText(/no incluía su código fuente/);
+  expect(notice.closest("[role='status']")).toHaveClass("border-amber-500/30");
+  fireEvent.click(screen.getByRole("button", { name: "Entendido" }));
+  expect(
+    screen.queryByText(/no incluía su código fuente/),
+  ).not.toBeInTheDocument();
+});
 it("lists and reopens a newly created project after returning from the IDE", async () => {
   const draftId = "new-draft";
   let exists = false;
