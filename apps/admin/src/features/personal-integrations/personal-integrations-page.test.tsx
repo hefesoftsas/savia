@@ -173,6 +173,36 @@ function createServices() {
 }
 
 describe("PersonalIntegrationsPage", () => {
+  it("uses the current ChatGPT Apps setup routes in its connection guide", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/integrations?tab=ai-assistants"]}>
+        <PersonalIntegrationsPage services={createServices()} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Integraciones" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("tab", { name: "ChatGPT y Claude" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByText(
+        /ChatGPT Business.*Configuración del espacio de trabajo/,
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(/Abre Apps\/Aplicaciones, elige Crear/),
+    ).toBeVisible();
+    expect(screen.queryByText(/Seguridad e inicio de sesión/)).toBeNull();
+    expect(screen.queryByText(/Abre Plugins/)).toBeNull();
+    await user.click(screen.getByRole("tab", { name: "Aplicaciones" }));
+    expect(
+      await screen.findByRole("heading", { name: "Savia Companion" }),
+    ).toBeVisible();
+  });
+
   it("opens the applications tab from its URL and keeps other integration tabs available", async () => {
     vi.stubGlobal(
       "fetch",
