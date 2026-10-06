@@ -12,7 +12,7 @@
     <link
       rel="apple-touch-icon"
       sizes="180x180"
-      href="/apple-touch-icon-v3.png"
+      href="/apple-touch-icon-v4.png"
     />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#0d9488" />
@@ -55,6 +55,9 @@
         height: 4rem;
         border-radius: 1rem;
       }
+      html.dark .savia-boot-mark img {
+        background: #fff;
+      }
       .savia-boot-ring {
         position: absolute;
         inset: 0;
@@ -89,29 +92,48 @@
     </style>
     <script>
       (function () {
+        var root = document.documentElement;
+        var themeColor = document.querySelector('meta[name="theme-color"]');
+
+        function syncThemeColor() {
+          if (themeColor) {
+            themeColor.setAttribute(
+              "content",
+              root.classList.contains("dark") ? "#171717" : "#0d9488",
+            );
+          }
+        }
+
         try {
           var raw = localStorage.getItem("savia.appearance");
-          if (!raw) return;
-          var appearance = JSON.parse(raw);
-          if (appearance && appearance.colorTheme) {
-            document.documentElement.dataset.colorTheme = appearance.colorTheme;
-          }
-          if (
-            appearance &&
-            (appearance.theme === "dark" ||
-              (appearance.theme === "system" &&
-                window.matchMedia("(prefers-color-scheme: dark)").matches))
-          ) {
-            document.documentElement.classList.add("dark");
-          } else if (
-            appearance &&
-            (appearance.theme === "light" ||
-              (appearance.theme === "system" &&
-                !window.matchMedia("(prefers-color-scheme: dark)").matches))
-          ) {
-            document.documentElement.classList.remove("dark");
+          if (raw) {
+            var appearance = JSON.parse(raw);
+            if (appearance && appearance.colorTheme) {
+              root.dataset.colorTheme = appearance.colorTheme;
+            }
+            if (
+              appearance &&
+              (appearance.theme === "dark" ||
+                (appearance.theme === "system" &&
+                  window.matchMedia("(prefers-color-scheme: dark)").matches))
+            ) {
+              root.classList.add("dark");
+            } else if (
+              appearance &&
+              (appearance.theme === "light" ||
+                (appearance.theme === "system" &&
+                  !window.matchMedia("(prefers-color-scheme: dark)").matches))
+            ) {
+              root.classList.remove("dark");
+            }
           }
         } catch (_) {}
+
+        syncThemeColor();
+        new MutationObserver(syncThemeColor).observe(root, {
+          attributes: true,
+          attributeFilter: ["class"],
+        });
       })();
     </script>
   </head>

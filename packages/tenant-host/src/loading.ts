@@ -21,6 +21,7 @@ export const saviaLoadingCss = String.raw`
 html.dark .savia-loading { background: #171717; color: #a3a3a3; }
 .savia-loading-mark { position: relative; display: flex; align-items: center; justify-content: center; width: 6rem; height: 6rem; }
 .savia-loading-mark img { width: 4rem; height: 4rem; border-radius: 1rem; }
+html.dark .savia-loading-mark img { background: #fff; }
 .savia-loading p { margin: 0; }
 .savia-loading .savia-ring { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 9999px; }
 .savia-loading .savia-ring::before,
