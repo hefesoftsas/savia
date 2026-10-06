@@ -149,6 +149,7 @@ describe("private compressed Companion recordings", () => {
     const repo = new CompanionRecordings(env.DOCUMENTS);
     const payload = input();
     const notes = {
+      language: "auto",
       transcript: {
         text: "Reviewed the launch date.",
         source: payload.source,
@@ -242,6 +243,7 @@ describe("private compressed Companion recordings", () => {
     const repo = new CompanionRecordings(env.DOCUMENTS);
     const payload = input();
     const previous = {
+      language: "auto",
       transcript: {
         text: "The group reviewed next steps.",
         source: payload.source,

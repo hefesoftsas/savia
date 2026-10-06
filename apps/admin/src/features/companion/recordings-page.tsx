@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router-dom";
-import { RecordingSessions } from "./recording-sessions";
+import { RecordingSessions, TRANSCRIPT_LANGUAGES } from "./recording-sessions";
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
@@ -44,6 +44,16 @@ const RecordingAssistant = lazy(() =>
     default: module.RecordingAssistant,
   })),
 );
+function transcriptLanguageName(code: string, locale: string) {
+  try {
+    const name = new Intl.DisplayNames([locale], { type: "language" }).of(code);
+    return name && name.toLowerCase() !== code.toLowerCase()
+      ? `${name} (${code})`
+      : code;
+  } catch {
+    return code;
+  }
+}
 
 export function CompanionRecordingsPage(props: {
   services?: Pick<AppServices, "apiClient">;
@@ -133,6 +143,8 @@ function AudioFilesPage({
     [deleting, setDeleting] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
   const [recordingPickerOpen, setRecordingPickerOpen] = useState(false);
+  const [language, setLanguage] = useState("auto");
+  const [retranscribeAck, setRetranscribeAck] = useState(false);
   const recordingPickerTrigger = useRef<HTMLButtonElement>(null);
   const mounted = useRef(true),
     inFlight = useRef(false);
@@ -145,6 +157,9 @@ function AudioFilesPage({
           ? "Microphone"
           : "System audio",
     );
+  const hasSavedNotes = Boolean(notes?.transcript || notes?.summary);
+  const languageChanged =
+    hasSavedNotes && language !== (notes?.language ?? "auto");
   const date = (r: Recording) =>
     new Date(r.createdAt).toLocaleString(intlLocale(locale), {
       dateStyle: "medium",
@@ -203,6 +218,8 @@ function AudioFilesPage({
   useEffect(() => {
     setAudio(null);
     setNotes(null);
+    setLanguage("auto");
+    setRetranscribeAck(false);
     if (!selected) {
       setLoadingDetail(false);
       return;
@@ -223,6 +240,8 @@ function AudioFilesPage({
         setAudio(objectUrl);
       }
       if (savedNotes.status === "fulfilled") setNotes(savedNotes.value);
+      if (savedNotes.status === "fulfilled")
+        setLanguage(savedNotes.value.language ?? "auto");
       const failure = results.find((r) => r.status === "rejected");
       if (failure?.status === "rejected")
         setError(
@@ -267,13 +286,24 @@ function AudioFilesPage({
     setProcessing(true);
     setError(null);
     try {
-      const result = await client.generate(selected.id);
-      if (mounted.current) setNotes(result);
+      const result = await client.generate(
+        selected.id,
+        language,
+        hasSavedNotes && languageChanged && retranscribeAck,
+      );
+      if (mounted.current) {
+        setNotes(result);
+        setLanguage(result.language ?? language);
+        setRetranscribeAck(false);
+      }
     } catch (error) {
       if (mounted.current) {
         setError(readProviderFailure(error) ?? processingFailure);
         const partial = await client.notes(selected.id).catch(() => null);
-        if (mounted.current && partial) setNotes(partial);
+        if (mounted.current && partial) {
+          setNotes(partial);
+          setLanguage(partial.language ?? language);
+        }
       }
     } finally {
       inFlight.current = false;
@@ -544,36 +574,94 @@ function AudioFilesPage({
                 )}
                 <div className="mt-8 grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
                   <div className="min-w-0">
-                    {!notes?.summary && (
-                      <div className="mt-6 border-t pt-5">
-                        <Button
-                          className="max-sm:h-11 max-sm:w-full"
-                          disabled={
-                            loadingDetail ||
-                            processing ||
-                            uploading ||
-                            deleting ||
-                            !audio
-                          }
-                          onClick={() => void generate()}
+                    <div className="mt-6 space-y-4 border-t pt-5">
+                      <label className="block max-w-xs text-sm font-medium">
+                        {t("Transcript language")}
+                        <select
+                          className="mt-2 block w-full rounded-md border bg-background p-2 font-normal"
+                          value={language}
+                          onChange={(event) => {
+                            setLanguage(event.target.value);
+                            setRetranscribeAck(false);
+                          }}
+                          disabled={processing || loadingDetail}
                         >
-                          {processing && (
-                            <LoaderCircle
-                              className="size-4 animate-spin"
-                              aria-hidden="true"
+                          <option value="auto">{t("Automatic")}</option>
+                          {language !== "auto" &&
+                            !TRANSCRIPT_LANGUAGES.some(
+                              (item) => item.code === language,
+                            ) && (
+                              <option value={language}>
+                                {transcriptLanguageName(
+                                  language,
+                                  intlLocale(locale),
+                                )}
+                              </option>
+                            )}
+                          {TRANSCRIPT_LANGUAGES.map((item) => (
+                            <option key={item.code} value={item.code}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {languageChanged && (
+                        <>
+                          <p className="text-sm text-muted-foreground">
+                            {t(
+                              "Switching language replaces the saved transcript and summary. Provider usage may be billed again.",
+                            )}
+                          </p>
+                          <label className="flex items-start gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="mt-1 size-4 accent-primary"
+                              checked={retranscribeAck}
+                              onChange={(event) =>
+                                setRetranscribeAck(event.target.checked)
+                              }
+                              disabled={processing}
                             />
-                          )}
-                          {t(
-                            processing
-                              ? "Preparing transcript and summary…"
-                              : "Generate summary",
-                          )}
-                        </Button>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          {t("Processing may incur charges.")}
-                        </p>
-                      </div>
-                    )}
+                            <span>
+                              {t(
+                                "I understand saved results will be replaced.",
+                              )}
+                            </span>
+                          </label>
+                        </>
+                      )}
+                      {(!notes?.summary || languageChanged) && (
+                        <>
+                          <Button
+                            className="max-sm:h-11 max-sm:w-full"
+                            disabled={
+                              loadingDetail ||
+                              processing ||
+                              uploading ||
+                              deleting ||
+                              !audio ||
+                              (languageChanged && !retranscribeAck)
+                            }
+                            onClick={() => void generate()}
+                          >
+                            {processing && (
+                              <LoaderCircle
+                                className="size-4 animate-spin"
+                                aria-hidden="true"
+                              />
+                            )}
+                            {t(
+                              processing
+                                ? "Preparing transcript and summary…"
+                                : "Generate summary",
+                            )}
+                          </Button>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {t("Processing may incur charges.")}
+                          </p>
+                        </>
+                      )}
+                    </div>
                     {notes?.summary && (
                       <article className="mt-8 max-w-prose border-t pt-6">
                         <h3 className="text-lg font-medium">

@@ -14,6 +14,7 @@ import {
   native,
   type Capabilities,
   type CaptureStatus,
+  type Source,
 } from "./client";
 import {
   loadLocale,
@@ -22,6 +23,7 @@ import {
   type Locale,
   type MessageKey,
 } from "./i18n";
+import { loadPreviewAudio } from "./preview-audio";
 import "./styles.css";
 
 const empty: CaptureStatus = {
@@ -65,12 +67,20 @@ function App() {
   useEffect(() => {
     document.documentElement.lang = locale === "pt" ? "pt-BR" : locale;
   }, [locale]);
+  const [previews, setPreviews] = useState<Record<Source, string | null>>({
+    microphone: null,
+    system: null,
+  });
+  const previewUrls = useRef<Record<Source, string | null>>({
+    microphone: null,
+    system: null,
+  });
   const inFlight = useRef(false);
   const mounted = useRef(true);
 
   useEffect(() => {
     mounted.current = true;
-    if (!isTauri()) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
     const poll = async () => {
       try {
         const next = await native<CaptureStatus>("capture_status");
@@ -79,11 +89,16 @@ function App() {
         if (mounted.current) setNotice(errorMessage(error));
       }
     };
-    void poll();
-    const timer = setInterval(() => void poll(), 1000);
+    if (isTauri()) {
+      void poll();
+      timer = setInterval(() => void poll(), 1000);
+    }
     return () => {
       mounted.current = false;
-      clearInterval(timer);
+      if (timer !== undefined) clearInterval(timer);
+      for (const url of Object.values(previewUrls.current))
+        if (url) URL.revokeObjectURL(url);
+      previewUrls.current = { microphone: null, system: null };
     };
   }, []);
 
@@ -106,6 +121,7 @@ function App() {
 
   const start = () =>
     run(t("Starting recording"), async () => {
+      revokePreviews();
       const next = await native<CaptureStatus>("start_capture", {
         sessionId: crypto.randomUUID(),
         sources: { microphone, system },
@@ -123,13 +139,67 @@ function App() {
       setSaved(false);
     });
 
+  const pause = () =>
+    run("Pausing recording", async () => {
+      const next = await native<CaptureStatus>("pause_capture");
+      setStatus(next);
+    });
+
+  const resume = () =>
+    run("Resuming recording", async () => {
+      const next = await native<CaptureStatus>("resume_capture");
+      setStatus(next);
+      setConsent(false);
+      setSaved(false);
+    });
+
   const discard = () =>
     run(t("Discarding audio"), async () => {
       setStatus(await native<CaptureStatus>("discard_capture"));
+      revokePreviews();
       setConsent(false);
       setSaved(false);
       setNotice("");
       setNoticeIsError(false);
+    });
+
+  function revokePreviewUrls() {
+    for (const url of Object.values(previewUrls.current))
+      if (url) URL.revokeObjectURL(url);
+    previewUrls.current = { microphone: null, system: null };
+  }
+
+  const revokePreviews = () => {
+    revokePreviewUrls();
+    setPreviews({ microphone: null, system: null });
+  };
+
+  const loadPreview = (source: Source) =>
+    run("Loading preview", async () => {
+      const segments = (status.chunks ?? [])
+        .filter((chunk) => chunk.source === source)
+        .sort((a, b) => a.sequence - b.sequence);
+      if (!segments.length) {
+        throw new Error("There is no captured audio to preview yet.");
+      }
+      const bytes = await loadPreviewAudio(segments, (sequence) =>
+        native<{ base64: string; format: string }>("read_capture_chunk", {
+          source,
+          sequence,
+        }),
+      );
+      if (!mounted.current) return;
+      const url = URL.createObjectURL(
+        new Blob([bytes.buffer], { type: "audio/ogg" }),
+      );
+      if (!mounted.current) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const previous = previewUrls.current[source];
+      if (previous) URL.revokeObjectURL(previous);
+      previewUrls.current = { ...previewUrls.current, [source]: url };
+      setPreviews(previewUrls.current);
     });
 
   const connect = (event: FormEvent) => {
@@ -243,6 +313,8 @@ function App() {
     .padStart(2, "0")}:${Math.floor((seconds % 3600) / 60)
     .toString()
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+  const isRecording = status.state === "recording";
+  const isPaused = status.state === "paused";
   const ready =
     status.state === "ready" ||
     (["error", "interrupted"].includes(status.state) &&
@@ -250,25 +322,30 @@ function App() {
   const connected = Boolean(capabilities);
   const complete = ready && saved;
   const selectedSources = microphone || system;
+  const previewSources = [
+    ...new Set((status.chunks ?? []).map((chunk) => chunk.source)),
+  ];
   const reviewHref = recordingReviewHref(appOrigin);
-  const locked = Boolean(busy) || status.state === "recording";
+  const locked = Boolean(busy) || isRecording || isPaused;
   const actionDisabled =
     Boolean(busy) ||
-    (status.state === "recording"
+    (isRecording || isPaused
       ? false
       : ready
         ? complete || !canUploadRecording(capabilities) || !consent
         : !isTauri() || !selectedSources);
 
   const primaryAction = () => {
-    if (status.state === "recording") return stop();
+    if (isRecording) return stop();
+    if (isPaused) return resume();
     if (ready) return upload();
     return start();
   };
 
-  const actionLabel =
-    status.state === "recording"
-      ? t("Stop recording")
+  const actionLabel = isRecording
+    ? t("Stop recording")
+    : isPaused
+      ? "Resume recording"
       : ready
         ? complete
           ? t("Saved to Savia")
@@ -417,21 +494,23 @@ function App() {
 
       <main>
         <section
-          className={`recording-stage${status.state === "recording" ? " is-recording" : ""}`}
+          className={`recording-stage${isRecording ? " is-recording" : ""}${isPaused ? " is-paused" : ""}`}
           aria-label={t("Recording status")}
         >
           <div className="stage-status" role="status" aria-live="polite">
             <span className="status-light" aria-hidden="true" />
             <span>
-              {status.state === "recording"
+              {isRecording
                 ? t("Recording")
-                : ready
-                  ? complete
-                    ? t("Saved to Savia")
-                    : t("Ready to upload")
-                  : status.state === "error" || status.state === "interrupted"
-                    ? t("Capture needs attention")
-                    : t("Ready to record")}
+                : isPaused
+                  ? "Paused"
+                  : ready
+                    ? complete
+                      ? t("Saved to Savia")
+                      : t("Ready to upload")
+                    : status.state === "error" || status.state === "interrupted"
+                      ? t("Capture needs attention")
+                      : t("Ready to record")}
             </span>
           </div>
           <p className="timer" aria-label={t("Seconds recorded", { seconds })}>
@@ -451,13 +530,15 @@ function App() {
             />
           </div>
           <p className="stage-hint">
-            {status.state === "recording"
+            {isRecording
               ? t("Recording stays on device")
-              : ready
-                ? t("Review before upload")
-                : status.state === "error" || status.state === "interrupted"
-                  ? t("Capture trouble")
-                  : t("Capture up to one hour")}
+              : isPaused
+                ? "Recording is paused. Resume to keep adding to the same take."
+                : ready
+                  ? t("Review before upload")
+                  : status.state === "error" || status.state === "interrupted"
+                    ? t("Capture trouble")
+                    : t("Capture up to one hour")}
           </p>
           {ready && status.tracks.length > 0 && (
             <ul className="captured-sources" aria-label={t("Captured audio")}>
@@ -477,6 +558,38 @@ function App() {
                 </li>
               ))}
             </ul>
+          )}
+          {ready && previewSources.length > 0 && (
+            <div className="preview-panel" aria-label="Local audio preview">
+              <p className="preview-title">
+                Preview on this device before uploading
+              </p>
+              {previewSources.map((source) => {
+                const url = previews[source];
+                return (
+                  <div key={source} className="preview-row">
+                    <span>
+                      {source === "microphone" ? "Microphone" : "System audio"}
+                    </span>
+                    {url ? (
+                      <audio className="preview-audio" src={url} controls />
+                    ) : (
+                      <button
+                        className="discard-action"
+                        type="button"
+                        disabled={Boolean(busy)}
+                        onClick={() => void loadPreview(source)}
+                      >
+                        Preview{" "}
+                        {source === "microphone"
+                          ? "microphone"
+                          : "system audio"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
           {status.recovered && (
             <p className="notice" role="status">
@@ -554,12 +667,33 @@ function App() {
               <span className="button-spinner" aria-hidden="true" />
             ) : (
               <span className="action-glyph" aria-hidden="true">
-                {status.state === "recording" ? "■" : ready ? "↑" : "●"}
+                {isRecording ? "■" : isPaused ? "●" : ready ? "↑" : "●"}
               </span>
             )}
             {busy ?? actionLabel}
           </button>
-          {(status.state === "recording" ||
+          {isRecording && (
+            <button
+              className="discard-action"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={pause}
+            >
+              Pause
+            </button>
+          )}
+          {isPaused && (
+            <button
+              className="discard-action"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={stop}
+            >
+              Finish
+            </button>
+          )}
+          {(isRecording ||
+            isPaused ||
             ready ||
             status.state === "error" ||
             status.state === "interrupted") && (

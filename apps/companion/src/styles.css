@@ -332,6 +332,10 @@ main {
   animation: recording-pulse 1.4s ease-in-out infinite;
 }
 
+.recording-stage.is-paused .status-light {
+  background: #b7791f;
+}
+
 .timer {
   margin: 10px 0 12px;
   color: #18231d;
@@ -415,6 +419,39 @@ main {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.preview-panel {
+  max-width: 330px;
+  margin: 16px auto 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+  text-align: left;
+}
+
+.preview-title {
+  margin: 0 0 8px;
+  color: #36433b;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.preview-row {
+  display: grid;
+  gap: 6px;
+  padding: 6px 0;
+  color: #3e4b43;
+  font-size: 11px;
+}
+
+.preview-row + .preview-row {
+  border-top: 1px solid #edf0ee;
+}
+
+.preview-audio {
+  width: 100%;
 }
 
 .notice {

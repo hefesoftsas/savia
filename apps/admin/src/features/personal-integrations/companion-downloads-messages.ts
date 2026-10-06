@@ -31,11 +31,23 @@ export const companionDownloadMessages = {
       "Record audio on your phone or computer and send it to Savia to generate summaries and ask questions.",
       "Grave áudio no telefone ou computador e envie ao Savia para gerar resumos e fazer perguntas.",
     ],
-  "Versiones de preview para pruebas. Android usa firma de prueba; los instaladores de escritorio todavía no tienen firma de distribución ni notarización.":
+  "Versiones de preview para pruebas. Android usa firma de prueba; los instaladores de escritorio pueden no tener firma de distribución ni notarización.":
     [
-      "Versiones de preview para pruebas. Android usa firma de prueba; los instaladores de escritorio todavía no tienen firma de distribución ni notarización.",
-      "Preview builds for testing. Android uses a test signing key; desktop installers do not yet have distribution signing or notarization.",
-      "Versões de preview para testes. O Android usa assinatura de teste; os instaladores desktop ainda não têm assinatura de distribuição nem notarização.",
+      "Versiones de preview para pruebas. Android usa firma de prueba; los instaladores de escritorio pueden no tener firma de distribución ni notarización.",
+      "Preview builds for testing. Android uses a test signing key; desktop installers may lack distribution signing or notarization.",
+      "Versões de preview para testes. O Android usa assinatura de teste; os instaladores desktop podem não ter assinatura de distribuição nem notarização.",
+    ],
+  'En macOS, las previews sin firma muestran el aviso de app dañada. Si es tu caso, copia la app a Aplicaciones, haz Control + clic en ella y elige Abrir, o ejecuta xattr -cr "/Applications/Savia Companion.app" y vuelve a abrirla.':
+    [
+      'En macOS, las previews sin firma muestran el aviso de app dañada. Si es tu caso, copia la app a Aplicaciones, haz Control + clic en ella y elige Abrir, o ejecuta xattr -cr "/Applications/Savia Companion.app" y vuelve a abrirla.',
+      'On macOS, unsigned previews show the damaged-app warning. If that is your case, copy the app to Applications, Control-click it and choose Open, or run xattr -cr "/Applications/Savia Companion.app" and open it again.',
+      'No macOS, as previews sem assinatura mostram o aviso de app danificado. Se for o seu caso, copie o app para Aplicativos, clique com Control nele e escolha Abrir, ou execute xattr -cr "/Applications/Savia Companion.app" e abra novamente.',
+    ],
+  "Los instaladores de escritorio son pequeños (unos pocos MB) porque usan el WebView del sistema; ese tamaño no significa que la descarga esté incompleta.":
+    [
+      "Los instaladores de escritorio son pequeños (unos pocos MB) porque usan el WebView del sistema; ese tamaño no significa que la descarga esté incompleta.",
+      "Desktop installers are small (a few MB) because they use the system WebView; that size does not mean the download is incomplete.",
+      "Os instaladores desktop são pequenos (poucos MB) porque usam o WebView do sistema; esse tamanho não significa que o download esteja incompleto.",
     ],
   "Buscando descargas disponibles…": [
     "Buscando descargas disponibles…",

@@ -10,6 +10,7 @@ describe("long recording scope isolation", () => {
     ["GET", base, "recordings:read"],
     ["GET", `${base}/${id}`, "recordings:read"],
     ["GET", `${base}/${id}/chunks/microphone/0`, "recordings:read"],
+    ["GET", `${base}/${id}/audio`, "recordings:read"],
     ["POST", base, "recordings:upload"],
     ["POST", `${base}/${id}/chunks`, "recordings:upload"],
     ["POST", `${base}/${id}/finalize`, "recordings:upload"],

@@ -46,6 +46,7 @@ pub struct TrackInfo {
 pub enum State {
     Idle,
     Recording,
+    Paused,
     Ready,
     Error,
 }
@@ -96,10 +97,11 @@ impl Lifecycle {
         if self.state == State::Recording {
             self.started_at
                 .map(|start| {
-                    now.saturating_duration_since(start)
+                    self.elapsed
+                        .saturating_add(now.saturating_duration_since(start))
                         .min(MAX_CAPTURE_DURATION)
                 })
-                .unwrap_or_default()
+                .unwrap_or(self.elapsed)
         } else {
             self.elapsed
         }
@@ -111,16 +113,38 @@ impl Lifecycle {
 
     pub fn reanchor_start(&mut self, now: Instant) {
         if self.state == State::Recording {
+            // Keep accumulated elapsed across pause/resume; only the clock
+            // origin moves so device-setup time is not billed as audio.
             self.started_at = Some(now);
-            self.elapsed = Duration::ZERO;
         }
     }
 
-    pub fn stop(&mut self, now: Instant) -> bool {
+    pub fn pause(&mut self, now: Instant) -> bool {
         if self.state != State::Recording {
             return false;
         }
         self.elapsed = self.elapsed_at(now);
+        self.started_at = None;
+        self.state = State::Paused;
+        true
+    }
+
+    pub fn resume(&mut self, now: Instant) -> Result<(), String> {
+        if self.state != State::Paused {
+            return Err("There is no paused capture to resume.".into());
+        }
+        self.started_at = Some(now);
+        self.state = State::Recording;
+        Ok(())
+    }
+
+    pub fn stop(&mut self, now: Instant) -> bool {
+        if self.state != State::Recording && self.state != State::Paused {
+            return false;
+        }
+        if self.state == State::Recording {
+            self.elapsed = self.elapsed_at(now);
+        }
         self.started_at = None;
         self.state = State::Ready;
         true
