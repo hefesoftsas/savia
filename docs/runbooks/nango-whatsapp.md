@@ -174,10 +174,19 @@ The webhook checks `X-Hub-Signature-256` against the raw body and durably stores
 accepted messages before acknowledging them, including validated native payloads.
 Unsupported event types are ignored. Incoming
 message IDs deduplicate retries. The existing minute scheduler recovers pending
-work; Worker background processing can start immediately. Leases serialize each
+work. Managed preview and production deployments set
+`WHATSAPP_PROCESSING_MODE=scheduled`: generation runs from the minute scheduler,
+not HTTP `waitUntil`, whose post-response lifetime can interrupt multi-step AI
+work. Allow up to one minute before processing starts. Local runtimes may omit
+this setting to start background processing immediately. Leases serialize each
 contact's conversation and fence stale processors. A four-minute processing
 lease accommodates media transcription followed by AI completion. Generation retries are
-bounded. Sending is recorded before calling Meta, and an uncertain send is
+bounded; after the final generation failure, a safe recovery message follows the
+same access checks and durable send path. Tool failures never expose provider
+credentials. City reference lookups use the authenticated `/api/lookups/dane`
+route, including for tenant administrators without platform roles. The quote
+assistant uses verified enabled products and prepares the validated draft before
+requesting data-processing consent. Sending is recorded before calling Meta, and an uncertain send is
 terminal rather than automatically repeated.
 
 `whatsapp_inbox` stores contact-specific history, saved replies, outbound message

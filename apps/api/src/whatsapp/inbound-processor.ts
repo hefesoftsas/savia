@@ -9,7 +9,10 @@ import type {
   WhatsappAssistantBinding,
   WhatsappInboundDependencies,
 } from "./inbound-contracts";
-import { WhatsappInboundRepository } from "./inbound-repository";
+import {
+  GENERATION_ATTEMPTS,
+  WhatsappInboundRepository,
+} from "./inbound-repository";
 
 const MAX_REPLY_LENGTH = 4096;
 const DEFAULT_BATCH_SIZE = 10;
@@ -114,9 +117,16 @@ export async function processWhatsappInbox(
       if (!reply || reply.length > MAX_REPLY_LENGTH)
         throw new Error("Generated reply is empty or too long");
     } catch {
-      await repository.retryGeneration(item.messageId, token, item.attempts);
-      failed++;
-      continue;
+      console.error("WHATSAPP_GENERATION_FAILED", { attempt: item.attempts });
+      if (item.attempts < GENERATION_ATTEMPTS) {
+        await repository.retryGeneration(item.messageId, token, item.attempts);
+        failed++;
+        continue;
+      }
+      // Persist and authorize the recovery reply through the same send path.
+      outgoing =
+        "No pude completar este mensaje. Puedes volver a intentarlo o escribir menú.";
+      reply = outgoing;
     }
 
     if (!(await repository.isWithinReplyWindow(item))) {

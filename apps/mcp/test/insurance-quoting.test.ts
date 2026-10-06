@@ -436,9 +436,9 @@ it("uses the named DANE service rather than domain discovery", async () => {
     "https://api.test",
     "caller",
     async (url) => {
-      expect(String(url)).toContain(
-        "/v1/savia-request/api/lookups/dane?city=Bogot",
-      );
+      const requestUrl = new URL(String(url));
+      expect(requestUrl.pathname).toBe("/api/lookups/dane");
+      expect(requestUrl.searchParams.get("city")).toBe("Bogotá");
       return Response.json({
         status: "matched",
         matches: [{ code: "11001", city: "BOGOTÁ, D.C." }],

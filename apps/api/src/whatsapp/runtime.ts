@@ -29,6 +29,7 @@ import { retrieveRelevantChunks, type RagEnvironment } from "../assistant/rag";
 import type { AssistantConfigurationRepository } from "../assistant/configuration";
 
 export type WhatsappSecrets = {
+  WHATSAPP_PROCESSING_MODE?: string;
   WHATSAPP_META_APP_SECRET?: string;
   WHATSAPP_WEBHOOK_VERIFY_TOKEN?: string;
   NANGO_BASE_URL?: string;
@@ -121,6 +122,7 @@ export function whatsappInboundFromEnvironment(
     },
     appSecret: environment.WHATSAPP_META_APP_SECRET?.trim(),
     verifyToken: environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim(),
+    deferProcessing: environment.WHATSAPP_PROCESSING_MODE === "scheduled",
     process: async () => {
       return processWhatsappInbox(
         repository,

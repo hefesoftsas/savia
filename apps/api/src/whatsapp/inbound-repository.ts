@@ -58,7 +58,7 @@ export type WhatsappHistoryMessage = {
 
 const MAX_CONTACT_DIGITS = 32;
 const MAX_MESSAGE_LENGTH = 4096;
-const GENERATION_ATTEMPTS = 3;
+export const GENERATION_ATTEMPTS = 3;
 // Media download, transcription and completion run sequentially with bounded timeouts.
 const PROCESSING_LEASE_MS = 4 * 60 * 1000;
 const MESSAGE_AGE_LIMIT_MS = 24 * 60 * 60 * 1000;

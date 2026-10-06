@@ -23,6 +23,7 @@ export type WhatsappWebhookDependencies = {
   appSecret?: string;
   verifyToken?: string;
   process?: () => Promise<unknown>;
+  deferProcessing?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -305,7 +306,7 @@ export function registerWhatsappWebhook(
       return c.text("Could not persist webhook events", 503);
     }
 
-    if (acceptedInbound && deps.process) {
+    if (acceptedInbound && deps.process && !deps.deferProcessing) {
       let waitUntil: ((promise: Promise<unknown>) => void) | undefined;
       try {
         waitUntil = c.executionCtx?.waitUntil.bind(c.executionCtx);

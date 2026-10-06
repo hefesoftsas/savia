@@ -660,18 +660,47 @@ describe("WhatsApp inbound persistence and processing", () => {
     });
   });
 
-  it("bounds generation retries and never sends a failed generation", async () => {
+  it("does not send an exhausted-generation recovery reply after access revocation", async () => {
+    const s = await setup();
+    await s.repository.receive(inbound(s));
+    await env.DB.prepare(
+      "UPDATE whatsapp_inbox SET generation_attempts=2 WHERE message_id=?",
+    )
+      .bind(`wamid-${s.tenantId}`)
+      .run();
+    const send = vi.fn(async () => "unused");
+    const result = await processWhatsappInbox(s.repository, {
+      generate: async () => {
+        throw new Error("model failure");
+      },
+      authorizeReply: async () => false,
+      send,
+    });
+    expect(result).toEqual({ processed: 0, failed: 1 });
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      await env.DB.prepare(
+        "SELECT state,failure_code FROM whatsapp_inbox WHERE message_id=?",
+      )
+        .bind(`wamid-${s.tenantId}`)
+        .first(),
+    ).toEqual({ state: "failed", failure_code: "channel_access_revoked" });
+  });
+
+  it("bounds generation retries and sends a safe recovery reply after exhaustion", async () => {
     const s = await setup();
     await s.repository.receive(inbound(s));
     const generate = vi.fn(async () => {
-      throw new Error("temporary model failure");
+      throw new Error("temporary model failure: Bearer private-provider-token");
     });
-    const send = vi.fn(async () => "unused");
+    const send = vi.fn(async () => "recovery-outbound");
 
     for (let attempt = 0; attempt < 3; attempt++) {
       expect(
         await processWhatsappInbox(s.repository, { generate, send }),
-      ).toEqual({ processed: 0, failed: 1 });
+      ).toEqual(
+        attempt < 2 ? { processed: 0, failed: 1 } : { processed: 1, failed: 0 },
+      );
       if (attempt < 2)
         await env.DB.prepare(
           "UPDATE whatsapp_inbox SET retry_at=NULL WHERE message_id=?",
@@ -681,7 +710,10 @@ describe("WhatsApp inbound persistence and processing", () => {
     }
 
     expect(generate).toHaveBeenCalledTimes(3);
-    expect(send).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[1]).toBe(
+      "No pude completar este mensaje. Puedes volver a intentarlo o escribir menú.",
+    );
     expect(
       await env.DB.prepare(
         "SELECT state,generation_attempts,failure_code FROM whatsapp_inbox WHERE message_id=?",
@@ -689,9 +721,9 @@ describe("WhatsApp inbound persistence and processing", () => {
         .bind(`wamid-${s.tenantId}`)
         .first(),
     ).toEqual({
-      state: "failed",
+      state: "completed",
       generation_attempts: 3,
-      failure_code: "generation_failed",
+      failure_code: null,
     });
   });
 });
