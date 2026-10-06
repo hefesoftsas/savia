@@ -46,7 +46,8 @@
 .tenant-branding-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.85fr);
-  gap: clamp(1.5rem, 4vw, 3.5rem);
+  column-gap: clamp(1.5rem, 4vw, 3.5rem);
+  row-gap: 0.5rem;
   align-items: start;
 }
 /* Fixed header width: the tab strip always spans the full row, so switching
@@ -332,6 +333,7 @@
   .tenant-branding-preview {
     position: static;
     max-width: 36rem;
+    margin-top: 1rem;
   }
 }
 @media (max-width: 480px) {
