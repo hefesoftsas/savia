@@ -231,5 +231,12 @@ uncertain and retain partial results. Channel cleanup preserves uncertain
 dispatch evidence and ownership.
 
 Focused API, admin, MCP, solution and schema checks passed, as did the root
-typecheck and contract suites. The full repository test run is tracked in the
-execution ledger; its result must be recorded before claiming full-suite success.
+typecheck and contract suites. Full admin passed 2,128 tests. A full API run
+passed 1,837 tests but encountered a public-form timeout and a following spy
+failure under concurrent workspace load; all 40 tests in that file passed when
+retried alone. Scheduler regressions found by the first run were fixed and its
+11 tests passed. All workspace suites completed across two batches after fixing
+missing migration checksums; full self-hosted passed 90 tests with 55 skipped.
+Native PostgreSQL integration was skipped without a live test URL. This records
+verified individual suites rather than claiming one uninterrupted green
+`pnpm test` run. No deployment or real provider execution was performed.
