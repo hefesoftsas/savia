@@ -38,6 +38,7 @@ import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { resolveInitialAppLocale } from "@/i18n/locale-storage";
 import { OfflineBanner } from "@/offline/offline-banner";
 import { PwaSplash } from "@/pwa/pwa-splash";
+import { getAdminAuthorizeUrl } from "@/components/admin/loading-recovery";
 import { Button } from "@/components/ui/button";
 import { RouteLoading } from "@/components/admin/route-loading";
 import { TenantHostMismatchError } from "@/components/admin/tenant-mismatch-error";
@@ -304,7 +305,7 @@ const TenantBrandingPage = lazy(() =>
 );
 
 function AuthLoadingFallback() {
-  return <PwaSplash recoveryHref="/api/auth/admin/authorize" />;
+  return <PwaSplash recoveryHref={getAdminAuthorizeUrl()} />;
 }
 
 export function App(props: { services?: AppServices } = {}) {
@@ -601,7 +602,7 @@ function BetterAuthCallback({
     };
   }, [onComplete, services, translate]);
 
-  if (!error) return <PwaSplash recoveryHref="/api/auth/admin/authorize" />;
+  if (!error) return <PwaSplash recoveryHref={getAdminAuthorizeUrl()} />;
 
   return (
     <main className="flex min-h-svh items-center justify-center bg-secondary p-6 text-foreground">
