@@ -1,6 +1,6 @@
 import "./recording-sessions.css";
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { AudioLines, RefreshCw } from "lucide-react";
+import { AudioLines, Download, RefreshCw } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
 import { useMessages } from "@/i18n/core";
@@ -25,6 +25,16 @@ export const sessionTime = (seconds: number) =>
     .padStart(2, "0")}`;
 const active = (session: RecordingSession) =>
   ["queued", "transcribing", "summarizing"].includes(session.job.status);
+export const TRANSCRIPT_LANGUAGES = [
+  { code: "es", name: "Español" },
+  { code: "en", name: "English" },
+  { code: "pt", name: "Português" },
+  { code: "fr", name: "Français" },
+  { code: "de", name: "Deutsch" },
+  { code: "it", name: "Italiano" },
+] as const;
+const languageName = (code: string) =>
+  TRANSCRIPT_LANGUAGES.find((item) => item.code === code)?.name ?? code;
 export function RecordingSessions({ api }: { api: ApiClient }) {
   const client = useMemo(() => new CompanionSessionsClient(api), [api]);
   const t = useMessages(companionMessages);
@@ -171,6 +181,8 @@ function SessionDetail({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(false),
     [retry, setRetry] = useState(false);
+  const [language, setLanguage] = useState(initial.job.language ?? "auto");
+  const [retranscribeAck, setRetranscribeAck] = useState(false);
   const inFlight = useRef(false),
     mounted = useRef(true);
   useEffect(() => {
@@ -196,6 +208,10 @@ function SessionDetail({
   const hasTranscript = Object.values(session.job.transcripts).some((item) =>
     item.text.trim(),
   );
+  const savedTranscripts = Object.keys(session.job.transcripts).length;
+  const currentJobLanguage = session.job.language ?? "auto";
+  const switchLanguage =
+    savedTranscripts > 0 && language !== currentJobLanguage;
   useEffect(() => {
     if (!running) return;
     const abort = new AbortController();
@@ -226,7 +242,12 @@ function SessionDetail({
     try {
       const next = cancel
         ? await client.cancel(session.id)
-        : await client.process(session.id, retry);
+        : await client.process(
+            session.id,
+            retry,
+            language,
+            switchLanguage && retranscribeAck,
+          );
       if (mounted.current) {
         setSession(next);
       }
@@ -237,6 +258,7 @@ function SessionDetail({
       if (mounted.current) {
         setBusy(false);
         setRetry(false);
+        setRetranscribeAck(false);
       }
     }
   }
@@ -265,6 +287,8 @@ function SessionDetail({
           {t(statusLabel)}
           {session.job.totalChunks > 0 &&
             ` · ${session.job.completedChunks}/${session.job.totalChunks}`}
+          {savedTranscripts > 0 &&
+            ` · ${t("Transcript language")}: ${currentJobLanguage === "auto" ? t("Automatic") : languageName(currentJobLanguage)}`}
         </p>
         {running && (
           <>
@@ -312,8 +336,51 @@ function SessionDetail({
                   </span>
                 </label>
               )}
+              <label className="block max-w-xs text-sm font-medium">
+                {t("Transcript language")}
+                <select
+                  className="mt-2 block w-full rounded-md border bg-background p-2 font-normal"
+                  value={language}
+                  onChange={(event) => setLanguage(event.target.value)}
+                  disabled={busy}
+                >
+                  <option value="auto">{t("Automatic")}</option>
+                  {TRANSCRIPT_LANGUAGES.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {switchLanguage && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {t(
+                      "Switching language replaces the saved transcript and summary. Provider usage may be billed again.",
+                    )}
+                  </p>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1 size-4 accent-primary"
+                      checked={retranscribeAck}
+                      onChange={(event) =>
+                        setRetranscribeAck(event.target.checked)
+                      }
+                      disabled={busy}
+                    />
+                    <span>
+                      {t("I understand saved results will be replaced.")}
+                    </span>
+                  </label>
+                </>
+              )}
               <Button
-                disabled={busy || (attention && !retry)}
+                disabled={
+                  busy ||
+                  (attention && !retry) ||
+                  (switchLanguage && !retranscribeAck)
+                }
                 onClick={() => void run(false)}
               >
                 {t(
@@ -449,6 +516,23 @@ function SessionPlayer({
     [error, setError] = useState(false);
   const [playNext, setPlayNext] = useState(false);
   const [audioRevision, setAudioRevision] = useState(0);
+  const [full, setFull] = useState<{
+    source: SessionChunk["source"];
+    url: string;
+  } | null>(null);
+  const [fullLoading, setFullLoading] = useState<SessionChunk["source"] | null>(
+    null,
+  );
+  const [fullFailed, setFullFailed] = useState<SessionChunk["source"] | null>(
+    null,
+  );
+  const fullUrl = useRef<string | null>(null);
+  useEffect(
+    () => () => {
+      if (fullUrl.current) URL.revokeObjectURL(fullUrl.current);
+    },
+    [],
+  );
   useEffect(() => {
     if (!chunk) return;
     const abort = new AbortController();
@@ -475,6 +559,29 @@ function SessionPlayer({
     .filter((item) => item.source === chunk.source)
     .sort((a, b) => a.sequence - b.sequence);
   const previous = ordered.find((item) => item.sequence === chunk.sequence - 1);
+  const sources = [...new Set(session.chunks.map((item) => item.source))];
+  const fullEligible = (source: SessionChunk["source"]) => {
+    const items = session.chunks.filter((item) => item.source === source);
+    return (
+      items.length > 0 &&
+      items.every((item) => (item.format ?? "ogg") === "ogg")
+    );
+  };
+  const loadFull = async (source: SessionChunk["source"]) => {
+    setFullLoading(source);
+    setFullFailed(null);
+    try {
+      const blob = await client.fullAudio(session.id, source);
+      const objectUrl = URL.createObjectURL(blob);
+      if (fullUrl.current) URL.revokeObjectURL(fullUrl.current);
+      fullUrl.current = objectUrl;
+      setFull({ source, url: objectUrl });
+    } catch {
+      setFullFailed(source);
+    } finally {
+      setFullLoading(null);
+    }
+  };
   return (
     <div className="mt-5 space-y-3">
       <label className="block text-sm font-medium">
@@ -541,6 +648,59 @@ function SessionPlayer({
           )}
         </p>
       )}
+      <div className="space-y-4 border-t pt-4">
+        <p className="text-sm font-medium">{t("Full audio")}</p>
+        {sources.map((source) => (
+          <div key={source} className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              {t(source === "microphone" ? "Microphone" : "System audio")}
+            </p>
+            {fullEligible(source) ? (
+              full?.source === source ? (
+                <>
+                  <audio className="w-full" src={full.url} controls autoPlay />
+                  <a
+                    href={full.url}
+                    download={`savia-${session.id}-${source}.ogg`}
+                    className="inline-flex min-h-9 items-center gap-1.5 text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    <Download className="size-3.5" aria-hidden="true" />
+                    {t("Download full audio")}
+                  </a>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  disabled={fullLoading !== null}
+                  onClick={() => void loadFull(source)}
+                >
+                  {t(
+                    fullLoading === source
+                      ? "Loading full audio…"
+                      : "Play full audio",
+                  )}
+                </Button>
+              )
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t("Full download is only available for desktop recordings.")}
+              </p>
+            )}
+            {fullFailed === source && (
+              <p className="text-sm" role="alert">
+                {t("Audio unavailable")}{" "}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void loadFull(source)}
+                >
+                  {t("Retry audio")}
+                </Button>
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

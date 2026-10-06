@@ -28,6 +28,7 @@ export type Recording = {
   sha256: string;
 };
 export type RecordingNotes = {
+  language?: string;
   transcript: {
     text: string;
     source: Recording["source"];
@@ -138,10 +139,14 @@ export class CompanionRecordingsClient {
       `/v1/companion/recordings/${encodeURIComponent(id)}/notes`,
     );
   }
-  generate(id: string): Promise<RecordingNotes> {
+  generate(
+    id: string,
+    language?: string,
+    retranscribe?: boolean,
+  ): Promise<RecordingNotes> {
     return this.api.post(
       `/v1/companion/recordings/${encodeURIComponent(id)}/notes`,
-      { consent: true },
+      { consent: true, language, retranscribe },
     );
   }
   remove(id: string): Promise<void> {

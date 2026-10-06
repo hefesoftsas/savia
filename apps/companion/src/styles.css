@@ -320,6 +320,10 @@ main {
   animation: recording-pulse 1.4s ease-in-out infinite;
 }
 
+.recording-stage.is-paused .status-light {
+  background: #b7791f;
+}
+
 .timer {
   margin: 10px 0 12px;
   color: #18231d;

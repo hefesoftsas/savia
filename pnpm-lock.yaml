@@ -764,8 +764,8 @@ importers:
         specifier: ^4.13.5
         version: 4.13.5
       nodemailer:
-        specifier: ^10.0.9
-        version: 10.0.15
+        specifier: 10.0.14
+        version: 10.0.14
       pg:
         specifier: ^8.18.0
         version: 8.23.0
@@ -8398,8 +8398,8 @@ packages:
   node-rsa@1.1.1:
     resolution: {integrity: sha512-Jd4cvbJMryN21r5HgxQOpMEqv+ooke/korixNNK3mGqfGJmy0M77WDDzo/05969+OkMy3XW1UuZsSmW9KQm7Fw==}
 
-  nodemailer@10.0.15:
-    resolution: {integrity: sha512-EUqp5PhtcsYXs9Fq/lS7s/8zlTrnBqmzZWzFFROrNikMiz+om/YRKMwqN907t+0A1KKyT8jd39CBUbFZmaZmcA==}
+  nodemailer@10.0.14:
+    resolution: {integrity: sha512-eJoLFKg55fesSlzUekmfOv/SBXh4KUYT8oiQc2RLP0tfG0rbNMJBK7wgHJwXTJwqyKlSJMz9UzDZ4v+aHEvo8g==}
     engines: {node: '>=20.0.0'}
 
   npm-run-path@4.0.1:
@@ -17678,7 +17678,7 @@ snapshots:
     dependencies:
       asn1: 0.2.6
 
-  nodemailer@10.0.15: {}
+  nodemailer@10.0.14: {}
 
   npm-run-path@4.0.1:
     dependencies:

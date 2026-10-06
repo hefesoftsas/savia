@@ -226,3 +226,15 @@ test("registry deployment accepts only the current main commit", async () => {
     /if \[ "\$approved_sha" != "\$current_sha" \]; then[\s\S]*exit 1/,
   );
 });
+
+test("coverage measures main and manual runs without duplicating required PR tests", async () => {
+  const coverage = await workflow("coverage.yml");
+  assert.match(coverage, /push:\n\s+branches: \[main\]/);
+  assert.match(coverage, /workflow_dispatch:/);
+  assert.doesNotMatch(coverage, /pull_request(?:_target)?:/);
+  assert.match(coverage, /pnpm test:coverage/);
+  assert.match(coverage, /needs: coverage/);
+  const ci = await workflow("ci.yml");
+  assert.match(ci, /pull_request:/);
+  assert.doesNotMatch(ci, /paths-ignore:|continue-on-error: true/);
+});

@@ -63,8 +63,11 @@ thresholds; the reports establish visibility before the team sets targets.
 
 ## Continuous integration
 
-The separate **Coverage** workflow runs on pushes to `main`, pull requests, and
-manual dispatch. Its 13 parallel lanes execute six Admin shards, three API
+The separate **Coverage** workflow runs on pushes to `main` and manual dispatch.
+Pull requests use the required **Savia CI** tests and typechecks without repeating
+those suites under coverage instrumentation. To measure a PR before merging,
+run **Coverage** manually and select its branch in GitHub Actions. This keeps
+coverage available while reducing competing runner jobs during integration. Its 13 parallel lanes execute six Admin shards, three API
 shards, the remaining core workspaces, insurance packages, and two Studio
 shards. Each lane uploads its raw reports even when tests fail. A final job
 downloads those reports, merges them, adds `summary.md` to the workflow run, and

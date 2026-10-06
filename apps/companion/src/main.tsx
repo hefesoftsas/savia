@@ -113,6 +113,20 @@ function App() {
       setSaved(false);
     });
 
+  const pause = () =>
+    run("Pausing recording", async () => {
+      const next = await native<CaptureStatus>("pause_capture");
+      setStatus(next);
+    });
+
+  const resume = () =>
+    run("Resuming recording", async () => {
+      const next = await native<CaptureStatus>("resume_capture");
+      setStatus(next);
+      setConsent(false);
+      setSaved(false);
+    });
+
   const discard = () =>
     run("Discarding audio", async () => {
       setStatus(await native<CaptureStatus>("discard_capture"));
@@ -263,6 +277,8 @@ function App() {
     .padStart(2, "0")}:${Math.floor((seconds % 3600) / 60)
     .toString()
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+  const isRecording = status.state === "recording";
+  const isPaused = status.state === "paused";
   const ready =
     status.state === "ready" ||
     (["error", "interrupted"].includes(status.state) &&
@@ -274,24 +290,26 @@ function App() {
     ...new Set((status.chunks ?? []).map((chunk) => chunk.source)),
   ];
   const reviewHref = recordingReviewHref(appOrigin);
-  const locked = Boolean(busy) || status.state === "recording";
+  const locked = Boolean(busy) || isRecording || isPaused;
   const actionDisabled =
     Boolean(busy) ||
-    (status.state === "recording"
+    (isRecording || isPaused
       ? false
       : ready
         ? complete || !canUploadRecording(capabilities) || !consent
         : !isTauri() || !selectedSources);
 
   const primaryAction = () => {
-    if (status.state === "recording") return stop();
+    if (isRecording) return stop();
+    if (isPaused) return resume();
     if (ready) return upload();
     return start();
   };
 
-  const actionLabel =
-    status.state === "recording"
-      ? "Stop recording"
+  const actionLabel = isRecording
+    ? "Stop recording"
+    : isPaused
+      ? "Resume recording"
       : ready
         ? complete
           ? "Saved to Savia"
@@ -427,21 +445,23 @@ function App() {
 
       <main>
         <section
-          className={`recording-stage${status.state === "recording" ? " is-recording" : ""}`}
+          className={`recording-stage${isRecording ? " is-recording" : ""}${isPaused ? " is-paused" : ""}`}
           aria-label="Recording status"
         >
           <div className="stage-status" role="status" aria-live="polite">
             <span className="status-light" aria-hidden="true" />
             <span>
-              {status.state === "recording"
+              {isRecording
                 ? "Recording"
-                : ready
-                  ? complete
-                    ? "Saved to Savia"
-                    : "Ready to upload"
-                  : status.state === "error" || status.state === "interrupted"
-                    ? "Capture needs attention"
-                    : "Ready to record"}
+                : isPaused
+                  ? "Paused"
+                  : ready
+                    ? complete
+                      ? "Saved to Savia"
+                      : "Ready to upload"
+                    : status.state === "error" || status.state === "interrupted"
+                      ? "Capture needs attention"
+                      : "Ready to record"}
             </span>
           </div>
           <p className="timer" aria-label={`${seconds} seconds recorded`}>
@@ -461,13 +481,15 @@ function App() {
             />
           </div>
           <p className="stage-hint">
-            {status.state === "recording"
+            {isRecording
               ? "Your audio stays on this device until you upload it."
-              : ready
-                ? "Check the captured sources, then upload when ready."
-                : status.state === "error" || status.state === "interrupted"
-                  ? "Review the message below, then try another recording."
-                  : "Capture up to one hour from your selected sources."}
+              : isPaused
+                ? "Recording is paused. Resume to keep adding to the same take."
+                : ready
+                  ? "Check the captured sources, then upload when ready."
+                  : status.state === "error" || status.state === "interrupted"
+                    ? "Review the message below, then try another recording."
+                    : "Capture up to one hour from your selected sources."}
           </p>
           {ready && status.tracks.length > 0 && (
             <ul className="captured-sources" aria-label="Captured audio">
@@ -597,12 +619,33 @@ function App() {
               <span className="button-spinner" aria-hidden="true" />
             ) : (
               <span className="action-glyph" aria-hidden="true">
-                {status.state === "recording" ? "■" : ready ? "↑" : "●"}
+                {isRecording ? "■" : isPaused ? "●" : ready ? "↑" : "●"}
               </span>
             )}
             {busy ?? actionLabel}
           </button>
-          {(status.state === "recording" ||
+          {isRecording && (
+            <button
+              className="discard-action"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={pause}
+            >
+              Pause
+            </button>
+          )}
+          {isPaused && (
+            <button
+              className="discard-action"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={stop}
+            >
+              Finish
+            </button>
+          )}
+          {(isRecording ||
+            isPaused ||
             ready ||
             status.state === "error" ||
             status.state === "interrupted") && (
