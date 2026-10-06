@@ -17,6 +17,14 @@ typedef CaptureTimerFactory = Timer Function(
   void Function() callback,
 );
 
+/// Local day+hour default for new captures, e.g. `Recording 2026-10-06 14:30`.
+/// The audio container (`format: 'm4a'`) stays a separate draft field.
+String defaultCaptureName([DateTime? now]) {
+  final at = now ?? DateTime.now();
+  String two(int value) => value.toString().padLeft(2, '0');
+  return 'Recording ${at.year.toString().padLeft(4, '0')}-${two(at.month)}-${two(at.day)} ${two(at.hour)}:${two(at.minute)}';
+}
+
 enum CapturePhase { idle, recording, ready, uploading, unknownOutcome, error }
 
 enum _CaptureOperation { start, stop, import, upload }
@@ -35,7 +43,8 @@ class CaptureController extends ChangeNotifier {
     required this.uploader,
     this.limit = mobileCaptureDurationLimit,
     this.timerFactory = Timer.new,
-  }) {
+    DateTime Function()? clock,
+  }) : clock = clock ?? DateTime.now {
     _interruption = native.interruptions.listen((_) {
       unawaited(stop());
     });
@@ -46,6 +55,7 @@ class CaptureController extends ChangeNotifier {
   final DraftUploader uploader;
   final Duration limit;
   final CaptureTimerFactory timerFactory;
+  final DateTime Function() clock;
   CapturePhase phase = CapturePhase.idle;
   RecordingDraft? draft;
   CompanionFailure? failure;
@@ -122,7 +132,7 @@ class CaptureController extends ChangeNotifier {
       draft = RecordingDraft(
         id: const Uuid().v4(),
         path: path,
-        name: 'Recording.m4a',
+        name: defaultCaptureName(clock()),
         format: 'm4a',
         bytes: bytes,
         durationSeconds: elapsed.inMilliseconds / 1000,
@@ -153,6 +163,31 @@ class CaptureController extends ChangeNotifier {
     if (busy) await _active;
     await stop();
   }
+
+  /// Renames the current draft in place, preserving id/path/bytes.
+  /// Trims [name] and requires 1..255 chars; invalid values are ignored.
+  /// Returns true when the draft name was updated.
+  bool renameDraft(String name) {
+    final current = draft;
+    if (current == null || busy) return false;
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed.length > 255) return false;
+    if (trimmed == current.name) return true;
+    draft = RecordingDraft(
+      id: current.id,
+      path: current.path,
+      name: trimmed,
+      format: current.format,
+      bytes: current.bytes,
+      durationSeconds: current.durationSeconds,
+      isCapture: current.isCapture,
+    );
+    _notify();
+    return true;
+  }
+
+  /// Alias kept for readability at call sites.
+  bool updateDraftName(String name) => renameDraft(name);
 
   Future<void> importAudio() => _run(_CaptureOperation.import, () async {
     if (draft != null || phase == CapturePhase.recording) return;

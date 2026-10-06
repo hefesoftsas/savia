@@ -40,6 +40,28 @@ export function formatDuration(locale: Locale, seconds: number): string {
   }).format(seconds);
 }
 
+/** Default recording-session name: local day + hour, e.g. "Feb 14, 2026, 3:45 PM". */
+export function defaultSessionName(
+  locale: Locale,
+  now: Date = new Date(),
+): string {
+  return now.toLocaleString(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+/** Trimmed session name sent to the backend. */
+export function normalizeSessionName(value: string): string {
+  return value.trim();
+}
+
+/** Session names require 1..255 chars after trimming. */
+export function isValidSessionName(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length >= 1 && trimmed.length <= 255;
+}
+
 const messages = {
   Connected: {
     es: "Conectado",
@@ -200,6 +222,16 @@ const messages = {
     es: "Grabación {id}",
     en: "Recording {id}",
     pt: "Gravação {id}",
+  },
+  "Session name": {
+    es: "Nombre de la sesión",
+    en: "Session name",
+    pt: "Nome da sessão",
+  },
+  "Name this recording": {
+    es: "Nombra esta grabación",
+    en: "Name this recording",
+    pt: "Nomeie esta gravação",
   },
   "Recording status": {
     es: "Estado de grabación",

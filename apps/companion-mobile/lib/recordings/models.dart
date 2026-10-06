@@ -156,19 +156,22 @@ class RecordingSummary {
     required this.decisions,
     required this.actions,
     required this.openQuestions,
+    this.title,
   });
 
   final String summary;
   final List<String> decisions;
   final List<RecordingAction> actions;
   final List<String> openQuestions;
+  final String? title;
 
   factory RecordingSummary.fromJson(Object? value) {
     if (value is! Map<String, dynamic> ||
         value['summary'] is! String ||
         value['decisions'] is! List ||
         value['actions'] is! List ||
-        value['openQuestions'] is! List) {
+        value['openQuestions'] is! List ||
+        (value['title'] != null && value['title'] is! String)) {
       throw const FormatException();
     }
     return RecordingSummary(
@@ -178,6 +181,7 @@ class RecordingSummary {
           .map(RecordingAction.fromJson)
           .toList(),
       openQuestions: _stringList(value['openQuestions']),
+      title: value['title'] as String?,
     );
   }
 }

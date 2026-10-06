@@ -27,6 +27,7 @@ export function requiredSessionRecordingScope(
       (action === "chunks" && match[2] && Number(match[3]) < 120))
   )
     return RECORDING_READ_SCOPE;
+  if (method === "PATCH" && !action) return RECORDING_UPLOAD_SCOPE;
   if (method === "POST" && !match[2]) {
     if (action === "chunks" || action === "finalize")
       return RECORDING_UPLOAD_SCOPE;

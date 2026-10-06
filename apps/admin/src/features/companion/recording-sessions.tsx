@@ -1,9 +1,9 @@
 import "./recording-sessions.css";
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { AudioLines, Download, RefreshCw } from "lucide-react";
+import { AudioLines, Download, Pencil, RefreshCw } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
-import { useMessages } from "@/i18n/core";
+import { useAppLocale, intlLocale, useMessages } from "@/i18n/core";
 import { companionMessages } from "@/i18n/locales/companion";
 import {
   CompanionSessionsClient,
@@ -38,6 +38,17 @@ const languageName = (code: string) =>
 export function RecordingSessions({ api }: { api: ApiClient }) {
   const client = useMemo(() => new CompanionSessionsClient(api), [api]);
   const t = useMessages(companionMessages);
+  const locale = useAppLocale();
+  const formatDate = (value: string) => {
+    try {
+      return new Date(value).toLocaleString(intlLocale(locale), {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch {
+      return value;
+    }
+  };
   const [sessions, setSessions] = useState<RecordingSession[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -139,6 +150,12 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
                     <span className="block break-words font-medium">
                       {item.name}
                     </span>
+                    <time
+                      className="mt-1 block text-sm text-muted-foreground"
+                      dateTime={item.createdAt}
+                    >
+                      {formatDate(item.createdAt)}
+                    </time>
                     <span className="mt-1 block text-sm text-muted-foreground">
                       {sessionTime(item.durationSeconds ?? 0)} ·{" "}
                       {t(
@@ -162,7 +179,18 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
             )}
           </nav>
           {session && (
-            <SessionDetail key={session.id} initial={session} client={client} />
+            <SessionDetail
+              key={session.id}
+              initial={session}
+              client={client}
+              onRenamed={(id, name) =>
+                setSessions((previous) =>
+                  previous.map((item) =>
+                    item.id === id ? { ...item, name } : item,
+                  ),
+                )
+              }
+            />
           )}
         </div>
       )}
@@ -172,19 +200,27 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
 function SessionDetail({
   initial,
   client,
+  onRenamed,
 }: {
   initial: RecordingSession;
   client: CompanionSessionsClient;
+  onRenamed: (id: string, name: string) => void;
 }) {
   const t = useMessages(companionMessages);
+  const locale = useAppLocale();
   const [session, setSession] = useState(initial);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(false),
     [retry, setRetry] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState(initial.name);
+  const [savingName, setSavingName] = useState(false);
+  const [renameError, setRenameError] = useState(false);
   const [language, setLanguage] = useState(initial.job.language ?? "auto");
   const [retranscribeAck, setRetranscribeAck] = useState(false);
   const inFlight = useRef(false),
     mounted = useRef(true);
+  const nameRevision = useRef(0);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -193,17 +229,25 @@ function SessionDetail({
   }, []);
   useEffect(() => {
     const abort = new AbortController();
+    const revision = nameRevision.current;
     setSession(initial);
+    setEditing(false);
+    setDraftName(initial.name);
+    setRenameError(false);
     void client
       .get(initial.id, abort.signal)
       .then((next) => {
-        if (!abort.signal.aborted) setSession(next);
+        if (!abort.signal.aborted && revision === nameRevision.current)
+          setSession(next);
       })
       .catch(() => {
         if (!abort.signal.aborted) setError(true);
       });
     return () => abort.abort();
   }, [initial, client]);
+  useEffect(() => {
+    if (!editing) setDraftName(session.name);
+  }, [session.name, editing]);
   const running = active(session);
   const hasTranscript = Object.values(session.job.transcripts).some((item) =>
     item.text.trim(),
@@ -277,9 +321,125 @@ function SessionDetail({
       failed: "Needs attention",
     } as const
   )[session.job.status];
+  async function saveName() {
+    const trimmed = draftName.trim();
+    if (!trimmed || trimmed.length > 255 || savingName) return;
+    if (trimmed === session.name) {
+      setEditing(false);
+      return;
+    }
+    setSavingName(true);
+    setRenameError(false);
+    try {
+      const next = await client.rename(session.id, trimmed);
+      if (mounted.current) {
+        nameRevision.current++;
+        setSession(next);
+        setDraftName(next.name);
+        setEditing(false);
+        onRenamed(next.id, next.name);
+      }
+    } catch {
+      if (mounted.current) setRenameError(true);
+    } finally {
+      if (mounted.current) setSavingName(false);
+    }
+  }
   return (
     <article className="min-w-0">
-      <h2 className="break-words text-xl font-semibold">{session.name}</h2>
+      <div className="flex items-start justify-between gap-3">
+        {editing ? (
+          <div className="min-w-0 flex-1">
+            <label className="block text-sm font-medium">
+              {t("Session name")}
+              <input
+                className="mt-2 block w-full rounded-md border bg-background p-2 font-normal"
+                value={draftName}
+                maxLength={255}
+                autoFocus
+                disabled={savingName}
+                onChange={(event) => setDraftName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void saveName();
+                  if (event.key === "Escape") {
+                    setDraftName(session.name);
+                    setEditing(false);
+                    setRenameError(false);
+                  }
+                }}
+              />
+            </label>
+            {renameError && (
+              <p role="alert" className="mt-2 text-sm text-destructive">
+                {t("Unable to rename this session. Try again.")}
+              </p>
+            )}
+            <div className="mt-2 flex gap-2">
+              <Button
+                size="sm"
+                disabled={
+                  savingName ||
+                  !draftName.trim() ||
+                  draftName.trim().length > 255
+                }
+                onClick={() => void saveName()}
+              >
+                {t(savingName ? "Saving…" : "Save name")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={savingName}
+                onClick={() => {
+                  setDraftName(session.name);
+                  setEditing(false);
+                  setRenameError(false);
+                }}
+              >
+                {t("Cancel")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="min-w-0">
+              <h2 className="break-words text-xl font-semibold">
+                {session.name}
+              </h2>
+              <time
+                className="mt-1 block text-sm text-muted-foreground"
+                dateTime={session.createdAt}
+              >
+                {(() => {
+                  try {
+                    return new Date(session.createdAt).toLocaleString(
+                      intlLocale(locale),
+                      { dateStyle: "medium", timeStyle: "short" },
+                    );
+                  } catch {
+                    return session.createdAt;
+                  }
+                })()}
+              </time>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || savingName}
+              onClick={() => {
+                setDraftName(session.name);
+                setRenameError(false);
+                setEditing(true);
+              }}
+              aria-label={t("Rename session")}
+              title={t("Rename session")}
+            >
+              <Pencil className="size-4" aria-hidden="true" />
+              {t("Rename")}
+            </Button>
+          </>
+        )}
+      </div>
       <SessionPlayer session={session} client={client} />
       <section className="mt-8 border-t pt-6">
         <h3 className="text-lg font-medium">{t("Transcript and summary")}</h3>
