@@ -49,15 +49,25 @@ type ContactAccess = ContactKey & {
   profileId: string;
 };
 type PublishedTask = {
-  id: string; employeeId: string; title: string; description: string;
-  order: number; audiences: Array<"external" | "internal">;
+  id: string;
+  employeeId: string;
+  title: string;
+  description: string;
+  order: number;
+  audiences: Array<"external" | "internal">;
 };
 type EmployeeSession = {
-  access: ContactAccess; employeeId: string; selectionRevision: number;
+  access: ContactAccess;
+  employeeId: string;
+  selectionRevision: number;
 };
 type ChannelAction = {
-  id: string; session: EmployeeSession; revision: number;
-  domain: string; command: string; input: Record<string, unknown>;
+  id: string;
+  session: EmployeeSession;
+  revision: number;
+  domain: string;
+  command: string;
+  input: Record<string, unknown>;
 };
 type ActionOutcome =
   | { state: "completed"; result: unknown }
@@ -196,3 +206,30 @@ edits; delegate bounded tests/reviews only when it improves isolation.
 Before implementation, obtain written-plan review and execution-method selection.
 No deployment, live Meta configuration change, or insurer request follows from
 this plan's approval alone.
+
+## Execution record
+
+Implementation is saved in the isolated worktree. Tasks 1–4 were committed
+separately; Tasks 5–8 were integrated together in `85459253` because the shared
+client, capabilities, confirmation lifecycle and runtime wiring depend on each
+other. The insurance operations live in the solution package and are re-exported
+by the release catalog. Existing Studio idempotency support avoids introducing
+a separate stable-ID endpoint.
+
+The planned integration test filenames were consolidated into
+`whatsapp-insurance.test.ts`, `whatsapp-general-actions.test.ts`, and
+`whatsapp-channel-inbound.test.ts`. Existing signed-webhook tests cover transport
+validation; the operation integration tests simulate external providers. No live
+Meta or insurer call was made. General actions verify the linked staff identity,
+confirmation, delayed delivery after menu navigation, and retained uncertainty.
+
+Independent review findings were fixed and tested: draft-bound consent, stale
+menu revocation, non-repeating access generations, navigation/default controls,
+credential redaction, vehicle replacement on plate changes, and final result
+binding validation. Unknown provider acknowledgements remain terminally
+uncertain and retain partial results. Channel cleanup preserves uncertain
+dispatch evidence and ownership.
+
+Focused API, admin, MCP, solution and schema checks passed, as did the root
+typecheck and contract suites. The full repository test run is tracked in the
+execution ledger; its result must be recorded before claiming full-suite success.

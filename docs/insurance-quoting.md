@@ -6,6 +6,32 @@ Step-by-step auto quote flow (`savia.insurance-quoter` + `insurance.quotes`).
 Each selected insurer product runs as its own independent flow; products run
 concurrently and each provider flow executes its steps sequentially.
 
+## Conversational WhatsApp quote pilot
+
+The opt-in virtual employee channel uses the same canonical quote contract and
+shared insurance operations as the authenticated assistant. Publish an employee
+with access to `cotizaciones` and `cotizaciones_detalle` under a task label such
+as **Consultar seguros**. The tenant must have the insurance solution installed,
+its Savia Request bundle prepared, and enabled products configured.
+
+Vehicle lookup is cached for the unchanged plate in the encrypted employee
+draft; retries require an explicit request. Supplied vehicle and applicant
+fields survive subsequent turns. After canonical validation, the server requests
+explicit data-processing consent for those specific fields; changed fields
+invalidate consent. A separate server-issued preview and confirmation are
+required before creating a quote or calling enabled insurer products.
+
+A stable execution key supports existing record-create idempotency. The contact
+ownership link is persisted before provider dispatch, and each product receives
+a durable dispatch claim. A lost dispatch acknowledgement becomes uncertain and
+is never automatically replayed. Customer summaries return only that contact's
+own completed channel results; linked advisers use their own tenant permissions.
+
+The pilot test uses simulated provider responses and a synthetic vehicle. No
+real insurer call is made by the test. See the
+[WhatsApp channel runbook](runbooks/nango-whatsapp.md#task-menu-and-virtual-employee-channel)
+for settings and a separately authorized live pilot.
+
 ## WhatsApp intake
 
 The quote plugin exports a static WhatsApp Flow intake contribution through the
