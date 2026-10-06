@@ -73,7 +73,7 @@ export type WhatsappAssistantDependencies = {
     | {
         tools: ToolSet;
         system: string;
-        directReply?: string;
+        directReply?: string | NativeReply;
         reply?(): NativeReply | string | undefined;
       }
     | undefined
