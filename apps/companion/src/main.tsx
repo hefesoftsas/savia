@@ -58,6 +58,8 @@ function App() {
   const [apiOrigin, setApiOrigin] = useState(DEFAULT_API_ORIGIN);
   const [appOrigin, setAppOrigin] = useState(DEFAULT_APP_ORIGIN);
   const [token, setToken] = useState("");
+  const [remember, setRemember] = useState(false);
+  const [hasStored, setHasStored] = useState(false);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [consent, setConsent] = useState(false);
@@ -243,12 +245,11 @@ function App() {
       setPreviews(previewUrls.current);
     });
 
-  const connect = (event: FormEvent) => {
-    event.preventDefault();
-    void run(message("Checking connection"), async () => {
+  const connectWith = (origin: string, tok: string, save: boolean) =>
+    run(message("Checking connection"), async () => {
       const result = await companionRequest<Capabilities>(
-        apiOrigin,
-        token,
+        origin,
+        tok,
         "capabilities",
       );
       setCapabilities(result);
@@ -261,8 +262,61 @@ function App() {
         isError: false,
       });
       if (result.storageAvailable) setSettingsOpen(false);
+      if (save) {
+        try {
+          await native<void>("credential_save", { origin, token: tok });
+          if (mounted.current) setHasStored(true);
+        } catch {
+          if (mounted.current)
+            setNotice({
+              message: message("Unable to save the credential on this device."),
+              isError: true,
+            });
+        }
+      } else {
+        try {
+          await native<void>("credential_clear");
+        } catch {
+          // Clearing is best effort; the session stays connected.
+        }
+        if (mounted.current) setHasStored(false);
+      }
     });
+
+  const connect = (event: FormEvent) => {
+    event.preventDefault();
+    void connectWith(apiOrigin, token, remember);
   };
+
+  const forget = () =>
+    run(message("Forget saved credential"), async () => {
+      await native<void>("credential_clear");
+      if (!mounted.current) return;
+      setHasStored(false);
+      setRemember(false);
+    });
+
+  // Saved OS-keychain credential: prefill and reconnect automatically.
+  useEffect(() => {
+    if (!isTauri()) return;
+    void (async () => {
+      try {
+        const saved = await native<{ origin: string; token: string } | null>(
+          "credential_load",
+        );
+        if (!mounted.current || !saved) return;
+        setApiOrigin(saved.origin);
+        setToken(saved.token);
+        setRemember(true);
+        setHasStored(true);
+        await connectWith(saved.origin, saved.token, true);
+      } catch {
+        // No usable saved credential: stay disconnected for manual setup.
+      }
+    });
+    // connectWith is stable for this bootstrap; run once on launch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openSavia = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!isTauri()) return;
@@ -535,6 +589,43 @@ function App() {
               <p className="field-hint">
                 {t("Opens the private recording review page.")}
               </p>
+              {isTauri() && (
+                <>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "8px",
+                      fontSize: "12px",
+                      fontWeight: 400,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      disabled={Boolean(busy)}
+                      onChange={(event) => setRemember(event.target.checked)}
+                      style={{ marginTop: "2px" }}
+                    />
+                    <span>
+                      {t("Remember on this device")}{" "}
+                      <span style={{ color: "#5a6660" }}>
+                        {t("Stored in the system keychain.")}
+                      </span>
+                    </span>
+                  </label>
+                  {hasStored && (
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={Boolean(busy)}
+                      onClick={() => void forget()}
+                    >
+                      {t("Forget saved credential")}
+                    </button>
+                  )}
+                </>
+              )}
               <button
                 className="connect-button"
                 type="submit"

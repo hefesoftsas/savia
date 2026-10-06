@@ -85,7 +85,10 @@ window and is not saved. See the [desktop language guide](../../docs/companion/d
 3. Create a [personal API key](../../docs/guides/personal-api-keys.md) in **My account → API keys**, with recording read and upload permissions. Alternatively use a Savia OAuth access token for an **active tenant member or platform administrator**, scoped for
    `savia.api.read` and `savia.api.write`, obtained through the existing supported
    Savia OAuth flow. Paste it into the validation app's password field; it remains
-   in memory. Built-in desktop OAuth/keychain integration is a later increment.
+   in memory unless you check Remember on this device, which stores the origin
+   and token in the OS keychain (macOS Keychain, Windows Credential Manager)
+   and reconnects on launch. Forgetting removes it. Built-in desktop OAuth
+   sign-in is a later increment.
 4. Enter the API origin (HTTPS, or local HTTP), then Check connection. Origins
    must have no path, credentials, query or fragment. Native forwarding rejects
    redirects to avoid disclosing the access token to another host.

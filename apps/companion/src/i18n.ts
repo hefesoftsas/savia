@@ -109,9 +109,9 @@ const messages = {
     pt: "Conectar ao Savia",
   },
   "Credentials stay in memory for this session.": {
-    es: "Las credenciales quedan en memoria solo en esta sesión.",
-    en: "Credentials stay in memory for this session.",
-    pt: "As credenciais ficam na memória apenas nesta sessão.",
+    es: "Las credenciales quedan en memoria salvo que elijas recordarlas.",
+    en: "Credentials stay in memory unless you choose to remember them.",
+    pt: "As credenciais ficam na memória, a menos que você opte por lembrá-las.",
   },
   Done: {
     es: "Listo",
@@ -132,6 +132,26 @@ const messages = {
     es: "Pega tu credencial de Savia",
     en: "Paste your Savia credential",
     pt: "Cole sua credencial do Savia",
+  },
+  "Remember on this device": {
+    es: "Recordar en este equipo",
+    en: "Remember on this device",
+    pt: "Lembrar neste dispositivo",
+  },
+  "Stored in the system keychain.": {
+    es: "Se guarda en el llavero del sistema.",
+    en: "Stored in the system keychain.",
+    pt: "É salva no gerenciador de credenciais do sistema.",
+  },
+  "Forget saved credential": {
+    es: "Olvidar credencial guardada",
+    en: "Forget saved credential",
+    pt: "Esquecer credencial salva",
+  },
+  "Unable to save the credential on this device.": {
+    es: "No se pudo guardar la credencial en este equipo.",
+    en: "Unable to save the credential on this device.",
+    pt: "Não foi possível salvar a credencial neste dispositivo.",
   },
   "Savia app address": {
     es: "Dirección de la app Savia",
