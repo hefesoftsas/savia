@@ -56,6 +56,7 @@ const oauthScopes = {
   "recordings:read": "Read private Companion recordings and session workspaces",
   "recordings:upload": "Upload private Companion recordings",
   "recordings:process": "Generate notes and answers from private recordings",
+  "recordings:delete": "Delete private Companion recordings and sessions",
 };
 
 type ScalarOAuthClient = {

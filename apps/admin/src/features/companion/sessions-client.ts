@@ -68,6 +68,9 @@ export class CompanionSessionsClient {
       name,
     });
   }
+  remove(id: string): Promise<void> {
+    return this.api.delete(`/v1/companion/sessions/${encodeURIComponent(id)}`);
+  }
   async audio(
     id: string,
     chunk: SessionChunk,

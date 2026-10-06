@@ -17,6 +17,7 @@ describe("long recording scope isolation", () => {
     ["POST", `${base}/${id}/notes`, "recordings:process"],
     ["POST", `${base}/${id}/cancel`, "recordings:process"],
     ["POST", `${base}/${id}/questions`, "recordings:process"],
+    ["DELETE", `${base}/${id}`, "recordings:delete"],
   ])("authorizes only the scope for %s %s", (method, path, scope) => {
     const request = new Request(`https://savia.test${path}`, { method });
     expect(requiredRecordingScope(request)).toBe(scope);
@@ -27,6 +28,7 @@ describe("long recording scope isolation", () => {
       "recordings:read",
       "recordings:upload",
       "recordings:process",
+      "recordings:delete",
     ] as const) {
       if (other !== scope)
         expect(() =>
@@ -39,7 +41,6 @@ describe("long recording scope isolation", () => {
     ["GET", `${base}/${id}/chunks/upload/0`],
     ["POST", `${base}/${id}/chunks/system/0`],
     ["GET", `${base}/${id}/notes`],
-    ["DELETE", `${base}/${id}`],
     ["POST", `${base}/../identity/users`],
   ])("rejects unrecognized %s %s", (method, path) => {
     const request = new Request(`https://savia.test${path}`, { method });
@@ -49,6 +50,7 @@ describe("long recording scope isolation", () => {
         "recordings:read",
         "recordings:upload",
         "recordings:process",
+        "recordings:delete",
       ]),
     ).toThrow();
   });

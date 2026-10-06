@@ -130,9 +130,12 @@ Starting a new recording or discarding the draft clears its previews. The app
 releases temporary preview URLs when replacing a preview and when the view is
 closed.
 
-Recordings → Recording sessions shows one session with source-aware playback,
-processing state, partial transcripts, summary and questions. Audio plays by
-segment in sequence within the selected source; visible offsets preserve gaps.
+Recordings → Recording sessions shows one session with combined playback,
+processing state, partial transcripts, summary and questions. When a session has
+more than one Ogg source, the review screen offers a single “combined call”
+player: it loads each source as one chained file and plays microphone and
+system audio together in lockstep, so a meeting is heard as one conversation.
+Per-source full-audio players and downloads remain below for isolated review.
 `GET /v1/companion/sessions/{id}/audio?source=` returns one source as a single
 chained Ogg file for listening and download. Each validated complete logical
 stream gets a distinct serial number and recomputed page checksums; codec packets,
@@ -149,6 +152,16 @@ Existing audio-file imports and short recording APIs remain available under the
 Audio files view. Summaries and answers never create business records or send
 external messages automatically.
 
+## Session deletion
+
+Any owner with `recordings:delete` can permanently delete a session with
+`DELETE /v1/companion/sessions/{id}` (see the generated OpenAPI/Scalar
+Companion group for the exact contract); the admin review screen exposes a
+delete action with confirmation. Deletion removes the manifest, every audio
+chunk and the pending job-schedule entry for that owner/workspace namespace;
+cross-workspace deletes return 404. It does not discard the local Companion
+draft or revoke provider usage already billed.
+
 ## Validation and limits
 
 Automated integration tests cover a synthetic hour consisting of 120 real AAC
@@ -160,7 +173,8 @@ wraparound, damaged-entry isolation, and bounded parallel dispatch. A two-sessio
 integration verifies concurrent transcription and persisted summaries using the
 R2 test binding and a fake provider. These are automated correctness checks, not a
 production load benchmark.
-Frontend tests exercise separate retry consent, progress and clearing stale answers.
+Frontend tests exercise separate retry consent, progress, clearing stale answers,
+combined-call playback of both sources, and session deletion with list removal.
 These checks do not substitute for microphone/loopback recordings on physical
 Windows/macOS/Android/iOS devices, Bluetooth changes, mobile force termination,
 or a paid hour-long provider qualification. Record those results using

@@ -161,9 +161,12 @@ async function companionAccessForActor(
     actor.credential?.kind === "oauth" &&
     requiredRecordingScope(request) !== null &&
     actor.credential.scopes.some((scope) =>
-      ["recordings:read", "recordings:upload", "recordings:process"].includes(
-        scope,
-      ),
+      [
+        "recordings:read",
+        "recordings:upload",
+        "recordings:process",
+        "recordings:delete",
+      ].includes(scope),
     ) &&
     !actor.credential.scopes.includes(requiredOAuthScope(request));
   let selectedTenantId: number | undefined;

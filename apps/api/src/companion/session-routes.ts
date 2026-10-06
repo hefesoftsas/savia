@@ -175,6 +175,24 @@ export function registerCompanionSessionRoutes(
   );
   app.openapi(
     createRoute({
+      method: "delete",
+      path: "/v1/companion/sessions/{id}",
+      tags: ["Companion"],
+      security: security("recordings:delete"),
+      summary: "Permanently delete an owned recording session and its audio",
+      request: { params },
+      responses: {
+        204: { description: "Recording session deleted" },
+        ...failures,
+      },
+    }),
+    async (c) => {
+      await options.sessions.remove(await access(c), c.req.valid("param").id);
+      return c.body(null, 204);
+    },
+  );
+  app.openapi(
+    createRoute({
       method: "post",
       path: "/v1/companion/sessions/{id}/chunks",
       tags: ["Companion"],

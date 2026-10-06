@@ -1242,6 +1242,7 @@ describe("Identity and access", () => {
         "recordings:read",
         "recordings:upload",
         "recordings:process",
+        "recordings:delete",
       ],
     });
   });

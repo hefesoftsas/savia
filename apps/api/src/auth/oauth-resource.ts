@@ -14,6 +14,7 @@ export const SAVIA_WRITE_SCOPE = "savia.api.write";
 export const RECORDING_READ_SCOPE = "recordings:read";
 export const RECORDING_UPLOAD_SCOPE = "recordings:upload";
 export const RECORDING_PROCESS_SCOPE = "recordings:process";
+export const RECORDING_DELETE_SCOPE = "recordings:delete";
 
 const roleClaim = "https://savia.hefesoft.com/roles";
 const emailClaim = "https://savia.hefesoft.com/email";
@@ -414,6 +415,7 @@ export async function protectedResourceMetadata(
         RECORDING_READ_SCOPE,
         RECORDING_UPLOAD_SCOPE,
         RECORDING_PROCESS_SCOPE,
+        RECORDING_DELETE_SCOPE,
       ],
     },
     {
@@ -423,6 +425,7 @@ export async function protectedResourceMetadata(
         RECORDING_READ_SCOPE,
         RECORDING_UPLOAD_SCOPE,
         RECORDING_PROCESS_SCOPE,
+        RECORDING_DELETE_SCOPE,
       ],
     },
   );

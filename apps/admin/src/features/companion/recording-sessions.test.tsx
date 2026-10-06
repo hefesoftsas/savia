@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { StoreContextProvider, memoryStore } from "ra-core";
@@ -248,6 +248,249 @@ it("plays and downloads the full concatenated audio per source", async () => {
   expect(requested).toContain(
     "/v1/companion/sessions/full/audio?source=microphone",
   );
+});
+
+it("plays microphone and system audio together as one combined call", async () => {
+  const twoSources: RecordingSession = {
+    ...session("mixed"),
+    chunks: [
+      {
+        source: "microphone",
+        sequence: 0,
+        startSeconds: 0,
+        durationSeconds: 30,
+        bytes: 4,
+        format: "ogg",
+      },
+      {
+        source: "system",
+        sequence: 0,
+        startSeconds: 0,
+        durationSeconds: 30,
+        bytes: 4,
+        format: "ogg",
+      },
+    ],
+    job: {
+      ...session("mixed").job,
+      status: "complete",
+      completedChunks: 2,
+      totalChunks: 2,
+      summary: {
+        summary: "All good.",
+        decisions: [],
+        actions: [],
+        openQuestions: [],
+      },
+    },
+  };
+  const requested: string[] = [];
+  URL.createObjectURL = vi.fn(
+    () => "blob:mixed-audio",
+  ) as unknown as typeof URL.createObjectURL;
+  URL.revokeObjectURL = vi.fn() as unknown as typeof URL.revokeObjectURL;
+  const fetchingApi = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      const url = new URL(String(input));
+      requested.push(`${url.pathname}${url.search}`);
+      if (url.pathname === "/v1/companion/sessions")
+        return Response.json({ sessions: [twoSources], cursor: null });
+      if (url.pathname.endsWith("/audio"))
+        return new Response("full-audio-bytes", {
+          headers: { "content-type": "audio/ogg" },
+        });
+      return Response.json(twoSources);
+    },
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={fetchingApi} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Play combined call" }),
+  );
+  expect(requested).toContain(
+    "/v1/companion/sessions/mixed/audio?source=microphone",
+  );
+  expect(requested).toContain(
+    "/v1/companion/sessions/mixed/audio?source=system",
+  );
+  await screen.findByText("Microphone and system audio, played together.");
+  expect(document.querySelectorAll("audio")).toHaveLength(2);
+});
+
+it("masters the combined call from the longest source timeline", async () => {
+  const uneven: RecordingSession = {
+    ...session("uneven"),
+    chunks: [
+      {
+        source: "microphone",
+        sequence: 0,
+        startSeconds: 0,
+        durationSeconds: 30,
+        bytes: 9,
+        format: "ogg",
+      },
+      {
+        source: "system",
+        sequence: 0,
+        startSeconds: 0,
+        durationSeconds: 60,
+        bytes: 22,
+        format: "ogg",
+      },
+    ],
+    job: {
+      ...session("uneven").job,
+      status: "complete",
+      completedChunks: 2,
+      totalChunks: 2,
+      summary: {
+        summary: "All good.",
+        decisions: [],
+        actions: [],
+        openQuestions: [],
+      },
+    },
+  };
+  URL.createObjectURL = ((blob: Blob) =>
+    `blob:${blob.size}`) as unknown as typeof URL.createObjectURL;
+  URL.revokeObjectURL = vi.fn() as unknown as typeof URL.revokeObjectURL;
+  const fetchingApi = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/companion/sessions")
+        return Response.json({ sessions: [uneven], cursor: null });
+      if (url.pathname.endsWith("/audio")) {
+        const body =
+          url.searchParams.get("source") === "system"
+            ? "system-audio-bytes-long"
+            : "mic-bytes";
+        return new Response(body, {
+          headers: { "content-type": "audio/ogg" },
+        });
+      }
+      return Response.json(uneven);
+    },
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={fetchingApi} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Play combined call" }),
+  );
+  await screen.findByText("Microphone and system audio, played together.");
+  expect(document.querySelector("audio[controls]")).toHaveAttribute(
+    "src",
+    "blob:23",
+  );
+});
+
+it("falls back to per-segment playback for mobile M4A sources", async () => {
+  const mobile: RecordingSession = {
+    ...session("mobile"),
+    chunks: [
+      {
+        source: "microphone",
+        sequence: 0,
+        startSeconds: 0,
+        durationSeconds: 30,
+        bytes: 4,
+        format: "m4a",
+      },
+    ],
+    job: {
+      ...session("mobile").job,
+      status: "complete",
+      completedChunks: 1,
+      totalChunks: 1,
+      summary: {
+        summary: "All good.",
+        decisions: [],
+        actions: [],
+        openQuestions: [],
+      },
+    },
+  };
+  const requested: string[] = [];
+  URL.createObjectURL = vi.fn(
+    () => "blob:segment-audio",
+  ) as unknown as typeof URL.createObjectURL;
+  URL.revokeObjectURL = vi.fn() as unknown as typeof URL.revokeObjectURL;
+  const fetchingApi = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      const url = new URL(String(input));
+      requested.push(`${url.pathname}${url.search}`);
+      if (url.pathname === "/v1/companion/sessions")
+        return Response.json({ sessions: [mobile], cursor: null });
+      if (url.pathname.includes("/chunks/"))
+        return new Response("segment-bytes", {
+          headers: { "content-type": "audio/mp4" },
+        });
+      return Response.json(mobile);
+    },
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={fetchingApi} />
+    </StoreContextProvider>,
+  );
+  expect(await screen.findByLabelText("Listen from")).toBeVisible();
+  expect(requested).toContain(
+    "/v1/companion/sessions/mobile/chunks/microphone/0",
+  );
+  await waitFor(() =>
+    expect(document.querySelectorAll("audio")).toHaveLength(1),
+  );
+  expect(
+    screen.queryByRole("button", { name: "Play combined call" }),
+  ).not.toBeInTheDocument();
+});
+
+it("deletes a session after confirmation and removes it from the list", async () => {
+  const deleted: string[] = [];
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (request.method === "DELETE") {
+        deleted.push(path);
+        return new Response(null, { status: 204 });
+      }
+      return Response.json(
+        path === "/v1/companion/sessions"
+          ? { sessions: [session("one")], cursor: null }
+          : session("one"),
+      );
+    },
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Delete session" }),
+  );
+  await user.click(
+    await screen.findByRole("button", { name: "Delete permanently" }),
+  );
+  expect(deleted).toEqual(["/v1/companion/sessions/one"]);
+  expect(await screen.findByText("No recording sessions yet")).toBeVisible();
 });
 
 it("opens the desktop review link directly on recording sessions", async () => {
