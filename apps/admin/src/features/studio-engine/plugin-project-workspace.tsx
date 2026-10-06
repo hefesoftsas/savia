@@ -60,6 +60,7 @@ export default function PluginProjectWorkspace({
   const [project, setProject] = useState<Project | null>(null);
   const [status, setStatus] = useState<SaveState>({ state: "saved" });
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [canPublishShared, setCanPublishShared] = useState(false);
@@ -140,6 +141,15 @@ export default function PluginProjectWorkspace({
     if (mounted.current)
       setError(reason instanceof Error ? reason.message : String(reason));
   }
+  function formatUpdatedAt(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString(locale, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  }
   async function create(
     draft: ProjectDraft = { files: createPluginProject(), history: [] },
   ) {
@@ -164,7 +174,7 @@ export default function PluginProjectWorkspace({
       manifest.version = `${parts[0]}.${parts[1]}.${Number(parts[2]) + 1}`;
     files["savia-extension.json"] = JSON.stringify(manifest, null, 2);
     if ((response.data as { synthesized?: boolean }).synthesized)
-      setError(
+      setNotice(
         tr(
           "Este plugin no incluía su código fuente; se abrió una copia editable como base.",
           "This plugin did not include its source; an editable copy was opened as a starting point.",
@@ -320,6 +330,17 @@ export default function PluginProjectWorkspace({
               {error}
             </p>
           )}
+          {notice && (
+            <div
+              role="status"
+              className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+            >
+              <span className="min-w-0 flex-1">{notice}</span>
+              <Button size="sm" variant="ghost" onClick={() => setNotice("")}>
+                {tr("Entendido", "Got it", "Entendi")}
+              </Button>
+            </div>
+          )}
           {status.state === "error" && (
             <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm">
               <span className="min-w-0 flex-1">
@@ -412,8 +433,24 @@ export default function PluginProjectWorkspace({
               {error}
             </p>
           )}
-          <header className="flex flex-wrap items-center gap-3 border-b pb-4">
-            <Button variant="ghost" size="sm" onClick={onClose}>
+          {notice && (
+            <div
+              role="status"
+              className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+            >
+              <span className="min-w-0 flex-1">{notice}</span>
+              <Button size="sm" variant="ghost" onClick={() => setNotice("")}>
+                {tr("Entendido", "Got it", "Entendi")}
+              </Button>
+            </div>
+          )}
+          <header className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:flex-wrap sm:items-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              onClick={onClose}
+            >
               {tr(
                 "Volver a extensiones",
                 "Back to extensions",
@@ -461,11 +498,12 @@ export default function PluginProjectWorkspace({
               {projects.map((item) => (
                 <li
                   key={item.id}
-                  className="flex min-w-0 items-center gap-3 py-2.5"
+                  className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-2.5"
                 >
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="min-w-0"
                     disabled={acting}
                     onClick={() =>
                       void action(() =>
@@ -475,10 +513,13 @@ export default function PluginProjectWorkspace({
                       )
                     }
                   >
-                    {item.label}
+                    <span className="truncate">{item.label}</span>
                   </Button>
-                  <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
-                    {item.updatedAt}
+                  <span
+                    className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground"
+                    title={item.updatedAt}
+                  >
+                    {formatUpdatedAt(item.updatedAt)}
                   </span>
                   <Button
                     variant="ghost"
@@ -532,6 +573,7 @@ export default function PluginProjectWorkspace({
                     <Button
                       variant="outline"
                       size="sm"
+                      className="shrink-0"
                       disabled={acting}
                       onClick={() =>
                         void action(() =>
