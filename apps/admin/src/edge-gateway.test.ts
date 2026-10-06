@@ -161,6 +161,9 @@ describe("edge gateway", () => {
     expect(staticAssetCacheControl("/savia-maskable-512-v5.png")).toBe(
       "public, max-age=31536000, immutable",
     );
+    expect(staticAssetCacheControl("/savia-splash-192-v1.png")).toBe(
+      "public, max-age=31536000, immutable",
+    );
     expect(staticAssetCacheControl("/favicon.svg")).toBe(
       "public, max-age=86400, must-revalidate",
     );
