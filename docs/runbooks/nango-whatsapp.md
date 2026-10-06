@@ -21,6 +21,12 @@ Owner: platform administrator. Review date: 2026-11-05.
 - Incoming text, native interactions, attachments and delivery receipts can arrive directly from Meta at
   `/webhooks/whatsapp`. Nango remains the outbound credential transport;
   Chatwoot is optional and is not part of the direct assistant flow.
+- The gateway's Wrangler asset configuration routes the exact
+  `/webhooks/whatsapp` path through the Worker before the SPA fallback in local,
+  preview and production deployments. Keep this entry in both the checked-in
+  `apps/admin/wrangler.jsonc` and generated deployment configs; otherwise Meta
+  verification requests and webhook events can receive the admin app instead
+  of reaching the API.
 
 ## Nango preparation (browser handoff)
 

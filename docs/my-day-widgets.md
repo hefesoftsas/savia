@@ -46,7 +46,8 @@ and request pages are excluded. Status, amount, and date fields are detected
 from the collection schema and can be adjusted where applicable.
 
 The Personal tab restores system widgets. At most twelve widgets can be saved.
-Collection widgets show at most ten items. Drag handles support keyboard
+Collection widgets show at most ten items. System cards omit the redundant
+collection/kind subtitle. Drag handles support keyboard
 ordering; the card menu also offers Move before, Move after, and Remove. Hidden
 mail entries retain their saved positions when visible cards are reordered.
 
@@ -62,8 +63,12 @@ settings in one row; settings retain their accessible name while showing only
 the icon. Mobile cards use compact spacing, a short date and touch-sized
 navigation. Day and week events use neutral cards with a small source marker,
 separate time and title, and compact copy/share controls with accessible labels.
-Google Calendar and Outlook use their provider icons with accessible names and
-hover titles; added calendar sources retain their visible names and color markers.
+Google Calendar and Outlook use their provider icons beside the time. View,
+navigation, calendar settings, and meeting actions use icons with tooltips and
+accessible names. Join links show the Meet, Teams, Zoom, or Jitsi logo; added
+calendar sources retain their visible names and color markers. Compact all-day
+entries show the all-day marker once alongside the event title, with the source
+name on its own line.
 The join link stays visible; deletion is in event details. A failed day read offers a retry directly in the agenda. Desktop
 month cells show three events and a
 **more** action for additional events. Multi-day events appear on every

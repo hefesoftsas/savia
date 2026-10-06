@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { render } from "../studio-engine/test/locale-test-render";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
@@ -390,6 +396,16 @@ describe("My Day calendar views", () => {
       await screen.findByRole("dialog", { name: "Reunión 1" }),
     ).toBeVisible();
     expect(screen.getAllByText("Todo el día").length).toBeGreaterThan(0);
+  });
+  it("shows the all-day label only once in compact imported events", async () => {
+    const user = userEvent.setup();
+    render(<Harness client={service()} />);
+    await user.click(await screen.findByRole("button", { name: "Mes" }));
+
+    const event = await screen.findByRole("button", { name: /Reunión 1/ });
+    expect(within(event).getByText("Todo el día · Reunión 1")).toBeVisible();
+    expect(within(event).queryByText("Todo el día · Equipo")).toBeNull();
+    expect(within(event).getByText("Equipo")).toBeVisible();
   });
   it("switches to seven Monday-first days and keeps provider queries range-aware", async () => {
     const user = userEvent.setup(),

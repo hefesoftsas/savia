@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Copy, Share2 } from "lucide-react";
 import { useMessages, type MessageCatalog } from "@/i18n/core";
+import { IconButtonWithTooltip } from "@/components/admin/icon-button-with-tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -81,32 +82,35 @@ function LinkActions({ url, compact }: { url: string; compact: boolean }) {
   return (
     <div className="grid min-w-0 gap-1">
       <div className="flex flex-wrap gap-1">
-        <Button
-          type="button"
-          variant={compact ? "ghost" : "outline"}
-          size={compact ? "icon" : "sm"}
-          className={compact ? "size-11" : undefined}
-          disabled={pending}
-          onClick={() => void act(false)}
-          aria-label={compact ? t("Copy meeting link") : undefined}
-          title={compact ? t("Copy meeting link") : undefined}
-        >
-          <Copy aria-hidden="true" className="size-4" />
-          {!compact && t("Copy meeting link")}
-        </Button>
-        <Button
-          type="button"
-          variant={compact ? "ghost" : "outline"}
-          size={compact ? "icon" : "sm"}
-          className={compact ? "size-11" : undefined}
-          disabled={pending}
-          onClick={() => void act(true)}
-          aria-label={compact ? t("Share meeting link") : undefined}
-          title={compact ? t("Share meeting link") : undefined}
-        >
-          <Share2 aria-hidden="true" className="size-4" />
-          {!compact && t("Share meeting link")}
-        </Button>
+        {[
+          { share: false, label: t("Copy meeting link"), Icon: Copy },
+          { share: true, label: t("Share meeting link"), Icon: Share2 },
+        ].map(({ share, label, Icon }) =>
+          compact ? (
+            <IconButtonWithTooltip
+              key={label}
+              label={label}
+              title={label}
+              className="size-11"
+              disabled={pending}
+              onClick={() => void act(share)}
+            >
+              <Icon aria-hidden="true" className="size-4" />
+            </IconButtonWithTooltip>
+          ) : (
+            <Button
+              key={label}
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              onClick={() => void act(share)}
+            >
+              <Icon aria-hidden="true" className="size-4" />
+              {label}
+            </Button>
+          ),
+        )}
       </div>
       {notice && (
         <p role="status" className="text-sm text-muted-foreground">
