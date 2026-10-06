@@ -500,8 +500,22 @@ export class WhatsappInboundRepository {
     const rows = await this.db
       .prepare(
         `SELECT message_id FROM whatsapp_inbox
-         WHERE state='pending' AND (retry_at IS NULL OR retry_at<=?)
-            OR (state='generating' AND lease_until<=? AND generation_attempts<?)
+         WHERE ((state='pending' AND (retry_at IS NULL OR retry_at<=?))
+            OR (state='generating' AND lease_until<=? AND generation_attempts<?))
+         AND NOT EXISTS (
+           SELECT 1 FROM whatsapp_inbox active
+           WHERE active.connection_id=whatsapp_inbox.connection_id
+             AND active.normalized_contact=whatsapp_inbox.normalized_contact
+             AND active.message_id<>whatsapp_inbox.message_id
+             AND active.state IN ('generating','responding')
+         ) AND NOT EXISTS (
+           SELECT 1 FROM whatsapp_inbox prior
+           WHERE prior.connection_id=whatsapp_inbox.connection_id
+             AND prior.normalized_contact=whatsapp_inbox.normalized_contact
+             AND prior.state IN ('pending','generating','responding')
+             AND (prior.received_at<whatsapp_inbox.received_at OR
+               (prior.received_at=whatsapp_inbox.received_at AND prior.message_id<whatsapp_inbox.message_id))
+         )
          ORDER BY received_at,message_id LIMIT ?`,
       )
       .bind(now, now, GENERATION_ATTEMPTS, batchLimit)

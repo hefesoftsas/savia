@@ -16,6 +16,9 @@ import {
 
 const MAX_REPLY_LENGTH = 4096;
 const DEFAULT_BATCH_SIZE = 10;
+const DRAIN_BATCH_SIZE = 2;
+const DRAIN_MAX_BATCHES = 100;
+const DRAIN_WALL_BUDGET_MS = 5 * 60 * 1000;
 
 function sameBinding(
   left: WhatsappAssistantBinding,
@@ -209,6 +212,59 @@ export async function processWhatsappInbox(
       await repository.fail(item.messageId, token, "outbound_send_uncertain");
       failed++;
     }
+  }
+
+  return { processed, failed };
+}
+
+export type WhatsappInboxDrainOptions = {
+  batchSize?: number;
+  maxBatches?: number;
+  wallBudgetMs?: number;
+  now?: () => number;
+};
+
+export async function drainWhatsappInbox(
+  repository: WhatsappInboundRepository,
+  dependencies: WhatsappInboundDependencies,
+  options: WhatsappInboxDrainOptions = {},
+): Promise<{ processed: number; failed: number }> {
+  const now = options.now ?? Date.now;
+  const batchSize = Math.max(
+    1,
+    Math.min(
+      DRAIN_BATCH_SIZE,
+      Math.floor(options.batchSize ?? DRAIN_BATCH_SIZE),
+    ),
+  );
+  const maxBatches = Math.max(
+    1,
+    Math.min(
+      DRAIN_MAX_BATCHES,
+      Math.floor(options.maxBatches ?? DRAIN_MAX_BATCHES),
+    ),
+  );
+  const wallBudgetMs = Math.max(
+    1,
+    Math.min(
+      DRAIN_WALL_BUDGET_MS,
+      Math.floor(options.wallBudgetMs ?? DRAIN_WALL_BUDGET_MS),
+    ),
+  );
+  const startedAt = now();
+  let processed = 0;
+  let failed = 0;
+
+  for (let batch = 0; batch < maxBatches; batch++) {
+    if (now() - startedAt >= wallBudgetMs) break;
+    const result = await processWhatsappInbox(
+      repository,
+      dependencies,
+      batchSize,
+    );
+    processed += result.processed;
+    failed += result.failed;
+    if (result.processed + result.failed === 0) break;
   }
 
   return { processed, failed };

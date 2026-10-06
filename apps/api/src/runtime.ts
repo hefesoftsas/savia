@@ -501,7 +501,7 @@ const runtime = {
         configuration,
         whatsappChannelOptions(environment, configuration),
       );
-      const report = await inbound.process();
+      const report = await inbound.process({ scheduled: true });
       await inbound.processActions();
       if (report.processed || report.failed)
         console.info(
