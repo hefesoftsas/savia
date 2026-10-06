@@ -51,3 +51,7 @@ can assign an explicit model when creating an employee or change or clear its
 model assignment when editing it. Other users
 can keep the inherited model and choose administrator-enabled alternatives in
 Pages **Ask AI**. Enabling alternatives does not change the employee's default.
+
+On small screens, the employee editor keeps its title and save/cancel actions
+visible while the form scrolls independently. Tabs wrap into complete rows
+without covering fields; all access modes and sections remain available.
