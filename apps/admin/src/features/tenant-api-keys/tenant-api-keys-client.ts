@@ -51,4 +51,8 @@ export class TenantApiKeysClient {
   revoke(tenantId: number, id: string) {
     return this.api.delete(`${this.path(tenantId)}/${encodeURIComponent(id)}`);
   }
+
+  delete(tenantId: number, id: string) {
+    return this.revoke(tenantId, id);
+  }
 }

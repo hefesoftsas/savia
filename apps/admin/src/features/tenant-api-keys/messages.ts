@@ -138,6 +138,11 @@ export const tenantApiKeyMessages = {
   Expired: ["Vencida", "Expired", "Expirada"],
   Active: ["Activa", "Active", "Ativa"],
   Revoke: ["Revocar", "Revoke", "Revogar"],
+  "Delete key confirmation": [
+    "¿Eliminar definitivamente la clave revocada de %{owner}? Esta acción no se puede deshacer.",
+    "Permanently delete %{owner}’s revoked key? This cannot be undone.",
+    "Excluir definitivamente a chave revogada de %{owner}? Esta ação não pode ser desfeita.",
+  ],
   "Revoke key confirmation": [
     "¿Revocar la clave de %{owner}? Las aplicaciones que la usan perderán acceso.",
     "Revoke %{owner}’s key? Apps using it will lose access.",

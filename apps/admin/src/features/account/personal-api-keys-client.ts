@@ -41,4 +41,7 @@ export class PersonalApiKeysClient {
   revoke(id: string) {
     return this.api.delete(`/v1/account/api-keys/${encodeURIComponent(id)}`);
   }
+  delete(id: string) {
+    return this.revoke(id);
+  }
 }

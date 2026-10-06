@@ -562,7 +562,35 @@ export function TenantApiKeysPanel({
                       >
                         {t("Revoke")}
                       </Button>
-                    ) : null}
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busy}
+                        aria-label={`${t("Delete")} ${key.name}`}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              t("Delete key confirmation", {
+                                owner: key.ownerName,
+                              }),
+                            )
+                          )
+                            return;
+                          void run(async () => {
+                            await client.delete(tenantId, key.id);
+                            if (contextRef.current !== context) return;
+                            setKeys((current) =>
+                              current.filter(
+                                (value) => value.id !== key.id,
+                              ),
+                            );
+                          });
+                        }}
+                      >
+                        {t("Delete")}
+                      </Button>
+                    )}
                   </li>
                 );
               })}
