@@ -15,7 +15,8 @@
     "./whatsapp": "./src/whatsapp.ts",
     "./plan-profiles": "./src/plan-profiles.ts",
     "./quote-results": "./src/screens/quote-results.tsx",
-    "./quote-screens.css": "./src/screens/quote-screens.css"
+    "./quote-screens.css": "./src/screens/quote-screens.css",
+    "./assistant-operations": "./src/assistant-operations.ts"
   },
   "scripts": {
     "test": "vitest run",

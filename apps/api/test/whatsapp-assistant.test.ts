@@ -228,3 +228,36 @@ it("does not allow the AI to initiate a template message", async () => {
     ),
   ).rejects.toThrow("WHATSAPP_AUTOMATIC_TEMPLATE_FORBIDDEN");
 });
+
+it("uses channel-authorized tools and server-generated previews without exposing tokens to the model", async () => {
+  const s = setup();
+  const tool = {
+    description: "Read",
+    inputSchema: {},
+    execute: async () => ({}),
+  };
+  const preview = {
+    kind: "buttons" as const,
+    text: "Confirm",
+    options: [{ id: "private-confirm-token", title: "Confirmar" }],
+  };
+  const generate = createWhatsappAssistant({
+    configuration: s.configuration,
+    employees: s.employees,
+    knowledge: s.knowledge,
+    complete: s.complete,
+    capabilities: async () => ({
+      tools: { read: tool } as any,
+      system: "Authorized channel operations",
+      reply: () => preview,
+    }),
+  });
+  expect(await generate(binding, [], "Test")).toEqual(preview);
+  expect(s.complete.mock.calls[0][0]).toHaveProperty("tools.read");
+  expect(s.complete.mock.calls[0][0].system).not.toContain(
+    "You have no administrative tools",
+  );
+  expect(JSON.stringify(s.complete.mock.calls[0][0])).not.toContain(
+    "private-confirm-token",
+  );
+});

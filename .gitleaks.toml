@@ -37,3 +37,10 @@ condition = "AND"
 paths = ['''^apps/admin/src/api/whatsapp-client\.test\.ts$''']
 regexTarget = "secret"
 regexes = ['''^123e4567-e89b-42d3-a456-426614174000$''']
+
+[[allowlists]]
+description = "WhatsApp plan prose describing navigation and default task controls"
+condition = "AND"
+paths = ['''^docs/superpowers/plans/2026-10-06-whatsapp-virtual-employee-channel\.md$''']
+regexTarget = "secret"
+regexes = ['''^navigation/default$''']

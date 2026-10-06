@@ -45,6 +45,32 @@ export type WhatsappAssistantConfiguration = {
   webhookReady: boolean;
 };
 
+export type WhatsappChannelConfiguration = {
+  routingEnabled: boolean;
+  defaultTaskId?: string | null;
+  tasks: Array<{
+    id: string;
+    employeeId: string;
+    title: string;
+    description: string;
+    order: number;
+    audiences: Array<"internal" | "external">;
+  }>;
+  staff: Array<{
+    phone: string;
+    label: string;
+    active: boolean;
+    principalId: string | null;
+  }>;
+  internalCapabilities: string[];
+  externalCapabilities: string[];
+};
+export type WhatsappChannelState = {
+  configuration: WhatsappChannelConfiguration | null;
+  employees: Array<{ id: string; name: string }>;
+  members: Array<{ id: string; name: string }>;
+};
+
 export type WhatsappNativeResources = {
   flows: Array<{
     key: string;
@@ -180,6 +206,25 @@ function agencyQuery(agencyId?: number): string {
 
 export class WhatsappClient {
   constructor(private readonly api: ApiClient) {}
+
+  async getChannel(agencyId: number): Promise<WhatsappChannelState> {
+    return (
+      await this.api.get<{ data: WhatsappChannelState }>(
+        `/v1/whatsapp/channel${agencyQuery(agencyId)}`,
+      )
+    ).data;
+  }
+  async updateChannel(
+    agencyId: number,
+    configuration: WhatsappChannelConfiguration,
+  ): Promise<WhatsappChannelConfiguration> {
+    return (
+      await this.api.put<{ data: WhatsappChannelConfiguration }>(
+        "/v1/whatsapp/channel",
+        { agencyId, configuration },
+      )
+    ).data;
+  }
 
   async getAssistant(
     agencyId: number,

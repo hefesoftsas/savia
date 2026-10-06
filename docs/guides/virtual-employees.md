@@ -63,3 +63,22 @@ actions instead of squeezing everything into one horizontal line.
 On small screens, the drawer keeps its title and save/cancel actions
 visible while the form scrolls independently. Tabs wrap into complete rows
 without covering fields; all access modes and sections remain available.
+
+## Publishing an employee to WhatsApp
+
+Use the WhatsApp integration's task-routing settings to publish existing active
+employees. Choose a task label that describes the user's goal, audience and
+order. Customers see these labels rather than employee names; employee replies
+identify the responder. An unpublished or inactive employee is unavailable.
+
+The server intersects the employee's collection grants with channel capabilities
+and the caller's current permissions. Staff numbers must be registered separately
+from the pilot admission allowlist. Linked staff use their own Savia identity and
+personal connections; customers use restricted, contact-owned operations.
+Publishing an employee does not grant new collections or personal accounts.
+
+Users can send `menú` or `inicio` at any time to choose another task. Pending
+approvals are cancelled; already confirmed jobs retain their original employee.
+Writes require a server-generated preview and explicit confirmation. See the
+[WhatsApp operations guide](../runbooks/nango-whatsapp.md#task-menu-and-virtual-employee-channel)
+for setup, supported commands, cleanup and uncertain-result recovery.

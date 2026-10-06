@@ -170,6 +170,14 @@ export async function processWhatsappInbox(
       continue;
     }
 
+    if (
+      dependencies.authorizeReply &&
+      !(await dependencies.authorizeReply(beforeSend, item))
+    ) {
+      await repository.fail(item.messageId, token, "channel_access_revoked");
+      failed++;
+      continue;
+    }
     try {
       const outboundId = await dependencies.send(
         beforeSend,
@@ -179,9 +187,12 @@ export async function processWhatsappInbox(
       );
       if (!outboundId.trim())
         throw new Error("The provider returned no message id");
-      if (await repository.complete(item.messageId, token, outboundId))
+      if (await repository.complete(item.messageId, token, outboundId)) {
         processed++;
-      else failed++;
+        await dependencies
+          .afterReply?.(beforeSend, item, outgoing)
+          .catch(() => console.error("WHATSAPP_CHANNEL_HISTORY_FAILED"));
+      } else failed++;
     } catch {
       // The request may have reached Meta even if its response was lost. Keep
       // the saved reply and stop here; an automatic retry could send twice.
