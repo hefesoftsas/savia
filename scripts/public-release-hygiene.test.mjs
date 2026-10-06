@@ -23,7 +23,7 @@ const technicalIdentifiers = new Set(["AES128", "SHA256"]);
 const approvedVendorHashes = new Map([
   [
     "apps/companion/src-tauri/Cargo.lock",
-    "1790dbecfd68b70cc1e587870154078223a5d08fc3c6eda7ee99cf290e8cbf4b",
+    "da3fda14684be59e5fdc8ed504e7cd00eac3e35aed5122ee82f6fcf1de5f1b30",
   ],
   [
     "apps/admin/public/login/lottie-light.min.js",
