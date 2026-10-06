@@ -319,7 +319,14 @@ describe("durable plugin projects and release source", () => {
       {},
       platform.env,
     );
-    expect(oldSource.status).toBe(404);
+    expect(oldSource.status).toBe(200);
+    const oldBody = (await oldSource.json()) as {
+      data: { files: Record<string, string>; synthesized?: boolean };
+    };
+    expect(oldBody.data.synthesized).toBe(true);
+    expect(oldBody.data.files["savia-extension.json"]).toContain(
+      "custom.old-project",
+    );
 
     const disabled = await sourceApp.request(
       "http://localhost/api/extensions/custom.project-test",

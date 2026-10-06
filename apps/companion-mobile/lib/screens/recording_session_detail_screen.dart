@@ -15,6 +15,7 @@ class RecordingSessionDetailScreen extends StatefulWidget {
     required this.playback,
     required this.downloadChunk,
     required this.canProcess,
+    required this.canRename,
     required this.onClose,
   });
   final RecordingSessionsController controller;
@@ -28,6 +29,7 @@ class RecordingSessionDetailScreen extends StatefulWidget {
   )
   downloadChunk;
   final bool canProcess;
+  final bool canRename;
   final VoidCallback onClose;
 
   @override
@@ -175,13 +177,14 @@ class _RecordingSessionDetailScreenState
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                IconButton(
-                  tooltip: l.sessionRename,
-                  onPressed: c.detailLoading || c.renaming
-                      ? null
-                      : () => _showRenameDialog(context),
-                  icon: const Icon(Icons.edit),
-                ),
+                if (widget.canRename)
+                  IconButton(
+                    tooltip: l.sessionRename,
+                    onPressed: c.detailLoading || c.renaming
+                        ? null
+                        : () => _showRenameDialog(context),
+                    icon: const Icon(Icons.edit),
+                  ),
                 IconButton(
                   tooltip: l.refresh,
                   onPressed: c.detailLoading ? null : c.refreshSelected,

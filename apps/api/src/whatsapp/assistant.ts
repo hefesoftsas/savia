@@ -15,6 +15,8 @@ import type {
   WhatsappChatMessage,
 } from "./inbound-contracts";
 
+import { humanSupportInstructions } from "./human-support";
+
 export type WhatsappAttachment = {
   type: "image" | "file";
   data: Uint8Array;
@@ -57,6 +59,7 @@ export type WhatsappAssistantDependencies = {
     employeeId: string,
     query: string,
   ): Promise<Array<{ text: string }>>;
+  humanSupportContact?(binding: WhatsappAssistantBinding): Promise<string>;
   prepareInput?(
     binding: WhatsappAssistantBinding,
     input: WhatsappInboundInput,
@@ -158,6 +161,9 @@ export function createWhatsappAssistant(
     const chunks = employee.allowedCollections.length
       ? await dependencies.knowledge(employee.id, message)
       : [];
+    const supportContact = await dependencies
+      .humanSupportContact?.(binding)
+      .catch(() => "");
     const system = [
       `You are ${employee.name}, answering an external contact over WhatsApp.`,
       capabilities
@@ -166,6 +172,7 @@ export function createWhatsappAssistant(
       employee.systemPrompt,
       "Use a natural, warm, conversational tone in the user's language. Keep replies short and build on the current conversation; avoid repeated greetings, exaggerated enthusiasm, unsolicited emojis, and long generic lists. Be transparent that you are a virtual assistant; never pretend to be a human. If a required consultation or operation fails, plainly say what could not be completed and ask the user to contact an advisor directly. Do not invent contact details or claim a human handoff has happened.",
       capabilities?.system ?? "",
+      humanSupportInstructions(supportContact),
       binding.native ? nativePrompt(binding.native) : "",
       chunks.length
         ? `<reference_documents>\n${chunks

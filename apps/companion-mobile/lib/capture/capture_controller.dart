@@ -169,14 +169,26 @@ class CaptureController extends ChangeNotifier {
   /// Returns true when the draft name was updated.
   bool renameDraft(String name) {
     final current = draft;
-    if (current == null || busy) return false;
+    if (current == null || busy || phase == CapturePhase.unknownOutcome) {
+      return false;
+    }
     final trimmed = name.trim();
-    if (trimmed.isEmpty || trimmed.length > 255) return false;
-    if (trimmed == current.name) return true;
+    final extension = RegExp(
+      r'\.(mp3|wav|m4a|ogg|opus|oga)$',
+      caseSensitive: false,
+    );
+    final baseName = current.isCapture
+        ? trimmed
+        : trimmed.replaceFirst(extension, '');
+    final nextName = current.isCapture
+        ? baseName
+        : '$baseName.${current.format}';
+    if (baseName.isEmpty || nextName.length > 255) return false;
+    if (nextName == current.name) return true;
     draft = RecordingDraft(
       id: current.id,
       path: current.path,
-      name: trimmed,
+      name: nextName,
       format: current.format,
       bytes: current.bytes,
       durationSeconds: current.durationSeconds,

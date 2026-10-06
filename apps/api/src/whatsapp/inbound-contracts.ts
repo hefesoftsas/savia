@@ -50,6 +50,7 @@ export type WhatsappChatMessage = {
 };
 
 export type WhatsappInboundDependencies = {
+  recoveryReply?(binding: WhatsappAssistantBinding): Promise<string>;
   authorizeReply?(
     binding: WhatsappAssistantBinding,
     input: WhatsappInboundInput,

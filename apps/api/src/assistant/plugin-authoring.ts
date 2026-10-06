@@ -12,7 +12,12 @@ import {
   pluginAuthoringResultSchema,
   type PluginAuthoringFiles,
 } from "@savia/studio-shared/plugin-authoring";
-import { APICallError, generateObject, NoObjectGeneratedError } from "ai";
+import {
+  APICallError,
+  generateObject,
+  NoObjectGeneratedError,
+  streamObject,
+} from "ai";
 import type { AssistantConfigurationRepository } from "./configuration";
 
 export type PluginAuthoringInput = {
@@ -65,6 +70,17 @@ export class PluginAuthoringError extends Error {
 }
 
 type GenerateObject = typeof generateObject;
+type StreamObject = typeof streamObject;
+export type AuthoringStreamEvent =
+  | { type: "message"; delta: string }
+  | { type: "usage"; input: number; output: number }
+  | { type: "result"; message: string; files: PluginAuthoringFiles }
+  | {
+      type: "error";
+      code: string;
+      message: string;
+      details?: PluginAuthoringDiagnostic[];
+    };
 type PluginAuthoringConfiguration = Pick<
   AssistantConfigurationRepository,
   | "assertTenantAdministrator"
@@ -230,7 +246,7 @@ function validateGeneratedFiles(
 }
 
 function authoringPrompt(
-  input: PluginAuthoringInput,
+  input: AuthoringPromptInput,
   collections: PluginAuthoringCollection[],
   validationDiagnostics: PluginAuthoringDiagnostic[] = [],
 ): string {
@@ -360,96 +376,150 @@ function providerFailure(error: unknown): PluginAuthoringError {
   );
 }
 
+type AuthoringPromptInput = Pick<
+  PluginAuthoringInput,
+  "prompt" | "files" | "history" | "diagnostics"
+>;
+
+type ResolvedAuthoringContext = {
+  request: AuthoringPromptInput & { tenantId: number };
+  effective: Awaited<
+    ReturnType<PluginAuthoringConfiguration["effectiveConfigurationForTenant"]>
+  >;
+  collections: PluginAuthoringCollection[];
+  operationSignal: AbortSignal;
+  deadlineSignal: AbortSignal;
+  signal: AbortSignal | undefined;
+  startedAt: number;
+};
+
+type ResolveDependencies = {
+  loadCollectionMetadata?: (
+    tenantId: number,
+    signal?: AbortSignal,
+  ) => Promise<PluginAuthoringCollection[]>;
+  timeoutMs?: number;
+};
+
+async function resolveAuthoringContext(
+  input: PluginAuthoringInput,
+  configuration: PluginAuthoringConfiguration,
+  dependencies: ResolveDependencies,
+): Promise<ResolvedAuthoringContext> {
+  const { principalId, isPlatformAdministrator, signal, ...wireInput } = input;
+  const parsedInput = pluginAuthoringRequestSchema.safeParse(wireInput);
+  if (!parsedInput.success) {
+    throw new PluginAuthoringError(
+      400,
+      "VALIDATION_ERROR",
+      "Invalid plugin authoring request",
+    );
+  }
+  const deadlineSignal = AbortSignal.timeout(
+    dependencies.timeoutMs ?? defaultOperationTimeoutMs,
+  );
+  const operationSignal = signal
+    ? AbortSignal.any([signal, deadlineSignal])
+    : deadlineSignal;
+  // The principal and role are server supplied and absent from the wire schema.
+  let effective;
+  if (isPlatformAdministrator) {
+    // Platform admins may target any active commercial tenant; the repository
+    // validates that explicit tenantId before resolving its effective config.
+    effective = await awaitWithSignal(
+      configuration.effectiveConfigurationForPlatformTenant(input.tenantId),
+      operationSignal,
+      signal,
+      deadlineSignal,
+    );
+  } else {
+    await awaitWithSignal(
+      configuration.assertTenantAdministrator(principalId, input.tenantId),
+      operationSignal,
+      signal,
+      deadlineSignal,
+    );
+    effective = await awaitWithSignal(
+      configuration.effectiveConfigurationForTenant(
+        principalId,
+        input.tenantId,
+      ),
+      operationSignal,
+      signal,
+      deadlineSignal,
+    );
+  }
+  if (!effective.apiKey) {
+    throw new PluginAuthoringError(
+      503,
+      "PLUGIN_AUTHORING_NOT_CONFIGURED",
+      "AI plugin authoring is not configured for this workspace.",
+    );
+  }
+
+  let collections: PluginAuthoringCollection[];
+  try {
+    collections = dependencies.loadCollectionMetadata
+      ? await awaitWithSignal(
+          dependencies.loadCollectionMetadata(input.tenantId, operationSignal),
+          operationSignal,
+          signal,
+          deadlineSignal,
+        )
+      : [];
+  } catch (error) {
+    if (error instanceof PluginAuthoringError) throw error;
+    throw new PluginAuthoringError(
+      503,
+      "PLUGIN_AUTHORING_METADATA_UNAVAILABLE",
+      "Workspace collection metadata is unavailable. Try again later.",
+    );
+  }
+
+  return {
+    request: {
+      tenantId: input.tenantId,
+      prompt: parsedInput.data.prompt,
+      files: parsedInput.data.files,
+      history: parsedInput.data.history,
+      diagnostics: parsedInput.data.diagnostics,
+    },
+    effective,
+    collections,
+    operationSignal,
+    deadlineSignal,
+    signal,
+    startedAt: Date.now(),
+  };
+}
+
 export function createPluginAuthoringService(
   configuration: PluginAuthoringConfiguration,
-  dependencies: {
+  dependencies: ResolveDependencies & {
     generateObject?: GenerateObject;
-    loadCollectionMetadata?: (
-      tenantId: number,
-      signal?: AbortSignal,
-    ) => Promise<PluginAuthoringCollection[]>;
-    timeoutMs?: number;
+    streamObject?: StreamObject;
   } = {},
 ) {
   const generate = dependencies.generateObject ?? generateObject;
+  const stream = dependencies.streamObject ?? streamObject;
 
   return {
     async generate(
       input: PluginAuthoringInput,
     ): Promise<PluginAuthoringResult> {
-      const { principalId, isPlatformAdministrator, signal, ...wireInput } =
-        input;
-      const parsedInput = pluginAuthoringRequestSchema.safeParse(wireInput);
-      if (!parsedInput.success) {
-        throw new PluginAuthoringError(
-          400,
-          "VALIDATION_ERROR",
-          "Invalid plugin authoring request",
-        );
-      }
-      const deadlineSignal = AbortSignal.timeout(
-        dependencies.timeoutMs ?? defaultOperationTimeoutMs,
+      const context = await resolveAuthoringContext(
+        input,
+        configuration,
+        dependencies,
       );
-      const operationSignal = signal
-        ? AbortSignal.any([signal, deadlineSignal])
-        : deadlineSignal;
-      // The principal and role are server supplied and absent from the wire schema.
-      let effective;
-      if (isPlatformAdministrator) {
-        // Platform admins may target any active commercial tenant; the repository
-        // validates that explicit tenantId before resolving its effective config.
-        effective = await awaitWithSignal(
-          configuration.effectiveConfigurationForPlatformTenant(input.tenantId),
-          operationSignal,
-          signal,
-          deadlineSignal,
-        );
-      } else {
-        await awaitWithSignal(
-          configuration.assertTenantAdministrator(principalId, input.tenantId),
-          operationSignal,
-          signal,
-          deadlineSignal,
-        );
-        effective = await awaitWithSignal(
-          configuration.effectiveConfigurationForTenant(
-            principalId,
-            input.tenantId,
-          ),
-          operationSignal,
-          signal,
-          deadlineSignal,
-        );
-      }
-      if (!effective.apiKey) {
-        throw new PluginAuthoringError(
-          503,
-          "PLUGIN_AUTHORING_NOT_CONFIGURED",
-          "AI plugin authoring is not configured for this workspace.",
-        );
-      }
-
-      let collections: PluginAuthoringCollection[];
-      try {
-        collections = dependencies.loadCollectionMetadata
-          ? await awaitWithSignal(
-              dependencies.loadCollectionMetadata(
-                input.tenantId,
-                operationSignal,
-              ),
-              operationSignal,
-              signal,
-              deadlineSignal,
-            )
-          : [];
-      } catch (error) {
-        if (error instanceof PluginAuthoringError) throw error;
-        throw new PluginAuthoringError(
-          503,
-          "PLUGIN_AUTHORING_METADATA_UNAVAILABLE",
-          "Workspace collection metadata is unavailable. Try again later.",
-        );
-      }
+      const {
+        effective,
+        collections,
+        operationSignal,
+        deadlineSignal,
+        signal,
+      } = context;
+      const startedAt = context.startedAt;
 
       const openrouter = createOpenRouter({ apiKey: effective.apiKey });
       const generateProposal = async (
@@ -467,7 +537,7 @@ export function createPluginAuthoringService(
                 collections,
                 validationDiagnostics,
               ),
-              maxOutputTokens: 14_000,
+              maxOutputTokens: 8_000,
               abortSignal: operationSignal,
               maxRetries: 0,
             }),
@@ -493,7 +563,34 @@ export function createPluginAuthoringService(
 
       let diagnostics = validateGeneratedFiles(parsedResult.data.files);
       if (diagnostics.length) {
-        result = await generateProposal(parsedResult.data.files, diagnostics);
+        // A second sequential provider call can exceed the Worker deadline and
+        // turn actionable validation feedback into a generic timeout. Skip the
+        // in-request repair when most of the deadline is already consumed; the
+        // client surfaces these diagnostics and the user retries with them.
+        if (Date.now() - startedAt > 60_000) {
+          throw new PluginAuthoringError(
+            502,
+            "PLUGIN_AUTHORING_INVALID_OUTPUT",
+            "The AI proposal still has files that fail Savia validation. Review the listed file paths and refine the request.",
+            diagnostics,
+          );
+        }
+        try {
+          result = await generateProposal(parsedResult.data.files, diagnostics);
+        } catch (error) {
+          if (
+            error instanceof PluginAuthoringError &&
+            error.code === "PLUGIN_AUTHORING_TIMEOUT"
+          ) {
+            throw new PluginAuthoringError(
+              502,
+              "PLUGIN_AUTHORING_INVALID_OUTPUT",
+              "The AI proposal still has files that fail Savia validation. Review the listed file paths and refine the request.",
+              diagnostics,
+            );
+          }
+          throw error;
+        }
         parsedResult = pluginAuthoringResultSchema.safeParse(result.object);
         if (!parsedResult.success) {
           throw new PluginAuthoringError(
@@ -513,6 +610,198 @@ export function createPluginAuthoringService(
         );
       }
       return parsedResult.data;
+    },
+
+    async prepareStream(
+      input: PluginAuthoringInput,
+    ): Promise<ResolvedAuthoringContext> {
+      return resolveAuthoringContext(input, configuration, dependencies);
+    },
+
+    async runStream(
+      context: ResolvedAuthoringContext,
+      onEvent: (event: AuthoringStreamEvent) => void | Promise<void>,
+    ): Promise<void> {
+      const {
+        effective,
+        collections,
+        operationSignal,
+        deadlineSignal,
+        signal,
+        startedAt,
+      } = context;
+      let eventsStarted = false;
+      const emit = async (event: AuthoringStreamEvent) => {
+        eventsStarted = true;
+        await onEvent(event);
+      };
+      const fail = async (error: PluginAuthoringError) => {
+        await emit({
+          type: "error",
+          code: error.code,
+          message: error.message,
+          ...(error.details ? { details: error.details } : {}),
+        });
+      };
+
+      const openrouter = createOpenRouter({ apiKey: effective.apiKey });
+      const totalUsage = { input: 0, output: 0 };
+      const streamProposal = async (
+        currentFiles: PluginAuthoringFiles,
+        validationDiagnostics: PluginAuthoringDiagnostic[] = [],
+      ) => {
+        let result: ReturnType<StreamObject>;
+        try {
+          result = stream({
+            model: openrouter(effective.model),
+            schema: pluginAuthoringResultSchema,
+            system: authoringSystem,
+            prompt: authoringPrompt(
+              { ...context.request, files: currentFiles },
+              collections,
+              validationDiagnostics,
+            ),
+            maxOutputTokens: 8_000,
+            abortSignal: operationSignal,
+            maxRetries: 0,
+          });
+        } catch (error) {
+          if (operationSignal.aborted)
+            throw operationAbortedError(signal, deadlineSignal);
+          if (error instanceof PluginAuthoringError) throw error;
+          throw providerFailure(error);
+        }
+        let streamed = "";
+        try {
+          for await (const partial of result.partialObjectStream) {
+            const next =
+              typeof partial === "object" &&
+              partial !== null &&
+              "message" in partial &&
+              typeof partial.message === "string"
+                ? partial.message
+                : "";
+            if (next.length > streamed.length && next.startsWith(streamed)) {
+              await emit({
+                type: "message",
+                delta: next.slice(streamed.length),
+              });
+              streamed = next;
+            } else if (next !== streamed) {
+              // Non-monotonic partials are cosmetic only; the final object
+              // stays authoritative, so resync without emitting.
+              streamed = next;
+            }
+          }
+          const [object, usage] = await Promise.all([
+            result.object,
+            result.usage,
+          ]);
+          totalUsage.input += usage.inputTokens ?? 0;
+          totalUsage.output += usage.outputTokens ?? 0;
+          return { object, streamed };
+        } catch (error) {
+          if (operationSignal.aborted)
+            throw operationAbortedError(signal, deadlineSignal);
+          if (error instanceof PluginAuthoringError) throw error;
+          throw providerFailure(error);
+        }
+      };
+
+      try {
+        let round = await streamProposal(context.request.files);
+        let parsedResult = pluginAuthoringResultSchema.safeParse(round.object);
+        if (!parsedResult.success) {
+          await fail(
+            new PluginAuthoringError(
+              502,
+              "PLUGIN_AUTHORING_INVALID_OUTPUT",
+              "The AI response did not match the plugin authoring contract.",
+            ),
+          );
+          return;
+        }
+
+        let diagnostics = validateGeneratedFiles(parsedResult.data.files);
+        if (diagnostics.length) {
+          if (Date.now() - startedAt > 60_000) {
+            await fail(
+              new PluginAuthoringError(
+                502,
+                "PLUGIN_AUTHORING_INVALID_OUTPUT",
+                "The AI proposal still has files that fail Savia validation. Review the listed file paths and refine the request.",
+                diagnostics,
+              ),
+            );
+            return;
+          }
+          try {
+            round = await streamProposal(parsedResult.data.files, diagnostics);
+          } catch (error) {
+            if (
+              error instanceof PluginAuthoringError &&
+              error.code === "PLUGIN_AUTHORING_TIMEOUT"
+            ) {
+              await fail(
+                new PluginAuthoringError(
+                  502,
+                  "PLUGIN_AUTHORING_INVALID_OUTPUT",
+                  "The AI proposal still has files that fail Savia validation. Review the listed file paths and refine the request.",
+                  diagnostics,
+                ),
+              );
+              return;
+            }
+            throw error;
+          }
+          parsedResult = pluginAuthoringResultSchema.safeParse(round.object);
+          if (!parsedResult.success) {
+            await fail(
+              new PluginAuthoringError(
+                502,
+                "PLUGIN_AUTHORING_INVALID_OUTPUT",
+                "The repaired AI response did not match the plugin authoring contract.",
+              ),
+            );
+            return;
+          }
+          diagnostics = validateGeneratedFiles(parsedResult.data.files);
+        }
+        if (diagnostics.length) {
+          await fail(
+            new PluginAuthoringError(
+              502,
+              "PLUGIN_AUTHORING_INVALID_OUTPUT",
+              "The AI proposal still has files that fail Savia validation. Review the listed file paths and refine the request.",
+              diagnostics,
+            ),
+          );
+          return;
+        }
+        await emit({
+          type: "usage",
+          input: totalUsage.input,
+          output: totalUsage.output,
+        });
+        await emit({
+          type: "result",
+          message: parsedResult.data.message,
+          files: parsedResult.data.files,
+        });
+      } catch (error) {
+        if (!eventsStarted) throw error;
+        if (error instanceof PluginAuthoringError) {
+          await fail(error);
+          return;
+        }
+        await fail(
+          new PluginAuthoringError(
+            503,
+            "PLUGIN_AUTHORING_UNAVAILABLE",
+            "AI plugin authoring is temporarily unavailable. Try again later.",
+          ),
+        );
+      }
     },
   };
 }
