@@ -573,4 +573,160 @@ export const personalIntegrationsMessages = {
     "Error deleting file",
     "Erro ao excluir arquivo",
   ],
+  "ChatGPT y Claude": ["ChatGPT y Claude", "ChatGPT and Claude", "ChatGPT e Claude"],
+  "Conecta Savia con ChatGPT y Claude para consultar tus colecciones y pedir tareas a tus empleados virtuales desde esos asistentes.":
+    [
+      "Conecta Savia con ChatGPT y Claude para consultar tus colecciones y pedir tareas a tus empleados virtuales desde esos asistentes.",
+      "Connect Savia with ChatGPT and Claude to query your collections and ask your virtual employees for tasks from those assistants.",
+      "Conecte o Savia ao ChatGPT e ao Claude para consultar suas coleções e pedir tarefas aos seus funcionários virtuais a partir desses assistentes.",
+    ],
+  "URL de conexión (MCP)": [
+    "URL de conexión (MCP)",
+    "Connection URL (MCP)",
+    "URL de conexão (MCP)",
+  ],
+  "Copia esta URL en el conector personalizado de ChatGPT o Claude. Siempre termina en /mcp y usa OAuth, sin pegar secretos internos.":
+    [
+      "Copia esta URL en el conector personalizado de ChatGPT o Claude. Siempre termina en /mcp y usa OAuth, sin pegar secretos internos.",
+      "Paste this URL into the ChatGPT or Claude custom connector. It always ends in /mcp and uses OAuth, without pasting internal secrets.",
+      "Cole esta URL no conector personalizado do ChatGPT ou do Claude. Ela sempre termina em /mcp e usa OAuth, sem colar segredos internos.",
+    ],
+  "Copiar URL": ["Copiar URL", "Copy URL", "Copiar URL"],
+  "URL copiada": ["URL copiada", "URL copied", "URL copiada"],
+  "¿Qué necesitas antes de empezar?": [
+    "¿Qué necesitas antes de empezar?",
+    "What do you need before starting?",
+    "Do que você precisa antes de começar?",
+  ],
+  "Acceso a ChatGPT con modo Desarrollador o a Claude con conectores personalizados habilitados.":
+    [
+      "Acceso a ChatGPT con modo Desarrollador o a Claude con conectores personalizados habilitados.",
+      "Access to ChatGPT with Developer mode or to Claude with custom connectors enabled.",
+      "Acesso ao ChatGPT com modo Desenvolvedor ou ao Claude com conectores personalizados habilitados.",
+    ],
+  "Tu usuario de Savia con acceso a la organización que quieres consultar.": [
+    "Tu usuario de Savia con acceso a la organización que quieres consultar.",
+    "Your Savia user with access to the organization you want to query.",
+    "Seu usuário do Savia com acesso à organização que você deseja consultar.",
+  ],
+  "Conexión HTTPS al entorno desplegado. Los clientes en la nube no pueden alcanzar localhost.":
+    [
+      "Conexión HTTPS al entorno desplegado. Los clientes en la nube no pueden alcanzar localhost.",
+      "HTTPS connection to the deployed environment. Cloud clients cannot reach localhost.",
+      "Conexão HTTPS com o ambiente implantado. Clientes na nuvem não conseguem alcançar localhost.",
+    ],
+  "Cómo conectar ChatGPT": [
+    "Cómo conectar ChatGPT",
+    "How to connect ChatGPT",
+    "Como conectar o ChatGPT",
+  ],
+  "Cómo conectar Claude": [
+    "Cómo conectar Claude",
+    "How to connect Claude",
+    "Como conectar o Claude",
+  ],
+  "Activa el modo Desarrollador en Ajustes → Seguridad e inicio de sesión → Seguridad avanzada.":
+    [
+      "Activa el modo Desarrollador en Ajustes → Seguridad e inicio de sesión → Seguridad avanzada.",
+      "Enable Developer mode in Settings → Security and login → Advanced security.",
+      "Ative o modo Desenvolvedor em Ajustes → Segurança e login → Segurança avançada.",
+    ],
+  "Abre Plugins, pulsa Crear app (+) e introduce el nombre de Savia y la URL de conexión.":
+    [
+      "Abre Plugins, pulsa Crear app (+) e introduce el nombre de Savia y la URL de conexión.",
+      "Open Plugins, click Create app (+) and enter the Savia name and the connection URL.",
+      "Abra Plugins, clique em Criar app (+) e informe o nome do Savia e a URL de conexão.",
+    ],
+  "Elige OAuth, acepta el aviso de servidor personalizado y deja seleccionado el Registro dinámico de cliente (DCR).":
+    [
+      "Elige OAuth, acepta el aviso de servidor personalizado y deja seleccionado el Registro dinámico de cliente (DCR).",
+      "Choose OAuth, accept the custom-server warning and keep Dynamic Client Registration (DCR) selected.",
+      "Escolha OAuth, aceite o aviso de servidor personalizado e mantenha o Registro dinâmico de cliente (DCR) selecionado.",
+    ],
+  "Pulsa Iniciar sesión con Savia, completa el login y aprueba solo los permisos necesarios.":
+    [
+      "Pulsa Iniciar sesión con Savia, completa el login y aprueba solo los permisos necesarios.",
+      "Click Sign in with Savia, complete login and approve only the required permissions.",
+      "Clique em Entrar com Savia, conclua o login e aprove apenas as permissões necessárias.",
+    ],
+  "Pulsa Actualizar en el conector y verifica que aparecen acciones como listar colecciones.":
+    [
+      "Pulsa Actualizar en el conector y verifica que aparecen acciones como listar colecciones.",
+      "Click Refresh in the connector and verify that actions such as listing collections appear.",
+      "Clique em Atualizar no conector e verifique se aparecem ações como listar coleções.",
+    ],
+  "Abre los ajustes de conectores de Claude y elige Añadir conector personalizado.":
+    [
+      "Abre los ajustes de conectores de Claude y elige Añadir conector personalizado.",
+      "Open Claude's connector settings and choose Add custom connector.",
+      "Abra as configurações de conectores do Claude e escolha Adicionar conector personalizado.",
+    ],
+  "Pega la misma URL de conexión y elige OAuth.": [
+    "Pega la misma URL de conexión y elige OAuth.",
+    "Paste the same connection URL and choose OAuth.",
+    "Cole a mesma URL de conexão e escolha OAuth.",
+  ],
+  "Completa el registro dinámico (DCR), inicia sesión en Savia y aprueba los permisos.":
+    [
+      "Completa el registro dinámico (DCR), inicia sesión en Savia y aprueba los permisos.",
+      "Complete dynamic registration (DCR), sign in to Savia and approve the permissions.",
+      "Conclua o registro dinâmico (DCR), entre no Savia e aprove as permissões.",
+    ],
+  "Vuelve a Claude y pide descubrir datos, por ejemplo: Lista las colecciones a las que tengo acceso.":
+    [
+      "Vuelve a Claude y pide descubrir datos, por ejemplo: Lista las colecciones a las que tengo acceso.",
+      "Go back to Claude and ask to discover data, for example: List the collections I can access.",
+      "Volte ao Claude e peça para descobrir dados, por exemplo: Liste as coleções às quais tenho acesso.",
+    ],
+  "Permisos que aprobarás": [
+    "Permisos que aprobarás",
+    "Permissions you will approve",
+    "Permissões que você aprovará",
+  ],
+  "Lectura para descubrir y leer colecciones y empleados.": [
+    "Lectura para descubrir y leer colecciones y empleados.",
+    "Read to discover and read collections and employees.",
+    "Leitura para descobrir e ler coleções e funcionários.",
+  ],
+  "Escritura para mutaciones autorizadas y confirmación de acciones pendientes.":
+    [
+      "Escritura para mutaciones autorizadas y confirmación de acciones pendientes.",
+      "Write for authorized mutations and pending-action confirmations.",
+      "Escrita para mutações autorizadas e confirmação de ações pendentes.",
+    ],
+  "Acceso sin conexión para renovar tokens (offline_access).": [
+    "Acceso sin conexión para renovar tokens (offline_access).",
+    "Offline access to refresh tokens (offline_access).",
+    "Acesso offline para renovar tokens (offline_access).",
+  ],
+  "Si algo falla": ["Si algo falla", "If something fails", "Se algo falhar"],
+  "Si no ves acciones tras conectar, usa Actualizar en el conector y revisa que la URL termine en /mcp.":
+    [
+      "Si no ves acciones tras conectar, usa Actualizar en el conector y revisa que la URL termine en /mcp.",
+      "If you see no actions after connecting, use Refresh in the connector and check that the URL ends in /mcp.",
+      "Se não vir ações após conectar, use Atualizar no conector e verifique se a URL termina em /mcp.",
+    ],
+  "Usa siempre el callback exacto que muestra tu cliente. No reutilices callbacks de otra cuenta.":
+    [
+      "Usa siempre el callback exacto que muestra tu cliente. No reutilices callbacks de otra cuenta.",
+      "Always use the exact callback shown by your client. Do not reuse callbacks from another account.",
+      "Use sempre o callback exato mostrado pelo seu cliente. Não reutilize callbacks de outra conta.",
+    ],
+  "Localhost o IPs privadas no funcionan con clientes en la nube: usa el entorno desplegado HTTPS.":
+    [
+      "Localhost o IPs privadas no funcionan con clientes en la nube: usa el entorno desplegado HTTPS.",
+      "Localhost or private IPs do not work with cloud clients: use the deployed HTTPS environment.",
+      "Localhost ou IPs privadas não funcionam com clientes na nuvem: use o ambiente HTTPS implantado.",
+    ],
+  "Qué puedes hacer después": [
+    "Qué puedes hacer después",
+    "What you can do next",
+    "O que você pode fazer depois",
+  ],
+  "Pide listar colecciones antes de usar un identificador y menciona a un empleado para una tarea.":
+    [
+      "Pide listar colecciones antes de usar un identificador y menciona a un empleado para una tarea.",
+      "Ask to list collections before using an identifier and mention an employee for a task.",
+      "Peça para listar coleções antes de usar um identificador e mencione um funcionário para uma tarefa.",
+    ],
 } as const;

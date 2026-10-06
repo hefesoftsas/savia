@@ -25,6 +25,7 @@ import { WhatsappConnectionsPage } from "@/features/whatsapp/whatsapp-connection
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CompanionDownloads } from "./companion-downloads";
+import { AiAssistantsConnect } from "./ai-assistants-connect";
 import { VirtualEmployeesManagement } from "./virtual-employees-management";
 import { useMessages } from "@/i18n/core";
 import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
@@ -348,7 +349,9 @@ export function PersonalIntegrationsPage({
           ? "whatsapp"
           : searchParams.get("tab") === "apps"
             ? "apps"
-            : "connections";
+            : searchParams.get("tab") === "ai-assistants"
+              ? "ai-assistants"
+              : "connections";
   const selectTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("tab", tab);
@@ -542,11 +545,11 @@ export function PersonalIntegrationsPage({
           <TabsTrigger className="min-h-11 sm:min-h-0" value="whatsapp">
             WhatsApp
           </TabsTrigger>
-          <TabsTrigger
-            className="min-h-11 sm:min-h-0"
-            value="virtual-employees"
-          >
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="virtual-employees">
             {t("Empleados Virtuales (IA)")}
+          </TabsTrigger>
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="ai-assistants">
+            {t("ChatGPT y Claude")}
           </TabsTrigger>
           <TabsTrigger value="apps">{t("Aplicaciones")}</TabsTrigger>
         </TabsList>
@@ -675,6 +678,10 @@ export function PersonalIntegrationsPage({
             client={services.virtualEmployees}
             assistantConfigClient={services.assistantConfiguration}
           />
+        </TabsContent>
+
+        <TabsContent value="ai-assistants" className="space-y-6">
+          <AiAssistantsConnect />
         </TabsContent>
       </Tabs>
     </IntegrationsPageShell>
