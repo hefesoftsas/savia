@@ -98,6 +98,24 @@ after transcripts exist requires explicit `retranscribe` consent, replaces
 saved transcripts and summaries, and may be billed again. Short audio-file
 notes accept the same `language`/`retranscribe` options.
 
+## Session names
+
+New sessions start with a user-editable name that defaults to the local
+day and hour (for example `Recording 2026-10-06 09:47`), never a bare
+recording identifier. Desktop and mobile capture both offer the name for
+editing before upload. Any owner with `recordings:upload` can rename a
+session later with `PATCH /v1/companion/sessions/{id}` (`{name: 1..255 chars}`;
+see the generated OpenAPI/Scalar Companion group for the exact contract);
+admin and mobile review screens expose a rename action.
+
+When summary processing completes, a session whose name is still a generic
+default (`Recording <hex>`, localized variants, or `Recording.m4a`) is
+renamed automatically: the summary model returns a concise `title` (1..80
+chars, in the meeting language) in the same provider call, and the worker
+adopts it. If the model returns no usable title, the worker falls back to a
+UTC day-hour name (`Recording YYYY-MM-DD HH:mm`) derived from creation time.
+A user-chosen name is never overwritten.
+
 ## Review and questions
 
 Library listing returns metadata; individual session reads retrieve saved transcripts

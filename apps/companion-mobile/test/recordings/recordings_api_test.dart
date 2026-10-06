@@ -331,7 +331,11 @@ void main() {
           ),
         );
 
-      await api.createSession(id: id, name: 'Recording.m4a', consent: true);
+      await api.createSession(
+        id: id,
+        name: 'Recording 2026-10-03 12:00',
+        consent: true,
+      );
       await api.uploadSessionChunk(
         sessionId: id,
         sequence: 0,
@@ -348,7 +352,7 @@ void main() {
       ) as Map<String, dynamic>;
       expect(create, {
         'id': id,
-        'name': 'Recording.m4a',
+        'name': 'Recording 2026-10-03 12:00',
         'sources': ['microphone'],
         'consent': true,
       });
@@ -403,7 +407,7 @@ Map<String, Object?> sessionJson({
   double? durationSeconds,
 }) => {
   'id': id,
-  'name': 'Recording.m4a',
+  'name': 'Recording 2026-10-03 12:00',
   'createdAt': '2026-10-03T12:00:00.000Z',
   'state': state,
   'durationSeconds': durationSeconds,

@@ -307,6 +307,16 @@ export const companionMessages = {
     "Nenhuma fala detectada.",
   ],
   "Download audio": ["Descargar audio", "Download audio", "Baixar áudio"],
+  "Session name": ["Nombre de la sesión", "Session name", "Nome da sessão"],
+  "Rename session": ["Renombrar sesión", "Rename session", "Renomear sessão"],
+  Rename: ["Renombrar", "Rename", "Renomear"],
+  "Save name": ["Guardar nombre", "Save name", "Salvar nome"],
+  "Saving…": ["Guardando…", "Saving…", "Salvando…"],
+  "Unable to rename this session. Try again.": [
+    "No se pudo renombrar esta sesión. Inténtalo de nuevo.",
+    "Unable to rename this session. Try again.",
+    "Não foi possível renomear esta sessão. Tente novamente.",
+  ],
   "Loading recordings…": [
     "Cargando grabaciones…",
     "Loading recordings…",

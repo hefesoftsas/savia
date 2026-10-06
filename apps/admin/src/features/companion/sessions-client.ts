@@ -63,6 +63,11 @@ export class CompanionSessionsClient {
       `/v1/companion/sessions/${encodeURIComponent(id)}/cancel`,
     );
   }
+  rename(id: string, name: string): Promise<RecordingSession> {
+    return this.api.patch(`/v1/companion/sessions/${encodeURIComponent(id)}`, {
+      name,
+    });
+  }
   async audio(
     id: string,
     chunk: SessionChunk,

@@ -272,3 +272,52 @@ it("opens the desktop review link directly on recording sessions", async () => {
   expect(await screen.findByText("No recording sessions yet")).toBeVisible();
   expect(paths).toEqual(["/v1/companion/sessions"]);
 });
+
+it("renames a session from its detail header", async () => {
+  const patched: { path: string; method: string; body: unknown }[] = [];
+  let name = "Interview one";
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (request.method === "GET")
+        return Response.json(
+          path === "/v1/companion/sessions"
+            ? { sessions: [{ ...session("one"), name }], cursor: null }
+            : { ...session("one"), name },
+        );
+      if (request.method === "PATCH") {
+        const body = (await request.json()) as { name: string };
+        name = body.name;
+        patched.push({ path, method: "PATCH", body });
+        return Response.json({ ...session("one"), name });
+      }
+      return Response.json({ ...session("one"), name });
+    },
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Rename session" }),
+  );
+  const field = screen.getByLabelText("Session name");
+  await user.clear(field);
+  await user.type(field, "Budget review");
+  await user.click(screen.getByRole("button", { name: "Save name" }));
+  expect(
+    await screen.findByRole("heading", { name: "Budget review" }),
+  ).toBeVisible();
+  expect(patched).toEqual([
+    {
+      path: "/v1/companion/sessions/one",
+      method: "PATCH",
+      body: { name: "Budget review" },
+    },
+  ]);
+});
