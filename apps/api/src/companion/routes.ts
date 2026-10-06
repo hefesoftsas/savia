@@ -44,6 +44,7 @@ import {
 import { MAX_OPUS_BYTES } from "./ogg";
 import {
   CompanionRecordings,
+  recordingLanguageSchema,
   saveRecordingSchema,
   recordingSchema,
   recordingListSchema,
@@ -821,10 +822,7 @@ export function registerCompanionRoutes(
   const notesConsentSchema = z
     .object({
       consent: z.literal(true),
-      language: z
-        .string()
-        .regex(/^([a-z]{2}|auto)$/)
-        .optional(),
+      language: recordingLanguageSchema.optional(),
       retranscribe: z.boolean().optional(),
     })
     .strict();
@@ -877,14 +875,34 @@ export function registerCompanionRoutes(
       const owner = await access(c);
       const id = c.req.valid("param").id;
       const body = c.req.valid("json");
-      // "auto" (or omitted) lets the provider detect the spoken language;
-      // an explicit user choice is passed through as a hint.
-      const requestedLanguage =
-        body.language === "auto" ? undefined : body.language;
+      // "auto" asks the provider to infer speech language. Older clients omit
+      // language on retries, so retain the saved choice when notes already exist.
       return recordings.withNotesLock(owner, id, async () => {
         let notes = await recordings.getNotes(owner, id);
+        const selectedLanguage =
+          body.language ??
+          (notes.transcript || notes.summary
+            ? (notes.language ?? "auto")
+            : "auto");
+        const requestedLanguage =
+          selectedLanguage === "auto" ? undefined : selectedLanguage;
+        const savedLanguage = notes.language ?? "auto";
+        if (
+          (notes.transcript || notes.summary) &&
+          selectedLanguage !== savedLanguage &&
+          !body.retranscribe
+        )
+          throw new CompanionError(
+            "LANGUAGE_CHANGE_REQUIRES_CONSENT",
+            "Changing transcript language requires explicit retranscription consent.",
+            409,
+          );
         if (body.retranscribe) {
-          notes = { transcript: null, summary: null };
+          notes = {
+            transcript: null,
+            summary: null,
+            language: selectedLanguage,
+          };
         } else if (notes.summary) return c.json(notes, 200);
 
         const config = await configuration(actorFromContext(c), owner);
@@ -912,7 +930,11 @@ export function registerCompanionRoutes(
                   language: requestedLanguage,
                   consent: true,
                 });
-          notes = { transcript, summary: null };
+          notes = {
+            transcript,
+            summary: null,
+            language: selectedLanguage,
+          };
           await recordings.storeNotes(owner, id, notes);
         }
 
@@ -927,7 +949,11 @@ export function registerCompanionRoutes(
           transcripts: [{ source: transcript.source, text: transcript.text }],
           consent: true,
         });
-        notes = { transcript, summary };
+        notes = {
+          transcript,
+          summary,
+          language: notes.language ?? selectedLanguage,
+        };
         await recordings.storeNotes(owner, id, notes);
         return c.json(notes, 200);
       });

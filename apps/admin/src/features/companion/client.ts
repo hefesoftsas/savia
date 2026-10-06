@@ -28,6 +28,7 @@ export type Recording = {
   sha256: string;
 };
 export type RecordingNotes = {
+  language?: string;
   transcript: {
     text: string;
     source: Recording["source"];
