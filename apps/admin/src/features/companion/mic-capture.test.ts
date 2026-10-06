@@ -28,7 +28,7 @@ function captureHarness(
   return {
     stop,
     close,
-    mediaDevices,
+    mediaDevices: mediaDevices as unknown as MediaDevices,
     AudioContextCtor: FakeAudioContext as unknown as typeof AudioContext,
   };
 }
