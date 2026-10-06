@@ -241,6 +241,38 @@ describe("WhatsApp channel state", () => {
     expect(restored.generation).not.toBe(original.generation);
   });
 
+  it("allows disabling a staff entry after its linked principal was revoked", async () => {
+    const s = await fixture();
+    const staff = [
+      {
+        phone: s.key.contact,
+        label: "Staff",
+        active: true,
+        principalId: s.principal.id,
+      },
+    ];
+    await s.repo.configure(
+      s.tenantId,
+      s.connectionId,
+      { ...s.config, staff },
+      s.principal.id,
+    );
+    await env.DB.prepare("UPDATE identity_principal SET is_active=0 WHERE id=?")
+      .bind(s.principal.id)
+      .run();
+    await expect(
+      s.repo.configure(
+        s.tenantId,
+        s.connectionId,
+        {
+          ...s.config,
+          staff: [{ ...staff[0], active: false }],
+        },
+        s.principal.id,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
   it("keeps access history generation across task label edits while issuing a new menu revision", async () => {
     const s = await fixture();
     await s.repo.configure(

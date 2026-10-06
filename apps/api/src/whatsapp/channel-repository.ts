@@ -53,7 +53,7 @@ export class WhatsappChannelRepository {
           .first())
       )
         throw new Error("CHANNEL_EMPLOYEE_UNAVAILABLE");
-    for (const staff of config.staff.filter((s) => s.principalId)) {
+    for (const staff of config.staff.filter((s) => s.active && s.principalId)) {
       const principal = await findPrincipal(this.db, staff.principalId!);
       if (
         !principal?.isActive ||
