@@ -244,6 +244,7 @@ function LoginContent({
   initialNotice,
   emailAvailable = false,
   allowEmailRegistration = false,
+  initialEmail,
 }: {
   tenantSlug?: string | null;
   branding?: TenantBranding;
@@ -251,6 +252,7 @@ function LoginContent({
   initialNotice?: string;
   emailAvailable?: boolean;
   allowEmailRegistration?: boolean;
+  initialEmail?: string;
 } = {}) {
   const workspaceKicker = tenantSlug
     ? `Espacio de trabajo · ${tenantSlug}`
@@ -283,6 +285,7 @@ function LoginContent({
             type="email"
             autoComplete="username"
             placeholder="nombre@empresa.com"
+            defaultValue={initialEmail}
             required
           />
         </div>
@@ -455,6 +458,7 @@ function LoginContent({
                   name="email"
                   type="email"
                   autoComplete="username"
+                  defaultValue={initialEmail}
                   required
                 />
               </div>
@@ -540,6 +544,7 @@ function LoginContent({
                 type="email"
                 autoComplete="email"
                 placeholder="nombre@empresa.com"
+                defaultValue={initialEmail}
                 required
               />
             </div>
@@ -577,6 +582,7 @@ function LoginContent({
               type="email"
               autoComplete="email"
               placeholder="nombre@empresa.com"
+              defaultValue={initialEmail}
               required
             />
           </div>
@@ -767,6 +773,7 @@ export function renderOAuthSurface(
     initialNotice?: string;
     emailAvailable?: boolean;
     allowEmailRegistration?: boolean;
+    initialEmail?: string;
     verification?: { id: string; email: string; notice?: string };
   },
 ): string {
@@ -829,6 +836,7 @@ export function renderOAuthSurface(
         initialNotice={options?.initialNotice}
         emailAvailable={options?.emailAvailable}
         allowEmailRegistration={options?.allowEmailRegistration}
+        initialEmail={options?.initialEmail}
       />
     ) : screen === "enroll" ? (
       <EnrollmentContent branding={options?.branding} />
