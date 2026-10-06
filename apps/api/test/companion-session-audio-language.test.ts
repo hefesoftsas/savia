@@ -13,6 +13,7 @@ import {
 import type { Authenticator } from "../src/auth/types";
 import { AuthenticationError } from "../src/auth/types";
 import { opusFixture } from "./fixtures/companion-tone";
+import { nativeOpusFixtureBase64 } from "./fixtures/companion-native-tone";
 import { m4aSegmentBase64 } from "./fixtures/companion-m4a";
 
 function workspaceAuthenticator(
@@ -92,6 +93,41 @@ const tenantHeaders = (tenantId: number) => ({
 
 const oggData = () =>
   btoa(Array.from(opusFixture(), (byte) => String.fromCharCode(byte)).join(""));
+const nativeOggData = () =>
+  btoa(
+    Array.from(
+      Uint8Array.from(atob(nativeOpusFixtureBase64), (c) => c.charCodeAt(0)),
+      (byte) => String.fromCharCode(byte),
+    ).join(""),
+  );
+
+function oggPages(bytes: Uint8Array) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const pages: { serial: number; sequence: number; flags: number }[] = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    if (
+      offset + 27 > bytes.length ||
+      String.fromCharCode(...bytes.subarray(offset, offset + 4)) !== "OggS"
+    )
+      throw new Error("Invalid Ogg page in full audio response");
+    const segmentCount = bytes[offset + 26];
+    const headerEnd = offset + 27 + segmentCount;
+    if (headerEnd > bytes.length) throw new Error("Truncated Ogg page header");
+    const bodyBytes = bytes
+      .subarray(offset + 27, headerEnd)
+      .reduce((total, size) => total + size, 0);
+    if (headerEnd + bodyBytes > bytes.length)
+      throw new Error("Truncated Ogg page body");
+    pages.push({
+      serial: view.getUint32(offset + 14, true),
+      sequence: view.getUint32(offset + 18, true),
+      flags: bytes[offset + 5],
+    });
+    offset = headerEnd + bodyBytes;
+  }
+  return pages;
+}
 
 async function uploadSession(
   instance: OpenAPIHono,
@@ -204,17 +240,18 @@ async function processUntilComplete(
 }
 
 describe("Companion session full audio", () => {
-  it("concatenates Ogg chunks in timeline order for listening and download", async () => {
+  it("chains each Ogg chunk as a valid independent logical stream", async () => {
     const service = mockService([]);
     const instance = app(service);
     const id = crypto.randomUUID();
     const data = oggData();
+    const nativeData = nativeOggData();
     await uploadSession(instance, id, [
       {
         source: "microphone",
         sequence: 0,
         startSeconds: 0,
-        data,
+        data: nativeData,
         format: "ogg",
       },
       {
@@ -231,11 +268,29 @@ describe("Companion session full audio", () => {
     );
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("audio/ogg");
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    const raw = opusFixture();
-    expect(bytes.length).toBe(raw.length * 2);
-    expect(bytes.slice(0, raw.length)).toEqual(raw);
-    expect(bytes.slice(raw.length)).toEqual(raw);
+    const pages = oggPages(new Uint8Array(await response.arrayBuffer()));
+    const streams = new Map<number, typeof pages>();
+    for (const page of pages) {
+      const stream = streams.get(page.serial) ?? [];
+      stream.push(page);
+      streams.set(page.serial, stream);
+    }
+    expect(streams.size).toBe(2);
+    const firstSerial = pages[0].serial;
+    const secondStreamStart = pages.findIndex(
+      (page) => page.serial !== firstSerial,
+    );
+    expect(secondStreamStart).toBe(streams.get(firstSerial)!.length);
+    expect(pages[secondStreamStart - 1].flags & 4).toBe(4);
+    expect(pages[secondStreamStart].flags & 2).toBe(2);
+    for (const stream of streams.values()) {
+      expect(stream[0].flags & 2).toBe(2);
+      expect(stream[0].sequence).toBe(0);
+      expect(stream.at(-1)!.flags & 4).toBe(4);
+      expect(stream.map((page) => page.sequence)).toEqual(
+        stream.map((_, sequence) => sequence),
+      );
+    }
   });
 
   it("rejects full audio before finalize, for unknown sources, and for mixed formats", async () => {

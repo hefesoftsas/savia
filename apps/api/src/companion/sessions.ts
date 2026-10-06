@@ -3,6 +3,7 @@ import { z } from "@hono/zod-openapi";
 import { CompanionError, summarySchema, transcriptSchema } from "./service";
 import { decodeAudio } from "./service";
 import { inspectOggOpus, MAX_OPUS_BYTES } from "./ogg";
+import { appendOggOpusLink, MAX_OGG_CHAIN_BYTES } from "./ogg-chain";
 import type { RecordingAccess } from "./recordings";
 
 export const sessionIdSchema = z.string().uuid();
@@ -678,20 +679,34 @@ export class CompanionSessions {
         409,
       );
     const total = timeline.reduce((sum, chunk) => sum + chunk.bytes, 0);
-    if (total <= 0 || total > 64 * 1024 * 1024)
+    if (total <= 0 || total > MAX_OGG_CHAIN_BYTES)
       throw new CompanionError(
         "AUDIO_TOO_LARGE",
         "Full session audio exceeds the 64 MB download limit.",
         413,
       );
-    // Ogg pages chain cleanly, so byte concatenation yields one playable
-    // stream in timeline order.
-    const bytes = new Uint8Array(total);
+    const bytes: Uint8Array<ArrayBuffer> = new Uint8Array(total);
     let offset = 0;
-    for (const chunk of timeline) {
-      const audio = await this.getAudio(access, id, source, chunk.sequence);
-      bytes.set(audio.bytes, offset);
-      offset += audio.bytes.length;
+    try {
+      for (const chunk of timeline) {
+        const audio = await this.getAudio(access, id, source, chunk.sequence);
+        offset = appendOggOpusLink(
+          bytes,
+          offset,
+          audio.bytes,
+          chunk.sequence + 1,
+        );
+      }
+      if (offset !== total)
+        throw new Error(
+          "Stored session audio size did not match its manifest.",
+        );
+    } catch {
+      throw new CompanionError(
+        "STORAGE_INVALID_RECORD",
+        "Stored session audio failed validation.",
+        503,
+      );
     }
     return {
       source,

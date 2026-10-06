@@ -107,7 +107,9 @@ Recordings → Recording sessions shows one session with source-aware playback,
 processing state, partial transcripts, summary and questions. Audio plays by
 segment in sequence within the selected source; visible offsets preserve gaps.
 `GET /v1/companion/sessions/{id}/audio?source=` returns one source as a single
-concatenated Ogg file for listening and download; it requires a finalized
+chained Ogg file for listening and download. Each validated complete logical
+stream gets a distinct serial number and recomputed page checksums; codec packets,
+granule positions and pre-skip remain intact. The endpoint requires a finalized
 session with Ogg-only segments (desktop captures) and is capped at 64 MB.
 Sessions with M4A segments keep per-segment playback only.
 A session with saved transcript segments can answer questions before all work is
