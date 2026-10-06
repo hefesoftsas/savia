@@ -158,13 +158,19 @@ conversation. Drag the separators to resize panels, or hide Files/Chat from the
 workspace toolbar. Files open in tabs; returning to a file preserves its editor
 and undo history during the session. Preview is another editor tab. Narrow layouts
 show **Files**, **Code**, **Preview** or **Chat** one at a time, without resetting
-source or the running plugin.
+source or the running plugin. Monaco is bundled with the app shell (no CDN), and
+`entry.tsx` offers ghost-text inline completions from the workspace's
+server-side AI configuration; provider keys never reach the browser.
 
 Send a request with Enter (Shift+Enter inserts a line break). The request appears
-immediately, followed by the generating status and assistant response. Failed
-requests can be retried without duplicating the conversation. Changed files open
-in Monaco's inline diff viewer before **Apply changes**. The current code stays
-unchanged until applied. Saved-project status appears in the bottom status bar.
+immediately and the assistant answer streams live, with input/output token usage
+(↑/↓) beside the pending indicator and under the finished answer. While a
+generation runs, the composer stays enabled and further prompts join a visible
+capped queue that drains in order; cancel stops only the running request.
+Failed requests can be retried without duplicating the conversation. Changed
+files open in Monaco's inline diff viewer before **Apply changes**. The current
+code stays unchanged until applied. Saved-project status appears in the bottom
+status bar.
 
 **Run** validates and opens preview; **Publish** releases the validated revision.
 The project options menu contains import/export and the optional publication
@@ -247,9 +253,12 @@ before unloading while a server save is still pending. Do not close the page unt
 “Project saved” appears if browser recovery storage is unavailable.
 
 **Edit source** on a store release creates a new project from its retained source
-and increments a plain semantic patch version. Older packages without authoring
-sources return an explicit missing-source error. Runtime artifacts and sources
-are retained atomically; published source versions are immutable. **Export project**
+and increments a plain semantic patch version. Older packages uploaded without
+authoring sources open as a synthesized editable copy built from the retained
+manifest and store configuration, with a notice that the original source was
+not stored. Runtime artifacts and sources are retained atomically; published
+source versions are immutable. The **Create plugin** project list also offers
+published store versions to open as new projects. **Export project**
 and **Import project** remain available for portable four-file JSON backups (chat
 history is saved in server projects but is not included in that portable export).
 

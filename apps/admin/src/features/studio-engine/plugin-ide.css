@@ -350,6 +350,35 @@
   color: var(--ide-secondary);
   font-size: 12px;
 }
+.plugin-ide-usage {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ide-secondary);
+}
+p.plugin-ide-usage {
+  margin-top: 6px;
+}
+.plugin-ide-generating .plugin-ide-usage {
+  margin-left: auto;
+}
+.plugin-ide-queue-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 6px;
+  border-radius: 6px;
+  color: var(--ide-secondary);
+}
+.plugin-ide-queue-remove:hover {
+  color: var(--foreground);
+  background: var(--ide-soft);
+}
+.plugin-ide-queue-remove svg {
+  width: 14px;
+  height: 14px;
+}
 .plugin-ide-generating svg {
   animation: plugin-ide-spin 1s linear infinite;
 }

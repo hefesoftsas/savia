@@ -54,6 +54,9 @@ export default function PluginProjectWorkspace({
   const [projects, setProjects] = useState<
     { id: string; label: string; version: number; updatedAt: string }[]
   >([]);
+  const [storeItems, setStoreItems] = useState<
+    { id: string; label: string; version: string }[]
+  >([]);
   const [project, setProject] = useState<Project | null>(null);
   const [status, setStatus] = useState<SaveState>({ state: "saved" });
   const [error, setError] = useState("");
@@ -148,6 +151,28 @@ export default function PluginProjectWorkspace({
     );
     if (mounted.current) activate(result.data);
   }
+  async function importFromStore(sourceId: string, sourceVersion: string) {
+    const response = await request<{
+      data: ProjectDraft & { synthesized?: boolean };
+    }>(
+      `/plugin-store/${encodeURIComponent(sourceId)}/source?version=${encodeURIComponent(sourceVersion)}`,
+    );
+    const files = { ...response.data.files };
+    const manifest = JSON.parse(files["savia-extension.json"]);
+    const parts = String(manifest.version).split(".");
+    if (parts.length === 3 && parts.every((part) => /^\d+$/.test(part)))
+      manifest.version = `${parts[0]}.${parts[1]}.${Number(parts[2]) + 1}`;
+    files["savia-extension.json"] = JSON.stringify(manifest, null, 2);
+    if ((response.data as { synthesized?: boolean }).synthesized)
+      setError(
+        tr(
+          "Este plugin no incluía su código fuente; se abrió una copia editable como base.",
+          "This plugin did not include its source; an editable copy was opened as a starting point.",
+          "Este plugin não incluía seu código-fonte; uma cópia editável foi aberta como base.",
+        ),
+      );
+    await create({ files, history: [] });
+  }
   useEffect(() => {
     mounted.current = true;
     let cancelled = false;
@@ -161,18 +186,38 @@ export default function PluginProjectWorkspace({
       );
       if (cancelled) return;
       setProjects(result.data);
+      void request<{
+        data: Array<{
+          manifest: { id: string; label?: string };
+          version: string;
+        }>;
+      }>("/plugin-store")
+        .then((store) => {
+          if (cancelled || !Array.isArray(store.data)) return;
+          const items = store.data
+            .filter(
+              (item) =>
+                item &&
+                typeof item.manifest?.id === "string" &&
+                typeof item.version === "string",
+            )
+            .map((item) => ({
+              id: item.manifest.id,
+              label:
+                typeof item.manifest.label === "string" &&
+                item.manifest.label.trim()
+                  ? item.manifest.label
+                  : item.manifest.id,
+              version: item.version,
+            }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+          if (!cancelled) setStoreItems(items);
+        })
+        .catch(() => {
+          /* The store list is best-effort; projects remain usable. */
+        });
       if (source) {
-        const response = await request<{ data: ProjectDraft }>(
-          `/plugin-store/${encodeURIComponent(source.id)}/source?version=${encodeURIComponent(source.version)}`,
-        );
-        if (cancelled) return;
-        const files = { ...response.data.files };
-        const manifest = JSON.parse(files["savia-extension.json"]);
-        const parts = String(manifest.version).split(".");
-        if (parts.length === 3 && parts.every((part) => /^\d+$/.test(part)))
-          manifest.version = `${parts[0]}.${parts[1]}.${Number(parts[2]) + 1}`;
-        files["savia-extension.json"] = JSON.stringify(manifest, null, 2);
-        await create({ files, history: [] });
+        await importFromStore(source.id, source.version);
         if (cancelled) return;
         onSourceOpened?.();
       }
@@ -448,6 +493,58 @@ export default function PluginProjectWorkspace({
                 </li>
               ))}
             </ul>
+          )}
+          {!loading && storeItems.length > 0 && (
+            <section
+              aria-label={tr(
+                "Abrir un plugin existente",
+                "Open an existing plugin",
+                "Abrir um plugin existente",
+              )}
+              className="flex flex-col gap-2 rounded-lg border bg-background px-3 py-3"
+            >
+              <h2 className="text-sm font-medium text-foreground">
+                {tr(
+                  "Abrir un plugin existente",
+                  "Open an existing plugin",
+                  "Abrir um plugin existente",
+                )}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {tr(
+                  "Elige una versión publicada para editarla como un proyecto nuevo.",
+                  "Pick a published version to edit it as a new project.",
+                  "Escolha uma versão publicada para editá-la como um novo projeto.",
+                )}
+              </p>
+              <ul className="divide-y">
+                {storeItems.map((item) => (
+                  <li
+                    key={`${item.id}@${item.version}`}
+                    className="flex min-w-0 items-center gap-3 py-2"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm">
+                      {item.label}{" "}
+                      <span className="text-xs text-muted-foreground">
+                        {item.version}
+                      </span>
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={acting}
+                      onClick={() =>
+                        void action(() =>
+                          importFromStore(item.id, item.version),
+                        )
+                      }
+                    >
+                      {tr("Editar", "Edit", "Editar")}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </section>
       )}

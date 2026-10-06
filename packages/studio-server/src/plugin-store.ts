@@ -1647,15 +1647,83 @@ export function registerPluginStore(
     )
       .bind(tenant, id, version)
       .first<{ files: string }>();
-    if (!source)
-      return fail("Plugin source is not available for this version.", 404);
-    let files: PluginStoreSourceFiles;
+    if (source) {
+      try {
+        const files = pluginStoreSourceFilesSchema.parse(
+          JSON.parse(source.files),
+        );
+        return c.json({ data: { files } });
+      } catch {
+        return fail("Plugin source is unavailable.", 404);
+      }
+    }
+    // Releases uploaded without src/entry.tsx (legacy store ZIPs) have no
+    // stored source. Synthesize an editable copy from the artifact so the
+    // plugin IDE can still open them instead of failing with 404.
+    let artifact: {
+      manifest: string;
+      store_json?: string | null;
+    } | null = null;
     try {
-      files = pluginStoreSourceFilesSchema.parse(JSON.parse(source.files));
+      artifact = await c.env.DB.prepare(
+        "SELECT manifest,store_json FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+      )
+        .bind(tenant, id, version)
+        .first<{ manifest: string; store_json: string | null }>();
+    } catch {
+      try {
+        const legacy = await c.env.DB.prepare(
+          "SELECT manifest FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+        )
+          .bind(tenant, id, version)
+          .first<{ manifest: string }>();
+        artifact = legacy
+          ? { manifest: legacy.manifest, store_json: null }
+          : null;
+      } catch {
+        artifact = null;
+      }
+    }
+    if (!artifact) {
+      return fail("Plugin source is not available for this version.", 404);
+    }
+    let manifestText = artifact.manifest;
+    try {
+      manifestText = JSON.stringify(JSON.parse(artifact.manifest), null, 2);
     } catch {
       return fail("Plugin source is unavailable.", 404);
     }
-    return c.json({ data: { files } });
+    let storeText = JSON.stringify({
+      format: "savia.store",
+      formatVersion: 1,
+      actions: [],
+      connectors: [],
+      collections: [],
+      bundles: [],
+      widgets: [],
+      screens: [],
+    });
+    if (artifact.store_json) {
+      try {
+        storeText = JSON.stringify(JSON.parse(artifact.store_json), null, 2);
+      } catch {
+        return fail("Plugin source is unavailable.", 404);
+      }
+    }
+    const files: PluginStoreSourceFiles = {
+      "entry.tsx": `// Editable copy of ${id}@${version}.\n// The uploaded ZIP did not include src/entry.tsx, so this starter replaces the original bundle.\n// Adapt the UI below; publishing creates a new version and keeps the previous artifact.\nexport function render(element: HTMLElement, savia: any) {\n  const root = createRoot(element);\n\n  function Plugin() {\n    const [value, setValue] = React.useState(0);\n    return (\n      <section style={{ padding: 20 }}>\n        <h2>Savia plugin</h2>\n        <p>Counter: {value}</p>\n        <button onClick={() => setValue((current) => current + 1)}>Add one</button>\n      </section>\n    );\n  }\n\n  root.render(<Plugin />);\n  return () => root.unmount();\n}\n`,
+      "savia-extension.json": manifestText.endsWith("\n")
+        ? manifestText
+        : `${manifestText}\n`,
+      "store.json": storeText.endsWith("\n") ? storeText : `${storeText}\n`,
+      "preview.json": `{\n  "collections": {},\n  "settings": {}\n}\n`,
+    };
+    try {
+      pluginStoreSourceFilesSchema.parse(files);
+    } catch {
+      return fail("Plugin source is unavailable.", 404);
+    }
+    return c.json({ data: { files, synthesized: true } });
   });
 
   app.get("/api/plugin-store/:id/shell", async (c) => {
