@@ -307,6 +307,65 @@ export const companionMessages = {
     "Nenhuma fala detectada.",
   ],
   "Download audio": ["Descargar audio", "Download audio", "Baixar áudio"],
+  "Record audio": ["Grabar audio", "Record audio", "Gravar áudio"],
+  "I have permission to record this audio.": [
+    "Tengo permiso para grabar este audio.",
+    "I have permission to record this audio.",
+    "Tenho permissão para gravar este áudio.",
+  ],
+  "Start recording": [
+    "Empezar a grabar",
+    "Start recording",
+    "Começar a gravar",
+  ],
+  "Starting recording…": [
+    "Empezando a grabar…",
+    "Starting recording…",
+    "Começando a gravar…",
+  ],
+  "Stop recording": ["Detener grabación", "Stop recording", "Parar gravação"],
+  "Save recording": ["Guardar grabación", "Save recording", "Salvar gravação"],
+  "Saving recording…": [
+    "Guardando grabación…",
+    "Saving recording…",
+    "Salvando gravação…",
+  ],
+  "Discard recording": [
+    "Descartar grabación",
+    "Discard recording",
+    "Descartar gravação",
+  ],
+  "Recording name": [
+    "Nombre de la grabación",
+    "Recording name",
+    "Nome da gravação",
+  ],
+  "Listen to your recording before saving.": [
+    "Escucha tu grabación antes de guardarla.",
+    "Listen to your recording before saving.",
+    "Ouça sua gravação antes de salvar.",
+  ],
+  "Recording stops automatically at the limit shown above.": [
+    "La grabación se detiene automáticamente en el límite indicado arriba.",
+    "Recording stops automatically at the limit shown above.",
+    "A gravação para automaticamente no limite mostrado acima.",
+  ],
+  "Microphone access was denied. Allow it in your browser and try again.": [
+    "Se denegó el acceso al micrófono. Permítelo en tu navegador e inténtalo de nuevo.",
+    "Microphone access was denied. Allow it in your browser and try again.",
+    "O acesso ao microfone foi negado. Permita-o no navegador e tente novamente.",
+  ],
+  "This browser cannot record audio. Use a recent Chrome, Edge, Firefox or Safari.":
+    [
+      "Este navegador no puede grabar audio. Usa una versión reciente de Chrome, Edge, Firefox o Safari.",
+      "This browser cannot record audio. Use a recent Chrome, Edge, Firefox or Safari.",
+      "Este navegador não pode gravar áudio. Use uma versão recente do Chrome, Edge, Firefox ou Safari.",
+    ],
+  "Unable to save the recording. Try again.": [
+    "No se pudo guardar la grabación. Inténtalo de nuevo.",
+    "Unable to save the recording. Try again.",
+    "Não foi possível salvar a gravação. Tente novamente.",
+  ],
   "Session name": ["Nombre de la sesión", "Session name", "Nome da sessão"],
   "Rename session": ["Renombrar sesión", "Rename session", "Renomear sessão"],
   Rename: ["Renombrar", "Rename", "Renomear"],

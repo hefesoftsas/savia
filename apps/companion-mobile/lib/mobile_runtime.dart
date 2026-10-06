@@ -425,6 +425,7 @@ class _MobileHomeState extends State<MobileHome> with WidgetsBindingObserver {
                                     cancellation: cancel,
                                   ),
                           canProcess: canProcess,
+                          canRename: canUpload,
                           onClose: () {
                             s.sessions.closeDetail();
                             unawaited(playback?.close());

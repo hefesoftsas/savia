@@ -8,8 +8,13 @@ file do not synchronize with the saved recording.
 1. Open **Recordings** and choose **Upload recording**.
 2. Use **Local disk** to select a file, or choose a connected drive, search by
    filename, and choose **Import** beside the desired audio file.
-3. Listen to the saved recording or download the original audio.
-4. To generate a transcript and meeting notes, grant processing consent and choose
+3. Alternatively choose **Record audio** to capture the microphone directly in
+   the browser: grant recording consent, choose **Start recording**, then stop,
+   preview, optionally rename (dated by default), and **Save recording**. Takes
+   are encoded as WAV/PCM16 in the browser and uploaded through the same import
+   route; recording stops automatically after 10 minutes.
+4. Listen to the saved recording or download the original audio.
+5. To generate a transcript and meeting notes, grant processing consent and choose
    **Generate summary**. Uploading alone does not send audio to the AI provider.
 
 The transcript language remains selectable after processing. Retrying a summary
