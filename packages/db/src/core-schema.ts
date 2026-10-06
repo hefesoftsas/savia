@@ -691,6 +691,7 @@ export const tenantWhatsappAssistantBindings = sqliteTable(
 export const whatsappInbox = sqliteTable(
   "whatsapp_inbox",
   {
+    routingSnapshot: text("routing_snapshot"),
     messageId: text("message_id").primaryKey().notNull(),
     phoneNumberId: text("phone_number_id").notNull(),
     wabaId: text("waba_id").notNull(),

@@ -1,3 +1,5 @@
+import { WhatsappChannelRepository } from "./channel-repository";
+import { createRoutedWhatsappGenerator } from "./channel-runtime";
 import { CompanionService } from "../companion/service";
 import { whatsappIntakeContributions } from "@savia/release-catalog/whatsapp";
 import {
@@ -56,6 +58,10 @@ export function whatsappInboundFromEnvironment(
         4,
       ),
   });
+  const routed = createRoutedWhatsappGenerator(
+    new WhatsappChannelRepository(environment.DB),
+    generate,
+  );
   return {
     repository,
     appSecret: environment.WHATSAPP_META_APP_SECRET?.trim(),
@@ -64,7 +70,9 @@ export function whatsappInboundFromEnvironment(
       return processWhatsappInbox(
         repository,
         {
-          generate,
+          generate: routed.generate,
+          authorizeReply: routed.authorizeReply,
+          afterReply: routed.afterReply,
           indicator: async (binding, messageId) => {
             if (binding.native?.readReceipts || binding.native?.typingIndicator)
               await sendReadIndicator(

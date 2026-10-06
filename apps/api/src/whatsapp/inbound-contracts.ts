@@ -1,3 +1,4 @@
+import type { EmployeeSession } from "./channel-contracts";
 import type { NativeConfiguration, NativeReply } from "./native";
 import type { NativeInbound } from "./native-input";
 import type { ActiveWhatsappConnection } from "./contracts";
@@ -15,6 +16,7 @@ export type WhatsappAssistantSettings = {
 export type WhatsappAssistantBinding = WhatsappAssistantSettings & {
   connection: ActiveWhatsappConnection;
   ownerPrincipalId: string;
+  channelSession?: EmployeeSession;
 };
 
 export type WhatsappInboundInput = {
@@ -48,6 +50,15 @@ export type WhatsappChatMessage = {
 };
 
 export type WhatsappInboundDependencies = {
+  authorizeReply?(
+    binding: WhatsappAssistantBinding,
+    input: WhatsappInboundInput,
+  ): Promise<boolean>;
+  afterReply?(
+    binding: WhatsappAssistantBinding,
+    input: WhatsappInboundInput,
+    reply: string | NativeReply,
+  ): Promise<void>;
   indicator?(
     binding: WhatsappAssistantBinding,
     messageId: string,
