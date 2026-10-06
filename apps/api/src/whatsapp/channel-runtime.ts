@@ -14,6 +14,7 @@ type Snapshot = {
   session: EmployeeSession | null;
   text: string;
   configurationRevision?: string;
+  employeeName?: string;
   reply?: NativeReply | string;
 };
 
@@ -119,6 +120,13 @@ export function createRoutedWhatsappGenerator(
         .bind(saved.session.employeeId, access.tenantId)
         .first<{ name: string }>();
       if (!employee) throw new Error("CHANNEL_EMPLOYEE_UNAVAILABLE");
+      saved.employeeName = employee.name;
+      await repository.db
+        .prepare(
+          "UPDATE whatsapp_inbox SET routing_snapshot=? WHERE message_id=? AND connection_id=?",
+        )
+        .bind(JSON.stringify(saved), input.messageId, binding.connectionId)
+        .run();
       const scopedHistory = rows.results.reverse().flatMap((r) => [
         { role: "user" as const, content: r.user_text },
         {
@@ -234,6 +242,23 @@ export function createRoutedWhatsappGenerator(
     ) {
       const saved = await snapshot(input.messageId);
       if (!saved?.session) return;
+      const assistantText =
+        typeof reply === "string"
+          ? reply
+          : reply.kind === "media" && saved.employeeName
+            ? nativeReplyText(
+                {
+                  ...reply,
+                  caption: reply.caption
+                    ? stripLeadingEmployeeHeaders(
+                        reply.caption,
+                        saved.employeeName,
+                      ) || undefined
+                    : undefined,
+                },
+                binding.native,
+              )
+            : nativeReplyText(reply, binding.native);
       await repository.db
         .prepare(
           "INSERT INTO whatsapp_channel_history(message_id,connection_id,contact,generation,employee_id,user_text,assistant_text,created_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(message_id) DO NOTHING",
@@ -245,10 +270,10 @@ export function createRoutedWhatsappGenerator(
           saved.generation,
           saved.session.employeeId,
           saved.text,
-          (typeof reply === "string"
-            ? reply
-            : nativeReplyText(reply, binding.native)
-          ).replace(/CONFIRMAR [A-Z2-7]{10}/gi, "[Confirmación pendiente]"),
+          assistantText.replace(
+            /CONFIRMAR [A-Z2-7]{10}/gi,
+            "[Confirmación pendiente]",
+          ),
           new Date().toISOString(),
         )
         .run();

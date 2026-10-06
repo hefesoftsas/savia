@@ -242,6 +242,14 @@ it("prepares a staff quote after AUTORIZO using the same validated draft", async
       .bind(session.access.connectionId, session.access.contact)
       .first("status"),
   ).toBe("pending");
+  for (const text of ["Confirmo mi dirección", "Confirmar Direccion"]) {
+    const ordinaryIntake = await adapter.capabilities(
+      { ...binding, channelSession: session },
+      { text } as any,
+    );
+    expect(ordinaryIntake?.directReply).toBeUndefined();
+    expect(ordinaryIntake?.tools).toHaveProperty("savia_get_quote_form");
+  }
 
   const rows = await env.DB.prepare(
     "SELECT id,status FROM whatsapp_channel_actions WHERE connection_id=? AND contact=?",
@@ -492,8 +500,8 @@ it("accepts a mixed-case confirmation code and explains expired confirmations", 
     { ...binding, channelSession: session },
     { text: `Confirmar ${code}` } as any,
   );
-  expect(expired?.directReply).toMatch(/venció|vencid/i);
-  expect(expired?.directReply).toMatch(/AUTORIZO/);
+  expect(expired?.directReply).toMatch(/no está vigente/i);
+  expect(expired?.directReply).not.toMatch(/AUTORIZO/);
   expect(expired?.directReply).toMatch(/menú/);
   expect(
     await env.DB.prepare(
@@ -508,6 +516,71 @@ it("accepts a mixed-case confirmation code and explains expired confirmations", 
   );
   expect(bareExpired?.directReply).toMatch(/AUTORIZO/);
   expect(bareExpired?.directReply).toMatch(/menú/);
+
+  const expiredQuote = await env.DB.prepare(
+    "SELECT id FROM whatsapp_channel_actions WHERE connection_id=? AND contact=?",
+  )
+    .bind(session.access.connectionId, session.access.contact)
+    .first<{ id: string }>();
+  const newerId = crypto.randomUUID();
+  const newerPayload = await new PersonalActionPayloadCipher(
+    "test-secret",
+  ).seal({
+    actionId: newerId,
+    principalId: session.access.principalId ?? session.access.contact,
+    payload: { collection: "example" },
+  });
+  const newerActionJson = JSON.stringify({
+    id: newerId,
+    session,
+    revision: 1,
+    domain: "studio",
+    command: "create-record",
+    input: { sealedPayload: newerPayload },
+  });
+  await env.DB.prepare(
+    "INSERT INTO whatsapp_channel_actions(id,connection_id,tenant_id,contact,generation,employee_id,selection_revision,action_json,token_hash,status,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,'completed',?,?)",
+  )
+    .bind(
+      newerId,
+      session.access.connectionId,
+      session.access.tenantId,
+      session.access.contact,
+      session.access.generation,
+      session.employeeId,
+      session.selectionRevision,
+      newerActionJson,
+      "unused-newer",
+      new Date(Date.now() + 60_000).toISOString(),
+      new Date(Date.now() + 1000).toISOString(),
+    )
+    .run();
+  const staleCode = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: `Confirmar ${code}` } as any,
+  );
+  expect(staleCode?.directReply).toMatch(/no está vigente/i);
+  expect(staleCode?.directReply).not.toMatch(/procesada|AUTORIZO/i);
+  const wrongCodeValue = [...code!]
+    .map((character) => (character === "A" ? "B" : "A"))
+    .join("");
+  const wrongCode = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: `CONFIRMAR ${wrongCodeValue}` } as any,
+  );
+  expect(wrongCode?.directReply).toMatch(/no está vigente/i);
+  expect(wrongCode?.directReply).not.toMatch(/procesada|AUTORIZO/i);
+  const staleButton = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    {
+      native: {
+        kind: "choice",
+        id: `confirm:${expiredQuote!.id}:${"a".repeat(32)}`,
+      },
+    } as any,
+  );
+  expect(staleButton?.directReply).toMatch(/no está vigente/i);
+  expect(staleButton?.directReply).not.toMatch(/procesada|AUTORIZO/i);
 });
 
 it("does not suggest AUTORIZO for an expired non-insurance action", async () => {

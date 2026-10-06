@@ -288,15 +288,35 @@ export function createChannelOperationAdapter(
     const nativeAction =
       input?.native?.kind === "choice" && /^(confirm|cancel):/i.test(choice);
     const cancelText = upperText === "CANCELAR";
-    const confirmationLike = /^(confirmar|confirmo)(?:\b|$)/i.test(normalized);
+    const bareConfirmation = /^(confirmar|confirmo)[.!?]*$/i.test(normalized);
+    const phraseConfirmation = /^confirmar\s+y\s+cotizar[.!?]*$/i.test(
+      normalized,
+    );
+    const typedCode = /^confirmar\s+([A-Z2-7]{10})[.!?]*$/i.exec(
+      upperText,
+    )?.[1];
+    const rawCodeLike = /^confirmar\s+([A-Za-z0-9]{1,32})[.!?]*$/i.exec(
+      input?.text?.trim() ?? "",
+    )?.[1];
+    const malformedCodeLike = Boolean(
+      rawCodeLike &&
+      (/[0-9]/.test(rawCodeLike) ||
+        rawCodeLike === rawCodeLike.toUpperCase()) &&
+      !/^[A-Z2-7]{10}$/i.test(rawCodeLike),
+    );
+    const confirmationLike =
+      bareConfirmation ||
+      phraseConfirmation ||
+      Boolean(typedCode) ||
+      malformedCodeLike;
     if (nativeAction || cancelText || confirmationLike) {
       let consumeChoice: string | null = null;
       if (nativeAction) consumeChoice = choice;
       else if (cancelText) consumeChoice = "CANCELAR";
-      else {
-        const code = /^confirmar\s+([A-Z2-7]{10})$/i.exec(upperText)?.[1];
-        if (code) consumeChoice = `CONFIRMAR ${code.toUpperCase()}`;
-      }
+      else if (typedCode)
+        consumeChoice = `CONFIRMAR ${typedCode.toUpperCase()}`;
+      const concreteAttempt =
+        nativeAction || Boolean(typedCode) || malformedCodeLike;
       let consumed = null;
       if (consumeChoice) {
         try {
@@ -307,7 +327,7 @@ export function createChannelOperationAdapter(
       }
       let expiredQuoteCanRetry = false;
       let latestActionStatus: string | null = null;
-      if (!consumed && !cancelText && actions) {
+      if (!consumed && !cancelText && !concreteAttempt && actions) {
         try {
           const latest = await deps.repository.db
             .prepare(
@@ -347,6 +367,14 @@ export function createChannelOperationAdapter(
         } catch {
           expiredQuoteCanRetry = false;
         }
+      }
+      if (concreteAttempt && !consumed) {
+        return {
+          tools: {},
+          system: whatsappOperationInstructions,
+          directReply:
+            "Esta confirmación ya no está vigente o el código no coincide. Solicita una nueva confirmación o escribe menú.",
+        };
       }
       const humanSupport =
         latestActionStatus === "uncertain" || latestActionStatus === "failed"

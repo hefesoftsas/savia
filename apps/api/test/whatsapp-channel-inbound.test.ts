@@ -309,18 +309,39 @@ it("normalizes native text and media captions without changing reply authorizati
     kind: "media" as const,
     resourceKey: "help-image",
     caption:
-      "alice · Asistente virtual\n\nAlice · Asistente Virtual\n\nMira esta imagen",
+      "alice · Asistente virtual\n\nAlice · Asistente Virtual\n\nMira esta imagen. Alice · Asistente virtual y Bob · Asistente virtual también aparecen.",
   };
-  const mediaRouted = createRoutedWhatsappGenerator(
-    repo,
-    vi.fn(async () => media),
+  const mediaComplete = vi.fn(async () => media);
+  const mediaRouted = createRoutedWhatsappGenerator(repo, mediaComplete);
+  const mediaReply = await mediaRouted.generate(
+    binding,
+    [],
+    mediaInput.text,
+    mediaInput,
   );
-  expect(
-    await mediaRouted.generate(binding, [], mediaInput.text, mediaInput),
-  ).toEqual({
+  expect(mediaReply).toEqual({
     kind: "media",
     resourceKey: "help-image",
-    caption: "alice · Asistente virtual\n\nMira esta imagen",
+    caption:
+      "alice · Asistente virtual\n\nMira esta imagen. Alice · Asistente virtual y Bob · Asistente virtual también aparecen.",
+  });
+  await mediaRouted.afterReply(binding, mediaInput, mediaReply);
+  const savedMediaHistory = await env.DB.prepare(
+    "SELECT assistant_text FROM whatsapp_channel_history WHERE message_id=?",
+  )
+    .bind(mediaInput.messageId)
+    .first<{ assistant_text: string }>();
+  expect(savedMediaHistory?.assistant_text).toBe(
+    "help-image: Mira esta imagen. Alice · Asistente virtual y Bob · Asistente virtual también aparecen.",
+  );
+
+  const followup = { ...mediaInput, messageId: "identity-header-media-next" };
+  await s.repository.receive(followup);
+  await mediaRouted.generate(binding, [], followup.text, followup);
+  expect(mediaComplete.mock.calls[1]?.[1]).toContainEqual({
+    role: "assistant",
+    content:
+      "help-image: Mira esta imagen. Alice · Asistente virtual y Bob · Asistente virtual también aparecen.",
   });
 });
 
