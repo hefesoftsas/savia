@@ -40,6 +40,13 @@ The shared loading style is delivered through the existing authentication CSS
 route; it does not require a new script or animation library. It represents
 pending work and does not add a minimum display time or delay navigation.
 
+Admin API requests have 15 seconds to receive a response; JSON and OAuth
+session requests also apply that deadline while reading the response body. If
+the application splash or a route fallback remains visible for 15 seconds, it
+replaces the spinner or skeleton with actions to retry or return to sign-in.
+The users list also shows a retry action when its data request fails, including
+when it reaches the request deadline.
+
 Explicit logout waits for the server sign-out and workspace cleanup before
 clearing mounted queries and redirecting to authorization. Clearing auth queries
 while asynchronous cleanup is still pending can trigger another authentication

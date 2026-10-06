@@ -1,5 +1,6 @@
 import type { UserIdentity } from "ra-core";
 import { isOfflineError } from "../offline/offline-error";
+import { REQUEST_TIMEOUT_MS, withRequestTimeout } from "../api/request-timeout";
 import type {
   AuthPermissions,
   AuthSession,
@@ -156,8 +157,20 @@ export class BetterAuthOAuthSession implements AuthSession {
   private readonly navigation: BrowserNavigation;
 
   constructor(private readonly settings: BetterAuthOAuthSettings) {
-    this.fetcher =
+    const fetcher =
       settings.fetcher ?? ((input, init) => globalThis.fetch(input, init));
+    this.fetcher = (input, init) =>
+      withRequestTimeout(
+        async (signal) => {
+          const response = await fetcher(input, { ...init, signal });
+          // Auth responses are small JSON payloads. Read a clone before
+          // resolving so a stalled body is covered by the same deadline.
+          if (response.body) await response.clone().arrayBuffer();
+          return response;
+        },
+        REQUEST_TIMEOUT_MS,
+        init?.signal,
+      );
     this.navigation = settings.navigation ?? defaultNavigation();
     if (typeof window !== "undefined") {
       window.addEventListener("savia:identity-changed", () => {
