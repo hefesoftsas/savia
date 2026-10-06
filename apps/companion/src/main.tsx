@@ -17,9 +17,15 @@ import {
   type Source,
 } from "./client";
 import {
+  captureErrorMessage,
+  localizedOperationError,
+  operationErrorMessage,
+  type LocalizedMessage,
+} from "./capture-errors";
+import {
   loadLocale,
-  saveLocale,
   translate,
+  formatDuration,
   type Locale,
   type MessageKey,
 } from "./i18n";
@@ -53,17 +59,18 @@ function App() {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [consent, setConsent] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [noticeIsError, setNoticeIsError] = useState(false);
+  const [notice, setNotice] = useState<{
+    message: LocalizedMessage;
+    isError: boolean;
+  } | null>(null);
   const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<LocalizedMessage | null>(null);
   const [locale, setLocale] = useState<Locale>(() => loadLocale());
   const t = (key: MessageKey, vars?: Record<string, string | number>) =>
     translate(locale, key, vars);
-  const changeLocale = (next: Locale) => {
-    saveLocale(next);
-    setLocale(next);
-  };
+  const message = (key: MessageKey, vars?: Record<string, string | number>) =>
+    ({ key, vars }) satisfies LocalizedMessage;
+  const changeLocale = (next: Locale) => setLocale(next);
   useEffect(() => {
     document.documentElement.lang = locale === "pt" ? "pt-BR" : locale;
   }, [locale]);
@@ -86,7 +93,8 @@ function App() {
         const next = await native<CaptureStatus>("capture_status");
         if (mounted.current) setStatus(next);
       } catch (error) {
-        if (mounted.current) setNotice(errorMessage(error));
+        if (mounted.current)
+          setNotice({ message: operationErrorMessage(error), isError: true });
       }
     };
     if (isTauri()) {
@@ -102,17 +110,15 @@ function App() {
     };
   }, []);
 
-  const run = async (label: string, action: () => Promise<void>) => {
+  const run = async (label: LocalizedMessage, action: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(label);
-    setNotice("");
-    setNoticeIsError(false);
+    setNotice(null);
     try {
       await action();
     } catch (error) {
-      setNotice(errorMessage(error));
-      setNoticeIsError(true);
+      setNotice({ message: operationErrorMessage(error), isError: true });
     } finally {
       inFlight.current = false;
       setBusy(null);
@@ -120,7 +126,7 @@ function App() {
   };
 
   const start = () =>
-    run(t("Starting recording"), async () => {
+    run(message("Starting recording"), async () => {
       revokePreviews();
       const next = await native<CaptureStatus>("start_capture", {
         sessionId: crypto.randomUUID(),
@@ -132,7 +138,7 @@ function App() {
     });
 
   const stop = () =>
-    run(t("Finalizing audio"), async () => {
+    run(message("Finalizing audio"), async () => {
       const next = await native<CaptureStatus>("stop_capture");
       setStatus(next);
       setConsent(false);
@@ -140,13 +146,13 @@ function App() {
     });
 
   const pause = () =>
-    run("Pausing recording", async () => {
+    run(message("Pause"), async () => {
       const next = await native<CaptureStatus>("pause_capture");
       setStatus(next);
     });
 
   const resume = () =>
-    run("Resuming recording", async () => {
+    run(message("Resume recording"), async () => {
       const next = await native<CaptureStatus>("resume_capture");
       setStatus(next);
       setConsent(false);
@@ -154,13 +160,12 @@ function App() {
     });
 
   const discard = () =>
-    run(t("Discarding audio"), async () => {
+    run(message("Discarding audio"), async () => {
       setStatus(await native<CaptureStatus>("discard_capture"));
       revokePreviews();
       setConsent(false);
       setSaved(false);
-      setNotice("");
-      setNoticeIsError(false);
+      setNotice(null);
     });
 
   function revokePreviewUrls() {
@@ -175,7 +180,7 @@ function App() {
   };
 
   const loadPreview = (source: Source) =>
-    run("Loading preview", async () => {
+    run(message("Loading preview"), async () => {
       const segments = (status.chunks ?? [])
         .filter((chunk) => chunk.source === source)
         .sort((a, b) => a.sequence - b.sequence);
@@ -204,21 +209,21 @@ function App() {
 
   const connect = (event: FormEvent) => {
     event.preventDefault();
-    void run(t("Checking connection"), async () => {
+    void run(message("Checking connection"), async () => {
       const result = await companionRequest<Capabilities>(
         apiOrigin,
         token,
         "capabilities",
       );
       setCapabilities(result);
-      setNotice(
-        result.storageAvailable
-          ? t("Connected to Savia.")
-          : t(
-              "Connected, but private audio storage is unavailable on this server.",
-            ),
-      );
-      setNoticeIsError(false);
+      setNotice({
+        message: message(
+          result.storageAvailable
+            ? "Connected to Savia."
+            : "Connected, but private audio storage is unavailable on this server.",
+        ),
+        isError: false,
+      });
       if (result.storageAvailable) setSettingsOpen(false);
     });
   };
@@ -226,20 +231,22 @@ function App() {
   const openSavia = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!isTauri()) return;
     event.preventDefault();
-    void run(t("Opening Savia"), async () => {
+    void run(message("Opening Savia"), async () => {
       const origin = validateApiOrigin(appOrigin);
       await native<void>("open_savia", { origin });
     });
   };
 
   const upload = () =>
-    run(t("Uploading to Savia"), async () => {
+    run(message("Uploading to Savia"), async () => {
       if (!canUploadRecording(capabilities) || !consent)
-        throw new Error(
-          t("Connect storage and confirm permission before upload."),
+        throw localizedOperationError(
+          "Connect storage and confirm permission before upload.",
         );
       if (!status.sessionId || !status.chunks?.length)
-        throw new Error(t("No recoverable audio is available to upload."));
+        throw localizedOperationError(
+          "No recoverable audio is available to upload.",
+        );
       const session = await companionRequest<{
         state: string;
         chunks: { source: string; sequence: number }[];
@@ -274,7 +281,7 @@ function App() {
         }
         uploaded++;
         setBusy(
-          t("Upload progress", {
+          message("Upload progress", {
             uploaded,
             total: status.chunks.length,
           }),
@@ -295,7 +302,10 @@ function App() {
         },
       });
       setSaved(true);
-      setNotice(t("Audio saved privately in Savia."));
+      setNotice({
+        message: message("Audio saved privately in Savia."),
+        isError: false,
+      });
     });
 
   const changeConnection = (change: () => void) => {
@@ -303,8 +313,7 @@ function App() {
     setCapabilities(null);
     setConsent(false);
     setSaved(false);
-    setNotice("");
-    setNoticeIsError(false);
+    setNotice(null);
   };
 
   const seconds = Math.floor(status.elapsedSeconds);
@@ -345,7 +354,7 @@ function App() {
   const actionLabel = isRecording
     ? t("Stop recording")
     : isPaused
-      ? "Resume recording"
+      ? t("Resume recording")
       : ready
         ? complete
           ? t("Saved to Savia")
@@ -503,7 +512,7 @@ function App() {
               {isRecording
                 ? t("Recording")
                 : isPaused
-                  ? "Paused"
+                  ? t("Paused")
                   : ready
                     ? complete
                       ? t("Saved to Savia")
@@ -533,7 +542,9 @@ function App() {
             {isRecording
               ? t("Recording stays on device")
               : isPaused
-                ? "Recording is paused. Resume to keep adding to the same take."
+                ? t(
+                    "Recording is paused. Resume to keep adding to the same take.",
+                  )
                 : ready
                   ? t("Review before upload")
                   : status.state === "error" || status.state === "interrupted"
@@ -551,7 +562,7 @@ function App() {
                   </span>
                   <span>
                     {t("Track details", {
-                      duration: track.durationSeconds.toFixed(1),
+                      duration: formatDuration(locale, track.durationSeconds),
                       size: Math.ceil(track.bytes / 1024),
                     })}
                   </span>
@@ -560,16 +571,21 @@ function App() {
             </ul>
           )}
           {ready && previewSources.length > 0 && (
-            <div className="preview-panel" aria-label="Local audio preview">
+            <div
+              className="preview-panel"
+              aria-label={t("Preview on this device before uploading")}
+            >
               <p className="preview-title">
-                Preview on this device before uploading
+                {t("Preview on this device before uploading")}
               </p>
               {previewSources.map((source) => {
                 const url = previews[source];
                 return (
                   <div key={source} className="preview-row">
                     <span>
-                      {source === "microphone" ? "Microphone" : "System audio"}
+                      {source === "microphone"
+                        ? t("Microphone")
+                        : t("System audio")}
                     </span>
                     {url ? (
                       <audio className="preview-audio" src={url} controls />
@@ -580,10 +596,11 @@ function App() {
                         disabled={Boolean(busy)}
                         onClick={() => void loadPreview(source)}
                       >
-                        Preview{" "}
-                        {source === "microphone"
-                          ? "microphone"
-                          : "system audio"}
+                        {t(
+                          source === "microphone"
+                            ? "Preview microphone"
+                            : "Preview system audio",
+                        )}
                       </button>
                     )}
                   </div>
@@ -598,15 +615,15 @@ function App() {
           )}
           {status.error && (
             <p className="notice is-error" role="alert">
-              {status.error}
+              {t(captureErrorMessage(status.errorCode).key)}
             </p>
           )}
           {notice && (
             <p
-              className={`notice${noticeIsError ? " is-error" : ""}`}
-              role={noticeIsError ? "alert" : "status"}
+              className={`notice${notice.isError ? " is-error" : ""}`}
+              role={notice.isError ? "alert" : "status"}
             >
-              {notice}
+              {t(notice.message.key, notice.message.vars)}
             </p>
           )}
           {!isTauri() && !notice && (
@@ -670,7 +687,7 @@ function App() {
                 {isRecording ? "■" : isPaused ? "●" : ready ? "↑" : "●"}
               </span>
             )}
-            {busy ?? actionLabel}
+            {busy ? t(busy.key, busy.vars) : actionLabel}
           </button>
           {isRecording && (
             <button
@@ -679,7 +696,7 @@ function App() {
               disabled={Boolean(busy)}
               onClick={pause}
             >
-              Pause
+              {t("Pause")}
             </button>
           )}
           {isPaused && (
@@ -689,7 +706,7 @@ function App() {
               disabled={Boolean(busy)}
               onClick={stop}
             >
-              Finish
+              {t("Finish")}
             </button>
           )}
           {(isRecording ||
@@ -734,18 +751,6 @@ function App() {
       </footer>
     </div>
   );
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  )
-    return error.message;
-  return String(error);
 }
 
 createRoot(document.getElementById("root")!).render(

@@ -1,13 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   detectLocale,
+  formatDuration,
   isLocale,
   loadLocale,
-  LOCALE_STORAGE_KEY,
   messageKeys,
-  saveLocale,
   translate,
+  type MessageKey,
 } from "./i18n";
+
+afterEach(() => vi.unstubAllGlobals());
 
 const tokens = (text: string) =>
   [...new Set(text.match(/\{[^}]+\}/g) ?? [])].sort();
@@ -58,19 +60,75 @@ describe("Companion desktop locale resolution", () => {
     expect(detectLocale("")).toBe("es");
   });
 
-  it("prefers the stored locale and persists first-run detection", () => {
-    const store = new Map<string, string>();
-    const storage = {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => {
-        store.set(key, value);
-      },
-    };
-    expect(loadLocale(storage, "en-US")).toBe("en");
-    expect(store.get(LOCALE_STORAGE_KEY)).toBe("en");
-    expect(loadLocale(storage, "pt-BR")).toBe("en");
-    saveLocale("pt", storage);
-    expect(loadLocale(storage, "en-US")).toBe("pt");
+  it("uses the current OS language each launch without browser storage", () => {
+    const storage = { getItem: vi.fn(), setItem: vi.fn() };
+    vi.stubGlobal("localStorage", storage);
+    vi.stubGlobal("navigator", { language: "pt-BR" });
+
+    expect(loadLocale()).toBe("pt");
+    expect(loadLocale("en-US")).toBe("en");
+    expect(loadLocale("fr-FR")).toBe("es");
+    expect(storage.getItem).not.toHaveBeenCalled();
+    expect(storage.setItem).not.toHaveBeenCalled();
+  });
+
+  it("formats track durations using the active locale", () => {
+    expect(formatDuration("es", 1.5)).toBe("1,5");
+    expect(formatDuration("pt", 1.5)).toBe("1,5");
+    expect(formatDuration("en", 1.5)).toBe("1.5");
+  });
+
+  it("uses complete localized actions for preview buttons", () => {
+    expect(translate("es", "Preview microphone")).toBe(
+      "Vista previa del micrófono",
+    );
+    expect(translate("es", "Preview system audio")).toBe(
+      "Vista previa del audio del sistema",
+    );
+    expect(translate("en", "Preview microphone")).toBe("Preview microphone");
+    expect(translate("en", "Preview system audio")).toBe(
+      "Preview system audio",
+    );
+    expect(translate("pt", "Preview microphone")).toBe(
+      "Pré-visualizar o microfone",
+    );
+    expect(translate("pt", "Preview system audio")).toBe(
+      "Pré-visualizar o áudio do sistema",
+    );
+  });
+
+  it("includes localized preview, pause, and native error messages", () => {
+    const requiredKeys: MessageKey[] = [
+      "Loading preview",
+      "Preview on this device before uploading",
+      "Preview",
+      "Preview microphone",
+      "Preview system audio",
+      "Paused",
+      "Resume recording",
+      "Pause",
+      "Finish",
+      "Recording is paused. Resume to keep adding to the same take.",
+      "CAPTURE_PERMISSION_DENIED_MICROPHONE",
+      "CAPTURE_PERMISSION_DENIED_SYSTEM",
+      "CAPTURE_UNAVAILABLE",
+      "CAPTURE_FAILED",
+      "OPERATION_FAILED",
+    ];
+
+    for (const key of requiredKeys) {
+      expect(translate("es", key)).not.toBe(key);
+      expect(translate("pt", key)).not.toBe(key);
+    }
+    expect(translate("es", "Preview on this device before uploading")).toBe(
+      "Escucha el audio en este dispositivo antes de subirlo",
+    );
+    expect(translate("es", "CAPTURE_FAILED")).toBe(
+      "No se pudo completar la captura de audio.",
+    );
+  });
+
+  it("keeps manual locale selection valid for the current window", () => {
     expect(isLocale("pt")).toBe(true);
     expect(isLocale("fr")).toBe(false);
   });

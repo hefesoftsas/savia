@@ -25,5 +25,6 @@ Microphone and output sources are not speaker identities. Keep Savia attribution
 The monorepo's current monochrome interface and emerald theme are the visual
 reference; this app extends that family. Controls must work with keyboard input
 and report native/backend failures clearly. The interface ships in Spanish,
-English and Portuguese: Spanish is the default, the OS language is detected on
-first run, and the user can switch language in the connection settings.
+English and Portuguese: it detects the OS/WebView language at each launch and
+falls back to Spanish. A manual choice in connection settings lasts for the
+current window only; the app does not persist that preference.

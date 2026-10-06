@@ -2,8 +2,6 @@ export const locales = ["es", "en", "pt"] as const;
 
 export type Locale = (typeof locales)[number];
 
-export const LOCALE_STORAGE_KEY = "savia-companion-locale";
-
 const SAVIA_LOCALES: Record<string, Locale> = {
   es: "es",
   en: "en",
@@ -26,48 +24,20 @@ export function detectLocale(tag: string | undefined | null): Locale {
   return "es";
 }
 
-type StorageLike = Pick<Storage, "getItem" | "setItem">;
-
-function ambientStorage(): StorageLike | undefined {
-  try {
-    if (typeof localStorage !== "undefined") return localStorage;
-  } catch {
-    // Private browsing or non-DOM runtimes have no usable storage.
-  }
-  return undefined;
-}
-
-/**
- * Stored locale wins; otherwise detect from the OS/browser language once and
- * persist it so later OS changes do not flip the app unexpectedly.
- */
-export function loadLocale(
-  storage: StorageLike | undefined = ambientStorage(),
-  navigatorLanguage?: string,
-): Locale {
-  const stored = storage?.getItem(LOCALE_STORAGE_KEY);
-  if (isLocale(stored)) return stored;
-  const detected = detectLocale(
+/** Use the current OS/browser language at every launch; manual choices stay in memory. */
+export function loadLocale(navigatorLanguage?: string): Locale {
+  return detectLocale(
     navigatorLanguage ??
       (typeof navigator !== "undefined" ? navigator.language : undefined),
   );
-  try {
-    storage?.setItem(LOCALE_STORAGE_KEY, detected);
-  } catch {
-    // Storage is a best effort; the detected locale still applies.
-  }
-  return detected;
 }
 
-export function saveLocale(
-  locale: Locale,
-  storage: StorageLike | undefined = ambientStorage(),
-): void {
-  try {
-    storage?.setItem(LOCALE_STORAGE_KEY, locale);
-  } catch {
-    // Ignore persistence failures; the selection still applies in memory.
-  }
+/** Format a captured track duration with the active UI locale. */
+export function formatDuration(locale: Locale, seconds: number): string {
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(seconds);
 }
 
 const messages = {
@@ -350,6 +320,81 @@ const messages = {
     es: "Descartar",
     en: "Discard",
     pt: "Descartar",
+  },
+  "Loading preview": {
+    es: "Cargando vista previa",
+    en: "Loading preview",
+    pt: "Carregando pré-visualização",
+  },
+  "Preview on this device before uploading": {
+    es: "Escucha el audio en este dispositivo antes de subirlo",
+    en: "Preview on this device before uploading",
+    pt: "Ouça o áudio neste dispositivo antes de enviá-lo",
+  },
+  Preview: {
+    es: "Vista previa",
+    en: "Preview",
+    pt: "Pré-visualizar",
+  },
+  "Preview microphone": {
+    es: "Vista previa del micrófono",
+    en: "Preview microphone",
+    pt: "Pré-visualizar o microfone",
+  },
+  "Preview system audio": {
+    es: "Vista previa del audio del sistema",
+    en: "Preview system audio",
+    pt: "Pré-visualizar o áudio do sistema",
+  },
+  Paused: {
+    es: "En pausa",
+    en: "Paused",
+    pt: "Pausada",
+  },
+  "Resume recording": {
+    es: "Reanudar grabación",
+    en: "Resume recording",
+    pt: "Retomar gravação",
+  },
+  Pause: {
+    es: "Pausar",
+    en: "Pause",
+    pt: "Pausar",
+  },
+  Finish: {
+    es: "Finalizar",
+    en: "Finish",
+    pt: "Concluir",
+  },
+  "Recording is paused. Resume to keep adding to the same take.": {
+    es: "La grabación está en pausa. Reanúdala para seguir en la misma toma.",
+    en: "Recording is paused. Resume to keep adding to the same take.",
+    pt: "A gravação está pausada. Retome para continuar na mesma tomada.",
+  },
+  CAPTURE_PERMISSION_DENIED_MICROPHONE: {
+    es: "Revisa los permisos del micrófono en la configuración del sistema.",
+    en: "Check microphone permissions in system settings.",
+    pt: "Verifique as permissões do microfone nas configurações do sistema.",
+  },
+  CAPTURE_PERMISSION_DENIED_SYSTEM: {
+    es: "Revisa los permisos de captura de audio del sistema.",
+    en: "Check system-audio capture permissions.",
+    pt: "Verifique as permissões de captura de áudio do sistema.",
+  },
+  CAPTURE_UNAVAILABLE: {
+    es: "La captura de audio no está disponible en este dispositivo.",
+    en: "Audio capture is unavailable on this device.",
+    pt: "A captura de áudio não está disponível neste dispositivo.",
+  },
+  CAPTURE_FAILED: {
+    es: "No se pudo completar la captura de audio.",
+    en: "Audio capture could not be completed.",
+    pt: "Não foi possível concluir a captura de áudio.",
+  },
+  OPERATION_FAILED: {
+    es: "No se pudo completar esta acción.",
+    en: "This action could not be completed.",
+    pt: "Não foi possível concluir esta ação.",
   },
   "Storage unavailable guidance": {
     es: "Conecta un servidor Savia con almacenamiento de grabaciones activado.",
