@@ -345,10 +345,10 @@ export const companionMessages = {
     "Listen to your recording before saving.",
     "Ouça sua gravação antes de salvar.",
   ],
-  "Recording stops automatically after 10 minutes.": [
-    "La grabación se detiene automáticamente a los 10 minutos.",
-    "Recording stops automatically after 10 minutes.",
-    "A gravação para automaticamente após 10 minutos.",
+  "Recording stops automatically at the limit shown above.": [
+    "La grabación se detiene automáticamente en el límite indicado arriba.",
+    "Recording stops automatically at the limit shown above.",
+    "A gravação para automaticamente no limite mostrado acima.",
   ],
   "Microphone access was denied. Allow it in your browser and try again.": [
     "Se denegó el acceso al micrófono. Permítelo en tu navegador e inténtalo de nuevo.",

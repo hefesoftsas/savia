@@ -56,7 +56,9 @@ it("records, previews, names and saves the take as wav", async () => {
     durationSeconds: 61,
   };
   const stop = vi.fn().mockResolvedValue(take);
-  const startCapture = vi.fn().mockResolvedValue({ stop, cancel: vi.fn() });
+  const startCapture = vi
+    .fn()
+    .mockResolvedValue({ stop, cancel: vi.fn(), maximumSeconds: 600 });
   const saved = { id: "fresh", name: "Charla.wav" };
   const { client, onSaved } = show({
     startCapture,

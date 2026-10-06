@@ -50,6 +50,7 @@ export function RecordingCapture({
   );
   const [consent, setConsent] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [maximumSeconds, setMaximumSeconds] = useState(MAX_CAPTURE_SECONDS);
   const [take, setTake] = useState<CapturedTake | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [name, setName] = useState(defaultName);
@@ -86,8 +87,11 @@ export function RecordingCapture({
     try {
       const capture = await startCapture({
         maxSeconds: MAX_CAPTURE_SECONDS,
-        onTick: (seconds) => {
-          if (mounted.current) setElapsed(seconds);
+        onTick: (seconds, maximum) => {
+          if (mounted.current) {
+            setElapsed(seconds);
+            setMaximumSeconds(maximum);
+          }
         },
         onAutoStop: (auto) => {
           if (mounted.current) {
@@ -102,6 +106,7 @@ export function RecordingCapture({
       }
       handle.current = capture;
       setElapsed(0);
+      setMaximumSeconds(capture.maximumSeconds ?? MAX_CAPTURE_SECONDS);
       setPhase("recording");
     } catch (e) {
       if (mounted.current) setError(captureErrorKey(e));
@@ -203,11 +208,11 @@ export function RecordingCapture({
             />
             {formatElapsed(elapsed)}
             <span className="text-sm text-muted-foreground">
-              / {formatElapsed(MAX_CAPTURE_SECONDS)}
+              / {formatElapsed(maximumSeconds)}
             </span>
           </p>
           <p className="text-xs text-muted-foreground">
-            {t("Recording stops automatically after 10 minutes.")}
+            {t("Recording stops automatically at the limit shown above.")}
           </p>
           <Button variant="outline" onClick={() => void stop()}>
             <Square className="size-4" aria-hidden="true" />
