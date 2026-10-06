@@ -52,6 +52,12 @@ model assignment when editing it. Other users
 can keep the inherited model and choose administrator-enabled alternatives in
 Pages **Ask AI**. Enabling alternatives does not change the employee's default.
 
-On small screens, the employee editor keeps its title and save/cancel actions
+Employee management lists each employee as a full-width row showing the name,
+@handle, status, role, access scope, knowledge-file count, and model. Selecting
+a row (or its Edit action) opens the create/edit form in a right-side drawer
+while the list stays visible behind it. The drawer keeps its header and
+save/cancel footer fixed while the form scrolls independently.
+
+On small screens, the drawer keeps its title and save/cancel actions
 visible while the form scrolls independently. Tabs wrap into complete rows
 without covering fields; all access modes and sections remain available.
