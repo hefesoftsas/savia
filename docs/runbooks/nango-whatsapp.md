@@ -174,7 +174,7 @@ The webhook checks `X-Hub-Signature-256` against the raw body and durably stores
 accepted messages before acknowledging them, including validated native payloads.
 Unsupported event types are ignored. Incoming
 message IDs deduplicate retries. The existing minute scheduler recovers pending
-work. Managed preview and production deployments set
+work, processing up to 50 eligible messages per tick across tenants. Managed preview and production deployments set
 `WHATSAPP_PROCESSING_MODE=scheduled`: generation runs from the minute scheduler,
 not HTTP `waitUntil`, whose post-response lifetime can interrupt multi-step AI
 work. Allow up to one minute before processing starts. Local runtimes may omit

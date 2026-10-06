@@ -69,6 +69,7 @@ it.each(["true", "false"])(
       WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-verify-token",
     });
     expect(processWhatsappInbox).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(processWhatsappInbox).mock.calls[0]?.[2]).toBe(50);
   },
 );
 it("passes the native webhook transport to scheduled workflows", async () => {
@@ -178,11 +179,9 @@ it("cleans private WhatsApp media even after webhook secrets are removed", async
   vi.clearAllMocks();
   const key = "whatsapp/inbound/2026-09-01/7/expired";
   const documents = {
-    list: vi
-      .fn()
-      .mockResolvedValue({
-        objects: [{ key, uploaded: new Date("2026-09-01T00:00:00Z") }],
-      }),
+    list: vi.fn().mockResolvedValue({
+      objects: [{ key, uploaded: new Date("2026-09-01T00:00:00Z") }],
+    }),
     delete: vi.fn(),
   } as unknown as R2Bucket;
   await worker.scheduled({} as ScheduledController, {

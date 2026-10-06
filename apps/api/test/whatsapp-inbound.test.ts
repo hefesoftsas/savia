@@ -267,6 +267,36 @@ describe("WhatsApp inbound persistence and processing", () => {
     });
   });
 
+  it("processes a bounded scheduler batch larger than ten inbox items", async () => {
+    const s = await setup();
+    const firstReceivedAt = Date.now() - 12_000;
+    for (let index = 0; index < 12; index++) {
+      expect(
+        await s.repository.receive(
+          inbound(
+            s,
+            `wamid-scheduled-${s.tenantId}-${String(index).padStart(2, "0")}`,
+            new Date(firstReceivedAt + index * 1_000).toISOString(),
+          ),
+        ),
+      ).toBe(true);
+    }
+
+    const generate = vi.fn(async () => "A reply");
+    const send = vi.fn(
+      async (_binding, _text, _contact, item) => `out-${item?.messageId}`,
+    );
+    const result = await processWhatsappInbox(
+      s.repository,
+      { generate, send },
+      50,
+    );
+
+    expect(result).toEqual({ processed: 12, failed: 0 });
+    expect(generate).toHaveBeenCalledTimes(12);
+    expect(send).toHaveBeenCalledTimes(12);
+  });
+
   it("does not resend when the provider send result is uncertain", async () => {
     const s = await setup();
     await s.repository.receive(inbound(s));

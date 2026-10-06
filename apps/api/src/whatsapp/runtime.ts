@@ -171,7 +171,7 @@ export function whatsappInboundFromEnvironment(
                   },
                 ),
         },
-        5,
+        50,
       );
     },
   };
