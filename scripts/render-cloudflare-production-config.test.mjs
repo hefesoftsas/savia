@@ -241,6 +241,7 @@ test("writes only the supported production workers and retains their runtime set
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
     ]);
     assert.ok(admin.assets.run_worker_first.includes("/health"));
+    assert.ok(admin.assets.run_worker_first.includes("/webhooks/whatsapp"));
     assert.ok(
       admin.assets.run_worker_first.includes("/companion-downloads.json"),
     );
@@ -352,6 +353,7 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
         ]);
       if (app === "admin") {
         assert.equal(conf.vars.CANONICAL_HOST, "savia-preview.hefesoft.com");
+        assert.ok(conf.assets.run_worker_first.includes("/webhooks/whatsapp"));
         assert.deepEqual(conf.routes, [
           { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
         ]);

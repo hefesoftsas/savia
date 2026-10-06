@@ -152,6 +152,7 @@ export function workerConfig(
         "/public/bookings/*",
         "/api/*",
         "/v1/*",
+        "/webhooks/whatsapp",
         "/s/*",
         "/.well-known/*",
         "/health",
