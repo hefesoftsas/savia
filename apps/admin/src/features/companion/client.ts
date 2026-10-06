@@ -58,11 +58,15 @@ export class CompanionRecordingsClient {
       format,
       consent: "true",
     });
-    return this.api.request(`/v1/companion/recordings/upload?${query}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/octet-stream" },
-      body: file,
-    });
+    return this.api.request(
+      `/v1/companion/recordings/upload?${query}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      },
+      300_000,
+    );
   }
   importFile(provider: DriveProvider, fileId: string): Promise<Recording> {
     return this.api.post("/v1/companion/recordings/import", {

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useAuthProvider, useNotify, useTranslate } from "ra-core";
 import { PwaSplash } from "@/pwa/pwa-splash";
 import { Notification } from "@/components/admin/notification";
+import { getAdminAuthorizeUrl } from "@/components/admin/loading-recovery";
 
 /**
  * Login page displayed when authentication is enabled and the user is not authenticated.
@@ -46,7 +47,7 @@ export const LoginPage = (_props: { redirectTo?: string }) => {
   return (
     <>
       <PwaSplash
-        recoveryHref="/api/auth/admin/authorize"
+        recoveryHref={getAdminAuthorizeUrl()}
         message={translate("savia.auth.signingIn", {
           _: "Iniciando sesión con Savia…",
         })}

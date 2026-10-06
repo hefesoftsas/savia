@@ -6,6 +6,11 @@ import { loadingMessages } from "@/i18n/locales/loading";
 
 export const LOADING_RECOVERY_DELAY_MS = 15_000;
 
+export function getAdminAuthorizeUrl(): string {
+  const apiUrl = import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin;
+  return `${apiUrl.replace(/\/$/, "")}/api/auth/admin/authorize`;
+}
+
 function getRecoveryCopy() {
   const language =
     typeof document === "undefined"

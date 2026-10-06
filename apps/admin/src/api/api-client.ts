@@ -103,15 +103,20 @@ export class ApiClient {
   async requestResponse(
     path: string,
     init: RequestInit = {},
+    timeoutMs = REQUEST_TIMEOUT_MS,
   ): Promise<Response> {
     return withRequestTimeout(
       (signal) => this.fetchResponse(path, init, signal),
-      REQUEST_TIMEOUT_MS,
+      timeoutMs,
       init.signal,
     );
   }
 
-  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  async request<T>(
+    path: string,
+    init: RequestInit = {},
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  ): Promise<T> {
     try {
       return await withRequestTimeout(
         async (signal) => {
@@ -135,7 +140,7 @@ export class ApiClient {
           }
           return body as T;
         },
-        REQUEST_TIMEOUT_MS,
+        timeoutMs,
         init.signal,
       );
     } catch (error) {

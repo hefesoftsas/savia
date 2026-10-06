@@ -2,7 +2,11 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableSkeleton } from "./table-skeleton";
 import { CardsGridSkeleton, ScreenListSkeleton } from "./page-skeletons";
-import { LoadingRecovery, useLoadingTimeout } from "./loading-recovery";
+import {
+  getAdminAuthorizeUrl,
+  LoadingRecovery,
+  useLoadingTimeout,
+} from "./loading-recovery";
 
 export type RouteLoadingVariant = "default" | "table" | "cards" | "screens";
 
@@ -21,7 +25,7 @@ export function RouteLoading({
   if (timedOut) {
     return (
       <LoadingRecovery
-        signInHref="/api/auth/admin/authorize"
+        signInHref={getAdminAuthorizeUrl()}
         className={cn("my-6", className)}
       />
     );
