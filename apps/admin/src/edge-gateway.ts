@@ -70,7 +70,7 @@ export function isImmutableAsset(pathname: string): boolean {
 /**
  * Estáticos raíz sin hash pero de cambio infrecuente. En el HAR el
  * manifest tardó 867ms y savia-icon-192 se pidió 2 veces, todo con
- * `max-age=0`: cada visita revalida. Versionados (v3) → immutable;
+ * `max-age=0`: cada visita revalida. Iconos versionados → immutable;
  * manifest y logo webp → 1h (el nombre versionado se bumpéa al cambiar).
  */
 export function staticAssetCacheControl(pathname: string): string | null {

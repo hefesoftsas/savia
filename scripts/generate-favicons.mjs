@@ -64,11 +64,11 @@ export async function generateFavicons() {
     ["favicon-16-v3.png", 16, false, false],
     ["favicon-32-v3.png", 32, false, false],
     ["favicon-48-v3.png", 48, false, false],
-    ["apple-touch-icon-v3.png", 180, false, true],
+    ["apple-touch-icon-v4.png", 180, false, true],
     ["savia-icon-192-v3.png", 192, false, false],
     ["savia-icon-512-v3.png", 512, false, false],
-    ["savia-maskable-192-v3.png", 192, true, true],
-    ["savia-maskable-512-v3.png", 512, true, true],
+    ["savia-maskable-192-v4.png", 192, true, true],
+    ["savia-maskable-512-v4.png", 512, true, true],
   ];
   for (const [name, size, maskable, opaque] of targets) {
     const svg = iconSvg(maskable, opaque);
@@ -79,7 +79,10 @@ export async function generateFavicons() {
     // Opaque PWA icons must not carry an alpha channel: flatten onto white
     // so iOS/Android never composite transparency onto black.
     if (opaque) {
-      await pipeline.flatten({ background: "#ffffff" }).png().toFile(join(publicDir, name));
+      await pipeline
+        .flatten({ background: "#ffffff" })
+        .png()
+        .toFile(join(publicDir, name));
     } else {
       await pipeline.png().toFile(join(publicDir, name));
     }
