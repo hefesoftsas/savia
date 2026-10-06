@@ -208,6 +208,16 @@ requesting data-processing consent. Explicit `AUTORIZO` continues from the
 server-validated authorized snapshot rather than model-generated input; any
 subsequent quote-field change requires renewed consent. The resulting operation
 still requires the separate server-issued confirmation before insurer execution.
+Quote confirmations show a concise Spanish summary with formatted COP amounts,
+the applicant's contact details and the number of enabled products. Provider
+codes, raw JSON and the expanded product catalog stay out of the customer message;
+the complete validated payload remains encrypted in the prepared operation.
+Text confirmation commands are case-insensitive. A bare `Confirmar` or
+`Confirmo` returns server-authored guidance to use the issued button or code;
+it does not approve an operation or invoke the model. Expired quote confirmations
+require a new preview. The server adds the virtual employee identity once and
+removes repeated copies of that exact leading header from assistant history
+and generated replies.
 Sending is recorded before calling Meta, and an uncertain send is
 terminal rather than automatically repeated.
 
