@@ -576,7 +576,7 @@ export function VirtualEmployeesManagement({
                   onClick={() => void openEdit(emp)}
                   className="group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-x-3 p-4 transition-colors hover:bg-muted/40 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-x-4 sm:px-5"
                 >
-                  <div className="col-start-1 row-start-1 flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                  <div className="col-start-1 row-start-1 flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary sm:row-span-3 sm:self-center">
                     <Icon className="size-5" />
                   </div>
 
