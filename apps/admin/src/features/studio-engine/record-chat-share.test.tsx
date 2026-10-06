@@ -44,7 +44,31 @@ function mount(client: ReturnType<typeof clientFactory>) {
   );
 }
 
-afterEach(cleanup);
+function waitForFocusScopeUnmount(dialog: HTMLElement) {
+  return new Promise<void>((resolve) => {
+    dialog.addEventListener(
+      "focusScope.autoFocusOnUnmount",
+      () => queueMicrotask(resolve),
+      { once: true },
+    );
+  });
+}
+
+afterEach(async () => {
+  try {
+    const dialog = screen.queryByRole("dialog");
+    if (dialog) {
+      const focusCleanup = waitForFocusScopeUnmount(dialog);
+      fireEvent.keyDown(document, { key: "Escape" });
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      await focusCleanup;
+    }
+  } finally {
+    cleanup();
+  }
+});
 
 it("offers a reconnect path when no chat provider is connected", async () => {
   const client = clientFactory();
@@ -151,6 +175,7 @@ it("discards channel results when the authenticated identity changes", async () 
   await waitFor(() =>
     expect(client.listCollaborationChannels).toHaveBeenCalledTimes(1),
   );
+  const focusCleanup = waitForFocusScopeUnmount(screen.getByRole("dialog"));
   window.dispatchEvent(new Event("savia:identity-changed"));
   resolveChannels({
     channels: [{ id: "old-user-channel", name: "Private" }],
@@ -160,6 +185,7 @@ it("discards channel results when the authenticated identity changes", async () 
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
+  await focusCleanup;
   expect(screen.queryByText("Private")).not.toBeInTheDocument();
 });
 
