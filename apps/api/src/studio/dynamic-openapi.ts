@@ -1128,6 +1128,7 @@ export async function dynamicOpenApi(
       null,
     ],
     ["/workflow-bundles", "get", "List available workflow bundles", null],
+    ["/workflow-pieces", "get", "List available workflow pieces", null],
     [
       "/workflow-bundles/{id}/prepare",
       "post",

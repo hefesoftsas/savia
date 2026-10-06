@@ -351,12 +351,33 @@
   grid-template-columns: minmax(210px, 1fr) minmax(250px, 1fr);
   gap: 1.5rem;
 }
-.wf-canvas {
-  padding: 1rem;
-  background: var(--muted);
+.wf-flow {
+  height: 440px;
+  min-height: 320px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  align-self: start;
+  background: var(--background);
+  overflow: hidden;
+}
+.wf-flow .wf-node {
+  width: 230px;
+  cursor: pointer;
+  margin: 0;
+}
+.wf-flow .wf-node-trigger {
+  width: 230px;
+  cursor: default;
+}
+.wf-flow .react-flow__handle {
+  width: 10px;
+  height: 10px;
+}
+.wf-flow .react-flow__edge-text {
+  font-size: 11px;
+  fill: var(--muted-foreground);
+}
+.wf-flow .react-flow__minimap {
+  background: var(--muted);
 }
 .wf-step {
   display: flex;
@@ -399,10 +420,6 @@
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-.wf-connector {
-  margin: 0.5rem auto;
-  color: var(--muted-foreground);
 }
 .wf-add {
   display: grid;

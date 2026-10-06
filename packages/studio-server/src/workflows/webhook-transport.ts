@@ -9,6 +9,34 @@ export type WebhookTransportResult = {
   error: string | null;
   truncated: boolean;
 };
+/** Masks known secrets and sensitive keys before history storage. */
+export function redactSecrets(
+  value: unknown,
+  secrets: (string | undefined)[],
+  depth = 0,
+): unknown {
+  if (depth > 50) return "[redacted]";
+  const live = secrets.filter(
+    (secret): secret is string => !!secret && secret.length > 0,
+  );
+  if (typeof value === "string")
+    return live.reduce(
+      (text, secret) => text.split(secret).join("[redacted]"),
+      value,
+    );
+  if (Array.isArray(value))
+    return value.map((entry) => redactSecrets(entry, live, depth + 1));
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value).map(([k, x]) => [
+        String(redactSecrets(k, live)),
+        /authorization|password|secret|token|api[-_]?key|cookie/i.test(k)
+          ? "[redacted]"
+          : redactSecrets(x, live, depth + 1),
+      ]),
+    );
+  return value;
+}
 export async function sendWorkflowWebhook(
   input: {
     url: string;
@@ -39,22 +67,7 @@ export async function sendWorkflowWebhook(
     headers.set("authorization", `Bearer ${input.secret}`);
   if (input.authType === "api-key")
     headers.set(input.authHeader!, input.secret!);
-  const redact = (v: unknown, depth = 0): unknown => {
-    if (depth > 50) return "[redacted]";
-    if (typeof v === "string")
-      return input.secret ? v.split(input.secret).join("[redacted]") : v;
-    if (Array.isArray(v)) return v.map((x) => redact(x, depth + 1));
-    if (v && typeof v === "object")
-      return Object.fromEntries(
-        Object.entries(v).map(([k, x]) => [
-          String(redact(k)),
-          /authorization|password|secret|token|api[-_]?key|cookie/i.test(k)
-            ? "[redacted]"
-            : redact(x, depth + 1),
-        ]),
-      );
-    return v;
-  };
+  const redact = (v: unknown) => redactSecrets(v, [input.secret]);
   try {
     await validatePublicDns(url, boundedFetch);
     const response = await boundedFetch(url, {

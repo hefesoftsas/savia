@@ -1,6 +1,7 @@
 import { z } from "zod";
-const reserved =
+export const reservedHeaderName =
   /^(authorization|host|content-type|connection|content-length|cookie|set-cookie|transfer-encoding|forwarded|x-forwarded-.+|proxy-.+|sec-.+|idempotency-key|x-savia-.+)$/i;
+const reserved = reservedHeaderName;
 export const webhookDestinationSchema = z
   .object({
     name: z.string().trim().min(1).max(100),

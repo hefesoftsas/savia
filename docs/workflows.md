@@ -17,8 +17,19 @@ Open **Build → Workflows** in the sidebar, or the **Flujos de trabajo** tab in
 5. Run manual workflows from the editor, or wait for the event/schedule. Inspect
    the execution list and expand each completed step to see its result.
 
-Native steps: condition, transform, equality query, create, update, task, internal
-notification, and durable delay. Queries return `{ records, count }`; create/update
+Native steps: condition, subflow calls, piece actions from the reviewed
+catalog, switch (up to 10 ordered cases plus default branch),
+transform, map over a referenced list (up to 100 items), bulk update of a
+referenced record list (up to 100 records), loop over a referenced list with
+a multi-step body (up to 100 items and iterations), equality query, create,
+update, task, internal notification, durable delay, and generic HTTPS
+requests. Switch output
+provides `{ value, matched, branch }` with `matched` as the zero-based case
+index (or null) for later references. Map output provides `{ items, count }`;
+bulk update output provides `{ updated, ids }`. Inside map and bulk-update
+value mappings, `item.*` refers to the current list element (for example
+`item.id` or `item.owner`); `item.*` is rejected in any other step.
+Queries return `{ records, count }`; create/update
 return the record including its ID. Tasks and notifications appear in the assigned
 user's workflow inbox. Task creation does **not** wait for task completion.
 
@@ -169,8 +180,12 @@ scheduler tick.
 - Task creation also appends a personal notice (`workflow:<run>:<node>` key) in the
   same checkpoint transaction; assignees see it in [Notifications](notifications.md)
   as well as the workflow inbox.
-- Unexpected errors retry at most three attempts with bounded backoff. Validation and
-  version conflicts fail visibly. Manual retry resumes the failed step, never prior jobs.
+- Unexpected errors retry up to the step's **Intentos máximos** (1–5, default 3)
+  with bounded backoff. Validation and version conflicts fail visibly without
+  consuming retries. Each step can **Continuar con error** instead of stopping:
+  the failure is recorded as a job output and `steps.<id>.error`, and the flow
+  follows the default forward edge (condition: `otherwise ?? next`; switch:
+  `otherwise`; others: `next`). Manual retry resumes the failed step, never prior jobs.
 - Workflows caused by workflow writes stop dispatching at depth five. Delays are stored
   as due timestamps, not in-memory timers. Scheduling coalesces missed occurrences into
   one run and advances the next due time; it does not backfill an unbounded backlog.
@@ -215,11 +230,81 @@ a fixed test identity and must never be deployed or pointed at user data.
 - At most 50 acyclic steps, 50 mappings per step, 100 query results, 64 KB definitions,
   32 KB manual input and 256 KB execution context. Lists show the latest 200 definitions
   or inbox items and 100 executions. Retention/archival tooling is not yet included.
-- Approvals, blocking human tasks, arbitrary cron expressions, parallel branches,
-  loops, subflows and connector nodes remain future capabilities.
-- The visual editor is a selectable step sequence with explicit branch destinations,
-  not a free-positioned drag-and-drop graph. Manual action is currently in that editor,
-  not yet an action embedded in every record screen.
+- Approvals, blocking human tasks, arbitrary cron expressions and parallel
+  branches remain future capabilities. Multi-way routing uses one switch
+  instead of chained true/false steps; reusable logic uses subflows instead
+  of duplicated branches; external services arrive as catalog pieces instead
+  of inline secrets.
+
+## Generic HTTPS requests
+
+A **Petición HTTP** step calls any public HTTPS API: `GET`, `POST`, `PUT`,
+`PATCH` or `DELETE`, with up to 10 headers, 20 query parameters and an
+optional JSON body mapping. The URL may be a literal (checked at save) or a
+reference resolved per execution. Output provides `{ status, body, truncated }`
+with JSON responses parsed; oversized bodies are replaced with a truncation
+marker. Authentication reuses a webhook destination as a credential vault:
+its secret is resolved at execution, applied as Bearer or API-key, and
+redacted from history with other sensitive keys. Never put secrets in literal
+header values; they persist in versions and history.
+
+The same transport bounds as outgoing webhooks apply: HTTPS port 443, public
+domains with DNS preflight, no redirects, a 10-second budget, 32 KiB payloads
+and responses. Network failures, timeouts, HTTP 408/429 and 5xx retry through
+the normal per-step attempts; other statuses fail immediately. Unlike webhook
+deliveries there is no idempotency key: retries of non-idempotent requests
+can repeat remote effects, and the step is safe to use inside loop bodies.
+Manual retry resumes the failed step with the same inputs.
+
+## Piece actions (extension nodes)
+
+A **Pieza** step runs an action contributed through the reviewed piece
+catalog instead of the native step set. Each piece declares its inputs
+(text, number, boolean or select, up to 20), its documented outputs, and
+whether failures may retry; the step pins the exact piece version, so later
+catalog updates never move published flows. Configuration accepts literals
+and the same typed references as every other step; unknown inputs, missing
+required values and mistyped literals are rejected at publication, and
+mistyped references fail the execution visibly. Outputs are available as
+`steps.<id>.<output>` once the step has run. The built-in `log` piece
+records a debugging message in the execution history.
+
+Optional solution packages contribute pieces through `WorkflowOptions`
+(`workflowPieces`); descriptors are validated, custom pieces override
+built-ins only on exact id and version, and execution receives scoped
+services (workspace database, owner, execution identity, fetch, clock) —
+never raw user credentials. Pieces run in-process as trusted reviewed code:
+they must be idempotent or guard their own side effects, and they must not
+retain personal data beyond their declared outputs.
+
+## Subflows (reusable flows)
+
+A **Subflujo** step calls another workflow's pinned published version with
+mapped inputs and continues with its outputs in `steps.<id>.steps`. The child
+runs inside the same execution and history: each pass of both graphs keeps
+its own job rows, waits and retries work across the boundary, and a retry
+resumes exactly where it stopped. Calls nest up to five deep; recursion and
+call cycles are rejected at publication and fenced at runtime. Publish the
+child first, then adopt its version in the parent; later child publications
+do not move existing pins. A disabled child keeps serving its pins.
+
+## Loops over lists
+
+A `loop` step repeats its body once per element of a referenced list (up to
+100 items, up to `maxIterations`). The head writes `{ count, index, item }`
+per pass; the body reads the element as `steps.<loop>.item`. A body chain
+that ends advances to the next element; an edge leaving the body breaks out
+to its target; an empty list skips the body. Retrying a failed body step
+resumes that pass; per-pass job rows keep each iteration inspectable, and a
+task inside the body assigns one inbox item per pass. Bodies cannot nest,
+cannot contain webhook steps (deliveries are keyed per step), and cannot be
+entered from outside except through their head.
+
+- The visual editor is a draggable node canvas with one edge per destination:
+  drag an output handle onto another step to rewire it, or use the step panel
+  dropdowns. Positions are a per-browser session cache; the definition carries
+  only the graph. Manual action is currently in that editor, not yet an action
+  embedded in every record screen.
 
 ## References
 

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ArrowDown,
   Plus,
   Play,
   Save,
@@ -36,6 +35,10 @@ import {
   TriggerEditor,
   ValueInput,
 } from "./workflow-editor";
+import WorkflowCanvas, {
+  connectStepTarget,
+  TRIGGER_NODE_ID,
+} from "./workflow-canvas";
 import "./workflows.css";
 
 type Draft = {
@@ -251,6 +254,33 @@ function WorkspaceWorkflows({
     setDraft(next);
     setDirty(true);
     setNotice("");
+  };
+  const connectStep = (
+    source: string,
+    target: string,
+    sourceHandle?: string | null,
+  ) => {
+    if (
+      !draft ||
+      source === TRIGGER_NODE_ID ||
+      target === TRIGGER_NODE_ID ||
+      source === target
+    )
+      return;
+    const origin = draft.definition.nodes.find((step) => step.id === source);
+    if (!origin) return;
+    const patched = connectStepTarget(origin, sourceHandle, target);
+    if (!patched) return;
+    change({
+      ...draft,
+      definition: {
+        ...draft.definition,
+        nodes: draft.definition.nodes.map((step) =>
+          step.id === source ? patched : step,
+        ),
+      },
+    });
+    setSelected(target);
   };
   const request = async (action: () => Promise<void>) => {
     setError("");
@@ -612,45 +642,19 @@ function WorkspaceWorkflows({
               </p>
             ) : null}
             <div className="wf-editor">
-              <div className="wf-canvas" aria-label={t("Secuencia de pasos")}>
-                <ol>
-                  {draft.definition.nodes.map((step, index) => (
-                    <li key={step.id}>
-                      <button
-                        className="wf-step"
-                        aria-pressed={selected === step.id}
-                        onClick={() => setSelected(step.id)}
-                      >
-                        <span className="wf-step-number">{index + 1}</span>
-                        <span>
-                          <strong>
-                            {step.label || t(stepLabels[step.type])}
-                          </strong>
-                          <small>
-                            {step.type === "condition"
-                              ? t("Sí → %{value0} · No → %{value1}", {
-                                  value0: step.next ?? t("Fin"),
-                                  value1: step.otherwise ?? t("Fin"),
-                                })
-                              : t("Siguiente → %{value0}", {
-                                  value0: step.next ?? t("Fin"),
-                                })}
-                          </small>
-                        </span>
-                        {step.type === "condition" ? (
-                          <GitBranch size={18} />
-                        ) : null}
-                      </button>
-                      {index < draft.definition.nodes.length - 1 ? (
-                        <ArrowDown
-                          className="wf-connector"
-                          size={18}
-                          aria-hidden="true"
-                        />
-                      ) : null}
-                    </li>
-                  ))}
-                </ol>
+              <div>
+                <WorkflowCanvas
+                  definition={draft.definition}
+                  selected={selected}
+                  storageKey={draft.id ?? "new"}
+                  onSelect={setSelected}
+                  onConnectNode={connectStep}
+                />
+                <p className="wf-muted">
+                  {t(
+                    "Arrastra desde un punto de salida hasta otro paso para reconectar.",
+                  )}
+                </p>
                 <div className="wf-add">
                   <label>
                     {t("Tipo de paso")}
@@ -682,7 +686,9 @@ function WorkspaceWorkflows({
                         native[0]?.name ?? "",
                       );
                       const nodes = draft.definition.nodes.map((s, i) =>
-                        i === draft.definition.nodes.length - 1 && !s.next
+                        i === draft.definition.nodes.length - 1 &&
+                        !s.next &&
+                        s.type !== "switch"
                           ? { ...s, next: added.id }
                           : s,
                       );
@@ -708,6 +714,7 @@ function WorkspaceWorkflows({
                       node={node}
                       definition={draft.definition}
                       objects={native}
+                      workflowId={draft.id}
                       onChange={(next) =>
                         change({
                           ...draft,
@@ -726,14 +733,43 @@ function WorkspaceWorkflows({
                       onClick={() => {
                         const nodes = draft.definition.nodes
                           .filter((n) => n.id !== node.id)
-                          .map((n) => ({
-                            ...n,
-                            ...(n.next === node.id ? { next: node.next } : {}),
-                            ...(n.type === "condition" &&
-                            n.otherwise === node.id
-                              ? { otherwise: node.next }
-                              : {}),
-                          }));
+                          .map((n): WorkflowNode => {
+                            let patched = n;
+                            if (patched.next === node.id)
+                              patched = { ...patched, next: node.next };
+                            if (
+                              patched.type === "condition" &&
+                              patched.otherwise === node.id
+                            )
+                              patched = {
+                                ...patched,
+                                otherwise: node.next,
+                              };
+                            if (patched.type === "switch") {
+                              patched = {
+                                ...patched,
+                                cases: patched.cases.map((entry) =>
+                                  entry.next === node.id
+                                    ? { ...entry, next: node.next }
+                                    : entry,
+                                ),
+                              };
+                              if (patched.otherwise === node.id)
+                                patched = {
+                                  ...patched,
+                                  otherwise: node.next,
+                                };
+                            }
+                            if (
+                              patched.type === "loop" &&
+                              patched.body === node.id
+                            )
+                              patched = {
+                                ...patched,
+                                body: node.next ?? "",
+                              };
+                            return patched;
+                          });
                         change({
                           ...draft,
                           definition: { ...draft.definition, nodes },

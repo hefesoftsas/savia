@@ -1,4 +1,30 @@
 import { z } from "zod";
+import { reservedHeaderName } from "./workflow-webhooks";
+
+function httpsLiteralOk(raw: string): boolean {
+  if (!raw || /\s/.test(raw)) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username ||
+    parsed.password ||
+    (parsed.port && parsed.port !== "443")
+  )
+    return false;
+  const host = parsed.hostname.toLowerCase();
+  return (
+    host.includes(".") &&
+    !host.endsWith(".") &&
+    !host.includes(":") &&
+    !/^\d+(\.\d+)*$/.test(host) &&
+    !/(^|\.)(localhost|local|internal|test|invalid|example|onion)$/.test(host)
+  );
+}
 
 const safePart = (part: string) =>
   !["__proto__", "constructor", "prototype"].includes(part);
@@ -16,7 +42,7 @@ const scalarWorkflowValueSchema = z.union([
       ref: z
         .string()
         .max(250)
-        .regex(/^(trigger|before|system|steps)(\.[a-zA-Z0-9_]+)+$/)
+        .regex(/^(trigger|before|system|steps|item)(\.[a-zA-Z0-9_]+)+$/)
         .refine((v) => v.split(".").every(safePart)),
     })
     .strict(),
@@ -62,7 +88,35 @@ const base = {
   id: key,
   label: z.string().trim().max(100).optional(),
   next: key.optional(),
+  onError: z.enum(["fail", "continue"]).optional(),
+  maxAttempts: z.number().int().min(1).max(5).optional(),
 };
+const switchOperators = z.enum([
+  "eq",
+  "neq",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "contains",
+  "date_after",
+]);
+const switchCaseSchema = z
+  .object({
+    operator: switchOperators,
+    value: workflowValueSchema,
+    next: key.optional(),
+  })
+  .strict();
+const itemsRefSchema = z
+  .object({
+    ref: z
+      .string()
+      .max(250)
+      .regex(/^(trigger|before|system|steps)(\.[a-zA-Z0-9_]+)+$/)
+      .refine((v) => v.split(".").every(safePart)),
+  })
+  .strict();
 export const workflowNodeSchema = z.discriminatedUnion("type", [
   z
     .object({
@@ -93,6 +147,126 @@ export const workflowNodeSchema = z.discriminatedUnion("type", [
       otherwise: key.optional(),
     })
     .strict(),
+  z
+    .object({
+      ...base,
+      type: z.literal("switch"),
+      input: workflowValueSchema,
+      cases: z.array(switchCaseSchema).min(1).max(10),
+      otherwise: key.optional(),
+    })
+    .strict()
+    .refine((node) => node.next === undefined, {
+      message: "Switch uses cases and otherwise, not next",
+      path: ["next"],
+    }),
+  z
+    .object({
+      ...base,
+      type: z.literal("map"),
+      items: itemsRefSchema,
+      values,
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      type: z.literal("bulkUpdate"),
+      collection: key,
+      items: itemsRefSchema,
+      values,
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      type: z.literal("loop"),
+      items: itemsRefSchema,
+      body: key,
+      maxIterations: z.number().int().min(1).max(100).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      type: z.literal("subflow"),
+      workflowId: z.uuid(),
+      workflowVersion: z.string().trim().min(1).max(200),
+      input: z
+        .record(
+          z.string().min(1).max(100).refine(safePart),
+          workflowValueSchema,
+        )
+        .refine((input) => Object.keys(input).length <= 50)
+        .optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      type: z.literal("piece"),
+      pieceId: z
+        .string()
+        .regex(/^[a-z][a-z0-9-]{0,63}$/)
+        .refine(safePart),
+      pieceVersion: z.number().int().positive(),
+      config: z
+        .record(key, workflowValueSchema)
+        .refine((config) => Object.keys(config).length <= 50)
+        .optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      type: z.literal("http"),
+      method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("GET"),
+      url: workflowValueSchema,
+      headers: z
+        .record(
+          z
+            .string()
+            .regex(/^[A-Za-z][A-Za-z0-9-]{0,79}$/)
+            .refine((name) => !reservedHeaderName.test(name)),
+          workflowValueSchema,
+        )
+        .refine((headers) => Object.keys(headers).length <= 10)
+        .optional(),
+      query: z
+        .record(
+          z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
+          workflowValueSchema,
+        )
+        .refine((query) => Object.keys(query).length <= 20)
+        .optional(),
+      body: values.optional(),
+      destinationId: z.uuid().optional(),
+      destinationRevision: z.number().int().positive().optional(),
+    })
+    .strict()
+    .superRefine((node, ctx) => {
+      if (
+        (node.destinationId === undefined) !==
+        (node.destinationRevision === undefined)
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "Credential reference needs both destination and revision",
+        });
+      if (
+        (node.method === "GET" || node.method === "DELETE") &&
+        node.body !== undefined
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "GET and DELETE requests cannot carry a JSON body",
+        });
+      if (typeof node.url === "string" && !httpsLiteralOk(node.url))
+        ctx.addIssue({
+          code: "custom",
+          message: "HTTP URL must be absolute https",
+        });
+    }),
   z.object({ ...base, type: z.literal("transform"), values }).strict(),
   z
     .object({
@@ -265,10 +439,14 @@ export const workflowDefinitionSchema = z
         return;
       }
       visiting.add(id);
-      for (const next of [
-        node.next,
-        node.type === "condition" ? node.otherwise : undefined,
-      ]) {
+      const outgoing: (string | undefined)[] = [node.next];
+      if (node.type === "condition") outgoing.push(node.otherwise);
+      if (node.type === "switch") {
+        for (const entry of node.cases) outgoing.push(entry.next);
+        outgoing.push(node.otherwise);
+      }
+      if (node.type === "loop") outgoing.push(node.body);
+      for (const next of outgoing) {
         if (!next) continue;
         predecessors.set(next, [...(predecessors.get(next) ?? []), id]);
         visit(next);
@@ -297,21 +475,128 @@ export const workflowDefinitionSchema = z
           );
       }
     }
+    for (const node of definition.nodes) {
+      if (node.type === "map" || node.type === "bulkUpdate") continue;
+      if (
+        references(node).some(
+          (ref) => ref === "item" || ref.startsWith("item."),
+        )
+      )
+        issue(`Step ${node.id} uses item.* outside a loop step`);
+    }
+    for (const head of definition.nodes) {
+      if (head.type !== "loop") continue;
+      if (head.next !== undefined && head.body === head.next)
+        issue(`Loop ${head.id} needs a body step after its post-loop step`);
+      const body = loopBodyMembers(definition, head.id);
+      if (body.hitsHead)
+        issue(
+          `Loop ${head.id} cannot point back to itself; end the body to iterate`,
+        );
+      for (const nested of body.nested)
+        issue(`Loop ${head.id} cannot contain loop ${nested}`);
+      for (const webhook of body.webhooks)
+        issue(`Step ${webhook} cannot run inside loop ${head.id}`);
+      if (!body.hitsHead && body.members.size === 0)
+        issue(`Loop ${head.id} needs at least one body step`);
+      if (head.next !== undefined && body.members.has(head.next))
+        issue(`Step ${head.next} cannot be both body and post-loop`);
+      for (const member of body.members) {
+        const outsiders = (predecessors.get(member) ?? []).filter(
+          (parent) => parent !== head.id && !body.members.has(parent),
+        );
+        if (outsiders.length > 0)
+          issue(`Step ${member} jumps into loop ${head.id}`);
+      }
+    }
     if (JSON.stringify(definition).length > 64_000)
       issue("Workflow definition is too large");
   });
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
+
+export type LoopHead = Extract<
+  WorkflowDefinition["nodes"][number],
+  { type: "loop" }
+>;
+export type LoopBodyFacts = {
+  members: Set<string>;
+  hitsHead: boolean;
+  nested: string[];
+  webhooks: string[];
+};
+/**
+ * Statically enclosed body of a loop head: nodes reachable from `body`
+ * without passing through the head itself, the post-loop step, or another
+ * loop. A chain end inside the body iterates; an edge leaving the body
+ * breaks out. Never follows more than the reachable graph, so it always
+ * terminates even for invalid definitions.
+ */
+export function loopBodyMembers(
+  definition: WorkflowDefinition,
+  headId: string,
+): LoopBodyFacts {
+  const members = new Set<string>(),
+    nested: string[] = [],
+    webhooks: string[] = [];
+  let hitsHead = false;
+  const head = definition.nodes.find((node) => node.id === headId);
+  if (!head || head.type !== "loop")
+    return { members, hitsHead, nested, webhooks };
+  const stop = head.next ?? null;
+  const seen = new Set<string>(),
+    queue = [head.body];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (id === headId) {
+      hitsHead = true;
+      continue;
+    }
+    const node = definition.nodes.find((candidate) => candidate.id === id);
+    if (!node) continue;
+    if (node.type === "loop") {
+      if (!nested.includes(id)) nested.push(id);
+      continue;
+    }
+    if (id === stop) continue;
+    if (node.type === "webhook" && !webhooks.includes(id)) webhooks.push(id);
+    members.add(id);
+    const outgoing: (string | undefined)[] = [node.next];
+    if (node.type === "condition") outgoing.push(node.otherwise);
+    if (node.type === "switch") {
+      for (const entry of node.cases) outgoing.push(entry.next);
+      outgoing.push(node.otherwise);
+    }
+    for (const next of outgoing) if (next) queue.push(next);
+  }
+  return { members, hitsHead, nested, webhooks };
+}
 export const workflowDraftSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
     definition: workflowDefinitionSchema,
   })
   .strict();
+export type WorkflowCall = {
+  child: string;
+  version: string;
+  returnNode: string;
+  saved: WorkflowContext;
+};
 export type WorkflowContext = {
   trigger: Record<string, unknown>;
   before: Record<string, unknown>;
   steps: Record<string, unknown>;
   system: Record<string, unknown>;
+  /** Current list element. Only present while a loop step maps its items. */
+  item?: unknown;
+  /** Active multi-step loop frames by head id. Runtime-managed. */
+  loops?: Record<string, { index: number; delayed?: boolean }>;
+  /** Pending subflow calls, innermost last. Runtime-managed. */
+  calls?: WorkflowCall[];
+  /** Completed subflow results awaiting pickup. Runtime-managed. */
+  returned?: Record<string, unknown>;
 };
 export function resolveWorkflowValue(
   value: WorkflowValue,
@@ -357,13 +642,12 @@ export function resolveWorkflowValue(
   }
   return result;
 }
-export function evaluateWorkflowCondition(
-  node: Extract<WorkflowNode, { type: "condition" }>,
-  context: WorkflowContext,
-) {
-  const left = resolveWorkflowValue(node.left, context),
-    right = resolveWorkflowValue(node.right, context);
-  switch (node.operator) {
+function compareWorkflowValues(
+  operator: string,
+  left: unknown,
+  right: unknown,
+): boolean {
+  switch (operator) {
     case "eq":
       return JSON.stringify(left) === JSON.stringify(right);
     case "neq":
@@ -393,14 +677,32 @@ export function evaluateWorkflowCondition(
     default:
       if (typeof left !== "number" || typeof right !== "number")
         throw new Error("Numeric comparisons require two numbers");
-      return node.operator === "gt"
+      return operator === "gt"
         ? left > right
-        : node.operator === "gte"
+        : operator === "gte"
           ? left >= right
-          : node.operator === "lt"
+          : operator === "lt"
             ? left < right
             : left <= right;
   }
+}
+export function evaluateWorkflowCondition(
+  node: Extract<WorkflowNode, { type: "condition" }>,
+  context: WorkflowContext,
+) {
+  const left = resolveWorkflowValue(node.left, context),
+    right = resolveWorkflowValue(node.right, context);
+  return compareWorkflowValues(node.operator, left, right);
+}
+export function matchWorkflowSwitchCase(
+  operator: Extract<
+    WorkflowNode,
+    { type: "switch" }
+  >["cases"][number]["operator"],
+  left: unknown,
+  right: unknown,
+): boolean {
+  return compareWorkflowValues(operator, left, right);
 }
 
 export function workflowResumeAt(

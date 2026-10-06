@@ -205,6 +205,301 @@ it("builds bounded term keys and calendar offsets without evaluating code", () =
   ).toBe(false);
 });
 
+it("routes a switch input across ordered cases with a default branch", () => {
+  const flow = {
+    trigger: { type: "manual" },
+    nodes: [
+      {
+        id: "route",
+        type: "switch",
+        input: { ref: "trigger.status" },
+        cases: [
+          { operator: "eq", value: "approved", next: "fast" },
+          { operator: "eq", value: "review" },
+        ],
+        otherwise: "slow",
+      },
+      { id: "fast", type: "transform", values: { lane: "fast" } },
+      { id: "slow", type: "transform", values: { lane: "slow" } },
+    ],
+  };
+  expect(workflowDefinitionSchema.safeParse(flow).success).toBe(true);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...flow,
+      nodes: [{ ...flow.nodes[0], next: "fast" }],
+    }).success,
+  ).toBe(false);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...flow,
+      nodes: [
+        {
+          ...flow.nodes[0],
+          cases: Array.from({ length: 11 }, () => ({
+            operator: "eq",
+            value: "x",
+            next: "fast",
+          })),
+        },
+        flow.nodes[1],
+        flow.nodes[2],
+      ],
+    }).success,
+  ).toBe(false);
+});
+
+it("maps and bulk-updates referenced lists with per-item values", () => {
+  const flow = {
+    trigger: { type: "manual" },
+    nodes: [
+      {
+        id: "each",
+        type: "map",
+        items: { ref: "trigger.tags" },
+        values: { tag: { ref: "item.id" } },
+        next: "bulk",
+      },
+      {
+        id: "bulk",
+        type: "bulkUpdate",
+        collection: "requests",
+        items: { ref: "steps.each.items" },
+        values: { status: "done" },
+      },
+    ],
+  };
+  expect(workflowDefinitionSchema.safeParse(flow).success).toBe(true);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...flow,
+      nodes: [{ ...flow.nodes[0], items: "trigger.tags" }],
+    }).success,
+  ).toBe(false);
+});
+
+it("rejects item references outside loop steps", () => {
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [
+        { id: "plain", type: "transform", values: { v: { ref: "item.id" } } },
+      ],
+    }).success,
+  ).toBe(false);
+});
+
+it("loops over a referenced list with an enclosed body", () => {
+  const flow = {
+    trigger: { type: "manual" },
+    nodes: [
+      {
+        id: "repeat",
+        type: "loop",
+        items: { ref: "trigger.tags" },
+        body: "touch",
+        maxIterations: 10,
+        next: "done",
+      },
+      {
+        id: "touch",
+        type: "transform",
+        values: { tag: { ref: "steps.repeat.item" } },
+      },
+      {
+        id: "done",
+        type: "transform",
+        values: { total: { ref: "steps.repeat.count" } },
+      },
+    ],
+  };
+  expect(workflowDefinitionSchema.safeParse(flow).success).toBe(true);
+  // Body results are not available on the skip path past the loop.
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...flow,
+      nodes: [
+        flow.nodes[0],
+        flow.nodes[1],
+        {
+          id: "done",
+          type: "transform",
+          values: { tag: { ref: "steps.touch.tag" } },
+        },
+      ],
+    }).success,
+  ).toBe(false);
+});
+
+it("rejects open loops, nested loops, webhooks and jumps into the body", () => {
+  const body = { id: "touch", type: "transform", values: {} };
+  const head = {
+    id: "repeat",
+    type: "loop",
+    items: { ref: "trigger.tags" },
+    body: "touch",
+    next: "done",
+  };
+  const done = { id: "done", type: "transform", values: {} };
+  const base = { trigger: { type: "manual" }, nodes: [head, body, done] };
+  expect(workflowDefinitionSchema.safeParse(base).success).toBe(true);
+  const cases = [
+    { ...head, body: "repeat" },
+    { ...head, body: "done" },
+    { ...head, next: "touch" },
+  ];
+  for (const patched of cases)
+    expect(
+      workflowDefinitionSchema.safeParse({
+        ...base,
+        nodes: [patched, body, done],
+      }).success,
+    ).toBe(false);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...base,
+      nodes: [
+        head,
+        { ...body, next: "inner" },
+        {
+          id: "inner",
+          type: "loop",
+          items: { ref: "trigger.tags" },
+          body: "done",
+        },
+        done,
+      ],
+    }).success,
+  ).toBe(false);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...base,
+      nodes: [
+        head,
+        {
+          id: "touch",
+          type: "webhook",
+          destinationId: "a12aa1d0-5393-4a7f-a807-80ad8a7abcde",
+          destinationRevision: 1,
+          values: {},
+        },
+        done,
+      ],
+    }).success,
+  ).toBe(false);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [
+        head,
+        body,
+        { id: "sneak", type: "transform", values: {}, next: "touch" },
+        { ...done, next: "sneak" },
+      ],
+    }).success,
+  ).toBe(false);
+});
+
+it("accepts pinned subflow calls with mapped inputs", () => {
+  const node = {
+    id: "child",
+    type: "subflow",
+    workflowId: "a12aa1d0-5393-4a7f-a807-80ad8a7abcde",
+    workflowVersion: "a12aa1d0-5393-4a7f-a807-80ad8a7abcde:3",
+    input: { name: { ref: "trigger.name" } },
+    next: "done",
+  };
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [node, { id: "done", type: "transform", values: {} }],
+    }).success,
+  ).toBe(true);
+  for (const patch of [
+    { workflowId: "not-a-uuid" },
+    { input: JSON.parse('{"__proto__":"x"}') },
+  ])
+    expect(
+      workflowDefinitionSchema.safeParse({
+        trigger: { type: "manual" },
+        nodes: [{ ...node, ...patch }],
+      }).success,
+    ).toBe(false);
+});
+
+it("accepts generic HTTPS steps with bounded mappings", () => {
+  const node = {
+    id: "call",
+    type: "http",
+    method: "POST",
+    url: "https://api.example.com/v1/records",
+    headers: { "X-Source": "savia" },
+    query: { limit: 10 },
+    body: { name: { ref: "trigger.name" } },
+  };
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [node],
+    }).success,
+  ).toBe(true);
+  for (const patch of [
+    { method: "FETCH" },
+    { url: "http://api.example.com/v1" },
+    { url: "https://192.0.2.1/x" },
+    { url: "https://internal/x" },
+    { headers: { authorization: "secret" } },
+    { body: { name: "x" }, method: "GET" },
+    { destinationId: "a12aa1d0-5393-4a7f-a807-80ad8a7abcde" },
+  ])
+    expect(
+      workflowDefinitionSchema.safeParse({
+        trigger: { type: "manual" },
+        nodes: [{ ...node, ...patch }],
+      }).success,
+    ).toBe(false);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [
+        {
+          ...node,
+          url: { ref: "trigger.url" },
+          method: "GET",
+          body: undefined,
+        },
+      ],
+    }).success,
+  ).toBe(true);
+});
+
+it("accepts per-step error policies with bounded attempts", () => {
+  const node = {
+    id: "risky",
+    type: "transform",
+    values: {},
+    onError: "continue",
+    maxAttempts: 1,
+  };
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [node],
+    }).success,
+  ).toBe(true);
+  for (const patch of [
+    { maxAttempts: 0 },
+    { maxAttempts: 6 },
+    { onError: "branch" },
+  ])
+    expect(
+      workflowDefinitionSchema.safeParse({
+        trigger: { type: "manual" },
+        nodes: [{ ...node, ...patch }],
+      }).success,
+    ).toBe(false);
+});
+
 it("accepts incoming and outgoing webhooks with pinned destinations", () => {
   const flow = {
     trigger: { type: "webhook" },

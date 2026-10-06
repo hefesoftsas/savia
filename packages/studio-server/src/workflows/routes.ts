@@ -1,5 +1,7 @@
 import { WebhookEndpointRepository } from "./webhook-endpoints";
 import { WebhookDestinationRepository } from "./webhook-destinations";
+import { resolveWorkflowPieceDescriptors } from "./pieces";
+import type { WorkflowPieceHandler } from "./pieces";
 import { webhookDestinationSchema } from "@savia/studio-shared/workflow-webhooks";
 import { isExtensionAvailable, type ExtensionOptions } from "../extensions";
 import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
@@ -15,6 +17,7 @@ export type WorkflowAction =
   "view" | "design" | "publish" | "execute" | "history" | "resolve";
 export type WorkflowOptions = {
   workflowBundles?: readonly WorkflowBundle[];
+  workflowPieces?: readonly WorkflowPieceHandler[];
   authorizeWorkflow?: (request: {
     workspace: string;
     principalId: string;
@@ -67,7 +70,11 @@ export function registerWorkflows(
       !(await options.authorizeWorkflow?.({ workspace, principalId, action }))
     )
       fail("Workflow permission required", 403);
-    return new WorkflowRepository(c.env.DB, workspace);
+    return new WorkflowRepository(c.env.DB, workspace, {
+      pieces: resolveWorkflowPieceDescriptors(
+        (options.workflowPieces ?? []).map((piece) => piece.descriptor),
+      ),
+    });
   };
   const endpoints = async (c: Context<Env>, action: WorkflowAction) => {
     const repo = await repository(c, action);
@@ -175,6 +182,14 @@ export function registerWorkflows(
         c.get("tenant"),
         c.get("principalId"),
         bundle,
+      ),
+    });
+  });
+  app.get("/api/workflow-pieces", async (c) => {
+    await repository(c, "view");
+    return c.json({
+      data: resolveWorkflowPieceDescriptors(
+        (options.workflowPieces ?? []).map((piece) => piece.descriptor),
       ),
     });
   });

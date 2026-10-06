@@ -1,5 +1,10 @@
 import { WebhookDestinationRepository } from "./webhook-destinations";
 import {
+  validatePieceConfig,
+  type WorkflowPiece,
+} from "@savia/studio-shared/workflow-pieces";
+import { resolveWorkflowPieceDescriptors } from "./pieces";
+import {
   workflowDraftSchema,
   type WorkflowDefinition,
 } from "@savia/studio-shared/workflows";
@@ -48,10 +53,26 @@ const parse = (row: WorkflowRow) => ({
 
 /** All public operations are workspace scoped. The host authorizes the action first. */
 export class WorkflowRepository {
+  private readonly pieces: WorkflowPiece[];
   constructor(
     readonly db: D1Database,
     readonly workspace: string,
-  ) {}
+    options: { pieces?: WorkflowPiece[] } = {},
+  ) {
+    this.pieces = resolveWorkflowPieceDescriptors(options.pieces ?? []);
+  }
+  async validatePieces(definition: WorkflowDefinition) {
+    for (const node of definition.nodes) {
+      if (node.type !== "piece") continue;
+      const piece = this.pieces.find(
+        (entry) =>
+          entry.id === node.pieceId && entry.version === node.pieceVersion,
+      );
+      if (!piece) fail("Workflow piece is not available", 422);
+      const errors = validatePieceConfig(piece, node.config ?? {});
+      if (errors.length > 0) fail(errors[0], 422);
+    }
+  }
   async list() {
     return (
       await this.db
@@ -105,12 +126,18 @@ export class WorkflowRepository {
     return this.get(id);
   }
   async validate(definition: WorkflowDefinition) {
-    for (const node of definition.nodes)
+    for (const node of definition.nodes) {
       if (node.type === "webhook")
         await new WebhookDestinationRepository(
           this.db,
           this.workspace,
         ).validate(node.destinationId, node.destinationRevision);
+      if (node.type === "http" && node.destinationId)
+        await new WebhookDestinationRepository(
+          this.db,
+          this.workspace,
+        ).validate(node.destinationId, node.destinationRevision!);
+    }
     for (const item of [definition.trigger, ...definition.nodes]) {
       if (!("collection" in item) || !item.collection) continue;
       await assertLocalCollection(this.db, this.workspace, item.collection);
@@ -150,11 +177,59 @@ export class WorkflowRepository {
         fail(`Unknown field in ${item.collection}`, 422);
     }
   }
+  async validateSubflows(id: string, definition: WorkflowDefinition) {
+    for (const node of definition.nodes) {
+      if (node.type !== "subflow") continue;
+      if (node.workflowId === id) fail("A workflow cannot call itself", 422);
+      const child = await this.db
+        .prepare("SELECT * FROM workflows WHERE workspace_id=? AND id=?")
+        .bind(this.workspace, node.workflowId)
+        .first<WorkflowRow>();
+      if (!child) fail("Subflow not found", 404);
+      if (!child.published_version)
+        fail("Publish the child workflow first", 422);
+      const version = await this.db
+        .prepare(
+          "SELECT workflow_id FROM workflow_versions WHERE workspace_id=? AND id=?",
+        )
+        .bind(this.workspace, node.workflowVersion)
+        .first<{ workflow_id: string }>();
+      if (!version || version.workflow_id !== node.workflowId)
+        fail("Pinned subflow version is missing", 422);
+    }
+    const drafts = new Map<string, WorkflowDefinition>([[id, definition]]);
+    const load = async (workflowId: string): Promise<WorkflowDefinition> => {
+      const cached = drafts.get(workflowId);
+      if (cached) return cached;
+      const row = await this.db
+        .prepare(
+          "SELECT definition FROM workflows WHERE workspace_id=? AND id=?",
+        )
+        .bind(this.workspace, workflowId)
+        .first<{ definition: string }>();
+      if (!row) fail("Subflow not found", 404);
+      const parsed = JSON.parse(row.definition) as WorkflowDefinition;
+      drafts.set(workflowId, parsed);
+      return parsed;
+    };
+    const visiting = new Set<string>();
+    const visit = async (current: string): Promise<void> => {
+      if (visiting.has(current)) fail("Subflow calls form a cycle", 422);
+      visiting.add(current);
+      for (const node of (await load(current)).nodes) {
+        if (node.type === "subflow") await visit(node.workflowId);
+      }
+      visiting.delete(current);
+    };
+    await visit(id);
+  }
   async publish(id: string, revision: number, owner: string) {
     const draft = await this.get(id);
     if (draft.revision !== revision)
       fail("Draft changed; reload before publishing", 409);
     await this.validate(draft.definition);
+    await this.validateSubflows(id, draft.definition);
+    await this.validatePieces(draft.definition);
     const version = `${id}:${revision}`,
       g = guard(
         this.db,
@@ -286,7 +361,7 @@ export class WorkflowRepository {
     const jobs = (
       await this.db
         .prepare(
-          "SELECT * FROM workflow_jobs WHERE workspace_id=? AND execution_id=? ORDER BY sequence",
+          "SELECT * FROM workflow_jobs WHERE workspace_id=? AND execution_id=? ORDER BY invocation,sequence",
         )
         .bind(this.workspace, id)
         .all<{ node_id: string; input: string; output: string }>()
