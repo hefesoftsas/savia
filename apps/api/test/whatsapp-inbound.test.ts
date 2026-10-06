@@ -3,7 +3,10 @@ import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { upsertPrincipal } from "../src/auth/identity-repository";
 import { WhatsappInboundRepository } from "../src/whatsapp/inbound-repository";
-import { processWhatsappInbox } from "../src/whatsapp/inbound-processor";
+import {
+  drainWhatsappInbox,
+  processWhatsappInbox,
+} from "../src/whatsapp/inbound-processor";
 import type {
   WhatsappAssistantSettings,
   WhatsappInboundDependencies,
@@ -267,7 +270,7 @@ describe("WhatsApp inbound persistence and processing", () => {
     });
   });
 
-  it("processes a bounded scheduler batch larger than ten inbox items", async () => {
+  it("drains more than ten inbox items in one scheduled invocation", async () => {
     const s = await setup();
     const firstReceivedAt = Date.now() - 12_000;
     for (let index = 0; index < 12; index++) {
@@ -286,10 +289,10 @@ describe("WhatsApp inbound persistence and processing", () => {
     const send = vi.fn(
       async (_binding, _text, _contact, item) => `out-${item?.messageId}`,
     );
-    const result = await processWhatsappInbox(
+    const result = await drainWhatsappInbox(
       s.repository,
       { generate, send },
-      50,
+      { maxBatches: 50 },
     );
 
     expect(result).toEqual({ processed: 12, failed: 0 });

@@ -1,9 +1,13 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it, vi } from "vitest";
 vi.mock("../src/whatsapp/inbound-processor", () => ({
+  drainWhatsappInbox: vi.fn(async () => ({ processed: 0, failed: 0 })),
   processWhatsappInbox: vi.fn(async () => ({ processed: 0, failed: 0 })),
 }));
-import { processWhatsappInbox } from "../src/whatsapp/inbound-processor";
+import {
+  drainWhatsappInbox,
+  processWhatsappInbox,
+} from "../src/whatsapp/inbound-processor";
 vi.mock("../src/bookings/jobs", () => ({
   runBookingJobs: vi.fn(async () => ({ completed: 0, failed: 0, skipped: 0 })),
 }));
@@ -68,8 +72,8 @@ it.each(["true", "false"])(
       WHATSAPP_META_APP_SECRET: "test-app-secret",
       WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-verify-token",
     });
-    expect(processWhatsappInbox).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(processWhatsappInbox).mock.calls[0]?.[2]).toBe(50);
+    expect(drainWhatsappInbox).toHaveBeenCalledTimes(1);
+    expect(processWhatsappInbox).not.toHaveBeenCalled();
   },
 );
 it("passes the native webhook transport to scheduled workflows", async () => {
@@ -192,5 +196,5 @@ it("cleans private WhatsApp media even after webhook secrets are removed", async
     WHATSAPP_WEBHOOK_VERIFY_TOKEN: undefined,
   });
   expect(documents.delete).toHaveBeenCalledWith([key]);
-  expect(processWhatsappInbox).not.toHaveBeenCalled();
+  expect(drainWhatsappInbox).not.toHaveBeenCalled();
 });
