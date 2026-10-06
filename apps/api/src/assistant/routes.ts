@@ -143,6 +143,35 @@ function authorizationFor(context: Context): string {
   return authorization;
 }
 
+function pluginAuthoringDependencies(app: OpenAPIHono, context: Context) {
+  return {
+    loadCollectionMetadata: async (tenantId: number, signal?: AbortSignal) => {
+      // Resolve through the same authenticated Studio route used by clients.
+      // The fixed path keeps the client from selecting another source URL.
+      const target = new URL(context.req.url);
+      target.pathname = `/v1/studio/${tenantId}/api/objects`;
+      target.search = "";
+      const headers = new Headers();
+      for (const name of ["authorization", "cookie"]) {
+        const value = context.req.header(name);
+        if (value) headers.set(name, value);
+      }
+      const response = await app.fetch(
+        new Request(target, { method: "GET", headers, signal }),
+        context.env,
+      );
+      if (!response.ok)
+        throw new Error("Authorized collection metadata lookup failed");
+      const body = (await response.json().catch(() => null)) as {
+        data?: unknown;
+      } | null;
+      if (!body || !Array.isArray(body.data))
+        throw new Error("Authorized collection metadata was invalid");
+      return summarizePluginAuthoringCollections(body.data);
+    },
+  };
+}
+
 export function registerAssistantRoutes(
   app: OpenAPIHono,
   service?: AssistantService,
@@ -163,32 +192,7 @@ export function registerAssistantRoutes(
     const actor = actorFromContext(context);
     const pluginAuthoring = createPluginAuthoringService(
       dependencies.configuration,
-      {
-        loadCollectionMetadata: async (tenantId, signal) => {
-          // Resolve through the same authenticated Studio route used by clients.
-          // The fixed path keeps the client from selecting another source URL.
-          const target = new URL(context.req.url);
-          target.pathname = `/v1/studio/${tenantId}/api/objects`;
-          target.search = "";
-          const headers = new Headers();
-          for (const name of ["authorization", "cookie"]) {
-            const value = context.req.header(name);
-            if (value) headers.set(name, value);
-          }
-          const response = await app.fetch(
-            new Request(target, { method: "GET", headers, signal }),
-            context.env,
-          );
-          if (!response.ok)
-            throw new Error("Authorized collection metadata lookup failed");
-          const body = (await response.json().catch(() => null)) as {
-            data?: unknown;
-          } | null;
-          if (!body || !Array.isArray(body.data))
-            throw new Error("Authorized collection metadata was invalid");
-          return summarizePluginAuthoringCollections(body.data);
-        },
-      },
+      pluginAuthoringDependencies(app, context),
     );
     try {
       const result = await pluginAuthoring.generate({
@@ -270,6 +274,7 @@ export function registerAssistantRoutes(
     const actor = actorFromContext(context);
     const pluginAuthoring = createPluginAuthoringService(
       dependencies.configuration,
+      pluginAuthoringDependencies(app, context),
     );
     const runAbort = new AbortController();
     const runSignal = context.req.raw.signal

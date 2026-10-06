@@ -32,11 +32,14 @@ export async function readAuthoringStream(
       if (!trimmed.startsWith("data:")) continue;
       const data = trimmed.slice(5).trim();
       if (!data) continue;
+      let event: AuthoringStreamEvent;
       try {
-        onEvent(JSON.parse(data) as AuthoringStreamEvent);
+        event = JSON.parse(data) as AuthoringStreamEvent;
       } catch {
         // A malformed frame never invalidates the frames around it.
+        continue;
       }
+      onEvent(event);
     }
   };
   try {

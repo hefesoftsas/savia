@@ -944,6 +944,17 @@ describe("plugin authoring route authentication", () => {
         "2026-10-04",
       )
       .run();
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
+    )
+      .bind(
+        `tenant:${tenantId}`,
+        "work_items",
+        "Work items",
+        "Tasks in this workspace",
+        JSON.stringify({ fields: { subject: { type: "Textbox" } } }),
+      )
+      .run();
 
     const authenticator: Authenticator = {
       async authenticate() {
@@ -1053,8 +1064,18 @@ describe("plugin authoring route authentication", () => {
         files,
       });
       expect(fetchMock).toHaveBeenCalledTimes(1);
+      const providerInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+      const providerBody = JSON.parse(String(providerInit.body)) as {
+        messages: Array<{ content: string }>;
+      };
+      expect(String(providerBody.messages.at(-1)?.content)).toContain(
+        "work_items",
+      );
     } finally {
       vi.unstubAllGlobals();
+      await env.DB.prepare("DELETE FROM studio_objects WHERE tenant_id=?")
+        .bind(`tenant:${tenantId}`)
+        .run();
       await env.DB.prepare("DELETE FROM tenants WHERE id=?")
         .bind(tenantId)
         .run();

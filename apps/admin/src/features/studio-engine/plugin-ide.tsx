@@ -309,14 +309,15 @@ export default function PluginIde({
     setProposal(null);
     setReviewFile(null);
   }
-  function enqueuePrompt(requestPrompt: string) {
+  function enqueuePrompt(requestPrompt: string): boolean {
     if (
       queueRef.current.length >= 5 ||
       queueRef.current.includes(requestPrompt)
     )
-      return;
+      return false;
     queueRef.current = [...queueRef.current, requestPrompt];
     setQueue(queueRef.current);
+    return true;
   }
   function shiftQueue(): string | undefined {
     const next = queueRef.current[0];
@@ -333,23 +334,26 @@ export default function PluginIde({
     const requestPrompt = input.trim();
     if (!requestPrompt || busy) return;
     if (generating) {
-      enqueuePrompt(requestPrompt);
-      if (input === prompt) setPrompt("");
+      if (enqueuePrompt(requestPrompt) && input === prompt) setPrompt("");
       return;
     }
     if (input === prompt) setPrompt("");
     await runGeneration(requestPrompt);
   }
-  async function runGeneration(requestPrompt: string) {
+  async function runGeneration(
+    requestPrompt: string,
+    context?: { history: ChatMessage[]; files: IdeFiles },
+  ) {
     const requestId = ++operation.current;
     const abort = new AbortController();
     controller.current = abort;
     const priorHistory =
-      history.at(-1)?.role === "user" &&
+      context?.history ??
+      (history.at(-1)?.role === "user" &&
       history.at(-1)?.content === requestPrompt
         ? history.slice(0, -1)
-        : history;
-    const baseFiles = proposal?.files ?? files;
+        : history);
+    const baseFiles = context?.files ?? proposal?.files ?? files;
     setLastPrompt(requestPrompt);
     setChatError("");
     setHistory(
@@ -368,6 +372,8 @@ export default function PluginIde({
     let streamedText = "";
     let usage: { input: number; output: number } | null = null;
     let succeeded = false;
+    let successfulContext: { history: ChatMessage[]; files: IdeFiles } | null =
+      null;
     try {
       const result = await requestPluginAuthoring(async (signal) => {
         const response = await apiClient.requestResponse(
@@ -445,17 +451,17 @@ export default function PluginIde({
       // Treat the response as data, including when returned by a proxy.
       const proposedFiles = pluginAuthoringResultSchema.parse(result).files;
       setProposal({ message: result.message, files: proposedFiles });
-      setHistory(
-        [
-          ...priorHistory,
-          { role: "user", content: requestPrompt },
-          {
-            role: "assistant",
-            content: result.message,
-            ...(usage ? { usage } : {}),
-          },
-        ].slice(-10) as ChatMessage[],
-      );
+      const nextHistory = [
+        ...priorHistory,
+        { role: "user" as const, content: requestPrompt },
+        {
+          role: "assistant" as const,
+          content: result.message,
+          ...(usage ? { usage } : {}),
+        },
+      ].slice(-10) as ChatMessage[];
+      setHistory(nextHistory);
+      successfulContext = { history: nextHistory, files: proposedFiles };
       setStreamingMessage("");
       setLiveUsage(null);
       succeeded = true;
@@ -479,7 +485,7 @@ export default function PluginIde({
         // pending indicator across the chain instead of flashing it.
         const next = succeeded ? shiftQueue() : undefined;
         if (!next) setGenerating(false);
-        if (next) void runGeneration(next);
+        if (next) void runGeneration(next, successfulContext ?? undefined);
       }
     }
   }
@@ -1304,10 +1310,12 @@ export default function PluginIde({
                         onClick={() => {
                           operation.current++;
                           controller.current?.abort();
-                          setGenerating(false);
                           setStreamingMessage("");
                           setLiveUsage(null);
                           setPrompt(lastPrompt);
+                          const next = shiftQueue();
+                          setGenerating(Boolean(next));
+                          if (next) void runGeneration(next);
                         }}
                       >
                         <Square />

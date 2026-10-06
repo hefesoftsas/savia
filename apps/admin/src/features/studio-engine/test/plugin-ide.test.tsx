@@ -630,3 +630,106 @@ it("queues follow-ups while generating and sends them in order", async () => {
   await screen.findByText("Second done");
   expect(screen.queryByText("Tú · En cola")).not.toBeInTheDocument();
 });
+
+it("carries each successful proposal and conversation into the next queued request", async () => {
+  const first = streamController();
+  const second = streamController();
+  const third = streamController();
+  const firstFiles = {
+    "entry.tsx": "export function render() { /* first */ }",
+    "savia-extension.json": "{}",
+    "store.json": "{}",
+    "preview.json": "{}",
+  };
+  const secondFiles = {
+    ...firstFiles,
+    "entry.tsx": "export function render() { /* second */ }",
+  };
+  mocks.requestResponse.mockResolvedValueOnce(first.response);
+  mocks.requestResponse.mockResolvedValueOnce(second.response);
+  mocks.requestResponse.mockResolvedValueOnce(third.response);
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "First request" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
+  for (const prompt of ["Second request", "Third request"]) {
+    fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+      target: { value: prompt },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Encolar mensaje" }));
+  }
+  first.send({ type: "result", message: "First done", files: firstFiles });
+  first.close();
+
+  await waitFor(() => expect(mocks.requestResponse).toHaveBeenCalledTimes(2));
+  expect(streamPayload(1)).toMatchObject({
+    prompt: "Second request",
+    files: firstFiles,
+    history: [
+      { role: "user", content: "First request" },
+      { role: "assistant", content: "First done" },
+    ],
+  });
+  second.send({ type: "result", message: "Second done", files: secondFiles });
+  second.close();
+  await waitFor(() => expect(mocks.requestResponse).toHaveBeenCalledTimes(3));
+  expect(streamPayload(2)).toMatchObject({
+    prompt: "Third request",
+    files: secondFiles,
+    history: [
+      { role: "user", content: "First request" },
+      { role: "assistant", content: "First done" },
+      { role: "user", content: "Second request" },
+      { role: "assistant", content: "Second done" },
+    ],
+  });
+  third.send({ type: "result", message: "Third done", files: secondFiles });
+  third.close();
+  await screen.findByText("Third done");
+});
+
+it("drains queued work after cancelling the current generation", async () => {
+  const first = streamController();
+  mocks.requestResponse.mockResolvedValueOnce(first.response);
+  mocks.requestResponse.mockResolvedValueOnce(
+    sseSuccess("Queued result", {
+      "entry.tsx": "export function render() {}",
+      "savia-extension.json": "{}",
+      "store.json": "{}",
+      "preview.json": "{}",
+    }),
+  );
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Current request" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Queued request" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Encolar mensaje" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
+
+  await waitFor(() => expect(mocks.requestResponse).toHaveBeenCalledTimes(2));
+  expect(streamPayload(1).prompt).toBe("Queued request");
+  await screen.findByText("Queued result");
+});
+
+it("keeps a full-queue prompt in the composer instead of discarding it", async () => {
+  mocks.requestResponse.mockReturnValue(new Promise(() => {}));
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Describe tu plugin"), {
+    target: { value: "Current request" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar a la IA" }));
+  for (let index = 1; index <= 5; index += 1) {
+    const composer = screen.getByLabelText("Describe tu plugin");
+    fireEvent.change(composer, { target: { value: `Queued ${index}` } });
+    fireEvent.click(screen.getByRole("button", { name: "Encolar mensaje" }));
+  }
+  const composer = screen.getByLabelText("Describe tu plugin");
+  fireEvent.change(composer, { target: { value: "Keep this prompt" } });
+  fireEvent.click(screen.getByRole("button", { name: "Encolar mensaje" }));
+  expect(composer).toHaveValue("Keep this prompt");
+});

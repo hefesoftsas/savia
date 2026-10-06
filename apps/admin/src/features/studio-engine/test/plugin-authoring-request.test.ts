@@ -63,6 +63,18 @@ it("parses SSE frames split across chunks and skips malformed frames", async () 
     { type: "result", message: "Hello", files: {} },
   ]);
 });
+it("propagates errors thrown by the stream event handler", async () => {
+  const response = new Response(
+    'data: {"type":"error","code":"PROVIDER_TIMEOUT","message":"try again"}\n\n',
+  );
+  const failure = new Error("provider timeout");
+
+  await expect(
+    readAuthoringStream(response, new AbortController().signal, (event) => {
+      if (event.type === "error") throw failure;
+    }),
+  ).rejects.toBe(failure);
+});
 it("cleans up its deadline on success and failure", async () => {
   vi.useFakeTimers();
   const controller = new AbortController();
