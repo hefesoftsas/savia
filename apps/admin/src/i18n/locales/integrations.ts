@@ -443,6 +443,7 @@ export const personalIntegrationsMessages = {
     "Coleções selecionadas (%{count}):",
   ],
   Quitar: ["Quitar", "Remove", "Remover"],
+  Eliminar: ["Eliminar", "Delete", "Excluir"],
   "Documentos de Referencia (Cloudflare RAG)": [
     "Documentos de Referencia (Cloudflare RAG)",
     "Reference Documents (Cloudflare RAG)",

@@ -574,13 +574,13 @@ export function VirtualEmployeesManagement({
                 <li
                   key={emp.id}
                   onClick={() => void openEdit(emp)}
-                  className="group flex cursor-pointer items-center gap-3 p-4 transition-colors hover:bg-muted/40 sm:gap-4 sm:px-5"
+                  className="group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-x-3 p-4 transition-colors hover:bg-muted/40 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-x-4 sm:px-5"
                 >
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                  <div className="col-start-1 row-start-1 flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary sm:row-span-3 sm:self-center">
                     <Icon className="size-5" />
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="col-start-2 row-start-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="truncate text-sm font-semibold text-foreground">
                         {emp.name}
@@ -597,86 +597,85 @@ export function VirtualEmployeesManagement({
                         {emp.status === "active" ? t("Activo") : t("Inactivo")}
                       </Badge>
                     </div>
+                  </div>
 
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {emp.position ? (
-                        <>
-                          <span className="font-medium">{emp.position}</span>
-                          <span aria-hidden="true"> · </span>
-                        </>
-                      ) : null}
-                      <span className="italic">
-                        "{emp.greeting || emp.systemPrompt}"
+                  <p className="col-span-2 col-start-1 row-start-2 mt-2 line-clamp-2 text-xs text-muted-foreground sm:col-span-1 sm:col-start-2 sm:mt-0.5 sm:truncate">
+                    {emp.position ? (
+                      <>
+                        <span className="font-medium">{emp.position}</span>
+                        <span aria-hidden="true"> · </span>
+                      </>
+                    ) : null}
+                    <span className="italic">
+                      "{emp.greeting || emp.systemPrompt}"
+                    </span>
+                  </p>
+
+                  <div className="col-span-2 col-start-1 row-start-3 mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground sm:col-span-1 sm:col-start-2 sm:mt-1.5">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Database className="size-3.5" aria-hidden="true" />
+                      <span className="font-medium">
+                        {isTextOnly
+                          ? t("Solo texto")
+                          : isAll
+                            ? t("Todas las colecciones")
+                            : t("%{count} colecciones", {
+                                count: emp.allowedCollections.length,
+                              })}
                       </span>
-                    </p>
-
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                    </span>
+                    {!isTextOnly ? (
                       <span className="inline-flex items-center gap-1.5">
-                        <Database className="size-3.5" aria-hidden="true" />
+                        <FileCode className="size-3.5" aria-hidden="true" />
                         <span className="font-medium">
-                          {isTextOnly
-                            ? t("Solo texto")
-                            : isAll
-                              ? t("Todas las colecciones")
-                              : t("%{count} colecciones", {
-                                  count: emp.allowedCollections.length,
-                                })}
+                          {t("%{count} docs RAG", {
+                            count: emp.filesCount ?? 0,
+                          })}
                         </span>
                       </span>
-                      {!isTextOnly ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <FileCode className="size-3.5" aria-hidden="true" />
-                          <span className="font-medium">
-                            {t("%{count} docs RAG", {
-                              count: emp.filesCount ?? 0,
-                            })}
-                          </span>
+                    ) : null}
+                    {emp.model ? (
+                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                        <Cpu
+                          className="size-3.5 shrink-0 text-primary"
+                          aria-hidden="true"
+                        />
+                        <span
+                          className="max-w-[180px] truncate font-mono text-[11px] font-medium text-foreground/80 lg:max-w-[240px]"
+                          title={emp.model}
+                        >
+                          {emp.model}
                         </span>
-                      ) : null}
-                      {emp.model ? (
-                        <span className="inline-flex min-w-0 items-center gap-1.5">
-                          <Cpu
-                            className="size-3.5 shrink-0 text-primary"
-                            aria-hidden="true"
-                          />
-                          <span
-                            className="max-w-[180px] truncate font-mono text-[11px] font-medium text-foreground/80 lg:max-w-[240px]"
-                            title={emp.model}
-                          >
-                            {emp.model}
-                          </span>
-                          <ModelCapabilityBadges
-                            model={models.find((m) => m.id === emp.model)}
-                            size="xs"
-                          />
-                        </span>
-                      ) : null}
-                    </div>
+                        <ModelCapabilityBadges
+                          model={models.find((m) => m.id === emp.model)}
+                          size="xs"
+                        />
+                      </span>
+                    ) : null}
                   </div>
 
                   <div
-                    className="flex shrink-0 items-center gap-1"
+                    className="col-span-2 col-start-1 row-start-4 mt-3 flex items-center justify-end gap-2 border-t pt-3 sm:col-span-1 sm:col-start-3 sm:row-span-3 sm:row-start-1 sm:mt-0 sm:self-center sm:shrink-0 sm:gap-1 sm:border-0 sm:pt-0"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 gap-1 px-2.5 text-xs max-sm:size-11 max-sm:p-0"
+                      className="min-h-11 gap-1.5 px-3 text-xs sm:h-8 sm:min-h-0 sm:px-2.5 sm:gap-1"
                       onClick={() => void openEdit(emp)}
                     >
                       <Pencil className="size-3.5" />
-                      <span className="sr-only sm:not-sr-only">
-                        {t("Editar")}
-                      </span>
+                      <span>{t("Editar")}</span>
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive max-sm:size-11 max-sm:p-0"
+                      className="min-h-11 gap-1.5 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:min-h-0 sm:gap-1 sm:px-2"
                       aria-label={`${t("Quitar")} ${emp.name}`}
                       onClick={() => void handleDelete(emp)}
                     >
                       <Trash2 className="size-3.5" />
+                      <span className="sm:sr-only">{t("Eliminar")}</span>
                     </Button>
                     <ChevronRight
                       className="hidden size-4 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground sm:block"

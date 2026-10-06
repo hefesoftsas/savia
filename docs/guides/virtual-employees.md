@@ -56,7 +56,9 @@ Employee management lists each employee as a full-width row showing the name,
 @handle, status, role, access scope, knowledge-file count, and model. Selecting
 a row (or its Edit action) opens the create/edit form in a right-side drawer
 while the list stays visible behind it. The drawer keeps its header and
-save/cancel footer fixed while the form scrolls independently.
+save/cancel footer fixed while the form scrolls independently. On narrow
+screens each row stacks into sub-rows for identity, description, metadata, and
+actions instead of squeezing everything into one horizontal line.
 
 On small screens, the drawer keeps its title and save/cancel actions
 visible while the form scrolls independently. Tabs wrap into complete rows
