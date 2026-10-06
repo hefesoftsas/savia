@@ -75,7 +75,7 @@ export function isImmutableAsset(pathname: string): boolean {
  */
 export function staticAssetCacheControl(pathname: string): string | null {
   if (
-    /^\/(favicon|apple-touch-icon|savia-icon|savia-maskable)(-[^/]*)?\.png$/.test(
+    /^\/(favicon|apple-touch-icon|savia-icon|savia-maskable|savia-splash)(-[^/]*)?\.png$/.test(
       pathname,
     )
   )
