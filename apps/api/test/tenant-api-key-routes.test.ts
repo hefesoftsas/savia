@@ -84,7 +84,7 @@ const post = (application: OpenAPIHono, owner: AppActor, path = base) =>
     body: JSON.stringify(input(owner)),
   });
 describe("tenant API key administration", () => {
-  it("creates for a member, lists safe metadata, audits the administrator and revokes immediately", async () => {
+  it("creates for a member, lists safe metadata, audits the administrator, revokes then deletes", async () => {
     const admin = await member(801, "tenant_admin"),
       owner = await member();
     const application = app(admin),
@@ -114,6 +114,24 @@ describe("tenant API key administration", () => {
     expect(revoked.status).toBe(204);
     await expect(repo.authenticate(created.secret)).rejects.toThrow();
     expect(
+      ((await (await application.request(base)).json()) as any).keys.some(
+        (k: any) => k.id === created.key.id,
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await application.request(`${base}/${created.key.id}`, {
+          method: "DELETE",
+          headers: { origin: "https://preview.example" },
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      ((await (await application.request(base)).json()) as any).keys.some(
+        (k: any) => k.id === created.key.id,
+      ),
+    ).toBe(false);
+    expect(
       (
         await application.request(`${base}/${created.key.id}`, {
           method: "DELETE",
@@ -126,7 +144,7 @@ describe("tenant API key administration", () => {
     )
       .bind(created.key.id)
       .all<any>();
-    expect(audits.results).toHaveLength(2);
+    expect(audits.results).toHaveLength(3);
     expect(
       audits.results.every((a: any) => a.actor_id === admin.principal.id),
     ).toBe(true);

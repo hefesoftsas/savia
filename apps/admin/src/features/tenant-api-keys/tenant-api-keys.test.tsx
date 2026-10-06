@@ -360,3 +360,71 @@ it("opts into native collection permissions when creating a member key", async (
     "records:create",
   ]);
 });
+
+it("deletes a revoked tenant key after confirmation", async () => {
+  const user = userEvent.setup();
+  let rows: any[] = [
+    {
+      id: "key-revoked",
+      name: "Companion",
+      prefix: "savia_pat_4353fb9e",
+      tenantId: 12,
+      scopes: ["recordings:read"],
+      createdAt: "2026-10-03T00:00:00Z",
+      expiresAt: "2027-03-01T00:00:00Z",
+      revokedAt: "2026-10-05T00:00:00Z",
+      lastUsedAt: null,
+      principalId: "member-1",
+      ownerName: "Alex Rivera",
+      ownerEmail: "alex@example.test",
+    },
+  ];
+  let deletions = 0;
+  const api = new ApiClient({
+    baseUrl: "https://preview.test",
+    tokenSource: {
+      async getAccessToken() {
+        return "jwt";
+      },
+    },
+    fetcher: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith("/members"))
+        return Response.json({
+          members: [
+            {
+              id: "member-1",
+              displayName: "Alex Rivera",
+              email: "alex@example.test",
+            },
+          ],
+        });
+      if (init?.method === "DELETE") {
+        deletions += 1;
+        rows = [];
+        return new Response(null, { status: 204 });
+      }
+      return Response.json({ keys: rows });
+    },
+  });
+  const confirm = vi
+    .spyOn(window, "confirm")
+    .mockReturnValueOnce(false)
+    .mockReturnValueOnce(true);
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "es" })}>
+      <TenantApiKeysPanel api={api} tenantId={12} />
+    </StoreContextProvider>,
+  );
+  await screen.findByText("Revocada");
+  await user.click(
+    screen.getByRole("button", { name: "Eliminar Companion" }),
+  );
+  expect(confirm).toHaveBeenCalled();
+  expect(deletions).toBe(0);
+  await user.click(
+    screen.getByRole("button", { name: "Eliminar Companion" }),
+  );
+  await waitFor(() => expect(deletions).toBe(1));
+  await waitFor(() => expect(screen.queryByText("Companion")).toBeNull());
+});
