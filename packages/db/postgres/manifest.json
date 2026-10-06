@@ -217,6 +217,10 @@
     {
       "filename": "0050_whatsapp_dispatch_indexes.sql",
       "sha256": "c0f7b5d0b68d11c56bd5f782e2406292fa8f4428e01c1326117738007c043aa8"
+    },
+    {
+      "filename": "0051_workflow_loop_iterations.sql",
+      "sha256": "44d979bffbe9e76f62f0a4d6cc005c3271642121934338a47e7dc758c92ffc10"
     }
   ],
   "sqliteOnlyDerivedTables": [
