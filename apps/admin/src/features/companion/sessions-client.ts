@@ -1,5 +1,6 @@
 import { ApiClient } from "@/api/api-client";
 import type { RecordingNotes } from "./client";
+const FULL_AUDIO_REQUEST_TIMEOUT_MS = 60_000;
 export type SessionChunk = {
   source: "microphone" | "system";
   sequence: number;
@@ -92,6 +93,7 @@ export class CompanionSessionsClient {
     const response = await this.api.requestResponse(
       `/v1/companion/sessions/${encodeURIComponent(id)}/audio?source=${source}`,
       { signal },
+      FULL_AUDIO_REQUEST_TIMEOUT_MS,
     );
     if (!response.ok) throw new Error("Audio unavailable");
     return response.blob();
