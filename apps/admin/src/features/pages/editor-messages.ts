@@ -263,4 +263,24 @@ export const editorMessages = {
     "This integration is no longer connected. Refresh the page and try again.",
     "Esta integração não está mais conectada. Atualize a página e tente novamente.",
   ],
+  "Insert snapshot as editable blocks": [
+    "Insertar copia como bloques editables",
+    "Insert snapshot as editable blocks",
+    "Inserir cópia como blocos editáveis",
+  ],
+  "Snapshot privacy warning": [
+    "Esta copia se guarda en la página y sigue sus permisos de uso compartido. El bloque en vivo sigue siendo privado.",
+    "This copy is saved in the page and follows its sharing permissions. The live block stays private.",
+    "Esta cópia é salva na página e segue suas permissões de compartilhamento. O bloco ao vivo continua privado.",
+  ],
+  "Snapshot unavailable": [
+    "No hay resumen cargado para copiar.",
+    "No loaded summary to copy.",
+    "Nenhum resumo carregado para copiar.",
+  ],
+  "Snapshot source note": [
+    "Copia editable del resumen de tickets",
+    "Editable copy of the ticket summary",
+    "Cópia editável do resumo de tickets",
+  ],
 } as const satisfies MessageCatalog;
