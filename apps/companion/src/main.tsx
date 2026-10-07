@@ -247,9 +247,14 @@ function App() {
 
   const connectWith = (origin: string, tok: string, save: boolean) =>
     run(message("Checking connection"), async () => {
+      // Normalize once so the stored credential matches what connected.
+      const cleanOrigin = origin.trim();
+      const cleanToken = tok.trim();
+      setApiOrigin(cleanOrigin);
+      setToken(cleanToken);
       const result = await companionRequest<Capabilities>(
-        origin,
-        tok,
+        cleanOrigin,
+        cleanToken,
         "capabilities",
       );
       setCapabilities(result);
@@ -264,7 +269,10 @@ function App() {
       if (result.storageAvailable) setSettingsOpen(false);
       if (save) {
         try {
-          await native<void>("credential_save", { origin, token: tok });
+          await native<void>("credential_save", {
+            origin: cleanOrigin,
+            token: cleanToken,
+          });
           if (mounted.current) setHasStored(true);
         } catch {
           if (mounted.current)
@@ -276,10 +284,16 @@ function App() {
       } else {
         try {
           await native<void>("credential_clear");
+          if (mounted.current) setHasStored(false);
         } catch {
-          // Clearing is best effort; the session stays connected.
+          // Keep the Forget action visible so a locked keychain can be
+          // retried; the stored credential may still auto-reconnect.
+          if (mounted.current)
+            setNotice({
+              message: message("Unable to forget the saved credential."),
+              isError: true,
+            });
         }
-        if (mounted.current) setHasStored(false);
       }
     });
 

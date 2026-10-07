@@ -153,6 +153,11 @@ const messages = {
     en: "Unable to save the credential on this device.",
     pt: "Não foi possível salvar a credencial neste dispositivo.",
   },
+  "Unable to forget the saved credential.": {
+    es: "No se pudo olvidar la credencial guardada.",
+    en: "Unable to forget the saved credential.",
+    pt: "Não foi possível esquecer a credencial salva.",
+  },
   "Savia app address": {
     es: "Dirección de la app Savia",
     en: "Savia app address",
