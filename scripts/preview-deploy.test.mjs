@@ -6,7 +6,21 @@ import {
   execFileWithInput,
   parseWorkersDevUrl,
   requireGatewayOrigin,
+  workerConfig,
 } from "./preview-deploy.mjs";
+
+test("routes public quote reports through the preview gateway", () => {
+  const config = workerConfig(
+    "gateway",
+    { workers: { gateway: "savia-preview-test" } },
+    {},
+    "https://savia-preview-test.workers.dev",
+    { assetsDir: "/tmp/savia-admin-assets" },
+  );
+
+  assert.ok(config.assets.run_worker_first.includes("/public/quotes"));
+  assert.ok(config.assets.run_worker_first.includes("/public/quotes/*"));
+});
 
 test("parses Cloudflare account-subdomain worker URLs", () => {
   assert.equal(

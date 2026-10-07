@@ -150,6 +150,8 @@ export function workerConfig(
         "/companion-downloads.json",
         "/public/bookings",
         "/public/bookings/*",
+        "/public/quotes",
+        "/public/quotes/*",
         "/api/*",
         "/v1/*",
         "/webhooks/whatsapp",
