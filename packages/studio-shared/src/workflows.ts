@@ -33,6 +33,11 @@ const key = z
   .string()
   .regex(/^[a-z][a-z0-9_]{0,47}$/)
   .refine(safePart);
+/** Collection or relation-traversal field path such as `status` or `related.customer.status`. */
+const fieldPath = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]{0,47}(\.[a-z][a-z0-9_]{0,47}){0,2}$/)
+  .refine((value) => value.split(".").every(safePart));
 const scalarWorkflowValueSchema = z.union([
   z.string().max(4000),
   z.number().finite(),
@@ -353,7 +358,7 @@ export const workflowNodeSchema = z.discriminatedUnion("type", [
 export type WorkflowNode = z.infer<typeof workflowNodeSchema>;
 export const workflowTriggerConditionSchema = z
   .object({
-    field: key,
+    field: fieldPath,
     operator: z.enum([
       "eq",
       "neq",
@@ -412,6 +417,20 @@ const trigger = z.discriminatedUnion("type", [
       changedFields: z.array(key).max(50).default([]),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal("validate"),
+      ...collectionTrigger,
+      changedFields: z.array(key).max(50).default([]),
+    })
+    .strict()
+    .superRefine((trigger, ctx) => {
+      if (!trigger.conditions?.length)
+        ctx.addIssue({
+          code: "custom",
+          message: "Validation needs at least one forbidden condition",
+        });
+    }),
   z
     .object({
       type: z.literal("updated"),
@@ -713,11 +732,7 @@ export function parallelRegion(
         reachedMerge = true;
         continue;
       }
-      if (
-        node.type === "loop" ||
-        node.type === "parallel" ||
-        node.type === "merge"
-      )
+      if (node.type === "loop" || node.type === "parallel")
         return {
           ...empty,
           errors: [`Step ${node.id} cannot run inside parallel branches yet`],
@@ -981,6 +996,89 @@ export function matchWorkflowSwitchCase(
   right: unknown,
 ): boolean {
   return compareWorkflowValues(operator, left, right);
+}
+
+/** Field lookup inside a record snapshot. Dotted paths traverse `related` preloads; missing segments yield undefined. */
+export function snapshotFieldValue(
+  snapshot: Record<string, unknown>,
+  field: string,
+): unknown {
+  let current: unknown = snapshot;
+  for (const part of field.split(".")) {
+    if (
+      !safePart(part) ||
+      current === null ||
+      typeof current !== "object" ||
+      !Object.hasOwn(current, part)
+    )
+      return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+const isRecordNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+/**
+ * Record-gate comparison with the same semantics as the collection-event
+ * SQL dispatch: missing fields satisfy neither equality nor inequality,
+ * numbers compare across integer/real, `false` and `0` are distinct, and
+ * `empty` matches missing, null or empty text.
+ */
+export function matchRecordCondition(
+  operator: WorkflowTriggerCondition["operator"],
+  actual: unknown,
+  expected: WorkflowTriggerCondition["value"],
+): boolean {
+  switch (operator) {
+    case "eq":
+      if (actual === undefined) return false;
+      if (actual === null || expected === null)
+        return actual === null && expected === null;
+      if (isRecordNumber(actual) && isRecordNumber(expected))
+        return actual === expected;
+      return typeof actual === typeof expected && actual === expected;
+    case "neq":
+      if (actual === undefined) return false;
+      return !matchRecordCondition("eq", actual, expected);
+    case "gt":
+    case "gte":
+    case "lt":
+    case "lte":
+      if (!isRecordNumber(actual) || typeof expected !== "number")
+        return false;
+      return operator === "gt"
+        ? actual > expected
+        : operator === "gte"
+          ? actual >= expected
+          : operator === "lt"
+            ? actual < expected
+            : actual <= expected;
+    case "contains":
+      return (
+        typeof actual === "string" &&
+        typeof expected === "string" &&
+        actual.includes(expected)
+      );
+    case "empty":
+      return actual === undefined || actual === null || actual === "";
+    case "not_empty":
+      return !matchRecordCondition("empty", actual, expected);
+  }
+}
+export function recordMatchesConditions(
+  conditions: WorkflowTriggerCondition[] | undefined,
+  mode: "all" | "any" | undefined,
+  snapshot: Record<string, unknown>,
+): boolean {
+  if (!conditions?.length) return true;
+  const results = conditions.map((condition) =>
+    matchRecordCondition(
+      condition.operator,
+      snapshotFieldValue(snapshot, condition.field),
+      condition.value,
+    ),
+  );
+  return mode === "any" ? results.some(Boolean) : results.every(Boolean);
 }
 
 export function workflowResumeAt(

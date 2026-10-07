@@ -2511,6 +2511,16 @@ export const automationMessages = {
     "Record created or updated",
     "Registro criado ou atualizado",
   ],
+  "Validación pre-guardado": [
+    "Validación pre-guardado",
+    "Pre-save validation",
+    "Validação pré-salvamento",
+  ],
+  "Rechaza el guardado cuando las condiciones coinciden con el estado prohibido; si el registro pasa, los pasos se ejecutan como en creado o actualizado.": [
+    "Rechaza el guardado cuando las condiciones coinciden con el estado prohibido; si el registro pasa, los pasos se ejecutan como en creado o actualizado.",
+    "Rejects the save when the conditions match the forbidden state; passing records run steps like created or updated.",
+    "Rejeita o salvamento quando as condições correspondem ao estado proibido; registros válidos executam etapas como criado ou atualizado.",
+  ],
   Programación: ["Programación", "Schedule", "Agendamento"],
   "Un sistema externo inicia este flujo mediante una solicitud autenticada.": [
     "Un sistema externo inicia este flujo mediante una solicitud autenticada.",

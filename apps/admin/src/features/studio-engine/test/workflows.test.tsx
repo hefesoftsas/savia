@@ -145,6 +145,69 @@ it("switches a schedule between fixed interval and cron", () => {
   ).toBe(false);
 });
 
+it("creates a pre-save validation trigger with relation traversal", () => {
+  let saved: WorkflowDefinition;
+  function Editor() {
+    const [definition, setDefinition] = React.useState<WorkflowDefinition>({
+      trigger: { type: "created", collection: "orders" },
+      nodes: [{ id: "done", type: "transform", values: {} }],
+    });
+    saved = definition;
+    return (
+      <TriggerEditor
+        definition={definition}
+        onChange={setDefinition}
+        objects={
+          [
+            {
+              name: "orders",
+              label: "Orders",
+              config: makeConfig({
+                amount: { type: "Number", label: "Amount" },
+                customer: {
+                  type: "Textbox",
+                  label: "Customer",
+                  config: { relation: "customers" },
+                },
+              }),
+            },
+            {
+              name: "customers",
+              label: "Customers",
+              config: makeConfig({ tier: { type: "Textbox", label: "Tier" } }),
+            },
+          ] as any
+        }
+      />
+    );
+  }
+  render(<Editor />);
+  fireEvent.change(screen.getByLabelText("Disparador"), {
+    target: { value: "validate" },
+  });
+  expect(saved!.trigger).toMatchObject({
+    type: "validate",
+    collection: "orders",
+    changedFields: [],
+  });
+  expect(
+    screen.getByText(
+      "Rechaza el guardado cuando las condiciones coinciden con el estado prohibido; si el registro pasa, los pasos se ejecutan como en creado o actualizado.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: {
+        ...saved!.trigger,
+        conditions: [
+          { field: "related.customer.tier", operator: "eq", value: "banned" },
+        ],
+      },
+      nodes: [{ id: "done", type: "transform", values: {} }],
+    }).success,
+  ).toBe(true);
+});
+
 it("edits collection filters and clears fields when switching collections", () => {
   let saved: WorkflowDefinition;
   function Editor() {

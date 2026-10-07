@@ -445,6 +445,27 @@ function ScheduleCronEditor({
     </>
   );
 }
+export function relationConditionFields(
+  objects: StudioObject[],
+  object: StudioObject | undefined,
+): { name: string; label: string }[] {
+  if (!object) return [];
+  const fields: { name: string; label: string }[] = [];
+  for (const [name, field] of fieldEntries(object)) {
+    const target = field.config?.relation;
+    if (!target || typeof target !== "string" || target === object.name)
+      continue;
+    if (field.config?.multiple) continue;
+    const targetObject = objects.find((o) => o.name === target);
+    if (!targetObject) continue;
+    for (const [targetName, targetField] of fieldEntries(targetObject))
+      fields.push({
+        name: `related.${name}.${targetName}`,
+        label: `${field.label} → ${targetField.label}`,
+      });
+  }
+  return fields;
+}
 export function TriggerEditor({
   definition,
   onChange,
@@ -477,7 +498,9 @@ export function TriggerEditor({
                       intervalMinutes: 60,
                       startAt: new Date().toISOString(),
                     }
-                  : type === "updated" || type === "created_or_updated"
+                  : type === "updated" ||
+                      type === "created_or_updated" ||
+                      type === "validate"
                     ? {
                         type,
                         collection: objects[0]?.name ?? "",
@@ -494,6 +517,7 @@ export function TriggerEditor({
           <option value="created_or_updated">
             {t("Registro creado o actualizado")}
           </option>
+          <option value="validate">{t("Validación pre-guardado")}</option>
           <option value="deleted">{t("Registro eliminado")}</option>
           <option value="schedule">{t("Programación")}</option>
         </select>
@@ -589,7 +613,9 @@ export function TriggerEditor({
           </label>
         </>
       )}
-      {trigger.type === "updated" || trigger.type === "created_or_updated" ? (
+      {trigger.type === "updated" ||
+      trigger.type === "created_or_updated" ||
+      trigger.type === "validate" ? (
         <label>
           {t("Campos que deben cambiar")}
           <select
@@ -635,9 +661,17 @@ export function TriggerEditor({
           )}
         </p>
       )}
+      {trigger.type === "validate" && (
+        <p className="wf-muted">
+          {t(
+            "Rechaza el guardado cuando las condiciones coinciden con el estado prohibido; si el registro pasa, los pasos se ejecutan como en creado o actualizado.",
+          )}
+        </p>
+      )}
       {trigger.type === "created" ||
       trigger.type === "updated" ||
       trigger.type === "created_or_updated" ||
+      trigger.type === "validate" ||
       trigger.type === "deleted" ? (
         <TriggerConditions
           conditions={trigger.conditions ?? []}
@@ -647,6 +681,10 @@ export function TriggerEditor({
               objects.find((o) => o.name === trigger.collection) ??
                 ({ config: { fields: {} } } as StudioObject),
             ).map(([name, field]) => ({ name, label: field.label })),
+            ...relationConditionFields(
+              objects,
+              objects.find((o) => o.name === trigger.collection),
+            ),
             { name: "id", label: t("ID del registro") },
           ]}
           onChange={(conditions) => set({ ...trigger, conditions })}
@@ -924,7 +962,7 @@ export function StepEditor({
     "system.owner",
     "system.workspace",
     "trigger.id",
-    ...(["created", "updated", "created_or_updated", "deleted"].includes(
+    ...(["created", "updated", "created_or_updated", "validate", "deleted"].includes(
       trigger.type,
     )
       ? ["system.eventType"]

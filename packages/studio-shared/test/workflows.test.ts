@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  matchRecordCondition,
+  recordMatchesConditions,
+  snapshotFieldValue,
   workflowDefinitionSchema,
   resolveWorkflowValue,
 } from "../src/workflows";
@@ -634,6 +637,62 @@ it("rejects open, uneven and nested parallel regions", () => {
       ]),
     ).success,
   ).toBe(false);
+});
+
+it("accepts pre-save validation triggers with forbidden conditions", () => {
+  const base = {
+    trigger: {
+      type: "validate",
+      collection: "orders",
+      conditions: [{ field: "amount", operator: "gte", value: 1000 }],
+    },
+    nodes: [{ id: "note", type: "transform", values: {} }],
+  };
+  expect(workflowDefinitionSchema.safeParse(base).success).toBe(true);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...base,
+      trigger: { type: "validate", collection: "orders", conditions: [] },
+    }).success,
+  ).toBe(false);
+});
+
+it("matches record conditions with dispatch parity, including related paths", () => {
+  expect(matchRecordCondition("eq", 1, 1)).toBe(true);
+  expect(matchRecordCondition("eq", 1.0, 1)).toBe(true);
+  expect(matchRecordCondition("eq", false, 0)).toBe(false);
+  expect(matchRecordCondition("eq", undefined, null)).toBe(false);
+  expect(matchRecordCondition("eq", null, null)).toBe(true);
+  expect(matchRecordCondition("neq", undefined, "x")).toBe(false);
+  expect(matchRecordCondition("neq", "a", "b")).toBe(true);
+  expect(matchRecordCondition("gt", "5", 3)).toBe(false);
+  expect(matchRecordCondition("contains", "hello", "ell")).toBe(true);
+  expect(matchRecordCondition("empty", undefined, null)).toBe(true);
+  expect(matchRecordCondition("empty", 0, null)).toBe(false);
+  expect(matchRecordCondition("not_empty", false, null)).toBe(true);
+  const snapshot = {
+    amount: 1500,
+    related: { customer: { tier: "banned" } },
+  };
+  expect(snapshotFieldValue(snapshot, "related.customer.tier")).toBe("banned");
+  expect(snapshotFieldValue(snapshot, "related.missing.tier")).toBe(undefined);
+  expect(
+    recordMatchesConditions(
+      [{ field: "related.customer.tier", operator: "eq", value: "banned" }],
+      "all",
+      snapshot,
+    ),
+  ).toBe(true);
+  expect(
+    recordMatchesConditions(
+      [
+        { field: "amount", operator: "gte", value: 1000 },
+        { field: "related.customer.tier", operator: "eq", value: "ok" },
+      ],
+      "any",
+      snapshot,
+    ),
+  ).toBe(true);
 });
 
 it("accepts pinned subflow calls with mapped inputs", () => {

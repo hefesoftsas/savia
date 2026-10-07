@@ -219,11 +219,11 @@ export async function processWorkflows(
         notifyTransition(run.workspace_id, run.id);
         continue;
       }
-      const context = JSON.parse(run.context) as WorkflowContext;
-      const pending = context.calls ?? [];
-      const currentId = context.branches?.[0] ?? run.node_id;
-      const ownerVersion = pending.length
-        ? pending[pending.length - 1].version
+      const rawContext = JSON.parse(run.context) as WorkflowContext;
+      const previewCalls = rawContext.calls ?? [];
+      const currentId = rawContext.branches?.[0] ?? run.node_id;
+      const ownerVersion = previewCalls.length
+        ? previewCalls[previewCalls.length - 1].version
         : run.version_id;
       const version = await db
         .prepare(
@@ -236,6 +236,14 @@ export async function processWorkflows(
         JSON.parse(version.definition),
       );
       await new WorkflowRepository(db, run.workspace_id).validate(definition);
+      const { enrichExecutionContext } = await import("./relations");
+      const context = await enrichExecutionContext(
+        db,
+        run.workspace_id,
+        definition,
+        rawContext,
+      );
+      const pending = context.calls ?? [];
       const node = definition.nodes.find((n) => n.id === currentId);
       if (!node) {
         if (!pending.length) {

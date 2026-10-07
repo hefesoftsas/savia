@@ -51,6 +51,40 @@ const parse = (row: WorkflowRow) => ({
   definition: JSON.parse(row.definition) as WorkflowDefinition,
 });
 
+/** Dotted `related.<field>.<target>` condition paths resolve through single-valued relation fields. */
+async function isRelatedConditionField(
+  db: D1Database,
+  workspace: string,
+  object: {
+    name: string;
+    config: { fields?: Record<string, { config?: { relation?: unknown; multiple?: unknown } }> };
+  },
+  field: string,
+): Promise<boolean> {
+  const parts = field.split(".");
+  if (parts.length !== 3 || parts[0] !== "related") return false;
+  const [, relation, target] = parts;
+  if (relation === "related") return false;
+  const source = object.config.fields?.[relation];
+  const targetName = source?.config?.relation;
+  if (typeof targetName !== "string" || !targetName || targetName === object.name)
+    return false;
+  if (source?.config?.multiple) return false;
+  const targetRow = await db
+    .prepare("SELECT config FROM studio_objects WHERE tenant_id=? AND name=?")
+    .bind(workspace, targetName)
+    .first<{ config: string }>();
+  if (!targetRow) return false;
+  try {
+    const config = JSON.parse(targetRow.config) as {
+      fields?: Record<string, unknown>;
+    };
+    return target === "id" || Object.hasOwn(config.fields ?? {}, target);
+  } catch {
+    return false;
+  }
+}
+
 /** All public operations are workspace scoped. The host authorizes the action first. */
 export class WorkflowRepository {
   private readonly pieces: WorkflowPiece[];
@@ -167,14 +201,22 @@ export class WorkflowRepository {
               : [];
       if (used.some((name) => !fields.has(name)))
         fail(`Unknown field in ${item.collection}`, 422);
-      if (
-        "conditions" in item &&
-        item.conditions?.some(
-          (condition) =>
-            !fields.has(condition.field) && condition.field !== "id",
-        )
-      )
-        fail(`Unknown field in ${item.collection}`, 422);
+      if ("conditions" in item && item.conditions?.length) {
+        for (const condition of item.conditions) {
+          if (
+            fields.has(condition.field) ||
+            condition.field === "id" ||
+            (await isRelatedConditionField(
+              this.db,
+              this.workspace,
+              object,
+              condition.field,
+            ))
+          )
+            continue;
+          fail(`Unknown field in ${item.collection}`, 422);
+        }
+      }
     }
   }
   async validateSubflows(id: string, definition: WorkflowDefinition) {

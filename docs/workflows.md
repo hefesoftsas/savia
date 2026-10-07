@@ -88,8 +88,23 @@ or `deleted`; combined triggers preserve the actual event type.
 Events, filter matching and execution creation remain in the native write
 transaction, scoped to the workspace and pinned published revision. A failed
 transaction leaves no event or execution. The scheduler runs the accepted steps
-asynchronously; these triggers cannot reject a save. Relation preloading and
-synchronous pre-save validation workflows remain future capabilities.
+asynchronously; collection triggers other than validation cannot reject a save.
+
+## Pre-save validation
+
+Select **Validación pre-guardado**, a collection, and at least one condition
+describing the forbidden state. The gate runs synchronously inside the native
+write: when every (or any, per mode) condition matches the about-to-write
+snapshot, the save is rejected with 422 naming the flow and no event is
+created. `changedFields` applies to updates only, like the combined trigger.
+Passing writes run the flow's steps asynchronously as created or updated.
+
+Conditions accept `related.<relation>.<field>` paths over single-valued
+relation fields (for example `related.customer.tier`); the gate preloads those
+snapshots before evaluating, and step references such as
+`trigger.related.customer.tier` resolve from the same preload. Async dispatch
+evaluates the flat snapshot, so relation conditions only block synchronously.
+Multiple-valued relations are skipped.
 
 Apply `packages/db/migrations/0059_workflow_collection_triggers.sql` on the host,
 or `packages/studio-server/migrations/0019_workflow_collection_triggers.sql` on the

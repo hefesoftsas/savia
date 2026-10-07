@@ -284,6 +284,7 @@ const triggerSummaries = {
   created: "Registro creado",
   updated: "Registro actualizado",
   created_or_updated: "Registro creado o actualizado",
+  validate: "Validación pre-guardado",
   deleted: "Registro eliminado",
   schedule: "Programación",
 } as const;
