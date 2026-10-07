@@ -49,6 +49,7 @@ const saviaEnglish = {
       resetOrderShort: "Reset",
       noSearchResults: "We couldn't find tools with that name.",
       saveOrderError: "We couldn't save the menu order. Please try again.",
+      dismissSaveError: "Dismiss menu order error",
       moveToPreviousGroup: "Move %{item} to previous group",
       moveToNextGroup: "Move %{item} to next group",
       reorder: "Reorder %{item}",
@@ -605,6 +606,7 @@ const saviaSpanish = {
       noSearchResults: "No encontramos herramientas con ese nombre.",
       saveOrderError:
         "No pudimos guardar el orden del menú. Inténtalo de nuevo.",
+      dismissSaveError: "Descartar error del orden del menú",
       moveToPreviousGroup: "Mover %{item} al grupo anterior",
       moveToNextGroup: "Mover %{item} al grupo siguiente",
       reorder: "Reordenar %{item}",
@@ -1163,6 +1165,7 @@ const saviaPortuguese = {
       noSearchResults: "Não encontramos ferramentas com esse nome.",
       saveOrderError:
         "Não foi possível salvar a ordem do menu. Tente novamente.",
+      dismissSaveError: "Dispensar erro da ordem do menu",
       moveToPreviousGroup: "Mover %{item} para o grupo anterior",
       moveToNextGroup: "Mover %{item} para o grupo seguinte",
       reorder: "Reordenar %{item}",

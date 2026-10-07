@@ -50,6 +50,7 @@ import {
   FileText,
   Trash2,
   User,
+  X,
 } from "lucide-react";
 import { LinkBase, useTranslate } from "ra-core";
 import { useLocation } from "react-router-dom";
@@ -125,6 +126,8 @@ import {
 } from "./sidebar-navigation";
 
 const navigationSaveErrorKey = "savia.sidebar.saveOrderError";
+const navigationDismissSaveErrorKey = "savia.sidebar.dismissSaveError";
+const SAVE_ERROR_AUTO_DISMISS_MS = 6000;
 const sidebarSectionLabelClassName =
   "px-2 text-[0.68rem] font-semibold tracking-[0.08em] text-muted-foreground/80 uppercase";
 
@@ -723,6 +726,15 @@ export function AppSidebar() {
     }
   }, [organizationMode]);
 
+  useEffect(() => {
+    if (!saveError) return;
+    const timeout = window.setTimeout(
+      () => setSaveError(null),
+      SAVE_ERROR_AUTO_DISMISS_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [saveError]);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const activeId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : null;
@@ -932,9 +944,25 @@ export function AppSidebar() {
             </div>
           ) : null}
           {saveError ? (
-            <p className="px-1 text-xs text-destructive" role="alert">
-              {saveError}
-            </p>
+            <div
+              className="flex items-start gap-1.5 px-1"
+              role="alert"
+            >
+              <p className="min-w-0 flex-1 text-xs text-destructive">
+                {saveError}
+              </p>
+              <Button
+                aria-label={translate(navigationDismissSaveErrorKey)}
+                className="size-6 shrink-0 text-destructive hover:text-destructive"
+                onClick={() => setSaveError(null)}
+                size="icon"
+                title={translate(navigationDismissSaveErrorKey)}
+                type="button"
+                variant="ghost"
+              >
+                <X className="size-3.5" />
+              </Button>
+            </div>
           ) : null}
         </div>
       </SidebarHeader>

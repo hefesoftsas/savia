@@ -138,6 +138,9 @@ processing state, partial transcripts, summary and questions. When a session has
 more than one Ogg source, the review screen offers a single “combined call”
 player: it loads each source as one chained file and plays microphone and
 system audio together in lockstep, so a meeting is heard as one conversation.
+Use **Start combined playback** to start every source from the same user action;
+if the browser cannot start a source, the review screen displays an error and
+offers the separate players for review.
 Per-source full-audio players and downloads remain below for isolated review.
 `GET /v1/companion/sessions/{id}/audio?source=` returns one source as a single
 chained Ogg file for listening and download. Each validated complete logical

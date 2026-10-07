@@ -23,9 +23,7 @@ export const sidebarNavigationItemIds = [
   "tenants",
   "page-administrator",
   "domain-sources",
-  "domain-workflows",
-  "domain-reports",
-  "domain-api",
+  "domain-operations",
   "domain-history",
   "domain-packages",
   "plugin-studio",
@@ -40,15 +38,23 @@ export type StaticSidebarNavigationItemId =
 export type SidebarNavigationItemId =
   StaticSidebarNavigationItemId | `page:${string}:${string}`;
 
-/** Stored layouts may still carry the pre-Studio item id. */
-export const legacySidebarNavigationItemIds = ["dynamic-crm"] as const;
+/** Stored layouts may still carry pre-Studio or pre-consolidation item ids. */
+export const legacySidebarNavigationItemIds = [
+  "dynamic-crm",
+  "domain-workflows",
+  "domain-reports",
+  "domain-api",
+] as const;
+
+const consolidatedOperationsIds = new Set(["domain-workflows", "domain-reports", "domain-api"]);
 
 export function migrateSidebarNavigationItemId(
   itemId: string,
 ): SidebarNavigationItemId {
-  return (
-    itemId === "dynamic-crm" ? "studio" : itemId
-  ) as SidebarNavigationItemId;
+  if (itemId === "dynamic-crm") return "studio" as SidebarNavigationItemId;
+  if (consolidatedOperationsIds.has(itemId))
+    return "domain-operations" as SidebarNavigationItemId;
+  return itemId as SidebarNavigationItemId;
 }
 
 export type SidebarNavigationLayoutV1 = {
@@ -203,15 +209,13 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
           "companion-recordings",
           "dashboard",
           "studio",
-          "domain-reports",
         ],
         productivity: [
           "page-administrator",
           "domain-sources",
-          "domain-workflows",
-          "domain-api",
-          "provider-credentials",
+          "domain-operations",
           "plugin-studio",
+          "provider-credentials",
           "virtual-employees",
           "integrations",
           "domain-packages",
@@ -230,10 +234,23 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
   };
 }
 
+function dedupeMigratedItems(
+  items: SidebarNavigationItemId[],
+): SidebarNavigationItemId[] {
+  const seen = new Set<string>();
+  const result: SidebarNavigationItemId[] = [];
+  for (const item of items) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    result.push(item);
+  }
+  return result;
+}
+
 function parseItemId(
   itemId: unknown,
   seen: Set<string>,
-): SidebarNavigationItemId {
+): SidebarNavigationItemId | null {
   if (
     typeof itemId !== "string" ||
     (!(sidebarNavigationItemIds as readonly string[]).includes(itemId) &&
@@ -246,6 +263,13 @@ function parseItemId(
   }
   const migrated = migrateSidebarNavigationItemId(itemId);
   if (seen.has(migrated)) {
+    // Legacy consolidation (workflows/reports/api -> operations) may produce
+    // the same target from distinct stored ids, and old defaults stored the
+    // three ids in different sections. Keep the first occurrence instead of
+    // rejecting the whole layout; exact duplicates of other items still fail.
+    if (migrated === "domain-operations") {
+      return null;
+    }
     throw new SidebarNavigationLayoutError(
       "Sidebar navigation item is duplicated",
     );
@@ -263,7 +287,12 @@ function parseBlockItems(
       "Sidebar navigation section is invalid",
     );
   }
-  return value.map((itemId) => parseItemId(itemId, seen));
+  const result: SidebarNavigationItemId[] = [];
+  for (const itemId of value) {
+    const parsed = parseItemId(itemId, seen);
+    if (parsed !== null) result.push(parsed);
+  }
+  return result;
 }
 
 export function normalizeSidebarNavigationLayout(
@@ -274,45 +303,72 @@ export function normalizeSidebarNavigationLayout(
 ): SidebarNavigationLayout {
   const hiddenItems =
     "hiddenItems" in value && Array.isArray(value.hiddenItems)
-      ? value.hiddenItems.map((item) =>
-          typeof item === "string"
-            ? migrateSidebarNavigationItemId(item)
-            : item,
+      ? dedupeMigratedItems(
+          value.hiddenItems.map((item) =>
+            typeof item === "string"
+              ? migrateSidebarNavigationItemId(item)
+              : item,
+          ),
         )
       : undefined;
   if (value.version === 2) {
+    const seenAcrossBlocks = new Set<string>();
+    const blocks = value.blocks.map((block) => {
+      const migrated =
+        block.kind === "builtin"
+          ? {
+              kind: "builtin" as const,
+              id: block.id,
+              items: dedupeMigratedItems(
+                block.items.map(migrateSidebarNavigationItemId),
+              ),
+              collapsed: block.collapsed === true,
+            }
+          : {
+              kind: "custom" as const,
+              id: block.id,
+              label: block.label,
+              items: dedupeMigratedItems(
+                block.items.map(migrateSidebarNavigationItemId),
+              ),
+              collapsed: block.collapsed === true,
+            };
+      // Drop items already placed in an earlier block (legacy consolidation
+      // may have produced the same target in several sections).
+      const filtered = migrated.items.filter((item) => {
+        if (seenAcrossBlocks.has(item)) return false;
+        seenAcrossBlocks.add(item);
+        return true;
+      });
+      return { ...migrated, items: filtered };
+    });
     return {
       version: 2,
       ...("presetVersion" in value && value.presetVersion === 2
         ? { presetVersion: 2 as const }
         : {}),
-      blocks: value.blocks.map((block) =>
-        block.kind === "builtin"
-          ? {
-              kind: "builtin",
-              id: block.id,
-              items: block.items.map(migrateSidebarNavigationItemId),
-              collapsed: block.collapsed === true,
-            }
-          : {
-              kind: "custom",
-              id: block.id,
-              label: block.label,
-              items: block.items.map(migrateSidebarNavigationItemId),
-              collapsed: block.collapsed === true,
-            },
-      ),
+      blocks,
       ...(hiddenItems ? { hiddenItems } : {}),
     };
   }
+  const seenAcrossSections = new Set<string>();
   return {
     version: 2,
-    blocks: sidebarNavigationSectionIds.map((id) => ({
-      kind: "builtin",
-      id,
-      items: [...value.sections[id]].map(migrateSidebarNavigationItemId),
-      collapsed: false,
-    })),
+    blocks: sidebarNavigationSectionIds.map((id) => {
+      const items = dedupeMigratedItems(
+        [...value.sections[id]].map(migrateSidebarNavigationItemId),
+      ).filter((item) => {
+        if (seenAcrossSections.has(item)) return false;
+        seenAcrossSections.add(item);
+        return true;
+      });
+      return {
+        kind: "builtin" as const,
+        id,
+        items,
+        collapsed: false,
+      };
+    }),
     ...(hiddenItems ? { hiddenItems } : {}),
   };
 }
@@ -410,9 +466,11 @@ export function parseSidebarNavigationLayout(
       );
     }
     const hiddenSeen = new Set<string>();
-    hiddenItems = value.hiddenItems.map((item) =>
-      parseItemId(item, hiddenSeen),
-    );
+    hiddenItems = [];
+    for (const item of value.hiddenItems) {
+      const parsed = parseItemId(item, hiddenSeen);
+      if (parsed !== null) hiddenItems.push(parsed);
+    }
   }
 
   return {

@@ -534,7 +534,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Revoke your personal key */
+    /** Revoke an active key, or permanently delete it once revoked */
     delete: {
       parameters: {
         query?: never;
@@ -546,7 +546,7 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Revoked or already absent */
+        /** @description Revoked, deleted, or already absent */
         204: {
           headers: {
             [name: string]: unknown;
@@ -738,7 +738,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Revoke a personal key in this tenant */
+    /** Revoke an active tenant key, or delete it once revoked */
     delete: {
       parameters: {
         query?: never;
@@ -751,7 +751,7 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Revoked or already absent */
+        /** @description Revoked, deleted, or already absent */
         204: {
           headers: {
             [name: string]: unknown;
@@ -21430,16 +21430,19 @@ export interface paths {
                             | "tenants"
                             | "page-administrator"
                             | "domain-sources"
-                            | "domain-workflows"
-                            | "domain-reports"
-                            | "domain-api"
+                            | "domain-operations"
                             | "domain-history"
                             | "domain-packages"
                             | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
-                        | "dynamic-crm"
+                        | (
+                            | "dynamic-crm"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                          )
                         | string
                       )[];
                       collapsed: boolean;
@@ -21467,16 +21470,19 @@ export interface paths {
                             | "tenants"
                             | "page-administrator"
                             | "domain-sources"
-                            | "domain-workflows"
-                            | "domain-reports"
-                            | "domain-api"
+                            | "domain-operations"
                             | "domain-history"
                             | "domain-packages"
                             | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
-                        | "dynamic-crm"
+                        | (
+                            | "dynamic-crm"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                          )
                         | string
                       )[];
                       collapsed: boolean;
@@ -21500,16 +21506,19 @@ export interface paths {
                       | "tenants"
                       | "page-administrator"
                       | "domain-sources"
-                      | "domain-workflows"
-                      | "domain-reports"
-                      | "domain-api"
+                      | "domain-operations"
                       | "domain-history"
                       | "domain-packages"
                       | "plugin-studio"
                       | "virtual-employees"
                       | "tenant-branding"
                     )
-                  | "dynamic-crm"
+                  | (
+                      | "dynamic-crm"
+                      | "domain-workflows"
+                      | "domain-reports"
+                      | "domain-api"
+                    )
                   | string
                 )[];
               };
@@ -21572,16 +21581,19 @@ export interface paths {
                             | "tenants"
                             | "page-administrator"
                             | "domain-sources"
-                            | "domain-workflows"
-                            | "domain-reports"
-                            | "domain-api"
+                            | "domain-operations"
                             | "domain-history"
                             | "domain-packages"
                             | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
-                        | "dynamic-crm"
+                        | (
+                            | "dynamic-crm"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                          )
                         | string
                       )[];
                       collapsed: boolean;
@@ -21609,16 +21621,19 @@ export interface paths {
                             | "tenants"
                             | "page-administrator"
                             | "domain-sources"
-                            | "domain-workflows"
-                            | "domain-reports"
-                            | "domain-api"
+                            | "domain-operations"
                             | "domain-history"
                             | "domain-packages"
                             | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
-                        | "dynamic-crm"
+                        | (
+                            | "dynamic-crm"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                          )
                         | string
                       )[];
                       collapsed: boolean;
@@ -21642,16 +21657,19 @@ export interface paths {
                       | "tenants"
                       | "page-administrator"
                       | "domain-sources"
-                      | "domain-workflows"
-                      | "domain-reports"
-                      | "domain-api"
+                      | "domain-operations"
                       | "domain-history"
                       | "domain-packages"
                       | "plugin-studio"
                       | "virtual-employees"
                       | "tenant-branding"
                     )
-                  | "dynamic-crm"
+                  | (
+                      | "dynamic-crm"
+                      | "domain-workflows"
+                      | "domain-reports"
+                      | "domain-api"
+                    )
                   | string
                 )[];
               };

@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { StoreContextProvider, memoryStore } from "ra-core";
@@ -321,6 +327,22 @@ it("plays microphone and system audio together as one combined call", async () =
   );
   await screen.findByText("Microphone and system audio, played together.");
   expect(document.querySelectorAll("audio")).toHaveLength(2);
+  const play = vi
+    .spyOn(HTMLMediaElement.prototype, "play")
+    .mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  await user.click(
+    screen.getByRole("button", { name: "Start combined playback" }),
+  );
+  expect(play).toHaveBeenCalledTimes(2);
+
+  play.mockRejectedValueOnce(new Error("Playback was blocked"));
+  await user.click(
+    screen.getByRole("button", { name: "Start combined playback" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "One or more audio tracks could not start",
+  );
 });
 
 it("masters the combined call from the longest source timeline", async () => {
@@ -393,6 +415,32 @@ it("masters the combined call from the longest source timeline", async () => {
     "src",
     "blob:23",
   );
+  const play = vi
+    .spyOn(HTMLMediaElement.prototype, "play")
+    .mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  await user.click(
+    screen.getByRole("button", { name: "Start combined playback" }),
+  );
+  const [master, microphone] = document.querySelectorAll("audio");
+  Object.defineProperties(master, {
+    paused: { configurable: true, writable: true, value: false },
+    currentTime: { configurable: true, writable: true, value: 40 },
+  });
+  Object.defineProperties(microphone, {
+    paused: { configurable: true, writable: true, value: true },
+    ended: { configurable: true, value: true },
+    duration: { configurable: true, value: 30 },
+    currentTime: { configurable: true, writable: true, value: 30 },
+  });
+
+  fireEvent.timeUpdate(master);
+
+  expect(play).toHaveBeenCalledTimes(2);
+
+  master.currentTime = 10;
+  fireEvent.timeUpdate(master);
+  expect(play).toHaveBeenCalledTimes(3);
 });
 
 it("falls back to per-segment playback for mobile M4A sources", async () => {
