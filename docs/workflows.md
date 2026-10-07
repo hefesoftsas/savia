@@ -193,9 +193,11 @@ one minute.
   The owner is the publisher of the pinned version. Manual starts also record the initiator.
   Revoked owners produce a blocked execution; retry rechecks permissions.
 - API actions distinguish view, design, publish, execute, history and resolve. This
-  delivery maps them to the host's existing workspace-administrator policy. Platform
-  administrators can operate general data domains. Non-admin delegated authoring and
-  inbox access need a future host permission policy; the engine does not bypass it.
+  delivery maps them to the host's existing workspace policy: every active
+  workspace member may view, read history, execute manual flows and resolve
+  their own inbox items (assignee ownership is still enforced per item);
+  draft design and publication require a workspace administrator. Platform
+  administrators can operate general data domains. The engine does not bypass it.
 - Only the assigned principal can resolve an inbox item, even within a workspace.
 - Task creation also appends a personal notice (`workflow:<run>:<node>` key) in the
   same checkpoint transaction; assignees see it in [Notifications](notifications.md)
