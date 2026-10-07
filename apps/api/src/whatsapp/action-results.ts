@@ -39,11 +39,16 @@ export function actionResultText(
         .map((warning) => warning.slice(0, 250))
     : [];
   const noPrice = Number(value.pricedOffers ?? 0) === 0;
+  const hasPartialResults =
+    outcome.state !== "completed" ||
+    Number(value.failedOffers ?? 0) > 0 ||
+    Number(value.uncertainOffers ?? 0) > 0 ||
+    Number(value.unpricedOffers ?? 0) > 0;
   return [
-    `${label}${outcome.state === "completed" ? "Resultados" : "Resultados parciales"} de ${value.reference}`,
+    `${label}${hasPartialResults ? "Resultados parciales" : "Resultados"} de ${value.reference}`,
     `Ofertas con precio: ${value.pricedOffers ?? 0}. Respuestas fallidas: ${value.failedOffers ?? 0}.`,
     Number(value.uncertainOffers ?? 0) > 0
-      ? `Sin resultado verificado: ${value.uncertainOffers}.`
+      ? `Sin resultado verificado: ${value.uncertainOffers}. Revisa su historial antes de volver a cotizar.`
       : "",
     Number(value.unpricedOffers ?? 0) > 0
       ? `Respuestas sin precio: ${value.unpricedOffers}.`
@@ -58,9 +63,7 @@ export function actionResultText(
     ...warnings,
     outcome.state !== "completed" ? outcome.message : "",
     noPrice ? "No recibí ofertas con precio." : "",
-    noPrice || outcome.state !== "completed"
-      ? humanSupportContactText(humanSupportContact)
-      : "",
+    noPrice ? humanSupportContactText(humanSupportContact) : "",
     "Puedes preguntarme por esta cotización o escribir menú para elegir otra tarea.",
   ]
     .filter(Boolean)

@@ -81,7 +81,8 @@ it("shows saved priced offers even when another insurer outcome is uncertain", (
   expect(text).toContain("Sin resultado verificado: 2");
   expect(text).toContain("Respuestas sin precio: 3");
   expect(text).toContain("no la repitas automáticamente");
-  expect(text).toContain("https://support.example.test/help");
+  expect(text).not.toContain("https://support.example.test/help");
+  expect(text).not.toContain("contactar directamente a un asesor");
   expect(text).not.toContain("Solicitud completada");
 });
 
@@ -101,6 +102,7 @@ it("shows incomplete quote states and relevant persistence warnings without expo
     },
   });
   expect(text).toContain("Respuestas sin precio: 2");
+  expect(text).toContain("Resultados parciales de COT-saved");
   expect(text).toContain(
     "No se pudo actualizar el estado de la cotización guardada.",
   );

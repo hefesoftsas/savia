@@ -30,8 +30,12 @@ permissions.
 
 WhatsApp result messages retain verified priced offers even when another insurer
 request is uncertain. They distinguish failed, unverified and unpriced responses,
-include relevant persistence warnings, and direct uncertain outcomes to human
-support without automatically repeating provider calls. Prices alone do not
+include relevant persistence warnings, and label results as partial when any
+requests fail or return unverified or unpriced responses. Human support is
+suggested when no priced offers are received; verified priced offers remain
+available without an automatic adviser referral. Unverified requests require
+history review before quoting again and are never automatically repeated.
+Prices alone do not
 establish a coverage recommendation. Internal CRM links stay out of customer
 messages.
 
