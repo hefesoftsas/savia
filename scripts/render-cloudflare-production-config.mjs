@@ -242,6 +242,8 @@ function gatewayConfig({ publicOrigin, documentsBucket }) {
         "/public/forms/*",
         "/public/bookings",
         "/public/bookings/*",
+        "/public/quotes",
+        "/public/quotes/*",
         "/office",
         "/office/*",
         "/api/*",

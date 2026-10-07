@@ -83,6 +83,9 @@ without applicant documents, contact details, raw provider responses, or interna
 CRM links. Opening the report does not call the model or insurers again. Report
 responses and the public page use `no-store`; unknown, expired, and revoked links
 return the same unavailable result.
+Production, preview, and local admin Worker configs route `/public/quotes` and
+`/public/quotes/*` through the gateway so these responses retain their security
+headers instead of falling through to the static single-page app.
 
 Tenant administrators can inspect and revoke these links in the quote screen's
 public-link settings, under shared quote results. Revocation is tenant-scoped

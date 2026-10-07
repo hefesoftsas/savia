@@ -265,6 +265,48 @@ test("writes only the supported production workers and retains their runtime set
   }
 });
 
+test("routes public quote pages through the admin worker for security headers", async () => {
+  const outputRoot = await mkdtemp(
+    join(tmpdir(), "savia-public-quote-config-"),
+  );
+  try {
+    for (const deploymentEnvironment of ["production", "preview"]) {
+      await renderProductionConfigs({
+        deploymentEnvironment,
+        authD1Id: `${deploymentEnvironment}-auth-id`,
+        domainD1Id: `${deploymentEnvironment}-domain-id`,
+        ...(deploymentEnvironment === "preview"
+          ? {
+              documentsBucket: "savia-documents-preview-test",
+              publicOrigin: "https://savia-preview.hefesoft.com",
+            }
+          : {}),
+        outputRoot,
+      });
+      const admin = JSON.parse(
+        await readFile(
+          join(
+            outputRoot,
+            `apps/admin/wrangler.${deploymentEnvironment}.jsonc`,
+          ),
+          "utf8",
+        ),
+      );
+      assert.ok(admin.assets.run_worker_first.includes("/public/quotes"));
+      assert.ok(admin.assets.run_worker_first.includes("/public/quotes/*"));
+    }
+
+    const local = await readFile(
+      new URL("../apps/admin/wrangler.jsonc", import.meta.url),
+      "utf8",
+    );
+    assert.match(local, /"\/public\/quotes"/);
+    assert.match(local, /"\/public\/quotes\/\*"/);
+  } finally {
+    await rm(outputRoot, { recursive: true, force: true });
+  }
+});
+
 test("renders Jira only when its integration ID is explicitly configured", async () => {
   const outputRoot = await mkdtemp(join(tmpdir(), "savia-jira-config-"));
   try {
