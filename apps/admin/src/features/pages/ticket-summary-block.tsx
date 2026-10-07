@@ -60,10 +60,18 @@ function snapshotHref(url: string): string | undefined {
 export function buildTicketSnapshotBlocks(
   summary: TicketSummary,
   header: string,
+  notes: {
+    warnings: string[];
+    prUnavailable: string;
+    prIncomplete: string;
+  } = { warnings: [], prUnavailable: "", prIncomplete: "" },
 ): Array<Record<string, unknown>> {
   const blocks: Array<Record<string, unknown>> = [
     { type: "p", children: [{ text: header }] },
   ];
+  for (const warning of notes.warnings) {
+    blocks.push({ type: "p", children: [{ text: `⚠ ${warning}` }] });
+  }
   const groups = new Map<string, TicketSummary["tickets"]>();
   for (const ticket of summary.tickets) {
     groups.set(ticket.status, [...(groups.get(ticket.status) ?? []), ticket]);
@@ -112,6 +120,18 @@ export function buildTicketSnapshotBlocks(
               : [{ text: prTitle }]),
           ],
         });
+      }
+      if (ticket.prLookup !== "complete") {
+        const lookupNote =
+          ticket.prLookup === "unavailable"
+            ? notes.prUnavailable
+            : notes.prIncomplete;
+        if (lookupNote) {
+          blocks.push({
+            type: "p",
+            children: [{ text: `⚠ ${lookupNote} — ${ticket.key}` }],
+          });
+        }
       }
     }
   }
@@ -590,14 +610,36 @@ export function TicketSummaryBlock({
                 type="button"
                 variant="outline"
                 disabled={visibleSummary.tickets.length === 0}
-                onClick={() =>
-                  onInsertSnapshot(
+                onClick={() => {
+                  const warnings = [
+                    ...visibleSummary.warnings.map((warning) =>
+                      t(
+                        warning === "limit_reached"
+                          ? "Ticket limit reached"
+                          : warning === "jira_partial"
+                            ? "Some Jira details are unavailable"
+                            : warning === "github_unavailable"
+                              ? "GitHub details unavailable"
+                              : "Some GitHub details are incomplete",
+                      ),
+                    ),
+                    ...(visibleSummary.partial &&
+                    !visibleSummary.warnings.length
+                      ? [t("Some ticket details are incomplete")]
+                      : []),
+                  ];
+                  return onInsertSnapshot(
                     buildTicketSnapshotBlocks(
                       visibleSummary,
                       `${t("Snapshot source note")} · ${visibleSummary.updatedAt}`,
+                      {
+                        warnings,
+                        prUnavailable: t("Pull request lookup unavailable"),
+                        prIncomplete: t("Pull request results incomplete"),
+                      },
                     ),
-                  )
-                }
+                  );
+                }}
               >
                 {t("Insert snapshot as editable blocks")}
               </Button>

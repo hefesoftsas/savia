@@ -487,3 +487,30 @@ it("builds snapshot blocks with safe links only", () => {
     ),
   ).toBe(false);
 });
+
+it("preserves partial-result warnings in snapshot blocks", () => {
+  const blocks = buildTicketSnapshotBlocks(
+    {
+      ...summary,
+      partial: true,
+      warnings: ["limit_reached"],
+      tickets: [
+        {
+          ...summary.tickets[0],
+          prLookup: "partial",
+          pullRequests: [],
+        },
+      ],
+    } as never,
+    "header",
+    {
+      warnings: ["Ticket limit reached"],
+      prUnavailable: "lookup unavailable",
+      prIncomplete: "results incomplete",
+    },
+  );
+  const text = JSON.stringify(blocks);
+  expect(text).toContain("Ticket limit reached");
+  expect(text).toContain("results incomplete");
+  expect(text).toContain("OPS-41");
+});
