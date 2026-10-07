@@ -321,6 +321,22 @@ it("plays microphone and system audio together as one combined call", async () =
   );
   await screen.findByText("Microphone and system audio, played together.");
   expect(document.querySelectorAll("audio")).toHaveLength(2);
+  const play = vi
+    .spyOn(HTMLMediaElement.prototype, "play")
+    .mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  await user.click(
+    screen.getByRole("button", { name: "Start combined playback" }),
+  );
+  expect(play).toHaveBeenCalledTimes(2);
+
+  play.mockRejectedValueOnce(new Error("Playback was blocked"));
+  await user.click(
+    screen.getByRole("button", { name: "Start combined playback" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "One or more audio tracks could not start",
+  );
 });
 
 it("masters the combined call from the longest source timeline", async () => {
