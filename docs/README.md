@@ -21,6 +21,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [Request caching](guides/request-caching.md) — declarative server cache policies for reference reads, scopes, invalidation and execution traces.
+
 - [Jitsi meetings](guides/jitsi-meetings.md) — schedule calls from My Day and Bookings and share the same room with attendees.
 - [Slack and Teams sharing](guides/slack-teams-sharing.md) — personal Nango connections, channel selection, record sharing and OAuth setup.
 

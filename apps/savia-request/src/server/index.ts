@@ -1,6 +1,7 @@
 import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
 import { HTTPException } from "hono/http-exception";
-import { lookupDaneCity } from "./dane";
+import { daneCityFlow, lookupDaneCity } from "./dane";
+import { validateRequestCachePolicy } from "./request-cache";
 import { openApi } from "./openapi";
 import { Hono } from "hono";
 import type { Env } from "./env";
@@ -69,10 +70,17 @@ app.get("/api/lookups/dane", async (c) => {
   )
     return c.json({ error: "Indica una ciudad válida." }, 400);
   try {
+    const definition = c.env?.DB
+      ? await getFlow(c.env, daneCityFlow.id, scopeOf(c.req.raw))
+      : daneCityFlow;
     return c.json(
       await lookupDaneCity(
         c.req.query("city") ?? "",
         c.req.query("department"),
+        fetch,
+        c.env,
+        definition?.steps[0]?.cache,
+        scopeOf(c.req.raw),
       ),
     );
   } catch (error) {
@@ -302,6 +310,17 @@ function validateFlow(value: Flow) {
   )
     throw new Error("Flow inválido");
   for (const step of value.steps) {
+    if (step.cache !== undefined && !validateRequestCachePolicy(step.cache))
+      throw new HTTPException(400, { message: "Invalid request cache policy" });
+    if (step.cache?.enabled && !["GET", "HEAD"].includes(step.method))
+      throw new HTTPException(400, {
+        message: "Request caching requires a read-only GET or HEAD step",
+      });
+    if (step.cache?.enabled && step.cache.scope === "connection")
+      throw new HTTPException(400, {
+        message:
+          "Connection-scoped caching requires an execution connection; use tenant scope for this flow",
+      });
     if (
       !step.id ||
       !step.name ||

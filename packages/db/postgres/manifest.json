@@ -1876,6 +1876,16 @@
       "type": "index",
       "name": "whatsapp_action_progress_expired_lease",
       "table": "whatsapp_channel_action_progress"
+    },
+    {
+      "type": "index",
+      "name": "savia_request_cache_expiry",
+      "table": "savia_request_cache"
+    },
+    {
+      "type": "index",
+      "name": "savia_request_cache_lease",
+      "table": "savia_request_cache"
     }
   ],
   "tables": [
@@ -16298,6 +16308,108 @@
         }
       ],
       "checkCount": 0
+    },
+    {
+      "name": "savia_request_cache",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "cache_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "response_status",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "response_status_text",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "response_headers",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "response_body",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "retrieved_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "expires_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "lease_token",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "lease_until",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["cache_key"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
     }
   ],
   "mappingNotes": [

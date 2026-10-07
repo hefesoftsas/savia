@@ -24,6 +24,11 @@ export type RequestStep = {
   body: string;
   bodyType?: string;
   auth?: { username: string; password: string };
+  cache?: {
+    enabled: boolean;
+    ttlSeconds: number;
+    scope: "public" | "tenant" | "connection";
+  };
   sourcePath?: string;
   pre: string;
   post: string;
@@ -47,6 +52,8 @@ export type RequestTrace = {
   status: string;
   durationMs: number;
   httpStatus?: number;
+  cacheStatus?: "hit" | "miss" | "coalesced" | "bypass";
+  cacheAgeMs?: number;
   responseJson?: unknown;
   extracted?: string[];
   error?: string;
