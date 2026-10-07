@@ -196,8 +196,6 @@ it("asks the public bootstrap to retire a stale administrative controller", asyn
   } finally {
     if (descriptor)
       Object.defineProperty(navigator, "serviceWorker", descriptor);
-    else
-      delete (navigator as Navigator & { serviceWorker?: unknown })
-        .serviceWorker;
+    else Reflect.deleteProperty(navigator, "serviceWorker");
   }
 });

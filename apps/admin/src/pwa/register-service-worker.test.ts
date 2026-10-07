@@ -165,3 +165,79 @@ it("bounds a stalled service-worker lookup and releases its retry guard", async 
     vi.useRealTimers();
   }
 });
+
+it("does not unregister later when a timed-out registration lookup resolves", async () => {
+  vi.useFakeTimers();
+  try {
+    const controller = { scriptURL: `${window.location.origin}/sw.js` };
+    let resolveRegistration!: (registration: unknown) => void;
+    const getRegistration = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveRegistration = resolve;
+        }),
+    );
+    const reload = vi.fn();
+    const retirement = retireAdministrativeWorkerForPublicRoute(
+      "/public/quotes/" + "d".repeat(64),
+      { controller, getRegistration } as unknown as ServiceWorkerContainer,
+      reload,
+    );
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(retirement).resolves.toBe(false);
+
+    const unregister = vi.fn().mockResolvedValue(true);
+    resolveRegistration({
+      scope: `${window.location.origin}/`,
+      active: controller,
+      unregister,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(unregister).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("reloads once if unregistration succeeds after the five-second deadline", async () => {
+  vi.useFakeTimers();
+  try {
+    const controller = { scriptURL: `${window.location.origin}/sw.js` };
+    let resolveUnregister!: (value: boolean) => void;
+    const unregister = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveUnregister = resolve;
+        }),
+    );
+    const reload = vi.fn();
+    const retirement = retireAdministrativeWorkerForPublicRoute(
+      "/public/quotes/" + "e".repeat(64),
+      {
+        controller,
+        getRegistration: vi.fn().mockResolvedValue({
+          scope: `${window.location.origin}/`,
+          active: controller,
+          unregister,
+        }),
+      } as unknown as ServiceWorkerContainer,
+      reload,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(unregister).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(retirement).resolves.toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+
+    resolveUnregister(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(reload).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});

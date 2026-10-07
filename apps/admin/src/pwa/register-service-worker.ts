@@ -38,35 +38,51 @@ export async function retireAdministrativeWorkerForPublicRoute(
   retiringControllers.add(controller);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let retired = false;
+  let timedOut = false;
+  let unregisterStarted = false;
+  let operationSettled = false;
+  let reloadIssued = false;
+  const reloadOnce = () => {
+    if (reloadIssued) return;
+    reloadIssued = true;
+    reload();
+  };
+  const retirement = (async () => {
+    const registration = await serviceWorker.getRegistration("/");
+    if (
+      timedOut ||
+      !registration ||
+      registration.scope !== new URL("/", window.location.origin).href ||
+      registration.active?.scriptURL !== controller.scriptURL
+    )
+      return;
+    unregisterStarted = true;
+    retired = await registration.unregister();
+    if (retired && timedOut) reloadOnce();
+  })().finally(() => {
+    operationSettled = true;
+    if (!retired) retiringControllers.delete(controller);
+  });
   try {
-    const retirement = (async () => {
-      const registration = await serviceWorker.getRegistration("/");
-      if (
-        !registration ||
-        registration.scope !== new URL("/", window.location.origin).href ||
-        registration.active?.scriptURL !== controller.scriptURL
-      )
-        return;
-      retired = await registration.unregister();
-    })();
     await Promise.race([
       retirement,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error("Service worker retirement timed out")),
-          PUBLIC_WORKER_RETIRE_DEADLINE_MS,
-        );
+        timer = setTimeout(() => {
+          timedOut = true;
+          reject(new Error("Service worker retirement timed out"));
+        }, PUBLIC_WORKER_RETIRE_DEADLINE_MS);
       }),
     ]);
-    if (retired) reload();
+    if (retired) reloadOnce();
     return retired;
   } catch {
     // Keep the current page usable when storage or worker APIs fail. The
     // service worker's ordinary update lifecycle remains available on return.
+    if (!unregisterStarted) retiringControllers.delete(controller);
     return false;
   } finally {
     if (timer !== undefined) clearTimeout(timer);
-    if (!retired) retiringControllers.delete(controller);
+    if (operationSettled && !retired) retiringControllers.delete(controller);
   }
 }
 
