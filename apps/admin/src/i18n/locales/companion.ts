@@ -73,6 +73,17 @@ export const companionMessages = {
     "Microphone and system audio, played together.",
     "Microfone e áudio do sistema, tocando juntos.",
   ],
+  "Start combined playback": [
+    "Iniciar reproducción de llamada completa",
+    "Start combined playback",
+    "Iniciar reprodução da chamada completa",
+  ],
+  "One or more audio tracks could not start. Try listening to the separate tracks.":
+    [
+      "No se pudo iniciar una de las pistas. Prueba escuchar los audios por separado.",
+      "One or more audio tracks could not start. Try listening to the separate tracks.",
+      "Não foi possível iniciar uma das faixas. Tente ouvir os áudios separadamente.",
+    ],
   "Play combined call": [
     "Reproducir llamada completa",
     "Play combined call",
