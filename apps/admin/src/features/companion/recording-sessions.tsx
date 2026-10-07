@@ -764,6 +764,7 @@ function SessionPlayer({
   const [combined, setCombined] = useState<string[] | null>(null);
   const [combinedLoading, setCombinedLoading] = useState(false);
   const [combinedFailed, setCombinedFailed] = useState(false);
+  const [combinedPlaybackFailed, setCombinedPlaybackFailed] = useState(false);
   const [full, setFull] = useState<{
     source: SessionChunk["source"];
     url: string;
@@ -835,6 +836,7 @@ function SessionPlayer({
   const loadCombined = async () => {
     setCombinedLoading(true);
     setCombinedFailed(false);
+    setCombinedPlaybackFailed(false);
     try {
       const blobs = await Promise.all(
         orderedSources.map((source) => client.fullAudio(session.id, source)),
@@ -855,7 +857,12 @@ function SessionPlayer({
    * Chained full-audio files start at each source's first chunk, so a slave
    * seeks to the same session time, not the same media time.
    */
-  const syncSlaves = () => {
+  const failCombinedPlayback = () => {
+    setCombinedPlaybackFailed(true);
+    masterRef.current?.pause();
+    for (const slave of slavesRef.current) slave?.pause();
+  };
+  const syncSlaves = (forcePlay = false) => {
     const master = masterRef.current;
     if (!master) return;
     const masterStart = timelineStart(orderedSources[0]);
@@ -866,12 +873,37 @@ function SessionPlayer({
       const clamped = Number.isFinite(slave.duration)
         ? Math.min(Math.max(target, 0), slave.duration)
         : Math.max(target, 0);
-      if (Math.abs(slave.currentTime - clamped) > 0.15)
-        slave.currentTime = clamped;
+      const previousTime = slave.currentTime;
+      const seeking = Math.abs(previousTime - clamped) > 0.15;
+      if (seeking) slave.currentTime = clamped;
       slave.playbackRate = master.playbackRate;
-      if (master.paused) slave.pause();
-      else void slave.play().catch(() => {});
+      slave.volume = master.volume;
+      slave.muted = master.muted;
+      const reachedEnd =
+        Number.isFinite(slave.duration) &&
+        slave.duration > 0 &&
+        clamped >= slave.duration;
+      const endedAtTarget =
+        slave.ended && (!seeking || clamped >= previousTime);
+      if (reachedEnd || endedAtTarget) {
+        if (!slave.paused) slave.pause();
+        return;
+      }
+      if (master.paused && !forcePlay) {
+        if (!slave.paused) slave.pause();
+      } else if (forcePlay || slave.paused) {
+        void slave.play().catch(failCombinedPlayback);
+      }
     });
+  };
+  const startCombinedPlayback = () => {
+    const master = masterRef.current;
+    if (!master) return;
+    setCombinedPlaybackFailed(false);
+    // Start every source directly from this user gesture. Some browsers reject
+    // playback started later from the master's asynchronous play event.
+    syncSlaves(true);
+    void master.play().catch(failCombinedPlayback);
   };
   const pauseSlaves = () => {
     for (const slave of slavesRef.current) slave?.pause();
@@ -892,10 +924,12 @@ function SessionPlayer({
                 className="w-full"
                 src={combined[0]}
                 controls
-                onPlay={syncSlaves}
+                onPlay={() => syncSlaves()}
                 onPause={pauseSlaves}
-                onSeeked={syncSlaves}
-                onRateChange={syncSlaves}
+                onSeeked={() => syncSlaves()}
+                onTimeUpdate={() => syncSlaves()}
+                onRateChange={() => syncSlaves()}
+                onVolumeChange={() => syncSlaves()}
                 onEnded={pauseSlaves}
               />
               {combined.slice(1).map((url, index) => (
@@ -911,6 +945,20 @@ function SessionPlayer({
                   preload="auto"
                 />
               ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={startCombinedPlayback}
+              >
+                {t("Start combined playback")}
+              </Button>
+              {combinedPlaybackFailed && (
+                <p className="text-sm" role="alert">
+                  {t(
+                    "One or more audio tracks could not start. Try listening to the separate tracks.",
+                  )}
+                </p>
+              )}
             </>
           ) : (
             <Button
