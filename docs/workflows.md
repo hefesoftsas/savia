@@ -357,8 +357,9 @@ entered from outside except through their head.
 - The visual editor is a draggable node canvas with one edge per destination:
   drag an output handle onto another step to rewire it, or use the step panel
   dropdowns. Positions are a per-browser session cache; the definition carries
-  only the graph. Manual action is currently in that editor, not yet an action
-  embedded in every record screen.
+  only the graph. Manual flows also run from any record screen through
+  **Ejecutar flujo…**: the run carries `trigger.collection` and
+  `trigger.record_id` for `collection`/`record_id` references downstream.
 
 ## References
 

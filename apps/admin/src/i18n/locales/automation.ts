@@ -3193,6 +3193,23 @@ export const automationMessages = {
     "Execution submitted. Check its status in the history.",
     "Execução enviada. Consulte seu status no histórico.",
   ],
+  "Flujo manual para este registro": [
+    "Flujo manual para este registro",
+    "Manual workflow for this record",
+    "Fluxo manual para este registro",
+  ],
+  "Ejecutar flujo…": [
+    "Ejecutar flujo…",
+    "Run workflow…",
+    "Executar fluxo…",
+  ],
+  "No se pudo ejecutar.": [
+    "No se pudo ejecutar.",
+    "Could not run.",
+    "Não foi possível executar.",
+  ],
+  "Enviando…": ["Enviando…", "Sending…", "Enviando…"],
+  Ejecutar: ["Ejecutar", "Run", "Executar"],
   Historial: ["Historial", "History", "Histórico"],
   Nombre: ["Nombre", "Name", "Nome"],
   "Creando…": ["Creando…", "Creating…", "Criando…"],
