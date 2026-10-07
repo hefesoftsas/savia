@@ -45,18 +45,93 @@ function excerpt(value: string) {
   return compact.length > 180 ? `${compact.slice(0, 177)}…` : compact;
 }
 
+function snapshotHref(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+      ? url
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Build plain editable Plate blocks from a loaded ticket summary snapshot. */
+export function buildTicketSnapshotBlocks(
+  summary: TicketSummary,
+  header: string,
+): Array<Record<string, unknown>> {
+  const blocks: Array<Record<string, unknown>> = [
+    { type: "p", children: [{ text: header }] },
+  ];
+  const groups = new Map<string, TicketSummary["tickets"]>();
+  for (const ticket of summary.tickets) {
+    groups.set(ticket.status, [...(groups.get(ticket.status) ?? []), ticket]);
+  }
+  for (const [status, tickets] of groups) {
+    blocks.push({
+      type: "h3",
+      children: [{ text: `${status} (${tickets.length})` }],
+    });
+    for (const ticket of tickets) {
+      const title = `${ticket.key} · ${ticket.title}`;
+      const href = snapshotHref(ticket.url);
+      const commentLabel =
+        ticket.comments.total === 0
+          ? "0"
+          : ticket.comments.total === null
+            ? "?"
+            : String(ticket.comments.total);
+      blocks.push({
+        type: "bullet",
+        children: [
+          ...(href
+            ? [{ type: "a", url: href, children: [{ text: title }] }]
+            : [{ text: title }]),
+          { text: ` — ${ticket.status} · ${commentLabel}` },
+        ],
+      });
+      if (ticket.comments.latest) {
+        blocks.push({
+          type: "p",
+          children: [
+            {
+              text: `“${excerpt(ticket.comments.latest.body)}” — ${ticket.comments.latest.author}`,
+            },
+          ],
+        });
+      }
+      for (const pr of ticket.pullRequests) {
+        const prHref = snapshotHref(pr.url);
+        const prTitle = `↳ ${pr.title} (${pr.state})`;
+        blocks.push({
+          type: "p",
+          children: [
+            ...(prHref
+              ? [{ type: "a", url: prHref, children: [{ text: prTitle }] }]
+              : [{ text: prTitle }]),
+          ],
+        });
+      }
+    }
+  }
+  return blocks;
+}
+
 export function TicketSummaryBlock({
   api,
   config = {},
   connected,
   readOnly = false,
   onConfigChange,
+  onInsertSnapshot,
 }: {
   api: ApiClient;
   config?: TicketSummaryConfig;
   connected: boolean;
   readOnly?: boolean;
   onConfigChange(config: TicketSummaryConfig): void;
+  onInsertSnapshot?(blocks: Array<Record<string, unknown>>): void;
 }) {
   const t = useMessages(editorMessages);
   const locale = useAppLocale();
@@ -505,6 +580,28 @@ export function TicketSummaryBlock({
             <p className="ticket-summary-muted">
               {t("Some ticket details are incomplete")}
             </p>
+          )}
+          {!readOnly && onInsertSnapshot && (
+            <div className="ticket-summary-snapshot-actions">
+              <p className="ticket-summary-muted">
+                {t("Snapshot privacy warning")}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={visibleSummary.tickets.length === 0}
+                onClick={() =>
+                  onInsertSnapshot(
+                    buildTicketSnapshotBlocks(
+                      visibleSummary,
+                      `${t("Snapshot source note")} · ${visibleSummary.updatedAt}`,
+                    ),
+                  )
+                }
+              >
+                {t("Insert snapshot as editable blocks")}
+              </Button>
+            </div>
           )}
         </>
       )}

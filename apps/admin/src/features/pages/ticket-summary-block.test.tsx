@@ -8,7 +8,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiClient } from "@/api/api-client";
-import { TicketSummaryBlock } from "./ticket-summary-block";
+import {
+  TicketSummaryBlock,
+  buildTicketSnapshotBlocks,
+} from "./ticket-summary-block";
 
 afterEach(cleanup);
 
@@ -403,4 +406,84 @@ it("lets readers refresh without changing shared filters", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
   expect(changed).not.toHaveBeenCalled();
+});
+
+it("offers an editable snapshot copy without persisting provider data", async () => {
+  const onInsertSnapshot = vi.fn();
+  render(
+    <TicketSummaryBlock
+      api={makeApi(vi.fn(async () => Response.json({ data: summary })))}
+      connected
+      onConfigChange={() => {}}
+      onInsertSnapshot={onInsertSnapshot}
+    />,
+  );
+  const action = await screen.findByRole("button", {
+    name: "Insert snapshot as editable blocks",
+  });
+  expect(
+    screen.getByText(
+      /This copy is saved in the page and follows its sharing permissions/,
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(action);
+  expect(onInsertSnapshot).toHaveBeenCalledTimes(1);
+  const blocks = onInsertSnapshot.mock.calls[0]?.[0] as Array<
+    Record<string, unknown>
+  >;
+  expect(blocks[0]).toMatchObject({ type: "p" });
+  const bullet = blocks.find((block) => block.type === "bullet") as {
+    children: Array<Record<string, unknown>>;
+  };
+  expect(bullet).toBeDefined();
+  const link = bullet.children.find((child) => child.type === "a") as Record<
+    string,
+    unknown
+  >;
+  expect(link.url).toBe("https://jira.example/browse/OPS-41");
+  expect(JSON.stringify(blocks)).not.toContain("encrypted");
+});
+
+it("hides the snapshot copy in read-only mode", async () => {
+  render(
+    <TicketSummaryBlock
+      api={makeApi(vi.fn(async () => Response.json({ data: summary })))}
+      connected
+      readOnly
+      onConfigChange={() => {}}
+      onInsertSnapshot={() => {}}
+    />,
+  );
+  await screen.findByRole("link", { name: /OPS-41/ });
+  expect(
+    screen.queryByRole("button", {
+      name: "Insert snapshot as editable blocks",
+    }),
+  ).not.toBeInTheDocument();
+});
+
+it("builds snapshot blocks with safe links only", () => {
+  const blocks = buildTicketSnapshotBlocks(
+    {
+      ...summary,
+      tickets: [
+        {
+          ...summary.tickets[0],
+          url: "javascript:alert(1)",
+          pullRequests: [],
+        },
+      ],
+    } as never,
+    "header",
+  );
+  expect(JSON.stringify(blocks)).not.toContain("javascript:");
+  expect(
+    blocks.some(
+      (block) =>
+        Array.isArray(block.children) &&
+        (block.children as Array<Record<string, unknown>>).some(
+          (child) => child.type === "a",
+        ),
+    ),
+  ).toBe(false);
 });
