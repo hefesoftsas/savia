@@ -217,6 +217,14 @@
     {
       "filename": "0050_whatsapp_dispatch_indexes.sql",
       "sha256": "c0f7b5d0b68d11c56bd5f782e2406292fa8f4428e01c1326117738007c043aa8"
+    },
+    {
+      "filename": "0051_whatsapp_action_progress.sql",
+      "sha256": "0f9617bae07e8fc41ef4782ee5509d0af904269d1f14486c5a630620f6c42270"
+    },
+    {
+      "filename": "0052_request_cache.sql",
+      "sha256": "ba9b4401675ad9016fe194ba5be417908d4fe0a6c798407e54d1de8cbeaf602b"
     }
   ],
   "sqliteOnlyDerivedTables": [

@@ -5,6 +5,10 @@
     {
       "filename": "0001_initial.sql",
       "sha256": "0673736587cb662cd970632cadefb922d5853e8454f90b35d4d8e66a519ff5c2"
+    },
+    {
+      "filename": "0002_request_cache.sql",
+      "sha256": "ba9b4401675ad9016fe194ba5be417908d4fe0a6c798407e54d1de8cbeaf602b"
     }
   ],
   "objects": [
