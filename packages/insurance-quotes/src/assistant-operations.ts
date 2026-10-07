@@ -622,6 +622,13 @@ export class InsuranceAssistantOperations {
       .sort((a, b) => a.premium! - b.premium!);
     const lowestPremium = priced[0]?.premium ?? null;
     const lowest = priced.filter((o) => o.premium === lowestPremium);
+    const pricedProposals = [...proposalByProduct.values()].filter(
+      (proposal) => proposal.state === "priced",
+    );
+    const coverageAvailable =
+      priced.length > 0 &&
+      pricedProposals.length === priced.length &&
+      pricedProposals.every((proposal) => (proposal.facts?.length ?? 0) > 0);
     try {
       await write(base + "cotizaciones/" + encode(master.data.id), "PATCH", {
         _version: master.data._version,
@@ -653,10 +660,12 @@ export class InsuranceAssistantOperations {
         proposalByProduct.get(product.id)!,
       ),
       tiedOfferCount: lowest.length,
-      coverageAvailable: false,
+      coverageAvailable,
       persistenceWarnings,
       recommendation: lowest.length
-        ? "Estas son las ofertas de menor precio recibidas. Para elegir el mejor equilibrio entre precio y cobertura faltan las coberturas y deducibles; no hay una ganadora integral verificada."
+        ? coverageAvailable
+          ? "Compara los límites y deducibles informados para cada oferta; el precio por sí solo no establece una ganadora integral verificada."
+          : "Algunas ofertas con precio no tienen hechos de cobertura o deducible disponibles para comparar; no hay una ganadora integral verificada."
         : "No llegaron ofertas con prima válida. Revisa los resultados del cotizador antes de volver a consultar.",
     };
     logQuoteEvent("whatsapp_quote_execution_finished", {

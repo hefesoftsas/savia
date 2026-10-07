@@ -831,3 +831,93 @@ it("retains returned coverage limits and deductibles in progress and published p
     /PRIVATE_DOCUMENT|private@example/,
   );
 });
+
+it("grounds the summary fallback in provider facts when every priced offer has them", async () => {
+  const persisted: Array<{
+    path: string;
+    method: string;
+    body: Record<string, unknown>;
+  }> = [];
+  const products = [
+    { id: "offer-a", label: "Carrier A · Product A", enabled: true },
+    { id: "offer-b", label: "Carrier B · Product B", enabled: true },
+  ];
+  const operations = quoteOperations(
+    products,
+    async (flowId) => ({
+      data: {
+        run: { runId: `run-${flowId}` },
+        output: {
+          data: {
+            premiumTotal: flowId === "offer-a" ? 1200000 : 1250000,
+            response: {
+              amparo: [
+                {
+                  nombre:
+                    flowId === "offer-a"
+                      ? "Responsabilidad Civil Extracontractual"
+                      : "Pérdida Parcial por Daños",
+                  capital: 1000000000,
+                  tdeducible: "0%",
+                },
+              ],
+            },
+          },
+        },
+      },
+    }),
+    persisted,
+  );
+
+  const result = await operations.createInsuranceQuote(input, {
+    executionKey: "summary-facts-fallback",
+  });
+
+  expect(result.coverageAvailable).toBe(true);
+  expect(result.recommendation).toContain("límites y deducibles informados");
+  expect(result.recommendation).not.toMatch(/faltan las coberturas/i);
+  expect(result.recommendation).toMatch(/no establece una ganadora integral/i);
+});
+
+it("keeps coverage facts unavailable if any priced proposal has none", async () => {
+  const persisted: Array<{
+    path: string;
+    method: string;
+    body: Record<string, unknown>;
+  }> = [];
+  const operations = quoteOperations(
+    [
+      { id: "known", label: "Carrier A · Known", enabled: true },
+      { id: "unknown", label: "Carrier B · Unknown", enabled: true },
+    ],
+    async (flowId) => ({
+      data: {
+        run: { runId: `run-${flowId}` },
+        output: {
+          data: {
+            premiumTotal: 1200000,
+            ...(flowId === "known"
+              ? {
+                  response: {
+                    amparo: [
+                      { nombre: "RCE", capital: 1000000, tdeducible: "0%" },
+                    ],
+                  },
+                }
+              : {}),
+          },
+        },
+      },
+    }),
+    persisted,
+  );
+
+  const result = await operations.createInsuranceQuote(input, {
+    executionKey: "summary-partial-facts",
+  });
+
+  expect(result.coverageAvailable).toBe(false);
+  expect(result.recommendation).toContain(
+    "Algunas ofertas con precio no tienen hechos de cobertura o deducible disponibles",
+  );
+});
