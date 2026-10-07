@@ -86,7 +86,7 @@ visible as such; they do not acquire estimated premiums.
 The assigned employee's configured LLM explains priced proposals in asynchronous
 batches while provider calls continue. The final analysis gives comparison
 guidance and identifies missing evidence. Equal prices without verified coverage
-do not justify a winning proposal. Model calls have an eight-second deadline,
+do not justify a winning proposal. Model calls have a twenty-second deadline,
 no tools, and no automatic retries. A model failure preserves provider results
 and the customer link, with analysis availability clearly indicated.
 Analysis disables model reasoning to reserve the bounded output budget for the
@@ -96,6 +96,11 @@ An explicit null preference means no verified preferred proposal and is normaliz
 to the public report's optional field. Local validation still checks proposal IDs
 and unsafe output. Schema failures record at most five static field paths and
 validation codes, without rejected values or model error messages.
+Model input includes only priced proposals and the count of remaining options.
+Identical facts are sent once, with explicit indices attaching each fact to its
+proposal. Distinct limits, deductibles, and evidence sources remain distinct;
+proposals without facts never inherit another proposal's evidence. The public
+report retains the full evidence for every offer.
 The private action result and structured diagnostics
 identify safe reasons such as unavailable configuration or authorization,
 timeout, malformed or truncated output, and proposal ID mismatch. They do not

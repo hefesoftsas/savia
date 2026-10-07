@@ -7,7 +7,8 @@ import {
   type QuoteAnalysis,
 } from "@savia/studio-shared/public-quote";
 
-const ANALYSIS_TIMEOUT_MS = 8_000;
+// Live structured analysis of four offers completed in 15.6 seconds.
+const ANALYSIS_TIMEOUT_MS = 20_000;
 const BATCH_WINDOW_MS = 250;
 
 export type QuoteAnalysisOutcome =

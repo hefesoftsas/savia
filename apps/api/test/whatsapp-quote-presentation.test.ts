@@ -370,7 +370,7 @@ it("persists the final deadline reason when the workflow and analyzer deadlines 
         }),
     });
     const finish = presentation.finish({ quoteId: "quote-1", proposals });
-    await vi.advanceTimersByTimeAsync(8_001);
+    await vi.advanceTimersByTimeAsync(20_001);
     const result = await finish;
     const entries = log.mock.calls.map(([line]) => JSON.parse(String(line)));
 

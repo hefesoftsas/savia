@@ -208,6 +208,26 @@ it("classifies output-token truncation and reports only bounded token metadata",
   });
 });
 
+it("accepts a valid structured response after the former eight-second cutoff", async () => {
+  vi.useFakeTimers();
+  try {
+    const onOutcome = vi.fn();
+    const pending = analyzeQuoteReport(
+      report,
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve(JSON.stringify(analysis)), 15_600);
+        }),
+      { onOutcome },
+    );
+    await vi.advanceTimersByTimeAsync(15_601);
+    expect(await pending).toMatchObject({ proposals: analysis.proposals });
+    expect(onOutcome).toHaveBeenCalledWith("completed");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("bounds a stalled model and keeps the verified report usable", async () => {
   vi.useFakeTimers();
   try {
@@ -217,7 +237,9 @@ it("bounds a stalled model and keeps the verified report usable", async () => {
         outcome = value;
       },
     });
-    await vi.advanceTimersByTimeAsync(8001);
+    await vi.advanceTimersByTimeAsync(19_999);
+    expect(outcome).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(2);
     expect(await pending).toBeUndefined();
     expect(outcome).toBe("timeout");
   } finally {
@@ -363,7 +385,7 @@ it("runs explanations while provider results continue without blocking their cal
       expect.stringContaining("Prima recibida"),
     );
     const finish = workflow.finish({ proposals: report.proposals });
-    await vi.advanceTimersByTimeAsync(8001);
+    await vi.advanceTimersByTimeAsync(20_001);
     const result = await finish;
     expect(result.publicUrl).toBeDefined();
   } finally {
