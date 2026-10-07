@@ -8,6 +8,8 @@ import type { QuoteAnalysis } from "@savia/studio-shared/public-quote";
 import {
   analyzeQuoteReport,
   createQuoteExplanationWorkflow,
+  type QuoteAnalysisCompletion,
+  type QuoteAnalysisOutcome,
 } from "./quote-analysis";
 import { enqueueChannelActionProgress } from "./action-progress";
 import type { ChannelAction } from "./channel-contracts";
@@ -30,6 +32,14 @@ export type QuoteCompletionInput = {
   signal: AbortSignal;
 };
 
+export const OPENROUTER_QUOTE_ANALYSIS_OPTIONS = {
+  providerOptions: {
+    openrouter: {
+      reasoning: { effort: "none", exclude: true },
+    },
+  },
+} as const;
+
 export type QuotePresentationDependencies = {
   repository: WhatsappChannelRepository;
   configuration: Pick<
@@ -43,13 +53,17 @@ export type QuotePresentationDependencies = {
   ): Promise<WhatsappAssistantBinding | undefined>;
   publicOrigin?: string;
   notifyProgress?(action: ChannelAction): void;
-  complete?(input: QuoteCompletionInput): Promise<string>;
+  complete?(
+    input: QuoteCompletionInput,
+  ): Promise<string | QuoteAnalysisCompletion>;
   analyze?: typeof analyzeQuoteReport;
   enqueueProgress?: typeof enqueueChannelActionProgress;
   publish?: typeof publishQuoteReport;
 };
 
-async function completeWithOpenRouter(input: QuoteCompletionInput) {
+export async function completeWithOpenRouter(
+  input: QuoteCompletionInput,
+): Promise<QuoteAnalysisCompletion> {
   const provider = createOpenRouter({ apiKey: input.apiKey });
   const result = await generateText({
     model: provider(input.model),
@@ -58,8 +72,14 @@ async function completeWithOpenRouter(input: QuoteCompletionInput) {
     maxOutputTokens: input.maxOutputTokens,
     maxRetries: 0,
     abortSignal: input.signal,
+    ...OPENROUTER_QUOTE_ANALYSIS_OPTIONS,
   });
-  return result.text;
+  return {
+    text: result.text,
+    finishReason: result.finishReason,
+    inputTokens: result.usage.inputTokens,
+    outputTokens: result.usage.outputTokens,
+  };
 }
 
 function isSessionCurrent(
@@ -150,82 +170,162 @@ export function createWhatsappQuotePresentationFactory(
       createdAt: new Date().toISOString(),
     };
     let quoteId: string | undefined;
+    let analysisUnavailableReason: string | undefined;
+    const analysisContext = {
+      action_id: action.id,
+      generation: action.session.access.generation,
+      selection_revision: action.session.selectionRevision,
+    };
     const workflow = createQuoteExplanationWorkflow(identity, {
-      analyze: async (report, outerSignal) =>
-        analyze(report, async (evidence, analysisSignal) => {
-          const signal = AbortSignal.any([outerSignal, analysisSignal]);
-          if (!(await authorize(binding, action))) return "";
-          const effective =
-            await dependencies.configuration.effectiveConfigurationForTenant(
-              action.session.access.principalId ?? binding.ownerPrincipalId,
-              binding.tenantId,
-            );
-          if (
-            signal.aborted ||
-            !effective.apiKey ||
-            effective.tenantId !== binding.tenantId
-          )
-            return "";
-          const employee = await dependencies.employees.getById(
-            action.session.employeeId,
-            binding.tenantId,
-          );
-          if (
-            !employee ||
-            employee.status !== "active" ||
-            employee.agencyId !== binding.tenantId
-          )
-            return "";
-          const model = employee.model ?? effective.model;
-          if (
-            model !== effective.model &&
-            !effective.allowedModels?.includes(model)
-          )
-            return "";
-          if (signal.aborted || !(await authorize(binding, action))) return "";
-          const complete = dependencies.complete ?? completeWithOpenRouter;
-          const started = Date.now();
-          const context = {
-            action_id: action.id,
-            generation: action.session.access.generation,
-            selection_revision: action.session.selectionRevision,
-          };
-          logWhatsappDiagnostic("whatsapp_quote_analysis", context, {
-            outcome: "started",
-          });
-          try {
-            const result = await complete({
-              apiKey: effective.apiKey,
-              model,
-              system: QUOTE_ANALYSIS_SYSTEM,
-              prompt: JSON.stringify({
-                reference: evidence.reference,
-                proposals: evidence.proposals,
-              }),
-              maxOutputTokens: Math.min(
-                4500,
-                500 +
-                  evidence.proposals.filter(
-                    (proposal) => proposal.state === "priced",
-                  ).length *
-                    120,
-              ),
-              signal,
-            });
+      analyze: async (report, outerSignal, phase) => {
+        let skippedReason: string | undefined;
+        const analysisStartedAt = Date.now();
+        return analyze(
+          report,
+          async (evidence, analysisSignal) => {
+            const signal = AbortSignal.any([outerSignal, analysisSignal]);
+            if (!(await authorize(binding, action))) {
+              skippedReason = "authorization_unavailable";
+              return "";
+            }
+            const effective = await dependencies.configuration
+              .effectiveConfigurationForTenant(
+                action.session.access.principalId ?? binding.ownerPrincipalId,
+                binding.tenantId,
+              )
+              .catch(() => undefined);
+            if (
+              signal.aborted ||
+              !effective ||
+              !effective.apiKey ||
+              effective.tenantId !== binding.tenantId
+            ) {
+              skippedReason = signal.aborted
+                ? "timeout"
+                : "configuration_unavailable";
+              return "";
+            }
+            const employee = await dependencies.employees
+              .getById(action.session.employeeId, binding.tenantId)
+              .catch(() => undefined);
+            if (
+              !employee ||
+              employee.status !== "active" ||
+              employee.agencyId !== binding.tenantId
+            ) {
+              skippedReason = "employee_unavailable";
+              return "";
+            }
+            const model = employee.model ?? effective.model;
+            if (
+              model !== effective.model &&
+              !effective.allowedModels?.includes(model)
+            ) {
+              skippedReason = "model_not_allowed";
+              return "";
+            }
+            if (signal.aborted || !(await authorize(binding, action))) {
+              skippedReason = signal.aborted
+                ? "timeout"
+                : "authorization_unavailable";
+              return "";
+            }
+            const complete = dependencies.complete ?? completeWithOpenRouter;
+            const started = Date.now();
+            const context = {
+              action_id: action.id,
+              generation: action.session.access.generation,
+              selection_revision: action.session.selectionRevision,
+            };
             logWhatsappDiagnostic("whatsapp_quote_analysis", context, {
-              outcome: signal.aborted ? "aborted" : "completed",
-              duration_ms: Math.max(0, Date.now() - started),
+              stage: phase,
+              outcome: "started",
             });
-            return result;
-          } catch (error) {
-            logWhatsappDiagnostic("whatsapp_quote_analysis", context, {
-              outcome: "failed",
-              duration_ms: Math.max(0, Date.now() - started),
-              error_code: diagnosticErrorCode(error),
-            });
-            throw error;
-          }
-        }),
+            try {
+              const result = await complete({
+                apiKey: effective.apiKey,
+                model,
+                system: QUOTE_ANALYSIS_SYSTEM,
+                prompt: JSON.stringify({
+                  reference: evidence.reference,
+                  proposals: evidence.proposals,
+                }),
+                maxOutputTokens: Math.min(
+                  4500,
+                  500 +
+                    evidence.proposals.filter(
+                      (proposal) => proposal.state === "priced",
+                    ).length *
+                      120,
+                ),
+                signal,
+              });
+              logWhatsappDiagnostic("whatsapp_quote_analysis", context, {
+                stage: phase,
+                outcome: signal.aborted ? "aborted" : "completed",
+                duration_ms: Math.max(0, Date.now() - started),
+              });
+              return result;
+            } catch (error) {
+              logWhatsappDiagnostic("whatsapp_quote_analysis", context, {
+                stage: phase,
+                outcome: "failed",
+                duration_ms: Math.max(0, Date.now() - started),
+                error_code: diagnosticErrorCode(error),
+              });
+              throw error;
+            }
+          },
+          {
+            signal: outerSignal,
+            onCompletion: ({ finishReason, inputTokens, outputTokens }) => {
+              logWhatsappDiagnostic(
+                "whatsapp_quote_analysis",
+                analysisContext,
+                {
+                  stage: phase,
+                  outcome:
+                    finishReason === "length"
+                      ? "truncated_output"
+                      : "response_received",
+                  operation: `finish_reason_${finishReason ?? "unknown"}`,
+                  ...(inputTokens === undefined
+                    ? {}
+                    : { input_tokens: inputTokens }),
+                  ...(outputTokens === undefined
+                    ? {}
+                    : { output_tokens: outputTokens }),
+                },
+              );
+            },
+            onOutcome: (outcome: QuoteAnalysisOutcome) => {
+              const code =
+                skippedReason ??
+                (outcome === "completed" ? undefined : outcome);
+              analysisUnavailableReason = code;
+              logWhatsappDiagnostic(
+                "whatsapp_quote_analysis",
+                analysisContext,
+                {
+                  stage: phase,
+                  outcome: skippedReason ? "skipped" : outcome,
+                  ...(code ? { error_code: code } : {}),
+                  duration_ms: Math.max(0, Date.now() - analysisStartedAt),
+                },
+              );
+            },
+          },
+        );
+      },
+      onUnavailable: (phase, reason) => {
+        const code = reason === "timeout" ? "timeout" : "analysis_error";
+        analysisUnavailableReason = code;
+        logWhatsappDiagnostic("whatsapp_quote_analysis", analysisContext, {
+          stage: phase,
+          outcome: "unavailable",
+          error_code: code,
+        });
+      },
       emit: async (eventKey, text) => {
         if (!(await authorize(binding, action))) return;
         const started = Date.now();
@@ -310,13 +410,29 @@ export function createWhatsappQuotePresentationFactory(
           typeof result.quoteId === "string" && result.quoteId.trim()
             ? result.quoteId
             : undefined;
-        if (!(await authorize(binding, action))) return result;
+        if (!(await authorize(binding, action))) {
+          logWhatsappDiagnostic("whatsapp_quote_analysis", analysisContext, {
+            stage: "final",
+            outcome: "skipped",
+            error_code: "authorization_unavailable",
+          });
+          analysisUnavailableReason = "authorization_unavailable";
+          return {
+            ...result,
+            analysisUnavailable: true,
+            analysisUnavailableReason,
+          };
+        }
         try {
-          return await workflow.finish(result);
+          const updated = await workflow.finish(result);
+          if (analysisUnavailableReason)
+            updated.analysisUnavailableReason = analysisUnavailableReason;
+          return updated;
         } catch {
           return {
             ...result,
             analysisUnavailable: true,
+            analysisUnavailableReason: "presentation_error",
             persistenceWarnings: [
               ...(Array.isArray(result.persistenceWarnings)
                 ? result.persistenceWarnings.filter(

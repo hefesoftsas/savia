@@ -2,6 +2,14 @@ import {
   publicQuoteReportSchema,
   type PublicQuoteReport,
 } from "@savia/studio-shared/public-quote";
+import {
+  createPublicLinkToken,
+  isPublicLinkActive,
+  isPublicLinkToken,
+  publicLinkExpiresAt,
+  publicLinkUrl,
+  revokePublicLink as revokeLink,
+} from "../public-links/lifecycle";
 
 const LINK_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -37,37 +45,11 @@ export type PublishedQuoteReport = {
   expiresAt: string;
 };
 
-function makeToken(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
-  );
-}
-
-function quoteUrl(publicOrigin: string, token: string): string {
-  let origin: URL;
-  try {
-    origin = new URL(publicOrigin);
-  } catch {
-    throw new Error("A valid public origin is required");
-  }
-  if (
-    !["http:", "https:"].includes(origin.protocol) ||
-    origin.username ||
-    origin.password ||
-    (origin.pathname !== "/" && origin.pathname !== "") ||
-    origin.search ||
-    origin.hash
-  )
-    throw new Error("A valid public origin is required");
-  return new URL(`/public/quotes/${token}`, origin).href;
-}
-
 function view(row: QuoteLinkSummaryRow, publicOrigin: string): PublicQuoteLink {
   return {
     id: row.id,
     quoteId: row.quote_id,
-    url: quoteUrl(publicOrigin, row.token),
+    url: publicLinkUrl(publicOrigin, `/public/quotes/${row.token}`),
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     revokedAt: row.revoked_at,
@@ -96,7 +78,7 @@ export async function publishQuoteReport(
     input.createdBy.length > 200
   )
     throw new Error("Quote link identifiers are required");
-  quoteUrl(input.publicOrigin, "0".repeat(64));
+  publicLinkUrl(input.publicOrigin, `/public/quotes/${"0".repeat(64)}`);
   const report = publicQuoteReportSchema.parse(input.report);
   const tenant = await db
     .prepare(
@@ -107,9 +89,9 @@ export async function publishQuoteReport(
   if (!tenant) throw new Error("An active commercial tenant is required");
   const now = new Date();
   const createdAt = now.toISOString();
-  const expiresAt = new Date(now.getTime() + LINK_LIFETIME_MS).toISOString();
+  const expiresAt = publicLinkExpiresAt(now, LINK_LIFETIME_MS);
   const id = crypto.randomUUID();
-  const token = makeToken();
+  const token = createPublicLinkToken();
 
   await db
     .prepare(
@@ -141,7 +123,7 @@ export async function publishQuoteReport(
   if (!row) throw new Error("Quote link could not be published");
   return {
     id: row.id,
-    url: quoteUrl(input.publicOrigin, row.token),
+    url: publicLinkUrl(input.publicOrigin, `/public/quotes/${row.token}`),
     expiresAt: row.expires_at,
   };
 }
@@ -151,15 +133,23 @@ export async function readPublicQuoteReport(
   token: string,
   now = new Date().toISOString(),
 ): Promise<{ report: PublicQuoteReport; expiresAt: string } | null> {
-  if (!/^[a-f0-9]{64}$/.test(token)) return null;
+  if (!isPublicLinkToken(token)) return null;
   const row = await db
     .prepare(
-      `SELECT report_json,expires_at FROM public_quote_links
-       WHERE token=? AND revoked_at IS NULL AND expires_at>?`,
+      `SELECT report_json,expires_at,revoked_at FROM public_quote_links
+       WHERE token=?`,
     )
-    .bind(token, now)
-    .first<{ report_json: string; expires_at: string }>();
-  if (!row) return null;
+    .bind(token)
+    .first<{
+      report_json: string;
+      expires_at: string;
+      revoked_at: string | null;
+    }>();
+  if (
+    !row ||
+    !isPublicLinkActive(row.expires_at, row.revoked_at, Date.parse(now))
+  )
+    return null;
   try {
     return {
       report: publicQuoteReportSchema.parse(JSON.parse(row.report_json)),
@@ -194,11 +184,5 @@ export async function revokeQuoteLink(
   id: string,
   now = new Date().toISOString(),
 ): Promise<boolean> {
-  const result = await db
-    .prepare(
-      "UPDATE public_quote_links SET revoked_at=? WHERE id=? AND tenant_id=? AND revoked_at IS NULL",
-    )
-    .bind(now, id, tenantId)
-    .run();
-  return (result.meta.changes ?? 0) > 0;
+  return revokeLink(db, { type: "quote", id, tenantId }, now);
 }

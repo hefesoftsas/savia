@@ -7,6 +7,14 @@ import {
 } from "@savia/studio-shared/metadata";
 import { z } from "@hono/zod-openapi";
 import {
+  createPublicLinkToken,
+  isPublicLinkActive,
+  isPublicLinkToken,
+  normalizePublicLinkExpiry,
+  persistPublicLinkShortUrl,
+  publicLinkUrl,
+} from "../public-links/lifecycle";
+import {
   captchaConfiguration,
   captchaIdentity,
   verifyCaptcha,
@@ -244,17 +252,17 @@ function tenantIdFromKey(key: string) {
   return Number(key.slice("tenant:".length));
 }
 export function managedForm(row: PublicFormRow, publicOrigin?: string) {
-  const active =
-    row.revoked_at === null &&
-    (row.expires_at === null || Date.parse(row.expires_at) > Date.now());
+  const active = isPublicLinkActive(row.expires_at, row.revoked_at);
   return {
     ...(publicOrigin
-      ? { url: new URL("/public/forms/" + row.token, publicOrigin).href }
+      ? {
+          url: publicLinkUrl(publicOrigin, "/public/forms/" + row.token),
+        }
       : {}),
     ...(publicOrigin && row.short_url && active
       ? { shortUrl: row.short_url }
       : publicOrigin && row.short_code && active
-        ? { shortUrl: new URL("/s/" + row.short_code, publicOrigin).href }
+        ? { shortUrl: publicLinkUrl(publicOrigin, "/s/" + row.short_code) }
         : {}),
     id: row.id,
     token: row.token,
@@ -276,18 +284,7 @@ export async function persistPublicFormShortUrl(
   id: string,
   shortUrl: string,
 ) {
-  const update = await db
-    .prepare(
-      "UPDATE public_forms SET short_url=? WHERE id=? AND short_url IS NULL",
-    )
-    .bind(shortUrl, id)
-    .run();
-  if (update.meta.changes > 0) return shortUrl;
-  const stored = await db
-    .prepare("SELECT short_url FROM public_forms WHERE id=?")
-    .bind(id)
-    .first<{ short_url: string | null }>();
-  return stored?.short_url ?? shortUrl;
+  return persistPublicLinkShortUrl(db, { type: "form", id }, shortUrl);
 }
 export async function availableObject(
   db: D1Database,
@@ -485,8 +482,12 @@ export async function publishPublicForm(
   input: z.infer<typeof publishSchema>,
 ) {
   captchaConfiguration(options);
-  if (input.expiresAt && Date.parse(input.expiresAt) <= Date.now())
-    reject("Expiry must be in the future.");
+  let expiresAt: string | null;
+  try {
+    expiresAt = normalizePublicLinkExpiry(input.expiresAt);
+  } catch {
+    return reject("Expiry must be in the future.");
+  }
   const tenant = tenantKey(input.tenantId);
   const object = await availableObject(
     db,
@@ -506,9 +507,7 @@ export async function publishPublicForm(
           object,
         });
   const id = crypto.randomUUID(),
-    token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    ).join("");
+    token = createPublicLinkToken();
   const logoImage = normalizePublicFormLogo(input.logoImage ?? null);
   await db
     .prepare(
@@ -527,7 +526,7 @@ export async function publishPublicForm(
       input.dailyLimit,
       input.kind === "quote" && input.returnResult ? 1 : 0,
       logoImage,
-      input.expiresAt ? new Date(input.expiresAt).toISOString() : null,
+      expiresAt,
       owner,
       new Date().toISOString(),
     )
@@ -553,7 +552,7 @@ export async function publishPublicForm(
   return result;
 }
 export async function activePublicForm(db: D1Database, token: string) {
-  if (!/^[a-f0-9]{64}$/.test(token)) reject("Public form unavailable.", 404);
+  if (!isPublicLinkToken(token)) reject("Public form unavailable.", 404);
   const row = await db
     .prepare(
       "SELECT * FROM public_forms WHERE token=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)",
@@ -561,6 +560,8 @@ export async function activePublicForm(db: D1Database, token: string) {
     .bind(token, new Date().toISOString())
     .first<PublicFormRow>();
   if (!row) reject("Public form unavailable.", 404);
+  if (!isPublicLinkActive(row.expires_at, row.revoked_at))
+    reject("Public form unavailable.", 404);
   await availableObject(
     db,
     row.tenant_id,

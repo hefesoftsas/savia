@@ -9,6 +9,7 @@ import {
   toAutoLightQuoteInput,
   type QuoteFormValues,
 } from "./screens/quote-input";
+import { extractProviderQuoteFacts } from "./provider-quote-facts";
 import { publicPlanHighlights } from "./plan-profiles";
 import { toUnifiedComparisonQuote } from "./screens/unified-quote-model";
 import { buildResultSnapshot, serializeSnapshot } from "./quote-snapshot";
@@ -255,21 +256,9 @@ function projectPublicQuoteResult(flowId: string, output: unknown) {
     (typeof value === "string" && value.trim() !== "")
       ? Number(value)
       : NaN;
-  // No raw strings from provider payloads are exposed, including quote references
-  // (which can embed a plate or document number). Coverage labels are fixed here.
-  const coverageLabels: Record<string, string> = {
-    rce: "Responsabilidad civil",
-    partialLoss: "Pérdida parcial",
-    totalLoss: "Pérdida total",
-    replacementCar: "Vehículo de reemplazo",
-    roadsideAssistance: "Asistencia en carretera",
-    medicalExpenses: "Gastos médicos",
-    legalAssistance: "Asistencia jurídica",
-  };
-  const source = record(data?.coverages);
-  const liveCoverages = Object.entries(coverageLabels)
-    .filter(([key]) => source?.[key] === true)
-    .map(([, label]) => label);
+  const liveCoverages = extractProviderQuoteFacts(data).map(
+    (fact) => `${fact.label}: ${fact.value}`,
+  );
   return {
     flowId,
     insurer: product.label.split(" · ")[0],

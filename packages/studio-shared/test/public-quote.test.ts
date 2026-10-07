@@ -72,3 +72,28 @@ it("rejects duplicate proposal IDs and unrelated analysis recommendations", () =
     }).success,
   ).toBe(false);
 });
+
+it("accepts a complete provider breakdown and bounds oversized reports", () => {
+  const facts = Array.from({ length: 25 }, (_, index) => ({
+    label: `Coverage ${index}`,
+    value: "Limit: 1000 COP",
+    source: "provider",
+  }));
+  expect(
+    publicQuoteReportSchema.safeParse({
+      ...report,
+      proposals: [{ ...report.proposals[0], facts }],
+    }).success,
+  ).toBe(true);
+  expect(
+    publicQuoteReportSchema.safeParse({
+      ...report,
+      proposals: [
+        {
+          ...report.proposals[0],
+          facts: Array.from({ length: 41 }, () => facts[0]),
+        },
+      ],
+    }).success,
+  ).toBe(false);
+});

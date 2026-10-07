@@ -1,4 +1,5 @@
 import { companionDownloadsResponse } from "./src/companion-downloads-catalog";
+import { PUBLIC_VISITOR_ROUTE_DENYLIST } from "./src/pwa/deployment-recovery";
 import { pluginDevelopmentReload } from "./build/plugin-development";
 import { officePlugin } from "./build/office-plugin";
 import { collectOfflineShellAssets } from "./build/offline-shell-assets";
@@ -127,9 +128,7 @@ export default defineConfig({
         navigateFallbackDenylist: [
           /^\/api/,
           /^\/v1/,
-          /^\/public\/forms/,
-          /^\/public\/bookings(?:\/|\?|$)/,
-          /^\/public\/pages(?:\/|\?|$)/,
+          ...PUBLIC_VISITOR_ROUTE_DENYLIST,
           /^\/s\/p(?:\/|\?|$)/,
           /^\/register(?:\/|\?|$)/,
           /^\/office(?:\/|$)/,

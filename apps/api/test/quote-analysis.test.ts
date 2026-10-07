@@ -2,6 +2,7 @@ import { expect, it, vi } from "vitest";
 import {
   analyzeQuoteReport,
   createQuoteExplanationWorkflow,
+  type QuoteAnalysisOutcome,
 } from "../src/whatsapp/quote-analysis";
 import type {
   PublicQuoteReport,
@@ -71,12 +72,129 @@ it("rejects analysis omitting received offers or referring to unverified offers"
   ).toBeUndefined();
 });
 
+it("reports safe reason codes for missing, malformed, schema-invalid, and mismatched analysis", async () => {
+  const outcomes: QuoteAnalysisOutcome[] = [];
+  const observe = {
+    onOutcome: (outcome: QuoteAnalysisOutcome) => {
+      outcomes.push(outcome);
+    },
+  };
+
+  await analyzeQuoteReport(report, async () => "", observe);
+  await analyzeQuoteReport(report, async () => "not-json", observe);
+  await analyzeQuoteReport(
+    report,
+    async () => JSON.stringify({ ...analysis, unexpected: true }),
+    observe,
+  );
+  await analyzeQuoteReport(
+    report,
+    async () =>
+      JSON.stringify({ ...analysis, proposals: [analysis.proposals[0]] }),
+    observe,
+  );
+  await analyzeQuoteReport(
+    report,
+    async () => {
+      throw new Error("model provider details are private");
+    },
+    observe,
+  );
+  await analyzeQuoteReport(
+    {
+      ...report,
+      proposals: report.proposals.map((proposal) => ({
+        ...proposal,
+        state: "failed" as const,
+        premium: undefined,
+      })),
+    },
+    async () => "should-not-run",
+    observe,
+  );
+
+  expect(outcomes).toEqual([
+    "missing_output",
+    "invalid_json",
+    "invalid_schema",
+    "proposal_ids_mismatch",
+    "model_error",
+    "no_priced_proposals",
+  ]);
+});
+
+it("classifies output-token truncation and reports only bounded token metadata", async () => {
+  let outcome: QuoteAnalysisOutcome | undefined;
+  let metadata: unknown;
+  const result = await analyzeQuoteReport(
+    report,
+    async () => ({
+      text: '{"proposals":[',
+      finishReason: "length",
+      inputTokens: 800,
+      outputTokens: 980,
+    }),
+    {
+      onOutcome: (value) => {
+        outcome = value;
+      },
+      onCompletion: (value) => {
+        metadata = value;
+      },
+    },
+  );
+
+  expect(result).toBeUndefined();
+  expect(outcome).toBe("truncated_output");
+  expect(metadata).toEqual({
+    finishReason: "length",
+    inputTokens: 800,
+    outputTokens: 980,
+  });
+});
+
 it("bounds a stalled model and keeps the verified report usable", async () => {
   vi.useFakeTimers();
   try {
-    const pending = analyzeQuoteReport(report, () => new Promise(() => {}));
+    let outcome: QuoteAnalysisOutcome | undefined;
+    const pending = analyzeQuoteReport(report, () => new Promise(() => {}), {
+      onOutcome: (value) => {
+        outcome = value;
+      },
+    });
     await vi.advanceTimersByTimeAsync(8001);
     expect(await pending).toBeUndefined();
+    expect(outcome).toBe("timeout");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("classifies an enclosing batch or final deadline as a timeout", async () => {
+  vi.useFakeTimers();
+  try {
+    const controller = new AbortController();
+    let outcome: QuoteAnalysisOutcome | undefined;
+    const pending = analyzeQuoteReport(
+      report,
+      (_value, signal) =>
+        new Promise<string>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        }),
+      {
+        signal: controller.signal,
+        onOutcome: (value) => {
+          outcome = value;
+        },
+      },
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    controller.abort(new Error("outer workflow deadline"));
+
+    expect(await pending).toBeUndefined();
+    expect(outcome).toBe("timeout");
   } finally {
     vi.useRealTimers();
   }
@@ -193,6 +311,34 @@ it("runs explanations while provider results continue without blocking their cal
     await vi.advanceTimersByTimeAsync(8001);
     const result = await finish;
     expect(result.publicUrl).toBeDefined();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("labels batch and final model analyses separately for timeout diagnosis", async () => {
+  vi.useFakeTimers();
+  try {
+    const phases: Array<"batch" | "final"> = [];
+    const workflow = createQuoteExplanationWorkflow(
+      { reference: report.reference, createdAt: report.createdAt },
+      {
+        analyze: async (_value, _signal, phase) => {
+          phases.push(phase);
+          return undefined;
+        },
+        emit: async () => {},
+        publish: async () => ({
+          id: "link",
+          url: "https://savia.test/public/quotes/opaque",
+          expiresAt: "2026-10-14T17:00:00.000Z",
+        }),
+      },
+    );
+    workflow.record(report.proposals[0]);
+    await vi.advanceTimersByTimeAsync(251);
+    await workflow.finish({ proposals: report.proposals });
+    expect(phases).toEqual(["batch", "final"]);
   } finally {
     vi.useRealTimers();
   }

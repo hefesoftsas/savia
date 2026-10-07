@@ -16,7 +16,7 @@ export const publicQuoteProposalSchema = z
     state: z.enum(["priced", "unpriced", "failed", "uncertain"]),
     premium: z.number().positive().finite().optional(),
     currency: z.literal("COP"),
-    facts: z.array(publicQuoteFactSchema).max(20).optional(),
+    facts: z.array(publicQuoteFactSchema).max(40).optional(),
   })
   .strict()
   .superRefine((proposal, context) => {

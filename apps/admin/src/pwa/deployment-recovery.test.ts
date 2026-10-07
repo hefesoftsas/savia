@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { isModuleLoadError, prepareAppReload } from "./deployment-recovery";
+import {
+  isModuleLoadError,
+  prepareAppReload,
+  PUBLIC_VISITOR_ROUTE_DENYLIST,
+} from "./deployment-recovery";
 afterEach(() => vi.restoreAllMocks());
 class Worker extends EventTarget {
   state: ServiceWorkerState = "installing";
@@ -32,6 +36,16 @@ it("recognizes obsolete module and stylesheet loads without swallowing ordinary 
   ).toBe(true);
   expect(isModuleLoadError(new Error("Failed to fetch"))).toBe(false);
   expect(isModuleLoadError(new Error("Permission denied"))).toBe(false);
+});
+it.each([
+  "/public/bookings",
+  "/public/bookings/token",
+  "/public/quotes",
+  "/public/quotes/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+])("keeps public route %s out of the app-shell fallback", (path) => {
+  expect(
+    PUBLIC_VISITOR_ROUTE_DENYLIST.some((pattern) => pattern.test(path)),
+  ).toBe(true);
 });
 it("waits for the replacement worker to activate before allowing reload", async () => {
   const worker = new Worker();
@@ -158,6 +172,8 @@ it("does not reload the broken shell when unregister fails", async () => {
 
 it.each([
   "/public/forms/0123456789abcdef0123456789abcdef",
+  "/public/bookings/0123456789abcdefghijkl",
+  "/public/quotes/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "/register",
   "/public/pages",
   "/public/pages/fixture",

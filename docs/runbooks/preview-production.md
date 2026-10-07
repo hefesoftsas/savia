@@ -18,6 +18,9 @@ replacement activates while existing tabs are open and triggers the app's
 update notice. The user chooses **Actualizar y recargar** to load the new app;
 activation itself does not reload an open form or discard its draft. Do not
 clear site data to recover a stale shell, because it can contain offline edits.
+Public forms, pages, bookings, and quote reports bypass the private app-shell
+fallback and service-worker update recovery; their direct gateway responses
+retain the public route's security headers.
 
 ## Isolated resources
 

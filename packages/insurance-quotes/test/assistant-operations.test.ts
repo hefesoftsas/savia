@@ -762,3 +762,72 @@ it("excludes unknown and private provider fields from proposal facts", async () 
     /private@example\.test|3001234567|Private Person|TESTCAR|rawPayload|rawProviderOutput|applicantName/,
   );
 });
+
+it("retains returned coverage limits and deductibles in progress and published proposals", async () => {
+  const persisted: Array<{
+    path: string;
+    method: string;
+    body: Record<string, unknown>;
+  }> = [];
+  const progress: Array<Record<string, unknown>> = [];
+  const operations = quoteOperations(
+    [{ id: "live-product", label: "Carrier · Live product", enabled: true }],
+    async () => ({
+      data: {
+        run: { runId: "coverage-run" },
+        output: {
+          data: {
+            response: {
+              datosEconomicos: { total: 1591272 },
+              amparo: [
+                {
+                  codigo: "9220",
+                  nombre: "Responsabilidad Civil Extracontractual ",
+                  capital: 4400000000,
+                  tdeducible: "0%",
+                  applicant: { document: "PRIVATE_DOCUMENT" },
+                },
+                {
+                  nombre: "Pérdida Parcial por Daños",
+                  capital: 32400000,
+                  tdeducible: "1 SMLV",
+                },
+                { nombre: "Vehículo Sustituto", capital: 0, deducible: null },
+                { nombre: ".", capital: 0 },
+              ],
+              customerEmail: "private@example.test",
+            },
+          },
+        },
+      },
+    }),
+    persisted,
+  );
+  const result = await operations.createInsuranceQuote(input, {
+    executionKey: "returned-coverage-details",
+    onProgress: (item) => {
+      progress.push(item as unknown as Record<string, unknown>);
+    },
+  });
+  expect(result.proposals[0].facts).toEqual([
+    {
+      label: "Responsabilidad Civil Extracontractual",
+      value: "Capital informado: $4.400.000.000 COP; deducible: 0%",
+      source: "provider",
+    },
+    {
+      label: "Pérdida Parcial por Daños",
+      value: "Capital informado: $32.400.000 COP; deducible: 1 SMLV",
+      source: "provider",
+    },
+    {
+      label: "Vehículo Sustituto",
+      value: "Capital informado: $0 COP; deducible no informado",
+      source: "provider",
+    },
+  ]);
+  expect(progress[0].facts).toEqual(result.proposals[0].facts);
+  expect(JSON.stringify(result.proposals)).not.toMatch(
+    /PRIVATE_DOCUMENT|private@example/,
+  );
+});
