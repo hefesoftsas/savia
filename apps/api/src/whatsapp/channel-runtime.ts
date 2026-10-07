@@ -12,6 +12,7 @@ import { handleConversationReset, redactResetCode } from "./conversation-reset";
 
 import { buildTaskMenu } from "./task-menu";
 import { humanSupportRecoveryReply } from "./human-support";
+import { diagnosticErrorCode, logWhatsappDiagnostic } from "./diagnostics";
 
 type Snapshot = {
   generation: string;
@@ -30,7 +31,27 @@ export async function prepareFailedQuoteReply(
   binding: WhatsappAssistantBinding,
   input: WhatsappInboundInput,
 ): Promise<string> {
+  const startedAt = Date.now();
   const session = binding.channelSession;
+  const context = {
+    message_id: input.messageId,
+    ...(session
+      ? {
+          generation: session.access.generation,
+          selection_revision: session.selectionRevision,
+        }
+      : {}),
+  };
+  const logReset = (stage: string, outcome: string, error?: unknown) =>
+    logWhatsappDiagnostic("whatsapp_quote_lifecycle_reset", context, {
+      stage,
+      outcome,
+      duration_ms: Math.max(0, Date.now() - startedAt),
+      reset_applied: false,
+      ...(error === undefined
+        ? {}
+        : { error_code: diagnosticErrorCode(error) }),
+    });
   const settings = await repository.settings(
     binding.tenantId,
     binding.connectionId,
@@ -38,27 +59,38 @@ export async function prepareFailedQuoteReply(
   const failure = humanSupportRecoveryReply(
     settings?.config.humanSupportContact,
   );
-  if (!session) return failure;
+  if (!session) {
+    logReset("prepare", "skipped");
+    return failure;
+  }
   const prepared = await repository.prepareQuoteLifecycleReset(
     session.access,
     session.selectionRevision,
     session.employeeId,
   );
-  if (!prepared) return failure;
+  if (!prepared) {
+    logReset("prepare", "skipped");
+    return failure;
+  }
   const row = await repository.db
     .prepare(
       "SELECT routing_snapshot FROM whatsapp_inbox WHERE message_id=? AND connection_id=?",
     )
     .bind(input.messageId, binding.connectionId)
     .first<{ routing_snapshot: string | null }>();
-  if (!row?.routing_snapshot) return failure;
+  if (!row?.routing_snapshot) {
+    logReset("prepare", "skipped");
+    return failure;
+  }
   const saved = JSON.parse(row.routing_snapshot) as Snapshot;
   if (
     saved.generation !== session.access.generation ||
     saved.session?.selectionRevision !== session.selectionRevision ||
     saved.session?.employeeId !== session.employeeId
-  )
+  ) {
+    logReset("prepare", "skipped");
     return failure;
+  }
   const result = await repository.db
     .prepare(
       "UPDATE whatsapp_inbox SET routing_snapshot=? WHERE message_id=? AND connection_id=? AND routing_snapshot=?",
@@ -70,7 +102,11 @@ export async function prepareFailedQuoteReply(
       row.routing_snapshot,
     )
     .run();
-  if (!result.meta.changes) return failure;
+  if (!result.meta.changes) {
+    logReset("prepare", "skipped");
+    return failure;
+  }
+  logReset("prepare", "prepared");
   return `${failure}\n\n${buildTaskMenu(prepared.menu, false)}`;
 }
 
@@ -386,18 +422,56 @@ export function createRoutedWhatsappGenerator(
           ),
           new Date().toISOString(),
         );
-      await repository.db.batch([
-        historyStatement,
-        ...(saved.quoteReset
-          ? repository.quoteLifecycleResetStatements(
-              saved.session.access,
-              saved.session.selectionRevision,
-              saved.session.employeeId,
-              saved.quoteReset,
-              { kind: "inbound-reply", messageId: input.messageId },
-            )
-          : []),
-      ]);
+      const resetStartedAt = Date.now();
+      try {
+        const persisted = await repository.db.batch([
+          historyStatement,
+          ...(saved.quoteReset
+            ? repository.quoteLifecycleResetStatements(
+                saved.session.access,
+                saved.session.selectionRevision,
+                saved.session.employeeId,
+                saved.quoteReset,
+                { kind: "inbound-reply", messageId: input.messageId },
+              )
+            : []),
+        ]);
+        if (saved.quoteReset) {
+          const applied = persisted[1]?.meta.changes === 1;
+          logWhatsappDiagnostic(
+            "whatsapp_quote_lifecycle_reset",
+            {
+              message_id: input.messageId,
+              generation: saved.generation,
+              selection_revision: saved.session.selectionRevision,
+            },
+            {
+              stage: "after_reply",
+              outcome: applied ? "applied" : "skipped",
+              duration_ms: Math.max(0, Date.now() - resetStartedAt),
+              reset_applied: applied,
+            },
+          );
+        }
+      } catch (error) {
+        if (saved.quoteReset)
+          logWhatsappDiagnostic(
+            "whatsapp_quote_lifecycle_reset",
+            {
+              message_id: input.messageId,
+              generation: saved.generation,
+              selection_revision: saved.session.selectionRevision,
+            },
+            {
+              stage: "after_reply",
+              outcome: "failed",
+              duration_ms: Math.max(0, Date.now() - resetStartedAt),
+              reset_applied: false,
+              error_code: diagnosticErrorCode(error),
+            },
+          );
+        throw error;
+      }
     },
   };
 }

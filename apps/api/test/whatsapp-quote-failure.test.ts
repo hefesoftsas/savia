@@ -68,6 +68,10 @@ async function setup() {
 
 it("closes fatal quote preparation only after delivery and starts the next task without prior context", async () => {
   const s = await setup();
+  const logs: string[] = [];
+  const logSpy = vi
+    .spyOn(console, "info")
+    .mockImplementation((entry) => logs.push(String(entry)));
   const send = vi.fn(async (_binding, reply) => {
     expect(reply).toContain("Consultar seguros");
     expect(await s.contact()).toMatchObject({
@@ -77,6 +81,7 @@ it("closes fatal quote preparation only after delivery and starts the next task 
     return "wamid.quote-failure";
   });
   await processWhatsappInbox(s.repository, { ...s.routed, send });
+  logSpy.mockRestore();
   expect(send).toHaveBeenCalledOnce();
   expect(await s.contact()).toMatchObject({
     employee_id: null,
@@ -96,6 +101,65 @@ it("closes fatal quote preparation only after delivery and starts the next task 
   });
   expect(next).toHaveBeenCalledOnce();
   expect(next.mock.calls[0][1]).toEqual([]);
+  const events = logs.map(
+    (entry) => JSON.parse(entry) as Record<string, unknown>,
+  );
+  const applied = events.find(
+    (event) =>
+      event.event === "whatsapp_quote_lifecycle_reset" &&
+      event.stage === "after_reply" &&
+      event.outcome === "applied",
+  );
+  expect(applied).toMatchObject({
+    message_id: s.input.messageId,
+    generation: s.access.generation,
+    reset_applied: true,
+  });
+  expect(applied?.selection_revision).toEqual(expect.any(Number));
+  expect(applied?.duration_ms).toEqual(expect.any(Number));
+  expect(Number(applied?.duration_ms)).toBeGreaterThanOrEqual(0);
+  expect(JSON.stringify(events)).not.toContain(s.access.contact);
+  expect(JSON.stringify(events)).not.toContain("private draft");
+});
+
+it("logs a skipped lifecycle reset when the source selection changed before acknowledgement persistence", async () => {
+  const s = await setup();
+  const logs: string[] = [];
+  const logSpy = vi
+    .spyOn(console, "info")
+    .mockImplementation((entry) => logs.push(String(entry)));
+  await processWhatsappInbox(s.repository, {
+    ...s.routed,
+    send: async () => {
+      await env.DB.prepare(
+        "UPDATE whatsapp_channel_contacts SET selection_revision=selection_revision+1 WHERE connection_id=? AND contact=?",
+      )
+        .bind(s.connectionId, s.access.contact)
+        .run();
+      return "wamid.quote-failure-stale-selection";
+    },
+  });
+  logSpy.mockRestore();
+
+  expect(await s.contact()).toMatchObject({
+    generation: s.access.generation,
+    employee_id: s.employeeId,
+    draft_json: "private draft",
+  });
+  const event = logs
+    .map((entry) => JSON.parse(entry) as Record<string, unknown>)
+    .find(
+      (entry) =>
+        entry.event === "whatsapp_quote_lifecycle_reset" &&
+        entry.stage === "after_reply",
+    );
+  expect(event).toMatchObject({
+    message_id: s.input.messageId,
+    outcome: "skipped",
+    reset_applied: false,
+  });
+  expect(event?.duration_ms).toEqual(expect.any(Number));
+  expect(Number(event?.duration_ms)).toBeGreaterThanOrEqual(0);
 });
 
 it("keeps the draft when the failure menu has no acknowledged delivery", async () => {

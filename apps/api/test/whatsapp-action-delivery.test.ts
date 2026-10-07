@@ -113,7 +113,12 @@ const partial: ActionOutcome = {
 
 it("delivers partial results, shows the task menu, and starts the next turn fresh", async () => {
   const s = await setup(partial);
+  const logs: string[] = [];
+  const logSpy = vi
+    .spyOn(console, "info")
+    .mockImplementation((entry) => logs.push(String(entry)));
   await Promise.all([s.deliver(), s.deliver()]);
+  logSpy.mockRestore();
   await s.deliver();
   expect(s.send).toHaveBeenCalledTimes(1);
   const sentText = s.send.mock.calls[0]?.[1];
@@ -155,6 +160,48 @@ it("delivers partial results, shows the task menu, and starts the next turn fres
   expect((await s.history()).results[0]?.generation).toBe(
     s.session.access.generation,
   );
+  const events = logs.map(
+    (entry) => JSON.parse(entry) as Record<string, unknown>,
+  );
+  const timing = events.find(
+    (event) =>
+      event.event === "whatsapp_action_result_timing" &&
+      event.stage === "ack_persistence",
+  );
+  expect(timing).toMatchObject({
+    action_id: s.actionId,
+    generation: s.session.access.generation,
+    selection_revision: s.session.selectionRevision,
+    outcome: "persisted",
+  });
+  expect(timing?.duration_ms).toEqual(expect.any(Number));
+  expect(Number(timing?.duration_ms)).toBeGreaterThanOrEqual(0);
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      event: "whatsapp_quote_lifecycle_reset",
+      action_id: s.actionId,
+      outcome: "applied",
+      reset_applied: true,
+    }),
+  );
+  expect(JSON.stringify(events)).not.toContain(s.session.access.contact);
+  expect(JSON.stringify(events)).not.toContain("private-applicant-data");
+});
+
+it("keeps result delivery successful when structured logging throws", async () => {
+  const s = await setup(partial);
+  vi.spyOn(console, "info").mockImplementation(() => {
+    throw new Error("logger unavailable");
+  });
+  await expect(s.deliver()).resolves.toMatchObject({ delivered: 1 });
+  vi.restoreAllMocks();
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(s.actionId)
+      .first("delivery_state"),
+  ).toBe("sent");
 });
 
 it("does not add uncertain deliveries to history or retry their sends", async () => {
@@ -195,6 +242,10 @@ it("classifies an expired sending lease as uncertain without retrying it", async
 
 it("recovers an acknowledged send's failed history write without sending again", async () => {
   const s = await setup(partial);
+  const logs: string[] = [];
+  const logSpy = vi
+    .spyOn(console, "info")
+    .mockImplementation((entry) => logs.push(String(entry)));
   const batch = vi.spyOn(env.DB, "batch");
   batch.mockRejectedValueOnce(new Error("Transient history write failure"));
   await s.deliver();
@@ -234,6 +285,27 @@ it("recovers an acknowledged send's failed history write without sending again",
   });
   expect(freshAccess.generation).not.toBe(s.session.access.generation);
   expect(await s.repo.getSession(freshAccess)).toBeNull();
+  logSpy.mockRestore();
+  const events = logs.map(
+    (entry) => JSON.parse(entry) as Record<string, unknown>,
+  );
+  const repair = events.find(
+    (event) =>
+      event.event === "whatsapp_action_result_timing" &&
+      event.stage === "history_repair" &&
+      event.outcome === "repaired",
+  );
+  expect(repair).toMatchObject({ action_id: s.actionId });
+  expect(repair?.duration_ms).toEqual(expect.any(Number));
+  expect(Number(repair?.duration_ms)).toBeGreaterThanOrEqual(0);
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      event: "whatsapp_quote_lifecycle_reset",
+      action_id: s.actionId,
+      stage: "history_repair",
+      reset_applied: true,
+    }),
+  );
 });
 
 it("repairs acknowledged history after the contact authorization changes", async () => {

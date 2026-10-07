@@ -214,10 +214,27 @@ when the processing-mode setting is omitted.
 
 Latency diagnostics emit `whatsapp_inbound_claimed` with `queue_wait_ms` and
 `whatsapp_inbound_timing` for preparation, indicators, generation, transport, acknowledgement persistence and
-total processing. `whatsapp_assistant_timing` separates configuration,
+total processing. `whatsapp_action_result_timing` records result-send,
+acknowledgement-persistence and history-repair duration/outcome. The
+`whatsapp_quote_lifecycle_reset` event reports whether the generation reset was
+applied or skipped, including after history repair. These events correlate by
+action or message ID, generation and selection revision; they do not include
+phone numbers, message bodies, drafts, applicant data, raw errors or credentials.
+`whatsapp_assistant_timing` separates configuration,
 capability setup, input preparation, knowledge retrieval and model/tool work.
-These events carry message IDs and durations, without phone numbers, message
-bodies, drafts or credentials. Existing action-started and action-finished events
+`whatsapp_operation` records start and terminal outcomes for each named tool,
+quote-catalog preflight, action preparation and typed backend request; failed
+HTTP responses include only status codes. A per-operation `call_id` disambiguates
+concurrent or repeated calls. `whatsapp_model_call` isolates each model invocation
+from tool execution and reports response duration, token counts when supplied by
+the provider, and bounded failure categories (including timeout/abort).
+`whatsapp_action_prepared` and `whatsapp_action_confirmation` connect inbound
+message IDs to the resulting action ID without logging confirmation codes.
+Filter by `message_id` for intake and model/tool latency, then use `action_id` to
+follow dispatch, delivery and reset. A start event without a terminal event can
+indicate a process interruption; it is not evidence of successful execution.
+These events carry operational IDs and durations, without phone numbers, message
+bodies, drafts, raw errors or credentials. Existing action-started and action-finished events
 measure confirmed-operation queue waits and execution durations. Queue wait is
 measured from server acceptance; provider-to-server latency can be compared using
 the inbox's `provider_timestamp` and `received_at`. Event admission removes the
