@@ -90,7 +90,13 @@ do not justify a winning proposal. Model calls have an eight-second deadline,
 no tools, and no automatic retries. A model failure preserves provider results
 and the customer link, with analysis availability clearly indicated.
 Analysis disables model reasoning to reserve the bounded output budget for the
-customer explanation. The private action result and structured diagnostics
+customer explanation. The OpenRouter adapter sends a strict JSON schema through
+the provider's structured-output API and requires compatible provider routing.
+An explicit null preference means no verified preferred proposal and is normalized
+to the public report's optional field. Local validation still checks proposal IDs
+and unsafe output. Schema failures record at most five static field paths and
+validation codes, without rejected values or model error messages.
+The private action result and structured diagnostics
 identify safe reasons such as unavailable configuration or authorization,
 timeout, malformed or truncated output, and proposal ID mismatch. They do not
 retain prompts, model responses, credentials, or contact details. Batch and

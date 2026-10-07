@@ -12,7 +12,10 @@ import type { WhatsappChannelRepository } from "../src/whatsapp/channel-reposito
 import type { VirtualEmployeesRepository } from "../src/assistant/virtual-employees";
 import type { AssistantConfigurationRepository } from "../src/assistant/configuration";
 
-vi.mock("ai", () => ({ generateText: vi.fn() }));
+vi.mock("ai", async () => ({
+  ...(await vi.importActual<typeof import("ai")>("ai")),
+  generateText: vi.fn(),
+}));
 vi.mock("@openrouter/ai-sdk-provider", () => ({
   createOpenRouter: vi.fn(),
 }));
@@ -313,6 +316,40 @@ it("persists a safe invalid-output reason without logging model text", async () 
       }),
     );
     expect(JSON.stringify(entries)).not.toContain(privateOutput);
+  } finally {
+    log.mockRestore();
+  }
+});
+
+it("persists only static validation fields and codes for malformed analysis", async () => {
+  const privateValue = "private@example.test";
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    const { presentation } = presentationFactory({
+      complete: async () =>
+        JSON.stringify({
+          proposals: [{ id: "product-1", explanation: 42 }],
+          suggestion: "Compare verified evidence.",
+          limitations: [],
+          [privateValue]: privateValue,
+        }),
+    });
+    const result = await presentation.finish({ quoteId: "quote-1", proposals });
+    expect(result.analysisUnavailableReason).toBe("invalid_schema");
+    expect(result.analysisValidationIssues).toContainEqual({
+      field: "proposals/[index]/explanation",
+      code: "invalid_type",
+    });
+    const entries = log.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        event: "whatsapp_quote_analysis_validation",
+        validation_field: "proposals/[index]/explanation",
+        validation_code: "invalid_type",
+      }),
+    );
+    expect(JSON.stringify(entries)).not.toContain(privateValue);
+    expect(JSON.stringify(result)).not.toContain(privateValue);
   } finally {
     log.mockRestore();
   }
