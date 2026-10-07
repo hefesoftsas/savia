@@ -16,7 +16,10 @@ Desktop keeps one private pending draft in the native app data directory. Its
 manifest is written atomically after completed audio segments. Closing preserves
 completed audio; reopening exposes a recovered draft and never restarts recording
 automatically. Discard removes that local draft, not uploaded backend audio.
-Credentials are kept in memory, never in the capture spool. An interrupted segment
+Credentials are kept in memory, never in the capture spool, unless the user
+opts into Remember on this device: origin and token are then stored as one
+envelope in the OS keychain, reloaded and revalidated on launch, and removed
+on demand. An interrupted segment
 that has not been committed may be lost; completed segments remain recoverable.
 
 Mobile records AAC-LC mono 24 kHz at 32 kbps for up to an hour with the app open.
