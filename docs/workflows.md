@@ -29,7 +29,7 @@ catalog, switch (up to 10 ordered cases plus default branch),
 transform, map over a referenced list (up to 100 items), bulk update of a
 referenced record list (up to 100 records), loop over a referenced list with
 a multi-step body (up to 100 items and iterations), equality query, create,
-update, task, internal notification, durable delay, and generic HTTPS
+update, task, internal notification, email, durable delay, and generic HTTPS
 requests. Switch output
 provides `{ value, matched, branch }` with `matched` as the zero-based case
 index (or null) for later references. Map output provides `{ items, count }`;
@@ -263,7 +263,8 @@ a fixed test identity and must never be deployed or pointed at user data.
 ## Current boundaries
 
 - Native collections only; external/domain/SQL/API adapters are rejected at publication
-  and execution. Outgoing JSON webhooks are supported as a dedicated step; general HTTP/email connectors are not.
+  and execution. Outgoing JSON webhooks, generic HTTPS calls and email are
+  supported as dedicated steps; other general connectors are not.
 - At most 50 acyclic steps, 50 mappings per step, 100 query results, 64 KB definitions,
   32 KB manual input and 256 KB execution context. Lists show the latest 200 definitions
   or inbox items and 100 executions. History maintenance runs with the scheduler
@@ -324,6 +325,17 @@ the normal per-step attempts; other statuses fail immediately. Unlike webhook
 deliveries there is no idempotency key: retries of non-idempotent requests
 can repeat remote effects, and the step is safe to use inside loop bodies.
 Manual retry resumes the failed step with the same inputs.
+
+## Email delivery
+
+An **Enviar correo** step sends one message through the host's mail delivery:
+`to` accepts a literal address or a reference resolving to one, `subject`
+and `body` accept literals and typed references up to 4,000 characters, and
+the output records `{ to, accepted }`. Hosts without mail delivery fail the
+step visibly without consuming it silently; configure delivery before
+publishing email flows. Retries can duplicate a message already accepted
+remotely, like generic HTTP steps. Email steps may run inside parallel
+branches and loop bodies.
 
 ## Piece actions (extension nodes)
 

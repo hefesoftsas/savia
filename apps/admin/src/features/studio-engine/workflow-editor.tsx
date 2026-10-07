@@ -38,6 +38,7 @@ export const stepLabels: Record<
   update: "Actualizar registro",
   task: "Crear tarea",
   notification: "Notificación interna",
+  email: "Enviar correo",
   delay: "Esperar",
 };
 export function newStep(
@@ -125,6 +126,8 @@ export function newStep(
       };
     case "notification":
       return { ...base, type, title: "", assignee: { ref: "system.owner" } };
+    case "email":
+      return { ...base, type, to: "", subject: "", body: "" };
     case "delay":
       return { ...base, type, seconds: 60 };
   }
@@ -1659,6 +1662,33 @@ export function StepEditor({
             onChange={(e) => patch({ dueDays: Number(e.target.value) })}
           />
         </label>
+      ) : null}
+      {node.type === "email" ? (
+        <>
+          <ValueInput
+            label={t("Destinatario")}
+            value={node.to}
+            onChange={(v) => patch({ to: v })}
+            variables={variables}
+          />
+          <ValueInput
+            label={t("Asunto")}
+            value={node.subject}
+            onChange={(v) => patch({ subject: v })}
+            variables={variables}
+          />
+          <ValueInput
+            label={t("Cuerpo")}
+            value={node.body}
+            onChange={(v) => patch({ body: v })}
+            variables={variables}
+          />
+          <p className="wf-muted">
+            {t(
+              "Requiere entrega de correo configurada en el host; sin ella el paso falla visiblemente.",
+            )}
+          </p>
+        </>
       ) : null}
       {node.type === "delay" ? (
         <fieldset>

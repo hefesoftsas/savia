@@ -1,4 +1,7 @@
-import { processWorkflows } from "@savia/studio-server/workflows/runtime";
+import {
+  processWorkflows,
+  type EmailDependencies,
+} from "@savia/studio-server/workflows/runtime";
 import type { WorkflowAction } from "@savia/studio-server/workflows/routes";
 import { findPrincipal, loadActor } from "./auth/identity-repository";
 import { canAccessSharedCrm, canManageSharedCrm } from "./external-crm/hubspot-access";
@@ -48,9 +51,11 @@ export async function runScheduledWorkflows(
   encryptionKey?: string,
   fetcher?: typeof fetch,
   realtime?: RealtimeHubClient,
+  email?: EmailDependencies,
 ) {
   return processWorkflows(db, workflowAuthorizer(db), {
     webhooks: { encryptionKey, fetcher },
+    email,
     onExecutionTransition(workspace, executionId) {
       const match = /^tenant:(0|[1-9]\d*)$/.exec(workspace);
       if (!match) return;

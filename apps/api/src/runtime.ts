@@ -706,6 +706,44 @@ const runtime = {
           : {}),
       });
     };
+    const workflowEmailBridgeKey = await identityAdministrationBridgeKey(
+      environment.SAVIA_INTERNAL_BRIDGE_KEY,
+      environment.SAVIA_MCP_SHARED_SECRET,
+    ).catch(() => null);
+    const workflowEmail =
+      environment.AUTH && workflowEmailBridgeKey
+        ? {
+            sendEmail: async (mail: {
+              to: string;
+              subject: string;
+              text: string;
+              workspace: string;
+            }) => {
+              const match = /^tenant:(\d+)$/.exec(mail.workspace);
+              if (!match)
+                throw new Error("Email delivery needs a tenant workspace");
+              const response = await environment.AUTH!.fetch(
+                new Request(
+                  `https://savia-auth.internal/_internal/tenant-email/${match[1]}/send`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "x-savia-bridge-key": workflowEmailBridgeKey,
+                      "content-type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      to: mail.to,
+                      subject: mail.subject,
+                      text: mail.text,
+                    }),
+                    signal: AbortSignal.timeout(15000),
+                  },
+                ),
+              );
+              if (!response.ok) throw new Error("Workflow email unavailable");
+            },
+          }
+        : undefined;
     if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
       const results = await Promise.allSettled([
         runBookings(),
@@ -716,6 +754,7 @@ const runtime = {
           studioIntegrationKeyFromEnvironment(environment),
           overrides.workflowFetch,
           realtime,
+          workflowEmail,
         ),
         runScheduledNotifications(environment.DB, realtime),
         runScheduledAuditRetention(environment.DB),
@@ -745,6 +784,7 @@ const runtime = {
         studioIntegrationKeyFromEnvironment(environment),
         overrides.workflowFetch,
         realtime,
+        workflowEmail,
       ),
       runScheduledNotifications(environment.DB, realtime),
       runScheduledAuditRetention(environment.DB),

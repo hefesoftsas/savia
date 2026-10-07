@@ -695,6 +695,38 @@ it("matches record conditions with dispatch parity, including related paths", ()
   ).toBe(true);
 });
 
+it("accepts email steps with bounded fields and valid recipients", () => {
+  const base = {
+    trigger: { type: "manual" },
+    nodes: [
+      {
+        id: "mail",
+        type: "email",
+        to: "buyer@example.com",
+        subject: "Hi",
+        body: "Hello",
+      },
+    ],
+  };
+  expect(workflowDefinitionSchema.safeParse(base).success).toBe(true);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [
+        { id: "mail", type: "email", to: "not-an-email", subject: "Hi", body: "Hello" },
+      ],
+    }).success,
+  ).toBe(false);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [
+        { id: "mail", type: "email", to: "a@b.co", subject: "Hi", body: "x".repeat(4001) },
+      ],
+    }).success,
+  ).toBe(false);
+});
+
 it("accepts pinned subflow calls with mapped inputs", () => {
   const node = {
     id: "child",

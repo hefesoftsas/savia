@@ -127,6 +127,14 @@ async function schedule(db: D1Database, now: number) {
 }
 
 /** A bounded tick. Leases fence every checkpoint, including native side effects. */
+export type EmailDependencies = {
+  sendEmail?: (input: {
+    to: string;
+    subject: string;
+    text: string;
+    workspace: string;
+  }) => Promise<void>;
+};
 export type WorkflowHistoryReport = {
   executions: number;
   inbox: number;
@@ -177,6 +185,7 @@ export async function processWorkflows(
     now?: number;
     maxSteps?: number;
     webhooks?: WebhookDependencies;
+    email?: EmailDependencies;
     pieces?: WorkflowPieceHandler[];
     onExecutionTransition?: (workspace: string, executionId: string) => void;
   } = {},
@@ -322,6 +331,7 @@ export async function processWorkflows(
           failedMeta,
           options.webhooks ?? {},
           resolveWorkflowPieces(options.pieces),
+          options.email ?? {},
         );
       notifyTransition(run.workspace_id, run.id);
     } catch (error) {
@@ -582,6 +592,7 @@ async function executeNode(
   meta: GraphMeta,
   webhooks: WebhookDependencies = {},
   pieces: WorkflowPieceHandler[] = resolveWorkflowPieces(),
+  email: EmailDependencies = {},
 ) {
   db = historyDatabase(db, run.workspace_id, {
     kind: "workflow",
@@ -1308,6 +1319,34 @@ async function executeNode(
         resumeAt: new Date(workflowResumeAt(node, context, now)).toISOString(),
       };
       break;
+    case "email": {
+      const to = value(node.to),
+        subject = value(node.subject),
+        body = value(node.body);
+      if (
+        typeof to !== "string" ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) ||
+        typeof subject !== "string" ||
+        !subject.trim() ||
+        subject.length > 4000 ||
+        typeof body !== "string" ||
+        !body.trim() ||
+        body.length > 4000
+      )
+        throw new Error("Email needs a valid recipient, subject and body");
+      if (!email.sendEmail)
+        throw new Error("Email delivery is not configured for this host");
+      // Non-idempotent like generic HTTP steps: a crash after sending can
+      // duplicate the message, so manual retry resends with the same inputs.
+      await email.sendEmail({
+        to,
+        subject,
+        text: body,
+        workspace: run.workspace_id,
+      });
+      output = { to, accepted: true };
+      break;
+    }
   }
   await transaction(db, [g.start, ...effects, ...finish(output)]);
 }

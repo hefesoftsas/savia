@@ -345,6 +345,38 @@ export const workflowNodeSchema = z.discriminatedUnion("type", [
   z
     .object({
       ...base,
+      type: z.literal("email"),
+      to: workflowValueSchema,
+      subject: workflowValueSchema,
+      body: workflowValueSchema,
+    })
+    .strict()
+    .superRefine((node, ctx) => {
+      for (const [path, value] of [
+        ["to", node.to],
+        ["subject", node.subject],
+        ["body", node.body],
+      ] as const) {
+        if (typeof value === "string" && value.length > 4000)
+          ctx.addIssue({
+            code: "custom",
+            path: [path],
+            message: "Email fields accept at most 4000 characters",
+          });
+      }
+      if (
+        typeof node.to === "string" &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(node.to)
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["to"],
+          message: "Email recipient must be a valid address",
+        });
+    }),
+  z
+    .object({
+      ...base,
       type: z.literal("delay"),
       seconds: z.number().int().min(1).max(31_536_000).optional(),
       until: workflowValueSchema.optional(),
@@ -651,6 +683,7 @@ const BRANCH_MEMBER_TYPES = new Set([
   "bulkUpdate",
   "task",
   "notification",
+  "email",
   "delay",
   "webhook",
   "http",
