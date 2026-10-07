@@ -12,9 +12,20 @@ export type InsuranceAssistantPorts = {
   ): Promise<{ data: Array<Record<string, unknown>> }>;
   studioPath(tenantId: number, path: string): string;
 };
+export type InsuranceQuoteProgress = {
+  productId: string;
+  provider: string;
+  product: string;
+  premium?: number;
+  quoteNumber?: string;
+  state: "priced" | "unpriced" | "failed" | "uncertain";
+  reference: string;
+  quoteId: string;
+};
 export type InsuranceExecutionOptions = {
   executionKey?: string;
   expectedProductIds?: readonly string[];
+  onProgress?(progress: InsuranceQuoteProgress): Promise<void> | void;
   linkOwnership?(quoteId: string): Promise<void>;
   claimDispatch?(productId: string): Promise<boolean>;
   /** Optional shorter deadlines; defaults are 15s per request and 90s total. */
@@ -408,6 +419,8 @@ export class InsuranceAssistantOperations {
           let productFailed = false;
           let productUncertain = false;
           let productHasPremium = false;
+          let productPremium: number | undefined;
+          let productQuoteNumber: string | undefined;
           const providerStartedAt = Date.now();
           try {
             const response = await write<{
@@ -439,12 +452,14 @@ export class InsuranceAssistantOperations {
                 ? Number(rawPremium)
                 : undefined;
             productHasPremium = premium !== undefined;
+            productPremium = premium;
             const number =
               result.quoteNumber ?? result.response?.simulacion?.codigo;
             const quoteNumber =
               typeof number === "string" || typeof number === "number"
                 ? String(number)
                 : undefined;
+            productQuoteNumber = quoteNumber;
             outcomes.push({
               provider,
               product: product.label,
@@ -486,6 +501,44 @@ export class InsuranceAssistantOperations {
               estado: "Error",
               error_mensaje: "La aseguradora no pudo completar la cotización.",
             };
+          }
+          // Surface verified provider outcomes before a possibly slow history PATCH.
+          if (options.onProgress) {
+            try {
+              const state = productUncertain
+                ? "uncertain"
+                : productFailed
+                  ? "failed"
+                  : productHasPremium
+                    ? "priced"
+                    : "unpriced";
+              await awaitExecution(
+                () =>
+                  Promise.resolve(
+                    options.onProgress!({
+                      productId: product.id,
+                      provider,
+                      product: product.label,
+                      ...(productPremium === undefined
+                        ? {}
+                        : { premium: productPremium }),
+                      ...(productQuoteNumber === undefined
+                        ? {}
+                        : { quoteNumber: productQuoteNumber }),
+                      state,
+                      reference,
+                      quoteId: master.data.id,
+                    }),
+                  ),
+                "progress_callback",
+              );
+            } catch (error) {
+              logQuoteEvent("whatsapp_quote_progress_callback_failed", {
+                product_id: product.id,
+                provider,
+                error_type: error instanceof Error ? error.name : "unknown",
+              });
+            }
           }
           try {
             await write(

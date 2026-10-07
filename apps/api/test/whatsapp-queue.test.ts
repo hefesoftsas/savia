@@ -122,6 +122,50 @@ async function actionRow(
   return id;
 }
 
+it("recovers pending progress even after final action delivery and sleeps once it is sent", async () => {
+  const fixture = await setupChannelFixture();
+  const scope = { connectionId: fixture.connectionId, contact: "573001234567" };
+  const actionId = await actionRow(scope, fixture.tenantId, "completed");
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_actions SET delivery_state='sent' WHERE id=?",
+  )
+    .bind(actionId)
+    .run();
+  const createdAt = new Date(Date.now() - 1000).toISOString();
+  await env.DB.prepare(
+    "INSERT INTO whatsapp_channel_action_progress(id,action_id,event_key,progress_text,status,created_at) VALUES(?,?,?,'Available offer','pending',?)",
+  )
+    .bind(crypto.randomUUID(), actionId, "product", createdAt)
+    .run();
+  expect(await nextWhatsappWake(env.DB, scope)).toBe(Date.parse(createdAt));
+  expect(await recoverWhatsappScopes(env.DB)).toContainEqual(scope);
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_action_progress SET status='sent' WHERE action_id=?",
+  )
+    .bind(actionId)
+    .run();
+  expect(await nextWhatsappWake(env.DB, scope)).toBeNull();
+});
+
+it("honors progress retry backoff while the final result waits", async () => {
+  const fixture = await setupChannelFixture();
+  const scope = { connectionId: fixture.connectionId, contact: "573001234567" };
+  const actionId = await actionRow(scope, fixture.tenantId, "completed");
+  const retryAt = new Date(Date.now() + 30000).toISOString();
+  await env.DB.prepare(
+    "INSERT INTO whatsapp_channel_action_progress(id,action_id,event_key,progress_text,status,created_at,retry_at) VALUES(?,?,?,'Product price','pending',?,?)",
+  )
+    .bind(
+      crypto.randomUUID(),
+      actionId,
+      "product",
+      new Date().toISOString(),
+      retryAt,
+    )
+    .run();
+  expect(await nextWhatsappWake(env.DB, scope)).toBe(Date.parse(retryAt));
+});
+
 it("waits for a running action lease instead of repeatedly waking for a blocked action", async () => {
   const fixture = await setupChannelFixture();
   const scope = { connectionId: fixture.connectionId, contact: "573001234567" };

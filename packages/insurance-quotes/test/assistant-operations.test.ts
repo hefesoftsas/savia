@@ -435,3 +435,139 @@ it("runs a confirmed quote when enabled products still match the snapshot", asyn
     ),
   ).toBe(true);
 });
+
+it("reports each provider result while another provider is still running", async () => {
+  let resolveSlow!: (value: unknown) => void;
+  const slowResponse = new Promise((resolve) => {
+    resolveSlow = resolve;
+  });
+  let markFastProgress!: (progress: unknown) => void;
+  const fastProgress = new Promise((resolve) => {
+    markFastProgress = resolve;
+  });
+  const persisted: Array<{
+    path: string;
+    method: string;
+    body: Record<string, unknown>;
+  }> = [];
+  let settled = false;
+  const operations = quoteOperations(
+    [
+      { id: "slow", label: "Carrier A · Product", enabled: true },
+      { id: "fast", label: "Carrier B · Product", enabled: true },
+    ],
+    async (flowId) =>
+      flowId === "slow"
+        ? slowResponse
+        : {
+            data: {
+              run: { runId: "fast-run" },
+              output: { data: { premiumTotal: 2000 } },
+            },
+          },
+    persisted,
+  );
+  const resultPromise = operations
+    .createInsuranceQuote(input, {
+      executionKey: "progress-test",
+      executionTimeouts: { requestMs: 500, budgetMs: 1000 },
+      onProgress: (progress) => {
+        if (progress.productId === "fast") markFastProgress(progress);
+      },
+    })
+    .then((result) => {
+      settled = true;
+      return result;
+    });
+
+  await expect(fastProgress).resolves.toMatchObject({
+    productId: "fast",
+    state: "priced",
+    premium: 2000,
+    reference: "COT-progress-test",
+    quoteId: "master",
+  });
+  expect(settled).toBe(false);
+  resolveSlow({
+    data: {
+      run: { runId: "slow-run" },
+      output: { data: { premiumTotal: 3000 } },
+    },
+  });
+  await expect(resultPromise).resolves.toMatchObject({ pricedOffers: 2 });
+});
+
+it("isolates progress callback failures from final quote results", async () => {
+  const persisted: Array<{
+    path: string;
+    method: string;
+    body: Record<string, unknown>;
+  }> = [];
+  const operations = quoteOperations(
+    [
+      { id: "one", label: "Carrier A · Product", enabled: true },
+      { id: "two", label: "Carrier B · Product", enabled: true },
+    ],
+    async () => ({
+      data: {
+        run: { runId: "progress-failure-run" },
+        output: { data: { premiumTotal: 4000 } },
+      },
+    }),
+    persisted,
+  );
+  let progressCalls = 0;
+
+  const result = await operations.createInsuranceQuote(input, {
+    executionKey: "progress-failure-test",
+    onProgress: () => {
+      progressCalls++;
+      if (progressCalls === 1) throw new Error("progress consumer failed");
+    },
+  });
+
+  expect(progressCalls).toBe(2);
+  expect(result).toMatchObject({ pricedOffers: 2, lowestPremium: 4000 });
+});
+
+it("emits provider progress before a slow detail-history update", async () => {
+  const events: string[] = [];
+  const persisted: Array<{
+    path: string;
+    method: string;
+    body: Record<string, unknown>;
+  }> = [];
+  const operations = quoteOperations(
+    [{ id: "slow-history", label: "Carrier · Product", enabled: true }],
+    async () => ({
+      data: {
+        run: { runId: "slow-history-run" },
+        output: { data: { premiumTotal: 5000 } },
+      },
+    }),
+    persisted,
+    (path, init) => {
+      if (path.includes("cotizaciones_detalle/") && init?.method === "PATCH") {
+        events.push("detail-history");
+        return new Promise(() => undefined);
+      }
+      return undefined;
+    },
+  );
+
+  const result = await operations.createInsuranceQuote(input, {
+    executionKey: "slow-history-progress",
+    executionTimeouts: { requestMs: 20, budgetMs: 200 },
+    onProgress: () => {
+      events.push("progress");
+    },
+  });
+
+  expect(events.slice(0, 2)).toEqual(["progress", "detail-history"]);
+  expect(result).toMatchObject({ pricedOffers: 1, lowestPremium: 5000 });
+  expect(result.persistenceWarnings).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("No se pudo actualizar el historial"),
+    ]),
+  );
+});

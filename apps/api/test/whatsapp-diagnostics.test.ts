@@ -70,6 +70,29 @@ it("whitelists fields and makes logging failure nonfatal", async () => {
   ).toBe("success");
 });
 
+it("logs only safe numeric progress queue metadata", () => {
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  logWhatsappDiagnostic(
+    "whatsapp_action_progress",
+    { action_id: "action", contact: "PRIVATE_CONTACT" } as any,
+    {
+      stage: "delivery",
+      outcome: "sent",
+      queue_wait_ms: 120,
+      event_count: 2,
+      text: "PRIVATE_PROGRESS_TEXT",
+    } as any,
+  );
+
+  const line = String(info.mock.calls[0][0]);
+  expect(JSON.parse(line)).toMatchObject({
+    action_id: "action",
+    queue_wait_ms: 120,
+    event_count: 2,
+  });
+  expect(line).not.toMatch(/PRIVATE_/);
+});
+
 it("reports HTTP failures without URLs or response bodies and preserves the response", async () => {
   const info = vi.spyOn(console, "info").mockImplementation(() => {});
   const response = new Response("PRIVATE_RESPONSE", { status: 503 });

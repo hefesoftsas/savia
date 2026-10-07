@@ -18,6 +18,8 @@ type Fields = {
   attempt?: number;
   input_tokens?: number;
   output_tokens?: number;
+  queue_wait_ms?: number;
+  event_count?: number;
 };
 
 export function logWhatsappDiagnostic(
@@ -46,6 +48,8 @@ export function logWhatsappDiagnostic(
       "attempt",
       "input_tokens",
       "output_tokens",
+      "queue_wait_ms",
+      "event_count",
     ] as const)
       if (fields[key] !== undefined) metadata[key] = fields[key];
     console.info(JSON.stringify(metadata));

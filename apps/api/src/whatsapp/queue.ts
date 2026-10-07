@@ -31,11 +31,28 @@ export async function nextWhatsappWake(
             AND active.contact=whatsapp_channel_actions.contact AND active.status='dispatching'
         ))
         OR (status IN ('completed','failed','uncertain')
-          AND (delivery_state IS NULL OR delivery_state IN ('history_pending','sending')))
+          AND (delivery_state IS NULL OR delivery_state IN ('history_pending','sending'))
+          AND NOT EXISTS (SELECT 1 FROM whatsapp_channel_action_progress p
+            WHERE p.action_id=whatsapp_channel_actions.id
+              AND p.status IN ('pending','sending','history_pending')))
       )
+      UNION ALL
+      SELECT CASE WHEN p.status='sending' THEN COALESCE(p.lease_until,p.created_at)
+        ELSE COALESCE(p.retry_at,p.created_at) END AS due_at
+      FROM whatsapp_channel_action_progress p
+      JOIN whatsapp_channel_actions a ON a.id=p.action_id
+      WHERE a.connection_id=? AND a.contact=?
+        AND p.status IN ('pending','sending','history_pending')
     )`,
     )
-    .bind(scope.connectionId, scope.contact, scope.connectionId, scope.contact)
+    .bind(
+      scope.connectionId,
+      scope.contact,
+      scope.connectionId,
+      scope.contact,
+      scope.connectionId,
+      scope.contact,
+    )
     .first<{ due_at: string | null }>();
   const due = result?.due_at ? Date.parse(result.due_at) : NaN;
   return Number.isFinite(due) ? due : null;
@@ -55,7 +72,11 @@ export async function recoverWhatsappScopes(
       WHERE status IN ('queued','dispatching') OR (
         status IN ('completed','failed','uncertain')
         AND (delivery_state IS NULL OR delivery_state IN ('history_pending','sending'))
-      )`,
+      )
+    UNION
+    SELECT a.connection_id,a.contact FROM whatsapp_channel_action_progress p
+      JOIN whatsapp_channel_actions a ON a.id=p.action_id
+      WHERE p.status IN ('pending','sending','history_pending')`,
     )
     .all<{ connection_id: string; contact: string }>();
   return rows.results.map((row) => ({

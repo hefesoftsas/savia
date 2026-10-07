@@ -122,7 +122,8 @@ export async function deliverChannelActionResults(
     .run();
   const rows = await db
     .prepare(
-      `SELECT id,tenant_id,connection_id,contact,generation,employee_id,selection_revision,action_json,result_json,delivery_state,outbound_message_id FROM whatsapp_channel_actions WHERE status IN ('completed','failed','uncertain') AND (delivery_state IS NULL OR delivery_state='history_pending')${scopeSql} ORDER BY created_at LIMIT ${scope ? 1 : 10}`,
+      `SELECT id,tenant_id,connection_id,contact,generation,employee_id,selection_revision,action_json,result_json,delivery_state,outbound_message_id FROM whatsapp_channel_actions WHERE status IN ('completed','failed','uncertain') AND (delivery_state IS NULL OR delivery_state='history_pending')
+       AND NOT EXISTS (SELECT 1 FROM whatsapp_channel_action_progress p WHERE p.action_id=whatsapp_channel_actions.id AND p.status IN ('pending','sending','history_pending'))${scopeSql} ORDER BY created_at LIMIT ${scope ? 1 : 10}`,
     )
     .bind(...(scope ? [scope.connectionId, scope.contact] : []))
     .all<ResultDelivery>();
@@ -382,7 +383,9 @@ export async function deliverChannelActionResults(
       const claimUntil = new Date(Date.now() + 60_000).toISOString();
       const claim = await db
         .prepare(
-          "UPDATE whatsapp_channel_actions SET delivery_state='sending',lease_until=? WHERE id=? AND delivery_state IS NULL",
+          `UPDATE whatsapp_channel_actions SET delivery_state='sending',lease_until=? WHERE id=? AND delivery_state IS NULL
+           AND NOT EXISTS (SELECT 1 FROM whatsapp_channel_action_progress p
+             WHERE p.action_id=whatsapp_channel_actions.id AND p.status IN ('pending','sending','history_pending'))`,
         )
         .bind(claimUntil, row.id)
         .run();

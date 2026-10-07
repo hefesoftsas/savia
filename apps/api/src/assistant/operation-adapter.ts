@@ -33,6 +33,8 @@ import {
   humanSupportRecoveryReply,
 } from "../whatsapp/human-support";
 import { formatQuotePreview } from "../whatsapp/quote-preview";
+import { quoteProgressText } from "../whatsapp/quote-progress";
+import { enqueueChannelActionProgress } from "../whatsapp/action-progress";
 import {
   validatePersonalConfirmedAction,
   type PersonalIntegrationOperations,
@@ -43,6 +45,7 @@ export type ChannelOperationDependencies = {
   secret?: string;
   backendForActor(actor: AppActor): Promise<typeof fetch>;
   personal?: PersonalIntegrationOperations;
+  onActionProgress?(action: ChannelAction): void;
 };
 
 export function createChannelOperationAdapter(
@@ -352,6 +355,26 @@ export function createChannelOperationAdapter(
           { outcome: consumed.state },
         );
       let expiredQuoteCanRetry = false;
+      let confirmationText =
+        "Solicitud confirmada. Estoy procesándola; puedes escribir menú para elegir otra tarea.";
+      if (consumed?.state === "queued") {
+        const queued = await deps.repository.db
+          .prepare(
+            "SELECT action_json FROM whatsapp_channel_actions WHERE id=?",
+          )
+          .bind(consumed.jobId)
+          .first<{ action_json: string }>()
+          .catch(() => null);
+        if (queued) {
+          const metadata = JSON.parse(queued.action_json);
+          if (
+            metadata.domain === "insurance" &&
+            metadata.command === "quote-auto"
+          )
+            confirmationText =
+              "Solicitud confirmada. Estoy consultando los productos; te enviaré las opciones conforme lleguen y un resumen al terminar. Puedes escribir menú para elegir otra tarea.";
+        }
+      }
       let latestActionStatus: string | null = null;
       if (!consumed && !cancelText && !concreteAttempt && actions) {
         try {
@@ -433,7 +456,7 @@ export function createChannelOperationAdapter(
         system: whatsappOperationInstructions,
         directReply:
           consumed?.state === "queued"
-            ? "Solicitud confirmada. Estoy procesándola; puedes escribir menú para elegir otra tarea."
+            ? confirmationText
             : consumed?.state === "cancelled"
               ? "Solicitud cancelada. Escribe menú para elegir otra tarea."
               : cancelText
@@ -888,6 +911,15 @@ export function createChannelOperationAdapter(
         {
           executionKey: action.id,
           expectedProductIds,
+          onProgress: async (progress) => {
+            await enqueueChannelActionProgress(
+              deps.repository,
+              action,
+              progress.productId,
+              quoteProgressText(progress),
+            );
+            deps.onActionProgress?.(action);
+          },
           linkOwnership: async (quoteId) => {
             await deps.repository.db
               .prepare(

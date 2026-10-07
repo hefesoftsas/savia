@@ -426,6 +426,25 @@ revoked deliveries become terminal. Expired deliveries remain dormant until a
 valid inbound opens a new reply window, then resume through the same access checks;
 neither state keeps the coordinator awake. Failures before attempting a send can retry normally.
 
+Confirmed quotes report product results incrementally. Each provider outcome is
+persisted in `whatsapp_channel_action_progress` before delivery. The channel groups
+results arriving within a 300 ms window into messages of at most 4096 characters,
+with one active progress sender per action. Provider calls do not wait for the
+WhatsApp send. Each update identifies the quote and product, reports a verified
+premium and quote number when present, and distinguishes unpriced or unverified
+responses. It never declares a winning offer before the final comparison.
+
+The progress outbox is shared channel infrastructure; insurance supplies its
+typed product events and text. An `(action_id,event_key)` constraint deduplicates
+events. Delivery revalidates the contact generation, selected task and reply
+window. A pre-send failure retries after 30 seconds; an ambiguous send or a
+15-second send timeout becomes uncertain and is not blindly replayed. Known
+acknowledgements with a failed history write repair history without another send.
+The coordinator also recovers unfinished progress from the DB. The final summary
+and menu wait until earlier progress deliveries are resolved. Progress messages
+do not clear the draft or change the selected task. Incremental delivery exposes
+received results sooner; it does not fix provider responses without a premium.
+
 After a quote-auto operation ends in a terminal completed, failed, or uncertain
 result, an acknowledged result message includes the main task menu and starts a
 fresh contact generation. A terminal quote preparation or catalog failure that

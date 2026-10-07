@@ -100,6 +100,64 @@ async function setup(outcome: ActionOutcome, ageMs = 0) {
   };
 }
 
+it("keeps the final result and lifecycle reset behind unfinished product progress", async () => {
+  const fixture = await setup({
+    state: "completed",
+    result: { reference: "COT-progress", pricedOffers: 1 },
+  });
+  await env.DB.prepare(
+    "INSERT INTO whatsapp_channel_action_progress(id,action_id,event_key,progress_text,status,created_at) VALUES(?,?,?,'Product price','pending',?)",
+  )
+    .bind(
+      crypto.randomUUID(),
+      fixture.actionId,
+      "product",
+      new Date().toISOString(),
+    )
+    .run();
+  await fixture.deliver();
+  expect(fixture.send).not.toHaveBeenCalled();
+  expect(
+    (await fixture.repo.getAccess(fixture.session.access)).generation,
+  ).toBe(fixture.session.access.generation);
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_action_progress SET status='sent' WHERE action_id=?",
+  )
+    .bind(fixture.actionId)
+    .run();
+  await fixture.deliver();
+  expect(fixture.send).toHaveBeenCalledTimes(1);
+});
+
+it("rechecks progress at the final send claim when an event arrives during authorization", async () => {
+  const fixture = await setup({
+    state: "completed",
+    result: { reference: "COT-race", pricedOffers: 1 },
+  });
+  fixture.resolve.mockImplementation(async () => {
+    await env.DB.prepare(
+      "INSERT INTO whatsapp_channel_action_progress(id,action_id,event_key,progress_text,status,created_at) VALUES(?,?,?,'Late product price','pending',?)",
+    )
+      .bind(
+        crypto.randomUUID(),
+        fixture.actionId,
+        "product",
+        new Date().toISOString(),
+      )
+      .run();
+    return fixture.binding;
+  });
+  await fixture.deliver();
+  expect(fixture.send).not.toHaveBeenCalled();
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(fixture.actionId)
+      .first("delivery_state"),
+  ).toBeNull();
+});
+
 const partial: ActionOutcome = {
   state: "uncertain",
   message: "Una solicitud requiere revisión.",

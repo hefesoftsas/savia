@@ -204,6 +204,7 @@ async function executeConfirmedQuote(
   const result = adapter.execute(binding, action);
   return {
     result,
+    actionId: action.id,
     settingsReads: () => settingsReads,
     providerCalls: () => providerCalls,
     writes,
@@ -235,6 +236,25 @@ it("uses one bounded catalog read for a matching confirmed product", async () =>
 
   expect(execution.settingsReads()).toBe(1);
   expect(execution.providerCalls()).toBe(1);
+});
+
+it("persists each product result for incremental delivery during execution", async () => {
+  const execution = await executeConfirmedQuote(
+    ["confirmed-auto"],
+    ["confirmed-auto"],
+  );
+  await execution.result;
+  const progress = await env.DB.prepare(
+    "SELECT event_key,progress_text,status FROM whatsapp_channel_action_progress WHERE action_id=?",
+  )
+    .bind(execution.actionId)
+    .all<{ event_key: string; progress_text: string; status: string }>();
+  expect(progress.results).toHaveLength(1);
+  expect(progress.results[0]).toMatchObject({
+    event_key: "confirmed-auto",
+    status: "pending",
+  });
+  expect(progress.results[0].progress_text).toContain("123.456");
 });
 
 it("preflights enabled products once and reuses the verified form for this turn", async () => {
