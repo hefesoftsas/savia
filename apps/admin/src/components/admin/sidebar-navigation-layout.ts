@@ -49,13 +49,33 @@ export type SidebarNavigationLayout = {
   hiddenItems?: SidebarNavigationItemId[];
 };
 
-/** Stored layouts may still carry the pre-Studio item id. */
+/** Stored layouts may still carry pre-Studio or pre-consolidation item ids. */
+const legacyOperationsIds = new Set([
+  "domain-workflows",
+  "domain-reports",
+  "domain-api",
+]);
+
 export function migrateSidebarNavigationItemId(
   itemId: string,
 ): SidebarNavigationItemId {
-  return (
-    itemId === "dynamic-crm" ? "studio" : itemId
-  ) as SidebarNavigationItemId;
+  if (itemId === "dynamic-crm") return "studio" as SidebarNavigationItemId;
+  if (legacyOperationsIds.has(itemId))
+    return "domain-operations" as SidebarNavigationItemId;
+  return itemId as SidebarNavigationItemId;
+}
+
+function dedupeMigratedItems(
+  items: SidebarNavigationItemId[],
+): SidebarNavigationItemId[] {
+  const seen = new Set<string>();
+  const result: SidebarNavigationItemId[] = [];
+  for (const item of items) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    result.push(item);
+  }
+  return result;
 }
 
 export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
@@ -103,45 +123,66 @@ export function normalizeSidebarNavigationLayout(
 ): SidebarNavigationLayout {
   const hiddenItems =
     "hiddenItems" in value && Array.isArray(value.hiddenItems)
-      ? value.hiddenItems.map((item) =>
-          typeof item === "string"
-            ? migrateSidebarNavigationItemId(item)
-            : item,
+      ? dedupeMigratedItems(
+          value.hiddenItems.map((item) =>
+            typeof item === "string"
+              ? migrateSidebarNavigationItemId(item)
+              : item,
+          ),
         )
       : undefined;
   if (value.version === 2) {
+    const seenAcrossBlocks = new Set<string>();
+    const blocks = value.blocks.map((block) => {
+      const items = dedupeMigratedItems(
+        block.items.map(migrateSidebarNavigationItemId),
+      ).filter((item) => {
+        if (seenAcrossBlocks.has(item)) return false;
+        seenAcrossBlocks.add(item);
+        return true;
+      });
+      return block.kind === "builtin"
+        ? {
+            kind: "builtin" as const,
+            id: block.id,
+            items,
+            collapsed: block.collapsed === true,
+          }
+        : {
+            kind: "custom" as const,
+            id: block.id,
+            label: block.label,
+            items,
+            collapsed: block.collapsed === true,
+          };
+    });
     return {
       version: 2,
       ...("presetVersion" in value && value.presetVersion === 2
         ? { presetVersion: 2 as const }
         : {}),
-      blocks: value.blocks.map((block) =>
-        block.kind === "builtin"
-          ? {
-              kind: "builtin",
-              id: block.id,
-              items: block.items.map(migrateSidebarNavigationItemId),
-              collapsed: block.collapsed === true,
-            }
-          : {
-              kind: "custom",
-              id: block.id,
-              label: block.label,
-              items: block.items.map(migrateSidebarNavigationItemId),
-              collapsed: block.collapsed === true,
-            },
-      ),
+      blocks,
       ...(hiddenItems ? { hiddenItems } : {}),
     };
   }
+  const seenAcrossSections = new Set<string>();
   return {
     version: 2,
-    blocks: sidebarNavigationSectionIds.map((id) => ({
-      kind: "builtin",
-      id,
-      items: [...value.sections[id]].map(migrateSidebarNavigationItemId),
-      collapsed: false,
-    })),
+    blocks: sidebarNavigationSectionIds.map((id) => {
+      const items = dedupeMigratedItems(
+        [...value.sections[id]].map(migrateSidebarNavigationItemId),
+      ).filter((item) => {
+        if (seenAcrossSections.has(item)) return false;
+        seenAcrossSections.add(item);
+        return true;
+      });
+      return {
+        kind: "builtin" as const,
+        id,
+        items,
+        collapsed: false,
+      };
+    }),
     ...(hiddenItems ? { hiddenItems } : {}),
   };
 }

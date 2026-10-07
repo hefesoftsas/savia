@@ -264,7 +264,7 @@ describe("user sidebar navigation preferences", () => {
     const app = appFor("principal-a");
     const layout = {
       ...defaultSidebarNavigationLayout(),
-      hiddenItems: ["domain-workflows", "virtual-employees"],
+      hiddenItems: ["domain-operations", "virtual-employees"],
     };
     const url = "https://savia.test/v1/user-preferences/sidebar-navigation";
     const saved = await app.request(url, {
@@ -562,12 +562,47 @@ it("round trips the navigation preset version and newly addressable tools", () =
   expect(parseSidebarNavigationLayout(layout)).toEqual(layout);
   expect(layout.blocks.flatMap((block) => block.items)).toEqual(
     expect.arrayContaining([
-      "domain-workflows",
+      "domain-operations",
       "domain-sources",
       "virtual-employees",
       "tenant-branding",
     ]),
   );
+});
+
+it("migrates legacy workflows/reports/api ids to the consolidated operations item", () => {
+  const layout = parseSidebarNavigationLayout({
+    version: 2,
+    blocks: [
+      {
+        kind: "builtin",
+        id: "operation",
+        items: ["domain-reports"],
+        collapsed: false,
+      },
+      {
+        kind: "builtin",
+        id: "productivity",
+        items: ["domain-workflows", "domain-api"],
+        collapsed: false,
+      },
+      {
+        kind: "builtin",
+        id: "administration",
+        items: [],
+        collapsed: false,
+      },
+      {
+        kind: "builtin",
+        id: "management",
+        items: [],
+        collapsed: false,
+      },
+    ],
+  });
+  expect(
+    layout.blocks.flatMap((block) => block.items),
+  ).toEqual(["domain-operations"]);
 });
 
 it("documents the persisted mail system widget in generated OpenAPI", () => {
