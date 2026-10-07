@@ -16,6 +16,11 @@ Open **Build → Workflows** in the sidebar, or the **Flujos de trabajo** tab in
    Editing a draft does not change the active version or any existing execution.
 5. Run manual workflows from the editor, or wait for the event/schedule. Inspect
    the execution list and expand each completed step to see its result.
+6. Move flows between workspaces with **Exportar** (downloads versioned
+   JSON) and **Importar**. Import validates the definition and audits
+   collections and fields against this workspace, blocking on missing ones;
+   subflow and destination references only warn because they are re-linked
+   before publishing. Review and publish every import.
 
 Native steps: condition, approval with assignee decision, parallel branches
 with a merge join, subflow calls,

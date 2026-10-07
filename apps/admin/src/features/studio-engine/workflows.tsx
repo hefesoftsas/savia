@@ -17,6 +17,8 @@ import {
   History,
   ChevronRight,
   Layers,
+  Download,
+  Upload,
 } from "lucide-react";
 import {
   workflowDraftSchema,
@@ -39,6 +41,11 @@ import WorkflowCanvas, {
   connectStepTarget,
   TRIGGER_NODE_ID,
 } from "./workflow-canvas";
+import {
+  auditWorkflowImport,
+  exportWorkflow,
+  parseWorkflowImport,
+} from "./workflow-transfer";
 import "./workflows.css";
 
 type Draft = {
@@ -255,6 +262,49 @@ function WorkspaceWorkflows({
     setDirty(true);
     setNotice("");
   };
+  const fileInput = useRef<HTMLInputElement>(null);
+  const exportDraft = () => {
+    if (!draft) return;
+    const payload = exportWorkflow(draft.name, draft.definition);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${draft.name}.savia-workflow.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+  const importFile = async (file: File) =>
+    request(async () => {
+      let raw: unknown;
+      try {
+        raw = JSON.parse(await file.text());
+      } catch {
+        throw new Error(t("El archivo no es un flujo de Savia válido."));
+      }
+      let parsed: { name: string; definition: Draft["definition"] };
+      try {
+        parsed = parseWorkflowImport(raw);
+      } catch {
+        throw new Error(t("El archivo no es un flujo de Savia válido."));
+      }
+      const audit = auditWorkflowImport(parsed.definition, native);
+      if (audit.missingCollections.length > 0 || audit.unknownFields.length > 0)
+        throw new Error(
+          `${t("Faltan colecciones:")} ${[...audit.missingCollections, ...audit.unknownFields].join(", ")}`,
+        );
+      const response = await api<{ data: Draft }>("/workflows", "POST", parsed);
+      choose(response.data);
+      setNotice(
+        audit.externalRefs.length > 0
+          ? `${t("Flujo importado como borrador.")} ${t("Referencias a revisar:")} ${audit.externalRefs.join(", ")}`
+          : t("Flujo importado como borrador."),
+      );
+    });
   const connectStep = (
     source: string,
     target: string,
@@ -353,10 +403,32 @@ function WorkspaceWorkflows({
             {t("Conecta eventos, decisiones y acciones sobre tus colecciones.")}
           </p>
         </div>
-        <Button disabled={busy || dirty} onClick={() => choose(fresh())}>
-          <Plus size={16} />
-          {t("Nuevo flujo")}
-        </Button>
+        <div className="wf-actions">
+          <Button
+            variant="outline"
+            disabled={busy || dirty}
+            onClick={() => fileInput.current?.click()}
+          >
+            <Upload size={16} />
+            {t("Importar")}
+          </Button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/json,.json"
+            className="sr-only"
+            aria-label={t("Archivo de flujo para importar")}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void importFile(file);
+            }}
+          />
+          <Button disabled={busy || dirty} onClick={() => choose(fresh())}>
+            <Plus size={16} />
+            {t("Nuevo flujo")}
+          </Button>
+        </div>
       </header>
       <WorkflowError
         error={error || errorText(list.error)}
@@ -533,6 +605,14 @@ function WorkspaceWorkflows({
                 />
               </label>
               <div className="wf-actions">
+                <Button
+                  variant="outline"
+                  disabled={busy || dirty || !draft.id}
+                  onClick={exportDraft}
+                >
+                  <Download size={16} />
+                  {t("Exportar")}
+                </Button>
                 <Button disabled={busy || !dirty} onClick={save}>
                   <Save size={16} />
                   {t("Guardar borrador")}

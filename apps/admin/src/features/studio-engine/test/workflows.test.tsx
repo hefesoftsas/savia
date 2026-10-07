@@ -1137,6 +1137,133 @@ it("edits parallel branches and renders one edge per branch", async () => {
   );
 });
 
+it("exports the saved draft as versioned JSON", async () => {
+  const flow = {
+    id: "flow-1",
+    name: "Shared flow",
+    revision: 1,
+    enabled: 0,
+    definition: {
+      trigger: { type: "manual" as const },
+      nodes: [{ id: "step_1", type: "transform" as const, values: {} }],
+    },
+  };
+  vi.mocked(api).mockImplementation(async (url) => ({
+    data: url === "/workflows" ? [flow] : url === "/workflow-bundles" ? [] : [],
+  }));
+  const created: string[] = [];
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  URL.createObjectURL = vi.fn((blob: any) => {
+    created.push("url");
+    return "blob:workflow";
+  }) as any;
+  URL.revokeObjectURL = vi.fn() as any;
+  try {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Workflows objects={[]} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByText("Shared flow"));
+    fireEvent.click(screen.getByRole("button", { name: "Exportar" }));
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(created).toEqual(["url"]);
+  } finally {
+    URL.createObjectURL = originalCreate;
+    URL.revokeObjectURL = originalRevoke;
+    click.mockRestore();
+  }
+});
+
+it("imports a valid flow and audits missing collections", async () => {
+  const objects = [
+    {
+      name: "requests",
+      label: "Requests",
+      config: makeConfig({ status: { type: "Textbox", label: "Status" } }),
+    },
+  ] as any;
+  vi.mocked(api).mockImplementation(async (url, method, data: any) => ({
+    data:
+      url === "/workflows"
+        ? method === "POST"
+          ? { id: "imported", revision: 0, enabled: 0, ...data }
+          : []
+        : url === "/workflow-bundles"
+          ? []
+          : [],
+  }));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <Workflows objects={objects} />
+    </QueryClientProvider>,
+  );
+  const file = new File(
+    [
+      JSON.stringify({
+        kind: "savia-workflow",
+        version: 1,
+        name: "Imported",
+        definition: {
+          trigger: { type: "manual" },
+          nodes: [{ id: "step_1", type: "transform", values: {} }],
+        },
+      }),
+    ],
+    "flow.json",
+    { type: "application/json" },
+  );
+  fireEvent.change(screen.getByLabelText("Archivo de flujo para importar"), {
+    target: { files: [file] },
+  });
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      "/workflows",
+      "POST",
+      expect.objectContaining({ name: "Imported" }),
+    ),
+  );
+  expect(
+    await screen.findByText("Flujo importado como borrador."),
+  ).toBeInTheDocument();
+  const bad = new File(["{no json"], "bad.json", {
+    type: "application/json",
+  });
+  fireEvent.change(screen.getByLabelText("Archivo de flujo para importar"), {
+    target: { files: [bad] },
+  });
+  expect(await screen.findByRole("alert")).toHaveTextContent("válido");
+  const foreign = new File(
+    [
+      JSON.stringify({
+        kind: "savia-workflow",
+        version: 1,
+        name: "Foreign",
+        definition: {
+          trigger: { type: "created", collection: "ghost" },
+          nodes: [{ id: "step_1", type: "transform", values: {} }],
+        },
+      }),
+    ],
+    "foreign.json",
+    { type: "application/json" },
+  );
+  fireEvent.change(screen.getByLabelText("Archivo de flujo para importar"), {
+    target: { files: [foreign] },
+  });
+  await waitFor(() =>
+    expect(screen.getByRole("alert")).toHaveTextContent("ghost"),
+  );
+});
+
 it("edits the body and budget of a loop step", () => {
   let saved: WorkflowNode | undefined;
   const definition: WorkflowDefinition = {

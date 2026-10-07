@@ -1356,6 +1356,27 @@ export const automationMessages = {
     "Dados / resultado",
   ],
   Importar: ["Importar", "Import", "Importar"],
+  Exportar: ["Exportar", "Export", "Exportar"],
+  "Archivo de flujo para importar": [
+    "Archivo de flujo para importar",
+    "Workflow file to import",
+    "Arquivo de fluxo para importar",
+  ],
+  "El archivo no es un flujo de Savia válido.": [
+    "El archivo no es un flujo de Savia válido.",
+    "The file is not a valid Savia workflow.",
+    "O arquivo não é um fluxo Savia válido.",
+  ],
+  "Flujo importado como borrador.": [
+    "Flujo importado como borrador.",
+    "Workflow imported as a draft.",
+    "Fluxo importado como rascunho.",
+  ],
+  "Referencias a revisar:": [
+    "Referencias a revisar:",
+    "References to review:",
+    "Referências para revisar:",
+  ],
   "filas válidas": ["filas válidas", "valid rows", "linhas válidas"],
   "Automatización guardada": [
     "Automatización guardada",
