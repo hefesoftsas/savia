@@ -97,6 +97,7 @@ export class InsuranceAssistantOperations {
     rawInput: unknown,
     options: InsuranceExecutionOptions = {},
   ) {
+    const quoteStartedAt = Date.now();
     const input = assistantQuoteInputSchema.parse(rawInput);
     const tenantId = await this.ports.resolveStudioTenantId();
     const collections = await this.ports.listStudioCollectionsForTenant(
@@ -117,6 +118,21 @@ export class InsuranceAssistantOperations {
     const reference = options.executionKey
       ? `COT-${options.executionKey}`
       : `COT-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 8)}`;
+    const logQuoteEvent = (event: string, fields: Record<string, unknown>) => {
+      if (!options.executionKey) return;
+      console.info(
+        JSON.stringify({
+          event,
+          execution_id: options.executionKey,
+          quote_reference: reference,
+          ...fields,
+        }),
+      );
+    };
+    logQuoteEvent("whatsapp_quote_execution_started", {
+      enabled_products: form.products.length,
+      concurrency: Math.min(4, form.products.length),
+    });
     const base = this.ports.studioPath(tenantId, "records/");
     const write = <T>(path: string, method: string, body: unknown) =>
       this.ports.request<T>(path, {
@@ -160,6 +176,7 @@ export class InsuranceAssistantOperations {
         while (queue.length) {
           const product = queue.shift()!;
           const provider = product.label.split(" · ")[0];
+          const productStartedAt = Date.now();
           let detail: { data: { id: string; _version: number } };
           try {
             detail = await write(base + "cotizaciones_detalle", "POST", {
@@ -170,7 +187,14 @@ export class InsuranceAssistantOperations {
               flow_id: product.id,
               estado: "Solicitada",
             });
-          } catch {
+          } catch (error) {
+            logQuoteEvent("whatsapp_quote_product_finished", {
+              product_id: product.id,
+              provider,
+              outcome: "detail_persistence_failed",
+              duration_ms: Date.now() - productStartedAt,
+              error_type: error instanceof Error ? error.name : "unknown",
+            });
             persistenceWarnings.push(
               `No se pudo preparar ${product.label}; no se envió al proveedor.`,
             );
@@ -180,6 +204,12 @@ export class InsuranceAssistantOperations {
             options.claimDispatch &&
             !(await options.claimDispatch(product.id))
           ) {
+            logQuoteEvent("whatsapp_quote_product_finished", {
+              product_id: product.id,
+              provider,
+              outcome: "dispatch_already_claimed",
+              duration_ms: Date.now() - productStartedAt,
+            });
             outcomes.push({
               provider,
               product: product.label,
@@ -192,6 +222,10 @@ export class InsuranceAssistantOperations {
             continue;
           }
           let data: Record<string, unknown>;
+          let productFailed = false;
+          let productUncertain = false;
+          let productHasPremium = false;
+          const providerStartedAt = Date.now();
           try {
             const response = await write<{
               data: {
@@ -221,6 +255,7 @@ export class InsuranceAssistantOperations {
               Number(rawPremium) > 0
                 ? Number(rawPremium)
                 : undefined;
+            productHasPremium = premium !== undefined;
             const number =
               result.quoteNumber ?? result.response?.simulacion?.codigo;
             const quoteNumber =
@@ -240,7 +275,24 @@ export class InsuranceAssistantOperations {
               numero_cotizacion: quoteNumber,
               run_id: response.data.run.runId,
             };
-          } catch {
+            logQuoteEvent("whatsapp_quote_product_provider_finished", {
+              product_id: product.id,
+              provider,
+              outcome: "response_received",
+              duration_ms: Date.now() - providerStartedAt,
+              premium_present: premium !== undefined,
+              quote_number_present: quoteNumber !== undefined,
+            });
+          } catch (error) {
+            productFailed = true;
+            productUncertain = Boolean(options.executionKey);
+            logQuoteEvent("whatsapp_quote_product_provider_finished", {
+              product_id: product.id,
+              provider,
+              outcome: "request_failed_or_unverified",
+              duration_ms: Date.now() - providerStartedAt,
+              error_type: error instanceof Error ? error.name : "unknown",
+            });
             outcomes.push({
               provider,
               product: product.label,
@@ -258,11 +310,29 @@ export class InsuranceAssistantOperations {
               "PATCH",
               { ...data, _version: detail.data._version },
             );
-          } catch {
+          } catch (error) {
+            logQuoteEvent("whatsapp_quote_product_history_update_failed", {
+              product_id: product.id,
+              provider,
+              duration_ms: Date.now() - productStartedAt,
+              error_type: error instanceof Error ? error.name : "unknown",
+            });
             persistenceWarnings.push(
               `No se pudo actualizar el historial de ${product.label}. No repitas la solicitud automáticamente.`,
             );
           }
+          logQuoteEvent("whatsapp_quote_product_finished", {
+            product_id: product.id,
+            provider,
+            outcome: productUncertain
+              ? "uncertain"
+              : productFailed
+                ? "failed"
+                : !productHasPremium
+                  ? "received_without_premium"
+                  : "priced",
+            duration_ms: Date.now() - productStartedAt,
+          });
         }
       }),
     );
@@ -282,7 +352,7 @@ export class InsuranceAssistantOperations {
         "No se pudo actualizar el estado de la cotización guardada.",
       );
     }
-    return {
+    const summary = {
       quoteId: master.data.id,
       reference,
       url,
@@ -304,6 +374,16 @@ export class InsuranceAssistantOperations {
         ? "Estas son las ofertas de menor precio recibidas. Para elegir el mejor equilibrio entre precio y cobertura faltan las coberturas y deducibles; no hay una ganadora integral verificada."
         : "No llegaron ofertas con prima válida. Revisa los resultados del cotizador antes de volver a consultar.",
     };
+    logQuoteEvent("whatsapp_quote_execution_finished", {
+      duration_ms: Date.now() - quoteStartedAt,
+      total_products: summary.totalOffers,
+      priced_products: summary.pricedOffers,
+      failed_products: summary.failedOffers,
+      uncertain_products: summary.uncertainOffers ?? 0,
+      unpriced_products: summary.unpricedOffers,
+      persistence_warning_count: summary.persistenceWarnings.length,
+    });
+    return summary;
   }
 
   async getQuoteSummary(reference?: string) {
