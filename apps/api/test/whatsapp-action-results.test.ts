@@ -1,6 +1,30 @@
 import { expect, it } from "vitest";
 import { actionResultText } from "../src/whatsapp/action-results";
 
+it("keeps the public quote link and model suggestion visible alongside the task menu", () => {
+  const url = "https://savia.test/public/quotes/" + "a".repeat(64);
+  const text = actionResultText(
+    "Alice",
+    "quote-auto",
+    {
+      state: "completed",
+      result: {
+        reference: "COT-report",
+        pricedOffers: 1,
+        publicUrl: url,
+        recommendation: "Esta oferta tiene la prima verificada más baja.",
+        persistenceWarnings: ["W".repeat(5000)],
+      },
+    },
+    "",
+    "Menú: " + "M".repeat(4000),
+  );
+  expect(text).toContain(url);
+  expect(text).toContain("Esta oferta tiene la prima verificada más baja.");
+  expect(text).toContain("Menú:");
+  expect(text.length).toBeLessThanOrEqual(4096);
+});
+
 it("distinguishes undispatched products from uncertain provider responses", () => {
   const text = actionResultText("Alice", "quote-auto", {
     state: "completed",

@@ -31,12 +31,26 @@ export function actionResultText(
   menuText = "",
 ): string {
   const label = `${employee} · Asistente virtual\n\n`;
+  const value = outcome.result as Record<string, unknown> | null;
+  let publicLink = "";
+  if (command === "quote-auto" && typeof value?.publicUrl === "string") {
+    try {
+      const url = new URL(value.publicUrl);
+      if (
+        ["https:", "http:"].includes(url.protocol) &&
+        !url.username &&
+        !url.password &&
+        /^\/public\/quotes\/[a-f0-9]{64}$/.test(url.pathname) &&
+        !url.search &&
+        !url.hash
+      )
+        publicLink = `\n\nVer cotización: ${url.href}\nDisponible durante 7 días.`;
+    } catch {}
+  }
   const withMenu = (body: string) => {
-    if (!menuText) return body.slice(0, 4096);
-    const suffix = `\n\n${menuText.slice(0, 4000)}`;
+    const suffix = `${publicLink}${menuText ? `\n\n${menuText.slice(0, publicLink ? 2000 : 4000)}` : ""}`;
     return `${body.slice(0, Math.max(0, 4096 - suffix.length))}${suffix}`;
   };
-  const value = outcome.result as Record<string, unknown> | null;
   const isQuote = command === "quote-auto" && value?.reference;
   if (outcome.state !== "completed" && !isQuote)
     return withMenu(
@@ -81,6 +95,9 @@ export function actionResultText(
       ),
     value.recommendation ??
       "Consulta las coberturas antes de elegir una oferta.",
+    value.analysisUnavailable
+      ? "El análisis automático no estuvo disponible; revisa las condiciones verificadas antes de elegir."
+      : "",
     ...warnings,
     outcome.state !== "completed" ? outcome.message : "",
     noPrice ? "No recibí ofertas con precio." : "",

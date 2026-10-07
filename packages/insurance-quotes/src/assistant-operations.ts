@@ -2,6 +2,10 @@ import {
   assistantQuoteInputSchema,
   assistantQuoteForm,
 } from "./assistant-contract";
+import type {
+  PublicQuoteFact,
+  PublicQuoteProposal,
+} from "@savia/studio-shared/public-quote";
 const encode = encodeURIComponent;
 export type InsuranceAssistantPorts = {
   request<T>(path: string, init?: RequestInit): Promise<T>;
@@ -21,6 +25,7 @@ export type InsuranceQuoteProgress = {
   state: "priced" | "unpriced" | "failed" | "uncertain";
   reference: string;
   quoteId: string;
+  facts?: PublicQuoteFact[];
 };
 export type InsuranceExecutionOptions = {
   executionKey?: string;
@@ -34,6 +39,34 @@ export type InsuranceExecutionOptions = {
 
 const WHATSAPP_REQUEST_TIMEOUT_MS = 15_000;
 const WHATSAPP_EXECUTION_BUDGET_MS = 90_000;
+
+const PROVIDER_COVERAGE_FACTS = [
+  ["rce", "Responsabilidad civil (RCE)"],
+  ["partialLossDeductible", "Deducible por pérdida parcial"],
+  ["totalLossDeductible", "Deducible por pérdida total"],
+  ["replacementCar", "Vehículo de reemplazo"],
+  ["craneAssistance", "Grúa"],
+  ["designatedDriver", "Conductor elegido"],
+  ["medicalExpenses", "Gastos médicos"],
+  ["legalAssistance", "Asistencia jurídica"],
+  ["workshop", "Taller"],
+] as const;
+
+function providerCoverageFacts(value: unknown): PublicQuoteFact[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const coverages = value as Record<string, unknown>;
+  return PROVIDER_COVERAGE_FACTS.flatMap(([key, label]) => {
+    const raw = coverages[key];
+    const text =
+      typeof raw === "string"
+        ? raw.trim()
+        : typeof raw === "number" && Number.isFinite(raw)
+          ? String(raw)
+          : "";
+    if (!text || text.length > 250) return [];
+    return [{ label, value: text, source: "provider" as const }];
+  });
+}
 
 class QuoteExecutionTimeoutError extends Error {
   constructor(
@@ -329,6 +362,18 @@ export class InsuranceAssistantOperations {
       failed: boolean;
       uncertain?: boolean;
     }> = [];
+    const proposalByProduct = new Map<string, PublicQuoteProposal>(
+      form.products.map((product) => [
+        product.id,
+        {
+          id: product.id,
+          provider: product.label.split(" · ")[0].slice(0, 100),
+          product: product.label.slice(0, 150),
+          state: "failed",
+          currency: "COP",
+        },
+      ]),
+    );
     const persistenceWarnings: string[] = [];
     let undispatchedOffers = 0;
     // A saved detail precedes every external call; failures never cause an automatic replay.
@@ -398,6 +443,10 @@ export class InsuranceAssistantOperations {
               failed: true,
               uncertain: true,
             });
+            proposalByProduct.set(product.id, {
+              ...proposalByProduct.get(product.id)!,
+              state: "uncertain",
+            });
             persistenceWarnings.push(
               `La solicitud de ${product.label} ya fue enviada; consulta su historial sin repetirla.`,
             );
@@ -421,6 +470,7 @@ export class InsuranceAssistantOperations {
           let productHasPremium = false;
           let productPremium: number | undefined;
           let productQuoteNumber: string | undefined;
+          let productFacts: PublicQuoteFact[] = [];
           const providerStartedAt = Date.now();
           try {
             const response = await write<{
@@ -460,12 +510,22 @@ export class InsuranceAssistantOperations {
                 ? String(number)
                 : undefined;
             productQuoteNumber = quoteNumber;
+            productFacts = providerCoverageFacts(result.coverages);
             outcomes.push({
               provider,
               product: product.label,
               premium,
               quoteNumber,
               failed: false,
+            });
+            proposalByProduct.set(product.id, {
+              id: product.id,
+              provider: provider.slice(0, 100),
+              product: product.label.slice(0, 150),
+              state: premium === undefined ? "unpriced" : "priced",
+              ...(premium === undefined ? {} : { premium }),
+              currency: "COP",
+              ...(productFacts.length ? { facts: productFacts } : {}),
             });
             data = {
               estado: "Recibida",
@@ -497,6 +557,10 @@ export class InsuranceAssistantOperations {
               failed: true,
               uncertain: Boolean(options.executionKey),
             });
+            proposalByProduct.set(product.id, {
+              ...proposalByProduct.get(product.id)!,
+              state: productUncertain ? "uncertain" : "failed",
+            });
             data = {
               estado: "Error",
               error_mensaje: "La aseguradora no pudo completar la cotización.",
@@ -525,6 +589,7 @@ export class InsuranceAssistantOperations {
                       ...(productQuoteNumber === undefined
                         ? {}
                         : { quoteNumber: productQuoteNumber }),
+                      ...(productFacts.length ? { facts: productFacts } : {}),
                       state,
                       reference,
                       quoteId: master.data.id,
@@ -610,6 +675,9 @@ export class InsuranceAssistantOperations {
       pricedOffers: priced.length,
       lowestPremium,
       lowestPriceOffers: lowest.slice(0, 5),
+      proposals: form.products.map((product) =>
+        proposalByProduct.get(product.id)!,
+      ),
       tiedOfferCount: lowest.length,
       coverageAvailable: false,
       persistenceWarnings,

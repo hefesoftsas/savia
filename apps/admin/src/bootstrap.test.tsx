@@ -24,6 +24,11 @@ vi.mock("./pwa/register-service-worker", () => ({
 vi.mock("./features/tenant-registration/registration-captcha", () => ({
   RegistrationCaptcha: () => null,
 }));
+vi.mock("./features/public-quotes/public-quote-page", () => ({
+  PublicQuotePage: ({ token }: { token: string }) => (
+    <div>Public quote {token}</div>
+  ),
+}));
 vi.mock("./features/public-forms/public-form-page", () => ({
   PublicFormPage: ({ token }: { token: string }) => (
     <div>Public form {token}</div>
@@ -147,4 +152,20 @@ it("opens tenant registration anonymously without loading private services", asy
   ).toBeInTheDocument();
   expect(calls.admin.mock.calls.length).toBe(previous);
   vi.unstubAllGlobals();
+});
+
+it("opens quote result links anonymously and keeps malformed quote paths out of private app", async () => {
+  document.documentElement.lang = "es";
+  localStorage.setItem("savia.locale", "es");
+  const previous = calls.admin.mock.calls.length;
+  const previousAppearance = calls.appearance.mock.calls.length;
+  const previousWorker = calls.worker.mock.calls.length;
+  const token = "a".repeat(64);
+  render(<ApplicationRoot pathname={`/public/quotes/${token}`} />);
+  expect(await screen.findByText(`Public quote ${token}`)).toBeInTheDocument();
+  render(<ApplicationRoot pathname="/public/quotes/not-a-token" />);
+  expect(screen.getByRole("alert")).toHaveTextContent("no es válido");
+  expect(calls.admin.mock.calls.length).toBe(previous);
+  expect(calls.appearance.mock.calls.length).toBe(previousAppearance);
+  expect(calls.worker.mock.calls.length).toBe(previousWorker);
 });

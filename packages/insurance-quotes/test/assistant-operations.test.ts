@@ -237,6 +237,15 @@ it("does not dispatch products once the WhatsApp quote request budget expires", 
   });
   expect(result.undispatchedOffers).toBeGreaterThan(0);
   expect(result.uncertainOffers).toBe(dispatches);
+  expect(result.proposals).toHaveLength(products.length);
+  expect(
+    result.proposals.map((proposal: { id: string }) => proposal.id),
+  ).toEqual(products.map((product) => product.id));
+  expect(
+    result.proposals.filter(
+      (proposal: { state: string }) => proposal.state === "uncertain",
+    ),
+  ).toHaveLength(dispatches);
 });
 
 it("bounds stalled detail persistence without dispatching the provider", async () => {
@@ -569,5 +578,130 @@ it("emits provider progress before a slow detail-history update", async () => {
     expect.arrayContaining([
       expect.stringContaining("No se pudo actualizar el historial"),
     ]),
+  );
+});
+
+it("carries verified provider facts to progress and all terminal proposals", async () => {
+  const products = Array.from({ length: 7 }, (_, index) => ({
+    id: `provider-${index}`,
+    label: `Carrier ${index} · Product ${index}`,
+    enabled: true,
+  }));
+  const progress: Array<Record<string, unknown>> = [];
+  const persisted: Array<{
+    path: string;
+    method: string;
+    body: Record<string, unknown>;
+  }> = [];
+  const operations = quoteOperations(
+    products,
+    async (flowId) => ({
+      data: {
+        run: { runId: `run-${flowId}` },
+        output: {
+          data: {
+            premiumTotal: 1000,
+            coverages: {
+              rce: "$4.000 millones COP",
+              partialLossDeductible: "10% mínimo 1 SMMLV",
+              totalLossDeductible: 0,
+              monthlyInstallment: 100,
+            },
+          },
+        },
+      },
+    }),
+    persisted,
+  );
+
+  const result = await operations.createInsuranceQuote(input, {
+    executionKey: "verified-coverage-facts",
+    onProgress: (item) => {
+      progress.push(item as unknown as Record<string, unknown>);
+    },
+  });
+
+  expect(progress).toHaveLength(7);
+  expect(
+    progress.find((item) => item.productId === "provider-0")?.facts,
+  ).toEqual([
+    {
+      label: "Responsabilidad civil (RCE)",
+      value: "$4.000 millones COP",
+      source: "provider",
+    },
+    {
+      label: "Deducible por pérdida parcial",
+      value: "10% mínimo 1 SMMLV",
+      source: "provider",
+    },
+    { label: "Deducible por pérdida total", value: "0", source: "provider" },
+  ]);
+  expect(result.proposals).toHaveLength(7);
+  expect(
+    result.proposals.map((proposal: { id: string }) => proposal.id),
+  ).toEqual(products.map((product) => product.id));
+  expect(result.proposals[0]).toMatchObject({
+    provider: "Carrier 0",
+    product: "Carrier 0 · Product 0",
+    state: "priced",
+    premium: 1000,
+    currency: "COP",
+  });
+  expect(result.proposals[0].facts).toEqual(
+    progress[progress.findIndex((item) => item.productId === "provider-0")]
+      .facts,
+  );
+  expect(result.lowestPriceOffers).toHaveLength(5);
+});
+
+it("excludes unknown and private provider fields from proposal facts", async () => {
+  const persisted: Array<{
+    path: string;
+    method: string;
+    body: Record<string, unknown>;
+  }> = [];
+  const operations = quoteOperations(
+    [{ id: "allowlisted", label: "Carrier · Product", enabled: true }],
+    async () => ({
+      data: {
+        run: { runId: "allowlisted-run" },
+        output: {
+          data: {
+            premiumTotal: 12000,
+            customerEmail: "private@example.test",
+            phone: "3001234567",
+            coverages: {
+              rce: "Verified RCE limit",
+              applicantName: "Private Person",
+              plate: "TESTCAR",
+              rawPayload: { private: true },
+            },
+            rawProviderOutput: { token: "never publish" },
+          },
+        },
+      },
+    }),
+    persisted,
+  );
+  const progress: Array<Record<string, unknown>> = [];
+
+  const result = await operations.createInsuranceQuote(input, {
+    executionKey: "private-fields-filtered",
+    onProgress: (item) => {
+      progress.push(item as unknown as Record<string, unknown>);
+    },
+  });
+
+  const publicJson = JSON.stringify({ progress, proposals: result.proposals });
+  expect(result.proposals[0].facts).toEqual([
+    {
+      label: "Responsabilidad civil (RCE)",
+      value: "Verified RCE limit",
+      source: "provider",
+    },
+  ]);
+  expect(publicJson).not.toMatch(
+    /private@example\.test|3001234567|Private Person|TESTCAR|rawPayload|rawProviderOutput|applicantName/,
   );
 });

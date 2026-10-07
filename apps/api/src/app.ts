@@ -1,3 +1,4 @@
+import { registerPublicQuoteRoutes } from "./public-quotes/routes";
 import { createWhatsappNangoClient } from "./whatsapp/nango";
 import { registerWhatsappNativeRoutes } from "./whatsapp/native-routes";
 import { AssistantThreadRepository } from "./assistant/threads";
@@ -258,6 +259,22 @@ export function createApp(
   registerLookupRoutes(app, saviaRequestService);
   registerWorkflowWebhookRoutes(app, db, {
     rateLimiter: publicForms?.rateLimiter,
+  });
+  const quoteLinksAuth = authenticationMiddleware(
+    db,
+    authenticator ??
+      betterAuthAuthenticator(
+        resolvedAuthService,
+        oauthResource,
+        new PersonalApiKeys(db, oauthUrls.personalApiKeyDeploymentId ?? null),
+      ),
+  );
+  app.use("/api/tenants/*/quote-links", quoteLinksAuth);
+  app.use("/api/tenants/*/quote-links/*", quoteLinksAuth);
+  registerPublicQuoteRoutes(app, db, {
+    rateLimiter: publicForms?.rateLimiter,
+    publicOrigin:
+      publicForms?.publicOrigin ?? new URL(oauthUrls.authorizationUrl).origin,
   });
   registerPublicFormRoutes(app, db, {
     ...publicForms,

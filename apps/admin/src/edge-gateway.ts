@@ -126,7 +126,9 @@ export async function gatewayFetch(
       pathname === "/public/forms" ||
       pathname.startsWith("/public/forms/") ||
       pathname === "/public/pages" ||
-      pathname.startsWith("/public/pages/")
+      pathname.startsWith("/public/pages/") ||
+      pathname === "/public/quotes" ||
+      pathname.startsWith("/public/quotes/")
     ) {
       const publicPage = new Response(response.body, response);
       publicPage.headers.set("Cache-Control", "no-store");

@@ -1,6 +1,9 @@
 import { env } from "cloudflare:workers";
 import { expect, it } from "vitest";
-import { createChannelOperationAdapter } from "../src/assistant/operation-adapter";
+import {
+  createChannelOperationAdapter,
+  type ChannelOperationDependencies,
+} from "../src/assistant/operation-adapter";
 import { PersonalActionPayloadCipher } from "../src/assistant/personal-action-payload";
 import { ChannelDrafts } from "../src/whatsapp/drafts";
 import { WhatsappChannelRepository } from "../src/whatsapp/channel-repository";
@@ -95,6 +98,7 @@ async function saveQuoteSummaryAction(
 async function executeConfirmedQuote(
   actionProductIds: string[],
   catalogProductIds: string[],
+  quotePresentation?: ChannelOperationDependencies["quotePresentation"],
 ) {
   const { fixture, repo, session, binding } = await selectedSession();
   let settingsReads = 0;
@@ -150,6 +154,7 @@ async function executeConfirmedQuote(
     repository: repo,
     secret: "test-secret",
     backendForActor: async () => backend,
+    quotePresentation,
   });
   const action = {
     id: crypto.randomUUID(),
@@ -210,6 +215,30 @@ async function executeConfirmedQuote(
     writes,
   };
 }
+
+it("retains the model analysis and customer link in the delivered quote outcome", async () => {
+  const received: string[] = [];
+  const execution = await executeConfirmedQuote(
+    ["confirmed-auto"],
+    ["confirmed-auto"],
+    () => ({
+      record: (proposal) => {
+        received.push(proposal.id);
+      },
+      finish: async (result) => ({
+        ...result,
+        publicUrl: "https://savia.test/public/quotes/opaque",
+        recommendation: "Compare the verified proposal.",
+      }),
+    }),
+  );
+  const outcome = await execution.result;
+  expect(outcome.result).toMatchObject({
+    publicUrl: "https://savia.test/public/quotes/opaque",
+    recommendation: "Compare the verified proposal.",
+  });
+  expect(received).toEqual(["confirmed-auto"]);
+});
 
 it("checks a changed confirmed product catalog before quote writes or provider dispatch", async () => {
   const execution = await executeConfirmedQuote(

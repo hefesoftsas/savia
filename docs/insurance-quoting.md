@@ -1,6 +1,6 @@
 # Insurance quoting
 
-Owner: Savia maintainers. Last reviewed: 2026-09-25.
+Owner: Savia maintainers. Last reviewed: 2026-10-07.
 
 Step-by-step auto quote flow (`savia.insurance-quoter` + `insurance.quotes`).
 Each selected insurer product runs as its own independent flow; products run
@@ -57,6 +57,33 @@ The pilot test uses simulated provider responses and a synthetic vehicle. No
 real insurer call is made by the test. See the
 [WhatsApp channel runbook](runbooks/nango-whatsapp.md#task-menu-and-virtual-employee-channel)
 for settings and a separately authorized live pilot.
+
+## Quote explanations and shared results
+
+Confirmed WhatsApp quotes collect a public proposal for every configured product.
+Only confirmed premiums and an explicit allowlist of coverage and deductible
+fields returned by the provider are included. Static catalog profiles are not
+verified coverage evidence. Failed, unpriced, and uncertain proposals remain
+visible as such; they do not acquire estimated premiums.
+
+The assigned employee's configured LLM explains priced proposals in asynchronous
+batches while provider calls continue. The final analysis gives comparison
+guidance and identifies missing evidence. Equal prices without verified coverage
+do not justify a winning proposal. Model calls have an eight-second deadline,
+no tools, and no automatic retries. A model failure preserves provider results
+and the customer link, with analysis availability clearly indicated.
+
+The final WhatsApp message includes an opaque public link to a read-only report.
+It expires seven days after creation and contains offers and saved analysis,
+without applicant documents, contact details, raw provider responses, or internal
+CRM links. Opening the report does not call the model or insurers again. Report
+responses and the public page use `no-store`; unknown, expired, and revoked links
+return the same unavailable result.
+
+Tenant administrators can inspect and revoke these links in the quote screen's
+public-link settings, under shared quote results. Revocation is tenant-scoped
+and requires authenticated administration access. Sharing a result does not
+create a new quote or grant access to the authenticated workspace.
 
 ## WhatsApp intake
 
