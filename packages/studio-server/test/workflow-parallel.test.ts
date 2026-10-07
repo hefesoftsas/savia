@@ -153,9 +153,24 @@ describe("parallel branches with a merge join", () => {
           next: "left_yes",
           otherwise: "left_no",
         },
-        { id: "left_yes", type: "transform", values: { lane: "yes" }, next: "join" },
-        { id: "left_no", type: "transform", values: { lane: "no" }, next: "join" },
-        { id: "right", type: "transform", values: { lane: "right" }, next: "join" },
+        {
+          id: "left_yes",
+          type: "transform",
+          values: { lane: "yes" },
+          next: "join",
+        },
+        {
+          id: "left_no",
+          type: "transform",
+          values: { lane: "no" },
+          next: "join",
+        },
+        {
+          id: "right",
+          type: "transform",
+          values: { lane: "right" },
+          next: "join",
+        },
         { id: "join", type: "merge", next: "done" },
         {
           id: "done",
@@ -178,7 +193,9 @@ describe("parallel branches with a merge join", () => {
       "join",
       "done",
     ]);
-    expect(detail.jobs.find((job) => job.node_id === "join")?.output).toMatchObject({
+    expect(
+      detail.jobs.find((job) => job.node_id === "join")?.output,
+    ).toMatchObject({
       count: 2,
     });
   });

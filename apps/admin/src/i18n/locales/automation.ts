@@ -2516,11 +2516,12 @@ export const automationMessages = {
     "Pre-save validation",
     "Validação pré-salvamento",
   ],
-  "Rechaza el guardado cuando las condiciones coinciden con el estado prohibido; si el registro pasa, los pasos se ejecutan como en creado o actualizado.": [
-    "Rechaza el guardado cuando las condiciones coinciden con el estado prohibido; si el registro pasa, los pasos se ejecutan como en creado o actualizado.",
-    "Rejects the save when the conditions match the forbidden state; passing records run steps like created or updated.",
-    "Rejeita o salvamento quando as condições correspondem ao estado proibido; registros válidos executam etapas como criado ou atualizado.",
-  ],
+  "Rechaza el guardado cuando las condiciones coinciden con el estado prohibido; si el registro pasa, los pasos se ejecutan como en creado o actualizado.":
+    [
+      "Rechaza el guardado cuando las condiciones coinciden con el estado prohibido; si el registro pasa, los pasos se ejecutan como en creado o actualizado.",
+      "Rejects the save when the conditions match the forbidden state; passing records run steps like created or updated.",
+      "Rejeita o salvamento quando as condições correspondem ao estado proibido; registros válidos executam etapas como criado ou atualizado.",
+    ],
   Programación: ["Programación", "Schedule", "Agendamento"],
   "Un sistema externo inicia este flujo mediante una solicitud autenticada.": [
     "Un sistema externo inicia este flujo mediante una solicitud autenticada.",
@@ -3208,11 +3209,7 @@ export const automationMessages = {
     "Manual workflow for this record",
     "Fluxo manual para este registro",
   ],
-  "Ejecutar flujo…": [
-    "Ejecutar flujo…",
-    "Run workflow…",
-    "Executar fluxo…",
-  ],
+  "Ejecutar flujo…": ["Ejecutar flujo…", "Run workflow…", "Executar fluxo…"],
   "No se pudo ejecutar.": [
     "No se pudo ejecutar.",
     "Could not run.",
@@ -3442,11 +3439,12 @@ export const automationMessages = {
   "Enviar correo": ["Enviar correo", "Send email", "Enviar e-mail"],
   Destinatario: ["Destinatario", "Recipient", "Destinatário"],
   Asunto: ["Asunto", "Subject", "Assunto"],
-  "Requiere entrega de correo configurada en el host; sin ella el paso falla visiblemente.": [
-    "Requiere entrega de correo configurada en el host; sin ella el paso falla visiblemente.",
-    "Requires mail delivery configured on the host; without it the step fails visibly.",
-    "Requer entrega de e-mail configurada no host; sem ela a etapa falha visivelmente.",
-  ],
+  "Requiere entrega de correo configurada en el host; sin ella el paso falla visiblemente.":
+    [
+      "Requiere entrega de correo configurada en el host; sin ella el paso falla visiblemente.",
+      "Requires mail delivery configured on the host; without it the step fails visibly.",
+      "Requer entrega de e-mail configurada no host; sem ela a etapa falha visivelmente.",
+    ],
   Método: ["Método", "Method", "Método"],
   URL: ["URL", "URL", "URL"],
   Cabeceras: ["Cabeceras", "Headers", "Cabeçalhos"],

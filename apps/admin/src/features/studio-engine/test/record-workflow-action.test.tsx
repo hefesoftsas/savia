@@ -30,11 +30,15 @@ it("runs a manual flow from the record with collection context", async () => {
             id: "flow-2",
             name: "On create",
             enabled: 1,
-            definition: { trigger: { type: "created", collection: "requests" }, nodes: [] },
+            definition: {
+              trigger: { type: "created", collection: "requests" },
+              nodes: [],
+            },
           },
         ],
       };
-    if (url === "/workflows/flow-1/start" && method === "POST") return { data: { id: "run-1" } };
+    if (url === "/workflows/flow-1/start" && method === "POST")
+      return { data: { id: "run-1" } };
     return { data: null };
   });
   render(
@@ -57,5 +61,9 @@ it("runs a manual flow from the record with collection context", async () => {
       }),
     ),
   );
-  expect(await screen.findByText("Ejecución enviada. Consulta su estado en el historial.")).toBeInTheDocument();
+  expect(
+    await screen.findByText(
+      "Ejecución enviada. Consulta su estado en el historial.",
+    ),
+  ).toBeInTheDocument();
 });

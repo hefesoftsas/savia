@@ -791,7 +791,10 @@ export function parallelRegion(
           errors: [`Parallel ${headId} branches must end at the merge`],
         };
       for (const next of outgoing) {
-        if (next === merge || (merge === null && byId.get(next)?.type === "merge")) {
+        if (
+          next === merge ||
+          (merge === null && byId.get(next)?.type === "merge")
+        ) {
           if (merge === null) merge = next;
           if (next !== merge)
             return {
@@ -1077,8 +1080,7 @@ export function matchRecordCondition(
     case "gte":
     case "lt":
     case "lte":
-      if (!isRecordNumber(actual) || typeof expected !== "number")
-        return false;
+      if (!isRecordNumber(actual) || typeof expected !== "number") return false;
       return operator === "gt"
         ? actual > expected
         : operator === "gte"

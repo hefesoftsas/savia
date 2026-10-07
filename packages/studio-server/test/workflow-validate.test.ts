@@ -23,7 +23,20 @@ async function published(definition: WorkflowDefinition) {
   return { repo, id: draft.id };
 }
 const gate = (
-  conditions: { field: string; operator: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "contains" | "empty" | "not_empty"; value: string | number | boolean | null }[],
+  conditions: {
+    field: string;
+    operator:
+      | "eq"
+      | "neq"
+      | "gt"
+      | "gte"
+      | "lt"
+      | "lte"
+      | "contains"
+      | "empty"
+      | "not_empty";
+    value: string | number | boolean | null;
+  }[],
   values: Record<string, unknown> = {},
 ): WorkflowDefinition => ({
   trigger: { type: "validate", collection: "orders", conditions },
@@ -45,7 +58,9 @@ beforeAll(async () => {
       await db.prepare(sql).run();
   }
   await db
-    .prepare("INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)")
+    .prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+    )
     .bind(
       workspace,
       "customers",
@@ -54,7 +69,9 @@ beforeAll(async () => {
     )
     .run();
   await db
-    .prepare("INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)")
+    .prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+    )
     .bind(
       workspace,
       "orders",
@@ -101,7 +118,9 @@ describe("pre-save validation workflows", () => {
   });
 
   it("evaluates related snapshots in the gate", async () => {
-    const banned = await createRecord(db, workspace, "customers", { tier: "banned" });
+    const banned = await createRecord(db, workspace, "customers", {
+      tier: "banned",
+    });
     const good = await createRecord(db, workspace, "customers", { tier: "ok" });
     const { repo, id } = await published(
       gate(
@@ -112,7 +131,10 @@ describe("pre-save validation workflows", () => {
     await expect(
       createRecord(db, workspace, "orders", { amount: 1, customer: banned.id }),
     ).rejects.toMatchObject({ status: 422 });
-    await createRecord(db, workspace, "orders", { amount: 1, customer: good.id });
+    await createRecord(db, workspace, "orders", {
+      amount: 1,
+      customer: good.id,
+    });
     await processWorkflows(db, async () => true, { maxSteps: 20 });
     const runs = await repo.executions(id);
     expect(runs).toHaveLength(1);
@@ -133,7 +155,14 @@ describe("pre-save validation workflows", () => {
     });
     const record = await createRecord(db, workspace, "orders", { amount: 900 });
     await expect(
-      updateRecord(db, workspace, "orders", record.id, { amount: 1500 }, { version: 1 }),
+      updateRecord(
+        db,
+        workspace,
+        "orders",
+        record.id,
+        { amount: 1500 },
+        { version: 1 },
+      ),
     ).rejects.toMatchObject({ status: 422 });
     await repo.setEnabled(id, false);
   });

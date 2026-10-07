@@ -4,7 +4,10 @@ import {
 } from "@savia/studio-server/workflows/runtime";
 import type { WorkflowAction } from "@savia/studio-server/workflows/routes";
 import { findPrincipal, loadActor } from "./auth/identity-repository";
-import { canAccessSharedCrm, canManageSharedCrm } from "./external-crm/hubspot-access";
+import {
+  canAccessSharedCrm,
+  canManageSharedCrm,
+} from "./external-crm/hubspot-access";
 import type { RealtimeHubClient } from "./realtime/hub-client";
 import { publishRealtime } from "./realtime/hub-client";
 import { tenantRoom } from "./realtime/protocol";

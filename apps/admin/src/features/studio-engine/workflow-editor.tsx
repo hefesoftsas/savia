@@ -965,9 +965,13 @@ export function StepEditor({
     "system.owner",
     "system.workspace",
     "trigger.id",
-    ...(["created", "updated", "created_or_updated", "validate", "deleted"].includes(
-      trigger.type,
-    )
+    ...([
+      "created",
+      "updated",
+      "created_or_updated",
+      "validate",
+      "deleted",
+    ].includes(trigger.type)
       ? ["system.eventType"]
       : []),
     ...(triggerObject

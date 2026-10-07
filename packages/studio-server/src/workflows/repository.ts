@@ -57,7 +57,12 @@ async function isRelatedConditionField(
   workspace: string,
   object: {
     name: string;
-    config: { fields?: Record<string, { config?: { relation?: unknown; multiple?: unknown } }> };
+    config: {
+      fields?: Record<
+        string,
+        { config?: { relation?: unknown; multiple?: unknown } }
+      >;
+    };
   },
   field: string,
 ): Promise<boolean> {
@@ -67,7 +72,11 @@ async function isRelatedConditionField(
   if (relation === "related") return false;
   const source = object.config.fields?.[relation];
   const targetName = source?.config?.relation;
-  if (typeof targetName !== "string" || !targetName || targetName === object.name)
+  if (
+    typeof targetName !== "string" ||
+    !targetName ||
+    targetName === object.name
+  )
     return false;
   if (source?.config?.multiple) return false;
   const targetRow = await db

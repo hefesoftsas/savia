@@ -527,8 +527,18 @@ it("accepts conditions and switches inside parallel branches", () => {
         next: "left_yes",
         otherwise: "left_no",
       },
-      { id: "left_yes", type: "transform", values: { lane: "yes" }, next: "join" },
-      { id: "left_no", type: "transform", values: { lane: "no" }, next: "join" },
+      {
+        id: "left_yes",
+        type: "transform",
+        values: { lane: "yes" },
+        next: "join",
+      },
+      {
+        id: "left_no",
+        type: "transform",
+        values: { lane: "no" },
+        next: "join",
+      },
       {
         id: "right",
         type: "switch",
@@ -713,7 +723,13 @@ it("accepts email steps with bounded fields and valid recipients", () => {
     workflowDefinitionSchema.safeParse({
       trigger: { type: "manual" },
       nodes: [
-        { id: "mail", type: "email", to: "not-an-email", subject: "Hi", body: "Hello" },
+        {
+          id: "mail",
+          type: "email",
+          to: "not-an-email",
+          subject: "Hi",
+          body: "Hello",
+        },
       ],
     }).success,
   ).toBe(false);
@@ -721,7 +737,13 @@ it("accepts email steps with bounded fields and valid recipients", () => {
     workflowDefinitionSchema.safeParse({
       trigger: { type: "manual" },
       nodes: [
-        { id: "mail", type: "email", to: "a@b.co", subject: "Hi", body: "x".repeat(4001) },
+        {
+          id: "mail",
+          type: "email",
+          to: "a@b.co",
+          subject: "Hi",
+          body: "x".repeat(4001),
+        },
       ],
     }).success,
   ).toBe(false);

@@ -1,7 +1,4 @@
-import {
-  fieldEntries,
-  type StudioObject,
-} from "@savia/studio-shared/metadata";
+import { fieldEntries, type StudioObject } from "@savia/studio-shared/metadata";
 import {
   recordMatchesConditions,
   workflowDefinitionSchema,
@@ -114,7 +111,12 @@ export async function validateWorkflowsForWrite(
   snapshot: Record<string, unknown>,
   before: Record<string, unknown> | null,
 ): Promise<{ id: string; name: string } | null> {
-  let rows: { workspace_id: string; id: string; name: string; definition: string }[];
+  let rows: {
+    workspace_id: string;
+    id: string;
+    name: string;
+    definition: string;
+  }[];
   try {
     rows = (
       await db
@@ -177,10 +179,15 @@ export async function enforceValidationWorkflows(
     before,
   );
   if (blocking)
-    fail(`Validación del flujo "${blocking.name}": el registro no cumple las condiciones.`, 422);
+    fail(
+      `Validación del flujo "${blocking.name}": el registro no cumple las condiciones.`,
+      422,
+    );
 }
 
-export function definitionNeedsRelations(definition: WorkflowDefinition): boolean {
+export function definitionNeedsRelations(
+  definition: WorkflowDefinition,
+): boolean {
   return JSON.stringify(definition).includes(".related.");
 }
 

@@ -69,9 +69,13 @@ export default function RecordWorkflowAction({
               data: { collection, record_id: recordId },
               key: crypto.randomUUID(),
             });
-            setNotice(t("Ejecución enviada. Consulta su estado en el historial."));
+            setNotice(
+              t("Ejecución enviada. Consulta su estado en el historial."),
+            );
           } catch (e) {
-            setError(e instanceof Error ? e.message : t("No se pudo ejecutar."));
+            setError(
+              e instanceof Error ? e.message : t("No se pudo ejecutar."),
+            );
           } finally {
             setBusy(false);
           }

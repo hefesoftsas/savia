@@ -159,7 +159,9 @@ export async function maintainWorkflowHistory(
       .run();
   }
   const pruned = await db
-    .prepare(`DELETE FROM workflow_executions WHERE (workspace_id, id) IN ${overflow}`)
+    .prepare(
+      `DELETE FROM workflow_executions WHERE (workspace_id, id) IN ${overflow}`,
+    )
     .run();
   let inbox = 0;
   for (const sql of [
@@ -170,7 +172,9 @@ export async function maintainWorkflowHistory(
     inbox += result.meta.changes ?? 0;
   }
   const events = await db
-    .prepare("DELETE FROM workflow_events WHERE created_at < datetime('now','-90 days')")
+    .prepare(
+      "DELETE FROM workflow_events WHERE created_at < datetime('now','-90 days')",
+    )
     .run();
   return {
     executions: pruned.meta.changes ?? 0,
@@ -441,7 +445,10 @@ function routeParallelFinish(
       return { branches: null, merges: null, next };
     return {
       branches: [...region.branches],
-      merges: { ...(context.merges ?? {}), [region.merge]: region.branches.length },
+      merges: {
+        ...(context.merges ?? {}),
+        [region.merge]: region.branches.length,
+      },
       next: region.branches[0],
     };
   }
