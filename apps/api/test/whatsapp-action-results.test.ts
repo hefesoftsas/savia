@@ -220,3 +220,133 @@ it("hides internal action references from quote summaries and uncertain messages
   expect(text).toContain("COT-20261007-A1B2C3D4");
   expect(text).toContain("Liberty · Integral: $1.591.272");
 });
+
+it("summarizes every priced proposal with verified policy details when analysis is unavailable", () => {
+  const proposals = ["Basic", "Basic + PT", "Integral", "Full"].map(
+    (product, index) => ({
+      id: `product-${index}`,
+      provider: "Carrier",
+      product,
+      state: "priced",
+      premium: 1000000 + index * 100000,
+      currency: "COP",
+      facts: [
+        {
+          label: "Responsabilidad civil",
+          value: "$4.400.000.000 COP; deducible: 0%",
+          source: "provider",
+        },
+      ],
+    }),
+  );
+  const text = actionResultText(
+    "Alice",
+    "quote-auto",
+    {
+      state: "completed",
+      result: {
+        reference: "internal",
+        pricedOffers: 4,
+        proposals,
+        lowestPriceOffers: [{ product: "Basic", premium: 1000000 }],
+        analysisUnavailable: true,
+        publicUrl: "https://savia.test/public/quotes/" + "a".repeat(64),
+      },
+    },
+    "",
+    "1. Consultar seguros",
+  );
+  expect(text).toContain("Basic + PT: $1.100.000");
+  expect(text).toContain("Integral: $1.200.000");
+  expect(text).toContain("Full: $1.300.000");
+  expect(text.match(/Responsabilidad civil/g)).toHaveLength(4);
+  expect(text).toContain("deducible: 0%");
+  expect(text).toContain("1. Consultar seguros");
+  expect(text.length).toBeLessThanOrEqual(4096);
+});
+
+it("reserves terminal guidance and warnings before spending space on coverage summaries", () => {
+  const proposals = Array.from({ length: 5 }, (_, index) => ({
+    id: `offer-${index}`,
+    provider: "Carrier",
+    product: `Offer ${index + 1} ` + "x".repeat(110),
+    state: "priced",
+    premium: 1000000,
+    currency: "COP",
+    facts: [
+      {
+        label: "Verified coverage",
+        value: "Verified limits and deductibles ".repeat(7),
+        source: "provider",
+      },
+    ],
+  }));
+  const text = actionResultText(
+    "Alice",
+    "quote-auto",
+    {
+      state: "completed",
+      result: {
+        reference: "internal",
+        pricedOffers: 5,
+        proposals,
+        recommendation:
+          "Compare verified conditions. " + "Long model guidance. ".repeat(60),
+        analysis: {
+          proposals: proposals.map((p) => ({
+            id: p.id,
+            explanation: "Verified price.",
+          })),
+          suggestion: "Compare verified conditions.",
+          limitations: [],
+        },
+        analysisUnavailable: true,
+        persistenceWarnings: [
+          "Saved results require review. " + "W".repeat(210),
+        ],
+        publicUrl: "https://savia.test/public/quotes/" + "a".repeat(64),
+      },
+    },
+    "",
+    "Menu: " + "M".repeat(1490),
+  );
+  expect(text).toContain("Compare verified conditions.");
+  expect(text).toContain("El análisis automático no estuvo disponible");
+  expect(text).toContain("Saved results require review.");
+  expect(text).toContain("Offer 5");
+  expect(text).toContain("Menu:");
+  expect(text).toContain("https://savia.test/public/quotes/");
+  expect(text.length).toBeLessThanOrEqual(4096);
+});
+
+it("replaces a legacy missing-coverage claim when saved proposals have verified facts", () => {
+  const text = actionResultText("Alice", "quote-auto", {
+    state: "completed",
+    result: {
+      reference: "internal",
+      pricedOffers: 1,
+      analysisUnavailable: true,
+      recommendation: "Faltan las coberturas y deducibles.",
+      proposals: [
+        {
+          id: "basic",
+          provider: "Carrier",
+          product: "Basic",
+          state: "priced",
+          premium: 1000000,
+          currency: "COP",
+          facts: [
+            {
+              label: "RCE",
+              value: "$4.400.000.000; deducible 0%",
+              source: "provider",
+            },
+          ],
+        },
+      ],
+    },
+  });
+  expect(text).toContain("RCE");
+  expect(text).not.toContain("Faltan las coberturas");
+  expect(text).toContain("deducibles informados");
+});

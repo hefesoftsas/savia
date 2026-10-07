@@ -61,8 +61,14 @@ for settings and a separately authorized live pilot.
 ## Quote explanations and shared results
 
 Confirmed WhatsApp quotes collect a public proposal for every configured product.
-Intermediate WhatsApp messages include only confirmed positive premiums; failed,
-unpriced, and uncertain responses are summarized once at the end. Internal action
+Intermediate WhatsApp messages include confirmed positive premiums and a bounded
+summary of up to eight verified coverage and deductible facts, without waiting
+for model analysis. Complete facts stay in the public report. Failed, unpriced,
+and uncertain responses are summarized once at the end. The terminal message
+lists up to five priced proposals, including offers outside the lowest-price
+group, with a compact evidence summary; older results without proposals retain
+their lowest-price summary. Terminal guidance, persistence warnings, the public
+link, and the task menu reserve space before optional coverage summaries. Internal action
 references and provider transaction numbers do not appear in these messages.
 Public reports have a separate short customer reference.
 Only confirmed premiums and an explicit allowlist of coverage and deductible
