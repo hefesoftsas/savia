@@ -10,8 +10,11 @@ import {
 } from "./i18n/app-locale";
 import { useMessages, useAppLocale, translateMessage } from "./i18n/core";
 import { publicFormsMessages } from "./i18n/locales/public-forms";
-import { lazy, Suspense, useMemo } from "react";
-import { registerPwaServiceWorker } from "./pwa/register-service-worker";
+import { lazy, Suspense, useEffect, useMemo } from "react";
+import {
+  registerPwaServiceWorker,
+  retireAdministrativeWorkerForPublicRoute,
+} from "./pwa/register-service-worker";
 import { PwaSplash } from "./pwa/pwa-splash";
 import { getAdminAuthorizeUrl } from "./components/admin/loading-recovery";
 import { CookieConsentBanner } from "./consent/cookie-consent-banner";
@@ -70,6 +73,14 @@ export function ApplicationRoot({
     pathname.startsWith("/public/quotes/") ||
     pathname === "/public/bookings" ||
     pathname.startsWith("/public/bookings/");
+  useEffect(() => {
+    if (!publicPath || !("serviceWorker" in navigator)) return;
+    void retireAdministrativeWorkerForPublicRoute(
+      pathname,
+      navigator.serviceWorker,
+      () => window.location.reload(),
+    );
+  }, [pathname, publicPath]);
   if (publicPath) return <PublicApplication pathname={pathname} />;
   return (
     <Suspense

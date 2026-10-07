@@ -10,6 +10,7 @@ const calls = vi.hoisted(() => ({
   admin: vi.fn(),
   appearance: vi.fn(),
   worker: vi.fn(),
+  retire: vi.fn(),
 }));
 vi.mock("./app", () => {
   calls.admin();
@@ -20,6 +21,7 @@ vi.mock("./components/admin/appearance-cache", () => ({
 }));
 vi.mock("./pwa/register-service-worker", () => ({
   registerPwaServiceWorker: calls.worker,
+  retireAdministrativeWorkerForPublicRoute: calls.retire,
 }));
 vi.mock("./features/tenant-registration/registration-captcha", () => ({
   RegistrationCaptcha: () => null,
@@ -168,4 +170,32 @@ it("opens quote result links anonymously and keeps malformed quote paths out of 
   expect(calls.admin.mock.calls.length).toBe(previous);
   expect(calls.appearance.mock.calls.length).toBe(previousAppearance);
   expect(calls.worker.mock.calls.length).toBe(previousWorker);
+});
+
+it("asks the public bootstrap to retire a stale administrative controller", async () => {
+  const pathname = `/public/quotes/${"a".repeat(64)}`;
+  const serviceWorker = { controller: { scriptURL: "/sw.js" } };
+  const descriptor = Object.getOwnPropertyDescriptor(
+    navigator,
+    "serviceWorker",
+  );
+  Object.defineProperty(navigator, "serviceWorker", {
+    configurable: true,
+    value: serviceWorker,
+  });
+  try {
+    render(<ApplicationRoot pathname={pathname} />);
+    expect(await screen.findByText(/Public quote/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(calls.retire).toHaveBeenCalledWith(
+        pathname,
+        serviceWorker,
+        expect.any(Function),
+      ),
+    );
+  } finally {
+    if (descriptor)
+      Object.defineProperty(navigator, "serviceWorker", descriptor);
+    else Reflect.deleteProperty(navigator, "serviceWorker");
+  }
 });
