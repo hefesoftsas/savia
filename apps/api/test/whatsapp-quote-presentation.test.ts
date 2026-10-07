@@ -1,5 +1,8 @@
 import { expect, it, vi } from "vitest";
+import { generateText } from "ai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
+  completeWithOpenRouter,
   createWhatsappQuotePresentationFactory,
   type QuoteCompletionInput,
 } from "../src/whatsapp/quote-presentation";
@@ -8,6 +11,11 @@ import type { WhatsappAssistantBinding } from "../src/whatsapp/inbound-contracts
 import type { WhatsappChannelRepository } from "../src/whatsapp/channel-repository";
 import type { VirtualEmployeesRepository } from "../src/assistant/virtual-employees";
 import type { AssistantConfigurationRepository } from "../src/assistant/configuration";
+
+vi.mock("ai", () => ({ generateText: vi.fn() }));
+vi.mock("@openrouter/ai-sdk-provider", () => ({
+  createOpenRouter: vi.fn(),
+}));
 
 const access = {
   tenantId: 7,
@@ -44,6 +52,7 @@ const binding = {
 function presentationFactory(options: {
   current?: boolean;
   allowedCollections?: string[];
+  apiKey?: string;
   model?: string;
   allowedModels?: string[];
   publicOrigin?: string;
@@ -75,7 +84,9 @@ function presentationFactory(options: {
   } as unknown as VirtualEmployeesRepository;
   const configuration = {
     effectiveConfigurationForTenant: vi.fn(async () => ({
-      apiKey: "test-api-key",
+      apiKey: Object.prototype.hasOwnProperty.call(options, "apiKey")
+        ? options.apiKey
+        : "test-api-key",
       tenantId: 7,
       model: "provider/model-main",
       summaryModel: options.model,
@@ -148,6 +159,44 @@ const proposals = [
   },
 ];
 
+it("disables OpenRouter reasoning and returns bounded finish metadata", async () => {
+  const model = vi.fn((modelId: string) => modelId);
+  vi.mocked(createOpenRouter).mockReturnValue(model as never);
+  vi.mocked(generateText).mockResolvedValue({
+    text: "{}",
+    finishReason: "length",
+    usage: { inputTokens: 800, outputTokens: 980 },
+  } as never);
+  const signal = new AbortController().signal;
+
+  const result = await completeWithOpenRouter({
+    apiKey: "private-key",
+    model: "provider/model",
+    system: "system prompt",
+    prompt: "private prompt",
+    maxOutputTokens: 980,
+    signal,
+  });
+
+  expect(generateText).toHaveBeenCalledWith(
+    expect.objectContaining({
+      providerOptions: {
+        openrouter: {
+          reasoning: { effort: "none", exclude: true },
+        },
+      },
+      maxRetries: 0,
+      abortSignal: signal,
+    }),
+  );
+  expect(result).toEqual({
+    text: "{}",
+    finishReason: "length",
+    inputTokens: 800,
+    outputTokens: 980,
+  });
+});
+
 it("uses authorized tenant model analysis, emits a checked explanation, then publishes the final report", async () => {
   let completionInput: QuoteCompletionInput | undefined;
   const { presentation, complete, publish, enqueue } = presentationFactory({
@@ -200,6 +249,7 @@ it("uses authorized tenant model analysis, emits a checked explanation, then pub
 });
 
 it("does not call the model or publish after channel generation access is revoked", async () => {
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
   const { presentation, complete, publish } = presentationFactory({
     current: false,
   });
@@ -207,7 +257,98 @@ it("does not call the model or publish after channel generation access is revoke
 
   expect(complete).not.toHaveBeenCalled();
   expect(publish).not.toHaveBeenCalled();
-  expect(result).toEqual({ quoteId: "quote-1", proposals });
+  expect(result).toMatchObject({
+    quoteId: "quote-1",
+    proposals,
+    analysisUnavailable: true,
+    analysisUnavailableReason: "authorization_unavailable",
+  });
+  expect(log).toHaveBeenCalledWith(
+    expect.stringContaining('"error_code":"authorization_unavailable"'),
+  );
+  log.mockRestore();
+});
+
+it("logs a safe configuration skip reason without exposing model credentials", async () => {
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    const { presentation, complete } = presentationFactory({ apiKey: "" });
+    presentation.record(proposals[0]);
+    const result = await presentation.finish({ quoteId: "quote-1", proposals });
+
+    const entries = log.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        event: "whatsapp_quote_analysis",
+        outcome: "skipped",
+        error_code: "configuration_unavailable",
+      }),
+    );
+    expect(complete).not.toHaveBeenCalled();
+    expect(result.analysisUnavailableReason).toBe("configuration_unavailable");
+    expect(JSON.stringify(entries)).not.toContain("test-api-key");
+    expect(JSON.stringify(entries)).not.toContain(access.contact);
+  } finally {
+    log.mockRestore();
+  }
+});
+
+it("persists a safe invalid-output reason without logging model text", async () => {
+  const privateOutput = "invalid response containing private@example.test";
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    const { presentation } = presentationFactory({
+      complete: async () => privateOutput,
+    });
+    const result = await presentation.finish({ quoteId: "quote-1", proposals });
+    const entries = log.mock.calls.map(([line]) => JSON.parse(String(line)));
+
+    expect(result.analysisUnavailableReason).toBe("invalid_json");
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        event: "whatsapp_quote_analysis",
+        stage: "final",
+        outcome: "invalid_json",
+        error_code: "invalid_json",
+      }),
+    );
+    expect(JSON.stringify(entries)).not.toContain(privateOutput);
+  } finally {
+    log.mockRestore();
+  }
+});
+
+it("persists the final deadline reason when the workflow and analyzer deadlines race", async () => {
+  vi.useFakeTimers();
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    const { presentation } = presentationFactory({
+      complete: (input) =>
+        new Promise((_resolve, reject) => {
+          input.signal.addEventListener(
+            "abort",
+            () => reject(new Error("request aborted")),
+            { once: true },
+          );
+        }),
+    });
+    const finish = presentation.finish({ quoteId: "quote-1", proposals });
+    await vi.advanceTimersByTimeAsync(8_001);
+    const result = await finish;
+    const entries = log.mock.calls.map(([line]) => JSON.parse(String(line)));
+
+    expect(result.analysisUnavailableReason).toBe("timeout");
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        event: "whatsapp_quote_analysis",
+        stage: "final",
+        error_code: "timeout",
+      }),
+    );
+  } finally {
+    vi.useRealTimers();
+    log.mockRestore();
+  }
 });
 
 it("stops all quote presentation when the employee loses quote collection access", async () => {
@@ -218,27 +359,46 @@ it("stops all quote presentation when the employee loses quote collection access
 
   expect(complete).not.toHaveBeenCalled();
   expect(publish).not.toHaveBeenCalled();
-  expect(result).toEqual({ quoteId: "quote-1", proposals });
+  expect(result).toMatchObject({
+    quoteId: "quote-1",
+    proposals,
+    analysisUnavailable: true,
+    analysisUnavailableReason: "authorization_unavailable",
+  });
 });
 
 it("falls back without a model when the summary model is outside the allowed list or public origin is absent", async () => {
-  const { presentation, complete, publish } = presentationFactory({
-    model: "provider/model-not-allowed",
-    allowedModels: ["provider/model-main"],
-    publicOrigin: undefined,
-  });
-  const result = await presentation.finish({
-    quoteId: "quote-1",
-    proposals,
-    recommendation: "Existing quote response",
-  });
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    const { presentation, complete, publish } = presentationFactory({
+      model: "provider/model-not-allowed",
+      allowedModels: ["provider/model-main"],
+      publicOrigin: undefined,
+    });
+    const result = await presentation.finish({
+      quoteId: "quote-1",
+      proposals,
+      recommendation: "Existing quote response",
+    });
 
-  expect(complete).not.toHaveBeenCalled();
-  expect(publish).not.toHaveBeenCalled();
-  expect(result).not.toHaveProperty("publicUrl");
-  expect(result.persistenceWarnings).toEqual([
-    "No se pudo crear el enlace público de esta cotización.",
-  ]);
+    expect(complete).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+    expect(result).not.toHaveProperty("publicUrl");
+    expect(result.persistenceWarnings).toEqual([
+      "No se pudo crear el enlace público de esta cotización.",
+    ]);
+    expect(result.analysisUnavailableReason).toBe("model_not_allowed");
+    const entries = log.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        event: "whatsapp_quote_analysis",
+        outcome: "skipped",
+        error_code: "model_not_allowed",
+      }),
+    );
+  } finally {
+    log.mockRestore();
+  }
 });
 
 it("publishes a customer reference independent of the internal action identifier", async () => {

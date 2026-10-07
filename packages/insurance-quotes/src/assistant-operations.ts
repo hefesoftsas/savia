@@ -6,6 +6,7 @@ import type {
   PublicQuoteFact,
   PublicQuoteProposal,
 } from "@savia/studio-shared/public-quote";
+import { extractProviderQuoteFacts } from "./provider-quote-facts";
 const encode = encodeURIComponent;
 export type InsuranceAssistantPorts = {
   request<T>(path: string, init?: RequestInit): Promise<T>;
@@ -44,34 +45,6 @@ export type InsuranceExecutionOptions = {
 const WHATSAPP_REQUEST_TIMEOUT_MS = 15_000;
 const WHATSAPP_PROVIDER_TIMEOUT_MS = 30_000;
 const WHATSAPP_EXECUTION_BUDGET_MS = 90_000;
-
-const PROVIDER_COVERAGE_FACTS = [
-  ["rce", "Responsabilidad civil (RCE)"],
-  ["partialLossDeductible", "Deducible por pérdida parcial"],
-  ["totalLossDeductible", "Deducible por pérdida total"],
-  ["replacementCar", "Vehículo de reemplazo"],
-  ["craneAssistance", "Grúa"],
-  ["designatedDriver", "Conductor elegido"],
-  ["medicalExpenses", "Gastos médicos"],
-  ["legalAssistance", "Asistencia jurídica"],
-  ["workshop", "Taller"],
-] as const;
-
-function providerCoverageFacts(value: unknown): PublicQuoteFact[] {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-  const coverages = value as Record<string, unknown>;
-  return PROVIDER_COVERAGE_FACTS.flatMap(([key, label]) => {
-    const raw = coverages[key];
-    const text =
-      typeof raw === "string"
-        ? raw.trim()
-        : typeof raw === "number" && Number.isFinite(raw)
-          ? String(raw)
-          : "";
-    if (!text || text.length > 250) return [];
-    return [{ label, value: text, source: "provider" as const }];
-  });
-}
 
 class QuoteExecutionTimeoutError extends Error {
   constructor(
@@ -510,7 +483,7 @@ export class InsuranceAssistantOperations {
                 ? String(number)
                 : undefined;
             productQuoteNumber = quoteNumber;
-            productFacts = providerCoverageFacts(result.coverages);
+            productFacts = extractProviderQuoteFacts(result);
             outcomes.push({
               provider,
               product: product.label,
@@ -540,6 +513,7 @@ export class InsuranceAssistantOperations {
               duration_ms: Date.now() - providerStartedAt,
               premium_present: premium !== undefined,
               quote_number_present: quoteNumber !== undefined,
+              coverage_fact_count: productFacts.length,
             });
           } catch (error) {
             productFailed = true;

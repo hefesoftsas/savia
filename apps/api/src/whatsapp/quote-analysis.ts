@@ -10,49 +10,186 @@ import {
 const ANALYSIS_TIMEOUT_MS = 8_000;
 const BATCH_WINDOW_MS = 250;
 
-async function withinDeadline<T>(
+export type QuoteAnalysisOutcome =
+  | "completed"
+  | "no_priced_proposals"
+  | "timeout"
+  | "truncated_output"
+  | "model_error"
+  | "missing_output"
+  | "invalid_json"
+  | "invalid_schema"
+  | "proposal_ids_mismatch"
+  | "preferred_id_mismatch"
+  | "unsafe_output"
+  | "invalid_evidence";
+
+type BoundedResult<T> =
+  | { status: "completed"; value: T }
+  | { status: "timeout" }
+  | { status: "failed" };
+
+export type QuoteAnalysisCompletion = {
+  text: string;
+  finishReason?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+};
+
+export type QuoteAnalysisCompletionMetadata = {
+  finishReason?:
+    "stop" | "length" | "content-filter" | "tool-calls" | "error" | "other";
+  inputTokens?: number;
+  outputTokens?: number;
+};
+
+async function runBounded<T>(
   operation: (signal: AbortSignal) => Promise<T>,
-  timeoutMs = ANALYSIS_TIMEOUT_MS,
-): Promise<T | undefined> {
+  timeoutMs: number,
+  externalSignal?: AbortSignal,
+): Promise<BoundedResult<T>> {
+  if (externalSignal?.aborted) return { status: "timeout" };
   const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<undefined>((resolve) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let abortListener: (() => void) | undefined;
+  const timeout = new Promise<BoundedResult<T>>((resolve) => {
     timer = setTimeout(() => {
       controller.abort();
-      resolve(undefined);
+      resolve({ status: "timeout" });
     }, timeoutMs);
   });
+  const externallyAborted = externalSignal
+    ? new Promise<BoundedResult<T>>((resolve) => {
+        abortListener = () => {
+          controller.abort(externalSignal.reason);
+          resolve({ status: "timeout" });
+        };
+        externalSignal.addEventListener("abort", abortListener, {
+          once: true,
+        });
+      })
+    : undefined;
+  const result = Promise.resolve()
+    .then(() => operation(controller.signal))
+    .then<BoundedResult<T>, BoundedResult<T>>(
+      (value) => ({ status: "completed", value }),
+      () => ({ status: "failed" }),
+    );
   try {
-    return await Promise.race([
-      Promise.resolve()
-        .then(() => operation(controller.signal))
-        .catch(() => undefined),
-      timeout,
-    ]);
+    return await Promise.race(
+      externallyAborted
+        ? [result, timeout, externallyAborted]
+        : [result, timeout],
+    );
   } finally {
-    clearTimeout(timer!);
+    if (timer !== undefined) clearTimeout(timer);
+    if (abortListener)
+      externalSignal?.removeEventListener("abort", abortListener);
   }
 }
 
 /** Bounded, tool-free model analysis. The caller supplies only approved evidence. */
 export async function analyzeQuoteReport(
   report: PublicQuoteReport,
-  complete: (report: PublicQuoteReport, signal: AbortSignal) => Promise<string>,
+  complete: (
+    report: PublicQuoteReport,
+    signal: AbortSignal,
+  ) => Promise<string | QuoteAnalysisCompletion>,
+  options: {
+    signal?: AbortSignal;
+    onOutcome?(outcome: QuoteAnalysisOutcome): void;
+    onCompletion?(metadata: QuoteAnalysisCompletionMetadata): void;
+  } = {},
 ): Promise<QuoteAnalysis | undefined> {
-  const evidence = publicQuoteReportSchema.parse(report);
-  if (!evidence.proposals.some((proposal) => proposal.state === "priced"))
+  const outcome = (value: QuoteAnalysisOutcome) => {
+    try {
+      options.onOutcome?.(value);
+    } catch {
+      // Diagnostics must never affect quote results.
+    }
+  };
+  const evidenceResult = publicQuoteReportSchema.safeParse(report);
+  if (!evidenceResult.success) {
+    outcome("invalid_evidence");
     return;
-  const text = await withinDeadline((signal) => complete(evidence, signal));
-  if (!text) return;
+  }
+  const evidence = evidenceResult.data;
+  if (!evidence.proposals.some((proposal) => proposal.state === "priced")) {
+    outcome("no_priced_proposals");
+    return;
+  }
+  const completion = await runBounded(
+    (signal) => complete(evidence, signal),
+    ANALYSIS_TIMEOUT_MS,
+    options.signal,
+  );
+  if (completion.status === "timeout") {
+    outcome("timeout");
+    return;
+  }
+  if (completion.status === "failed") {
+    outcome("model_error");
+    return;
+  }
+  const output =
+    typeof completion.value === "string"
+      ? { text: completion.value }
+      : completion.value;
+  const finishReasons = [
+    "stop",
+    "length",
+    "content-filter",
+    "tool-calls",
+    "error",
+    "other",
+  ] as const;
+  const metadata: QuoteAnalysisCompletionMetadata = {
+    ...(output.finishReason &&
+    finishReasons.includes(
+      output.finishReason as (typeof finishReasons)[number],
+    )
+      ? { finishReason: output.finishReason as (typeof finishReasons)[number] }
+      : {}),
+    ...(Number.isSafeInteger(output.inputTokens) && output.inputTokens! >= 0
+      ? { inputTokens: output.inputTokens }
+      : {}),
+    ...(Number.isSafeInteger(output.outputTokens) && output.outputTokens! >= 0
+      ? { outputTokens: output.outputTokens }
+      : {}),
+  };
   try {
-    const parsed = quoteAnalysisSchema.parse(
-      JSON.parse(
-        text
-          .trim()
-          .replace(/^```(?:json)?\s*/i, "")
-          .replace(/\s*```$/, ""),
-      ),
+    options.onCompletion?.(metadata);
+  } catch {
+    // Diagnostics must never affect quote results.
+  }
+  if (metadata.finishReason === "length") {
+    outcome("truncated_output");
+    return;
+  }
+  const text = output.text;
+  if (!text.trim()) {
+    outcome("missing_output");
+    return;
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(
+      text
+        .trim()
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/, ""),
     );
+  } catch {
+    outcome("invalid_json");
+    return;
+  }
+  const parsedResult = quoteAnalysisSchema.safeParse(json);
+  if (!parsedResult.success) {
+    outcome("invalid_schema");
+    return;
+  }
+  try {
+    const parsed = parsedResult.data;
     const priced = evidence.proposals.filter(
       (proposal) => proposal.state === "priced",
     );
@@ -62,10 +199,17 @@ export async function analyzeQuoteReport(
       new Set(parsed.proposals.map((proposal) => proposal.id)).size !==
         expected.size ||
       parsed.proposals.some((proposal) => !expected.has(proposal.id))
-    )
+    ) {
+      outcome("proposal_ids_mismatch");
       return;
-    if (parsed.preferredProposalId && !expected.has(parsed.preferredProposalId))
+    }
+    if (
+      parsed.preferredProposalId &&
+      !expected.has(parsed.preferredProposalId)
+    ) {
+      outcome("preferred_id_mismatch");
       return;
+    }
     const strings = [
       parsed.suggestion,
       ...parsed.limitations,
@@ -75,8 +219,10 @@ export async function analyzeQuoteReport(
       strings.some((value) =>
         /https?:\/\/|\b[^\s@]+@[^\s@]+\.[^\s@]+/i.test(value),
       )
-    )
+    ) {
+      outcome("unsafe_output");
       return;
+    }
     const coverageMissing = priced.some((proposal) => !proposal.facts?.length);
     if (coverageMissing)
       parsed.limitations = [
@@ -100,9 +246,18 @@ export async function analyzeQuoteReport(
           "La comparación es parcial: hay opciones sin precio verificado.",
         ]),
       ].slice(0, 8);
-    return publicQuoteReportSchema.parse({ ...evidence, analysis: parsed })
-      .analysis;
+    const result = publicQuoteReportSchema.safeParse({
+      ...evidence,
+      analysis: parsed,
+    });
+    if (!result.success) {
+      outcome("invalid_schema");
+      return;
+    }
+    outcome("completed");
+    return result.data.analysis;
   } catch {
+    outcome("invalid_schema");
     return;
   }
 }
@@ -112,9 +267,14 @@ type WorkflowDependencies = {
   analyze(
     report: PublicQuoteReport,
     signal: AbortSignal,
+    phase: "batch" | "final",
   ): Promise<QuoteAnalysis | undefined>;
   emit(eventKey: string, text: string): Promise<void>;
   publish(report: PublicQuoteReport): Promise<PublishedQuoteLink>;
+  onUnavailable?(
+    phase: "batch" | "final",
+    reason: "timeout" | "analysis_error",
+  ): void;
 };
 
 /** Model batches run alongside provider calls; the provider callback never waits. */
@@ -163,9 +323,17 @@ export function createQuoteExplanationWorkflow(
         report.proposals = report.proposals.filter(
           (proposal) => proposal.state !== "priced" || ids.has(proposal.id),
         );
-        const analysis = await withinDeadline((signal) =>
-          dependencies.analyze(report, signal),
+        const bounded = await runBounded(
+          (signal) => dependencies.analyze(report, signal, "batch"),
+          ANALYSIS_TIMEOUT_MS,
         );
+        const analysis =
+          bounded.status === "completed" ? bounded.value : undefined;
+        if (bounded.status !== "completed")
+          dependencies.onUnavailable?.(
+            "batch",
+            bounded.status === "timeout" ? "timeout" : "analysis_error",
+          );
         if (analysis) {
           const validated = publicQuoteReportSchema.safeParse({
             ...report,
@@ -201,9 +369,17 @@ export function createQuoteExplanationWorkflow(
       }
       await running;
       const report = snapshot();
-      const generated = await withinDeadline((signal) =>
-        dependencies.analyze(report, signal),
+      const bounded = await runBounded(
+        (signal) => dependencies.analyze(report, signal, "final"),
+        ANALYSIS_TIMEOUT_MS,
       );
+      const generated =
+        bounded.status === "completed" ? bounded.value : undefined;
+      if (bounded.status !== "completed")
+        dependencies.onUnavailable?.(
+          "final",
+          bounded.status === "timeout" ? "timeout" : "analysis_error",
+        );
       const validated = publicQuoteReportSchema.safeParse({
         ...report,
         ...(generated ? { analysis: generated } : {}),

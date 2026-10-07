@@ -67,7 +67,14 @@ references and provider transaction numbers do not appear in these messages.
 Public reports have a separate short customer reference.
 Only confirmed premiums and an explicit allowlist of coverage and deductible
 fields returned by the provider are included. Static catalog profiles are not
-verified coverage evidence. Failed, unpriced, and uncertain proposals remain
+verified coverage evidence. WhatsApp and public forms share the same provider
+fact projection. It accepts normalized `coverages`, canonical `coverageDetails`
+(`label`, `limit`, `deductible`), and returned `response.amparo` entries
+(`nombre`, `capital`, `tdeducible`/`deducible`). Reports retain up to 40 facts,
+including zero deductibles; zero capital is shown as reported and never treated
+as unlimited coverage. Missing values remain explicitly unreported. Unknown
+fields, contacts, and raw payloads are excluded.
+Failed, unpriced, and uncertain proposals remain
 visible as such; they do not acquire estimated premiums.
 
 The assigned employee's configured LLM explains priced proposals in asynchronous
@@ -76,6 +83,12 @@ guidance and identifies missing evidence. Equal prices without verified coverage
 do not justify a winning proposal. Model calls have an eight-second deadline,
 no tools, and no automatic retries. A model failure preserves provider results
 and the customer link, with analysis availability clearly indicated.
+Analysis disables model reasoning to reserve the bounded output budget for the
+customer explanation. The private action result and structured diagnostics
+identify safe reasons such as unavailable configuration or authorization,
+timeout, malformed or truncated output, and proposal ID mismatch. They do not
+retain prompts, model responses, credentials, or contact details. Batch and
+final-analysis outcomes are logged separately.
 
 The final WhatsApp message includes an opaque public link to a read-only report.
 It expires seven days after creation and contains offers and saved analysis,
