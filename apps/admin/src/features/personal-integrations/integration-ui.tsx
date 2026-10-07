@@ -75,10 +75,12 @@ export function IntegrationHelpTooltip({
 export function IntegrationGroup({
   title,
   headingId,
+  description,
   children,
 }: {
   title: string;
   headingId?: string;
+  description?: string;
   children: ReactNode;
 }) {
   return (
@@ -93,6 +95,11 @@ export function IntegrationGroup({
         >
           {title}
         </h2>
+        {description ? (
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
       </div>
       <ul className="integrations-group__list">{children}</ul>
     </section>

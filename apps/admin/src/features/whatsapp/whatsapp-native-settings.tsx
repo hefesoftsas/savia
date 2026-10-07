@@ -409,53 +409,55 @@ export function WhatsappNativeSettings({
     );
 
   return (
-    <IntegrationGroup title="Capacidades nativas de WhatsApp">
-      <li className="space-y-5 px-5 py-4">
-        <p className="text-sm text-muted-foreground">
-          Configuración aislada por tenant. Las capacidades se envían solo al
-          pulsar una acción de prueba y requieren consentimiento explícito.
-        </p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {flags.map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={configuration[key]}
-                onChange={(event) => {
-                  const enabled = event.target.checked;
-                  setState({
-                    ...state,
-                    configuration: {
-                      ...configuration,
-                      [key]: enabled,
-                      ...(key === "typingIndicator" && enabled
-                        ? { readReceipts: true }
-                        : {}),
-                    },
-                  });
-                }}
-                disabled={
-                  busy ||
-                  (key === "readReceipts" && configuration.typingIndicator)
-                }
-              />
-              {label}
-            </label>
-          ))}
-        </div>
-        <p className="text-xs leading-5 text-muted-foreground">
-          Imágenes y PDF requieren que el modelo del asistente admita visión y
-          archivos. Para transcribir audio, configura un modelo compatible en{" "}
-          <Link
-            className="font-medium text-primary underline"
-            to="/assistant-configuration"
-          >
-            Configurar transcripción
-          </Link>
-          .
-        </p>
+    <IntegrationGroup
+      title="Capacidades nativas de WhatsApp"
+      description="Configuración aislada por tenant. Las capacidades solo se envían al pulsar una acción de prueba."
+    >
+      <li className="space-y-6 px-5 py-5 sm:px-6">
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold">Capacidades</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {flags.map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={configuration[key]}
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    setState({
+                      ...state,
+                      configuration: {
+                        ...configuration,
+                        [key]: enabled,
+                        ...(key === "typingIndicator" && enabled
+                          ? { readReceipts: true }
+                          : {}),
+                      },
+                    });
+                  }}
+                  disabled={
+                    busy ||
+                    (key === "readReceipts" && configuration.typingIndicator)
+                  }
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Imágenes y PDF requieren que el modelo del asistente admita visión y
+            archivos. Para transcribir audio, configura un modelo compatible en{" "}
+            <Link
+              className="font-medium text-primary underline"
+              to="/assistant-configuration"
+            >
+              Configurar transcripción
+            </Link>
+            .
+          </p>
+        </section>
 
-        <div className="space-y-3 rounded-lg border p-3">
+        <section className="space-y-3">
           <div>
             <h3 className="text-sm font-medium">Recursos publicados de Meta</h3>
             <p className="text-xs text-muted-foreground">
@@ -539,45 +541,62 @@ export function WhatsappNativeSettings({
               </div>
             </div>
           ) : null}
-        </div>
+        </section>
 
-        {resourceEditors.map(([key, label]) => (
-          <label key={key} className="block text-sm">
-            <span className="mb-1 block font-medium">{label}</span>
-            <textarea
-              className="min-h-24 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
-              value={rawResources[key]}
-              onChange={(event) =>
-                setRawResources({ ...rawResources, [key]: event.target.value })
-              }
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold">Recursos avanzados (JSON)</h3>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Solo edita si conoces el formato. Los cambios no se guardan hasta
+            pulsar Guardar.
+          </p>
+          <details className="rounded-xl border">
+            <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium">
+              Ver editores JSON
+            </summary>
+            <div className="space-y-3 border-t px-4 py-4">
+              {resourceEditors.map(([key, label]) => (
+                <label key={key} className="block text-sm">
+                  <span className="mb-1 block font-medium">{label}</span>
+                  <textarea
+                    className="min-h-24 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
+                    value={rawResources[key]}
+                    onChange={(event) =>
+                      setRawResources({
+                        ...rawResources,
+                        [key]: event.target.value,
+                      })
+                    }
+                    disabled={busy}
+                    spellCheck={false}
+                  />
+                </label>
+              ))}
+            </div>
+          </details>
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+            <input
+              aria-label="Archivo de medio"
+              type="file"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               disabled={busy}
-              spellCheck={false}
             />
-          </label>
-        ))}
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            aria-label="Archivo de medio"
-            type="file"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            disabled={busy}
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void uploadMedia()}
-            disabled={!file || busy}
-          >
-            Subir medio
-          </Button>
-          <Button size="sm" onClick={() => void save()} disabled={busy}>
-            {busy ? "Procesando…" : "Guardar configuración nativa"}
-          </Button>
-        </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void uploadMedia()}
+              disabled={!file || busy}
+            >
+              Subir medio
+            </Button>
+            <Button size="sm" onClick={() => void save()} disabled={busy}>
+              {busy ? "Procesando…" : "Guardar configuración nativa"}
+            </Button>
+          </div>
+        </section>
 
         {state.contributions.length > 0 ? (
-          <div className="space-y-2 rounded-lg border p-3">
-            <h3 className="text-sm font-medium">
+          <section className="space-y-2 rounded-xl border bg-muted/20 p-4">
+            <h3 className="text-sm font-semibold">
               Flows aportados por soluciones
             </h3>
             {state.contributions.map((item) => (
@@ -600,12 +619,12 @@ export function WhatsappNativeSettings({
                 </Button>
               </div>
             ))}
-          </div>
+          </section>
         ) : null}
 
-        <div className="space-y-3 rounded-lg border p-3">
+        <section className="space-y-3 rounded-xl border bg-muted/20 p-4">
           <div>
-            <h3 className="text-sm font-medium">Probar mensaje nativo</h3>
+            <h3 className="text-sm font-semibold">Probar mensaje nativo</h3>
             <p className="text-xs text-muted-foreground">
               El envío requiere consentimiento marcado y genera una clave de
               idempotencia nueva. No se envía al guardar configuración.
@@ -769,7 +788,7 @@ export function WhatsappNativeSettings({
           >
             Enviar prueba nativa
           </Button>
-        </div>
+        </section>
         {feedback ? (
           <p role="status" className="text-sm">
             {feedback}
