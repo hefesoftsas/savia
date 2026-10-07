@@ -3,7 +3,15 @@ import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 import { useEffect, useRef, useState } from "react";
 import Nango from "@nangohq/frontend";
 import Whatsapp from "@thesvg/react/whatsapp";
-import { CircleAlert, RotateCcw, Send } from "lucide-react";
+import {
+  Bot,
+  CircleAlert,
+  FlaskConical,
+  ListChecks,
+  Plug,
+  RotateCcw,
+  Send,
+} from "lucide-react";
 import type { AppServices } from "@/app-services";
 import type {
   WhatsappConnection,
@@ -11,6 +19,7 @@ import type {
 } from "@/api/whatsapp-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   IntegrationGroup,
   IntegrationGroupEmpty,
@@ -22,6 +31,7 @@ import {
 } from "@/features/personal-integrations/integration-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WhatsappAssistantSettings } from "./whatsapp-assistant-settings";
+import { WhatsappChannelSettings } from "./whatsapp-channel-settings";
 import { WhatsappNativeSettings } from "./whatsapp-native-settings";
 
 type NangoConnectEvent = unknown;
@@ -119,6 +129,7 @@ export function WhatsappConnectionsPage({
   const [wabaId, setWabaId] = useState("");
   const [testTo, setTestTo] = useState("");
   const [testText, setTestText] = useState("");
+  const [section, setSection] = useState("conexion");
   const refreshRequestId = useRef(0);
   const latestTenant = useRef(currentTenant);
   latestTenant.current = currentTenant;
@@ -201,6 +212,22 @@ export function WhatsappConnectionsPage({
     !currentTenant.isLoading && loadedTenantId === currentTenant.id;
   const enabled = provider?.availability === "enabled";
   const connected = connection?.status === "connected";
+  const canConfigureAssistant =
+    enabled && tenantDataIsCurrent && currentTenant.id !== null;
+  const canConfigureChannel =
+    canConfigureAssistant && typeof services.whatsapp.getChannel === "function";
+  const showAdvanced =
+    enabled && connected && tenantDataIsCurrent && currentTenant.id !== null;
+
+  useEffect(() => {
+    if (!canConfigureAssistant && section !== "conexion") {
+      setSection("conexion");
+    } else if (section === "menu" && !canConfigureChannel) {
+      setSection("asistente");
+    } else if (section === "avanzado" && !showAdvanced) {
+      setSection("conexion");
+    }
+  }, [canConfigureAssistant, canConfigureChannel, showAdvanced, section]);
 
   async function completeConnection(nangoConnectionId: string) {
     const requestTenantId = currentTenant.id;
@@ -339,26 +366,17 @@ export function WhatsappConnectionsPage({
         ? "Reconectar"
         : "Conectar";
 
-  const content = (
-    <>
-      {tenantDataIsCurrent && feedback ? (
-        <div
-          className="integrations-feedback flex items-start gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
-          role="status"
-        >
-          <CircleAlert className="mt-0.5 size-4 shrink-0 text-primary" />
-          <p className="leading-6">{feedback}</p>
-        </div>
-      ) : null}
-
+  const connectionGroup = (
+    <IntegrationGroup
+      title="WhatsApp"
+      description="Conecta tu cuenta de WhatsApp Business vía Nango para activar el asistente y el menú."
+    >
       {loading || !tenantDataIsCurrent || !provider ? (
-        <IntegrationGroup title="WhatsApp">
-          <li className="px-5 py-4">
-            <Skeleton className="h-10 w-full" />
-          </li>
-        </IntegrationGroup>
+        <li className="px-5 py-4">
+          <Skeleton className="h-10 w-full" />
+        </li>
       ) : (
-        <IntegrationGroup title="WhatsApp">
+        <>
           <IntegrationProviderRow
             name={provider.displayName}
             hint={providerHint(provider, connection ?? undefined)}
@@ -396,121 +414,204 @@ export function WhatsappConnectionsPage({
           {provider.availability !== "enabled" ? (
             <IntegrationGroupEmpty message="Un administrador debe crear la integración whatsapp-business en Nango. Después podrás conectar tu cuenta aquí." />
           ) : null}
-        </IntegrationGroup>
+        </>
       )}
+    </IntegrationGroup>
+  );
 
-      {enabled && tenantDataIsCurrent && currentTenant.id !== null ? (
-        <WhatsappAssistantSettings
-          key={currentTenant.id}
-          services={services}
-          tenantId={currentTenant.id}
-          connected={connected}
-        />
+  const numberGroup = (
+    <IntegrationGroup
+      title="Número de WhatsApp"
+      description="Vincula el número que usarán los mensajes. Savia lo valida contra la API vía Nango."
+    >
+      <li className="space-y-4 px-5 py-5 sm:px-6">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium">Phone number ID</span>
+            <Input
+              value={phoneNumberId}
+              onChange={(event) => setPhoneNumberId(event.target.value)}
+              placeholder="123456789012345"
+              inputMode="numeric"
+              disabled={busy}
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium">Número visible</span>
+            <Input
+              value={displayPhoneNumber}
+              onChange={(event) => setDisplayPhoneNumber(event.target.value)}
+              placeholder="+573001234567"
+              disabled={busy}
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium">WABA ID</span>
+            <Input
+              value={wabaId}
+              onChange={(event) => setWabaId(event.target.value)}
+              placeholder="987654321098765"
+              inputMode="numeric"
+              disabled={busy}
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="sm"
+            disabled={busy || !phoneNumberId.trim()}
+            onClick={() => void saveNumber()}
+          >
+            Vincular número
+          </Button>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Los tokens quedan en Nango.
+          </p>
+        </div>
+      </li>
+    </IntegrationGroup>
+  );
+
+  const testGroup = (
+    <IntegrationGroup
+      title="Probar envío"
+      description="Envía un mensaje de prueba dentro de la ventana de 24 horas del contacto."
+    >
+      <li className="space-y-4 px-5 py-5 sm:px-6">
+        <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium">Destino</span>
+            <Input
+              value={testTo}
+              onChange={(event) => setTestTo(event.target.value)}
+              placeholder="+573001234567"
+              disabled={busy || !connection?.phoneNumberId}
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium">Texto</span>
+            <Input
+              value={testText}
+              onChange={(event) => setTestText(event.target.value)}
+              placeholder="Hola desde Savia"
+              maxLength={1000}
+              disabled={busy || !connection?.phoneNumberId}
+            />
+          </label>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy || !connection?.phoneNumberId}
+          onClick={() => void sendTest()}
+        >
+          <Send aria-hidden="true" />
+          Enviar prueba
+        </Button>
+        {!connection?.phoneNumberId ? (
+          <p className="text-xs leading-5 text-muted-foreground">
+            Vincula primero el número para habilitar el envío.
+          </p>
+        ) : null}
+      </li>
+    </IntegrationGroup>
+  );
+
+  const content = (
+    <>
+      {tenantDataIsCurrent && feedback ? (
+        <div
+          className="integrations-feedback flex items-start gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
+          role="status"
+        >
+          <CircleAlert className="mt-0.5 size-4 shrink-0 text-primary" />
+          <p className="leading-6">{feedback}</p>
+        </div>
       ) : null}
 
-      {enabled && connected && tenantDataIsCurrent ? (
-        <>
-          <IntegrationGroup title="Número de WhatsApp">
-            <li className="space-y-3 px-5 py-4">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium">
-                    Phone number ID
-                  </span>
-                  <Input
-                    value={phoneNumberId}
-                    onChange={(event) => setPhoneNumberId(event.target.value)}
-                    placeholder="123456789012345"
-                    inputMode="numeric"
-                    disabled={busy}
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium">Número visible</span>
-                  <Input
-                    value={displayPhoneNumber}
-                    onChange={(event) =>
-                      setDisplayPhoneNumber(event.target.value)
-                    }
-                    placeholder="+573001234567"
-                    disabled={busy}
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium">WABA ID</span>
-                  <Input
-                    value={wabaId}
-                    onChange={(event) => setWabaId(event.target.value)}
-                    placeholder="987654321098765"
-                    inputMode="numeric"
-                    disabled={busy}
-                  />
-                </label>
-              </div>
-              <Button
-                size="sm"
-                disabled={busy || !phoneNumberId.trim()}
-                onClick={() => void saveNumber()}
-              >
-                Vincular número
-              </Button>
-              <p className="text-xs leading-5 text-muted-foreground">
-                Savia valida el número contra la API de WhatsApp vía Nango antes
-                de guardarlo. Los tokens quedan en Nango.
-              </p>
-            </li>
-          </IntegrationGroup>
+      {loading ||
+      !tenantDataIsCurrent ||
+      !provider ||
+      !canConfigureAssistant ? (
+        <div className="space-y-4">{connectionGroup}</div>
+      ) : (
+        <Tabs
+          value={section}
+          onValueChange={setSection}
+          className="w-full space-y-4"
+        >
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 p-1">
+            <TabsTrigger value="conexion" className="gap-1.5">
+              <Plug aria-hidden="true" />
+              Conexión
+            </TabsTrigger>
+            <TabsTrigger value="asistente" className="gap-1.5">
+              <Bot aria-hidden="true" />
+              Asistente IA
+            </TabsTrigger>
+            {canConfigureChannel ? (
+              <TabsTrigger value="menu" className="gap-1.5">
+                <ListChecks aria-hidden="true" />
+                Menú y equipo
+              </TabsTrigger>
+            ) : null}
+            {showAdvanced ? (
+              <TabsTrigger value="avanzado" className="gap-1.5">
+                <FlaskConical aria-hidden="true" />
+                Avanzado
+              </TabsTrigger>
+            ) : null}
+          </TabsList>
 
-          {currentTenant.id !== null ? (
-            <WhatsappNativeSettings
-              key={`native-${currentTenant.id}`}
-              services={services}
-              tenantId={currentTenant.id}
-            />
+          <TabsContent value="conexion" forceMount className="space-y-4">
+            {connectionGroup}
+            {showAdvanced ? (
+              <>
+                {numberGroup}
+                {testGroup}
+              </>
+            ) : (
+              <IntegrationGroup
+                title="Número y pruebas"
+                description="Disponible cuando la conexión esté activa."
+              >
+                <IntegrationGroupEmpty message="Conecta WhatsApp para vincular el número y enviar pruebas." />
+              </IntegrationGroup>
+            )}
+          </TabsContent>
+
+          <TabsContent value="asistente" forceMount className="space-y-4">
+            {currentTenant.id !== null ? (
+              <WhatsappAssistantSettings
+                key={currentTenant.id}
+                services={services}
+                tenantId={currentTenant.id}
+                connected={connected}
+              />
+            ) : null}
+          </TabsContent>
+
+          {canConfigureChannel && currentTenant.id !== null ? (
+            <TabsContent value="menu" forceMount className="space-y-4">
+              <WhatsappChannelSettings
+                key={`channel-${currentTenant.id}`}
+                whatsapp={services.whatsapp}
+                tenantId={currentTenant.id}
+              />
+            </TabsContent>
           ) : null}
 
-          <IntegrationGroup title="Probar envío">
-            <li className="space-y-3 px-5 py-4">
-              <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium">Destino</span>
-                  <Input
-                    value={testTo}
-                    onChange={(event) => setTestTo(event.target.value)}
-                    placeholder="+573001234567"
-                    disabled={busy || !connection?.phoneNumberId}
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium">Texto</span>
-                  <Input
-                    value={testText}
-                    onChange={(event) => setTestText(event.target.value)}
-                    placeholder="Hola desde Savia"
-                    maxLength={1000}
-                    disabled={busy || !connection?.phoneNumberId}
-                  />
-                </label>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy || !connection?.phoneNumberId}
-                onClick={() => void sendTest()}
-              >
-                <Send aria-hidden="true" />
-                Enviar prueba
-              </Button>
-              {!connection?.phoneNumberId ? (
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Vincula primero el número para habilitar el envío. El mensaje
-                  solo llega dentro de la ventana de 24 horas del contacto.
-                </p>
-              ) : null}
-            </li>
-          </IntegrationGroup>
-        </>
-      ) : null}
+          {showAdvanced && currentTenant.id !== null ? (
+            <TabsContent value="avanzado" forceMount className="space-y-4">
+              <WhatsappNativeSettings
+                key={`native-${currentTenant.id}`}
+                services={services}
+                tenantId={currentTenant.id}
+              />
+            </TabsContent>
+          ) : null}
+        </Tabs>
+      )}
     </>
   );
 
