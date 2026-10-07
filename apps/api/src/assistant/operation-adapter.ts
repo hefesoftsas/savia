@@ -1,3 +1,8 @@
+import {
+  traceWhatsappOperation,
+  logWhatsappDiagnostic,
+  type WhatsappDiagnosticContext,
+} from "../whatsapp/diagnostics";
 import { ChannelDrafts } from "../whatsapp/drafts";
 import { SaviaApiClient } from "@savia/release-catalog/assistant-api-client";
 import { assistantQuoteInputSchema } from "@savia/release-catalog/assistant-contracts";
@@ -68,6 +73,7 @@ export function createChannelOperationAdapter(
   async function client(
     binding: WhatsappAssistantBinding,
     session: EmployeeSession,
+    diagnosticContext: WhatsappDiagnosticContext = {},
   ) {
     await employee(session);
     const id = session.access.principalId ?? binding.ownerPrincipalId;
@@ -116,7 +122,11 @@ export function createChannelOperationAdapter(
         )
       )
         throw new Error("CHANNEL_MEMBERSHIP_REVOKED");
-      return (await deps.backendForActor(liveActor))(input, init);
+      return traceWhatsappOperation(
+        diagnosticContext,
+        "backend_request",
+        async () => (await deps.backendForActor(liveActor))(input, init),
+      );
     };
     return new SaviaApiClient(
       "https://channel.savia.invalid",
@@ -134,6 +144,7 @@ export function createChannelOperationAdapter(
     verifiedQuoteForm?: Awaited<
       ReturnType<SaviaApiClient["getInsuranceQuoteForm"]>
     >,
+    diagnosticContext: WhatsappDiagnosticContext = {},
   ) {
     const category =
       name.includes("quote") || name.includes("dane")
@@ -175,7 +186,7 @@ export function createChannelOperationAdapter(
       !allowed(String(input.collection))
     )
       throw new Error("CHANNEL_COLLECTION_REVOKED");
-    const c = await client(binding, session);
+    const c = await client(binding, session, diagnosticContext);
     switch (name) {
       case "savia_get_quote_form":
         return verifiedQuoteForm ?? c.getInsuranceQuoteForm();
@@ -274,6 +285,12 @@ export function createChannelOperationAdapter(
     if (!session) return undefined;
     const selected = await employee(session);
     let preview: NativeReply | string | undefined;
+    let quoteFailed = false;
+    const diagnosticContext: WhatsappDiagnosticContext = {
+      message_id: input?.messageId,
+      generation: session.access.generation,
+      selection_revision: session.selectionRevision,
+    };
     const choice =
       input?.native?.kind === "choice"
         ? input.native.id
@@ -325,6 +342,12 @@ export function createChannelOperationAdapter(
           consumed = null;
         }
       }
+      if (consumed)
+        logWhatsappDiagnostic(
+          "whatsapp_action_confirmation",
+          { ...diagnosticContext, action_id: consumed.jobId },
+          { outcome: consumed.state },
+        );
       let expiredQuoteCanRetry = false;
       let latestActionStatus: string | null = null;
       if (!consumed && !cancelText && !concreteAttempt && actions) {
@@ -437,13 +460,26 @@ export function createChannelOperationAdapter(
     > | null = null;
     if (channelCapabilityAllowed(session.access, "insurance")) {
       try {
-        verifiedQuoteForm = await (
-          await client(binding, session)
-        ).getInsuranceQuoteForm();
-        if (!verifiedQuoteForm.products.length)
-          throw new Error("No enabled quote products");
+        verifiedQuoteForm = await traceWhatsappOperation(
+          diagnosticContext,
+          "quote_catalog",
+          async () => {
+            const form = await (
+              await client(binding, session, diagnosticContext)
+            ).getInsuranceQuoteForm();
+            if (!form.products.length)
+              throw new Error("No enabled quote products");
+            return form;
+          },
+        );
       } catch {
         verifiedQuoteForm = null;
+        // Catalog discovery also runs during unrelated employee turns. Only
+        // an explicit quote request treats discovery failure as a closed flow.
+        quoteFailed =
+          /\b(cotizar|cotizame|cotiza|nueva cotizacion|otra cotizacion|una nueva|reintentar? (?:la |una )?cotizacion|volver a cotizar|quiero (?:una )?cotizacion|hacer (?:una )?cotizacion)\b/.test(
+            normalized,
+          );
         effectiveAccess = {
           ...session.access,
           capabilities: session.access.capabilities.filter(
@@ -479,7 +515,7 @@ export function createChannelOperationAdapter(
         command,
         value,
       );
-      const c = await client(binding, session);
+      const c = await client(binding, session, diagnosticContext);
       let payload = value;
       let summary = `Acción: ${command}`;
       if (domain === "insurance") {
@@ -554,6 +590,11 @@ export function createChannelOperationAdapter(
         summary,
         Boolean(binding.native?.replyButtons),
       );
+      logWhatsappDiagnostic(
+        "whatsapp_action_prepared",
+        { ...diagnosticContext, action_id: action.id },
+        { outcome: "pending_confirmation" },
+      );
       return {
         actionId: action.id,
         requiresConfirmation: true,
@@ -571,9 +612,40 @@ export function createChannelOperationAdapter(
               }),
           }
         : {}),
-      read: (name, data) =>
-        read(binding, session, name, data, verifiedQuoteForm ?? undefined),
-      prepare: prepareOperation,
+      read: async (name, data) => {
+        try {
+          return await traceWhatsappOperation(diagnosticContext, name, () =>
+            read(
+              binding,
+              session,
+              name,
+              data,
+              verifiedQuoteForm ?? undefined,
+              diagnosticContext,
+            ),
+          );
+        } catch (error) {
+          if (
+            name === "savia_get_quote_form" ||
+            name === "savia_get_quote_summary"
+          )
+            quoteFailed = true;
+          throw error;
+        }
+      },
+      prepare: async (domain, command, value) => {
+        try {
+          return await traceWhatsappOperation(
+            diagnosticContext,
+            "prepare_action",
+            () => prepareOperation(domain, command, value),
+          );
+        } catch (error) {
+          if (domain === "insurance" && command === "quote-auto")
+            quoteFailed = true;
+          throw error;
+        }
+      },
     });
 
     if (authorizedConsentPrompt) {
@@ -584,6 +656,7 @@ export function createChannelOperationAdapter(
         return {
           tools: {},
           system,
+          quoteFailed: () => true,
           directReply: humanSupportRecoveryReply(
             currentSettings?.config.humanSupportContact,
           ),
@@ -714,10 +787,15 @@ export function createChannelOperationAdapter(
             return await recover();
           }
         }
-        const result = await prepareOperation("insurance", "quote-auto", {
-          ...parsedSnapshot.data,
-          consent: true,
-        });
+        const result = await traceWhatsappOperation(
+          diagnosticContext,
+          "prepare_action",
+          () =>
+            prepareOperation("insurance", "quote-auto", {
+              ...parsedSnapshot.data,
+              consent: true,
+            }),
+        );
         if (result?.requiresConfirmation !== true || result?.isError)
           return await recover();
         const { savia_prepare_command: _prepareCommand, ...readTools } = tools;
@@ -727,7 +805,12 @@ export function createChannelOperationAdapter(
       }
     }
 
-    return { system, tools, reply: () => preview };
+    return {
+      system,
+      tools,
+      reply: () => preview,
+      quoteFailed: () => quoteFailed,
+    };
   }
 
   async function execute(
@@ -741,7 +824,11 @@ export function createChannelOperationAdapter(
       action.command,
       action.input,
     );
-    const c = await client(binding, action.session);
+    const c = await client(binding, action.session, {
+      action_id: action.id,
+      generation: action.session.access.generation,
+      selection_revision: action.session.selectionRevision,
+    });
     if (action.domain === "personal-integrations") {
       if (!action.session.access.principalId || !deps.personal)
         throw new Error("CHANNEL_PERSONAL_ACCOUNT_UNAVAILABLE");

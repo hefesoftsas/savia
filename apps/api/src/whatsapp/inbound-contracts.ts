@@ -50,11 +50,18 @@ export type WhatsappChatMessage = {
 };
 
 export type WhatsappInboundDependencies = {
-  recoveryReply?(binding: WhatsappAssistantBinding): Promise<string>;
+  recoveryReply?(
+    binding: WhatsappAssistantBinding,
+    input: WhatsappInboundInput,
+  ): Promise<string>;
   authorizeReply?(
     binding: WhatsappAssistantBinding,
     input: WhatsappInboundInput,
   ): Promise<boolean>;
+  completionStatements?(
+    binding: WhatsappAssistantBinding,
+    input: WhatsappInboundInput,
+  ): Promise<D1PreparedStatement[]>;
   afterReply?(
     binding: WhatsappAssistantBinding,
     input: WhatsappInboundInput,

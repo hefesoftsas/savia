@@ -8,6 +8,19 @@ import {
 } from "./channel-contracts";
 import { findPrincipal, loadActor } from "../auth/identity-repository";
 
+export type PreparedQuoteLifecycleReset = {
+  generation: string;
+  menu: ChannelMenu;
+};
+
+export type QuoteLifecycleResetGuard =
+  | {
+      kind: "action-result";
+      actionId: string;
+      outboundMessageId: string;
+    }
+  | { kind: "inbound-reply"; messageId: string };
+
 export class WhatsappChannelRepository {
   constructor(readonly db: D1Database) {}
 
@@ -244,6 +257,171 @@ export class WhatsappChannelRepository {
       )
       .run();
     return menu;
+  }
+
+  /** Prepare a fresh menu/reset only while the originating quote selection is current. */
+  async prepareQuoteLifecycleReset(
+    access: ContactAccess,
+    expectedSelectionRevision: number,
+    expectedEmployeeId: string,
+    excludeActionId?: string,
+  ): Promise<PreparedQuoteLifecycleReset | null> {
+    const currentSettings = await this.settings(
+      access.tenantId,
+      access.connectionId,
+    );
+    if (!currentSettings?.config.routingEnabled) return null;
+    const current = await this.db
+      .prepare(
+        "SELECT generation,employee_id,selection_revision FROM whatsapp_channel_contacts WHERE connection_id=? AND contact=?",
+      )
+      .bind(access.connectionId, access.contact)
+      .first<{
+        generation: string;
+        employee_id: string | null;
+        selection_revision: number;
+      }>();
+    if (
+      !current ||
+      current.generation !== access.generation ||
+      current.employee_id !== expectedEmployeeId ||
+      current.selection_revision !== expectedSelectionRevision
+    )
+      return null;
+    const inFlight = await this.db
+      .prepare(
+        `SELECT 1 FROM whatsapp_channel_actions WHERE connection_id=? AND contact=? AND generation=?
+         AND (status IN ('queued','dispatching') OR
+           (status IN ('completed','failed','uncertain') AND
+             (delivery_state IS NULL OR delivery_state IN ('sending','history_pending'))))
+         AND (? IS NULL OR id<>?) LIMIT 1`,
+      )
+      .bind(
+        access.connectionId,
+        access.contact,
+        access.generation,
+        excludeActionId ?? null,
+        excludeActionId ?? null,
+      )
+      .first();
+    if (inFlight) return null;
+    const tasks = await this.listTasks(access, currentSettings);
+    if (!tasks.some((task) => task.employeeId === expectedEmployeeId))
+      return null;
+    return {
+      generation: crypto.randomUUID(),
+      menu: {
+        id: crypto.randomUUID(),
+        revision: currentSettings.revision,
+        tasks,
+        page: 0,
+      },
+    };
+  }
+
+  /**
+   * Return statements to append to the durable acknowledgement batch. The
+   * contact update is fenced by both the originating selection and the stored
+   * acknowledgement, so a late result cannot clear a newer conversation.
+   */
+  quoteLifecycleResetStatements(
+    access: ContactAccess,
+    expectedSelectionRevision: number,
+    expectedEmployeeId: string,
+    prepared: PreparedQuoteLifecycleReset,
+    guard: QuoteLifecycleResetGuard,
+  ): D1PreparedStatement[] {
+    const ackExists =
+      guard.kind === "action-result"
+        ? `EXISTS (
+             SELECT 1 FROM whatsapp_channel_actions ack
+             WHERE ack.id=? AND ack.connection_id=? AND ack.contact=?
+               AND ack.generation=? AND ack.employee_id=? AND ack.selection_revision=?
+               AND ack.status IN ('completed','failed','uncertain')
+               AND ack.delivery_state='sent' AND ack.outbound_message_id=?
+           )`
+        : `EXISTS (
+             SELECT 1 FROM whatsapp_inbox ack
+             WHERE ack.message_id=? AND ack.connection_id=?
+               AND ack.normalized_contact=? AND ack.state='completed'
+               AND ack.outbound_message_id IS NOT NULL
+           )`;
+    const ackValues =
+      guard.kind === "action-result"
+        ? [
+            guard.actionId,
+            access.connectionId,
+            access.contact,
+            access.generation,
+            expectedEmployeeId,
+            expectedSelectionRevision,
+            guard.outboundMessageId,
+          ]
+        : [guard.messageId, access.connectionId, access.contact];
+    const serializedMenu = JSON.stringify(prepared.menu);
+    const reset = this.db
+      .prepare(
+        `UPDATE whatsapp_channel_contacts
+         SET generation=?,employee_id=NULL,selection_revision=selection_revision+1,
+             menu_json=?,buffered_text=NULL,draft_json=NULL,reset_token_hash=NULL,
+             reset_expires_at=NULL,reset_attempts=0,last_reset_message_id=NULL
+         WHERE connection_id=? AND contact=? AND generation=?
+           AND employee_id=? AND selection_revision=?
+           AND NOT EXISTS (
+             SELECT 1 FROM whatsapp_channel_actions active
+             WHERE active.connection_id=whatsapp_channel_contacts.connection_id
+               AND active.contact=whatsapp_channel_contacts.contact
+               AND active.generation=whatsapp_channel_contacts.generation
+               AND (active.status IN ('queued','dispatching') OR
+                 (active.status IN ('completed','failed','uncertain') AND
+                   (active.delivery_state IS NULL OR active.delivery_state IN ('sending','history_pending'))))
+               AND (? IS NULL OR active.id<>?)
+           )
+           AND EXISTS (
+             SELECT 1 FROM whatsapp_channel_settings settings
+             WHERE settings.connection_id=whatsapp_channel_contacts.connection_id
+               AND settings.revision=?
+           )
+           AND ${ackExists}`,
+      )
+      .bind(
+        prepared.generation,
+        serializedMenu,
+        access.connectionId,
+        access.contact,
+        access.generation,
+        expectedEmployeeId,
+        expectedSelectionRevision,
+        guard.kind === "action-result" ? guard.actionId : null,
+        guard.kind === "action-result" ? guard.actionId : null,
+        prepared.menu.revision,
+        ...ackValues,
+      );
+    const cancelPending = this.db
+      .prepare(
+        `UPDATE whatsapp_channel_actions SET status='cancelled'
+         WHERE connection_id=? AND contact=? AND generation=?
+           AND employee_id=? AND selection_revision=? AND status='pending'
+           AND EXISTS (
+             SELECT 1 FROM whatsapp_channel_contacts current
+             WHERE current.connection_id=? AND current.contact=?
+               AND current.generation=? AND current.selection_revision=?
+               AND current.menu_json=?
+           )`,
+      )
+      .bind(
+        access.connectionId,
+        access.contact,
+        access.generation,
+        expectedEmployeeId,
+        expectedSelectionRevision,
+        access.connectionId,
+        access.contact,
+        prepared.generation,
+        expectedSelectionRevision + 1,
+        serializedMenu,
+      );
+    return [reset, cancelPending];
   }
 
   async menu(access: ContactAccess): Promise<ChannelMenu | null> {

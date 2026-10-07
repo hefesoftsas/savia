@@ -214,10 +214,27 @@ when the processing-mode setting is omitted.
 
 Latency diagnostics emit `whatsapp_inbound_claimed` with `queue_wait_ms` and
 `whatsapp_inbound_timing` for preparation, indicators, generation, transport, acknowledgement persistence and
-total processing. `whatsapp_assistant_timing` separates configuration,
+total processing. `whatsapp_action_result_timing` records result-send,
+acknowledgement-persistence and history-repair duration/outcome. The
+`whatsapp_quote_lifecycle_reset` event reports whether the generation reset was
+applied or skipped, including after history repair. These events correlate by
+action or message ID, generation and selection revision; they do not include
+phone numbers, message bodies, drafts, applicant data, raw errors or credentials.
+`whatsapp_assistant_timing` separates configuration,
 capability setup, input preparation, knowledge retrieval and model/tool work.
-These events carry message IDs and durations, without phone numbers, message
-bodies, drafts or credentials. Existing action-started and action-finished events
+`whatsapp_operation` records start and terminal outcomes for each named tool,
+quote-catalog preflight, action preparation and typed backend request; failed
+HTTP responses include only status codes. A per-operation `call_id` disambiguates
+concurrent or repeated calls. `whatsapp_model_call` isolates each model invocation
+from tool execution and reports response duration, token counts when supplied by
+the provider, and bounded failure categories (including timeout/abort).
+`whatsapp_action_prepared` and `whatsapp_action_confirmation` connect inbound
+message IDs to the resulting action ID without logging confirmation codes.
+Filter by `message_id` for intake and model/tool latency, then use `action_id` to
+follow dispatch, delivery and reset. A start event without a terminal event can
+indicate a process interruption; it is not evidence of successful execution.
+These events carry operational IDs and durations, without phone numbers, message
+bodies, drafts, raw errors or credentials. Existing action-started and action-finished events
 measure confirmed-operation queue waits and execution durations. Queue wait is
 measured from server acceptance; provider-to-server latency can be compared using
 the inbox's `provider_timestamp` and `received_at`. Event admission removes the
@@ -408,6 +425,21 @@ claim is classified as uncertain and never automatically resent. Permanently
 revoked deliveries become terminal. Expired deliveries remain dormant until a
 valid inbound opens a new reply window, then resume through the same access checks;
 neither state keeps the coordinator awake. Failures before attempting a send can retry normally.
+
+After a quote-auto operation ends in a terminal completed, failed, or uncertain
+result, an acknowledged result message includes the main task menu and starts a
+fresh contact generation. A terminal quote preparation or catalog failure that
+is acknowledged follows the same lifecycle, as does an exhausted model-generation
+failure for a quote flow. The current draft, employee selection, buffered input
+and reset challenge are cleared only after the acknowledgement is durable; an
+uncertain outbound send does not reset the conversation. For a terminal inbound
+quote failure, the prepared reset and inbox completion commit in the same database
+transaction, so a later history write failure cannot leave the old draft active. Prior conversational
+history remains in its original generation and is excluded from the new
+conversation. A `history_pending` repair performs the same reset without sending
+the message again. The quote, action, dispatch and audit records remain in their
+originating generation for follow-up by an operator, while the new conversation
+starts with no selected employee or prior quote context.
 
 Contacts can request a fresh conversation with the exact command
 `Borrar mis datos y empezar de nuevo`. The server returns a contact-bound,

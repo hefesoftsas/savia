@@ -164,7 +164,7 @@ export async function processWhatsappInbox(
       // Persist and authorize the recovery reply through the same send path.
       outgoing =
         (await dependencies
-          .recoveryReply?.(binding)
+          .recoveryReply?.(binding, item)
           .catch(() => humanSupportRecoveryReply())) ??
         humanSupportRecoveryReply();
       reply = outgoing;
@@ -187,6 +187,25 @@ export async function processWhatsappInbox(
       continue;
     }
     binding = current;
+
+    let completionStatements: D1PreparedStatement[] = [];
+    if (dependencies.completionStatements) {
+      const completionStartedAt = Date.now();
+      try {
+        // Prepare all database work before an external send. Preparation
+        // failures can retry safely because no message has been dispatched.
+        completionStatements = await dependencies.completionStatements(
+          binding,
+          item,
+        );
+        timing("completion_preparation", completionStartedAt);
+      } catch {
+        timing("completion_preparation", completionStartedAt, "failed");
+        await repository.retryGeneration(item.messageId, token, item.attempts);
+        failed++;
+        continue;
+      }
+    }
 
     const startedAt = new Date().toISOString();
     if (
@@ -248,6 +267,7 @@ export async function processWhatsappInbox(
         item.messageId,
         token,
         outboundId,
+        completionStatements,
       );
       timing(
         "persistence",

@@ -1,4 +1,11 @@
 import {
+  traceWhatsappOperation,
+  logWhatsappDiagnostic,
+  diagnosticErrorCode,
+  diagnosticHttpStatus,
+  type WhatsappDiagnosticContext,
+} from "./diagnostics";
+import {
   nativeReplySchema,
   buildNativeMessage,
   type NativeReply,
@@ -25,6 +32,7 @@ export type WhatsappAttachment = {
 };
 
 type CompletionInput = {
+  diagnosticContext?: WhatsappDiagnosticContext;
   apiKey: string;
   model: string;
   system: string;
@@ -66,6 +74,10 @@ export type WhatsappAssistantDependencies = {
     configuration: EffectiveAssistantConfiguration,
   ): Promise<{ text: string; attachments?: WhatsappAttachment[] }>;
   complete?: (input: CompletionInput) => Promise<string>;
+  quoteFailureReply?(
+    binding: WhatsappAssistantBinding,
+    input: WhatsappInboundInput,
+  ): Promise<string | NativeReply>;
   capabilities?(
     binding: WhatsappAssistantBinding,
     input?: WhatsappInboundInput,
@@ -74,6 +86,7 @@ export type WhatsappAssistantDependencies = {
         tools: ToolSet;
         system: string;
         directReply?: string | NativeReply;
+        quoteFailed?(): boolean;
         reply?(): NativeReply | string | undefined;
       }
     | undefined
@@ -82,40 +95,71 @@ export type WhatsappAssistantDependencies = {
 
 async function complete(input: CompletionInput): Promise<string> {
   const provider = createOpenRouter({ apiKey: input.apiKey });
-  const result = await generateText({
-    model: provider(input.model),
-    system: input.system,
-    messages: input.attachments?.length
-      ? [
-          ...input.messages.slice(0, -1),
-          {
-            role: "user",
-            content: [
-              { type: "text", text: input.messages.at(-1)?.content ?? "" },
-              ...input.attachments.map((attachment) =>
-                attachment.type === "image"
-                  ? {
-                      type: "image" as const,
-                      image: attachment.data,
-                      mediaType: attachment.mediaType,
-                    }
-                  : {
-                      type: "file" as const,
-                      data: attachment.data,
-                      mediaType: attachment.mediaType,
-                      filename: attachment.filename,
-                    },
-              ),
-            ],
-          },
-        ]
-      : input.messages,
-    ...(input.tools ? { tools: input.tools, stopWhen: isStepCount(8) } : {}),
-    maxOutputTokens: 1000,
-    abortSignal: AbortSignal.timeout(60000),
-    maxRetries: 0,
-  });
-  return result.text;
+  const context = input.diagnosticContext ?? {};
+  const pendingCalls = new Map<string, number>();
+  try {
+    const result = await generateText({
+      model: provider(input.model),
+      system: input.system,
+      messages: input.attachments?.length
+        ? [
+            ...input.messages.slice(0, -1),
+            {
+              role: "user",
+              content: [
+                { type: "text", text: input.messages.at(-1)?.content ?? "" },
+                ...input.attachments.map((attachment) =>
+                  attachment.type === "image"
+                    ? {
+                        type: "image" as const,
+                        image: attachment.data,
+                        mediaType: attachment.mediaType,
+                      }
+                    : {
+                        type: "file" as const,
+                        data: attachment.data,
+                        mediaType: attachment.mediaType,
+                        filename: attachment.filename,
+                      },
+                ),
+              ],
+            },
+          ]
+        : input.messages,
+      ...(input.tools ? { tools: input.tools, stopWhen: isStepCount(8) } : {}),
+      onLanguageModelCallStart: ({ callId }) => {
+        pendingCalls.set(callId, Date.now());
+        logWhatsappDiagnostic("whatsapp_model_call", context, {
+          call_id: callId,
+          outcome: "started",
+        });
+      },
+      onLanguageModelCallEnd: ({ callId, usage, performance }) => {
+        pendingCalls.delete(callId);
+        logWhatsappDiagnostic("whatsapp_model_call", context, {
+          call_id: callId,
+          outcome: "completed",
+          duration_ms: Math.max(0, performance.responseTimeMs),
+          input_tokens: usage.inputTokens,
+          output_tokens: usage.outputTokens,
+        });
+      },
+      maxOutputTokens: 1000,
+      abortSignal: AbortSignal.timeout(60000),
+      maxRetries: 0,
+    });
+    return result.text;
+  } catch (error) {
+    for (const [callId, started] of pendingCalls)
+      logWhatsappDiagnostic("whatsapp_model_call", context, {
+        call_id: callId,
+        outcome: "failed",
+        duration_ms: Math.max(0, Date.now() - started),
+        error_code: diagnosticErrorCode(error),
+        http_status: diagnosticHttpStatus(error),
+      });
+    throw error;
+  }
 }
 
 /** Legacy text replies and routed employee capabilities share tenant/model checks. */
@@ -128,18 +172,19 @@ export function createWhatsappAssistant(
     message: string,
     input?: WhatsappInboundInput,
   ): Promise<string | NativeReply> => {
+    const diagnosticContext: WhatsappDiagnosticContext = {
+      message_id: input?.messageId,
+      generation: binding.channelSession?.access.generation,
+      selection_revision: binding.channelSession?.selectionRevision,
+    };
     let phaseStartedAt = Date.now();
     const timing = (stage: string) => {
       const now = Date.now();
       if (input)
-        console.info(
-          JSON.stringify({
-            event: "whatsapp_assistant_timing",
-            message_id: input.messageId,
-            stage,
-            duration_ms: Math.max(0, now - phaseStartedAt),
-          }),
-        );
+        logWhatsappDiagnostic("whatsapp_assistant_timing", diagnosticContext, {
+          stage,
+          duration_ms: Math.max(0, now - phaseStartedAt),
+        });
       phaseStartedAt = now;
     };
     const configuration =
@@ -149,6 +194,7 @@ export function createWhatsappAssistant(
       );
     if (!configuration.apiKey || configuration.tenantId !== binding.tenantId)
       throw new Error("WHATSAPP_ASSISTANT_UNAVAILABLE");
+    const apiKey = configuration.apiKey;
     const employee = await dependencies.employees.getById(
       binding.employeeId,
       binding.tenantId,
@@ -168,6 +214,12 @@ export function createWhatsappAssistant(
     timing("configuration");
     const capabilities = await dependencies.capabilities?.(binding, input);
     timing("capabilities");
+    if (
+      capabilities?.quoteFailed?.() &&
+      input &&
+      dependencies.quoteFailureReply
+    )
+      return dependencies.quoteFailureReply(binding, input);
     if (capabilities?.directReply) return capabilities.directReply;
     const prepared =
       input && dependencies.prepareInput
@@ -203,26 +255,35 @@ export function createWhatsappAssistant(
       .join("\n\n");
     timing("prompt");
     const text = (
-      await (dependencies.complete ?? complete)({
-        apiKey: configuration.apiKey,
-        model,
-        system,
-        ...(capabilities && Object.keys(capabilities.tools).length
-          ? { tools: capabilities.tools }
-          : {}),
-        ...(prepared.attachments?.length
-          ? { attachments: prepared.attachments }
-          : {}),
-        messages: [
-          ...history.slice(-20).map(({ role, content }) => ({
-            role,
-            content: content.slice(0, 4096),
-          })),
-          { role: "user", content: message },
-        ],
-      })
+      await traceWhatsappOperation(diagnosticContext, "model_and_tools", () =>
+        (dependencies.complete ?? complete)({
+          diagnosticContext,
+          apiKey,
+          model,
+          system,
+          ...(capabilities && Object.keys(capabilities.tools).length
+            ? { tools: capabilities.tools }
+            : {}),
+          ...(prepared.attachments?.length
+            ? { attachments: prepared.attachments }
+            : {}),
+          messages: [
+            ...history.slice(-20).map(({ role, content }) => ({
+              role,
+              content: content.slice(0, 4096),
+            })),
+            { role: "user", content: message },
+          ],
+        }),
+      )
     ).trim();
     timing("model_and_tools");
+    if (
+      capabilities?.quoteFailed?.() &&
+      input &&
+      dependencies.quoteFailureReply
+    )
+      return dependencies.quoteFailureReply(binding, input);
     const confirmation = capabilities?.reply?.();
     if (confirmation) return confirmation;
     if (binding.native && text.startsWith("{")) {
