@@ -19,10 +19,10 @@ export async function processChannelActions(
     .run();
   const rows = await db
     .prepare(
-      "SELECT id,action_json FROM whatsapp_channel_actions WHERE status='queued' ORDER BY created_at LIMIT ?",
+      "SELECT id,action_json,created_at FROM whatsapp_channel_actions WHERE status='queued' ORDER BY created_at LIMIT ?",
     )
     .bind(Math.max(1, Math.min(limit, 10)))
-    .all<{ id: string; action_json: string }>();
+    .all<{ id: string; action_json: string; created_at: string }>();
   let completed = 0,
     uncertain = 0;
   for (const row of rows.results) {
@@ -34,7 +34,16 @@ export async function processChannelActions(
       .bind(token, new Date(Date.now() + 360000).toISOString(), row.id)
       .run();
     if (claim.meta.changes !== 1) continue;
+    const startedAt = Date.now();
+    console.info(
+      JSON.stringify({
+        event: "whatsapp_channel_action_started",
+        action_id: row.id,
+        queue_wait_ms: Math.max(0, startedAt - Date.parse(row.created_at)),
+      }),
+    );
     let outcome: ActionOutcome;
+    let failureType: string | undefined;
     try {
       const action = await actions.open(row.action_json);
       const current = await actions.repository.getAccess(action.session.access);
@@ -49,7 +58,8 @@ export async function processChannelActions(
         { ...action, session: { ...action.session, access: current } },
         row.id,
       );
-    } catch {
+    } catch (error) {
+      failureType = error instanceof Error ? error.name : "unknown";
       outcome = {
         state: "uncertain",
         message:
@@ -62,6 +72,15 @@ export async function processChannelActions(
       )
       .bind(outcome.state, JSON.stringify(outcome), row.id, token)
       .run();
+    console.info(
+      JSON.stringify({
+        event: "whatsapp_channel_action_finished",
+        action_id: row.id,
+        outcome: outcome.state,
+        duration_ms: Date.now() - startedAt,
+        ...(failureType ? { error_type: failureType } : {}),
+      }),
+    );
     if (outcome.state === "completed") completed++;
     else if (outcome.state === "uncertain") uncertain++;
   }
