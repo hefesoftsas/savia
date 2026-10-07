@@ -93,7 +93,7 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
    Meta system-user token prepared by the platform administrator.
 4. Nango returns an opaque connection id. After completion, the user fills
    the phone number id, visible number, and WABA id in the **Número de
-   WhatsApp** panel. The completion API can also accept this metadata when
+   WhatsApp** panel of the **Conexión** tab. The completion API can also accept this metadata when
    it is already available.
 5. Savia verifies the Nango connection belongs to `user:<principal-id>` and
    its `agency_id` tag matches the explicitly selected tenant. Missing or
@@ -101,7 +101,7 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
    cannot substitute for tenant Connect sessions. Savia then validates the
    phone number live against the WhatsApp Cloud API through
    the proxy, and persists only safe metadata with status `connected`.
-6. **Probar envío** sends a short free-form text through
+6. **Probar envío** (in the **Conexión** tab) sends a short free-form text through
    `POST /v21.0/<phone_number_id>/messages`. Destination numbers may include
    whitespace for readability; Savia removes whitespace before validating and
    sending the number. The plus sign and digits are preserved, and other
@@ -136,7 +136,7 @@ replacement connections do not invalidate an existing healthy connection.
    optional reference documents. Use the tenant's default model or a model
    explicitly enabled by its administrator. External contacts receive plain-text
    answers without MCP tools, user credentials or administrative actions.
-4. Open **My integrations → WhatsApp → Asistente de WhatsApp**. Select the
+4. Open **My integrations → WhatsApp**, then the **Asistente IA** tab. Select the
    employee, enter pilot contacts with country codes (one per line), enable
    **Responder con IA**, and save. An empty contact list never means everyone.
    Authenticated `GET` and `PUT /v1/whatsapp/assistant` require an explicit
@@ -228,14 +228,15 @@ prevent delayed events from downgrading delivered/read messages. Check these
 records using tenant-scoped operational queries; do not export private message
 content or credentials to logs or public handoffs.
 
-Disable **Responder con IA** to stop the pilot without disconnecting Nango.
+Disable **Responder con IA** (in the **Asistente IA** tab) to stop the pilot without disconnecting Nango.
 Automatic free-form replies require a recent inbound message; expired pending
 messages do not trigger a send. Native capabilities are configured separately
 for each tenant; the existing text behavior remains available with all flags off.
 
 ### Native messages and account resources
 
-Use the native WhatsApp panel after assigning an assistant and enabling the
+Use the native WhatsApp panel in the **Avanzado** tab of
+**My integrations → WhatsApp** after assigning an assistant and enabling the
 connection for explicitly allowed pilot contacts. Enable reply buttons (up to
 three choices), lists (up to ten options), read receipts, typing indication and
 attachment understanding individually. Meta combines typing indication with a

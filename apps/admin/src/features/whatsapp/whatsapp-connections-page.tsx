@@ -219,6 +219,16 @@ export function WhatsappConnectionsPage({
   const showAdvanced =
     enabled && connected && tenantDataIsCurrent && currentTenant.id !== null;
 
+  useEffect(() => {
+    if (!canConfigureAssistant && section !== "conexion") {
+      setSection("conexion");
+    } else if (section === "menu" && !canConfigureChannel) {
+      setSection("asistente");
+    } else if (section === "avanzado" && !showAdvanced) {
+      setSection("conexion");
+    }
+  }, [canConfigureAssistant, canConfigureChannel, showAdvanced, section]);
+
   async function completeConnection(nangoConnectionId: string) {
     const requestTenantId = currentTenant.id;
     try {
@@ -553,7 +563,7 @@ export function WhatsappConnectionsPage({
             ) : null}
           </TabsList>
 
-          <TabsContent value="conexion" className="space-y-4">
+          <TabsContent value="conexion" forceMount className="space-y-4">
             {connectionGroup}
             {showAdvanced ? (
               <>
@@ -570,7 +580,7 @@ export function WhatsappConnectionsPage({
             )}
           </TabsContent>
 
-          <TabsContent value="asistente" className="space-y-4">
+          <TabsContent value="asistente" forceMount className="space-y-4">
             {currentTenant.id !== null ? (
               <WhatsappAssistantSettings
                 key={currentTenant.id}
@@ -582,7 +592,7 @@ export function WhatsappConnectionsPage({
           </TabsContent>
 
           {canConfigureChannel && currentTenant.id !== null ? (
-            <TabsContent value="menu" className="space-y-4">
+            <TabsContent value="menu" forceMount className="space-y-4">
               <WhatsappChannelSettings
                 key={`channel-${currentTenant.id}`}
                 whatsapp={services.whatsapp}
@@ -592,7 +602,7 @@ export function WhatsappConnectionsPage({
           ) : null}
 
           {showAdvanced && currentTenant.id !== null ? (
-            <TabsContent value="avanzado" className="space-y-4">
+            <TabsContent value="avanzado" forceMount className="space-y-4">
               <WhatsappNativeSettings
                 key={`native-${currentTenant.id}`}
                 services={services}
