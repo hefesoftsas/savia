@@ -258,7 +258,7 @@ function receiver(
   status: number,
 ): typeof fetch {
   return (async (url: RequestInfo | URL, init?: RequestInit) => {
-    if (String(url).includes("cloudflare-dns.com"))
+    if (new URL(String(url)).hostname === "cloudflare-dns.com")
       return Response.json({
         Status: 0,
         Answer: [{ type: 1, data: "93.184.216.34" }],
@@ -326,7 +326,7 @@ it("does not advance a workflow cancelled while delivery is in flight", async ()
     url: RequestInfo | URL,
     init?: RequestInit,
   ) => {
-    if (String(url).includes("cloudflare-dns.com"))
+    if (new URL(String(url)).hostname === "cloudflare-dns.com")
       return Response.json({
         Status: 0,
         Answer: [{ type: 1, data: "93.184.216.34" }],
@@ -401,7 +401,7 @@ it("keeps published destination URL and blocks disabled destinations", async () 
   });
   const urls: string[] = [];
   const fetcher: typeof fetch = (async (url: RequestInfo | URL) => {
-    if (String(url).includes("cloudflare-dns.com"))
+    if (new URL(String(url)).hostname === "cloudflare-dns.com")
       return Response.json({
         Status: 0,
         Answer: [{ type: 1, data: "93.184.216.34" }],
@@ -430,7 +430,7 @@ it("recovers a lost delivery outcome using identical bytes and identity", async 
     url: RequestInfo | URL,
     init?: RequestInit,
   ) => {
-    if (String(url).includes("cloudflare-dns.com"))
+    if (new URL(String(url)).hostname === "cloudflare-dns.com")
       return Response.json({
         Status: 0,
         Answer: [{ type: 1, data: "93.184.216.34" }],
@@ -500,7 +500,7 @@ it("closes the last uncertain attempt when repeated lost outcomes exhaust the bu
   const f = await outgoing();
   let sends = 0;
   const fetcher = (async (url: RequestInfo | URL) => {
-    if (String(url).includes("cloudflare-dns.com"))
+    if (new URL(String(url)).hostname === "cloudflare-dns.com")
       return Response.json({
         Status: 0,
         Answer: [{ type: 1, data: "93.184.216.34" }],

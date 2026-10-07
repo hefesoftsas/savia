@@ -1,5 +1,10 @@
 import { WebhookDestinationRepository } from "./webhook-destinations";
 import {
+  validatePieceConfig,
+  type WorkflowPiece,
+} from "@savia/studio-shared/workflow-pieces";
+import { resolveWorkflowPieceDescriptors } from "./pieces";
+import {
   workflowDraftSchema,
   type WorkflowDefinition,
 } from "@savia/studio-shared/workflows";
@@ -46,21 +51,94 @@ const parse = (row: WorkflowRow) => ({
   definition: JSON.parse(row.definition) as WorkflowDefinition,
 });
 
+/** Dotted `related.<field>.<target>` condition paths resolve through single-valued relation fields. */
+async function isRelatedConditionField(
+  db: D1Database,
+  workspace: string,
+  object: {
+    name: string;
+    config: {
+      fields?: Record<
+        string,
+        { config?: { relation?: unknown; multiple?: unknown } }
+      >;
+    };
+  },
+  field: string,
+): Promise<boolean> {
+  const parts = field.split(".");
+  if (parts.length !== 3 || parts[0] !== "related") return false;
+  const [, relation, target] = parts;
+  if (relation === "related") return false;
+  const source = object.config.fields?.[relation];
+  const targetName = source?.config?.relation;
+  if (
+    typeof targetName !== "string" ||
+    !targetName ||
+    targetName === object.name
+  )
+    return false;
+  if (source?.config?.multiple) return false;
+  const targetRow = await db
+    .prepare("SELECT config FROM studio_objects WHERE tenant_id=? AND name=?")
+    .bind(workspace, targetName)
+    .first<{ config: string }>();
+  if (!targetRow) return false;
+  try {
+    const config = JSON.parse(targetRow.config) as {
+      fields?: Record<string, unknown>;
+    };
+    return target === "id" || Object.hasOwn(config.fields ?? {}, target);
+  } catch {
+    return false;
+  }
+}
+
 /** All public operations are workspace scoped. The host authorizes the action first. */
 export class WorkflowRepository {
+  private readonly pieces: WorkflowPiece[];
   constructor(
     readonly db: D1Database,
     readonly workspace: string,
-  ) {}
+    options: { pieces?: WorkflowPiece[] } = {},
+  ) {
+    this.pieces = resolveWorkflowPieceDescriptors(options.pieces ?? []);
+  }
+  async validatePieces(definition: WorkflowDefinition) {
+    for (const node of definition.nodes) {
+      if (node.type !== "piece") continue;
+      const piece = this.pieces.find(
+        (entry) =>
+          entry.id === node.pieceId && entry.version === node.pieceVersion,
+      );
+      if (!piece) fail("Workflow piece is not available", 422);
+      const errors = validatePieceConfig(piece, node.config ?? {});
+      if (errors.length > 0) fail(errors[0], 422);
+    }
+  }
   async list() {
-    return (
+    const rows = (
       await this.db
         .prepare(
-          "SELECT * FROM workflows WHERE workspace_id=? ORDER BY created_at DESC,id LIMIT 200",
+          "SELECT w.*,v.definition AS published_definition FROM workflows w LEFT JOIN workflow_versions v ON v.workspace_id=w.workspace_id AND v.id=w.published_version WHERE w.workspace_id=? ORDER BY w.created_at DESC,w.id LIMIT 200",
         )
         .bind(this.workspace)
-        .all<WorkflowRow>()
-    ).results.map(parse);
+        .all<WorkflowRow & { published_definition: string | null }>()
+    ).results;
+    return rows.map((row) => {
+      const { published_definition, ...rest } = row;
+      let publishedTrigger: string | null = null;
+      if (published_definition) {
+        try {
+          publishedTrigger = (
+            JSON.parse(published_definition) as WorkflowDefinition
+          ).trigger.type;
+        } catch {
+          publishedTrigger = null;
+        }
+      }
+      return { ...parse(rest), publishedTrigger };
+    });
   }
   async get(id: string) {
     const row = await this.db
@@ -105,12 +183,18 @@ export class WorkflowRepository {
     return this.get(id);
   }
   async validate(definition: WorkflowDefinition) {
-    for (const node of definition.nodes)
+    for (const node of definition.nodes) {
       if (node.type === "webhook")
         await new WebhookDestinationRepository(
           this.db,
           this.workspace,
         ).validate(node.destinationId, node.destinationRevision);
+      if (node.type === "http" && node.destinationId)
+        await new WebhookDestinationRepository(
+          this.db,
+          this.workspace,
+        ).validate(node.destinationId, node.destinationRevision!);
+    }
     for (const item of [definition.trigger, ...definition.nodes]) {
       if (!("collection" in item) || !item.collection) continue;
       await assertLocalCollection(this.db, this.workspace, item.collection);
@@ -140,21 +224,91 @@ export class WorkflowRepository {
               : [];
       if (used.some((name) => !fields.has(name)))
         fail(`Unknown field in ${item.collection}`, 422);
-      if (
-        "conditions" in item &&
-        item.conditions?.some(
-          (condition) =>
-            !fields.has(condition.field) && condition.field !== "id",
-        )
-      )
-        fail(`Unknown field in ${item.collection}`, 422);
+      if ("conditions" in item && item.conditions?.length) {
+        for (const condition of item.conditions) {
+          if (
+            fields.has(condition.field) ||
+            condition.field === "id" ||
+            (await isRelatedConditionField(
+              this.db,
+              this.workspace,
+              object,
+              condition.field,
+            ))
+          )
+            continue;
+          fail(`Unknown field in ${item.collection}`, 422);
+        }
+      }
     }
+  }
+  async validateSubflows(id: string, definition: WorkflowDefinition) {
+    for (const node of definition.nodes) {
+      if (node.type !== "subflow") continue;
+      if (node.workflowId === id) fail("A workflow cannot call itself", 422);
+      const child = await this.db
+        .prepare("SELECT * FROM workflows WHERE workspace_id=? AND id=?")
+        .bind(this.workspace, node.workflowId)
+        .first<WorkflowRow>();
+      if (!child) fail("Subflow not found", 404);
+      if (!child.published_version)
+        fail("Publish the child workflow first", 422);
+      const version = await this.db
+        .prepare(
+          "SELECT workflow_id FROM workflow_versions WHERE workspace_id=? AND id=?",
+        )
+        .bind(this.workspace, node.workflowVersion)
+        .first<{ workflow_id: string }>();
+      if (!version || version.workflow_id !== node.workflowId)
+        fail("Pinned subflow version is missing", 422);
+    }
+    // Cycle traversal follows the exact pinned versions executions use, not
+    // the mutable drafts: a cycle removed from a draft still blocks while an
+    // old published version references it.
+    const pinned = new Map<string, WorkflowDefinition>();
+    const loadPinned = async (
+      workflowId: string,
+      versionId: string,
+    ): Promise<WorkflowDefinition> => {
+      const cached = pinned.get(versionId);
+      if (cached) return cached;
+      const row = await this.db
+        .prepare(
+          "SELECT definition FROM workflow_versions WHERE workspace_id=? AND id=? AND workflow_id=?",
+        )
+        .bind(this.workspace, versionId, workflowId)
+        .first<{ definition: string }>();
+      if (!row) fail("Pinned subflow version is missing", 422);
+      const parsed = JSON.parse(row.definition) as WorkflowDefinition;
+      pinned.set(versionId, parsed);
+      return parsed;
+    };
+    const visiting = new Set<string>();
+    const visit = async (
+      current: string,
+      currentVersion: string | null,
+    ): Promise<void> => {
+      if (visiting.has(current)) fail("Subflow calls form a cycle", 422);
+      visiting.add(current);
+      const currentDefinition =
+        currentVersion === null
+          ? definition
+          : await loadPinned(current, currentVersion);
+      for (const node of currentDefinition.nodes) {
+        if (node.type === "subflow")
+          await visit(node.workflowId, node.workflowVersion);
+      }
+      visiting.delete(current);
+    };
+    await visit(id, null);
   }
   async publish(id: string, revision: number, owner: string) {
     const draft = await this.get(id);
     if (draft.revision !== revision)
       fail("Draft changed; reload before publishing", 409);
     await this.validate(draft.definition);
+    await this.validateSubflows(id, draft.definition);
+    await this.validatePieces(draft.definition);
     const version = `${id}:${revision}`,
       g = guard(
         this.db,
@@ -286,7 +440,7 @@ export class WorkflowRepository {
     const jobs = (
       await this.db
         .prepare(
-          "SELECT * FROM workflow_jobs WHERE workspace_id=? AND execution_id=? ORDER BY sequence",
+          "SELECT * FROM workflow_jobs WHERE workspace_id=? AND execution_id=? ORDER BY invocation,sequence",
         )
         .bind(this.workspace, id)
         .all<{ node_id: string; input: string; output: string }>()
@@ -341,11 +495,63 @@ export class WorkflowRepository {
     return (
       await this.db
         .prepare(
-          "SELECT * FROM workflow_tasks WHERE workspace_id=? AND assignee=? ORDER BY created_at DESC,id LIMIT 200",
+          "SELECT id,title,kind,status,created_at FROM workflow_tasks WHERE workspace_id=? AND assignee=? UNION ALL SELECT id,title,'approval' AS kind,CASE status WHEN 'open' THEN 'open' ELSE 'done' END AS status,created_at FROM workflow_approvals WHERE workspace_id=? AND assignee=? ORDER BY created_at DESC,id LIMIT 200",
         )
-        .bind(this.workspace, user)
+        .bind(this.workspace, user, this.workspace, user)
         .all<{ id: string; status: string; title: string; kind: string }>()
     ).results;
+  }
+  async resolveApproval(
+    id: string,
+    user: string,
+    decision: string,
+    comment?: string,
+  ) {
+    if (decision !== "approved" && decision !== "rejected")
+      fail("Approval decision must be approved or rejected", 422);
+    if (
+      comment !== undefined &&
+      (typeof comment !== "string" || comment.length > 500)
+    )
+      fail("Approval comment must be text up to 500 characters", 422);
+    const row = await this.db
+      .prepare(
+        "SELECT execution_id,node_id FROM workflow_approvals WHERE workspace_id=? AND id=? AND assignee=? AND status='open'",
+      )
+      .bind(this.workspace, id, user)
+      .first<{ execution_id: string; node_id: string }>();
+    if (!row) fail("Assigned approval not found", 404);
+    const execution = await this.db
+      .prepare(
+        "SELECT status,node_id FROM workflow_executions WHERE workspace_id=? AND id=?",
+      )
+      .bind(this.workspace, row.execution_id)
+      .first<{ status: string; node_id: string | null }>();
+    if (
+      !execution ||
+      execution.status !== "waiting" ||
+      execution.node_id !== row.node_id
+    )
+      fail("Assigned approval not found", 404);
+    const g = guard(
+      this.db,
+      "SELECT EXISTS(SELECT 1 FROM workflow_executions WHERE workspace_id=? AND id=? AND node_id=? AND status='waiting')",
+      [this.workspace, row.execution_id, row.node_id],
+    );
+    await transaction(this.db, [
+      g.start,
+      this.db
+        .prepare(
+          "UPDATE workflow_approvals SET status='decided',decision=?,comment=?,decided_by=?,decided_at=? WHERE workspace_id=? AND id=? AND status='open'",
+        )
+        .bind(decision, comment ?? null, user, Date.now(), this.workspace, id),
+      this.db
+        .prepare(
+          "UPDATE workflow_executions SET status='queued',wake_at=0,attempts=0 WHERE workspace_id=? AND id=?",
+        )
+        .bind(this.workspace, row.execution_id),
+      g.end,
+    ]);
   }
   async resolveTask(id: string, user: string) {
     const result = await this.db

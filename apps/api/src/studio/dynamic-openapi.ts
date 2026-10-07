@@ -1128,6 +1128,7 @@ export async function dynamicOpenApi(
       null,
     ],
     ["/workflow-bundles", "get", "List available workflow bundles", null],
+    ["/workflow-pieces", "get", "List available workflow pieces", null],
     [
       "/workflow-bundles/{id}/prepare",
       "post",
@@ -1172,6 +1173,12 @@ export async function dynamicOpenApi(
     ],
     ["/workflow-inbox", "get", "Read assigned tasks and notifications", null],
     ["/workflow-inbox/{id}/resolve", "post", "Resolve assigned item", null],
+    [
+      "/workflow-approvals/{id}/resolve",
+      "post",
+      "Decide assigned approval",
+      null,
+    ],
   ] as const;
   const notificationRoutes = [
     ["/notifications", "get", "List personal notifications", null],

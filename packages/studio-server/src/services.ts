@@ -9,6 +9,7 @@ import {
   requireWriteAccess,
 } from "./access-authorization";
 import type { AccessAction } from "@savia/studio-shared/access-control";
+import { enforceValidationWorkflows } from "./workflows/relations";
 export const parseObject = (row: any): StudioObject => ({
   ...row,
   config: JSON.parse(row.config),
@@ -270,6 +271,7 @@ export async function createRecord(
       created_by: policyFor(db)?.principalId ?? options.createdBy ?? null,
     };
   requireWriteAccess(db, name, "create", null, result, Object.keys(input));
+  await enforceValidationWorkflows(db, tenant, name, { ...data, id }, null);
   const schemaGuard = guard(
     db,
     "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
@@ -350,6 +352,13 @@ export async function updateRecord(
   );
   if (Object.keys(errors).length)
     return fail(Object.values(errors).join(". "), 422);
+  await enforceValidationWorkflows(
+    db,
+    tenant,
+    name,
+    { ...data, id },
+    { ...stored, id },
+  );
   const schemaGuard = guard(
     db,
     "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",

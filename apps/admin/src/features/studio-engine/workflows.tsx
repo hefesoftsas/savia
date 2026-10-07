@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ArrowDown,
   Plus,
   Play,
   Save,
@@ -18,6 +17,8 @@ import {
   History,
   ChevronRight,
   Layers,
+  Download,
+  Upload,
 } from "lucide-react";
 import {
   workflowDraftSchema,
@@ -36,6 +37,15 @@ import {
   TriggerEditor,
   ValueInput,
 } from "./workflow-editor";
+import WorkflowCanvas, {
+  connectStepTarget,
+  TRIGGER_NODE_ID,
+} from "./workflow-canvas";
+import {
+  auditWorkflowImport,
+  exportWorkflow,
+  parseWorkflowImport,
+} from "./workflow-transfer";
 import "./workflows.css";
 
 type Draft = {
@@ -252,6 +262,76 @@ function WorkspaceWorkflows({
     setDirty(true);
     setNotice("");
   };
+  const fileInput = useRef<HTMLInputElement>(null);
+  const exportDraft = () => {
+    if (!draft) return;
+    const payload = exportWorkflow(draft.name, draft.definition);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${draft.name}.savia-workflow.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+  const importFile = async (file: File) =>
+    request(async () => {
+      let raw: unknown;
+      try {
+        raw = JSON.parse(await file.text());
+      } catch {
+        throw new Error(t("El archivo no es un flujo de Savia válido."));
+      }
+      let parsed: { name: string; definition: Draft["definition"] };
+      try {
+        parsed = parseWorkflowImport(raw);
+      } catch {
+        throw new Error(t("El archivo no es un flujo de Savia válido."));
+      }
+      const audit = auditWorkflowImport(parsed.definition, native);
+      if (audit.missingCollections.length > 0 || audit.unknownFields.length > 0)
+        throw new Error(
+          `${t("Faltan colecciones:")} ${[...audit.missingCollections, ...audit.unknownFields].join(", ")}`,
+        );
+      const response = await api<{ data: Draft }>("/workflows", "POST", parsed);
+      choose(response.data);
+      setNotice(
+        audit.externalRefs.length > 0
+          ? `${t("Flujo importado como borrador.")} ${t("Referencias a revisar:")} ${audit.externalRefs.join(", ")}`
+          : t("Flujo importado como borrador."),
+      );
+    });
+  const connectStep = (
+    source: string,
+    target: string,
+    sourceHandle?: string | null,
+  ) => {
+    if (
+      !draft ||
+      source === TRIGGER_NODE_ID ||
+      target === TRIGGER_NODE_ID ||
+      source === target
+    )
+      return;
+    const origin = draft.definition.nodes.find((step) => step.id === source);
+    if (!origin) return;
+    const patched = connectStepTarget(origin, sourceHandle, target);
+    if (!patched) return;
+    change({
+      ...draft,
+      definition: {
+        ...draft.definition,
+        nodes: draft.definition.nodes.map((step) =>
+          step.id === source ? patched : step,
+        ),
+      },
+    });
+    setSelected(target);
+  };
   const request = async (action: () => Promise<void>) => {
     setError("");
     setBusy(true);
@@ -323,10 +403,32 @@ function WorkspaceWorkflows({
             {t("Conecta eventos, decisiones y acciones sobre tus colecciones.")}
           </p>
         </div>
-        <Button disabled={busy || dirty} onClick={() => choose(fresh())}>
-          <Plus size={16} />
-          {t("Nuevo flujo")}
-        </Button>
+        <div className="wf-actions">
+          <Button
+            variant="outline"
+            disabled={busy || dirty}
+            onClick={() => fileInput.current?.click()}
+          >
+            <Upload size={16} />
+            {t("Importar")}
+          </Button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/json,.json"
+            className="sr-only"
+            aria-label={t("Archivo de flujo para importar")}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void importFile(file);
+            }}
+          />
+          <Button disabled={busy || dirty} onClick={() => choose(fresh())}>
+            <Plus size={16} />
+            {t("Nuevo flujo")}
+          </Button>
+        </div>
       </header>
       <WorkflowError
         error={error || errorText(list.error)}
@@ -503,6 +605,14 @@ function WorkspaceWorkflows({
                 />
               </label>
               <div className="wf-actions">
+                <Button
+                  variant="outline"
+                  disabled={busy || dirty || !draft.id}
+                  onClick={exportDraft}
+                >
+                  <Download size={16} />
+                  {t("Exportar")}
+                </Button>
                 <Button disabled={busy || !dirty} onClick={save}>
                   <Save size={16} />
                   {t("Guardar borrador")}
@@ -612,45 +722,19 @@ function WorkspaceWorkflows({
               </p>
             ) : null}
             <div className="wf-editor">
-              <div className="wf-canvas" aria-label={t("Secuencia de pasos")}>
-                <ol>
-                  {draft.definition.nodes.map((step, index) => (
-                    <li key={step.id}>
-                      <button
-                        className="wf-step"
-                        aria-pressed={selected === step.id}
-                        onClick={() => setSelected(step.id)}
-                      >
-                        <span className="wf-step-number">{index + 1}</span>
-                        <span>
-                          <strong>
-                            {step.label || t(stepLabels[step.type])}
-                          </strong>
-                          <small>
-                            {step.type === "condition"
-                              ? t("Sí → %{value0} · No → %{value1}", {
-                                  value0: step.next ?? t("Fin"),
-                                  value1: step.otherwise ?? t("Fin"),
-                                })
-                              : t("Siguiente → %{value0}", {
-                                  value0: step.next ?? t("Fin"),
-                                })}
-                          </small>
-                        </span>
-                        {step.type === "condition" ? (
-                          <GitBranch size={18} />
-                        ) : null}
-                      </button>
-                      {index < draft.definition.nodes.length - 1 ? (
-                        <ArrowDown
-                          className="wf-connector"
-                          size={18}
-                          aria-hidden="true"
-                        />
-                      ) : null}
-                    </li>
-                  ))}
-                </ol>
+              <div>
+                <WorkflowCanvas
+                  definition={draft.definition}
+                  selected={selected}
+                  storageKey={draft.id ?? "new"}
+                  onSelect={setSelected}
+                  onConnectNode={connectStep}
+                />
+                <p className="wf-muted">
+                  {t(
+                    "Arrastra desde un punto de salida hasta otro paso para reconectar.",
+                  )}
+                </p>
                 <div className="wf-add">
                   <label>
                     {t("Tipo de paso")}
@@ -682,7 +766,9 @@ function WorkspaceWorkflows({
                         native[0]?.name ?? "",
                       );
                       const nodes = draft.definition.nodes.map((s, i) =>
-                        i === draft.definition.nodes.length - 1 && !s.next
+                        i === draft.definition.nodes.length - 1 &&
+                        !s.next &&
+                        s.type !== "switch"
                           ? { ...s, next: added.id }
                           : s,
                       );
@@ -708,6 +794,7 @@ function WorkspaceWorkflows({
                       node={node}
                       definition={draft.definition}
                       objects={native}
+                      workflowId={draft.id}
                       onChange={(next) =>
                         change({
                           ...draft,
@@ -726,14 +813,52 @@ function WorkspaceWorkflows({
                       onClick={() => {
                         const nodes = draft.definition.nodes
                           .filter((n) => n.id !== node.id)
-                          .map((n) => ({
-                            ...n,
-                            ...(n.next === node.id ? { next: node.next } : {}),
-                            ...(n.type === "condition" &&
-                            n.otherwise === node.id
-                              ? { otherwise: node.next }
-                              : {}),
-                          }));
+                          .map((n): WorkflowNode => {
+                            let patched = n;
+                            if (patched.next === node.id)
+                              patched = { ...patched, next: node.next };
+                            if (
+                              (patched.type === "condition" ||
+                                patched.type === "approval") &&
+                              patched.otherwise === node.id
+                            )
+                              patched = {
+                                ...patched,
+                                otherwise: node.next,
+                              };
+                            if (patched.type === "switch") {
+                              patched = {
+                                ...patched,
+                                cases: patched.cases.map((entry) =>
+                                  entry.next === node.id
+                                    ? { ...entry, next: node.next }
+                                    : entry,
+                                ),
+                              };
+                              if (patched.otherwise === node.id)
+                                patched = {
+                                  ...patched,
+                                  otherwise: node.next,
+                                };
+                            }
+                            if (
+                              patched.type === "loop" &&
+                              patched.body === node.id
+                            )
+                              patched = {
+                                ...patched,
+                                body: node.next ?? "",
+                              };
+                            if (patched.type === "parallel") {
+                              patched = {
+                                ...patched,
+                                branches: patched.branches.map((entry) =>
+                                  entry === node.id ? (node.next ?? "") : entry,
+                                ),
+                              };
+                            }
+                            return patched;
+                          });
                         change({
                           ...draft,
                           definition: { ...draft.definition, nodes },
@@ -1010,7 +1135,11 @@ function WorkspaceWorkflows({
                 <span className="wf-inbox-title">{item.title}</span>
                 <span className="wf-inbox-meta">
                   <span className="wf-badge wf-badge-muted">
-                    {item.kind === "task" ? t("Tarea") : t("Notificación")}
+                    {item.kind === "task"
+                      ? t("Tarea")
+                      : item.kind === "approval"
+                        ? t("Aprobación")
+                        : t("Notificación")}
                   </span>
                   <span
                     className={
@@ -1023,7 +1152,43 @@ function WorkspaceWorkflows({
                   </span>
                 </span>
               </span>
-              {item.status !== "done" ? (
+              {item.status !== "done" && item.kind === "approval" ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      request(async () => {
+                        await api(
+                          `/workflow-approvals/${item.id}/resolve`,
+                          "POST",
+                          { decision: "approved" },
+                        );
+                      })
+                    }
+                  >
+                    {t("Aprobar")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      request(async () => {
+                        await api(
+                          `/workflow-approvals/${item.id}/resolve`,
+                          "POST",
+                          { decision: "rejected" },
+                        );
+                      })
+                    }
+                  >
+                    {t("Rechazar")}
+                  </Button>
+                </>
+              ) : null}
+              {item.status !== "done" && item.kind !== "approval" ? (
                 <Button
                   size="sm"
                   variant="outline"

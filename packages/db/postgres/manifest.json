@@ -225,6 +225,18 @@
     {
       "filename": "0052_request_cache.sql",
       "sha256": "ba9b4401675ad9016fe194ba5be417908d4fe0a6c798407e54d1de8cbeaf602b"
+    },
+    {
+      "filename": "0054_workflow_loop_iterations.sql",
+      "sha256": "5645ff24a070d9919c892060555fbc372bff61bfa5aa7602b7d0e105faf39486"
+    },
+    {
+      "filename": "0055_workflow_approvals.sql",
+      "sha256": "3dc83aed232ea04dfd89cf4dd73a2dc38fd210b02f02cbf554f08b5ce24732b1"
+    },
+    {
+      "filename": "0056_workflow_validate_dispatch.sql",
+      "sha256": "10da3c8be09b098321a5af37c5cf70d7356995c8b3f12a112337f206a689ff96"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1869,6 +1881,11 @@
       "type": "index",
       "name": "whatsapp_action_unfinished_scope",
       "table": "whatsapp_channel_actions"
+    },
+    {
+      "type": "trigger",
+      "name": "workflow_event_dispatch_validate",
+      "table": "workflow_events"
     },
     {
       "type": "index",

@@ -633,6 +633,370 @@ describe("general workflows on real D1", () => {
       .first<{ n: number }>();
     expect(count?.n).toBe(1);
   });
+  it("routes switch cases in order and falls back to the default branch", async () => {
+    const definition = manual([
+      {
+        id: "route",
+        type: "switch",
+        input: { ref: "trigger.status" },
+        cases: [
+          { operator: "eq", value: "approved", next: "fast" },
+          { operator: "eq", value: "review", next: "slow" },
+        ],
+        otherwise: "slow",
+      },
+      {
+        id: "fast",
+        type: "transform",
+        values: { lane: "fast", seen: { ref: "steps.route.value" } },
+      },
+      {
+        id: "slow",
+        type: "transform",
+        values: { lane: "slow", matched: { ref: "steps.route.matched" } },
+      },
+    ]);
+    const first = await published(definition);
+    const approved = await first.repo.start(
+      first.id,
+      { status: "approved" },
+      owner,
+      "switch-approved",
+    );
+    await processWorkflows(db, async () => true);
+    await processWorkflows(db, async () => true);
+    const approvedDetail = await first.repo.execution(approved.id);
+    expect(approvedDetail.status).toBe("completed");
+    expect(approvedDetail.jobs.map((j) => j.node_id)).toEqual([
+      "route",
+      "fast",
+    ]);
+    expect(approvedDetail.jobs[0].output).toMatchObject({
+      matched: 0,
+      branch: "fast",
+    });
+    const second = await published(definition);
+    const fallback = await second.repo.start(
+      second.id,
+      { status: "other" },
+      owner,
+      "switch-fallback",
+    );
+    await processWorkflows(db, async () => true);
+    await processWorkflows(db, async () => true);
+    const fallbackDetail = await second.repo.execution(fallback.id);
+    expect(fallbackDetail.status).toBe("completed");
+    expect(fallbackDetail.jobs.map((j) => j.node_id)).toEqual([
+      "route",
+      "slow",
+    ]);
+    expect(fallbackDetail.jobs[0].output).toMatchObject({
+      matched: null,
+      branch: "slow",
+    });
+  });
+  it("continues with the recorded error when a step allows it", async () => {
+    const { repo, id } = await published(
+      manual([
+        {
+          id: "risky",
+          type: "transform",
+          values: { value: { ref: "trigger.missing" } },
+          onError: "continue",
+          maxAttempts: 1,
+          next: "done",
+        },
+        {
+          id: "done",
+          type: "transform",
+          values: { recovered: { ref: "steps.risky.error" } },
+        },
+      ]),
+    );
+    const run = await repo.start(id, {}, owner, "continue-once");
+    await processWorkflows(db, async () => true);
+    await processWorkflows(db, async () => true);
+    const detail = await repo.execution(run.id);
+    expect(detail.status).toBe("completed");
+    expect(detail.jobs.map((j) => j.node_id)).toEqual(["risky", "done"]);
+    expect(detail.jobs[0].output).toMatchObject({
+      error: expect.any(String),
+    });
+    expect(detail.jobs[1].output).toMatchObject({
+      recovered: expect.any(String),
+    });
+  });
+  it("fails fast when maxAttempts is 1", async () => {
+    const { repo, id } = await published(
+      manual([
+        {
+          id: "missing",
+          type: "transform",
+          values: { value: { ref: "trigger.missing" } },
+          maxAttempts: 1,
+        },
+      ]),
+    );
+    const run = await repo.start(id, {}, owner, "fail-fast");
+    await processWorkflows(db, async () => true);
+    const detail = await repo.execution(run.id);
+    expect(detail.status).toBe("failed");
+    expect(detail.jobs).toHaveLength(0);
+  });
+  it("bulk-updates every record returned by a query", async () => {
+    const { repo, id } = await published(
+      manual([
+        {
+          id: "find",
+          type: "query",
+          collection: "requests",
+          field: "status",
+          value: "bulk_pending",
+          limit: 20,
+          next: "close",
+        },
+        {
+          id: "close",
+          type: "bulkUpdate",
+          collection: "requests",
+          items: { ref: "steps.find.records" },
+          values: { status: "bulk_done" },
+        },
+      ]),
+    );
+    for (const title of ["Bulk A", "Bulk B", "Bulk C"])
+      await createRecord(db, tenant, "requests", {
+        title,
+        status: "bulk_pending",
+      });
+    const run = await repo.start(id, {}, owner, "bulk-close");
+    await processWorkflows(db, async () => true);
+    await processWorkflows(db, async () => true);
+    const detail = await repo.execution(run.id);
+    expect(detail.status).toBe("completed");
+    expect(detail.jobs.map((j) => j.node_id)).toEqual(["find", "close"]);
+    const output = detail.jobs[1].output as { updated: number; ids: string[] };
+    expect(output.updated).toBe(3);
+    for (const recordId of output.ids)
+      expect((await getRecord(db, tenant, "requests", recordId)).status).toBe(
+        "bulk_done",
+      );
+  });
+  it("maps each list element with per-item values", async () => {
+    const { repo, id } = await published(
+      manual([
+        {
+          id: "each",
+          type: "map",
+          items: { ref: "trigger.tags" },
+          values: { tag: { ref: "item.id" }, flag: true },
+        },
+      ]),
+    );
+    const run = await repo.start(
+      id,
+      { tags: [{ id: "a" }, { id: "b" }] },
+      owner,
+      "map-tags",
+    );
+    await processWorkflows(db, async () => true);
+    const detail = await repo.execution(run.id);
+    expect(detail.status).toBe("completed");
+    expect(detail.jobs[0].output).toEqual({
+      items: [
+        { tag: "a", flag: true },
+        { tag: "b", flag: true },
+      ],
+      count: 2,
+    });
+  });
+  it("fails a bulk step when items are not records", async () => {
+    const { repo, id } = await published(
+      manual([
+        {
+          id: "close",
+          type: "bulkUpdate",
+          collection: "requests",
+          items: { ref: "trigger.status" },
+          values: { status: "bulk_done" },
+          maxAttempts: 1,
+        },
+      ]),
+    );
+    const run = await repo.start(
+      id,
+      { status: "bulk_pending" },
+      owner,
+      "bulk-bad",
+    );
+    await processWorkflows(db, async () => true);
+    expect((await repo.execution(run.id)).status).toBe("failed");
+  });
+  it("loops over query records with one pass recorded per step", async () => {
+    const { repo, id } = await published(
+      manual([
+        {
+          id: "find",
+          type: "query",
+          collection: "requests",
+          field: "status",
+          value: "loop_pending",
+          limit: 20,
+          next: "repeat",
+        },
+        {
+          id: "repeat",
+          type: "loop",
+          items: { ref: "steps.find.records" },
+          body: "touch",
+          next: "summarize",
+        },
+        {
+          id: "touch",
+          type: "update",
+          collection: "requests",
+          recordId: { ref: "steps.repeat.item.id" },
+          values: { status: "loop_done" },
+        },
+        {
+          id: "summarize",
+          type: "transform",
+          values: { total: { ref: "steps.repeat.count" } },
+        },
+      ]),
+    );
+    for (const title of ["Loop A", "Loop B", "Loop C"])
+      await createRecord(db, tenant, "requests", {
+        title,
+        status: "loop_pending",
+      });
+    const run = await repo.start(id, {}, owner, "loop-records");
+    await processWorkflows(db, async () => true);
+    await processWorkflows(db, async () => true);
+    const detail = await repo.execution(run.id);
+    expect(detail.status).toBe("completed");
+    // The head runs once per pass; the last body end detects completion and
+    // routes out, so there is no extra exit pass.
+    expect(detail.jobs.map((j) => j.node_id)).toEqual([
+      "find",
+      "repeat",
+      "touch",
+      "repeat",
+      "touch",
+      "repeat",
+      "touch",
+      "summarize",
+    ]);
+    const passes = detail.jobs.filter((j) => j.node_id === "repeat");
+    const indexes = passes.map((j) => (j.output as { index: number }).index);
+    expect(indexes).toEqual([0, 1, 2]);
+    expect(detail.jobs[detail.jobs.length - 1].output).toMatchObject({
+      total: 3,
+    });
+    const remaining = await db
+      .prepare(
+        "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=? AND json_extract(data,'$.status')='loop_pending' AND deleted_at IS NULL",
+      )
+      .bind(tenant, "requests")
+      .first<{ n: number }>();
+    expect(remaining?.n).toBe(0);
+  });
+  it("skips the body when the loop list is empty", async () => {
+    const { repo, id } = await published(
+      manual([
+        {
+          id: "find",
+          type: "query",
+          collection: "requests",
+          field: "status",
+          value: "loop_missing",
+          limit: 20,
+          next: "repeat",
+        },
+        {
+          id: "repeat",
+          type: "loop",
+          items: { ref: "steps.find.records" },
+          body: "touch",
+          next: "summarize",
+        },
+        {
+          id: "touch",
+          type: "transform",
+          values: { seen: { ref: "steps.repeat.item" } },
+        },
+        {
+          id: "summarize",
+          type: "transform",
+          values: { total: { ref: "steps.repeat.count" } },
+        },
+      ]),
+    );
+    const run = await repo.start(id, {}, owner, "loop-empty");
+    await processWorkflows(db, async () => true);
+    const detail = await repo.execution(run.id);
+    expect(detail.status).toBe("completed");
+    expect(detail.jobs.map((j) => j.node_id)).toEqual([
+      "find",
+      "repeat",
+      "summarize",
+    ]);
+    expect(detail.jobs[1].output).toMatchObject({ count: 0, iterations: 0 });
+  });
+  it("breaks out of the body through an edge that leaves it", async () => {
+    const { repo, id } = await published(
+      manual([
+        {
+          id: "repeat",
+          type: "loop",
+          items: { ref: "trigger.tags" },
+          body: "touch",
+          next: "summarize",
+        },
+        {
+          id: "touch",
+          type: "transform",
+          values: { seen: { ref: "steps.repeat.item" } },
+          next: "gate",
+        },
+        {
+          id: "gate",
+          type: "condition",
+          left: { ref: "steps.repeat.index" },
+          operator: "gte",
+          right: 1,
+          next: "summarize",
+        },
+        {
+          id: "summarize",
+          type: "transform",
+          values: { total: { ref: "steps.repeat.count" } },
+        },
+      ]),
+    );
+    const run = await repo.start(
+      id,
+      { tags: [{ id: "a" }, { id: "b" }, { id: "c" }] },
+      owner,
+      "loop-break",
+    );
+    await processWorkflows(db, async () => true);
+    await processWorkflows(db, async () => true);
+    const detail = await repo.execution(run.id);
+    expect(detail.status).toBe("completed");
+    expect(detail.jobs.map((j) => j.node_id)).toEqual([
+      "repeat",
+      "touch",
+      "gate",
+      "repeat",
+      "touch",
+      "gate",
+      "summarize",
+    ]);
+    expect(detail.jobs[detail.jobs.length - 1].output).toMatchObject({
+      total: 3,
+    });
+  });
   it("recovers an expired lease and refuses execution after permission revocation", async () => {
     const { repo, id } = await published(valueFlow("recovery"));
     const run = await repo.start(id, {}, owner, "recover");
@@ -710,6 +1074,28 @@ describe("general workflows on real D1", () => {
     expect(await repo.executions(id)).toHaveLength(1);
     await processWorkflows(db, async () => true, { now: now + 60_001 });
     expect(await repo.executions(id)).toHaveLength(2);
+    await repo.setEnabled(id, false);
+  });
+  it("fires cron schedules once and coalesces missed occurrences", async () => {
+    // A Monday 09:30 window around 2026-03-02T09:30Z.
+    const now = Date.parse("2026-03-02T09:30:00Z");
+    const { repo, id } = await published({
+      trigger: {
+        type: "schedule",
+        cron: "30 9 * * 1",
+        startAt: new Date(now - 60000).toISOString(),
+      },
+      nodes: [{ id: "value", type: "transform", values: {} }],
+    });
+    await processWorkflows(db, async () => true, { now });
+    expect(await repo.executions(id)).toHaveLength(1);
+    const advanced = await db
+      .prepare(
+        "SELECT next_run_at FROM workflows WHERE workspace_id=? AND id=?",
+      )
+      .bind(tenant, id)
+      .first<{ next_run_at: number }>();
+    expect(advanced?.next_run_at).toBe(Date.parse("2026-03-09T09:30:00Z"));
     await repo.setEnabled(id, false);
   });
   it("calls realtime transition hooks with committed workspace execution IDs", async () => {

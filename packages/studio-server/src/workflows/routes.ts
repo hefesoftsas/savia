@@ -1,5 +1,7 @@
 import { WebhookEndpointRepository } from "./webhook-endpoints";
 import { WebhookDestinationRepository } from "./webhook-destinations";
+import { resolveWorkflowPieceDescriptors } from "./pieces";
+import type { WorkflowPieceHandler } from "./pieces";
 import { webhookDestinationSchema } from "@savia/studio-shared/workflow-webhooks";
 import { isExtensionAvailable, type ExtensionOptions } from "../extensions";
 import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
@@ -12,9 +14,16 @@ import { fail } from "../context";
 import { WorkflowRepository } from "./repository";
 import { workflowDraftSchema } from "@savia/studio-shared/workflows";
 export type WorkflowAction =
-  "view" | "design" | "publish" | "execute" | "history" | "resolve";
+  | "view"
+  | "design"
+  | "publish"
+  | "execute"
+  | "history"
+  | "resolve"
+  | "administer";
 export type WorkflowOptions = {
   workflowBundles?: readonly WorkflowBundle[];
+  workflowPieces?: readonly WorkflowPieceHandler[];
   authorizeWorkflow?: (request: {
     workspace: string;
     principalId: string;
@@ -45,6 +54,12 @@ export const workflowRequests = {
       key: z.string().min(1).max(150),
     })
     .strict(),
+  approval: z
+    .object({
+      decision: z.enum(["approved", "rejected"]),
+      comment: z.string().max(500).optional(),
+    })
+    .strict(),
 };
 export function registerWorkflows(
   app: Hono<Env>,
@@ -67,7 +82,11 @@ export function registerWorkflows(
       !(await options.authorizeWorkflow?.({ workspace, principalId, action }))
     )
       fail("Workflow permission required", 403);
-    return new WorkflowRepository(c.env.DB, workspace);
+    return new WorkflowRepository(c.env.DB, workspace, {
+      pieces: resolveWorkflowPieceDescriptors(
+        (options.workflowPieces ?? []).map((piece) => piece.descriptor),
+      ),
+    });
   };
   const endpoints = async (c: Context<Env>, action: WorkflowAction) => {
     const repo = await repository(c, action);
@@ -178,6 +197,14 @@ export function registerWorkflows(
       ),
     });
   });
+  app.get("/api/workflow-pieces", async (c) => {
+    await repository(c, "view");
+    return c.json({
+      data: resolveWorkflowPieceDescriptors(
+        (options.workflowPieces ?? []).map((piece) => piece.descriptor),
+      ),
+    });
+  });
   app.get("/api/workflows", async (c) =>
     c.json({ data: await (await repository(c, "view")).list() }),
   );
@@ -253,12 +280,12 @@ export function registerWorkflows(
   );
   app.post("/api/workflow-executions/:id/cancel", async (c) =>
     c.json({
-      data: await (await repository(c, "execute")).cancel(c.req.param("id")),
+      data: await (await repository(c, "administer")).cancel(c.req.param("id")),
     }),
   );
   app.post("/api/workflow-executions/:id/retry", async (c) =>
     c.json({
-      data: await (await repository(c, "execute")).retry(c.req.param("id")),
+      data: await (await repository(c, "administer")).retry(c.req.param("id")),
     }),
   );
   app.get("/api/workflow-inbox", async (c) =>
@@ -270,6 +297,18 @@ export function registerWorkflows(
     await (
       await repository(c, "resolve")
     ).resolveTask(c.req.param("id"), c.get("principalId"));
+    return c.json({ data: { resolved: true } });
+  });
+  app.post("/api/workflow-approvals/:id/resolve", async (c) => {
+    const body = workflowRequests.approval.parse(await c.req.json());
+    await (
+      await repository(c, "resolve")
+    ).resolveApproval(
+      c.req.param("id"),
+      c.get("principalId"),
+      body.decision,
+      body.comment,
+    );
     return c.json({ data: { resolved: true } });
   });
 }

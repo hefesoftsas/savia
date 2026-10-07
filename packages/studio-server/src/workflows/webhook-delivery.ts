@@ -141,6 +141,7 @@ export async function executeWebhookNode(
   };
   const contextTooLarge = JSON.stringify(updated).length > 256000;
   const finished = success && !contextTooLarge,
+    returning = finished && !node.next && (context.calls?.length ?? 0) > 0,
     checkpoint = fencing();
   const statements = [
     checkpoint.start,
@@ -167,7 +168,7 @@ export async function executeWebhookNode(
     statements.push(
       db
         .prepare(
-          "INSERT INTO workflow_jobs(workspace_id,execution_id,node_id,sequence,type,input,output,attempts) VALUES (?,?,?,?,?,?,?,?)",
+          "INSERT INTO workflow_jobs(workspace_id,execution_id,node_id,sequence,type,input,output,attempts,invocation) VALUES (?,?,?,?,?,?,?,?,(SELECT COALESCE(MAX(invocation),0)+1 FROM workflow_jobs WHERE workspace_id=? AND execution_id=?))",
         )
         .bind(
           ...scoped,
@@ -176,6 +177,8 @@ export async function executeWebhookNode(
           JSON.stringify(node),
           JSON.stringify(result.output),
           sequence,
+          run.workspace_id,
+          run.id,
         ),
     );
   statements.push(
@@ -185,7 +188,7 @@ export async function executeWebhookNode(
       )
       .bind(
         finished
-          ? node.next
+          ? node.next || returning
             ? "queued"
             : "completed"
           : retry

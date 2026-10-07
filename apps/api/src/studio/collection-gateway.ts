@@ -40,8 +40,8 @@ import {
 } from "./collection-sources";
 import { createRecordBundlesApp } from "./record-bundles";
 import type { SqlBridgeClient } from "./sql-bridge";
-import { canManageSharedCrm } from "../external-crm/hubspot-access";
 import { createNotificationPolicy } from "../notifications";
+import { authorizeWorkflowActor } from "../workflows";
 
 export type CollectionGatewayContext = {
   db: D1Database;
@@ -114,8 +114,8 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
       pluginRegistry: context.pluginRegistry,
       policy: createNotificationPolicy(db),
       integrationFetch: context.collectionFetch,
-      authorizeWorkflow: async ({ workspace }) =>
-        canManageSharedCrm(actor, workspace),
+      authorizeWorkflow: async ({ workspace, action }) =>
+        authorizeWorkflowActor(actor, workspace, action),
       accessPolicy: context.accessPolicy,
       seedObjects,
       ...solutionOptions,

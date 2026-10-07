@@ -58,6 +58,7 @@ import {
 import { OperationError, OperationPager, TaskPanel } from "./operations";
 import "./operations.css";
 import { RecordChatShareAction } from "./record-chat-share";
+import RecordWorkflowAction from "./record-workflow-action";
 import { useOptionalAppServices } from "@/features/assistant/assistant-context";
 
 type Relation = {
@@ -543,6 +544,12 @@ export default function RecordDetail({
                 <RecordChatShareAction
                   share={recordShare}
                   personalIntegrations={appServices!.personalIntegrations}
+                />
+              ) : null}
+              {current?.id ? (
+                <RecordWorkflowAction
+                  collection={object.name}
+                  recordId={String(current.id)}
                 />
               ) : null}
             </div>

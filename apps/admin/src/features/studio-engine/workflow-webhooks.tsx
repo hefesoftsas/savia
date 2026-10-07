@@ -122,7 +122,7 @@ export function WorkflowDestinationPicker({
   value,
   onChange,
 }: {
-  value: { destinationId: string; destinationRevision: number };
+  value: { destinationId?: string; destinationRevision?: number };
   onChange: (v: { destinationId: string; destinationRevision: number }) => void;
 }) {
   const t = useMessages(automationMessages);
@@ -176,7 +176,7 @@ export function WorkflowDestinationPicker({
       <label>
         {t("Destino HTTPS")}
         <select
-          value={value.destinationId}
+          value={value.destinationId ?? ""}
           disabled={busy || query.isPending}
           onChange={(e) => {
             const d = query.data?.data.find((v) => v.id === e.target.value);
