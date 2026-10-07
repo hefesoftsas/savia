@@ -127,6 +127,49 @@ async function schedule(db: D1Database, now: number) {
 }
 
 /** A bounded tick. Leases fence every checkpoint, including native side effects. */
+export type WorkflowHistoryReport = {
+  executions: number;
+  inbox: number;
+  events: number;
+};
+export async function maintainWorkflowHistory(
+  db: D1Database,
+): Promise<WorkflowHistoryReport> {
+  const overflow = `(SELECT workspace_id, id FROM (SELECT workspace_id, id, ROW_NUMBER() OVER (PARTITION BY workspace_id, workflow_id ORDER BY created_at DESC, id DESC) AS rn, status FROM workflow_executions) WHERE rn > 100 AND status IN ('completed','failed','blocked','cancelled') LIMIT 500)`;
+  for (const table of [
+    "workflow_jobs",
+    "workflow_webhook_attempts",
+    "workflow_webhook_deliveries",
+    "workflow_webhook_receipts",
+    "workflow_tasks",
+    "workflow_approvals",
+  ]) {
+    await db
+      .prepare(
+        `DELETE FROM ${table} WHERE (workspace_id, execution_id) IN ${overflow}`,
+      )
+      .run();
+  }
+  const pruned = await db
+    .prepare(`DELETE FROM workflow_executions WHERE (workspace_id, id) IN ${overflow}`)
+    .run();
+  let inbox = 0;
+  for (const sql of [
+    "DELETE FROM workflow_tasks WHERE status='done' AND created_at < datetime('now','-90 days')",
+    "DELETE FROM workflow_approvals WHERE status IN ('decided','expired') AND created_at < datetime('now','-90 days')",
+  ]) {
+    const result = await db.prepare(sql).run();
+    inbox += result.meta.changes ?? 0;
+  }
+  const events = await db
+    .prepare("DELETE FROM workflow_events WHERE created_at < datetime('now','-90 days')")
+    .run();
+  return {
+    executions: pruned.meta.changes ?? 0,
+    inbox,
+    events: events.meta.changes ?? 0,
+  };
+}
 export async function processWorkflows(
   db: D1Database,
   authorize: WorkflowAuthorization,
@@ -318,6 +361,11 @@ export async function processWorkflows(
         .run();
       notifyTransition(run.workspace_id, run.id);
     }
+  }
+  try {
+    await maintainWorkflowHistory(db);
+  } catch {
+    // Maintenance is best effort and must not fail execution progress.
   }
 }
 

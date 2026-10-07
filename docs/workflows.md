@@ -249,7 +249,10 @@ a fixed test identity and must never be deployed or pointed at user data.
   and execution. Outgoing JSON webhooks are supported as a dedicated step; general HTTP/email connectors are not.
 - At most 50 acyclic steps, 50 mappings per step, 100 query results, 64 KB definitions,
   32 KB manual input and 256 KB execution context. Lists show the latest 200 definitions
-  or inbox items and 100 executions. Retention/archival tooling is not yet included.
+  or inbox items and 100 executions. History maintenance runs with the scheduler
+  tick: terminal executions beyond the latest 100 per workflow are pruned with
+  their jobs, deliveries, receipts and inbox rows; resolved inbox items and
+  events older than 90 days are removed in bounded batches.
 - Arbitrary DAG branches remain future
   capabilities. Multi-way routing uses one switch instead of chained
   true/false steps; reusable logic uses subflows instead of duplicated
