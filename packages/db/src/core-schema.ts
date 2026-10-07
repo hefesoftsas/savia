@@ -755,6 +755,14 @@ export const whatsappInbox = sqliteTable(
       table.retryAt,
       table.receivedAt,
     ),
+    index("whatsapp_inbox_dispatch_scope")
+      .on(
+        table.connectionId,
+        table.normalizedContact,
+        table.receivedAt,
+        table.messageId,
+      )
+      .where(sql`${table.state} IN ('pending', 'generating', 'responding')`),
     index("whatsapp_inbox_contact_history_idx").on(
       table.connectionId,
       table.phoneNumberId,
@@ -1053,6 +1061,10 @@ export const whatsappChannelContacts = sqliteTable(
     bufferedText: text("buffered_text"),
     draftJson: text("draft_json"),
     accessFingerprint: text("access_fingerprint"),
+    resetTokenHash: text("reset_token_hash"),
+    resetExpiresAt: text("reset_expires_at"),
+    resetAttempts: integer("reset_attempts").notNull().default(0),
+    lastResetMessageId: text("last_reset_message_id"),
   },
   (table) => [primaryKey({ columns: [table.connectionId, table.contact] })],
 );
@@ -1068,31 +1080,53 @@ export const whatsappChannelHistory = sqliteTable("whatsapp_channel_history", {
   assistantText: text("assistant_text").notNull(),
   createdAt: text("created_at").notNull(),
 });
-export const whatsappChannelActions = sqliteTable("whatsapp_channel_actions", {
-  id: text("id").primaryKey().notNull(),
-  connectionId: text("connection_id")
-    .notNull()
-    .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
-  tenantId: bigint("tenant_id")
-    .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  contact: text("contact").notNull(),
-  generation: text("generation").notNull(),
-  employeeId: text("employee_id").notNull(),
-  selectionRevision: integer("selection_revision").notNull(),
-  actionJson: text("action_json").notNull(),
-  tokenHash: text("token_hash").notNull(),
-  status: text("status").notNull(),
-  attempts: integer("attempts").notNull().default(0),
-  expiresAt: text("expires_at").notNull(),
-  createdAt: text("created_at").notNull(),
-  queuedAt: text("queued_at"),
-  resultJson: text("result_json"),
-  outboundMessageId: text("outbound_message_id"),
-  deliveryState: text("delivery_state"),
-  leaseToken: text("lease_token"),
-  leaseUntil: text("lease_until"),
-});
+export const whatsappChannelActions = sqliteTable(
+  "whatsapp_channel_actions",
+  {
+    id: text("id").primaryKey().notNull(),
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => tenantWhatsappConnections.id, { onDelete: "cascade" }),
+    tenantId: bigint("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    contact: text("contact").notNull(),
+    generation: text("generation").notNull(),
+    employeeId: text("employee_id").notNull(),
+    selectionRevision: integer("selection_revision").notNull(),
+    actionJson: text("action_json").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    status: text("status").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull(),
+    queuedAt: text("queued_at"),
+    resultJson: text("result_json"),
+    outboundMessageId: text("outbound_message_id"),
+    deliveryState: text("delivery_state"),
+    leaseToken: text("lease_token"),
+    leaseUntil: text("lease_until"),
+  },
+  (table) => [
+    index("whatsapp_action_dispatch_scope").on(
+      table.connectionId,
+      table.contact,
+      table.status,
+      table.queuedAt,
+      table.createdAt,
+    ),
+    index("whatsapp_action_delivery_scope")
+      .on(table.connectionId, table.contact, table.createdAt)
+      .where(
+        sql`${table.status} IN ('completed', 'failed', 'uncertain') AND (${table.deliveryState} IS NULL OR ${table.deliveryState} = 'history_pending')`,
+      ),
+    index("whatsapp_action_unfinished_scope")
+      .on(table.connectionId, table.contact)
+      .where(
+        sql`${table.status} IN ('queued', 'dispatching') OR (${table.status} IN ('completed', 'failed', 'uncertain') AND (${table.deliveryState} IS NULL OR ${table.deliveryState} IN ('history_pending', 'sending')))`,
+      ),
+  ],
+);
 export const whatsappChannelResources = sqliteTable(
   "whatsapp_channel_resources",
   {

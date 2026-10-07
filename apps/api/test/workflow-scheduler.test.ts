@@ -28,9 +28,25 @@ vi.mock("../src/notifications", () => ({
 vi.mock("../src/personal-integrations/jira-privacy-runtime", () => ({
   runJiraPrivacyMaintenance: vi.fn(async () => undefined),
 }));
+vi.mock("../src/whatsapp/channel-cleanup", () => ({
+  cleanupChannelState: vi.fn(async () => undefined),
+}));
+vi.mock("../src/whatsapp/queue", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/whatsapp/queue")>();
+  return {
+    ...actual,
+    recoverWhatsappScopes: vi.fn(async () => []),
+    wakeWhatsappScope: vi.fn(async () => undefined),
+  };
+});
+import { cleanupChannelState } from "../src/whatsapp/channel-cleanup";
 import { runJiraPrivacyMaintenance } from "../src/personal-integrations/jira-privacy-runtime";
 import worker from "../src/index";
 import { runScheduledWorkflows } from "../src/workflows";
+import {
+  recoverWhatsappScopes,
+  wakeWhatsappScope,
+} from "../src/whatsapp/queue";
 beforeAll(async () => {
   await env.DB.prepare(
     "CREATE TABLE IF NOT EXISTS studio_audit(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,action TEXT NOT NULL,object_name TEXT NOT NULL,record_id TEXT,detail TEXT NOT NULL,created_at TEXT NOT NULL)",
@@ -69,6 +85,7 @@ it.each(["true", "false"])(
     await worker.scheduled({} as ScheduledController, {
       ...env,
       SAVIA_WORKFLOW_ONLY_SCHEDULE: mode,
+      WHATSAPP_PROCESSING_MODE: "scheduled",
       WHATSAPP_META_APP_SECRET: "test-app-secret",
       WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-verify-token",
     });
@@ -188,13 +205,100 @@ it("cleans private WhatsApp media even after webhook secrets are removed", async
     }),
     delete: vi.fn(),
   } as unknown as R2Bucket;
-  await worker.scheduled({} as ScheduledController, {
-    ...env,
-    DOCUMENTS: documents,
-    SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
-    WHATSAPP_META_APP_SECRET: undefined,
-    WHATSAPP_WEBHOOK_VERIFY_TOKEN: undefined,
-  });
+  await worker.scheduled(
+    {
+      scheduledTime: Date.parse("2026-10-07T12:05:00.000Z"),
+    } as ScheduledController,
+    {
+      ...env,
+      WHATSAPP_PROCESSING_MODE: "events",
+      DOCUMENTS: documents,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+      WHATSAPP_META_APP_SECRET: undefined,
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: undefined,
+    },
+  );
   expect(documents.delete).toHaveBeenCalledWith([key]);
   expect(drainWhatsappInbox).not.toHaveBeenCalled();
+});
+
+it("skips WhatsApp media cleanup off the event recovery boundary while running other minute jobs", async () => {
+  vi.clearAllMocks();
+  const documents = {
+    list: vi.fn().mockResolvedValue({ objects: [] }),
+    delete: vi.fn(),
+  } as unknown as R2Bucket;
+
+  await worker.scheduled(
+    {
+      scheduledTime: Date.parse("2026-10-07T12:06:00.000Z"),
+    } as ScheduledController,
+    {
+      ...env,
+      WHATSAPP_PROCESSING_MODE: "events",
+      DOCUMENTS: documents,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+    },
+  );
+
+  expect(documents.list).not.toHaveBeenCalled();
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
+  expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+});
+
+it("recovers event-driven WhatsApp scopes on the five-minute boundary and attempts every wake", async () => {
+  vi.clearAllMocks();
+  vi.mocked(recoverWhatsappScopes).mockResolvedValueOnce([
+    { connectionId: "connection-1", contact: "+15550000001" },
+    { connectionId: "connection-1", contact: "+15550000002" },
+  ]);
+  vi.mocked(wakeWhatsappScope)
+    .mockRejectedValueOnce(new Error("dispatcher unavailable"))
+    .mockResolvedValueOnce(undefined);
+
+  await expect(
+    worker.scheduled(
+      {
+        scheduledTime: Date.parse("2026-10-07T12:05:00.000Z"),
+      } as ScheduledController,
+      {
+        ...env,
+        WHATSAPP_PROCESSING_MODE: "events",
+        WHATSAPP_META_APP_SECRET: "test-app-secret",
+        WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-verify-token",
+        WHATSAPP_DISPATCHER: {} as DurableObjectNamespace,
+        SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+      },
+    ),
+  ).rejects.toThrow("Scheduled jobs failed");
+
+  expect(cleanupChannelState).toHaveBeenCalledTimes(1);
+  expect(recoverWhatsappScopes).toHaveBeenCalledTimes(1);
+  expect(wakeWhatsappScope).toHaveBeenCalledTimes(2);
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
+  expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+});
+
+it("does not recover event-driven WhatsApp scopes off the five-minute boundary", async () => {
+  vi.clearAllMocks();
+
+  await worker.scheduled(
+    {
+      scheduledTime: Date.parse("2026-10-07T12:06:00.000Z"),
+    } as ScheduledController,
+    {
+      ...env,
+      WHATSAPP_PROCESSING_MODE: "events",
+      WHATSAPP_META_APP_SECRET: "test-app-secret",
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-verify-token",
+      WHATSAPP_DISPATCHER: {} as DurableObjectNamespace,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+    },
+  );
+
+  expect(cleanupChannelState).not.toHaveBeenCalled();
+  expect(recoverWhatsappScopes).not.toHaveBeenCalled();
+  expect(wakeWhatsappScope).not.toHaveBeenCalled();
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
+  expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
 });

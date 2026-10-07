@@ -172,17 +172,60 @@ binding before reconnecting. Sending and enabling still require a healthy sender
 
 The webhook checks `X-Hub-Signature-256` against the raw body and durably stores
 accepted messages before acknowledging them, including validated native payloads.
-Unsupported event types are ignored. Incoming
-message IDs deduplicate retries. The existing minute scheduler recovers pending
-work. Managed preview and production deployments set
-`WHATSAPP_PROCESSING_MODE=scheduled`: generation runs from the minute scheduler,
-not HTTP `waitUntil`, whose post-response lifetime can interrupt multi-step AI
-work. Allow up to one minute before processing starts. Local runtimes may omit
-this setting to start background processing immediately. Each scheduled invocation
-drains multiple small batches within a five-minute scan budget and a bounded
-batch count, rather than imposing a fixed five-message global quota per minute.
+Unsupported event types are ignored. Incoming message IDs deduplicate retries.
+Managed preview and production deployments set `WHATSAPP_PROCESSING_MODE=events`
+and bind `WHATSAPP_DISPATCHER` to the `WhatsappDispatcher` Durable Object. After
+persistence, the webhook awaits a short wake request before acknowledging Meta;
+it never runs AI or provider jobs in HTTP `waitUntil`. If a wake fails, it returns 503. A redelivered message resolves its existing inbox row and repairs the wake
+without inserting or sending twice. Receipt-only callbacks do not wake processors.
+
+Each connection/contact pair has a coordinator named by a SHA-256 digest of its
+scope. Its storage contains only scope, wake revision, retry metadata and an
+alarm; messages, encrypted drafts, actions and results remain in D1. Duplicate
+wakes coalesce into the earliest alarm. One alarm delivers at most one existing result per delivery pass, then processes at most one inbound
+message or one confirmed action, prioritizing already queued actions over new
+inputs to prevent starvation. A confirmation acknowledgement is sent before
+its queued action can run in the next alarm; settled action results are delivered
+immediately afterward.
+New confirmations or remaining messages schedule another alarm without waiting
+for a cron tick. Separate conversations have separate coordinators.
+
+After processing, the coordinator schedules the oldest inbound retry, active
+lease expiry, queued action or pending delivery. When no unfinished work remains,
+it removes the alarm. Wakes arriving during processing are fenced by a durable
+revision so they cannot be erased by completion. A watchdog is stored before
+external work; failures leave a durable retry with backoff. Alarms may execute
+more than once, so existing atomic claims, reply fences and uncertain-send rules
+remain required. Due rows that cannot currently progress back off for a minute
+rather than spinning.
+
+The shared cron still runs each minute for other platform functions. In event
+mode, WhatsApp retention/media maintenance and recovery run only on five-minute
+boundaries. Recovery finds unfinished conversation scopes and wakes coordinators
+with bounded request concurrency; it does not execute AI itself. Apply migration
+`0050_whatsapp_dispatch_indexes.sql` before enabling events. Deployment config
+adds Durable Object migration `v2` while preserving `RealtimeHub` migration `v1`.
+To roll back, set `WHATSAPP_PROCESSING_MODE=scheduled`: existing alarms stop
+processing and the minute cron resumes inbox draining and action execution. An
+events deployment without its dispatcher binding fails closed rather than
+silently using short-lived HTTP processing. Self-hosted runtimes without Durable
+Objects should retain scheduled mode. Legacy inline mode remains available only
+when the processing-mode setting is omitted.
+
+Latency diagnostics emit `whatsapp_inbound_claimed` with `queue_wait_ms` and
+`whatsapp_inbound_timing` for preparation, indicators, generation, transport, acknowledgement persistence and
+total processing. `whatsapp_assistant_timing` separates configuration,
+capability setup, input preparation, knowledge retrieval and model/tool work.
+These events carry message IDs and durations, without phone numbers, message
+bodies, drafts or credentials. Existing action-started and action-finished events
+measure confirmed-operation queue waits and execution durations. Queue wait is
+measured from server acceptance; provider-to-server latency can be compared using
+the inbox's `provider_timestamp` and `received_at`. Event admission removes the
+normal minute-tick wait; model, media, provider and DB time still contribute to
+latency. Alarm scheduling does not establish a fixed response-time SLA.
+
 Individual batches retain the bounded media and model timeouts, leaving room
-inside the scheduled Worker lifetime. Overlapping ticks retain atomic message
+inside the alarm or scheduled Worker lifetime. Overlapping retries retain atomic message
 claims and per-contact leases. Leases serialize each
 contact's conversation and fence stale processors. A four-minute processing
 lease accommodates media transcription followed by AI completion. Generation retries are
@@ -342,7 +385,8 @@ inputs and drafts are encrypted using the backend `SAVIA_MCP_SHARED_SECRET`.
 Without that secret the channel cannot prepare writes. Keep it stable across
 restarts, or existing sealed actions and drafts become unreadable.
 
-The minute scheduler executes confirmed jobs outside the AI completion request.
+The event dispatcher executes confirmed jobs outside the AI completion request;
+scheduled mode retains the minute scheduler.
 Atomic claims and per-product dispatch evidence prevent automatic replay after
 an uncertain outcome. Operators must reconcile **uncertain** results against
 saved records and provider evidence before asking for a fresh action. Results
@@ -355,9 +399,33 @@ for follow-up questions. An uncertain send is not added as delivered history and
 is not automatically retried.
 
 An acknowledged send whose history write failed uses delivery state
-`history_pending`. The next scheduler run repairs only its stored history;
+`history_pending`. The next dispatcher or scheduler run repairs only its stored history;
 it does not send again. The outbound message ID and exact sent text remain
-recorded with the action. Failures before attempting a send can retry normally.
+recorded with the action. History repair is conditional on the unchanged result
+and delivery state, so a concurrent conversation reset cannot recreate scrubbed
+history. Result sends claim a 60-second lease; an interrupted or expired sending
+claim is classified as uncertain and never automatically resent. Permanently
+revoked deliveries become terminal. Expired deliveries remain dormant until a
+valid inbound opens a new reply window, then resume through the same access checks;
+neither state keeps the coordinator awake. Failures before attempting a send can retry normally.
+
+Contacts can request a fresh conversation with the exact command
+`Borrar mis datos y empezar de nuevo`. The server returns a contact-bound,
+five-minute confirmation code: `BORRAR <code>`. A bare `Sí` does not confirm;
+`CANCELAR BORRADO` or returning to the main menu cancels the request. Five wrong
+attempts invalidate the code. These controls run before the model or its tools,
+and only a hash of the code is persisted.
+
+A confirmed reset rotates the contact generation, clears all task drafts,
+selections and assistant history for that contact on the connection, removes
+unexecuted approvals, and scrubs earlier inbox text, payloads and routing
+snapshots. Newer accepted messages survive the reset. Pending result-history
+repairs are revoked and their cached conversation text is removed. Reset is
+blocked while a confirmed operation is queued, dispatching, or sending a result.
+Executed actions, dispatch evidence, resource ownership and domain quote records
+remain stored; they are not automatically exposed in the fresh generation. This
+is a conversation reset, not full erasure of customer or policy records, and it
+does not delete messages from the contact's WhatsApp app.
 
 History, resolved action records and inactive drafts use a 30-day channel
 retention window. Uncertain or active dispatch evidence survives cleanup;

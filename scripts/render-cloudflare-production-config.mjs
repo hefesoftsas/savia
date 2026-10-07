@@ -85,9 +85,15 @@ function apiConfig({
       },
     ],
     durable_objects: {
-      bindings: [{ name: "REALTIME_HUB", class_name: "RealtimeHub" }],
+      bindings: [
+        { name: "REALTIME_HUB", class_name: "RealtimeHub" },
+        { name: "WHATSAPP_DISPATCHER", class_name: "WhatsappDispatcher" },
+      ],
     },
-    migrations: [{ tag: "v1", new_sqlite_classes: ["RealtimeHub"] }],
+    migrations: [
+      { tag: "v1", new_sqlite_classes: ["RealtimeHub"] },
+      { tag: "v2", new_sqlite_classes: ["WhatsappDispatcher"] },
+    ],
     d1_databases: [
       {
         binding: "DB",
@@ -98,7 +104,7 @@ function apiConfig({
     ],
     r2_buckets: [{ binding: "DOCUMENTS", bucket_name: documentsBucket }],
     vars: {
-      WHATSAPP_PROCESSING_MODE: "scheduled",
+      WHATSAPP_PROCESSING_MODE: "events",
       NANGO_BASE_URL: "https://nango.cloud.hefesoft.com",
       NANGO_CONNECT_URL: "https://nango-connect.cloud.hefesoft.com",
       NANGO_HUBSPOT_INTEGRATION_ID: "hubspot",

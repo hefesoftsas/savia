@@ -1,3 +1,4 @@
+import type { WhatsappQueueScope } from "./queue";
 import { humanSupportContactText } from "./human-support";
 import type { ActionOutcome } from "./channel-contracts";
 import type { WhatsappAssistantBinding } from "./inbound-contracts";
@@ -82,17 +83,41 @@ export async function deliverChannelActionResults(
     text: string,
     phone: string,
   ) => Promise<string>,
+  scope?: WhatsappQueueScope,
 ) {
   const db = repository.db;
+  let delivered = 0;
+  const scopeSql = scope ? " AND connection_id=? AND contact=?" : "";
+  const scopeValues = scope ? [scope.connectionId, scope.contact] : [];
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE whatsapp_channel_actions SET delivery_state='uncertain',lease_until=NULL
+       WHERE status IN ('completed','failed','uncertain') AND delivery_state='sending'
+         AND (lease_until IS NULL OR lease_until<=?)${scopeSql}`,
+    )
+    .bind(now, ...scopeValues)
+    .run();
   const rows = await db
     .prepare(
-      "SELECT id,tenant_id,connection_id,contact,generation,employee_id,action_json,result_json,delivery_state,outbound_message_id FROM whatsapp_channel_actions WHERE status IN ('completed','failed','uncertain') AND (delivery_state IS NULL OR delivery_state='history_pending') ORDER BY created_at LIMIT 10",
+      `SELECT id,tenant_id,connection_id,contact,generation,employee_id,action_json,result_json,delivery_state,outbound_message_id FROM whatsapp_channel_actions WHERE status IN ('completed','failed','uncertain') AND (delivery_state IS NULL OR delivery_state='history_pending')${scopeSql} ORDER BY created_at LIMIT ${scope ? 1 : 10}`,
     )
+    .bind(...(scope ? [scope.connectionId, scope.contact] : []))
     .all<ResultDelivery>();
-  const historyStatement = (row: ResultDelivery, text: string, at: string) =>
+  const historyStatement = (
+    row: ResultDelivery,
+    text: string,
+    at: string,
+    outboundMessageId = row.outbound_message_id,
+  ) =>
     db
       .prepare(
-        "INSERT INTO whatsapp_channel_history(message_id,connection_id,contact,generation,employee_id,user_text,assistant_text,created_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(message_id) DO NOTHING",
+        `INSERT INTO whatsapp_channel_history(message_id,connection_id,contact,generation,employee_id,user_text,assistant_text,created_at)
+         SELECT ?,?,?,?,?,?,?,? WHERE EXISTS (
+           SELECT 1 FROM whatsapp_channel_actions WHERE id=? AND delivery_state='sent'
+             AND outbound_message_id=?
+             AND (result_json=? OR (result_json IS NULL AND CAST(? AS TEXT) IS NULL))
+         ) ON CONFLICT(message_id) DO NOTHING`,
       )
       .bind(
         `action-result:${row.id}`,
@@ -103,6 +128,10 @@ export async function deliverChannelActionResults(
         "[Result of confirmed action]",
         text,
         at,
+        row.id,
+        outboundMessageId,
+        row.result_json,
+        row.result_json,
       );
   for (const row of rows.results) {
     let claimed = false;
@@ -114,40 +143,82 @@ export async function deliverChannelActionResults(
       outcome: ActionOutcome;
     } | null = null;
     try {
-      const access = await repository.getAccess({
-        tenantId: row.tenant_id,
-        connectionId: row.connection_id,
-        contact: row.contact,
-      });
+      if (row.delivery_state === "history_pending") {
+        const saved = row.result_json ? JSON.parse(row.result_json) : undefined;
+        if (
+          !row.outbound_message_id ||
+          typeof saved?.deliveryText !== "string" ||
+          typeof saved?.deliveryAt !== "string"
+        ) {
+          await db
+            .prepare(
+              "UPDATE whatsapp_channel_actions SET delivery_state='revoked',lease_until=NULL WHERE id=? AND delivery_state='history_pending'",
+            )
+            .bind(row.id)
+            .run();
+          continue;
+        }
+        // Repair only persistence for a known acknowledgement, even if the
+        // authorization or reply window has since changed. Never resend.
+        const repair = await db.batch([
+          db
+            .prepare(
+              "UPDATE whatsapp_channel_actions SET delivery_state='sent',lease_until=NULL WHERE id=? AND delivery_state='history_pending' AND outbound_message_id=? AND result_json=?",
+            )
+            .bind(row.id, row.outbound_message_id, row.result_json),
+          historyStatement(row, saved.deliveryText, saved.deliveryAt),
+        ]);
+        if (repair[0]?.meta.changes === 1) delivered++;
+        continue;
+      }
+
+      let access;
+      try {
+        access = await repository.getAccess({
+          tenantId: row.tenant_id,
+          connectionId: row.connection_id,
+          contact: row.contact,
+        });
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          ["CHANNEL_ROUTING_DISABLED", "CHANNEL_STAFF_REVOKED"].includes(
+            error.message,
+          )
+        ) {
+          await db
+            .prepare(
+              "UPDATE whatsapp_channel_actions SET delivery_state='revoked',lease_until=NULL WHERE id=? AND delivery_state IS NULL",
+            )
+            .bind(row.id)
+            .run();
+        }
+        continue;
+      }
       if (
         access.generation !== row.generation ||
         !(await repository.listTasks(access)).some(
           (t) => t.employeeId === row.employee_id,
         )
-      )
-        continue;
-      if (row.delivery_state === "history_pending") {
-        const saved = JSON.parse(row.result_json!);
-        if (
-          !row.outbound_message_id ||
-          typeof saved.deliveryText !== "string" ||
-          typeof saved.deliveryAt !== "string"
-        )
-          throw new Error("CHANNEL_DELIVERY_HISTORY_UNAVAILABLE");
-        // Repair only persistence for a known acknowledgement, even if the
-        // reply window has since closed. Never send to Meta again.
-        await db.batch([
-          db
-            .prepare(
-              "UPDATE whatsapp_channel_actions SET delivery_state='sent' WHERE id=? AND delivery_state='history_pending'",
-            )
-            .bind(row.id),
-          historyStatement(row, saved.deliveryText, saved.deliveryAt),
-        ]);
+      ) {
+        await db
+          .prepare(
+            "UPDATE whatsapp_channel_actions SET delivery_state='revoked',lease_until=NULL WHERE id=? AND delivery_state IS NULL",
+          )
+          .bind(row.id)
+          .run();
         continue;
       }
       const binding = await resolve(row.connection_id, row.tenant_id);
-      if (!binding?.allowedContacts.includes(row.contact)) continue;
+      if (!binding?.allowedContacts.includes(row.contact)) {
+        await db
+          .prepare(
+            "UPDATE whatsapp_channel_actions SET delivery_state='revoked',lease_until=NULL WHERE id=? AND delivery_state IS NULL",
+          )
+          .bind(row.id)
+          .run();
+        continue;
+      }
       const recent = await db
         .prepare(
           "SELECT message_id FROM whatsapp_inbox WHERE connection_id=? AND normalized_contact=? AND phone_number_id=? AND waba_id=? AND provider_timestamp>? LIMIT 1",
@@ -160,23 +231,60 @@ export async function deliverChannelActionResults(
           new Date(Date.now() - 86400000).toISOString(),
         )
         .first();
-      if (!recent) continue;
+      if (!recent) {
+        await db
+          .prepare(
+            "UPDATE whatsapp_channel_actions SET delivery_state='expired',lease_until=NULL WHERE id=? AND delivery_state IS NULL",
+          )
+          .bind(row.id)
+          .run();
+        continue;
+      }
       const employee = await db
         .prepare(
           "SELECT name FROM assistant_virtual_employees WHERE id=? AND agency_id=? AND status='active'",
         )
         .bind(row.employee_id, row.tenant_id)
         .first<{ name: string }>();
-      if (!employee) continue;
+      if (!employee) {
+        await db
+          .prepare(
+            "UPDATE whatsapp_channel_actions SET delivery_state='revoked',lease_until=NULL WHERE id=? AND delivery_state IS NULL",
+          )
+          .bind(row.id)
+          .run();
+        continue;
+      }
+      const claimUntil = new Date(Date.now() + 60_000).toISOString();
       const claim = await db
         .prepare(
-          "UPDATE whatsapp_channel_actions SET delivery_state='sending' WHERE id=? AND delivery_state IS NULL",
+          "UPDATE whatsapp_channel_actions SET delivery_state='sending',lease_until=? WHERE id=? AND delivery_state IS NULL",
         )
-        .bind(row.id)
+        .bind(claimUntil, row.id)
         .run();
       if (claim.meta.changes !== 1) continue;
       claimed = true;
-      const finalAccess = await repository.getAccess(access);
+      let finalAccess;
+      try {
+        finalAccess = await repository.getAccess(access);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          ["CHANNEL_ROUTING_DISABLED", "CHANNEL_STAFF_REVOKED"].includes(
+            error.message,
+          )
+        ) {
+          await db
+            .prepare(
+              "UPDATE whatsapp_channel_actions SET delivery_state='revoked',lease_until=NULL WHERE id=? AND delivery_state='sending'",
+            )
+            .bind(row.id)
+            .run();
+          claimed = false;
+          continue;
+        }
+        throw error;
+      }
       const finalBinding = await resolve(row.connection_id, row.tenant_id);
       if (
         finalAccess.generation !== row.generation ||
@@ -191,7 +299,7 @@ export async function deliverChannelActionResults(
       ) {
         await db
           .prepare(
-            "UPDATE whatsapp_channel_actions SET delivery_state='revoked' WHERE id=?",
+            "UPDATE whatsapp_channel_actions SET delivery_state='revoked',lease_until=NULL WHERE id=? AND delivery_state='sending'",
           )
           .bind(row.id)
           .run();
@@ -222,18 +330,19 @@ export async function deliverChannelActionResults(
       await db.batch([
         db
           .prepare(
-            "UPDATE whatsapp_channel_actions SET delivery_state='sent',outbound_message_id=? WHERE id=? AND delivery_state='sending'",
+            "UPDATE whatsapp_channel_actions SET delivery_state='sent',outbound_message_id=?,lease_until=NULL WHERE id=? AND delivery_state='sending'",
           )
           .bind(id, row.id),
-        historyStatement(row, text, acknowledged.at),
+        historyStatement(row, text, acknowledged.at, id),
       ]);
+      delivered++;
     } catch {
       if (!claimed) continue;
       if (acknowledged) {
         // Preserve the exact sent text and acknowledgement for history repair.
         await db
           .prepare(
-            "UPDATE whatsapp_channel_actions SET delivery_state='history_pending',outbound_message_id=?,result_json=? WHERE id=? AND delivery_state='sending'",
+            "UPDATE whatsapp_channel_actions SET delivery_state='history_pending',outbound_message_id=?,result_json=?,lease_until=NULL WHERE id=? AND delivery_state='sending'",
           )
           .bind(
             acknowledged.id,
@@ -250,10 +359,11 @@ export async function deliverChannelActionResults(
       // Only failures before the send attempt may release the delivery claim.
       await db
         .prepare(
-          "UPDATE whatsapp_channel_actions SET delivery_state=? WHERE id=? AND delivery_state='sending'",
+          "UPDATE whatsapp_channel_actions SET delivery_state=?,lease_until=NULL WHERE id=? AND delivery_state='sending'",
         )
         .bind(sendAttempted ? "uncertain" : null, row.id)
         .run();
     }
   }
+  return { delivered };
 }

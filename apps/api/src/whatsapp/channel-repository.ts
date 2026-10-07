@@ -169,7 +169,7 @@ export class WhatsappChannelRepository {
     const candidateGeneration = crypto.randomUUID();
     await this.db
       .prepare(
-        "INSERT INTO whatsapp_channel_contacts(connection_id,contact,generation,access_fingerprint) VALUES(?,?,?,?) ON CONFLICT(connection_id,contact) DO UPDATE SET generation=excluded.generation,access_fingerprint=excluded.access_fingerprint,employee_id=NULL,selection_revision=whatsapp_channel_contacts.selection_revision+1,menu_json=NULL,buffered_text=NULL,draft_json=NULL WHERE whatsapp_channel_contacts.access_fingerprint IS NULL OR whatsapp_channel_contacts.access_fingerprint<>excluded.access_fingerprint",
+        "INSERT INTO whatsapp_channel_contacts(connection_id,contact,generation,access_fingerprint) VALUES(?,?,?,?) ON CONFLICT(connection_id,contact) DO UPDATE SET generation=excluded.generation,access_fingerprint=excluded.access_fingerprint,employee_id=NULL,selection_revision=whatsapp_channel_contacts.selection_revision+1,menu_json=NULL,buffered_text=NULL,draft_json=NULL,reset_token_hash=NULL,reset_expires_at=NULL,reset_attempts=0,last_reset_message_id=NULL WHERE whatsapp_channel_contacts.access_fingerprint IS NULL OR whatsapp_channel_contacts.access_fingerprint<>excluded.access_fingerprint",
       )
       .bind(
         key.connectionId,

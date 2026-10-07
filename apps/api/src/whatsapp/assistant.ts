@@ -128,6 +128,20 @@ export function createWhatsappAssistant(
     message: string,
     input?: WhatsappInboundInput,
   ): Promise<string | NativeReply> => {
+    let phaseStartedAt = Date.now();
+    const timing = (stage: string) => {
+      const now = Date.now();
+      if (input)
+        console.info(
+          JSON.stringify({
+            event: "whatsapp_assistant_timing",
+            message_id: input.messageId,
+            stage,
+            duration_ms: Math.max(0, now - phaseStartedAt),
+          }),
+        );
+      phaseStartedAt = now;
+    };
     const configuration =
       await dependencies.configuration.effectiveConfigurationForTenant(
         binding.ownerPrincipalId,
@@ -151,16 +165,20 @@ export function createWhatsappAssistant(
       !configuration.allowedModels?.includes(model)
     )
       throw new Error("WHATSAPP_MODEL_NOT_ALLOWED");
+    timing("configuration");
     const capabilities = await dependencies.capabilities?.(binding, input);
+    timing("capabilities");
     if (capabilities?.directReply) return capabilities.directReply;
     const prepared =
       input && dependencies.prepareInput
         ? await dependencies.prepareInput(binding, input, configuration)
         : { text: message };
+    timing("input");
     message = prepared.text.slice(0, 20000);
     const chunks = employee.allowedCollections.length
       ? await dependencies.knowledge(employee.id, message)
       : [];
+    timing("knowledge");
     const supportContact = await dependencies
       .humanSupportContact?.(binding)
       .catch(() => "");
@@ -183,6 +201,7 @@ export function createWhatsappAssistant(
     ]
       .filter(Boolean)
       .join("\n\n");
+    timing("prompt");
     const text = (
       await (dependencies.complete ?? complete)({
         apiKey: configuration.apiKey,
@@ -203,6 +222,7 @@ export function createWhatsappAssistant(
         ],
       })
     ).trim();
+    timing("model_and_tools");
     const confirmation = capabilities?.reply?.();
     if (confirmation) return confirmation;
     if (binding.native && text.startsWith("{")) {

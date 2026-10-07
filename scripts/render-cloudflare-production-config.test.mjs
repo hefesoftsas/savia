@@ -153,7 +153,15 @@ test("writes only the supported production workers and retains their runtime set
     );
     assert.equal("TURNSTILE_SECRET_KEY" in api.vars, false);
     assert.equal(api.keep_vars, true);
-    assert.equal(api.vars.WHATSAPP_PROCESSING_MODE, "scheduled");
+    assert.equal(api.vars.WHATSAPP_PROCESSING_MODE, "events");
+    assert.deepEqual(api.durable_objects.bindings, [
+      { name: "REALTIME_HUB", class_name: "RealtimeHub" },
+      { name: "WHATSAPP_DISPATCHER", class_name: "WhatsappDispatcher" },
+    ]);
+    assert.deepEqual(api.migrations, [
+      { tag: "v1", new_sqlite_classes: ["RealtimeHub"] },
+      { tag: "v2", new_sqlite_classes: ["WhatsappDispatcher"] },
+    ]);
     assert.deepEqual(api.triggers, { crons: ["* * * * *"] });
     assert.deepEqual(api.observability, {
       enabled: true,
@@ -321,7 +329,7 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
       if (app === "api") {
         assert.deepEqual(conf.triggers, { crons: ["* * * * *"] });
         assert.equal(conf.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE, "true");
-        assert.equal(conf.vars.WHATSAPP_PROCESSING_MODE, "scheduled");
+        assert.equal(conf.vars.WHATSAPP_PROCESSING_MODE, "events");
         assert.equal(conf.vars.COMPANION_ENABLED, "true");
         assert.equal(conf.r2_buckets[0].bucket_name, "savia-documents-preview");
         assert.equal(
