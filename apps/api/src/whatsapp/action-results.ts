@@ -8,6 +8,8 @@ import {
 } from "./channel-repository";
 import { buildTaskMenu } from "./task-menu";
 import { diagnosticErrorCode, logWhatsappDiagnostic } from "./diagnostics";
+import { publicQuoteProposalSchema } from "@savia/studio-shared/public-quote";
+import { quoteFactsText } from "./quote-facts-text";
 
 type ResultDelivery = {
   id: string;
@@ -63,6 +65,30 @@ export function actionResultText(
   const offers = Array.isArray(value.lowestPriceOffers)
     ? (value.lowestPriceOffers as Array<{ product: string; premium: number }>)
     : [];
+  const proposals = (
+    Array.isArray(value.proposals) ? value.proposals : []
+  ).flatMap((proposal) => {
+    const parsed = publicQuoteProposalSchema.safeParse(proposal);
+    return parsed.success && parsed.data.state === "priced"
+      ? [parsed.data]
+      : [];
+  });
+  const offerLines = proposals.length
+    ? proposals
+        .slice(0, 5)
+        .map((proposal) =>
+          [
+            `${proposal.product}: $${proposal.premium!.toLocaleString("es-CO")}`,
+            quoteFactsText(proposal.facts, 2, 260),
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        )
+    : offers
+        .slice(0, 5)
+        .map(
+          (o) => `${o.product}: $${Number(o.premium).toLocaleString("es-CO")}`,
+        );
   const warnings = Array.isArray(value.persistenceWarnings)
     ? value.persistenceWarnings
         .filter((warning): warning is string => typeof warning === "string")
@@ -93,11 +119,7 @@ export function actionResultText(
     Number(value.undispatchedOffers ?? 0) > 0
       ? `Productos sin consultar: ${value.undispatchedOffers}.`
       : "",
-    ...offers
-      .slice(0, 5)
-      .map(
-        (o) => `${o.product}: $${Number(o.premium).toLocaleString("es-CO")}`,
-      ),
+    ...offerLines,
     value.recommendation ??
       "Consulta las coberturas antes de elegir una oferta.",
     value.analysisUnavailable

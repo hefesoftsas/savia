@@ -220,3 +220,47 @@ it("hides internal action references from quote summaries and uncertain messages
   expect(text).toContain("COT-20261007-A1B2C3D4");
   expect(text).toContain("Liberty · Integral: $1.591.272");
 });
+
+it("summarizes every priced proposal with verified policy details when analysis is unavailable", () => {
+  const proposals = ["Basic", "Basic + PT", "Integral", "Full"].map(
+    (product, index) => ({
+      id: `product-${index}`,
+      provider: "Carrier",
+      product,
+      state: "priced",
+      premium: 1000000 + index * 100000,
+      currency: "COP",
+      facts: [
+        {
+          label: "Responsabilidad civil",
+          value: "$4.400.000.000 COP; deducible: 0%",
+          source: "provider",
+        },
+      ],
+    }),
+  );
+  const text = actionResultText(
+    "Alice",
+    "quote-auto",
+    {
+      state: "completed",
+      result: {
+        reference: "internal",
+        pricedOffers: 4,
+        proposals,
+        lowestPriceOffers: [{ product: "Basic", premium: 1000000 }],
+        analysisUnavailable: true,
+        publicUrl: "https://savia.test/public/quotes/" + "a".repeat(64),
+      },
+    },
+    "",
+    "1. Consultar seguros",
+  );
+  expect(text).toContain("Basic + PT: $1.100.000");
+  expect(text).toContain("Integral: $1.200.000");
+  expect(text).toContain("Full: $1.300.000");
+  expect(text.match(/Responsabilidad civil/g)).toHaveLength(4);
+  expect(text).toContain("deducible: 0%");
+  expect(text).toContain("1. Consultar seguros");
+  expect(text.length).toBeLessThanOrEqual(4096);
+});
