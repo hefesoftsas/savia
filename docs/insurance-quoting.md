@@ -67,7 +67,8 @@ for model analysis. Complete facts stay in the public report. Failed, unpriced,
 and uncertain responses are summarized once at the end. The terminal message
 lists up to five priced proposals, including offers outside the lowest-price
 group, with a compact evidence summary; older results without proposals retain
-their lowest-price summary. Internal action
+their lowest-price summary. Terminal guidance, persistence warnings, the public
+link, and the task menu reserve space before optional coverage summaries. Internal action
 references and provider transaction numbers do not appear in these messages.
 Public reports have a separate short customer reference.
 Only confirmed premiums and an explicit allowlist of coverage and deductible

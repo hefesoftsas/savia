@@ -264,3 +264,89 @@ it("summarizes every priced proposal with verified policy details when analysis 
   expect(text).toContain("1. Consultar seguros");
   expect(text.length).toBeLessThanOrEqual(4096);
 });
+
+it("reserves terminal guidance and warnings before spending space on coverage summaries", () => {
+  const proposals = Array.from({ length: 5 }, (_, index) => ({
+    id: `offer-${index}`,
+    provider: "Carrier",
+    product: `Offer ${index + 1} ` + "x".repeat(110),
+    state: "priced",
+    premium: 1000000,
+    currency: "COP",
+    facts: [
+      {
+        label: "Verified coverage",
+        value: "Verified limits and deductibles ".repeat(7),
+        source: "provider",
+      },
+    ],
+  }));
+  const text = actionResultText(
+    "Alice",
+    "quote-auto",
+    {
+      state: "completed",
+      result: {
+        reference: "internal",
+        pricedOffers: 5,
+        proposals,
+        recommendation:
+          "Compare verified conditions. " + "Long model guidance. ".repeat(60),
+        analysis: {
+          proposals: proposals.map((p) => ({
+            id: p.id,
+            explanation: "Verified price.",
+          })),
+          suggestion: "Compare verified conditions.",
+          limitations: [],
+        },
+        analysisUnavailable: true,
+        persistenceWarnings: [
+          "Saved results require review. " + "W".repeat(210),
+        ],
+        publicUrl: "https://savia.test/public/quotes/" + "a".repeat(64),
+      },
+    },
+    "",
+    "Menu: " + "M".repeat(1490),
+  );
+  expect(text).toContain("Compare verified conditions.");
+  expect(text).toContain("El análisis automático no estuvo disponible");
+  expect(text).toContain("Saved results require review.");
+  expect(text).toContain("Offer 5");
+  expect(text).toContain("Menu:");
+  expect(text).toContain("https://savia.test/public/quotes/");
+  expect(text.length).toBeLessThanOrEqual(4096);
+});
+
+it("replaces a legacy missing-coverage claim when saved proposals have verified facts", () => {
+  const text = actionResultText("Alice", "quote-auto", {
+    state: "completed",
+    result: {
+      reference: "internal",
+      pricedOffers: 1,
+      analysisUnavailable: true,
+      recommendation: "Faltan las coberturas y deducibles.",
+      proposals: [
+        {
+          id: "basic",
+          provider: "Carrier",
+          product: "Basic",
+          state: "priced",
+          premium: 1000000,
+          currency: "COP",
+          facts: [
+            {
+              label: "RCE",
+              value: "$4.400.000.000; deducible 0%",
+              source: "provider",
+            },
+          ],
+        },
+      ],
+    },
+  });
+  expect(text).toContain("RCE");
+  expect(text).not.toContain("Faltan las coberturas");
+  expect(text).toContain("deducibles informados");
+});

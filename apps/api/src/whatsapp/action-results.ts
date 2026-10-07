@@ -8,7 +8,10 @@ import {
 } from "./channel-repository";
 import { buildTaskMenu } from "./task-menu";
 import { diagnosticErrorCode, logWhatsappDiagnostic } from "./diagnostics";
-import { publicQuoteProposalSchema } from "@savia/studio-shared/public-quote";
+import {
+  publicQuoteProposalSchema,
+  quoteAnalysisSchema,
+} from "@savia/studio-shared/public-quote";
 import { quoteFactsText } from "./quote-facts-text";
 
 type ResultDelivery = {
@@ -49,10 +52,9 @@ export function actionResultText(
         publicLink = `\n\nVer cotización: ${url.href}\nDisponible durante 7 días.`;
     } catch {}
   }
-  const withMenu = (body: string) => {
-    const suffix = `${publicLink}${menuText ? `\n\n${menuText.slice(0, command === "quote-auto" ? 1500 : 4000)}` : ""}`;
-    return `${body.slice(0, Math.max(0, 4096 - suffix.length))}${suffix}`;
-  };
+  const suffix = `${publicLink}${menuText ? `\n\n${menuText.slice(0, command === "quote-auto" ? 1500 : 4000)}` : ""}`;
+  const bodyBudget = Math.max(0, 4096 - suffix.length);
+  const withMenu = (body: string) => `${body.slice(0, bodyBudget)}${suffix}`;
   const isQuote = command === "quote-auto" && value?.reference;
   if (outcome.state !== "completed" && !isQuote)
     return withMenu(
@@ -73,21 +75,17 @@ export function actionResultText(
       ? [parsed.data]
       : [];
   });
-  const offerLines = proposals.length
-    ? proposals
-        .slice(0, 5)
-        .map((proposal) =>
-          [
-            `${proposal.product}: $${proposal.premium!.toLocaleString("es-CO")}`,
-            quoteFactsText(proposal.facts, 2, 260),
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        )
+  const shownProposals = proposals.slice(0, 5);
+  const offerHeadings = proposals.length
+    ? shownProposals.map(
+        (proposal) =>
+          `${proposal.product}: $${proposal.premium!.toLocaleString("es-CO")}`,
+      )
     : offers
         .slice(0, 5)
         .map(
-          (o) => `${o.product}: $${Number(o.premium).toLocaleString("es-CO")}`,
+          (offer) =>
+            `${offer.product}: $${Number(offer.premium).toLocaleString("es-CO")}`,
         );
   const warnings = Array.isArray(value.persistenceWarnings)
     ? value.persistenceWarnings
@@ -107,7 +105,7 @@ export function actionResultText(
     /^COT-\d{8}-[A-F0-9]{8}$/.test(value.publicReference)
       ? value.publicReference
       : undefined;
-  const quoteText = [
+  const header = [
     `${label}${hasPartialResults ? "Resultados parciales" : "Resultados"} de ${publicReference ?? "tu cotización"}`,
     `Ofertas con precio: ${value.pricedOffers ?? 0}. Respuestas fallidas: ${value.failedOffers ?? 0}.`,
     Number(value.uncertainOffers ?? 0) > 0
@@ -119,9 +117,18 @@ export function actionResultText(
     Number(value.undispatchedOffers ?? 0) > 0
       ? `Productos sin consultar: ${value.undispatchedOffers}.`
       : "",
-    ...offerLines,
-    value.recommendation ??
-      "Consulta las coberturas antes de elegir una oferta.",
+  ].filter(Boolean);
+  const analysis = quoteAnalysisSchema.safeParse(value.analysis);
+  const coverageAvailable =
+    proposals.length > 0 &&
+    proposals.every((proposal) => quoteFactsText(proposal.facts, 1, 400));
+  let recommendation =
+    coverageAvailable && !analysis.success
+      ? "Compara los límites y deducibles informados para cada oferta; el precio por sí solo no establece una ganadora integral verificada."
+      : typeof value.recommendation === "string"
+        ? value.recommendation
+        : "Consulta las coberturas antes de elegir una oferta.";
+  const footer = [
     value.analysisUnavailable
       ? "El análisis automático no estuvo disponible; revisa las condiciones verificadas antes de elegir."
       : "",
@@ -131,10 +138,45 @@ export function actionResultText(
     menuText
       ? "Elige una opción del menú para empezar una nueva tarea."
       : "Puedes preguntarme por esta cotización o escribir menú para elegir otra tarea.",
-  ]
+  ].filter(Boolean);
+  // Guidance and warnings take priority over optional repeated coverage details.
+  const reserved = [...header, ...offerHeadings, ...footer].join("\n").length;
+  const recommendationBudget = Math.max(0, bodyBudget - reserved - 1);
+  if (recommendation.length > recommendationBudget)
+    recommendation =
+      recommendationBudget > 0
+        ? recommendation.slice(0, recommendationBudget - 1) + "…"
+        : "";
+  const baseLength = [...header, ...offerHeadings, recommendation, ...footer]
     .filter(Boolean)
-    .join("\n");
-  return withMenu(quoteText);
+    .join("\n").length;
+  const perOfferFactBudget = shownProposals.length
+    ? Math.min(
+        260,
+        Math.max(
+          0,
+          Math.floor(
+            (bodyBudget - baseLength - shownProposals.length) /
+              shownProposals.length,
+          ),
+        ),
+      )
+    : 0;
+  const offerLines = offerHeadings.map((heading, index) =>
+    [
+      heading,
+      shownProposals[index]
+        ? quoteFactsText(shownProposals[index].facts, 2, perOfferFactBudget)
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+  return withMenu(
+    [...header, ...offerLines, recommendation, ...footer]
+      .filter(Boolean)
+      .join("\n"),
+  );
 }
 
 export async function deliverChannelActionResults(
