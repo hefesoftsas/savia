@@ -85,6 +85,19 @@
   font-size: 0.875rem;
 }
 
+.ticket-summary-snapshot-actions {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.ticket-summary-snapshot-actions p {
+  margin: 0;
+}
+
 .ticket-summary-counts,
 .ticket-summary-list,
 .ticket-summary-prs {

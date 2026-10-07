@@ -100,6 +100,64 @@ async function setup(outcome: ActionOutcome, ageMs = 0) {
   };
 }
 
+it("keeps the final result and lifecycle reset behind unfinished product progress", async () => {
+  const fixture = await setup({
+    state: "completed",
+    result: { reference: "COT-progress", pricedOffers: 1 },
+  });
+  await env.DB.prepare(
+    "INSERT INTO whatsapp_channel_action_progress(id,action_id,event_key,progress_text,status,created_at) VALUES(?,?,?,'Product price','pending',?)",
+  )
+    .bind(
+      crypto.randomUUID(),
+      fixture.actionId,
+      "product",
+      new Date().toISOString(),
+    )
+    .run();
+  await fixture.deliver();
+  expect(fixture.send).not.toHaveBeenCalled();
+  expect(
+    (await fixture.repo.getAccess(fixture.session.access)).generation,
+  ).toBe(fixture.session.access.generation);
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_action_progress SET status='sent' WHERE action_id=?",
+  )
+    .bind(fixture.actionId)
+    .run();
+  await fixture.deliver();
+  expect(fixture.send).toHaveBeenCalledTimes(1);
+});
+
+it("rechecks progress at the final send claim when an event arrives during authorization", async () => {
+  const fixture = await setup({
+    state: "completed",
+    result: { reference: "COT-race", pricedOffers: 1 },
+  });
+  fixture.resolve.mockImplementation(async () => {
+    await env.DB.prepare(
+      "INSERT INTO whatsapp_channel_action_progress(id,action_id,event_key,progress_text,status,created_at) VALUES(?,?,?,'Late product price','pending',?)",
+    )
+      .bind(
+        crypto.randomUUID(),
+        fixture.actionId,
+        "product",
+        new Date().toISOString(),
+      )
+      .run();
+    return fixture.binding;
+  });
+  await fixture.deliver();
+  expect(fixture.send).not.toHaveBeenCalled();
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(fixture.actionId)
+      .first("delivery_state"),
+  ).toBeNull();
+});
+
 const partial: ActionOutcome = {
   state: "uncertain",
   message: "Una solicitud requiere revisión.",
@@ -111,9 +169,14 @@ const partial: ActionOutcome = {
   },
 };
 
-it("delivers partial results once and supplies them to the next employee turn", async () => {
+it("delivers partial results, shows the task menu, and starts the next turn fresh", async () => {
   const s = await setup(partial);
+  const logs: string[] = [];
+  const logSpy = vi
+    .spyOn(console, "info")
+    .mockImplementation((entry) => logs.push(String(entry)));
   await Promise.all([s.deliver(), s.deliver()]);
+  logSpy.mockRestore();
   await s.deliver();
   expect(s.send).toHaveBeenCalledTimes(1);
   const sentText = s.send.mock.calls[0]?.[1];
@@ -140,11 +203,63 @@ it("delivers partial results once and supplies them to the next employee turn", 
     timestamp: new Date().toISOString(),
   };
   await s.repository.receive(input);
-  await routed.generate(s.binding, [], input.text, input);
-  expect(complete.mock.calls[0]?.[1]).toContainEqual({
-    role: "assistant",
-    content: sentText?.replace("Test employee · Asistente virtual\n\n", ""),
+  const nextReply = await routed.generate(s.binding, [], input.text, input);
+  expect(sentText).toContain("¿Qué deseas hacer?");
+  expect(String(nextReply)).toContain("¿Qué deseas hacer?");
+  expect(complete).not.toHaveBeenCalled();
+  const nextAccess = await s.repo.getAccess({
+    tenantId: s.tenantId,
+    connectionId: s.connectionId,
+    contact: s.session.access.contact,
   });
+  expect(nextAccess.generation).not.toBe(s.session.access.generation);
+  expect(await s.repo.getSession(nextAccess)).toBeNull();
+  expect((await s.history()).results).toHaveLength(1);
+  expect((await s.history()).results[0]?.generation).toBe(
+    s.session.access.generation,
+  );
+  const events = logs.map(
+    (entry) => JSON.parse(entry) as Record<string, unknown>,
+  );
+  const timing = events.find(
+    (event) =>
+      event.event === "whatsapp_action_result_timing" &&
+      event.stage === "ack_persistence",
+  );
+  expect(timing).toMatchObject({
+    action_id: s.actionId,
+    generation: s.session.access.generation,
+    selection_revision: s.session.selectionRevision,
+    outcome: "persisted",
+  });
+  expect(timing?.duration_ms).toEqual(expect.any(Number));
+  expect(Number(timing?.duration_ms)).toBeGreaterThanOrEqual(0);
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      event: "whatsapp_quote_lifecycle_reset",
+      action_id: s.actionId,
+      outcome: "applied",
+      reset_applied: true,
+    }),
+  );
+  expect(JSON.stringify(events)).not.toContain(s.session.access.contact);
+  expect(JSON.stringify(events)).not.toContain("private-applicant-data");
+});
+
+it("keeps result delivery successful when structured logging throws", async () => {
+  const s = await setup(partial);
+  vi.spyOn(console, "info").mockImplementation(() => {
+    throw new Error("logger unavailable");
+  });
+  await expect(s.deliver()).resolves.toMatchObject({ delivered: 1 });
+  vi.restoreAllMocks();
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(s.actionId)
+      .first("delivery_state"),
+  ).toBe("sent");
 });
 
 it("does not add uncertain deliveries to history or retry their sends", async () => {
@@ -185,6 +300,10 @@ it("classifies an expired sending lease as uncertain without retrying it", async
 
 it("recovers an acknowledged send's failed history write without sending again", async () => {
   const s = await setup(partial);
+  const logs: string[] = [];
+  const logSpy = vi
+    .spyOn(console, "info")
+    .mockImplementation((entry) => logs.push(String(entry)));
   const batch = vi.spyOn(env.DB, "batch");
   batch.mockRejectedValueOnce(new Error("Transient history write failure"));
   await s.deliver();
@@ -213,9 +332,38 @@ it("recovers an acknowledged send's failed history write without sending again",
   await s.deliver();
   await s.deliver();
   expect(s.send).toHaveBeenCalledTimes(1);
+  expect(s.send.mock.calls[0]?.[1]).toContain("¿Qué deseas hacer?");
   const history = (await s.history()).results;
   expect(history).toHaveLength(1);
   expect(history[0]?.assistant_text).toBe(s.send.mock.calls[0]?.[1]);
+  const freshAccess = await s.repo.getAccess({
+    tenantId: s.tenantId,
+    connectionId: s.connectionId,
+    contact: s.session.access.contact,
+  });
+  expect(freshAccess.generation).not.toBe(s.session.access.generation);
+  expect(await s.repo.getSession(freshAccess)).toBeNull();
+  logSpy.mockRestore();
+  const events = logs.map(
+    (entry) => JSON.parse(entry) as Record<string, unknown>,
+  );
+  const repair = events.find(
+    (event) =>
+      event.event === "whatsapp_action_result_timing" &&
+      event.stage === "history_repair" &&
+      event.outcome === "repaired",
+  );
+  expect(repair).toMatchObject({ action_id: s.actionId });
+  expect(repair?.duration_ms).toEqual(expect.any(Number));
+  expect(Number(repair?.duration_ms)).toBeGreaterThanOrEqual(0);
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      event: "whatsapp_quote_lifecycle_reset",
+      action_id: s.actionId,
+      stage: "history_repair",
+      reset_applied: true,
+    }),
+  );
 });
 
 it("repairs acknowledged history after the contact authorization changes", async () => {

@@ -214,10 +214,27 @@ when the processing-mode setting is omitted.
 
 Latency diagnostics emit `whatsapp_inbound_claimed` with `queue_wait_ms` and
 `whatsapp_inbound_timing` for preparation, indicators, generation, transport, acknowledgement persistence and
-total processing. `whatsapp_assistant_timing` separates configuration,
+total processing. `whatsapp_action_result_timing` records result-send,
+acknowledgement-persistence and history-repair duration/outcome. The
+`whatsapp_quote_lifecycle_reset` event reports whether the generation reset was
+applied or skipped, including after history repair. These events correlate by
+action or message ID, generation and selection revision; they do not include
+phone numbers, message bodies, drafts, applicant data, raw errors or credentials.
+`whatsapp_assistant_timing` separates configuration,
 capability setup, input preparation, knowledge retrieval and model/tool work.
-These events carry message IDs and durations, without phone numbers, message
-bodies, drafts or credentials. Existing action-started and action-finished events
+`whatsapp_operation` records start and terminal outcomes for each named tool,
+quote-catalog preflight, action preparation and typed backend request; failed
+HTTP responses include only status codes. A per-operation `call_id` disambiguates
+concurrent or repeated calls. `whatsapp_model_call` isolates each model invocation
+from tool execution and reports response duration, token counts when supplied by
+the provider, and bounded failure categories (including timeout/abort).
+`whatsapp_action_prepared` and `whatsapp_action_confirmation` connect inbound
+message IDs to the resulting action ID without logging confirmation codes.
+Filter by `message_id` for intake and model/tool latency, then use `action_id` to
+follow dispatch, delivery and reset. A start event without a terminal event can
+indicate a process interruption; it is not evidence of successful execution.
+These events carry operational IDs and durations, without phone numbers, message
+bodies, drafts, raw errors or credentials. Existing action-started and action-finished events
 measure confirmed-operation queue waits and execution durations. Queue wait is
 measured from server acceptance; provider-to-server latency can be compared using
 the inbox's `provider_timestamp` and `received_at`. Event admission removes the
@@ -408,6 +425,69 @@ claim is classified as uncertain and never automatically resent. Permanently
 revoked deliveries become terminal. Expired deliveries remain dormant until a
 valid inbound opens a new reply window, then resume through the same access checks;
 neither state keeps the coordinator awake. Failures before attempting a send can retry normally.
+
+Confirmed quotes report product results incrementally. Each provider outcome is
+persisted in `whatsapp_channel_action_progress` before delivery. The channel groups
+results arriving within a 300 ms window into messages of at most 4096 characters,
+with one active progress sender per action. Provider calls do not wait for the
+WhatsApp send. Each update identifies the quote and product, reports a verified
+premium and quote number when present, and distinguishes unpriced or unverified
+responses. It never declares a winning offer before the final comparison.
+
+The progress outbox is shared channel infrastructure; insurance supplies its
+typed product events and text. An `(action_id,event_key)` constraint deduplicates
+events. Delivery revalidates the contact generation, selected task and reply
+window. A pre-send failure retries after 30 seconds; an ambiguous send or a
+15-second send timeout becomes uncertain and is not blindly replayed. Known
+acknowledgements with a failed history write repair history without another send.
+The coordinator also recovers unfinished progress from the DB. The final summary
+and menu wait until earlier progress deliveries are resolved. Progress messages
+do not clear the draft or change the selected task. Incremental delivery exposes
+received results sooner; it does not fix provider responses without a premium.
+
+After a quote-auto operation ends in a terminal completed, failed, or uncertain
+result, an acknowledged result message includes the main task menu and starts a
+fresh contact generation. A terminal quote preparation or catalog failure that
+is acknowledged follows the same lifecycle, as does an exhausted model-generation
+failure for a quote flow. The current draft, employee selection, buffered input
+and reset challenge are cleared only after the acknowledgement is durable; an
+uncertain outbound send does not reset the conversation. For a terminal inbound
+quote failure, the prepared reset and inbox completion commit in the same database
+transaction, so a later history write failure cannot leave the old draft active. Prior conversational
+history remains in its original generation and is excluded from the new
+conversation. A `history_pending` repair performs the same reset without sending
+the message again. The quote, action, dispatch and audit records remain in their
+originating generation for follow-up by an operator, while the new conversation
+starts with no selected employee or prior quote context.
+
+An explicit request for a new quote, such as `Hagamos una nueva` or
+`Nueva cotización`, follows the same acknowledged reset path while a quote task
+is selected. The server returns the task menu directly, without asking the model
+to claim that the draft was cleared. A queued or executing action, or a terminal
+result still awaiting delivery, blocks this reset. The contact must wait for that
+result before starting a new cycle. Starting a new cycle preserves domain quote
+and audit records; it does not erase customer records.
+
+An unreferenced quote summary is limited to the selected employee and current
+contact generation, including for staff contacts. An authorized staff contact can
+request a historical quote by its explicit reference. External contacts remain
+limited to their own current channel results even when supplying a reference.
+
+WhatsApp quote execution uses a 15-second limit for each backend request and a
+90-second execution budget. The confirmed product list is checked against the
+current catalog inside that budget, before any quote write or provider dispatch;
+there is no separate unbounded catalog preflight. A local deadline settles the operation even if the
+underlying backend ignores cancellation. Available offers are retained when a
+provider exceeds its deadline; a dispatched request with an unverified outcome
+is classified as uncertain and is never automatically resent. Products not
+dispatched before the global deadline are reported separately. Late provider
+responses cannot overwrite the returned summary or trigger another dispatch.
+If a dispatch-claim write commits after its deadline, its evidence is retained
+even though this execution does not call the provider. Reconciliation requires
+checking the saved history; the claim is not deleted or automatically replayed.
+The existing six-minute action lease remains interruption recovery, rather than
+the normal deadline for completing a quote. Interactive quote execution outside
+WhatsApp retains its existing request behavior.
 
 Contacts can request a fresh conversation with the exact command
 `Borrar mis datos y empezar de nuevo`. The server returns a contact-bound,

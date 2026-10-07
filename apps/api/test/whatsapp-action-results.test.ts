@@ -1,6 +1,24 @@
 import { expect, it } from "vitest";
 import { actionResultText } from "../src/whatsapp/action-results";
 
+it("distinguishes undispatched products from uncertain provider responses", () => {
+  const text = actionResultText("Alice", "quote-auto", {
+    state: "completed",
+    result: {
+      reference: "COT-budget",
+      pricedOffers: 1,
+      failedOffers: 0,
+      uncertainOffers: 0,
+      undispatchedOffers: 2,
+      lowestPriceOffers: [{ product: "Received product", premium: 1000000 }],
+    },
+  });
+  expect(text).toContain("Resultados parciales de COT-budget");
+  expect(text).toContain("Productos sin consultar: 2");
+  expect(text).toContain("Received product: $1.000.000");
+  expect(text).not.toContain("Sin resultado verificado:");
+});
+
 it("directs a quote with no priced offers to the configured human contact", () => {
   const text = actionResultText(
     "Alice",
@@ -108,4 +126,45 @@ it("shows incomplete quote states and relevant persistence warnings without expo
   );
   expect(text).toContain("Puedes preguntarme por esta cotización");
   expect(text).not.toContain("https://internal.example.test");
+});
+
+it("appends the actual task menu to a terminal quote failure and keeps it within WhatsApp limits", () => {
+  const menu =
+    "¿Qué deseas hacer? Escribe menú o inicio para volver aquí.\n\n1. Consultar seguros\n2. Asistencia vial\n\nResponde con el número de la opción.";
+  const text = actionResultText(
+    "Alice",
+    "quote-auto",
+    { state: "failed", message: "No fue posible completar la cotización." },
+    "",
+    menu,
+  );
+  expect(text).toContain("No fue posible completar la cotización.");
+  expect(text).toContain(menu);
+
+  const completedWithMenu = actionResultText(
+    "Alice",
+    "quote-auto",
+    {
+      state: "completed",
+      result: { reference: "COT-menu", pricedOffers: 1 },
+    },
+    "",
+    menu,
+  );
+  expect(completedWithMenu).toContain(menu);
+  expect(completedWithMenu).not.toContain(
+    "Puedes preguntarme por esta cotización",
+  );
+  expect(completedWithMenu).toContain("empezar una nueva tarea");
+
+  const longMenu = "Menú\n" + "x".repeat(5000);
+  const bounded = actionResultText(
+    "Alice",
+    "quote-auto",
+    { state: "completed", result: { reference: "COT-test" } },
+    "",
+    longMenu,
+  );
+  expect(bounded.length).toBeLessThanOrEqual(4096);
+  expect(bounded).toContain("Menú\n");
 });

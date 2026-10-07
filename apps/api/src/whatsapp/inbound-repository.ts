@@ -786,6 +786,7 @@ export class WhatsappInboundRepository {
     messageId: string,
     token: string,
     outboundId: string,
+    completionStatements: D1PreparedStatement[] = [],
   ): Promise<boolean> {
     const now = new Date().toISOString();
     const dialect = this.sqlDialect().name;
@@ -838,6 +839,7 @@ export class WhatsappInboundRepository {
           outboundId,
           outboundId,
         ),
+      ...completionStatements,
     ]);
     return result[0].meta.changes === 1;
   }

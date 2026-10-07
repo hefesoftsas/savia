@@ -2,7 +2,12 @@ import type { WhatsappQueueScope } from "./queue";
 import { humanSupportContactText } from "./human-support";
 import type { ActionOutcome } from "./channel-contracts";
 import type { WhatsappAssistantBinding } from "./inbound-contracts";
-import { WhatsappChannelRepository } from "./channel-repository";
+import {
+  WhatsappChannelRepository,
+  type PreparedQuoteLifecycleReset,
+} from "./channel-repository";
+import { buildTaskMenu } from "./task-menu";
+import { diagnosticErrorCode, logWhatsappDiagnostic } from "./diagnostics";
 
 type ResultDelivery = {
   id: string;
@@ -15,6 +20,7 @@ type ResultDelivery = {
   result_json: string | null;
   delivery_state: string | null;
   outbound_message_id: string | null;
+  selection_revision: number;
 };
 
 export function actionResultText(
@@ -22,14 +28,24 @@ export function actionResultText(
   command: string,
   outcome: ActionOutcome,
   humanSupportContact = "",
+  menuText = "",
 ): string {
   const label = `${employee} · Asistente virtual\n\n`;
+  const withMenu = (body: string) => {
+    if (!menuText) return body.slice(0, 4096);
+    const suffix = `\n\n${menuText.slice(0, 4000)}`;
+    return `${body.slice(0, Math.max(0, 4096 - suffix.length))}${suffix}`;
+  };
   const value = outcome.result as Record<string, unknown> | null;
   const isQuote = command === "quote-auto" && value?.reference;
   if (outcome.state !== "completed" && !isQuote)
-    return `${label}${outcome.message}\n${humanSupportContactText(humanSupportContact)}\nEscribe menú para elegir otra tarea.`;
+    return withMenu(
+      `${label}${outcome.message}\n${humanSupportContactText(humanSupportContact)}\nEscribe menú para elegir otra tarea.`,
+    );
   if (!isQuote)
-    return `${label}${({ "create-record": "Registro creado.", "update-record": "Registro actualizado.", "delete-record": "Registro eliminado.", "send-email": "Correo enviado.", "create-event": "Evento creado.", "upload-file": "Archivo guardado." } as Record<string, string>)[command] ?? "Solicitud completada."}\nEscribe menú para elegir otra tarea.`;
+    return withMenu(
+      `${label}${({ "create-record": "Registro creado.", "update-record": "Registro actualizado.", "delete-record": "Registro eliminado.", "send-email": "Correo enviado.", "create-event": "Evento creado.", "upload-file": "Archivo guardado." } as Record<string, string>)[command] ?? "Solicitud completada."}\nEscribe menú para elegir otra tarea.`,
+    );
   const offers = Array.isArray(value.lowestPriceOffers)
     ? (value.lowestPriceOffers as Array<{ product: string; premium: number }>)
     : [];
@@ -44,8 +60,9 @@ export function actionResultText(
     outcome.state !== "completed" ||
     Number(value.failedOffers ?? 0) > 0 ||
     Number(value.uncertainOffers ?? 0) > 0 ||
+    Number(value.undispatchedOffers ?? 0) > 0 ||
     Number(value.unpricedOffers ?? 0) > 0;
-  return [
+  const quoteText = [
     `${label}${hasPartialResults ? "Resultados parciales" : "Resultados"} de ${value.reference}`,
     `Ofertas con precio: ${value.pricedOffers ?? 0}. Respuestas fallidas: ${value.failedOffers ?? 0}.`,
     Number(value.uncertainOffers ?? 0) > 0
@@ -53,6 +70,9 @@ export function actionResultText(
       : "",
     Number(value.unpricedOffers ?? 0) > 0
       ? `Respuestas sin precio: ${value.unpricedOffers}.`
+      : "",
+    Number(value.undispatchedOffers ?? 0) > 0
+      ? `Productos sin consultar: ${value.undispatchedOffers}.`
       : "",
     ...offers
       .slice(0, 5)
@@ -65,11 +85,13 @@ export function actionResultText(
     outcome.state !== "completed" ? outcome.message : "",
     noPrice ? "No recibí ofertas con precio." : "",
     noPrice ? humanSupportContactText(humanSupportContact) : "",
-    "Puedes preguntarme por esta cotización o escribir menú para elegir otra tarea.",
+    menuText
+      ? "Elige una opción del menú para empezar una nueva tarea."
+      : "Puedes preguntarme por esta cotización o escribir menú para elegir otra tarea.",
   ]
     .filter(Boolean)
-    .join("\n")
-    .slice(0, 4096);
+    .join("\n");
+  return withMenu(quoteText);
 }
 
 export async function deliverChannelActionResults(
@@ -100,7 +122,8 @@ export async function deliverChannelActionResults(
     .run();
   const rows = await db
     .prepare(
-      `SELECT id,tenant_id,connection_id,contact,generation,employee_id,action_json,result_json,delivery_state,outbound_message_id FROM whatsapp_channel_actions WHERE status IN ('completed','failed','uncertain') AND (delivery_state IS NULL OR delivery_state='history_pending')${scopeSql} ORDER BY created_at LIMIT ${scope ? 1 : 10}`,
+      `SELECT id,tenant_id,connection_id,contact,generation,employee_id,selection_revision,action_json,result_json,delivery_state,outbound_message_id FROM whatsapp_channel_actions WHERE status IN ('completed','failed','uncertain') AND (delivery_state IS NULL OR delivery_state='history_pending')
+       AND NOT EXISTS (SELECT 1 FROM whatsapp_channel_action_progress p WHERE p.action_id=whatsapp_channel_actions.id AND p.status IN ('pending','sending','history_pending'))${scopeSql} ORDER BY created_at LIMIT ${scope ? 1 : 10}`,
     )
     .bind(...(scope ? [scope.connectionId, scope.contact] : []))
     .all<ResultDelivery>();
@@ -109,6 +132,7 @@ export async function deliverChannelActionResults(
     text: string,
     at: string,
     outboundMessageId = row.outbound_message_id,
+    resultJson = row.result_json,
   ) =>
     db
       .prepare(
@@ -130,10 +154,36 @@ export async function deliverChannelActionResults(
         at,
         row.id,
         outboundMessageId,
-        row.result_json,
-        row.result_json,
+        resultJson,
+        resultJson,
       );
   for (const row of rows.results) {
+    const startedAt = Date.now();
+    const diagnosticContext = {
+      action_id: row.id,
+      generation: row.generation,
+      selection_revision: row.selection_revision,
+    };
+    let stage = "prepare";
+    let stageStartedAt = startedAt;
+    const logStage = (
+      name: string,
+      outcome: string,
+      at = startedAt,
+      error?: unknown,
+    ) =>
+      logWhatsappDiagnostic(
+        "whatsapp_action_result_timing",
+        diagnosticContext,
+        {
+          stage: name,
+          outcome,
+          duration_ms: Math.max(0, Date.now() - at),
+          ...(error === undefined
+            ? {}
+            : { error_code: diagnosticErrorCode(error) }),
+        },
+      );
     let claimed = false;
     let sendAttempted = false;
     let acknowledged: {
@@ -141,9 +191,12 @@ export async function deliverChannelActionResults(
       text: string;
       at: string;
       outcome: ActionOutcome;
+      preparedReset: PreparedQuoteLifecycleReset | null;
     } | null = null;
     try {
       if (row.delivery_state === "history_pending") {
+        stage = "history_repair";
+        const repairStartedAt = Date.now();
         const saved = row.result_json ? JSON.parse(row.result_json) : undefined;
         if (
           !row.outbound_message_id ||
@@ -156,7 +209,41 @@ export async function deliverChannelActionResults(
             )
             .bind(row.id)
             .run();
+          logStage("history_repair", "revoked", repairStartedAt);
           continue;
+        }
+        let resetStatements: D1PreparedStatement[] = [];
+        const action = JSON.parse(row.action_json);
+        const savedReset = saved?.quoteReset as
+          PreparedQuoteLifecycleReset | undefined;
+        if (
+          action.domain === "insurance" &&
+          action.command === "quote-auto" &&
+          savedReset?.generation &&
+          savedReset.menu?.id
+        ) {
+          try {
+            const access = await repository.getAccess({
+              tenantId: row.tenant_id,
+              connectionId: row.connection_id,
+              contact: row.contact,
+            });
+            if (access.generation === row.generation) {
+              resetStatements = repository.quoteLifecycleResetStatements(
+                access,
+                row.selection_revision,
+                row.employee_id,
+                savedReset,
+                {
+                  kind: "action-result",
+                  actionId: row.id,
+                  outboundMessageId: row.outbound_message_id,
+                },
+              );
+            }
+          } catch {
+            // History repair remains valid when current authorization changed.
+          }
         }
         // Repair only persistence for a known acknowledgement, even if the
         // authorization or reply window has since changed. Never resend.
@@ -167,7 +254,38 @@ export async function deliverChannelActionResults(
             )
             .bind(row.id, row.outbound_message_id, row.result_json),
           historyStatement(row, saved.deliveryText, saved.deliveryAt),
+          ...resetStatements,
         ]);
+        logStage(
+          "history_repair",
+          repair[0]?.meta.changes === 1 ? "repaired" : "stale",
+          repairStartedAt,
+        );
+        if (resetStatements.length) {
+          const applied = repair[2]?.meta.changes === 1;
+          logWhatsappDiagnostic(
+            "whatsapp_quote_lifecycle_reset",
+            diagnosticContext,
+            {
+              stage: "history_repair",
+              outcome: applied ? "applied" : "skipped",
+              reset_applied: applied,
+            },
+          );
+        } else if (
+          action.domain === "insurance" &&
+          action.command === "quote-auto"
+        ) {
+          logWhatsappDiagnostic(
+            "whatsapp_quote_lifecycle_reset",
+            diagnosticContext,
+            {
+              stage: "history_repair",
+              outcome: "skipped",
+              reset_applied: false,
+            },
+          );
+        }
         if (repair[0]?.meta.changes === 1) delivered++;
         continue;
       }
@@ -192,6 +310,9 @@ export async function deliverChannelActionResults(
             )
             .bind(row.id)
             .run();
+          logStage("access", "revoked", startedAt, error);
+        } else {
+          logStage("access", "retryable", startedAt, error);
         }
         continue;
       }
@@ -207,6 +328,7 @@ export async function deliverChannelActionResults(
           )
           .bind(row.id)
           .run();
+        logStage("access", "revoked", startedAt);
         continue;
       }
       const binding = await resolve(row.connection_id, row.tenant_id);
@@ -217,6 +339,7 @@ export async function deliverChannelActionResults(
           )
           .bind(row.id)
           .run();
+        logStage("binding", "revoked", startedAt);
         continue;
       }
       const recent = await db
@@ -238,6 +361,7 @@ export async function deliverChannelActionResults(
           )
           .bind(row.id)
           .run();
+        logStage("reply_window", "expired", startedAt);
         continue;
       }
       const employee = await db
@@ -253,12 +377,15 @@ export async function deliverChannelActionResults(
           )
           .bind(row.id)
           .run();
+        logStage("employee", "revoked", startedAt);
         continue;
       }
       const claimUntil = new Date(Date.now() + 60_000).toISOString();
       const claim = await db
         .prepare(
-          "UPDATE whatsapp_channel_actions SET delivery_state='sending',lease_until=? WHERE id=? AND delivery_state IS NULL",
+          `UPDATE whatsapp_channel_actions SET delivery_state='sending',lease_until=? WHERE id=? AND delivery_state IS NULL
+           AND NOT EXISTS (SELECT 1 FROM whatsapp_channel_action_progress p
+             WHERE p.action_id=whatsapp_channel_actions.id AND p.status IN ('pending','sending','history_pending'))`,
         )
         .bind(claimUntil, row.id)
         .run();
@@ -281,6 +408,7 @@ export async function deliverChannelActionResults(
             .bind(row.id)
             .run();
           claimed = false;
+          logStage("final_access", "revoked", startedAt, error);
           continue;
         }
         throw error;
@@ -303,6 +431,7 @@ export async function deliverChannelActionResults(
           )
           .bind(row.id)
           .run();
+        logStage("final_access", "revoked", startedAt);
         continue;
       }
       const action = JSON.parse(row.action_json);
@@ -316,27 +445,127 @@ export async function deliverChannelActionResults(
       const supportContact =
         (await repository.settings(row.tenant_id, row.connection_id))?.config
           .humanSupportContact ?? "";
+      const resetsQuoteLifecycle =
+        action.domain === "insurance" && action.command === "quote-auto";
+      const resetPrepareStartedAt = Date.now();
+      const preparedReset = resetsQuoteLifecycle
+        ? await repository.prepareQuoteLifecycleReset(
+            finalAccess,
+            row.selection_revision,
+            row.employee_id,
+            row.id,
+          )
+        : null;
+      if (resetsQuoteLifecycle && !preparedReset)
+        logWhatsappDiagnostic(
+          "whatsapp_quote_lifecycle_reset",
+          diagnosticContext,
+          {
+            stage: "prepare",
+            outcome: "skipped",
+            duration_ms: Math.max(0, Date.now() - resetPrepareStartedAt),
+            reset_applied: false,
+          },
+        );
+      const menuText = preparedReset
+        ? String(buildTaskMenu(preparedReset.menu, false))
+        : "";
       const text = actionResultText(
         employee.name,
         action.command,
         outcome,
         supportContact,
+        menuText,
       );
       sendAttempted = true;
+      stage = "send";
+      const sendStartedAt = Date.now();
+      stageStartedAt = sendStartedAt;
       const id = await send(finalBinding, text, row.contact);
-      acknowledged = { id, text, at: new Date().toISOString(), outcome };
+      logStage("send", "acknowledged", sendStartedAt);
+      acknowledged = {
+        id,
+        text,
+        at: new Date().toISOString(),
+        outcome,
+        preparedReset,
+      };
+      const acknowledgedResult = JSON.stringify({
+        ...outcome,
+        deliveryText: text,
+        deliveryAt: acknowledged.at,
+        ...(preparedReset ? { quoteReset: preparedReset } : {}),
+      });
       // Record only acknowledged deliveries in the originating history scope.
       // A stable delivery ID also deduplicates history.
-      await db.batch([
+      const statements: D1PreparedStatement[] = [
         db
           .prepare(
-            "UPDATE whatsapp_channel_actions SET delivery_state='sent',outbound_message_id=?,lease_until=NULL WHERE id=? AND delivery_state='sending'",
+            `UPDATE whatsapp_channel_actions SET delivery_state='sent',outbound_message_id=?,result_json=?,lease_until=NULL
+             WHERE id=? AND delivery_state='sending'
+               AND (result_json=? OR (result_json IS NULL AND CAST(? AS TEXT) IS NULL))`,
           )
-          .bind(id, row.id),
-        historyStatement(row, text, acknowledged.at, id),
-      ]);
+          .bind(
+            id,
+            acknowledgedResult,
+            row.id,
+            row.result_json,
+            row.result_json,
+          ),
+        historyStatement(row, text, acknowledged.at, id, acknowledgedResult),
+      ];
+      if (preparedReset)
+        statements.push(
+          ...repository.quoteLifecycleResetStatements(
+            finalAccess,
+            row.selection_revision,
+            row.employee_id,
+            preparedReset,
+            { kind: "action-result", actionId: row.id, outboundMessageId: id },
+          ),
+        );
+      stage = "ack_persistence";
+      const persistenceStartedAt = Date.now();
+      stageStartedAt = persistenceStartedAt;
+      const persisted = await db.batch(statements);
+      logStage("ack_persistence", "persisted", persistenceStartedAt);
+      if (preparedReset) {
+        const applied = persisted[2]?.meta.changes === 1;
+        logWhatsappDiagnostic(
+          "whatsapp_quote_lifecycle_reset",
+          diagnosticContext,
+          {
+            stage: "ack_persistence",
+            outcome: applied ? "applied" : "skipped",
+            duration_ms: Math.max(0, Date.now() - persistenceStartedAt),
+            reset_applied: applied,
+          },
+        );
+      }
+      logStage("delivery", "acknowledged");
       delivered++;
-    } catch {
+    } catch (error) {
+      logStage(
+        stage,
+        acknowledged
+          ? "persistence_failed"
+          : sendAttempted
+            ? "uncertain"
+            : "failed",
+        stageStartedAt,
+        error,
+      );
+      if (acknowledged?.preparedReset)
+        logWhatsappDiagnostic(
+          "whatsapp_quote_lifecycle_reset",
+          diagnosticContext,
+          {
+            stage: "ack_persistence",
+            outcome: "skipped",
+            reset_applied: false,
+            error_code: diagnosticErrorCode(error),
+          },
+        );
       if (!claimed) continue;
       if (acknowledged) {
         // Preserve the exact sent text and acknowledgement for history repair.
@@ -350,6 +579,9 @@ export async function deliverChannelActionResults(
               ...acknowledged.outcome,
               deliveryText: acknowledged.text,
               deliveryAt: acknowledged.at,
+              ...(acknowledged.preparedReset
+                ? { quoteReset: acknowledged.preparedReset }
+                : {}),
             }),
             row.id,
           )

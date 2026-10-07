@@ -56,7 +56,11 @@ Default status names are **To Do**, **In Code Review**, **Code Review**, **Ready
 
 Tickets are grouped by status and include Jira comment counts and the latest comment excerpt, author, date, and source link. Connected GitHub accounts add discovered pull requests, open/draft/closed/merged state, review decisions, unresolved review-thread counts when complete, and discussion excerpts. A missing connection, inaccessible PR, or partial provider result is explicitly marked; it does not mean that no comments or PRs exist.
 
+The live summary itself is not editable text: it is a void block that renders the viewer's private provider data. Move, duplicate, or delete it with the normal block toolbar, and keep writing in the paragraph below it. After inserting it with `/`, the caret lands in that trailing paragraph so typing continues instead of getting trapped inside the live card.
+
 Only the block configuration is stored in Page content, autosave, history, and exports. The backend encrypts saved provider results separately for each viewer, filter configuration and connection identity. It checks the viewer's active connections before returning a cached summary. Disconnecting or changing a source account removes its cached snapshots. Sharing a Page does not share the author's Jira or GitHub results. Anonymous public pages show a private-content placeholder. No scheduled background refresh is created by inserting this block, and the browser does not persist ticket data.
+
+When an editable copy is needed, use **Insert snapshot as editable blocks** inside the live block. It inserts the currently loaded tickets below as ordinary headings, bullets, and links that can be edited, moved, and deleted. That copy becomes part of the shared page content (history, exports, search) and follows page permissions, unlike the live block. It is a one-time snapshot and does not refresh with Jira or GitHub.
 
 The displayed update time belongs to the saved summary, so returning to the page does not make old data appear freshly fetched. Tickets stay visible while refreshing. If the update fails, the previous summary and its timestamp remain visible with an explicit warning; a failed initial load still reports that tickets are unavailable.
 

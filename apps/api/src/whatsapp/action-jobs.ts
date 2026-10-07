@@ -1,3 +1,4 @@
+import { diagnosticErrorCode } from "./diagnostics";
 import type { WhatsappQueueScope } from "./queue";
 import type { ChannelAction, ActionOutcome } from "./channel-contracts";
 import { databaseConflict } from "@savia/db/errors";
@@ -90,7 +91,7 @@ export async function processChannelActions(
         row.id,
       );
     } catch (error) {
-      failureType = error instanceof Error ? error.name : "unknown";
+      failureType = diagnosticErrorCode(error);
       outcome = {
         state: "uncertain",
         message:
@@ -109,7 +110,7 @@ export async function processChannelActions(
         action_id: row.id,
         outcome: outcome.state,
         duration_ms: Date.now() - startedAt,
-        ...(failureType ? { error_type: failureType } : {}),
+        ...(failureType ? { error_code: failureType } : {}),
       }),
     );
     if (afterAction) {
