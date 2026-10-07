@@ -157,7 +157,10 @@ export function createChannelOperationAdapter(
     if (!channelCapabilityAllowed(session.access, category))
       throw new Error("CHANNEL_CAPABILITY_DENIED");
     const selected = await employee(session);
-    if (name === "savia_get_quote_summary" && !session.access.principalId) {
+    if (
+      name === "savia_get_quote_summary" &&
+      (!session.access.principalId || !input.reference)
+    ) {
       const rows = await deps.repository.db
         .prepare(
           "SELECT result_json FROM whatsapp_channel_actions WHERE connection_id=? AND contact=? AND generation=? AND employee_id=? AND status IN ('completed','uncertain') ORDER BY created_at DESC LIMIT 20",
@@ -870,16 +873,21 @@ export function createChannelOperationAdapter(
       return { state: "completed", result };
     }
     if (action.domain === "insurance") {
-      const form = await c.getInsuranceQuoteForm();
+      const expectedProductIds = action.input.products;
       if (
-        JSON.stringify(form.products.map((p) => p.id)) !==
-        JSON.stringify(action.input.products)
+        !Array.isArray(expectedProductIds) ||
+        expectedProductIds.length === 0 ||
+        !expectedProductIds.every(
+          (id): id is string => typeof id === "string" && id.trim().length > 0,
+        ) ||
+        new Set(expectedProductIds).size !== expectedProductIds.length
       )
         throw new Error("CHANNEL_PRODUCTS_CHANGED");
       const result = await c.createInsuranceQuote(
         { vehicle: action.input.vehicle, applicant: action.input.applicant },
         {
           executionKey: action.id,
+          expectedProductIds,
           linkOwnership: async (quoteId) => {
             await deps.repository.db
               .prepare(

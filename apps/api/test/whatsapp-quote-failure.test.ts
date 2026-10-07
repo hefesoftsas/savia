@@ -177,6 +177,160 @@ it("keeps the draft when the failure menu has no acknowledged delivery", async (
   });
 });
 
+it("starts a fresh quote cycle from an explicit new-quote request without calling the model", async () => {
+  const s = await setup();
+  await env.DB.prepare(
+    "UPDATE assistant_virtual_employees SET allowed_collections=? WHERE id=?",
+  )
+    .bind('["cotizaciones","cotizaciones_detalle"]', s.employeeId)
+    .run();
+  await env.DB.prepare(
+    "UPDATE whatsapp_inbox SET state='failed',failure_code='superseded' WHERE message_id=?",
+  )
+    .bind(s.input.messageId)
+    .run();
+  const input = {
+    ...s.input,
+    messageId: crypto.randomUUID(),
+    text: "Hagamos una nueva cotización",
+  };
+  await s.repository.receive(input);
+  const complete = vi.fn(async () => "model should not run");
+  const routed = createRoutedWhatsappGenerator(s.repo, complete);
+  const send = vi.fn(async (_binding, reply) => {
+    expect(reply).toContain("Consultar seguros");
+    expect(await s.contact()).toMatchObject({
+      generation: s.access.generation,
+      draft_json: "private draft",
+    });
+    return "wamid.explicit-new-quote";
+  });
+  const binding = (await s.repository.resolve(s.phoneNumberId, s.wabaId))!;
+  const firstReply = await routed.generate(binding, [], input.text, input);
+  const retryReply = await routed.generate(binding, [], input.text, input);
+  expect(retryReply).toEqual(firstReply);
+  expect(complete).not.toHaveBeenCalled();
+
+  expect(
+    await processWhatsappInbox(s.repository, { ...routed, send }),
+  ).toMatchObject({ processed: 1, failed: 0 });
+
+  expect(complete).not.toHaveBeenCalled();
+  expect(send).toHaveBeenCalledOnce();
+  expect(await s.contact()).toMatchObject({
+    employee_id: null,
+    draft_json: null,
+  });
+  expect((await s.contact())?.generation).not.toBe(s.access.generation);
+});
+
+it("does not claim a new quote cycle when a confirmed action is still queued", async () => {
+  const s = await setup();
+  await env.DB.prepare(
+    "UPDATE assistant_virtual_employees SET allowed_collections=? WHERE id=?",
+  )
+    .bind('["cotizaciones","cotizaciones_detalle"]', s.employeeId)
+    .run();
+  await env.DB.prepare(
+    "UPDATE whatsapp_inbox SET state='failed',failure_code='superseded' WHERE message_id=?",
+  )
+    .bind(s.input.messageId)
+    .run();
+  const input = {
+    ...s.input,
+    messageId: crypto.randomUUID(),
+    text: "Hagamos una nueva cotización",
+  };
+  await s.repository.receive(input);
+  const session = (await s.repo.getSession(s.access))!;
+  await env.DB.prepare(
+    `INSERT INTO whatsapp_channel_actions
+      (id,connection_id,tenant_id,contact,generation,employee_id,selection_revision,
+       action_json,token_hash,status,expires_at,created_at)
+     VALUES(?,?,?,?,?,?,?,'{}','queued','queued',?,?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      s.connectionId,
+      s.tenantId,
+      s.access.contact,
+      s.access.generation,
+      s.employeeId,
+      session.selectionRevision,
+      new Date(Date.now() + 60_000).toISOString(),
+      new Date().toISOString(),
+    )
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO whatsapp_channel_actions
+      (id,connection_id,tenant_id,contact,generation,employee_id,selection_revision,
+       action_json,token_hash,status,expires_at,created_at,result_json,delivery_state)
+     VALUES(?,?,?,?,?,?,?,'{}','undelivered','completed',?,?, '{}','history_pending')`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      s.connectionId,
+      s.tenantId,
+      s.access.contact,
+      s.access.generation,
+      s.employeeId,
+      session.selectionRevision,
+      new Date(Date.now() + 60_000).toISOString(),
+      new Date().toISOString(),
+    )
+    .run();
+  const complete = vi.fn(async () => "model should not run");
+  const routed = createRoutedWhatsappGenerator(s.repo, complete);
+  const send = vi.fn(async (_binding, reply) => {
+    expect(reply).not.toContain("Consultar seguros");
+    expect(reply).toMatch(/proces|espera|menú/i);
+    return "wamid.new-quote-busy";
+  });
+
+  expect(
+    await processWhatsappInbox(s.repository, { ...routed, send }),
+  ).toMatchObject({ processed: 1 });
+
+  expect(complete).not.toHaveBeenCalled();
+  expect(await s.contact()).toMatchObject({
+    generation: s.access.generation,
+    employee_id: s.employeeId,
+    draft_json: "private draft",
+  });
+});
+
+it("does not reset when the selected employee cannot create insurance quotes", async () => {
+  const s = await setup();
+  await env.DB.prepare(
+    "UPDATE whatsapp_inbox SET state='failed',failure_code='superseded' WHERE message_id=?",
+  )
+    .bind(s.input.messageId)
+    .run();
+  const input = {
+    ...s.input,
+    messageId: crypto.randomUUID(),
+    text: "Hagamos una nueva",
+  };
+  await s.repository.receive(input);
+  const complete = vi.fn(async () => "Normal assistant response");
+  const routed = createRoutedWhatsappGenerator(s.repo, complete);
+
+  const reply = await routed.generate(
+    (await s.repository.resolve(s.phoneNumberId, s.wabaId))!,
+    [],
+    input.text,
+    input,
+  );
+
+  expect(reply).toContain("Normal assistant response");
+  expect(complete).toHaveBeenCalledOnce();
+  expect(await s.contact()).toMatchObject({
+    generation: s.access.generation,
+    employee_id: s.employeeId,
+    draft_json: "private draft",
+  });
+});
+
 it("returns to the menu when model retries are exhausted", async () => {
   const s = await setup();
   await env.DB.prepare(

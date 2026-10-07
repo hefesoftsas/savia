@@ -441,6 +441,35 @@ the message again. The quote, action, dispatch and audit records remain in their
 originating generation for follow-up by an operator, while the new conversation
 starts with no selected employee or prior quote context.
 
+An explicit request for a new quote, such as `Hagamos una nueva` or
+`Nueva cotización`, follows the same acknowledged reset path while a quote task
+is selected. The server returns the task menu directly, without asking the model
+to claim that the draft was cleared. A queued or executing action, or a terminal
+result still awaiting delivery, blocks this reset. The contact must wait for that
+result before starting a new cycle. Starting a new cycle preserves domain quote
+and audit records; it does not erase customer records.
+
+An unreferenced quote summary is limited to the selected employee and current
+contact generation, including for staff contacts. An authorized staff contact can
+request a historical quote by its explicit reference. External contacts remain
+limited to their own current channel results even when supplying a reference.
+
+WhatsApp quote execution uses a 15-second limit for each backend request and a
+90-second execution budget. The confirmed product list is checked against the
+current catalog inside that budget, before any quote write or provider dispatch;
+there is no separate unbounded catalog preflight. A local deadline settles the operation even if the
+underlying backend ignores cancellation. Available offers are retained when a
+provider exceeds its deadline; a dispatched request with an unverified outcome
+is classified as uncertain and is never automatically resent. Products not
+dispatched before the global deadline are reported separately. Late provider
+responses cannot overwrite the returned summary or trigger another dispatch.
+If a dispatch-claim write commits after its deadline, its evidence is retained
+even though this execution does not call the provider. Reconciliation requires
+checking the saved history; the claim is not deleted or automatically replayed.
+The existing six-minute action lease remains interruption recovery, rather than
+the normal deadline for completing a quote. Interactive quote execution outside
+WhatsApp retains its existing request behavior.
+
 Contacts can request a fresh conversation with the exact command
 `Borrar mis datos y empezar de nuevo`. The server returns a contact-bound,
 five-minute confirmation code: `BORRAR <code>`. A bare `Sí` does not confirm;

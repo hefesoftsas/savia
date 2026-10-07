@@ -63,6 +63,180 @@ async function selectedSession(staffMode = false, replyButtons = true) {
   return { fixture, repo, session, binding };
 }
 
+async function saveQuoteSummaryAction(
+  fixture: Awaited<ReturnType<typeof setupChannelFixture>>,
+  session: Awaited<ReturnType<typeof selectedSession>>["session"],
+  generation: string,
+  reference: string,
+  insuredValue: number,
+  createdAt: string,
+) {
+  await env.DB.prepare(
+    `INSERT INTO whatsapp_channel_actions
+      (id,connection_id,tenant_id,contact,generation,employee_id,selection_revision,
+       action_json,token_hash,status,expires_at,created_at,result_json)
+     VALUES(?,?,?,?,?,?,?,'{}','unused','completed',?,?,?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      fixture.connectionId,
+      fixture.tenantId,
+      session.access.contact,
+      generation,
+      session.employeeId,
+      session.selectionRevision,
+      createdAt,
+      createdAt,
+      JSON.stringify({ result: { reference, insuredValue } }),
+    )
+    .run();
+}
+
+async function executeConfirmedQuote(
+  actionProductIds: string[],
+  catalogProductIds: string[],
+) {
+  const { fixture, repo, session, binding } = await selectedSession();
+  let settingsReads = 0;
+  let providerCalls = 0;
+  const writes: string[] = [];
+  const backend: typeof fetch = async (url, init) => {
+    const requestUrl = new URL(String(url));
+    const path = requestUrl.pathname;
+    if (path.endsWith("/settings")) {
+      settingsReads++;
+      return Response.json({
+        data: {
+          value: {
+            vehicleLookup: { enabled: true, flowId: "lookup" },
+            products: catalogProductIds.map((id) => ({
+              id,
+              label: `Carrier · ${id}`,
+              enabled: true,
+            })),
+          },
+        },
+      });
+    }
+    if (path.endsWith("/objects"))
+      return Response.json({
+        data: [{ name: "cotizaciones" }, { name: "cotizaciones_detalle" }],
+      });
+    if (path.endsWith("/actions/quote")) {
+      providerCalls++;
+      return Response.json({
+        data: {
+          run: { runId: "quote-run" },
+          output: { data: { premiumTotal: 123456 } },
+        },
+      });
+    }
+    if (init?.method === "POST") {
+      writes.push(path);
+      return Response.json({
+        data: {
+          id: path.endsWith("/cotizaciones") ? "quote-master" : "quote-detail",
+          _version: 1,
+        },
+      });
+    }
+    if (init?.method === "PATCH") {
+      writes.push(path);
+      return Response.json({ data: {} });
+    }
+    throw new Error(`Unexpected request ${String(url)}`);
+  };
+  const adapter = createChannelOperationAdapter({
+    repository: repo,
+    secret: "test-secret",
+    backendForActor: async () => backend,
+  });
+  const action = {
+    id: crypto.randomUUID(),
+    session,
+    revision: 1,
+    domain: "insurance",
+    command: "quote-auto",
+    input: {
+      vehicle: {
+        plate: "TESTCAR",
+        fasecoldaCode: "12345678",
+        productionYear: 2011,
+        isNew: false,
+        circulationCity: "11001",
+        accessoriesValue: 0,
+        declaredValue: 16000000,
+      },
+      applicant: {
+        documentType: "CC",
+        documentNumber: "123456789",
+        firstName: "Test",
+        surname: "User",
+        gender: "F",
+        birthDate: "1990-01-01",
+        city: "11001",
+        address: "Calle 1",
+        phone: "3001234567",
+        email: "test@example.test",
+      },
+      products: actionProductIds,
+      consent: true,
+    },
+  };
+  await env.DB.prepare(
+    `INSERT INTO whatsapp_channel_actions
+      (id,connection_id,tenant_id,contact,generation,employee_id,selection_revision,
+       action_json,token_hash,status,expires_at,created_at)
+     VALUES(?,?,?,?,?,?,?,'{}','dispatching','dispatching',?,?)`,
+  )
+    .bind(
+      action.id,
+      fixture.connectionId,
+      fixture.tenantId,
+      session.access.contact,
+      session.access.generation,
+      session.employeeId,
+      session.selectionRevision,
+      new Date(Date.now() + 60_000).toISOString(),
+      new Date().toISOString(),
+    )
+    .run();
+  const result = adapter.execute(binding, action);
+  return {
+    result,
+    settingsReads: () => settingsReads,
+    providerCalls: () => providerCalls,
+    writes,
+  };
+}
+
+it("checks a changed confirmed product catalog before quote writes or provider dispatch", async () => {
+  const execution = await executeConfirmedQuote(
+    ["confirmed-auto"],
+    ["new-auto"],
+  );
+
+  await expect(execution.result).rejects.toThrow(
+    "Confirmed quote products changed",
+  );
+
+  expect(execution.settingsReads()).toBe(1);
+  expect(execution.writes).toEqual([]);
+  expect(execution.providerCalls()).toBe(0);
+});
+
+it("uses one bounded catalog read for a matching confirmed product", async () => {
+  const execution = await executeConfirmedQuote(
+    ["confirmed-auto"],
+    ["confirmed-auto"],
+  );
+
+  await expect(execution.result).resolves.toMatchObject({ state: "completed" });
+
+  expect(execution.settingsReads()).toBe(1);
+  expect(execution.providerCalls()).toBe(1);
+});
+
 it("preflights enabled products once and reuses the verified form for this turn", async () => {
   const { fixture, repo, session, binding } = await selectedSession();
   let settingsReads = 0;
@@ -126,6 +300,170 @@ it("preflights enabled products once and reuses the verified form for this turn"
   expect(denied).toMatchObject({ isError: true });
   expect(denied.products).toBeUndefined();
   expect(settingsReads).toBe(1);
+});
+
+it("uses only current-generation actions for a staff summary without a reference", async () => {
+  const { fixture, repo, session, binding } = await selectedSession(true);
+  const quoteRecordReads: string[] = [];
+  const backend: typeof fetch = async (url) => {
+    const path = new URL(String(url)).pathname;
+    if (path.endsWith("/settings"))
+      return Response.json({
+        data: {
+          value: {
+            vehicleLookup: { enabled: true, flowId: "sura-autos-provider" },
+            products: [{ id: "auto", label: "Auto", enabled: true }],
+          },
+        },
+      });
+    if (path.includes("/records/cotizaciones")) quoteRecordReads.push(path);
+    throw new Error(`Unexpected request ${String(url)}`);
+  };
+  const adapter = createChannelOperationAdapter({
+    repository: repo,
+    secret: "test-secret",
+    backendForActor: async () => backend,
+  });
+  const capabilities = await adapter.capabilities({
+    ...binding,
+    channelSession: session,
+  });
+  await saveQuoteSummaryAction(
+    fixture,
+    session,
+    session.access.generation,
+    "current-cycle",
+    16000000,
+    new Date().toISOString(),
+  );
+  await saveQuoteSummaryAction(
+    fixture,
+    session,
+    "previous-generation",
+    "prior-cycle",
+    42000000,
+    "2999-01-01T00:00:00.000Z",
+  );
+
+  const result = await (
+    capabilities!.tools.savia_get_quote_summary as any
+  ).execute({});
+
+  expect(result).toMatchObject({
+    quote: { reference: "current-cycle", insuredValue: 16000000 },
+    totalQuotes: 1,
+  });
+  expect(quoteRecordReads).toEqual([]);
+});
+
+it("allows a staff summary to query the tenant API by an explicit reference", async () => {
+  const { repo, session, binding } = await selectedSession(true);
+  let referenceFilter: unknown;
+  const backend: typeof fetch = async (url) => {
+    const requestUrl = new URL(String(url));
+    if (requestUrl.pathname.endsWith("/settings"))
+      return Response.json({
+        data: {
+          value: {
+            vehicleLookup: { enabled: true, flowId: "sura-autos-provider" },
+            products: [{ id: "auto", label: "Auto", enabled: true }],
+          },
+        },
+      });
+    if (requestUrl.pathname.endsWith("/objects"))
+      return Response.json({
+        data: [
+          { name: "cotizaciones", recordCount: 1 },
+          { name: "cotizaciones_detalle", recordCount: 1 },
+        ],
+      });
+    if (requestUrl.pathname.endsWith("/records/cotizaciones")) {
+      referenceFilter = JSON.parse(requestUrl.searchParams.get("filters")!);
+      return Response.json({
+        data: [
+          {
+            id: "quote-id",
+            name: "prior-reference",
+            estado: "Recibida",
+            valor_asegurado: 42000000,
+          },
+        ],
+        total: 1,
+      });
+    }
+    if (requestUrl.pathname.endsWith("/records/cotizaciones_detalle"))
+      return Response.json({ data: [], total: 0 });
+    throw new Error(`Unexpected request ${String(url)}`);
+  };
+  const adapter = createChannelOperationAdapter({
+    repository: repo,
+    secret: "test-secret",
+    backendForActor: async () => backend,
+  });
+  const capabilities = await adapter.capabilities({
+    ...binding,
+    channelSession: session,
+  });
+
+  const result = await (
+    capabilities!.tools.savia_get_quote_summary as any
+  ).execute({ reference: "prior-reference" });
+
+  expect(referenceFilter).toEqual({
+    logic: "and",
+    conditions: [{ field: "name", op: "eq", value: "prior-reference" }],
+  });
+  expect(result.quote).toMatchObject({ reference: "prior-reference" });
+});
+
+it("keeps an explicitly referenced external summary within the current generation", async () => {
+  const { fixture, repo, session, binding } = await selectedSession();
+  const backend: typeof fetch = async (url) => {
+    if (new URL(String(url)).pathname.endsWith("/settings"))
+      return Response.json({
+        data: {
+          value: {
+            vehicleLookup: { enabled: true, flowId: "sura-autos-provider" },
+            products: [{ id: "auto", label: "Auto", enabled: true }],
+          },
+        },
+      });
+    throw new Error(`Unexpected request ${String(url)}`);
+  };
+  const adapter = createChannelOperationAdapter({
+    repository: repo,
+    secret: "test-secret",
+    backendForActor: async () => backend,
+  });
+  const capabilities = await adapter.capabilities({
+    ...binding,
+    channelSession: session,
+  });
+  await saveQuoteSummaryAction(
+    fixture,
+    session,
+    session.access.generation,
+    "current-cycle",
+    16000000,
+    new Date().toISOString(),
+  );
+  await saveQuoteSummaryAction(
+    fixture,
+    session,
+    "previous-generation",
+    "current-cycle",
+    42000000,
+    "2999-01-01T00:00:00.000Z",
+  );
+
+  const result = await (
+    capabilities!.tools.savia_get_quote_summary as any
+  ).execute({ reference: "current-cycle" });
+
+  expect(result).toMatchObject({
+    quote: { reference: "current-cycle", insuredValue: 16000000 },
+    totalQuotes: 1,
+  });
 });
 
 it("removes quote tools and product claims when preflight cannot verify a catalog", async () => {

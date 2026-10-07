@@ -60,6 +60,7 @@ export function actionResultText(
     outcome.state !== "completed" ||
     Number(value.failedOffers ?? 0) > 0 ||
     Number(value.uncertainOffers ?? 0) > 0 ||
+    Number(value.undispatchedOffers ?? 0) > 0 ||
     Number(value.unpricedOffers ?? 0) > 0;
   const quoteText = [
     `${label}${hasPartialResults ? "Resultados parciales" : "Resultados"} de ${value.reference}`,
@@ -69,6 +70,9 @@ export function actionResultText(
       : "",
     Number(value.unpricedOffers ?? 0) > 0
       ? `Respuestas sin precio: ${value.unpricedOffers}.`
+      : "",
+    Number(value.undispatchedOffers ?? 0) > 0
+      ? `Productos sin consultar: ${value.undispatchedOffers}.`
       : "",
     ...offers
       .slice(0, 5)
