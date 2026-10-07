@@ -1,6 +1,24 @@
 import { expect, it } from "vitest";
 import { actionResultText } from "../src/whatsapp/action-results";
 
+it("distinguishes undispatched products from uncertain provider responses", () => {
+  const text = actionResultText("Alice", "quote-auto", {
+    state: "completed",
+    result: {
+      reference: "COT-budget",
+      pricedOffers: 1,
+      failedOffers: 0,
+      uncertainOffers: 0,
+      undispatchedOffers: 2,
+      lowestPriceOffers: [{ product: "Received product", premium: 1000000 }],
+    },
+  });
+  expect(text).toContain("Resultados parciales de COT-budget");
+  expect(text).toContain("Productos sin consultar: 2");
+  expect(text).toContain("Received product: $1.000.000");
+  expect(text).not.toContain("Sin resultado verificado:");
+});
+
 it("directs a quote with no priced offers to the configured human contact", () => {
   const text = actionResultText(
     "Alice",

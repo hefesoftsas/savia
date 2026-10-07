@@ -33,6 +33,8 @@ import {
   humanSupportRecoveryReply,
 } from "../whatsapp/human-support";
 import { formatQuotePreview } from "../whatsapp/quote-preview";
+import { quoteProgressText } from "../whatsapp/quote-progress";
+import { enqueueChannelActionProgress } from "../whatsapp/action-progress";
 import {
   validatePersonalConfirmedAction,
   type PersonalIntegrationOperations,
@@ -43,6 +45,7 @@ export type ChannelOperationDependencies = {
   secret?: string;
   backendForActor(actor: AppActor): Promise<typeof fetch>;
   personal?: PersonalIntegrationOperations;
+  onActionProgress?(action: ChannelAction): void;
 };
 
 export function createChannelOperationAdapter(
@@ -157,7 +160,10 @@ export function createChannelOperationAdapter(
     if (!channelCapabilityAllowed(session.access, category))
       throw new Error("CHANNEL_CAPABILITY_DENIED");
     const selected = await employee(session);
-    if (name === "savia_get_quote_summary" && !session.access.principalId) {
+    if (
+      name === "savia_get_quote_summary" &&
+      (!session.access.principalId || !input.reference)
+    ) {
       const rows = await deps.repository.db
         .prepare(
           "SELECT result_json FROM whatsapp_channel_actions WHERE connection_id=? AND contact=? AND generation=? AND employee_id=? AND status IN ('completed','uncertain') ORDER BY created_at DESC LIMIT 20",
@@ -349,6 +355,26 @@ export function createChannelOperationAdapter(
           { outcome: consumed.state },
         );
       let expiredQuoteCanRetry = false;
+      let confirmationText =
+        "Solicitud confirmada. Estoy procesándola; puedes escribir menú para elegir otra tarea.";
+      if (consumed?.state === "queued") {
+        const queued = await deps.repository.db
+          .prepare(
+            "SELECT action_json FROM whatsapp_channel_actions WHERE id=?",
+          )
+          .bind(consumed.jobId)
+          .first<{ action_json: string }>()
+          .catch(() => null);
+        if (queued) {
+          const metadata = JSON.parse(queued.action_json);
+          if (
+            metadata.domain === "insurance" &&
+            metadata.command === "quote-auto"
+          )
+            confirmationText =
+              "Solicitud confirmada. Estoy consultando los productos; te enviaré las opciones conforme lleguen y un resumen al terminar. Puedes escribir menú para elegir otra tarea.";
+        }
+      }
       let latestActionStatus: string | null = null;
       if (!consumed && !cancelText && !concreteAttempt && actions) {
         try {
@@ -430,7 +456,7 @@ export function createChannelOperationAdapter(
         system: whatsappOperationInstructions,
         directReply:
           consumed?.state === "queued"
-            ? "Solicitud confirmada. Estoy procesándola; puedes escribir menú para elegir otra tarea."
+            ? confirmationText
             : consumed?.state === "cancelled"
               ? "Solicitud cancelada. Escribe menú para elegir otra tarea."
               : cancelText
@@ -870,16 +896,30 @@ export function createChannelOperationAdapter(
       return { state: "completed", result };
     }
     if (action.domain === "insurance") {
-      const form = await c.getInsuranceQuoteForm();
+      const expectedProductIds = action.input.products;
       if (
-        JSON.stringify(form.products.map((p) => p.id)) !==
-        JSON.stringify(action.input.products)
+        !Array.isArray(expectedProductIds) ||
+        expectedProductIds.length === 0 ||
+        !expectedProductIds.every(
+          (id): id is string => typeof id === "string" && id.trim().length > 0,
+        ) ||
+        new Set(expectedProductIds).size !== expectedProductIds.length
       )
         throw new Error("CHANNEL_PRODUCTS_CHANGED");
       const result = await c.createInsuranceQuote(
         { vehicle: action.input.vehicle, applicant: action.input.applicant },
         {
           executionKey: action.id,
+          expectedProductIds,
+          onProgress: async (progress) => {
+            await enqueueChannelActionProgress(
+              deps.repository,
+              action,
+              progress.productId,
+              quoteProgressText(progress),
+            );
+            deps.onActionProgress?.(action);
+          },
           linkOwnership: async (quoteId) => {
             await deps.repository.db
               .prepare(

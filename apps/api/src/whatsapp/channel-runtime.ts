@@ -6,6 +6,7 @@ import type {
 } from "./inbound-contracts";
 import type { ChannelMenu, EmployeeSession } from "./channel-contracts";
 import { WhatsappChannelRepository } from "./channel-repository";
+import { assertChannelCommandAllowed } from "../assistant/capabilities";
 import { routeEmployeeInput } from "./employee-router";
 import { nativeReplyText, type NativeReply } from "./native";
 import { handleConversationReset, redactResetCode } from "./conversation-reset";
@@ -63,51 +64,112 @@ export async function prepareFailedQuoteReply(
     logReset("prepare", "skipped");
     return failure;
   }
-  const prepared = await repository.prepareQuoteLifecycleReset(
-    session.access,
-    session.selectionRevision,
-    session.employeeId,
+  const staged = await stageQuoteLifecycleReset(
+    repository,
+    binding.connectionId,
+    input.messageId,
+    session,
   );
-  if (!prepared) {
+  if (!staged) {
     logReset("prepare", "skipped");
     return failure;
   }
+  logReset("prepare", "prepared");
+  return `${failure}\n\n${buildTaskMenu(staged.prepared.menu, false)}`;
+}
+
+async function stageQuoteLifecycleReset(
+  repository: WhatsappChannelRepository,
+  connectionId: string,
+  messageId: string,
+  session: EmployeeSession,
+) {
   const row = await repository.db
     .prepare(
       "SELECT routing_snapshot FROM whatsapp_inbox WHERE message_id=? AND connection_id=?",
     )
-    .bind(input.messageId, binding.connectionId)
+    .bind(messageId, connectionId)
     .first<{ routing_snapshot: string | null }>();
-  if (!row?.routing_snapshot) {
-    logReset("prepare", "skipped");
-    return failure;
-  }
+  if (!row?.routing_snapshot) return null;
   const saved = JSON.parse(row.routing_snapshot) as Snapshot;
   if (
     saved.generation !== session.access.generation ||
     saved.session?.selectionRevision !== session.selectionRevision ||
     saved.session?.employeeId !== session.employeeId
-  ) {
-    logReset("prepare", "skipped");
-    return failure;
-  }
+  )
+    return null;
+  if (saved.quoteReset) return { saved, prepared: saved.quoteReset };
+  const prepared = await repository.prepareQuoteLifecycleReset(
+    session.access,
+    session.selectionRevision,
+    session.employeeId,
+  );
+  if (!prepared) return null;
+  const updated = { ...saved, quoteReset: prepared };
   const result = await repository.db
     .prepare(
       "UPDATE whatsapp_inbox SET routing_snapshot=? WHERE message_id=? AND connection_id=? AND routing_snapshot=?",
     )
     .bind(
-      JSON.stringify({ ...saved, quoteReset: prepared }),
-      input.messageId,
-      binding.connectionId,
+      JSON.stringify(updated),
+      messageId,
+      connectionId,
       row.routing_snapshot,
     )
     .run();
-  if (!result.meta.changes) {
-    logReset("prepare", "skipped");
-    return failure;
+  return result.meta.changes ? { saved: updated, prepared } : null;
+}
+
+function isExplicitNewQuoteRequest(value: string) {
+  const text = value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .replace(/[.!?]+$/, "");
+  return (
+    /^(?:(?:hagamos|quiero|necesito|empecemos|iniciemos)\s+)?(?:una\s+)?(?:nueva|otra)\s+cotizacion$/.test(
+      text,
+    ) ||
+    /^(?:hagamos|hagamoslo)\s+una\s+nueva$/.test(text) ||
+    /^(?:(?:let'?s|let us)\s+)?(?:start|do)\s+(?:a\s+)?new\s+(?:quote|quotation)$/.test(
+      text,
+    ) ||
+    /^new\s+(?:quote|quotation)$/.test(text) ||
+    /^(?:quiero empezar|empecemos|iniciemos)\s+de\s+cero$/.test(text)
+  );
+}
+
+async function canRestartQuoteCycle(
+  repository: WhatsappChannelRepository,
+  session: EmployeeSession,
+) {
+  const current = await repository.getSession(session.access);
+  if (
+    current?.employeeId !== session.employeeId ||
+    current.selectionRevision !== session.selectionRevision ||
+    current.access.generation !== session.access.generation
+  )
+    return false;
+  const row = await repository.db
+    .prepare(
+      "SELECT allowed_collections FROM assistant_virtual_employees WHERE id=? AND agency_id=? AND status='active'",
+    )
+    .bind(session.employeeId, session.access.tenantId)
+    .first<{ allowed_collections: string }>();
+  if (!row) return false;
+  try {
+    assertChannelCommandAllowed(
+      { allowedCollections: JSON.parse(row.allowed_collections) },
+      current.access,
+      "insurance",
+      "quote-auto",
+      {},
+    );
+    return true;
+  } catch {
+    return false;
   }
-  logReset("prepare", "prepared");
-  return `${failure}\n\n${buildTaskMenu(prepared.menu, false)}`;
 }
 
 function stripLeadingEmployeeHeaders(value: string, employeeName: string) {
@@ -225,6 +287,52 @@ export function createRoutedWhatsappGenerator(
       }
       if (saved.reply) return saved.reply;
       if (!saved.session) throw new Error("CHANNEL_SELECTION_REQUIRED");
+      const selectedSession = saved.session;
+      if (
+        isExplicitNewQuoteRequest(saved.text) &&
+        (await canRestartQuoteCycle(repository, selectedSession))
+      ) {
+        const staged = await stageQuoteLifecycleReset(
+          repository,
+          binding.connectionId,
+          input.messageId,
+          selectedSession,
+        );
+        if (!staged) {
+          logWhatsappDiagnostic(
+            "whatsapp_quote_lifecycle_reset",
+            {
+              message_id: input.messageId,
+              generation: saved.generation,
+              selection_revision: selectedSession.selectionRevision,
+            },
+            {
+              stage: "explicit_restart",
+              outcome: "skipped",
+              reset_applied: false,
+            },
+          );
+          return "No pude verificar que la solicitud anterior haya terminado, así que conservé tu borrador y no inicié otra cotización. Espera su resultado o escribe menú para volver a las tareas.";
+        }
+        saved = staged.saved;
+        logWhatsappDiagnostic(
+          "whatsapp_quote_lifecycle_reset",
+          {
+            message_id: input.messageId,
+            generation: saved.generation,
+            selection_revision: selectedSession.selectionRevision,
+          },
+          {
+            stage: "explicit_restart",
+            outcome: "prepared",
+            reset_applied: false,
+          },
+        );
+        return buildTaskMenu(
+          staged.prepared.menu,
+          Boolean(binding.native?.listMessages),
+        );
+      }
       const rows = await repository.db
         .prepare(
           "SELECT user_text,assistant_text FROM whatsapp_channel_history WHERE connection_id=? AND contact=? AND generation=? AND employee_id=? ORDER BY created_at DESC,message_id DESC LIMIT 20",
