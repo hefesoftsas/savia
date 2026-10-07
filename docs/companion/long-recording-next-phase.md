@@ -141,6 +141,8 @@ chained Ogg file for listening and download. Each validated complete logical
 stream gets a distinct serial number and recomputed page checksums; codec packets,
 granule positions and pre-skip remain intact. The endpoint requires a finalized
 session with Ogg-only segments (desktop captures) and is capped at 64 MB.
+The web review UI allows up to 60 seconds for each full-source audio download;
+individual segment requests keep the standard API timeout.
 Sessions with M4A segments keep per-segment playback only.
 A session with saved transcript segments can answer questions before all work is
 complete. Answers include the source/sequence/time references sent as evidence.

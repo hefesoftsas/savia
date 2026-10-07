@@ -105,8 +105,29 @@ export class ApiClient {
     init: RequestInit = {},
     timeoutMs = REQUEST_TIMEOUT_MS,
   ): Promise<Response> {
+    const { response } = await this.requestResponseWithBody(
+      path,
+      init,
+      async (result) => result,
+      timeoutMs,
+    );
+    return response;
+  }
+
+  /** Keeps the request timeout active while consuming the response body. */
+  async requestResponseWithBody<T>(
+    path: string,
+    init: RequestInit,
+    consume: (response: Response) => Promise<T>,
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  ): Promise<{ response: Response; body: T }> {
+    const token = await this.getAccessToken(init.signal);
     return withRequestTimeout(
-      (signal) => this.fetchResponse(path, init, signal),
+      async (signal) => {
+        const response = await this.fetchResponse(path, init, signal, token);
+        const body = await consume(response);
+        return { response, body };
+      },
       timeoutMs,
       init.signal,
     );
@@ -118,9 +139,10 @@ export class ApiClient {
     timeoutMs = REQUEST_TIMEOUT_MS,
   ): Promise<T> {
     try {
+      const token = await this.getAccessToken(init.signal);
       return await withRequestTimeout(
         async (signal) => {
-          const response = await this.fetchResponse(path, init, signal);
+          const response = await this.fetchResponse(path, init, signal, token);
           const body = await responseBody(response);
           if (!response.ok) {
             const envelope = body as ApiErrorEnvelope | null;
@@ -157,8 +179,8 @@ export class ApiClient {
     path: string,
     init: RequestInit,
     signal: AbortSignal,
+    token: string | null,
   ): Promise<Response> {
-    const token = await this.tokenSource.getAccessToken();
     const headers = new Headers(init.headers);
     headers.set("Accept", "application/json");
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -169,5 +191,28 @@ export class ApiClient {
       credentials: init.credentials ?? "include",
       headers,
     });
+  }
+
+  private async getAccessToken(
+    signal?: AbortSignal | null,
+  ): Promise<string | null> {
+    if (!signal) return this.tokenSource.getAccessToken();
+    if (signal.aborted)
+      throw signal.reason ?? new DOMException("Aborted", "AbortError");
+
+    let removeAbortListener: (() => void) | undefined;
+    const aborted = new Promise<never>((_resolve, reject) => {
+      const abort = () =>
+        reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      signal.addEventListener("abort", abort, { once: true });
+      removeAbortListener = () => signal.removeEventListener("abort", abort);
+      if (signal.aborted) abort();
+    });
+
+    try {
+      return await Promise.race([this.tokenSource.getAccessToken(), aborted]);
+    } finally {
+      removeAbortListener?.();
+    }
   }
 }
