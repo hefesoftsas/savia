@@ -223,7 +223,7 @@
       "sha256": "44d979bffbe9e76f62f0a4d6cc005c3271642121934338a47e7dc758c92ffc10"
     },
     {
-      "filename": "0049_workflow_approvals.sql",
+      "filename": "0052_workflow_approvals.sql",
       "sha256": "84cc43cec069b8a1ff5228fdf0263b95d349bbb791d4c6c33ebb52cc48a883bf"
     }
   ],
