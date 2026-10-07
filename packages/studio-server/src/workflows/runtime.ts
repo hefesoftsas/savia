@@ -375,7 +375,7 @@ function routeParallelFinish(
       return { branches: null, merges: null, next };
     return {
       branches: [...region.branches],
-      merges: { ...(context.merges ?? {}), [region.merge]: region.ends.length },
+      merges: { ...(context.merges ?? {}), [region.merge]: region.branches.length },
       next: region.branches[0],
     };
   }
@@ -836,11 +836,12 @@ async function executeNode(
         [...meta.parallel.regions.values()].find(
           (region) => region.merge === node.id,
         )?.ends ?? [];
+      const reached = ends.filter((end) => end in context.steps);
       output = {
         branches: Object.fromEntries(
-          ends.map((end) => [end, context.steps[end]]),
+          reached.map((end) => [end, context.steps[end]]),
         ),
-        count: ends.length,
+        count: reached.length,
       };
       break;
     }

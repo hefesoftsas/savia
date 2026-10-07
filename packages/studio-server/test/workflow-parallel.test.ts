@@ -139,4 +139,47 @@ describe("parallel branches with a merge join", () => {
       error: expect.any(String),
     });
   });
+
+  it("runs conditions inside branches and still joins once", async () => {
+    const { repo, id } = await published(
+      manual([
+        { id: "fork", type: "parallel", branches: ["left", "right"] },
+        {
+          id: "left",
+          type: "condition",
+          left: { ref: "trigger.flag" },
+          operator: "eq",
+          right: true,
+          next: "left_yes",
+          otherwise: "left_no",
+        },
+        { id: "left_yes", type: "transform", values: { lane: "yes" }, next: "join" },
+        { id: "left_no", type: "transform", values: { lane: "no" }, next: "join" },
+        { id: "right", type: "transform", values: { lane: "right" }, next: "join" },
+        { id: "join", type: "merge", next: "done" },
+        {
+          id: "done",
+          type: "transform",
+          values: { lanes: { ref: "steps.join.count" } },
+        },
+      ]),
+    );
+    const run = await repo.start(id, { flag: true }, owner, "parallel-cond");
+    await ticked();
+    await ticked();
+    await ticked();
+    const detail = await repo.execution(run.id);
+    expect(detail.status).toBe("completed");
+    expect(detail.jobs.map((job) => job.node_id)).toEqual([
+      "fork",
+      "left",
+      "right",
+      "left_yes",
+      "join",
+      "done",
+    ]);
+    expect(detail.jobs.find((job) => job.node_id === "join")?.output).toMatchObject({
+      count: 2,
+    });
+  });
 });

@@ -510,6 +510,58 @@ it("joins straight-line branches and exposes every branch result", () => {
   ).toBe(false);
 });
 
+it("accepts conditions and switches inside parallel branches", () => {
+  const flow = {
+    trigger: { type: "manual" },
+    nodes: [
+      { id: "fork", type: "parallel", branches: ["left", "right"] },
+      {
+        id: "left",
+        type: "condition",
+        left: { ref: "trigger.flag" },
+        operator: "eq",
+        right: true,
+        next: "left_yes",
+        otherwise: "left_no",
+      },
+      { id: "left_yes", type: "transform", values: { lane: "yes" }, next: "join" },
+      { id: "left_no", type: "transform", values: { lane: "no" }, next: "join" },
+      {
+        id: "right",
+        type: "switch",
+        input: { ref: "trigger.kind" },
+        cases: [{ operator: "eq", value: "a", next: "right_a" }],
+        otherwise: "join",
+      },
+      { id: "right_a", type: "transform", values: { lane: "a" }, next: "join" },
+      { id: "join", type: "merge", next: "done" },
+      { id: "done", type: "transform", values: {} },
+    ],
+  };
+  expect(workflowDefinitionSchema.safeParse(flow).success).toBe(true);
+  // Uneven interiors still fail: one condition path leaves the region.
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [
+        { id: "fork", type: "parallel", branches: ["left", "right"] },
+        {
+          id: "left",
+          type: "condition",
+          left: "",
+          operator: "eq",
+          right: "",
+          next: "join",
+          otherwise: "elsewhere",
+        },
+        { id: "right", type: "transform", values: {}, next: "join" },
+        { id: "join", type: "merge" },
+        { id: "elsewhere", type: "transform", values: {} },
+      ],
+    }).success,
+  ).toBe(false);
+});
+
 it("rejects open, uneven and nested parallel regions", () => {
   const join = { id: "join", type: "merge" };
   const end = (id: string, next = "join") => ({
@@ -548,12 +600,11 @@ it("rejects open, uneven and nested parallel regions", () => {
       fork(["left", "right"]),
       end("left"),
       {
-        ...end("right"),
+        id: "right",
+        type: "loop",
+        items: { ref: "trigger.tags" },
+        body: "join",
         next: "join",
-        type: "condition",
-        left: "",
-        operator: "eq",
-        right: "",
       },
       join,
     ],

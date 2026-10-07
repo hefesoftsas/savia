@@ -254,18 +254,19 @@ a fixed test identity and must never be deployed or pointed at user data.
   capabilities. Multi-way routing uses one switch instead of chained
   true/false steps; reusable logic uses subflows instead of duplicated
   branches; external services arrive as catalog pieces instead of inline
-  secrets.
+  secrets. Parallel branches accept condition, switch and subflow interiors;
+  loops and nested parallels remain outside parallel regions.
 
 ## Parallel branches
 
-A **Ramas paralelas** step fans out into 2–8 straight-line branches that
+A **Ramas paralelas** step fans out into 2–8 branches that
 run interleaved, and **Unir ramas** waits for every branch before
 continuing with their combined outputs in `steps.<id>.branches`. Each
-branch is a straight line of single steps to the same merge: no
-conditions, loops, subflows, nested parallels or jumps in or out. A branch
-failure fails the execution; per-step error continuation stays inside its
-branch. Steps after the merge can reference any branch result, since every
-branch always runs exactly once. Waiting steps (delays, approvals, webhook
+branch is a DAG from its entry to the same merge: conditions, switches
+and subflows may fork inside a branch as long as every path reaches the
+merge, and steps after the merge can reference any executed branch result.
+Branches must not share steps, loops and nested parallels stay outside
+the region, and waiting steps (delays, approvals, webhook
 retries) pause the whole execution until they resume. Loops and parallel
 regions cannot nest in either direction.
 

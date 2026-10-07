@@ -623,7 +623,7 @@ export type ParallelRegion = {
   /** Structural problems; the caller turns them into issues. */
   errors: string[];
 };
-const LINEAR_BRANCH_TYPES = new Set([
+const BRANCH_MEMBER_TYPES = new Set([
   "transform",
   "map",
   "query",
@@ -637,11 +637,25 @@ const LINEAR_BRANCH_TYPES = new Set([
   "http",
   "piece",
   "approval",
+  "condition",
+  "switch",
+  "subflow",
 ]);
+function branchOutgoing(node: WorkflowNode): (string | undefined)[] {
+  const outgoing: (string | undefined)[] = [node.next];
+  if (node.type === "condition" || node.type === "approval")
+    outgoing.push(node.otherwise);
+  if (node.type === "switch") {
+    for (const entry of node.cases) outgoing.push(entry.next);
+    outgoing.push(node.otherwise);
+  }
+  return outgoing;
+}
 /**
- * Statically enclosed parallel region: straight-line branches from each
- * entry to a common merge. Always terminates; invalid graphs yield errors
- * instead of members.
+ * Statically enclosed parallel region: branches from each
+ * entry to a common merge. Branch interiors may use conditions, switches
+ * and subflows as long as every path reaches the same merge. Always
+ * terminates; invalid graphs yield errors instead of members.
  */
 export function parallelRegion(
   definition: WorkflowDefinition,
@@ -668,14 +682,22 @@ export function parallelRegion(
     ends: string[] = [];
   let merge: string | null = null;
   for (const entry of branches) {
-    const chain = new Set<string>();
-    let current: string | undefined = entry;
-    for (;;) {
-      const node: WorkflowNode | undefined = current
-        ? byId.get(current)
-        : undefined;
-      if (!node) break;
-      if (node.id === headId || chain.has(node.id)) {
+    const stack: string[] = [entry];
+    const seen = new Set<string>();
+    const local = new Set<string>();
+    let reachedMerge = false;
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      const node: WorkflowNode | undefined = byId.get(current);
+      if (!node) {
+        return {
+          ...empty,
+          errors: [`Parallel ${headId} branches must end at the merge`],
+        };
+      }
+      if (node.id === headId) {
         return {
           ...empty,
           errors: [`Parallel ${headId} branches cannot cycle`],
@@ -688,34 +710,58 @@ export function parallelRegion(
             ...empty,
             errors: [`Parallel ${headId} branches must join at one merge`],
           };
-        break;
+        reachedMerge = true;
+        continue;
       }
-      if (!LINEAR_BRANCH_TYPES.has(node.type))
+      if (
+        node.type === "loop" ||
+        node.type === "parallel" ||
+        node.type === "merge"
+      )
         return {
           ...empty,
           errors: [`Step ${node.id} cannot run inside parallel branches yet`],
         };
-      chain.add(node.id);
+      if (!BRANCH_MEMBER_TYPES.has(node.type))
+        return {
+          ...empty,
+          errors: [`Step ${node.id} cannot run inside parallel branches yet`],
+        };
       if (members.has(node.id))
         return {
           ...empty,
           errors: [`Parallel ${headId} branches must not share steps`],
         };
+      local.add(node.id);
       members.add(node.id);
-      if (node.next === undefined)
+      const outgoing = branchOutgoing(node).filter(
+        (next): next is string => next !== undefined,
+      );
+      if (outgoing.length === 0)
         return {
           ...empty,
           errors: [`Parallel ${headId} branches must end at the merge`],
         };
-      current = node.next;
+      for (const next of outgoing) {
+        if (next === merge || (merge === null && byId.get(next)?.type === "merge")) {
+          if (merge === null) merge = next;
+          if (next !== merge)
+            return {
+              ...empty,
+              errors: [`Parallel ${headId} branches must join at one merge`],
+            };
+          reachedMerge = true;
+          if (!ends.includes(node.id)) ends.push(node.id);
+          continue;
+        }
+        stack.push(next);
+      }
     }
-    const last = [...chain].pop();
-    if (last === undefined || merge === null)
+    if (!reachedMerge || merge === null)
       return {
         ...empty,
         errors: [`Parallel ${headId} branches must end at the merge`],
       };
-    ends.push(last);
   }
   return { branches, merge, ends, members, errors: [] };
 }
