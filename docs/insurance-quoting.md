@@ -25,7 +25,29 @@ A stable execution key supports existing record-create idempotency. The contact
 ownership link is persisted before provider dispatch, and each product receives
 a durable dispatch claim. A lost dispatch acknowledgement becomes uncertain and
 is never automatically replayed. Customer summaries return only that contact's
-own completed channel results; linked advisers use their own tenant permissions.
+own completed or uncertain channel results; linked advisers use their own tenant
+permissions.
+
+WhatsApp result messages retain verified priced offers even when another insurer
+request is uncertain. They distinguish failed, unverified and unpriced responses,
+include relevant persistence warnings, and direct uncertain outcomes to human
+support without automatically repeating provider calls. Prices alone do not
+establish a coverage recommendation. Internal CRM links stay out of customer
+messages.
+
+After Meta acknowledges a result send, its text is saved to the originating
+contact, access generation and employee's conversation history, together with
+the outbound message ID. Follow-up questions therefore receive the delivered
+result as context. Duplicate delivery attempts do not send or record it twice;
+uncertain sends are not recorded as delivered and are never automatically retried.
+Current access checks and the reply window still apply.
+
+If the history transaction fails after a send acknowledgement, the channel saves
+the outbound ID, exact message text and send time in a `history_pending` delivery.
+The scheduler retries only the history write, under the original access scope,
+without sending again or requiring a new reply window. Preparation failures
+before a send attempt can retry; an attempted send without an acknowledgement
+remains uncertain.
 
 The pilot test uses simulated provider responses and a synthetic vehicle. No
 real insurer call is made by the test. See the
