@@ -1,5 +1,6 @@
 import runtime from "./runtime";
 export * from "./runtime";
+export { WhatsappDispatcher } from "./whatsapp/dispatcher";
 export { RealtimeHub } from "./realtime/hub";
 export default {
   fetch(

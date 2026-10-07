@@ -1,3 +1,4 @@
+import type { WhatsappQueueScope } from "./queue";
 import { cleanupChannelState } from "./channel-cleanup";
 import { deliverChannelActionResults } from "./action-results";
 import {
@@ -96,9 +97,36 @@ export function whatsappInboundFromEnvironment(
   const routed = createRoutedWhatsappGenerator(channelRepository, generate);
   return {
     repository,
-    processActions: async () => {
-      if (!operations?.actions) return { completed: 0, uncertain: 0 };
-      await cleanupChannelState(channelRepository);
+    processActions: async (scope?: WhatsappQueueScope, dispatch = true) => {
+      if (!operations?.actions)
+        return { completed: 0, uncertain: 0, processed: 0, delivered: 0 };
+      if (!scope) await cleanupChannelState(channelRepository);
+      let delivered = 0;
+      const deliverResults = async () => {
+        const result = await deliverChannelActionResults(
+          channelRepository,
+          async (connectionId, tenantId) => {
+            const row = await environment.DB.prepare(
+              "SELECT phone_number_id,waba_id FROM tenant_whatsapp_connections WHERE id=? AND tenant_id=?",
+            )
+              .bind(connectionId, tenantId)
+              .first<{ phone_number_id: string; waba_id: string }>();
+            return row
+              ? repository.resolve(row.phone_number_id, row.waba_id)
+              : undefined;
+          },
+          (binding, text, phone) =>
+            sendWhatsappReply(nango, binding, text, phone),
+          scope,
+        );
+        delivered += result.delivered;
+      };
+      // A completed action from an earlier tick must not wait behind a new
+      // provider job. Deliver it before dispatching queued work, then after
+      // each job so a slow later action cannot hold its result.
+      await deliverResults();
+      if (!dispatch)
+        return { completed: 0, uncertain: 0, processed: 0, delivered };
       const report = await processChannelActions(
         operations.actions,
         async (action) => {
@@ -120,28 +148,19 @@ export function whatsappInboundFromEnvironment(
             throw new Error("CHANNEL_BINDING_REVOKED");
           return operations.execute(binding, action);
         },
+        scope ? 1 : 3,
+        deliverResults,
+        scope,
       );
-      await deliverChannelActionResults(
-        channelRepository,
-        async (connectionId, tenantId) => {
-          const row = await environment.DB.prepare(
-            "SELECT phone_number_id,waba_id FROM tenant_whatsapp_connections WHERE id=? AND tenant_id=?",
-          )
-            .bind(connectionId, tenantId)
-            .first<{ phone_number_id: string; waba_id: string }>();
-          return row
-            ? repository.resolve(row.phone_number_id, row.waba_id)
-            : undefined;
-        },
-        (binding, text, phone) =>
-          sendWhatsappReply(nango, binding, text, phone),
-      );
-      return report;
+      return { ...report, delivered };
     },
     appSecret: environment.WHATSAPP_META_APP_SECRET?.trim(),
     verifyToken: environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim(),
     deferProcessing: environment.WHATSAPP_PROCESSING_MODE === "scheduled",
-    process: async (options?: { scheduled?: boolean }) => {
+    process: async (options?: {
+      scheduled?: boolean;
+      scope?: WhatsappQueueScope;
+    }) => {
       const processingDependencies = {
         recoveryReply: async (binding) =>
           humanSupportRecoveryReply(await humanSupportContact(binding)),
@@ -189,9 +208,16 @@ export function whatsappInboundFromEnvironment(
                 },
               ),
       } satisfies import("./inbound-contracts").WhatsappInboundDependencies;
-      return options?.scheduled
-        ? drainWhatsappInbox(repository, processingDependencies)
-        : processWhatsappInbox(repository, processingDependencies, 5);
+      return options?.scope
+        ? processWhatsappInbox(
+            repository,
+            processingDependencies,
+            1,
+            options.scope,
+          )
+        : options?.scheduled
+          ? drainWhatsappInbox(repository, processingDependencies)
+          : processWhatsappInbox(repository, processingDependencies, 5);
     },
   };
 }

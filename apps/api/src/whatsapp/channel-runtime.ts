@@ -8,6 +8,7 @@ import type { EmployeeSession } from "./channel-contracts";
 import { WhatsappChannelRepository } from "./channel-repository";
 import { routeEmployeeInput } from "./employee-router";
 import { nativeReplyText, type NativeReply } from "./native";
+import { handleConversationReset, redactResetCode } from "./conversation-reset";
 
 type Snapshot = {
   generation: string;
@@ -16,6 +17,7 @@ type Snapshot = {
   configurationRevision?: string;
   employeeName?: string;
   reply?: NativeReply | string;
+  control?: "conversation-reset";
 };
 
 function stripLeadingEmployeeHeaders(value: string, employeeName: string) {
@@ -63,7 +65,7 @@ export function createRoutedWhatsappGenerator(
       if (!settings?.config.routingEnabled)
         return complete(binding, history, text, input);
       if (!input) throw new Error("CHANNEL_INPUT_REQUIRED");
-      const access = await repository.getAccess({
+      let access = await repository.getAccess({
         tenantId: binding.tenantId,
         connectionId: binding.connectionId,
         contact: input.contactPhone.replace(/\D/g, ""),
@@ -71,6 +73,37 @@ export function createRoutedWhatsappGenerator(
       let saved = await snapshot(input.messageId);
       if (saved && saved.generation !== access.generation)
         throw new Error("CHANNEL_ACCESS_REVOKED");
+      if (
+        saved?.control === "conversation-reset" &&
+        !/^borrar mis datos y empezar de nuevo$/i.test(text.trim())
+      )
+        return saved.reply!;
+      const reset = await handleConversationReset(repository, access, input);
+      if (reset) {
+        access = reset.access;
+        saved = {
+          generation: access.generation,
+          session: null,
+          text: "[Conversation reset]",
+          configurationRevision: settings.revision,
+          reply: redactResetCode(reset.reply),
+          control: "conversation-reset",
+        };
+        await repository.db
+          .prepare(
+            "UPDATE whatsapp_inbox SET message_text=?,input_payload=NULL,routing_snapshot=? WHERE message_id=? AND connection_id=?",
+          )
+          .bind(
+            reset.request
+              ? "Borrar mis datos y empezar de nuevo"
+              : "[Conversation reset]",
+            JSON.stringify(saved),
+            input.messageId,
+            binding.connectionId,
+          )
+          .run();
+        return reset.reply;
+      }
       if (!saved) {
         const route = await routeEmployeeInput(
           access,
@@ -212,6 +245,7 @@ export function createRoutedWhatsappGenerator(
             currentSettings.revision !== saved.configurationRevision
           )
             return false;
+          if (saved.control === "conversation-reset") return true;
           const menu = await repository.menu(access);
           if (!menu || menu.revision !== saved.configurationRevision)
             return false;

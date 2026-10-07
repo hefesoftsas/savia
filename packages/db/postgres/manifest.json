@@ -209,6 +209,14 @@
     {
       "filename": "0048_whatsapp_action_queue_timestamp.sql",
       "sha256": "468beb134d34381cff330f2ec478eea14f5dd038847b3f8fc89f3c4bbc7846e4"
+    },
+    {
+      "filename": "0049_whatsapp_conversation_reset.sql",
+      "sha256": "c4739b69fcd5a547cb2ae9f1ba64e297695e5110d84d133189f7dbfe51863fb0"
+    },
+    {
+      "filename": "0050_whatsapp_dispatch_indexes.sql",
+      "sha256": "c0f7b5d0b68d11c56bd5f782e2406292fa8f4428e01c1326117738007c043aa8"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1750,6 +1758,11 @@
       "table": "whatsapp_inbox"
     },
     {
+      "type": "index",
+      "name": "whatsapp_inbox_dispatch_scope",
+      "table": "whatsapp_inbox"
+    },
+    {
       "type": "table",
       "name": "whatsapp_inbox",
       "table": "whatsapp_inbox"
@@ -1832,6 +1845,21 @@
     {
       "type": "index",
       "name": "whatsapp_channel_action_jobs",
+      "table": "whatsapp_channel_actions"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_action_dispatch_scope",
+      "table": "whatsapp_channel_actions"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_action_delivery_scope",
+      "table": "whatsapp_channel_actions"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_action_unfinished_scope",
       "table": "whatsapp_channel_actions"
     }
   ],
@@ -15673,6 +15701,38 @@
         {
           "cid": 8,
           "name": "access_fingerprint",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "reset_token_hash",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "reset_expires_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "reset_attempts",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "last_reset_message_id",
           "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,

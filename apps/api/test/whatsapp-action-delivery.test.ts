@@ -5,6 +5,7 @@ import { WhatsappChannelRepository } from "../src/whatsapp/channel-repository";
 import { WhatsappChannelActions } from "../src/whatsapp/confirmations";
 import { deliverChannelActionResults } from "../src/whatsapp/action-results";
 import { createRoutedWhatsappGenerator } from "../src/whatsapp/channel-runtime";
+import { nextWhatsappWake } from "../src/whatsapp/queue";
 import type { ActionOutcome } from "../src/whatsapp/channel-contracts";
 import type {
   WhatsappAssistantBinding,
@@ -162,6 +163,26 @@ it("does not add uncertain deliveries to history or retry their sends", async ()
   ).toBe("uncertain");
 });
 
+it("classifies an expired sending lease as uncertain without retrying it", async () => {
+  const s = await setup(partial);
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_actions SET delivery_state='sending',lease_until=? WHERE id=?",
+  )
+    .bind(new Date(Date.now() - 1000).toISOString(), s.actionId)
+    .run();
+
+  await s.deliver();
+
+  expect(s.send).not.toHaveBeenCalled();
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state,lease_until FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(s.actionId)
+      .first(),
+  ).toEqual({ delivery_state: "uncertain", lease_until: null });
+});
+
 it("recovers an acknowledged send's failed history write without sending again", async () => {
   const s = await setup(partial);
   const batch = vi.spyOn(env.DB, "batch");
@@ -195,6 +216,82 @@ it("recovers an acknowledged send's failed history write without sending again",
   const history = (await s.history()).results;
   expect(history).toHaveLength(1);
   expect(history[0]?.assistant_text).toBe(s.send.mock.calls[0]?.[1]);
+});
+
+it("repairs acknowledged history after the contact authorization changes", async () => {
+  const s = await setup(partial);
+  const deliveryText = "The acknowledged result";
+  const deliveryAt = new Date().toISOString();
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_actions SET delivery_state='history_pending',outbound_message_id=?,result_json=? WHERE id=?",
+  )
+    .bind(
+      `wamid.result.${s.actionId}`,
+      JSON.stringify({ ...partial, deliveryText, deliveryAt }),
+      s.actionId,
+    )
+    .run();
+  await s.repo.configure(
+    s.tenantId,
+    s.connectionId,
+    {
+      routingEnabled: true,
+      tasks: [],
+      staff: [],
+      internalCapabilities: [],
+      externalCapabilities: [],
+    },
+    s.principal.id,
+  );
+
+  await s.deliver();
+
+  expect(s.send).not.toHaveBeenCalled();
+  expect((await s.history()).results).toMatchObject([
+    { assistant_text: deliveryText },
+  ]);
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(s.actionId)
+      .first("delivery_state"),
+  ).toBe("sent");
+});
+
+it("does not recreate acknowledged history if reset revokes it before repair", async () => {
+  const s = await setup(partial);
+  const deliveryText = "Private acknowledged result";
+  const deliveryAt = new Date().toISOString();
+  const resultJson = JSON.stringify({ ...partial, deliveryText, deliveryAt });
+  await env.DB.prepare(
+    "UPDATE whatsapp_channel_actions SET delivery_state='history_pending',outbound_message_id=?,result_json=? WHERE id=?",
+  )
+    .bind(`wamid.result.${s.actionId}`, resultJson, s.actionId)
+    .run();
+  const batch = vi.spyOn(env.DB, "batch");
+  const originalBatch = env.DB.batch.bind(env.DB);
+  batch.mockImplementationOnce(async (statements) => {
+    await env.DB.prepare(
+      "UPDATE whatsapp_channel_actions SET delivery_state='revoked',result_json=? WHERE id=?",
+    )
+      .bind(JSON.stringify(partial), s.actionId)
+      .run();
+    return originalBatch(statements);
+  });
+
+  await s.deliver();
+  batch.mockRestore();
+
+  expect((await s.history()).results).toHaveLength(0);
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(s.actionId)
+      .first("delivery_state"),
+  ).toBe("revoked");
+  expect(s.send).not.toHaveBeenCalled();
 });
 
 it("retries preparation failures that occurred before attempting a send", async () => {
@@ -236,6 +333,53 @@ it("does not send or record results outside the reply window", async () => {
   await s.deliver();
   expect(s.send).not.toHaveBeenCalled();
   expect((await s.history()).results).toHaveLength(0);
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(s.actionId)
+      .first("delivery_state"),
+  ).toBe("expired");
+});
+
+it("reactivates an expired result when a valid new inbound opens the reply window", async () => {
+  const s = await setup(partial, 25 * 60 * 60 * 1000);
+  const scope = {
+    connectionId: s.connectionId,
+    contact: s.session.access.contact,
+  };
+  await s.deliver();
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(s.actionId)
+      .first("delivery_state"),
+  ).toBe("expired");
+  expect(await nextWhatsappWake(env.DB, scope)).toBeNull();
+
+  expect(
+    await s.repository.receive({
+      phoneNumberId: s.phoneNumberId,
+      wabaId: s.wabaId,
+      messageId: `reopen-${s.actionId}`,
+      contactPhone: s.session.access.contact,
+      text: "menu",
+      timestamp: new Date().toISOString(),
+    }),
+  ).toBe(true);
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(s.actionId)
+      .first("delivery_state"),
+  ).toBeNull();
+  expect(await nextWhatsappWake(env.DB, scope)).not.toBeNull();
+
+  await s.deliver();
+  await s.deliver();
+  expect(s.send).toHaveBeenCalledTimes(1);
 });
 
 it("does not send or record results after contact access is revoked", async () => {
@@ -255,4 +399,29 @@ it("does not send or record results after contact access is revoked", async () =
   await s.deliver();
   expect(s.send).not.toHaveBeenCalled();
   expect((await s.history()).results).toHaveLength(0);
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(s.actionId)
+      .first("delivery_state"),
+  ).toBe("revoked");
+});
+
+it("delivers only the coordinator's conversation while another result remains pending", async () => {
+  const first = await setup(partial);
+  const second = await setup(partial);
+  await deliverChannelActionResults(first.repo, first.resolve, first.send, {
+    connectionId: first.connectionId,
+    contact: first.session.access.contact,
+  });
+  expect((await first.history()).results).toHaveLength(1);
+  expect((await second.history()).results).toHaveLength(0);
+  expect(
+    await env.DB.prepare(
+      "SELECT delivery_state FROM whatsapp_channel_actions WHERE id=?",
+    )
+      .bind(second.actionId)
+      .first("delivery_state"),
+  ).toBeNull();
 });

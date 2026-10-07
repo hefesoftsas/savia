@@ -6,6 +6,7 @@
   "vars": {
     "SAVIA_OAUTH_ISSUER": "http://127.0.0.1:8787/api/auth",
     "SAVIA_API_RESOURCE": "http://127.0.0.1:8787",
+    "WHATSAPP_PROCESSING_MODE": "events",
   },
   "services": [
     { "binding": "SAVIA_REQUEST", "service": "savia-request" },
@@ -28,9 +29,15 @@
     },
   ],
   "durable_objects": {
-    "bindings": [{ "name": "REALTIME_HUB", "class_name": "RealtimeHub" }],
+    "bindings": [
+      { "name": "REALTIME_HUB", "class_name": "RealtimeHub" },
+      { "name": "WHATSAPP_DISPATCHER", "class_name": "WhatsappDispatcher" },
+    ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RealtimeHub"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RealtimeHub"] },
+    { "tag": "v2", "new_sqlite_classes": ["WhatsappDispatcher"] },
+  ],
   "d1_databases": [
     {
       "binding": "DB",

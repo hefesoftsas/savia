@@ -16,6 +16,8 @@ import {
 
 import { humanSupportRecoveryReply } from "./human-support";
 
+import type { WhatsappQueueScope } from "./queue";
+
 const MAX_REPLY_LENGTH = 4096;
 const DEFAULT_BATCH_SIZE = 10;
 const DRAIN_BATCH_SIZE = 2;
@@ -39,9 +41,10 @@ export async function processWhatsappInbox(
   repository: WhatsappInboundRepository,
   dependencies: WhatsappInboundDependencies,
   limit = DEFAULT_BATCH_SIZE,
+  scope?: WhatsappQueueScope,
 ): Promise<{ processed: number; failed: number }> {
   const now = new Date().toISOString();
-  const candidates = await repository.candidates(limit, now);
+  const candidates = await repository.candidates(limit, now, scope);
   let processed = 0;
   let failed = 0;
 
@@ -53,6 +56,29 @@ export async function processWhatsappInbox(
       new Date().toISOString(),
     );
     if (!item) continue;
+    const processingStartedAt = Date.now();
+    const timing = (stage: string, startedAt: number, outcome = "completed") =>
+      console.info(
+        JSON.stringify({
+          event: "whatsapp_inbound_timing",
+          message_id: item.messageId,
+          attempt: item.attempts,
+          stage,
+          outcome,
+          duration_ms: Math.max(0, Date.now() - startedAt),
+        }),
+      );
+    console.info(
+      JSON.stringify({
+        event: "whatsapp_inbound_claimed",
+        message_id: item.messageId,
+        attempt: item.attempts,
+        queue_wait_ms: Math.max(
+          0,
+          processingStartedAt - Date.parse(item.receivedAt),
+        ),
+      }),
+    );
 
     let binding = await repository.resolve(item.phoneNumberId, item.wabaId);
     if (
@@ -86,13 +112,18 @@ export async function processWhatsappInbox(
     }
 
     if (dependencies.indicator) {
+      const indicatorStartedAt = Date.now();
       try {
         await dependencies.indicator(binding, item.messageId);
       } catch {
         /* Metadata indicators must not block the conversation. */
+      } finally {
+        timing("indicator", indicatorStartedAt);
       }
     }
     const history = await repository.getHistory(item);
+    timing("preparation", processingStartedAt);
+    const generationStartedAt = Date.now();
     let reply: string;
     let outgoing: string | NativeReply;
     try {
@@ -121,7 +152,9 @@ export async function processWhatsappInbox(
       }
       if (!reply || reply.length > MAX_REPLY_LENGTH)
         throw new Error("Generated reply is empty or too long");
+      timing("generation", generationStartedAt);
     } catch {
+      timing("generation", generationStartedAt, "failed");
       console.error("WHATSAPP_GENERATION_FAILED", { attempt: item.attempts });
       if (item.attempts < GENERATION_ATTEMPTS) {
         await repository.retryGeneration(item.messageId, token, item.attempts);
@@ -196,6 +229,9 @@ export async function processWhatsappInbox(
       failed++;
       continue;
     }
+    const transportStartedAt = Date.now();
+    let sendCompleted = false;
+    let persistenceStartedAt = 0;
     try {
       const outboundId = await dependencies.send(
         beforeSend,
@@ -205,13 +241,29 @@ export async function processWhatsappInbox(
       );
       if (!outboundId.trim())
         throw new Error("The provider returned no message id");
-      if (await repository.complete(item.messageId, token, outboundId)) {
+      timing("transport", transportStartedAt);
+      sendCompleted = true;
+      persistenceStartedAt = Date.now();
+      const saved = await repository.complete(
+        item.messageId,
+        token,
+        outboundId,
+      );
+      timing(
+        "persistence",
+        persistenceStartedAt,
+        saved ? "completed" : "stale",
+      );
+      if (saved) {
         processed++;
         await dependencies
           .afterReply?.(beforeSend, item, outgoing)
           .catch(() => console.error("WHATSAPP_CHANNEL_HISTORY_FAILED"));
+        timing("total", processingStartedAt);
       } else failed++;
     } catch {
+      if (sendCompleted) timing("persistence", persistenceStartedAt, "failed");
+      else timing("transport", transportStartedAt, "uncertain");
       // The request may have reached Meta even if its response was lost. Keep
       // the saved reply and stop here; an automatic retry could send twice.
       await repository.fail(item.messageId, token, "outbound_send_uncertain");

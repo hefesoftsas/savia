@@ -33,6 +33,20 @@ import {
   type WhatsappSecrets,
 } from "./whatsapp/runtime";
 import {
+  runWhatsappEventLanes,
+  runWhatsappScheduledLanes,
+} from "./whatsapp/scheduler";
+import {
+  isWhatsappRecoveryTick,
+  recoverWhatsappScopes,
+  usesWhatsappEvents,
+  wakeWhatsappInput,
+  wakeWhatsappScope,
+  type WhatsappQueueScope,
+} from "./whatsapp/queue";
+import { cleanupChannelState } from "./whatsapp/channel-cleanup";
+import { WhatsappChannelRepository } from "./whatsapp/channel-repository";
+import {
   createSqlBridgeClient,
   sqlBridgeFromEnvironment,
   type SqlBridgeClient,
@@ -103,6 +117,7 @@ export type RuntimeEnvironment = {
   DB: D1Database;
   DOCUMENTS: R2Bucket;
   REALTIME_HUB?: DurableObjectNamespace;
+  WHATSAPP_DISPATCHER?: DurableObjectNamespace;
   REALTIME_RATE_LIMITER?: {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };
@@ -370,6 +385,24 @@ export function createApiRuntime(
     },
   };
 }
+/** A bounded alarm batch processes one input or action for a single conversation. */
+export async function processWhatsappEventBatch(
+  environment: RuntimeEnvironment,
+  scope: WhatsappQueueScope,
+): Promise<boolean> {
+  const configuration = assistantConfigurationFromEnvironment(environment);
+  const inbound = whatsappInboundFromEnvironment(
+    environment,
+    configuration,
+    whatsappChannelOptions(environment, configuration),
+  );
+  return runWhatsappEventLanes(
+    async () => (await inbound.processActions(scope, false)).delivered,
+    () => inbound.process({ scope }),
+    () => inbound.processActions(scope),
+  );
+}
+
 const runtime = {
   async fetch(
     request: Request,
@@ -468,11 +501,29 @@ const runtime = {
         ...(pagesSearchSchedule ? { schedule: pagesSearchSchedule } : {}),
       },
       whatsappRoutesFromEnvironment(environment),
-      whatsappInboundFromEnvironment(
-        environment,
-        assistant.configuration,
-        whatsappChannelOptions(environment, assistant.configuration),
-      ),
+      {
+        ...whatsappInboundFromEnvironment(
+          environment,
+          assistant.configuration,
+          whatsappChannelOptions(environment, assistant.configuration),
+        ),
+        ...(usesWhatsappEvents(environment)
+          ? {
+              deferProcessing: true,
+              wake: async (
+                input: import("./whatsapp/inbound-contracts").WhatsappInboundInput,
+              ) => {
+                if (!environment.WHATSAPP_DISPATCHER)
+                  throw new Error("WHATSAPP_DISPATCHER_MISSING");
+                await wakeWhatsappInput(
+                  environment.DB,
+                  environment.WHATSAPP_DISPATCHER,
+                  input,
+                );
+              },
+            }
+          : {}),
+      },
     ).fetch(request, environment, context);
     return response;
   },
@@ -483,6 +534,11 @@ const runtime = {
   ): Promise<void> {
     const realtime = createRealtimeHubClient(environment.REALTIME_HUB);
     const runWhatsapp = async () => {
+      if (
+        usesWhatsappEvents(environment) &&
+        !isWhatsappRecoveryTick(_event?.scheduledTime ?? Date.now())
+      )
+        return;
       if (environment.DOCUMENTS) {
         try {
           await cleanupWhatsappMedia(environment.DOCUMENTS);
@@ -495,18 +551,62 @@ const runtime = {
         !environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim()
       )
         return;
+      if (usesWhatsappEvents(environment)) {
+        if (!environment.WHATSAPP_DISPATCHER)
+          throw new Error("WHATSAPP_DISPATCHER_MISSING");
+        await cleanupChannelState(
+          new WhatsappChannelRepository(environment.DB),
+        );
+        const scopes = await recoverWhatsappScopes(environment.DB);
+        // Bound recovery wake concurrency; all conversations retain independent alarms.
+        const wakeFailures: unknown[] = [];
+        for (let index = 0; index < scopes.length; index += 16) {
+          const results = await Promise.allSettled(
+            scopes
+              .slice(index, index + 16)
+              .map((scope) =>
+                wakeWhatsappScope(environment.WHATSAPP_DISPATCHER!, scope),
+              ),
+          );
+          const failures = results.filter(
+            (result) => result.status === "rejected",
+          );
+          wakeFailures.push(
+            ...failures.map(
+              (result) => (result as PromiseRejectedResult).reason,
+            ),
+          );
+        }
+        if (wakeFailures.length)
+          throw new AggregateError(
+            wakeFailures,
+            "WhatsApp recovery wakes failed",
+          );
+        if (scopes.length)
+          console.info(
+            JSON.stringify({
+              event: "whatsapp_dispatch_recovery",
+              conversations: scopes.length,
+            }),
+          );
+        return;
+      }
       const configuration = assistantConfigurationFromEnvironment(environment);
       const inbound = whatsappInboundFromEnvironment(
         environment,
         configuration,
         whatsappChannelOptions(environment, configuration),
       );
-      const report = await inbound.process({ scheduled: true });
-      await inbound.processActions();
-      if (report.processed || report.failed)
-        console.info(
-          JSON.stringify({ event: "whatsapp_inbound_batch", ...report }),
-        );
+      await runWhatsappScheduledLanes(
+        async () => {
+          const report = await inbound.process({ scheduled: true });
+          if (report.processed || report.failed)
+            console.info(
+              JSON.stringify({ event: "whatsapp_inbound_batch", ...report }),
+            );
+        },
+        () => inbound.processActions(),
+      );
     };
     const runCompanion = async () => {
       if (environment.COMPANION_ENABLED !== "true" || !environment.DOCUMENTS)
