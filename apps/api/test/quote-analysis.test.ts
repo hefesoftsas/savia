@@ -72,6 +72,61 @@ it("rejects analysis omitting received offers or referring to unverified offers"
   ).toBeUndefined();
 });
 
+it("treats a null preferred proposal as no preference", async () => {
+  const result = await analyzeQuoteReport(report, async () =>
+    JSON.stringify({ ...analysis, preferredProposalId: null }),
+  );
+
+  expect(result?.proposals).toHaveLength(2);
+  expect(result?.preferredProposalId).toBeUndefined();
+});
+
+it("reports bounded validation paths and codes without model-provided keys or values", async () => {
+  const validationIssues: Array<{ field: string; code: string }> = [];
+  const unsafeContact = "private@example.test";
+  const invalid = {
+    proposals: [
+      { id: "a", explanation: 42 },
+      { id: "b", explanation: "Valid", extra: unsafeContact },
+    ],
+    suggestion: 42,
+    preferredProposalId: null,
+    limitations: [42],
+    extra: unsafeContact,
+  };
+
+  const result = await analyzeQuoteReport(
+    report,
+    async () => JSON.stringify(invalid),
+    {
+      onValidationIssue: (issues) => validationIssues.push(...issues),
+    },
+  );
+
+  expect(result).toBeUndefined();
+  expect(validationIssues.length).toBeGreaterThan(0);
+  expect(validationIssues.length).toBeLessThanOrEqual(5);
+  expect(validationIssues).toContainEqual({
+    field: "proposals/[index]/explanation",
+    code: "invalid_type",
+  });
+  expect(validationIssues).toContainEqual({
+    field: "suggestion",
+    code: "invalid_type",
+  });
+  expect(validationIssues).toContainEqual({
+    field: "limitations/[index]",
+    code: "invalid_type",
+  });
+  expect(validationIssues).not.toContainEqual(
+    expect.objectContaining({ field: expect.stringContaining("extra") }),
+  );
+  expect(JSON.stringify(validationIssues)).not.toContain(unsafeContact);
+  expect(
+    validationIssues.every(({ code }) => /^[a-z_]{1,40}$/.test(code)),
+  ).toBe(true);
+});
+
 it("reports safe reason codes for missing, malformed, schema-invalid, and mismatched analysis", async () => {
   const outcomes: QuoteAnalysisOutcome[] = [];
   const observe = {

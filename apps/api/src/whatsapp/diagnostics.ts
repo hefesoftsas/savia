@@ -20,6 +20,25 @@ type Fields = {
   output_tokens?: number;
   queue_wait_ms?: number;
   event_count?: number;
+  validation_field?:
+    | "root"
+    | "proposals"
+    | "proposals/[index]"
+    | "proposals/[index]/id"
+    | "proposals/[index]/explanation"
+    | "suggestion"
+    | "preferredProposalId"
+    | "limitations"
+    | "limitations/[index]";
+  validation_code?:
+    | "invalid_type"
+    | "too_big"
+    | "too_small"
+    | "invalid_format"
+    | "unrecognized_keys"
+    | "invalid_value"
+    | "invalid_union"
+    | "custom";
 };
 
 export function logWhatsappDiagnostic(
@@ -50,6 +69,8 @@ export function logWhatsappDiagnostic(
       "output_tokens",
       "queue_wait_ms",
       "event_count",
+      "validation_field",
+      "validation_code",
     ] as const)
       if (fields[key] !== undefined) metadata[key] = fields[key];
     console.info(JSON.stringify(metadata));

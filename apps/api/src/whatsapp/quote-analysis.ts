@@ -43,6 +43,92 @@ export type QuoteAnalysisCompletionMetadata = {
   outputTokens?: number;
 };
 
+export type QuoteAnalysisValidationIssue = {
+  field:
+    | "root"
+    | "proposals"
+    | "proposals/[index]"
+    | "proposals/[index]/id"
+    | "proposals/[index]/explanation"
+    | "suggestion"
+    | "preferredProposalId"
+    | "limitations"
+    | "limitations/[index]";
+  code:
+    | "invalid_type"
+    | "too_big"
+    | "too_small"
+    | "invalid_format"
+    | "unrecognized_keys"
+    | "invalid_value"
+    | "invalid_union"
+    | "custom";
+};
+
+function safeValidationIssues(
+  issues: readonly { path: readonly PropertyKey[]; code: string }[],
+): QuoteAnalysisValidationIssue[] {
+  const fields = new Set<QuoteAnalysisValidationIssue["field"]>([
+    "root",
+    "proposals",
+    "proposals/[index]",
+    "proposals/[index]/id",
+    "proposals/[index]/explanation",
+    "suggestion",
+    "preferredProposalId",
+    "limitations",
+    "limitations/[index]",
+  ]);
+  const codes = new Set<QuoteAnalysisValidationIssue["code"]>([
+    "invalid_type",
+    "too_big",
+    "too_small",
+    "invalid_format",
+    "unrecognized_keys",
+    "invalid_value",
+    "invalid_union",
+    "custom",
+  ]);
+  const safe: QuoteAnalysisValidationIssue[] = [];
+  for (const issue of issues) {
+    let field: QuoteAnalysisValidationIssue["field"] = "root";
+    const path = issue.path;
+    if (path.length === 1 && path[0] === "proposals") field = "proposals";
+    else if (
+      path.length === 2 &&
+      path[0] === "proposals" &&
+      typeof path[1] === "number"
+    )
+      field = "proposals/[index]";
+    else if (
+      path.length === 3 &&
+      path[0] === "proposals" &&
+      typeof path[1] === "number" &&
+      (path[2] === "id" || path[2] === "explanation")
+    )
+      field = `proposals/[index]/${path[2]}`;
+    else if (path.length === 1 && path[0] === "suggestion")
+      field = "suggestion";
+    else if (path.length === 1 && path[0] === "preferredProposalId")
+      field = "preferredProposalId";
+    else if (path.length === 1 && path[0] === "limitations")
+      field = "limitations";
+    else if (
+      path.length === 2 &&
+      path[0] === "limitations" &&
+      typeof path[1] === "number"
+    )
+      field = "limitations/[index]";
+    if (!fields.has(field)) continue;
+    const code = codes.has(issue.code as QuoteAnalysisValidationIssue["code"])
+      ? (issue.code as QuoteAnalysisValidationIssue["code"])
+      : undefined;
+    if (code) safe.push({ field, code });
+    if (safe.length === 5) break;
+  }
+  return safe;
+}
+
 async function runBounded<T>(
   operation: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
@@ -99,6 +185,7 @@ export async function analyzeQuoteReport(
     signal?: AbortSignal;
     onOutcome?(outcome: QuoteAnalysisOutcome): void;
     onCompletion?(metadata: QuoteAnalysisCompletionMetadata): void;
+    onValidationIssue?(issues: readonly QuoteAnalysisValidationIssue[]): void;
   } = {},
 ): Promise<QuoteAnalysis | undefined> {
   const outcome = (value: QuoteAnalysisOutcome) => {
@@ -183,8 +270,26 @@ export async function analyzeQuoteReport(
     outcome("invalid_json");
     return;
   }
+  if (
+    json !== null &&
+    typeof json === "object" &&
+    !Array.isArray(json) &&
+    (json as Record<string, unknown>).preferredProposalId === null
+  ) {
+    const { preferredProposalId: _ignored, ...withoutPreference } =
+      json as Record<string, unknown>;
+    json = withoutPreference;
+  }
   const parsedResult = quoteAnalysisSchema.safeParse(json);
   if (!parsedResult.success) {
+    const issues = safeValidationIssues(parsedResult.error.issues);
+    if (issues.length) {
+      try {
+        options.onValidationIssue?.(issues);
+      } catch {
+        // Diagnostics must never affect quote results.
+      }
+    }
     outcome("invalid_schema");
     return;
   }
