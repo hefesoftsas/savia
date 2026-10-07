@@ -873,11 +873,22 @@ function SessionPlayer({
       const clamped = Number.isFinite(slave.duration)
         ? Math.min(Math.max(target, 0), slave.duration)
         : Math.max(target, 0);
-      if (Math.abs(slave.currentTime - clamped) > 0.15)
-        slave.currentTime = clamped;
+      const previousTime = slave.currentTime;
+      const seeking = Math.abs(previousTime - clamped) > 0.15;
+      if (seeking) slave.currentTime = clamped;
       slave.playbackRate = master.playbackRate;
       slave.volume = master.volume;
       slave.muted = master.muted;
+      const reachedEnd =
+        Number.isFinite(slave.duration) &&
+        slave.duration > 0 &&
+        clamped >= slave.duration;
+      const endedAtTarget =
+        slave.ended && (!seeking || clamped >= previousTime);
+      if (reachedEnd || endedAtTarget) {
+        if (!slave.paused) slave.pause();
+        return;
+      }
       if (master.paused && !forcePlay) {
         if (!slave.paused) slave.pause();
       } else if (forcePlay || slave.paused) {
