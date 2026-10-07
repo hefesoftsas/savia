@@ -13,10 +13,15 @@ const mark = source.replace(/<svg[^>]*>/, "").replace("</svg>", "");
 
 // Normal icons use almost the entire canvas. Maskable icons reserve the
 // central 80%-diameter safe circle; the OS supplies the outer silhouette.
-function iconSvg(maskable = false) {
+// Splash icon uses the opaque canvas so the dark lower leaves remain
+// visible against dark background without leaking into in-app transparent assets.
+function iconSvg(maskable = false, opaque = false) {
   const scale = maskable ? 0.6 : 0.96;
   const inset = (64 - 64 * scale) / 2;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g transform="translate(${inset} ${inset}) scale(${scale})">${mark}</g></svg>`;
+  const background = opaque
+    ? `<rect width="64" height="64" fill="#ffffff"/>`
+    : ``;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${background}<g transform="translate(${inset} ${inset}) scale(${scale})">${mark}</g></svg>`;
 }
 
 function createIco(pngBuffers) {
@@ -54,21 +59,32 @@ export async function generateFavicons() {
   // bytes under immutable caching, so the transparent artwork needs fresh
   // URLs. Never reuse a retired versioned name for different bytes, and keep
   // previously deployed files in public/ so old manifests keep resolving.
+  // The splash icon lives separately at v1 to isolate boot splash contrast
+  // from in-app transparent icons.
   const targets = [
-    ["favicon-16-v3.png", 16, false],
-    ["favicon-32-v3.png", 32, false],
-    ["favicon-48-v3.png", 48, false],
-    ["apple-touch-icon-v5.png", 180, false],
-    ["savia-icon-192-v3.png", 192, false],
-    ["savia-icon-512-v3.png", 512, false],
-    ["savia-maskable-192-v5.png", 192, true],
-    ["savia-maskable-512-v5.png", 512, true],
+    // [name, size, maskable, opaque]
+    ["favicon-16-v3.png", 16, false, false],
+    ["favicon-32-v3.png", 32, false, false],
+    ["favicon-48-v3.png", 48, false, false],
+    ["apple-touch-icon-v5.png", 180, false, false],
+    ["savia-icon-192-v3.png", 192, false, false],
+    ["savia-icon-512-v3.png", 512, false, false],
+    ["savia-maskable-192-v5.png", 192, true, false],
+    ["savia-maskable-512-v5.png", 512, true, false],
+    ["savia-splash-192-v1.png", 192, false, true],
   ];
-  for (const [name, size, maskable] of targets) {
-    await sharp(Buffer.from(iconSvg(maskable)), { density: 384 })
-      .resize(size, size)
-      .png()
-      .toFile(join(publicDir, name));
+  for (const [name, size, maskable, opaque = false] of targets) {
+    const pipeline = sharp(Buffer.from(iconSvg(maskable, opaque)), {
+      density: 384,
+    }).resize(size, size);
+    if (opaque) {
+      await pipeline
+        .flatten({ background: "#ffffff" })
+        .png()
+        .toFile(join(publicDir, name));
+    } else {
+      await pipeline.png().toFile(join(publicDir, name));
+    }
     console.log(`Generated ${name}`);
   }
   writeFileSync(join(publicDir, "favicon.svg"), iconSvg() + "\n");

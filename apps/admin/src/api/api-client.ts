@@ -1,3 +1,9 @@
+import {
+  REQUEST_TIMEOUT_MS,
+  RequestTimeoutError,
+  withRequestTimeout,
+} from "./request-timeout";
+
 export type AccessTokenSource = {
   getAccessToken(): Promise<string | null>;
 };
@@ -97,6 +103,60 @@ export class ApiClient {
   async requestResponse(
     path: string,
     init: RequestInit = {},
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  ): Promise<Response> {
+    return withRequestTimeout(
+      (signal) => this.fetchResponse(path, init, signal),
+      timeoutMs,
+      init.signal,
+    );
+  }
+
+  async request<T>(
+    path: string,
+    init: RequestInit = {},
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  ): Promise<T> {
+    try {
+      return await withRequestTimeout(
+        async (signal) => {
+          const response = await this.fetchResponse(path, init, signal);
+          const body = await responseBody(response);
+          if (!response.ok) {
+            const envelope = body as ApiErrorEnvelope | null;
+            const serverError = envelope?.error;
+            throw new ApiClientError(
+              response.status,
+              serverError && typeof serverError === "object"
+                ? (serverError.code ?? `HTTP_${response.status}`)
+                : `HTTP_${response.status}`,
+              typeof serverError === "string"
+                ? serverError
+                : (serverError?.message ??
+                    response.statusText ??
+                    "Request failed"),
+              body,
+            );
+          }
+          return body as T;
+        },
+        timeoutMs,
+        init.signal,
+      );
+    } catch (error) {
+      if (error instanceof RequestTimeoutError) {
+        throw new ApiClientError(0, "REQUEST_TIMEOUT", error.message, {
+          timeoutMs: error.timeoutMs,
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async fetchResponse(
+    path: string,
+    init: RequestInit,
+    signal: AbortSignal,
   ): Promise<Response> {
     const token = await this.tokenSource.getAccessToken();
     const headers = new Headers(init.headers);
@@ -105,28 +165,9 @@ export class ApiClient {
 
     return this.fetcher(requestUrl(this.baseUrl, path), {
       ...init,
+      signal,
       credentials: init.credentials ?? "include",
       headers,
     });
-  }
-
-  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const response = await this.requestResponse(path, init);
-    const body = await responseBody(response);
-    if (!response.ok) {
-      const envelope = body as ApiErrorEnvelope | null;
-      const serverError = envelope?.error;
-      throw new ApiClientError(
-        response.status,
-        serverError && typeof serverError === "object"
-          ? (serverError.code ?? `HTTP_${response.status}`)
-          : `HTTP_${response.status}`,
-        typeof serverError === "string"
-          ? serverError
-          : (serverError?.message ?? response.statusText ?? "Request failed"),
-        body,
-      );
-    }
-    return body as T;
   }
 }

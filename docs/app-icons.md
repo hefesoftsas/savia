@@ -15,6 +15,11 @@ central safe circle (80% diameter). Their background is transparent, so
 launchers fill the silhouette with their own backdrop. Never label the normal
 icon as maskable.
 
+The static boot splash uses a dedicated opaque asset (`savia-splash-192-v1.png`)
+so the dark lower leaves stay crisp and visible against both light and dark
+splash backgrounds. All in-app presentation components, maskable icons and
+touch icons retain transparent backgrounds to avoid unwanted opaque borders.
+
 `apps/admin/index.html` and `apps/admin/public/site.webmanifest` reference the
 versioned assets. When changing their artwork, bump those asset URLs so browsers
 and installed applications can discover the new icons. Never reuse a retired
