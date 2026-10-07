@@ -117,14 +117,28 @@ export class WorkflowRepository {
     }
   }
   async list() {
-    return (
+    const rows = (
       await this.db
         .prepare(
-          "SELECT * FROM workflows WHERE workspace_id=? ORDER BY created_at DESC,id LIMIT 200",
+          "SELECT w.*,v.definition AS published_definition FROM workflows w LEFT JOIN workflow_versions v ON v.workspace_id=w.workspace_id AND v.id=w.published_version WHERE w.workspace_id=? ORDER BY w.created_at DESC,w.id LIMIT 200",
         )
         .bind(this.workspace)
-        .all<WorkflowRow>()
-    ).results.map(parse);
+        .all<WorkflowRow & { published_definition: string | null }>()
+    ).results;
+    return rows.map((row) => {
+      const { published_definition, ...rest } = row;
+      let publishedTrigger: string | null = null;
+      if (published_definition) {
+        try {
+          publishedTrigger = (
+            JSON.parse(published_definition) as WorkflowDefinition
+          ).trigger.type;
+        } catch {
+          publishedTrigger = null;
+        }
+      }
+      return { ...parse(rest), publishedTrigger };
+    });
   }
   async get(id: string) {
     const row = await this.db
@@ -248,31 +262,45 @@ export class WorkflowRepository {
       if (!version || version.workflow_id !== node.workflowId)
         fail("Pinned subflow version is missing", 422);
     }
-    const drafts = new Map<string, WorkflowDefinition>([[id, definition]]);
-    const load = async (workflowId: string): Promise<WorkflowDefinition> => {
-      const cached = drafts.get(workflowId);
+    // Cycle traversal follows the exact pinned versions executions use, not
+    // the mutable drafts: a cycle removed from a draft still blocks while an
+    // old published version references it.
+    const pinned = new Map<string, WorkflowDefinition>();
+    const loadPinned = async (
+      workflowId: string,
+      versionId: string,
+    ): Promise<WorkflowDefinition> => {
+      const cached = pinned.get(versionId);
       if (cached) return cached;
       const row = await this.db
         .prepare(
-          "SELECT definition FROM workflows WHERE workspace_id=? AND id=?",
+          "SELECT definition FROM workflow_versions WHERE workspace_id=? AND id=? AND workflow_id=?",
         )
-        .bind(this.workspace, workflowId)
+        .bind(this.workspace, versionId, workflowId)
         .first<{ definition: string }>();
-      if (!row) fail("Subflow not found", 404);
+      if (!row) fail("Pinned subflow version is missing", 422);
       const parsed = JSON.parse(row.definition) as WorkflowDefinition;
-      drafts.set(workflowId, parsed);
+      pinned.set(versionId, parsed);
       return parsed;
     };
     const visiting = new Set<string>();
-    const visit = async (current: string): Promise<void> => {
+    const visit = async (
+      current: string,
+      currentVersion: string | null,
+    ): Promise<void> => {
       if (visiting.has(current)) fail("Subflow calls form a cycle", 422);
       visiting.add(current);
-      for (const node of (await load(current)).nodes) {
-        if (node.type === "subflow") await visit(node.workflowId);
+      const currentDefinition =
+        currentVersion === null
+          ? definition
+          : await loadPinned(current, currentVersion);
+      for (const node of currentDefinition.nodes) {
+        if (node.type === "subflow")
+          await visit(node.workflowId, node.workflowVersion);
       }
       visiting.delete(current);
     };
-    await visit(id);
+    await visit(id, null);
   }
   async publish(id: string, revision: number, owner: string) {
     const draft = await this.get(id);

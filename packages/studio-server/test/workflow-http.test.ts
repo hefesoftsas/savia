@@ -26,7 +26,7 @@ function apiMock(
   body: unknown,
 ): typeof fetch {
   return (async (url: RequestInfo | URL, init?: RequestInit) => {
-    if (String(url).includes("cloudflare-dns.com"))
+    if (new URL(String(url)).hostname === "cloudflare-dns.com")
       return Response.json({
         Status: 0,
         Answer: [{ type: 1, data: "93.184.216.34" }],

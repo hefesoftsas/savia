@@ -38,3 +38,5 @@ INSERT INTO workflow_tasks_new(workspace_id,id,execution_id,node_id,kind,title,a
 DROP TABLE workflow_tasks;
 --> statement-breakpoint
 ALTER TABLE workflow_tasks_new RENAME TO workflow_tasks;
+--> statement-breakpoint
+CREATE INDEX workflow_tasks_inbox ON workflow_tasks(workspace_id,assignee,status);

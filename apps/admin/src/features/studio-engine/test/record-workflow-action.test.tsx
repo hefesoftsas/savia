@@ -15,7 +15,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it("runs a manual flow from the record with collection context", async () => {
+it("loads manual flows on demand and runs one with record context", async () => {
   vi.mocked(api).mockImplementation(async (url, method, data: any) => {
     if (url === "/workflows")
       return {
@@ -25,6 +25,7 @@ it("runs a manual flow from the record with collection context", async () => {
             name: "Notify owner",
             enabled: 1,
             definition: { trigger: { type: "manual" }, nodes: [] },
+            publishedTrigger: "manual",
           },
           {
             id: "flow-2",
@@ -34,6 +35,14 @@ it("runs a manual flow from the record with collection context", async () => {
               trigger: { type: "created", collection: "requests" },
               nodes: [],
             },
+            publishedTrigger: "created",
+          },
+          {
+            id: "flow-3",
+            name: "Unpublished manual draft",
+            enabled: 1,
+            definition: { trigger: { type: "manual" }, nodes: [] },
+            publishedTrigger: "created",
           },
         ],
       };
@@ -46,8 +55,13 @@ it("runs a manual flow from the record with collection context", async () => {
       <RecordWorkflowAction collection="requests" recordId="rec-9" />
     </QueryClientProvider>,
   );
+  expect(api).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Ejecutar flujo…" }));
   expect(await screen.findByText("Notify owner")).toBeInTheDocument();
   expect(screen.queryByText("On create")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("Unpublished manual draft"),
+  ).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Flujo manual para este registro"), {
     target: { value: "flow-1" },
   });
@@ -66,4 +80,15 @@ it("runs a manual flow from the record with collection context", async () => {
       "Ejecución enviada. Consulta su estado en el historial.",
     ),
   ).toBeInTheDocument();
+});
+
+it("ignores non-list workflow responses", async () => {
+  vi.mocked(api).mockResolvedValue({ data: { record: { id: "rec-9" } } });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RecordWorkflowAction collection="requests" recordId="rec-9" />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Ejecutar flujo…" }));
+  expect(await screen.findByText("Sin flujos manuales.")).toBeInTheDocument();
 });

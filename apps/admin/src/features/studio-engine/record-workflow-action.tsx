@@ -12,6 +12,7 @@ type Flow = {
   name: string;
   enabled: number;
   definition: WorkflowDefinition;
+  publishedTrigger?: string | null;
 };
 
 export default function RecordWorkflowAction({
@@ -22,6 +23,7 @@ export default function RecordWorkflowAction({
   recordId: string;
 }) {
   const t = useMessages(automationMessages);
+  const [open, setOpen] = useState(false);
   const [flowId, setFlowId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -30,31 +32,56 @@ export default function RecordWorkflowAction({
     queryKey: ["record-manual-workflows"],
     queryFn: () => api<{ data: Flow[] }>("/workflows"),
     staleTime: 30_000,
+    enabled: open,
   });
-  const manual = (list.data?.data ?? []).filter(
-    (flow) => flow.definition?.trigger?.type === "manual" && flow.enabled,
+  if (!open)
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+        aria-expanded={false}
+      >
+        <Play size={15} /> {t("Ejecutar flujo…")}
+      </Button>
+    );
+  const flows = Array.isArray(list.data?.data) ? list.data.data : [];
+  // Eligibility comes from the published revision: /start validates it, so a
+  // manual draft of an event flow (or vice versa) must not be offered.
+  const manual = flows.filter(
+    (flow) =>
+      (flow.publishedTrigger ?? flow.definition?.trigger?.type) === "manual" &&
+      flow.enabled,
   );
-  if (!list.data && list.isPending) return null;
-  if (manual.length === 0) return null;
   return (
     <span className="flex flex-wrap items-center gap-2">
-      <select
-        aria-label={t("Flujo manual para este registro")}
-        className="h-8 rounded-md border bg-background px-2 text-sm"
-        value={flowId}
-        onChange={(e) => {
-          setFlowId(e.target.value);
-          setError("");
-          setNotice("");
-        }}
-      >
-        <option value="">{t("Ejecutar flujo…")}</option>
-        {manual.map((flow) => (
-          <option key={flow.id} value={flow.id}>
-            {flow.name}
-          </option>
-        ))}
-      </select>
+      {list.isPending ? (
+        <span role="status" className="text-sm text-muted-foreground">
+          {t("Cargando flujos…")}
+        </span>
+      ) : manual.length === 0 ? (
+        <span role="status" className="text-sm text-muted-foreground">
+          {t("Sin flujos manuales.")}
+        </span>
+      ) : (
+        <select
+          aria-label={t("Flujo manual para este registro")}
+          className="h-8 rounded-md border bg-background px-2 text-sm"
+          value={flowId}
+          onChange={(e) => {
+            setFlowId(e.target.value);
+            setError("");
+            setNotice("");
+          }}
+        >
+          <option value="">{t("Elige un flujo")}</option>
+          {manual.map((flow) => (
+            <option key={flow.id} value={flow.id}>
+              {flow.name}
+            </option>
+          ))}
+        </select>
+      )}
       <Button
         variant="outline"
         size="sm"

@@ -34,6 +34,7 @@ it("lets workspace admins run every workflow action", async () => {
     "execute",
     "history",
     "resolve",
+    "administer",
   ] as const)
     await expect(
       authorizeWorkflowAction(db, "admin-1", "tenant:1", action),
@@ -52,6 +53,9 @@ it("lets members view, run and resolve but not design or publish", async () => {
   ).resolves.toBe(false);
   await expect(
     authorizeWorkflowAction(db, "member-1", "tenant:1", "publish"),
+  ).resolves.toBe(false);
+  await expect(
+    authorizeWorkflowAction(db, "member-1", "tenant:1", "administer"),
   ).resolves.toBe(false);
 });
 

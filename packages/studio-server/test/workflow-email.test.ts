@@ -66,6 +66,14 @@ beforeEach(async () => {
 });
 
 describe("email steps", () => {
+  it("exposes the published trigger type in listings", async () => {
+    const { repo, id } = await published(emailFlow("buyer@example.com"));
+    const listed = await repo.list();
+    expect(listed.find((flow) => flow.id === id)?.publishedTrigger).toBe(
+      "manual",
+    );
+    await repo.setEnabled(id, false);
+  });
   it("sends through the injected sender and records acceptance", async () => {
     const sent: unknown[] = [];
     const { repo, id } = await published(emailFlow("buyer@example.com"));

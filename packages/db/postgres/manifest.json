@@ -220,15 +220,15 @@
     },
     {
       "filename": "0051_workflow_loop_iterations.sql",
-      "sha256": "44d979bffbe9e76f62f0a4d6cc005c3271642121934338a47e7dc758c92ffc10"
+      "sha256": "5645ff24a070d9919c892060555fbc372bff61bfa5aa7602b7d0e105faf39486"
     },
     {
       "filename": "0052_workflow_approvals.sql",
-      "sha256": "84cc43cec069b8a1ff5228fdf0263b95d349bbb791d4c6c33ebb52cc48a883bf"
+      "sha256": "3dc83aed232ea04dfd89cf4dd73a2dc38fd210b02f02cbf554f08b5ce24732b1"
     },
     {
       "filename": "0053_workflow_validate_dispatch.sql",
-      "sha256": "ae20b61a31972b90b9706ea29bc6c2ee48098c8fd551a3da9688e92ab5d40663"
+      "sha256": "10da3c8be09b098321a5af37c5cf70d7356995c8b3f12a112337f206a689ff96"
     }
   ],
   "sqliteOnlyDerivedTables": [

@@ -212,6 +212,53 @@ describe("reusable subflow calls", () => {
     ).rejects.toMatchObject({ status: 422 });
   });
 
+  it("detects cycles through pinned versions even after drafts diverge", async () => {
+    const repo = new WorkflowRepository(db, workspace);
+    const plain = (extra: WorkflowDefinition["nodes"] = []) =>
+      manual([{ id: "echo", type: "transform", values: {} }, ...extra]);
+    const callOf = (workflowId: string, workflowVersion: string) =>
+      manual([
+        {
+          id: "call",
+          type: "subflow",
+          workflowId,
+          workflowVersion,
+          next: "done",
+        },
+        { id: "done", type: "transform", values: {} },
+      ]);
+    const first = await repo.create(
+      { name: "First", definition: plain() },
+      owner,
+    );
+    await repo.publish(first.id, first.revision, owner);
+    const firstRow = await repo.get(first.id);
+    // Second is published calling First.
+    const second = await repo.create(
+      {
+        name: "Second",
+        definition: callOf(first.id, firstRow.published_version!),
+      },
+      owner,
+    );
+    await repo.publish(second.id, second.revision, owner);
+    const secondRow = await repo.get(second.id);
+    // Second's draft drops the call, but its pin still references First.
+    await repo.save(second.id, secondRow.revision, {
+      name: "Second",
+      definition: plain(),
+    });
+    // First calling Second's published pin must be rejected: executions
+    // would recurse through the pin even though the draft looks acyclic.
+    const looping = await repo.save(first.id, firstRow.revision, {
+      name: "First",
+      definition: callOf(second.id, secondRow.published_version!),
+    });
+    await expect(
+      repo.publish(looping.id, looping.revision, owner),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
   it("bounds call depth at runtime", async () => {
     const repo = new WorkflowRepository(db, workspace);
     let next: { id: string; version: string } | null = null;

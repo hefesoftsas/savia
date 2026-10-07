@@ -3210,6 +3210,12 @@ export const automationMessages = {
     "Fluxo manual para este registro",
   ],
   "Ejecutar flujo…": ["Ejecutar flujo…", "Run workflow…", "Executar fluxo…"],
+  "Sin flujos manuales.": [
+    "Sin flujos manuales.",
+    "No manual workflows.",
+    "Sem fluxos manuais.",
+  ],
+  "Elige un flujo": ["Elige un flujo", "Choose a workflow", "Escolha um fluxo"],
   "No se pudo ejecutar.": [
     "No se pudo ejecutar.",
     "Could not run.",

@@ -14,7 +14,13 @@ import { fail } from "../context";
 import { WorkflowRepository } from "./repository";
 import { workflowDraftSchema } from "@savia/studio-shared/workflows";
 export type WorkflowAction =
-  "view" | "design" | "publish" | "execute" | "history" | "resolve";
+  | "view"
+  | "design"
+  | "publish"
+  | "execute"
+  | "history"
+  | "resolve"
+  | "administer";
 export type WorkflowOptions = {
   workflowBundles?: readonly WorkflowBundle[];
   workflowPieces?: readonly WorkflowPieceHandler[];
@@ -274,12 +280,12 @@ export function registerWorkflows(
   );
   app.post("/api/workflow-executions/:id/cancel", async (c) =>
     c.json({
-      data: await (await repository(c, "execute")).cancel(c.req.param("id")),
+      data: await (await repository(c, "administer")).cancel(c.req.param("id")),
     }),
   );
   app.post("/api/workflow-executions/:id/retry", async (c) =>
     c.json({
-      data: await (await repository(c, "execute")).retry(c.req.param("id")),
+      data: await (await repository(c, "administer")).retry(c.req.param("id")),
     }),
   );
   app.get("/api/workflow-inbox", async (c) =>

@@ -69,16 +69,50 @@ export function auditWorkflowImport(
     }
     return new Set(fieldEntries(object).map(([name]) => name));
   };
+  const fieldsOfRelated = (
+    collection: string,
+    path: string,
+  ): Set<string> | null => {
+    const parts = path.split(".");
+    if (parts.length !== 3 || parts[0] !== "related") return null;
+    const [, relation] = parts;
+    const object = objects.find((entry) => entry.name === collection);
+    const relationField = object
+      ? fieldEntries(object).find(([name]) => name === relation)?.[1]
+      : undefined;
+    const targetName = relationField?.config?.relation;
+    if (typeof targetName !== "string" || relationField?.config?.multiple) {
+      if (!missingCollections.includes(relation))
+        missingCollections.push(relation);
+      return null;
+    }
+    const targetObject = objects.find((entry) => entry.name === targetName);
+    if (!targetObject) {
+      if (!missingCollections.includes(targetName))
+        missingCollections.push(targetName);
+      return null;
+    }
+    return new Set(fieldEntries(targetObject).map(([name]) => name));
+  };
   const checkFields = (
     collection: string,
     location: string,
     names: string[],
   ) => {
-    const fields = fieldsOf(collection);
-    if (!fields) return;
-    for (const name of names)
+    for (const name of names) {
+      if (name.startsWith("related.")) {
+        const fields = fieldsOfRelated(collection, name);
+        if (!fields) continue;
+        const target = name.split(".")[2];
+        if (target !== "id" && !fields.has(target))
+          unknownFields.push(`${location}: ${name}`);
+        continue;
+      }
+      const fields = fieldsOf(collection);
+      if (!fields) return;
       if (name !== "id" && !fields.has(name))
         unknownFields.push(`${location}: ${name}`);
+    }
   };
   const trigger = definition.trigger;
   if ("collection" in trigger && trigger.collection) {

@@ -41,7 +41,7 @@ import {
 import { createRecordBundlesApp } from "./record-bundles";
 import type { SqlBridgeClient } from "./sql-bridge";
 import { createNotificationPolicy } from "../notifications";
-import { authorizeWorkflowAction } from "../workflows";
+import { authorizeWorkflowActor } from "../workflows";
 
 export type CollectionGatewayContext = {
   db: D1Database;
@@ -114,8 +114,8 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
       pluginRegistry: context.pluginRegistry,
       policy: createNotificationPolicy(db),
       integrationFetch: context.collectionFetch,
-      authorizeWorkflow: async ({ workspace, principalId, action }) =>
-        authorizeWorkflowAction(db, principalId, workspace, action),
+      authorizeWorkflow: async ({ workspace, action }) =>
+        authorizeWorkflowActor(actor, workspace, action),
       accessPolicy: context.accessPolicy,
       seedObjects,
       ...solutionOptions,
