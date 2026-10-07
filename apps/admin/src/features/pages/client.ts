@@ -233,10 +233,14 @@ export class PagesClient {
     const body = new FormData();
     body.append("file", file);
     return (
-      await this.api.request<{ data: PageFile }>(`${this.path(id)}/files`, {
-        method: "POST",
-        body,
-      })
+      await this.api.request<{ data: PageFile }>(
+        `${this.path(id)}/files`,
+        {
+          method: "POST",
+          body,
+        },
+        300_000,
+      )
     ).data;
   }
   async file(id: string, fileId: string) {

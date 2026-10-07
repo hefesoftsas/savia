@@ -13,6 +13,7 @@ import { publicFormsMessages } from "./i18n/locales/public-forms";
 import { lazy, Suspense, useMemo } from "react";
 import { registerPwaServiceWorker } from "./pwa/register-service-worker";
 import { PwaSplash } from "./pwa/pwa-splash";
+import { getAdminAuthorizeUrl } from "./components/admin/loading-recovery";
 import { CookieConsentBanner } from "./consent/cookie-consent-banner";
 
 const PrivateApp = lazy(async () => {
@@ -67,6 +68,7 @@ export function ApplicationRoot({
     <Suspense
       fallback={
         <PwaSplash
+          recoveryHref={getAdminAuthorizeUrl()}
           message={translateMessage(
             publicFormsMessages,
             "Cargando…",

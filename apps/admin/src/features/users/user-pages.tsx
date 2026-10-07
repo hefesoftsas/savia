@@ -296,12 +296,43 @@ export function UserList() {
       filterDefaultValues={{ isActive: true }}
       filters={userFilters(t)}
       perPage={20}
+      queryOptions={{ retry: false }}
       pagination={<ListPagination rowsPerPageOptions={[10, 20, 50, 100]} />}
       actions={<UserListActions />}
     >
+      <UserListContent />
+    </List>
+  );
+}
+
+function UserListContent() {
+  const t = useMessages(settingsMessages);
+  const { data, error, isPending, refetch } = useListContext<UserRecord>();
+  const hasUsers = Array.isArray(data) && data.length > 0;
+
+  if (error && !isPending && !hasUsers) {
+    return (
+      <section
+        role="alert"
+        className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4"
+      >
+        <p className="text-sm">
+          {t(
+            "No se pudo cargar el listado de usuarios. Comprueba tu conexión e inténtalo de nuevo.",
+          )}
+        </p>
+        <Button type="button" variant="outline" onClick={() => void refetch()}>
+          {t("Reintentar")}
+        </Button>
+      </section>
+    );
+  }
+
+  return (
+    <>
       <TenantUserScope />
       <UserTabbedTable />
-    </List>
+    </>
   );
 }
 
