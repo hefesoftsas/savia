@@ -347,7 +347,17 @@ Atomic claims and per-product dispatch evidence prevent automatic replay after
 an uncertain outcome. Operators must reconcile **uncertain** results against
 saved records and provider evidence before asking for a fresh action. Results
 are sent only while the Meta 24-hour reply window and current access permit it;
-a later menu selection does not change their originating identity.
+a later menu selection does not change their originating identity. Verified
+priced offers remain visible in partial-result messages, alongside counts of
+unverified and unpriced responses and relevant persistence warnings. A result
+send acknowledged by Meta is added to the originating employee's scoped history
+for follow-up questions. An uncertain send is not added as delivered history and
+is not automatically retried.
+
+An acknowledged send whose history write failed uses delivery state
+`history_pending`. The next scheduler run repairs only its stored history;
+it does not send again. The outbound message ID and exact sent text remain
+recorded with the action. Failures before attempting a send can retry normally.
 
 History, resolved action records and inactive drafts use a 30-day channel
 retention window. Uncertain or active dispatch evidence survives cleanup;
