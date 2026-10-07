@@ -2,6 +2,10 @@ import {
   assistantQuoteInputSchema,
   assistantQuoteForm,
 } from "./assistant-contract";
+import type {
+  PublicQuoteFact,
+  PublicQuoteProposal,
+} from "@savia/studio-shared/public-quote";
 const encode = encodeURIComponent;
 export type InsuranceAssistantPorts = {
   request<T>(path: string, init?: RequestInit): Promise<T>;
@@ -21,6 +25,7 @@ export type InsuranceQuoteProgress = {
   state: "priced" | "unpriced" | "failed" | "uncertain";
   reference: string;
   quoteId: string;
+  facts?: PublicQuoteFact[];
 };
 export type InsuranceExecutionOptions = {
   executionKey?: string;
@@ -28,12 +33,45 @@ export type InsuranceExecutionOptions = {
   onProgress?(progress: InsuranceQuoteProgress): Promise<void> | void;
   linkOwnership?(quoteId: string): Promise<void>;
   claimDispatch?(productId: string): Promise<boolean>;
-  /** Optional shorter deadlines; defaults are 15s per request and 90s total. */
-  executionTimeouts?: { requestMs?: number; budgetMs?: number };
+  /** Provider actions default to 30s; persistence requests default to 15s, within a 90s total budget. */
+  executionTimeouts?: {
+    requestMs?: number;
+    providerMs?: number;
+    budgetMs?: number;
+  };
 };
 
 const WHATSAPP_REQUEST_TIMEOUT_MS = 15_000;
+const WHATSAPP_PROVIDER_TIMEOUT_MS = 30_000;
 const WHATSAPP_EXECUTION_BUDGET_MS = 90_000;
+
+const PROVIDER_COVERAGE_FACTS = [
+  ["rce", "Responsabilidad civil (RCE)"],
+  ["partialLossDeductible", "Deducible por pérdida parcial"],
+  ["totalLossDeductible", "Deducible por pérdida total"],
+  ["replacementCar", "Vehículo de reemplazo"],
+  ["craneAssistance", "Grúa"],
+  ["designatedDriver", "Conductor elegido"],
+  ["medicalExpenses", "Gastos médicos"],
+  ["legalAssistance", "Asistencia jurídica"],
+  ["workshop", "Taller"],
+] as const;
+
+function providerCoverageFacts(value: unknown): PublicQuoteFact[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const coverages = value as Record<string, unknown>;
+  return PROVIDER_COVERAGE_FACTS.flatMap(([key, label]) => {
+    const raw = coverages[key];
+    const text =
+      typeof raw === "string"
+        ? raw.trim()
+        : typeof raw === "number" && Number.isFinite(raw)
+          ? String(raw)
+          : "";
+    if (!text || text.length > 250) return [];
+    return [{ label, value: text, source: "provider" as const }];
+  });
+}
 
 class QuoteExecutionTimeoutError extends Error {
   constructor(
@@ -142,6 +180,12 @@ export class InsuranceAssistantOperations {
           WHATSAPP_REQUEST_TIMEOUT_MS,
         )
       : Number.POSITIVE_INFINITY;
+    const providerTimeoutMs = executionMode
+      ? boundedTimeout(
+          options.executionTimeouts?.providerMs,
+          WHATSAPP_PROVIDER_TIMEOUT_MS,
+        )
+      : Number.POSITIVE_INFINITY;
     const executionDeadline = executionMode
       ? quoteStartedAt +
         boundedTimeout(
@@ -235,22 +279,21 @@ export class InsuranceAssistantOperations {
     });
     const base = this.ports.studioPath(tenantId, "records/");
     const write = <T>(path: string, method: string, body: unknown) => {
+      const isProviderAction = path.includes(
+        "extensions/insurance.quotes/actions/quote",
+      );
+      const phase = isProviderAction
+        ? "provider_request"
+        : method.toLowerCase() === "patch"
+          ? "persistence_patch"
+          : "persistence_post";
       if (executionMode && remainingExecutionMs() <= 0) {
         logQuoteEvent("whatsapp_quote_request_timed_out", {
-          phase: path.includes("actions/quote")
-            ? "provider_request"
-            : method.toLowerCase() === "patch"
-              ? "persistence_patch"
-              : "persistence_post",
+          phase,
           timeout_ms: 0,
           timeout_kind: "execution_budget",
         });
-        return Promise.reject(
-          new QuoteExecutionTimeoutError(
-            path.includes("actions/quote") ? "provider_request" : "persistence",
-            true,
-          ),
-        );
+        return Promise.reject(new QuoteExecutionTimeoutError(phase, true));
       }
       const controller = executionMode ? new AbortController() : undefined;
       const request = this.ports.request<T>(path, {
@@ -275,29 +318,19 @@ export class InsuranceAssistantOperations {
           new QuoteExecutionTimeoutError("persistence", true),
         );
       }
-      const effectiveTimeout = Math.min(requestTimeoutMs, remaining);
+      const timeoutMs = isProviderAction ? providerTimeoutMs : requestTimeoutMs;
+      const effectiveTimeout = Math.min(timeoutMs, remaining);
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
           const deadlineExpired = remainingExecutionMs() <= 0;
           controller?.abort();
           logQuoteEvent("whatsapp_quote_request_timed_out", {
-            phase: path.includes("actions/quote")
-              ? "provider_request"
-              : method.toLowerCase() === "patch"
-                ? "persistence_patch"
-                : "persistence_post",
+            phase,
             timeout_ms: effectiveTimeout,
             timeout_kind: deadlineExpired ? "execution_budget" : "request",
           });
-          reject(
-            new QuoteExecutionTimeoutError(
-              path.includes("actions/quote")
-                ? "provider_request"
-                : "persistence",
-              deadlineExpired,
-            ),
-          );
+          reject(new QuoteExecutionTimeoutError(phase, deadlineExpired));
         }, effectiveTimeout);
       });
       return Promise.race([request, timeout]).finally(() => {
@@ -329,6 +362,18 @@ export class InsuranceAssistantOperations {
       failed: boolean;
       uncertain?: boolean;
     }> = [];
+    const proposalByProduct = new Map<string, PublicQuoteProposal>(
+      form.products.map((product) => [
+        product.id,
+        {
+          id: product.id,
+          provider: product.label.split(" · ")[0].slice(0, 100),
+          product: product.label.slice(0, 150),
+          state: "failed",
+          currency: "COP",
+        },
+      ]),
+    );
     const persistenceWarnings: string[] = [];
     let undispatchedOffers = 0;
     // A saved detail precedes every external call; failures never cause an automatic replay.
@@ -398,6 +443,10 @@ export class InsuranceAssistantOperations {
               failed: true,
               uncertain: true,
             });
+            proposalByProduct.set(product.id, {
+              ...proposalByProduct.get(product.id)!,
+              state: "uncertain",
+            });
             persistenceWarnings.push(
               `La solicitud de ${product.label} ya fue enviada; consulta su historial sin repetirla.`,
             );
@@ -421,6 +470,7 @@ export class InsuranceAssistantOperations {
           let productHasPremium = false;
           let productPremium: number | undefined;
           let productQuoteNumber: string | undefined;
+          let productFacts: PublicQuoteFact[] = [];
           const providerStartedAt = Date.now();
           try {
             const response = await write<{
@@ -460,12 +510,22 @@ export class InsuranceAssistantOperations {
                 ? String(number)
                 : undefined;
             productQuoteNumber = quoteNumber;
+            productFacts = providerCoverageFacts(result.coverages);
             outcomes.push({
               provider,
               product: product.label,
               premium,
               quoteNumber,
               failed: false,
+            });
+            proposalByProduct.set(product.id, {
+              id: product.id,
+              provider: provider.slice(0, 100),
+              product: product.label.slice(0, 150),
+              state: premium === undefined ? "unpriced" : "priced",
+              ...(premium === undefined ? {} : { premium }),
+              currency: "COP",
+              ...(productFacts.length ? { facts: productFacts } : {}),
             });
             data = {
               estado: "Recibida",
@@ -497,6 +557,10 @@ export class InsuranceAssistantOperations {
               failed: true,
               uncertain: Boolean(options.executionKey),
             });
+            proposalByProduct.set(product.id, {
+              ...proposalByProduct.get(product.id)!,
+              state: productUncertain ? "uncertain" : "failed",
+            });
             data = {
               estado: "Error",
               error_mensaje: "La aseguradora no pudo completar la cotización.",
@@ -525,6 +589,7 @@ export class InsuranceAssistantOperations {
                       ...(productQuoteNumber === undefined
                         ? {}
                         : { quoteNumber: productQuoteNumber }),
+                      ...(productFacts.length ? { facts: productFacts } : {}),
                       state,
                       reference,
                       quoteId: master.data.id,
@@ -610,6 +675,9 @@ export class InsuranceAssistantOperations {
       pricedOffers: priced.length,
       lowestPremium,
       lowestPriceOffers: lowest.slice(0, 5),
+      proposals: form.products.map((product) =>
+        proposalByProduct.get(product.id)!,
+      ),
       tiedOfferCount: lowest.length,
       coverageAvailable: false,
       persistenceWarnings,

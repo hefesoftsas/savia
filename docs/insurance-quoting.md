@@ -1,6 +1,6 @@
 # Insurance quoting
 
-Owner: Savia maintainers. Last reviewed: 2026-09-25.
+Owner: Savia maintainers. Last reviewed: 2026-10-07.
 
 Step-by-step auto quote flow (`savia.insurance-quoter` + `insurance.quotes`).
 Each selected insurer product runs as its own independent flow; products run
@@ -58,6 +58,37 @@ real insurer call is made by the test. See the
 [WhatsApp channel runbook](runbooks/nango-whatsapp.md#task-menu-and-virtual-employee-channel)
 for settings and a separately authorized live pilot.
 
+## Quote explanations and shared results
+
+Confirmed WhatsApp quotes collect a public proposal for every configured product.
+Intermediate WhatsApp messages include only confirmed positive premiums; failed,
+unpriced, and uncertain responses are summarized once at the end. Internal action
+references and provider transaction numbers do not appear in these messages.
+Public reports have a separate short customer reference.
+Only confirmed premiums and an explicit allowlist of coverage and deductible
+fields returned by the provider are included. Static catalog profiles are not
+verified coverage evidence. Failed, unpriced, and uncertain proposals remain
+visible as such; they do not acquire estimated premiums.
+
+The assigned employee's configured LLM explains priced proposals in asynchronous
+batches while provider calls continue. The final analysis gives comparison
+guidance and identifies missing evidence. Equal prices without verified coverage
+do not justify a winning proposal. Model calls have an eight-second deadline,
+no tools, and no automatic retries. A model failure preserves provider results
+and the customer link, with analysis availability clearly indicated.
+
+The final WhatsApp message includes an opaque public link to a read-only report.
+It expires seven days after creation and contains offers and saved analysis,
+without applicant documents, contact details, raw provider responses, or internal
+CRM links. Opening the report does not call the model or insurers again. Report
+responses and the public page use `no-store`; unknown, expired, and revoked links
+return the same unavailable result.
+
+Tenant administrators can inspect and revoke these links in the quote screen's
+public-link settings, under shared quote results. Revocation is tenant-scoped
+and requires authenticated administration access. Sharing a result does not
+create a new quote or grant access to the authenticated workspace.
+
 ## WhatsApp intake
 
 The quote plugin exports a static WhatsApp Flow intake contribution through the
@@ -83,6 +114,11 @@ provider execution out of AI tools. Receiving a questionnaire is not a quote;
 quote results and their CRM history should follow the existing quote lifecycle.
 
 ## Performance
+
+Provider calls in confirmed WhatsApp execution have a 30-second request deadline;
+persistence requests retain a 15-second deadline. Both remain capped by the
+90-second total execution budget. A completed response received within the
+provider deadline is used immediately; expiry never triggers a replay.
 
 - Quote startup records elapsed time for setup (`setupMs`), CRM persistence
   (`crmMs`) and each product flow (`duracion_ms` per detail, surfaced as

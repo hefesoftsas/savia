@@ -25,6 +25,11 @@ const PrivateApp = lazy(async () => {
   applyCachedAppearance();
   return { default: App };
 });
+const PublicQuote = lazy(async () => {
+  const { PublicQuotePage } =
+    await import("./features/public-quotes/public-quote-page");
+  return { default: PublicQuotePage };
+});
 const PublicForm = lazy(async () => {
   const { PublicFormPage } =
     await import("./features/public-forms/public-form-page");
@@ -61,6 +66,8 @@ export function ApplicationRoot({
     pathname.startsWith("/public/forms/") ||
     pathname === "/public/pages" ||
     pathname.startsWith("/public/pages/") ||
+    pathname === "/public/quotes" ||
+    pathname.startsWith("/public/quotes/") ||
     pathname === "/public/bookings" ||
     pathname.startsWith("/public/bookings/");
   if (publicPath) return <PublicApplication pathname={pathname} />;
@@ -108,6 +115,9 @@ function PublicApplicationContent({ pathname }: { pathname: string }) {
     /^\/public\/pages\/([A-Za-z0-9_-]{20,128})(?:\/([A-Za-z0-9_-]+))?\/?$/.exec(
       pathname,
     );
+  const publicQuoteMatch = /^\/public\/quotes\/([a-fA-F0-9]{64})\/?$/.exec(
+    pathname,
+  );
   const publicBookingManageMatch =
     /^\/public\/bookings\/manage\/([A-Za-z0-9_-]{20,128})\/?$/.exec(pathname);
   const publicBookingMatch =
@@ -136,6 +146,8 @@ function PublicApplicationContent({ pathname }: { pathname: string }) {
       <Suspense fallback={<PwaSplash message={t("Cargando…")} />}>
         {pathname === "/register" ? (
           <PublicRegistration />
+        ) : publicQuoteMatch ? (
+          <PublicQuote token={publicQuoteMatch[1]} />
         ) : publicBookingManageMatch ? (
           <PublicBookingManage token={publicBookingManageMatch[1]} />
         ) : publicBookingMatch ? (

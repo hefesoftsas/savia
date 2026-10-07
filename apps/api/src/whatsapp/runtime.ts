@@ -33,6 +33,7 @@ import { createWhatsappAssistant, sendWhatsappReply } from "./assistant";
 import { VirtualEmployeesRepository } from "../assistant/virtual-employees";
 import { retrieveRelevantChunks, type RagEnvironment } from "../assistant/rag";
 import type { AssistantConfigurationRepository } from "../assistant/configuration";
+import { createWhatsappQuotePresentationFactory } from "./quote-presentation";
 
 export type WhatsappSecrets = {
   WHATSAPP_PROCESSING_MODE?: string;
@@ -42,6 +43,7 @@ export type WhatsappSecrets = {
   NANGO_CONNECT_URL?: string;
   NANGO_API_KEY?: string;
   NANGO_WHATSAPP_INTEGRATION_ID?: string;
+  SAVIA_PUBLIC_ORIGIN?: string;
 };
 
 export function whatsappInboundFromEnvironment(
@@ -77,10 +79,21 @@ export function whatsappInboundFromEnvironment(
     text: string,
     phone: string,
   ) => sendWhatsappReply(nango, binding, text, phone);
+  const employees = new VirtualEmployeesRepository(environment.DB);
+  const productionQuotePresentation = createWhatsappQuotePresentationFactory({
+    repository: channelRepository,
+    configuration,
+    employees,
+    resolveBinding,
+    publicOrigin: environment.SAVIA_PUBLIC_ORIGIN,
+    notifyProgress: (action) => progressPumps.get(action.id)?.notify(),
+  });
   const operations = channelOptions
     ? createChannelOperationAdapter({
         ...channelOptions,
         repository: channelRepository,
+        quotePresentation:
+          channelOptions.quotePresentation ?? productionQuotePresentation,
         onActionProgress: (action) => progressPumps.get(action.id)?.notify(),
       })
     : undefined;
@@ -111,7 +124,7 @@ export function whatsappInboundFromEnvironment(
       environment.DOCUMENTS,
       new CompanionService({ sttModel: environment.COMPANION_STT_MODEL }),
     ),
-    employees: new VirtualEmployeesRepository(environment.DB),
+    employees,
     knowledge: (employeeId, query) =>
       retrieveRelevantChunks(
         environment as RagEnvironment,

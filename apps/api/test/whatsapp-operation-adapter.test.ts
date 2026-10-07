@@ -1,6 +1,9 @@
 import { env } from "cloudflare:workers";
 import { expect, it } from "vitest";
-import { createChannelOperationAdapter } from "../src/assistant/operation-adapter";
+import {
+  createChannelOperationAdapter,
+  type ChannelOperationDependencies,
+} from "../src/assistant/operation-adapter";
 import { PersonalActionPayloadCipher } from "../src/assistant/personal-action-payload";
 import { ChannelDrafts } from "../src/whatsapp/drafts";
 import { WhatsappChannelRepository } from "../src/whatsapp/channel-repository";
@@ -95,6 +98,8 @@ async function saveQuoteSummaryAction(
 async function executeConfirmedQuote(
   actionProductIds: string[],
   catalogProductIds: string[],
+  quotePresentation?: ChannelOperationDependencies["quotePresentation"],
+  providerOutput: Record<string, unknown> = { premiumTotal: 123456 },
 ) {
   const { fixture, repo, session, binding } = await selectedSession();
   let settingsReads = 0;
@@ -127,7 +132,7 @@ async function executeConfirmedQuote(
       return Response.json({
         data: {
           run: { runId: "quote-run" },
-          output: { data: { premiumTotal: 123456 } },
+          output: { data: providerOutput },
         },
       });
     }
@@ -150,6 +155,7 @@ async function executeConfirmedQuote(
     repository: repo,
     secret: "test-secret",
     backendForActor: async () => backend,
+    quotePresentation,
   });
   const action = {
     id: crypto.randomUUID(),
@@ -211,6 +217,30 @@ async function executeConfirmedQuote(
   };
 }
 
+it("retains the model analysis and customer link in the delivered quote outcome", async () => {
+  const received: string[] = [];
+  const execution = await executeConfirmedQuote(
+    ["confirmed-auto"],
+    ["confirmed-auto"],
+    () => ({
+      record: (proposal) => {
+        received.push(proposal.id);
+      },
+      finish: async (result) => ({
+        ...result,
+        publicUrl: "https://savia.test/public/quotes/opaque",
+        recommendation: "Compare the verified proposal.",
+      }),
+    }),
+  );
+  const outcome = await execution.result;
+  expect(outcome.result).toMatchObject({
+    publicUrl: "https://savia.test/public/quotes/opaque",
+    recommendation: "Compare the verified proposal.",
+  });
+  expect(received).toEqual(["confirmed-auto"]);
+});
+
 it("checks a changed confirmed product catalog before quote writes or provider dispatch", async () => {
   const execution = await executeConfirmedQuote(
     ["confirmed-auto"],
@@ -255,6 +285,30 @@ it("persists each product result for incremental delivery during execution", asy
     status: "pending",
   });
   expect(progress.results[0].progress_text).toContain("123.456");
+});
+
+it("records non-priced quote proposals without queuing customer progress", async () => {
+  const recorded: Array<{ id: string; state: string }> = [];
+  const execution = await executeConfirmedQuote(
+    ["confirmed-auto"],
+    ["confirmed-auto"],
+    () => ({
+      record: (proposal) => {
+        recorded.push(proposal);
+      },
+      finish: async (result) => result,
+    }),
+    { response: { status: "received_without_price" } },
+  );
+  await execution.result;
+
+  expect(recorded).toMatchObject([{ id: "confirmed-auto", state: "unpriced" }]);
+  const progress = await env.DB.prepare(
+    "SELECT event_key,progress_text FROM whatsapp_channel_action_progress WHERE action_id=?",
+  )
+    .bind(execution.actionId)
+    .all();
+  expect(progress.results).toEqual([]);
 });
 
 it("preflights enabled products once and reuses the verified form for this turn", async () => {

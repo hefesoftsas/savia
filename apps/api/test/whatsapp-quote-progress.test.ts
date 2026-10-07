@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { quoteProgressText } from "../src/whatsapp/quote-progress";
 
-it("reports the product price and verified quote number without declaring a final winner", () => {
+it("reports only the priced product and premium without internal quote identifiers", () => {
   const text = quoteProgressText({
     productId: "auto",
     provider: "Carrier",
@@ -14,12 +14,13 @@ it("reports the product price and verified quote number without declaring a fina
   });
   expect(text).toContain("Carrier · Auto");
   expect(text).toContain("123.456");
-  expect(text).toContain("Q-42");
-  expect(text).toContain("COT-1");
-  expect(text).not.toMatch(/mejor|menor|cobertura/i);
+  expect(text).not.toContain("Q-42");
+  expect(text).not.toContain("COT-1");
+  expect(text).not.toContain("quote-1");
+  expect(text).not.toMatch(/resumen final|mejor|menor|cobertura/i);
 });
 
-it("distinguishes unpriced and unverified responses without invented premiums", () => {
+it("emits no customer progress for unpriced, failed, uncertain, or invalid-premium results", () => {
   const base = {
     productId: "auto",
     provider: "Carrier",
@@ -27,10 +28,15 @@ it("distinguishes unpriced and unverified responses without invented premiums", 
     reference: "COT-1",
     quoteId: "quote-1",
   };
-  expect(quoteProgressText({ ...base, state: "unpriced" })).toContain(
-    "sin precio",
+  expect(quoteProgressText({ ...base, state: "unpriced" })).toBe("");
+  expect(quoteProgressText({ ...base, state: "failed" })).toBe("");
+  expect(quoteProgressText({ ...base, state: "uncertain" })).toBe("");
+  expect(quoteProgressText({ ...base, state: "priced" })).toBe("");
+  expect(quoteProgressText({ ...base, state: "priced", premium: 0 })).toBe("");
+  expect(quoteProgressText({ ...base, state: "priced", premium: -100 })).toBe(
+    "",
   );
-  const uncertain = quoteProgressText({ ...base, state: "uncertain" });
-  expect(uncertain).toContain("sin resultado verificado");
-  expect(uncertain).not.toContain("$");
+  expect(
+    quoteProgressText({ ...base, state: "priced", premium: Number.NaN }),
+  ).toBe("");
 });

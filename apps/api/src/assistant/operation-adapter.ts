@@ -1,3 +1,4 @@
+import type { PublicQuoteProposal } from "@savia/studio-shared/public-quote";
 import {
   traceWhatsappOperation,
   logWhatsappDiagnostic,
@@ -46,6 +47,13 @@ export type ChannelOperationDependencies = {
   backendForActor(actor: AppActor): Promise<typeof fetch>;
   personal?: PersonalIntegrationOperations;
   onActionProgress?(action: ChannelAction): void;
+  quotePresentation?(
+    binding: WhatsappAssistantBinding,
+    action: ChannelAction,
+  ): {
+    record(proposal: PublicQuoteProposal): void;
+    finish(result: Record<string, unknown>): Promise<Record<string, unknown>>;
+  };
 };
 
 export function createChannelOperationAdapter(
@@ -906,17 +914,31 @@ export function createChannelOperationAdapter(
         new Set(expectedProductIds).size !== expectedProductIds.length
       )
         throw new Error("CHANNEL_PRODUCTS_CHANGED");
-      const result = await c.createInsuranceQuote(
+      const presentation = deps.quotePresentation?.(binding, action);
+      const rawResult = await c.createInsuranceQuote(
         { vehicle: action.input.vehicle, applicant: action.input.applicant },
         {
           executionKey: action.id,
           expectedProductIds,
           onProgress: async (progress) => {
+            presentation?.record({
+              id: progress.productId,
+              provider: progress.provider,
+              product: progress.product,
+              state: progress.state,
+              currency: "COP",
+              facts: progress.facts,
+              ...(progress.state === "priced"
+                ? { premium: progress.premium }
+                : {}),
+            });
+            const progressText = quoteProgressText(progress);
+            if (!progressText) return;
             await enqueueChannelActionProgress(
               deps.repository,
               action,
               progress.productId,
-              quoteProgressText(progress),
+              progressText,
             );
             deps.onActionProgress?.(action);
           },
@@ -953,6 +975,16 @@ export function createChannelOperationAdapter(
           },
         },
       );
+      assertChannelCommandAllowed(
+        await employee(action.session),
+        action.session.access,
+        action.domain,
+        action.command,
+        action.input,
+      );
+      const result = presentation
+        ? await presentation.finish(rawResult)
+        : rawResult;
       if (result.uncertainOffers)
         return {
           state: "uncertain",

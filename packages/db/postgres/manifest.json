@@ -225,6 +225,10 @@
     {
       "filename": "0052_request_cache.sql",
       "sha256": "ba9b4401675ad9016fe194ba5be417908d4fe0a6c798407e54d1de8cbeaf602b"
+    },
+    {
+      "filename": "0053_public_quote_links.sql",
+      "sha256": "eb5fea0d519eb1d01393dd71afb41fcdde638bf6c764d5de61dea4be6bae509e"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1894,6 +1898,16 @@
       "type": "index",
       "name": "savia_request_cache_lease",
       "table": "savia_request_cache"
+    },
+    {
+      "type": "index",
+      "name": "public_quote_links_tenant_quote",
+      "table": "public_quote_links"
+    },
+    {
+      "type": "index",
+      "name": "public_quote_links_expiry",
+      "table": "public_quote_links"
     }
   ],
   "tables": [
@@ -16416,6 +16430,99 @@
           "columns": ["cache_key"],
           "origin": "pk"
         }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "public_quote_links",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "action_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "quote_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "token",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "report_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_by",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "expires_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "revoked_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        { "columns": ["id"], "origin": "pk" },
+        { "columns": ["token"], "origin": "u" },
+        { "columns": ["tenant_id", "action_id"], "origin": "u" }
       ],
       "checkCount": 1
     }

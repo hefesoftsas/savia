@@ -272,6 +272,7 @@ it.each([
   "/public/bookings/manage/fixture",
   "/public/pages/fixture",
   "/public/pages/fixture/child",
+  "/public/quotes/" + "a".repeat(64),
   "/register",
 ])(
   "serves public page %s without leaking its link or caching",
