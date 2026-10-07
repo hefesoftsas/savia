@@ -159,14 +159,16 @@ export class WhatsappChannelActions {
       return null;
     }
     const status = cancel ? "cancelled" : "queued";
+    const queuedAt = status === "queued" ? new Date().toISOString() : null;
     const result = await this.repository.db
       .prepare(
-        "UPDATE whatsapp_channel_actions SET status=? WHERE id=? AND status='pending' AND expires_at>? AND generation=? AND selection_revision=?",
+        "UPDATE whatsapp_channel_actions SET status=?,queued_at=? WHERE id=? AND status='pending' AND expires_at>? AND generation=? AND selection_revision=?",
       )
       .bind(
         status,
+        queuedAt,
         row.id,
-        new Date().toISOString(),
+        queuedAt ?? new Date().toISOString(),
         session.access.generation,
         session.selectionRevision,
       )

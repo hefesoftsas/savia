@@ -62,6 +62,60 @@ const ownerAccess = (ownerId: string, tenantId?: number): RecordingAccess => ({
 });
 
 describe("private Companion sessions", () => {
+  it("loads long audio chunks concurrently without rereading the manifest", async () => {
+    const owner = crypto.randomUUID();
+    const access = ownerAccess(owner, 76);
+    const id = crypto.randomUUID();
+    let manifestReads = 0;
+    let activeChunkReads = 0;
+    let maximumChunkReads = 0;
+    const storage = new Proxy(env.DOCUMENTS, {
+      get(target, property, receiver) {
+        if (property === "get")
+          return async (key: string, ...args: unknown[]) => {
+            if (key.endsWith("/manifest.json")) manifestReads++;
+            if (key.includes("/chunks/")) {
+              activeChunkReads++;
+              maximumChunkReads = Math.max(maximumChunkReads, activeChunkReads);
+              await new Promise((resolve) => setTimeout(resolve, 10));
+              try {
+                return await target.get(key, ...(args as []));
+              } finally {
+                activeChunkReads--;
+              }
+            }
+            return target.get(key, ...(args as []));
+          };
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as R2Bucket;
+    const repo = new CompanionSessions(storage);
+    try {
+      await repo.create(access, {
+        id,
+        name: "Long audio",
+        sources: ["microphone"],
+        consent: true,
+      });
+      for (let sequence = 0; sequence < 3; sequence++)
+        await repo.putChunk(access, id, chunk(sequence, sequence));
+      await repo.finalize(access, id, {
+        expectedChunks: 3,
+        durationSeconds: 3,
+      });
+      manifestReads = 0;
+
+      const audio = await repo.getFullAudio(access, id, "microphone");
+
+      expect(audio.chunks).toBe(3);
+      expect(manifestReads).toBe(1);
+      expect(maximumChunkReads).toBeGreaterThan(1);
+    } finally {
+      await clean(owner, 76);
+    }
+  });
+
   it("keeps tenant namespaces isolated and makes same-byte chunk retries idempotent", async () => {
     const owner = crypto.randomUUID();
     const id = crypto.randomUUID();

@@ -226,6 +226,7 @@ describe("WhatsappConnectionsPage", () => {
       </MemoryRouter>,
     );
 
+    await user.click(await screen.findByRole("tab", { name: "Asistente IA" }));
     const assistantToggle = await screen.findByRole("checkbox", {
       name: "Responder con IA",
     });
@@ -253,6 +254,7 @@ describe("WhatsappConnectionsPage", () => {
 
   it("keeps the connected integration usable when the native settings request fails", async () => {
     tenantState.id = 101;
+    const user = userEvent.setup();
     const services = createServices();
     vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
       {
@@ -280,9 +282,12 @@ describe("WhatsappConnectionsPage", () => {
     );
 
     expect(
+      await screen.findByRole("button", { name: "Desconectar" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Enviar prueba" })).toBeVisible();
+    await user.click(await screen.findByRole("tab", { name: "Avanzado" }));
+    expect(
       await screen.findByText("Native settings are not available"),
     ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Desconectar" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Enviar prueba" })).toBeVisible();
   });
 });
