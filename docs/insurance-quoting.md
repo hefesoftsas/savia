@@ -25,7 +25,13 @@ A stable execution key supports existing record-create idempotency. The contact
 ownership link is persisted before provider dispatch, and each product receives
 a durable dispatch claim. A lost dispatch acknowledgement becomes uncertain and
 is never automatically replayed. Customer summaries return only that contact's
-own completed channel results; linked advisers use their own tenant permissions.
+own channel results; linked advisers use their own tenant permissions.
+
+WhatsApp reports confirmed priced offers even when some insurer requests remain
+unverified. It labels those results as partial and asks the contact to review
+quote history before repeating the request. The internal uncertain state is
+retained to prevent duplicate provider dispatches; partial results with prices
+do not trigger an adviser referral.
 
 The pilot test uses simulated provider responses and a synthetic vehicle. No
 real insurer call is made by the test. See the

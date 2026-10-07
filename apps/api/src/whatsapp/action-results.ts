@@ -10,19 +10,51 @@ export function actionResultText(
   humanSupportContact = "",
 ): string {
   const label = `${employee} · Asistente virtual\n\n`;
-  if (outcome.state !== "completed")
-    return `${label}${outcome.message}\n${humanSupportContactText(humanSupportContact)}\nEscribe menú para elegir otra tarea.`;
   const value = outcome.result as Record<string, unknown> | null;
-  if (command !== "quote-auto" || !value?.reference)
+  const quoteResult =
+    command === "quote-auto" && value?.reference ? value : undefined;
+  if (outcome.state !== "completed" && !quoteResult)
+    return `${label}${outcome.message}\n${humanSupportContactText(humanSupportContact)}\nEscribe menú para elegir otra tarea.`;
+  if (!quoteResult)
     return `${label}${({ "create-record": "Registro creado.", "update-record": "Registro actualizado.", "delete-record": "Registro eliminado.", "send-email": "Correo enviado.", "create-event": "Evento creado.", "upload-file": "Archivo guardado." } as Record<string, string>)[command] ?? "Solicitud completada."}\nEscribe menú para elegir otra tarea.`;
-  const offers = Array.isArray(value.lowestPriceOffers)
-    ? (value.lowestPriceOffers as Array<{ product: string; premium: number }>)
+  const offers = Array.isArray(quoteResult.lowestPriceOffers)
+    ? (quoteResult.lowestPriceOffers as Array<{
+        product: string;
+        premium: number;
+      }>)
     : [];
+  const pricedOffers = Number(quoteResult.pricedOffers ?? 0);
+  const failedOffers = Number(quoteResult.failedOffers ?? 0);
+  const uncertainOffers = Number(quoteResult.uncertainOffers ?? 0);
+  const unpricedOffers = Number(quoteResult.unpricedOffers ?? 0);
+  const hasPartialResults =
+    outcome.state !== "completed" ||
+    failedOffers > 0 ||
+    uncertainOffers > 0 ||
+    unpricedOffers > 0;
+  const heading = hasPartialResults
+    ? `Resultados parciales de ${quoteResult.reference}`
+    : `Resultados de ${quoteResult.reference}`;
   const support =
-    Number(value.pricedOffers ?? 0) === 0
+    pricedOffers === 0
       ? `\nNo recibí ofertas con precio. ${humanSupportContactText(humanSupportContact)}`
       : "";
-  return `${label}Resultados de ${value.reference}\nOfertas con precio: ${value.pricedOffers ?? 0}. Respuestas fallidas: ${value.failedOffers ?? 0}.\n${offers.map((o) => `${o.product}: $${Number(o.premium).toLocaleString("es-CO")}`).join("\n")}\n${value.recommendation ?? "Consulta las coberturas antes de elegir una oferta."}${support}\nEscribe menú para elegir otra tarea.`.slice(
+  const status =
+    pricedOffers > 0
+      ? `Ofertas con precio confirmado: ${pricedOffers}.`
+      : "Aún no hay ofertas con precio confirmado.";
+  const followUp = [
+    uncertainOffers > 0
+      ? `${uncertainOffers} solicitud(es) siguen sin resultado verificado. Las ofertas recibidas están guardadas. Revisa su historial antes de volver a cotizar.`
+      : "",
+    failedOffers > 0 ? `Consultas sin respuesta usable: ${failedOffers}.` : "",
+    unpricedOffers > 0
+      ? `Consultas sin oferta con precio: ${unpricedOffers}.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return `${label}${heading}\n${status}\n${offers.map((o) => `${o.product}: $${Number(o.premium).toLocaleString("es-CO")}`).join("\n")}${followUp ? `\n${followUp}` : ""}\n${quoteResult.recommendation ?? "Consulta las coberturas antes de elegir una oferta."}${support}\nEscribe menú para elegir otra tarea.`.slice(
     0,
     4096,
   );
