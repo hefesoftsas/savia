@@ -1,4 +1,75 @@
+import { PUBLIC_VISITOR_ROUTE_DENYLIST } from "./deployment-recovery";
+
 const observedRegistrations = new WeakSet<ServiceWorkerRegistration>();
+const retiringControllers = new WeakSet<ServiceWorker>();
+const PUBLIC_WORKER_RETIRE_DEADLINE_MS = 5_000;
+
+/**
+ * An older administrative worker may still serve its cached private shell for
+ * a newly added public route. Drop only that root worker, then reload once so
+ * the browser requests the public document without the stale controller.
+ */
+export async function retireAdministrativeWorkerForPublicRoute(
+  pathname: string,
+  serviceWorker: ServiceWorkerContainer,
+  reload: () => void,
+): Promise<boolean> {
+  const publicRoute =
+    pathname === "/register" ||
+    PUBLIC_VISITOR_ROUTE_DENYLIST.some((pattern) => pattern.test(pathname)) ||
+    pathname === "/office" ||
+    pathname.startsWith("/office/");
+  const controller = serviceWorker.controller;
+  if (!publicRoute || !controller || retiringControllers.has(controller))
+    return false;
+
+  let script: URL;
+  try {
+    script = new URL(controller.scriptURL);
+  } catch {
+    return false;
+  }
+  if (
+    script.origin !== window.location.origin ||
+    (script.pathname !== "/sw.js" && script.pathname !== "/dev-sw.js")
+  )
+    return false;
+
+  retiringControllers.add(controller);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let retired = false;
+  try {
+    const retirement = (async () => {
+      const registration = await serviceWorker.getRegistration("/");
+      if (
+        !registration ||
+        registration.scope !== new URL("/", window.location.origin).href ||
+        registration.active?.scriptURL !== controller.scriptURL
+      )
+        return;
+      retired = await registration.unregister();
+    })();
+    await Promise.race([
+      retirement,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("Service worker retirement timed out")),
+          PUBLIC_WORKER_RETIRE_DEADLINE_MS,
+        );
+      }),
+    ]);
+    if (retired) reload();
+    return retired;
+  } catch {
+    // Keep the current page usable when storage or worker APIs fail. The
+    // service worker's ordinary update lifecycle remains available on return.
+    return false;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (!retired) retiringControllers.delete(controller);
+  }
+}
+
 /**
  * Registers the PWA Service Worker in both development and production environments.
  */
