@@ -146,7 +146,7 @@ export function createWhatsappQuotePresentationFactory(
 
   return (binding: WhatsappAssistantBinding, action: ChannelAction) => {
     const identity: Pick<PublicQuoteReport, "reference" | "createdAt"> = {
-      reference: `COT-${action.id}`,
+      reference: `COT-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
       createdAt: new Date().toISOString(),
     };
     let quoteId: string | undefined;

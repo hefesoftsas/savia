@@ -48,7 +48,7 @@ export function actionResultText(
     } catch {}
   }
   const withMenu = (body: string) => {
-    const suffix = `${publicLink}${menuText ? `\n\n${menuText.slice(0, publicLink ? 2000 : 4000)}` : ""}`;
+    const suffix = `${publicLink}${menuText ? `\n\n${menuText.slice(0, command === "quote-auto" ? 1500 : 4000)}` : ""}`;
     return `${body.slice(0, Math.max(0, 4096 - suffix.length))}${suffix}`;
   };
   const isQuote = command === "quote-auto" && value?.reference;
@@ -76,11 +76,16 @@ export function actionResultText(
     Number(value.uncertainOffers ?? 0) > 0 ||
     Number(value.undispatchedOffers ?? 0) > 0 ||
     Number(value.unpricedOffers ?? 0) > 0;
+  const publicReference =
+    typeof value.publicReference === "string" &&
+    /^COT-\d{8}-[A-F0-9]{8}$/.test(value.publicReference)
+      ? value.publicReference
+      : undefined;
   const quoteText = [
-    `${label}${hasPartialResults ? "Resultados parciales" : "Resultados"} de ${value.reference}`,
+    `${label}${hasPartialResults ? "Resultados parciales" : "Resultados"} de ${publicReference ?? "tu cotización"}`,
     `Ofertas con precio: ${value.pricedOffers ?? 0}. Respuestas fallidas: ${value.failedOffers ?? 0}.`,
     Number(value.uncertainOffers ?? 0) > 0
-      ? `Sin resultado verificado: ${value.uncertainOffers}. Revisa su historial antes de volver a cotizar.`
+      ? `Sin resultado verificado: ${value.uncertainOffers}. Las solicitudes sin confirmar no se repetirán automáticamente.`
       : "",
     Number(value.unpricedOffers ?? 0) > 0
       ? `Respuestas sin precio: ${value.unpricedOffers}.`
@@ -99,7 +104,6 @@ export function actionResultText(
       ? "El análisis automático no estuvo disponible; revisa las condiciones verificadas antes de elegir."
       : "",
     ...warnings,
-    outcome.state !== "completed" ? outcome.message : "",
     noPrice ? "No recibí ofertas con precio." : "",
     noPrice ? humanSupportContactText(humanSupportContact) : "",
     menuText

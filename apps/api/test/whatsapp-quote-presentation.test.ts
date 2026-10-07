@@ -170,7 +170,7 @@ it("uses authorized tenant model analysis, emits a checked explanation, then pub
   presentation.record(proposals[0]);
   const result = await presentation.finish({
     quoteId: "quote-1",
-    reference: "COT-action-quote-1",
+    reference: expect.stringMatching(/^COT-\d{8}-[A-F0-9]{8}$/),
     proposals,
     pricedOffers: 1,
   });
@@ -187,7 +187,7 @@ it("uses authorized tenant model analysis, emits a checked explanation, then pub
   );
   expect(publish).toHaveBeenCalledWith(
     expect.objectContaining({
-      reference: "COT-action-quote-1",
+      reference: expect.stringMatching(/^COT-\d{8}-[A-F0-9]{8}$/),
       proposals,
       analysis: expect.objectContaining({ preferredProposalId: "product-1" }),
     }),
@@ -239,4 +239,23 @@ it("falls back without a model when the summary model is outside the allowed lis
   expect(result.persistenceWarnings).toEqual([
     "No se pudo crear el enlace público de esta cotización.",
   ]);
+});
+
+it("publishes a customer reference independent of the internal action identifier", async () => {
+  const hooks = presentationFactory({});
+  const result = await hooks.presentation.finish({
+    quoteId: "saved-quote",
+    proposals: [
+      {
+        id: "product-1",
+        provider: "Insurer",
+        product: "Plan",
+        state: "priced",
+        premium: 1500000,
+        currency: "COP",
+      },
+    ],
+  });
+  expect(result.publicReference).toMatch(/^COT-\d{8}-[A-F0-9]{8}$/);
+  expect(result.publicReference).not.toContain(action.id);
 });

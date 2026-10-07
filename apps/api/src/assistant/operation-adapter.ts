@@ -932,11 +932,13 @@ export function createChannelOperationAdapter(
                 ? { premium: progress.premium }
                 : {}),
             });
+            const progressText = quoteProgressText(progress);
+            if (!progressText) return;
             await enqueueChannelActionProgress(
               deps.repository,
               action,
               progress.productId,
-              quoteProgressText(progress),
+              progressText,
             );
             deps.onActionProgress?.(action);
           },

@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { InsuranceAssistantOperations } from "../src/assistant-operations";
 const input = {
   vehicle: {
@@ -165,7 +165,7 @@ it("returns priced peer results when an execution provider ignores abort and tim
   );
   const result = await operations.createInsuranceQuote(input, {
     executionKey: "timeout-test",
-    executionTimeouts: { requestMs: 25, budgetMs: 100 },
+    executionTimeouts: { requestMs: 25, providerMs: 25, budgetMs: 100 },
   });
 
   expect(result).toMatchObject({
@@ -202,6 +202,63 @@ it("returns priced peer results when an execution provider ignores abort and tim
         entry.path.includes("cotizaciones_detalle/") && entry.body.prima === 1,
     ),
   ).toBe(false);
+});
+
+it("allows a WhatsApp provider response after the persistence request deadline", async () => {
+  vi.useFakeTimers();
+  try {
+    const persisted: Array<{
+      path: string;
+      method: string;
+      body: Record<string, unknown>;
+    }> = [];
+    const operations = quoteOperations(
+      [{ id: "slow-provider", label: "Carrier · Product", enabled: true }],
+      async () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                data: {
+                  run: { runId: "slow-run" },
+                  output: { data: { premiumTotal: 1591272 } },
+                },
+              }),
+            20,
+          ),
+        ),
+      persisted,
+    );
+    const progress: unknown[] = [];
+    const resultPromise = operations.createInsuranceQuote(input, {
+      executionKey: "provider-deadline-test",
+      executionTimeouts: { requestMs: 15, providerMs: 30, budgetMs: 90_000 },
+      onProgress: (item) => {
+        progress.push(item);
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(15);
+    await vi.advanceTimersByTimeAsync(5);
+    const result = await resultPromise;
+
+    expect(result).toMatchObject({
+      pricedOffers: 1,
+      uncertainOffers: 0,
+      lowestPremium: 1591272,
+    });
+    expect(progress).toHaveLength(1);
+    expect(
+      persisted.some(
+        (entry) =>
+          entry.path.includes("cotizaciones_detalle/") &&
+          entry.method === "PATCH" &&
+          entry.body.prima === 1591272,
+      ),
+    ).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it("does not dispatch products once the WhatsApp quote request budget expires", async () => {

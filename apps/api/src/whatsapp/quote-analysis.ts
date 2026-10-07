@@ -238,6 +238,7 @@ export function createQuoteExplanationWorkflow(
           publicQuoteReportSchema.parse(report),
         );
         updated.publicUrl = link.url;
+        updated.publicReference = report.reference;
         updated.publicLinkId = link.id;
         updated.publicLinkExpiresAt = link.expiresAt;
       } catch {

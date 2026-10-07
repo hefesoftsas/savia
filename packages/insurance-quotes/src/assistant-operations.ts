@@ -33,11 +33,16 @@ export type InsuranceExecutionOptions = {
   onProgress?(progress: InsuranceQuoteProgress): Promise<void> | void;
   linkOwnership?(quoteId: string): Promise<void>;
   claimDispatch?(productId: string): Promise<boolean>;
-  /** Optional shorter deadlines; defaults are 15s per request and 90s total. */
-  executionTimeouts?: { requestMs?: number; budgetMs?: number };
+  /** Provider actions default to 30s; persistence requests default to 15s, within a 90s total budget. */
+  executionTimeouts?: {
+    requestMs?: number;
+    providerMs?: number;
+    budgetMs?: number;
+  };
 };
 
 const WHATSAPP_REQUEST_TIMEOUT_MS = 15_000;
+const WHATSAPP_PROVIDER_TIMEOUT_MS = 30_000;
 const WHATSAPP_EXECUTION_BUDGET_MS = 90_000;
 
 const PROVIDER_COVERAGE_FACTS = [
@@ -175,6 +180,12 @@ export class InsuranceAssistantOperations {
           WHATSAPP_REQUEST_TIMEOUT_MS,
         )
       : Number.POSITIVE_INFINITY;
+    const providerTimeoutMs = executionMode
+      ? boundedTimeout(
+          options.executionTimeouts?.providerMs,
+          WHATSAPP_PROVIDER_TIMEOUT_MS,
+        )
+      : Number.POSITIVE_INFINITY;
     const executionDeadline = executionMode
       ? quoteStartedAt +
         boundedTimeout(
@@ -268,22 +279,21 @@ export class InsuranceAssistantOperations {
     });
     const base = this.ports.studioPath(tenantId, "records/");
     const write = <T>(path: string, method: string, body: unknown) => {
+      const isProviderAction = path.includes(
+        "extensions/insurance.quotes/actions/quote",
+      );
+      const phase = isProviderAction
+        ? "provider_request"
+        : method.toLowerCase() === "patch"
+          ? "persistence_patch"
+          : "persistence_post";
       if (executionMode && remainingExecutionMs() <= 0) {
         logQuoteEvent("whatsapp_quote_request_timed_out", {
-          phase: path.includes("actions/quote")
-            ? "provider_request"
-            : method.toLowerCase() === "patch"
-              ? "persistence_patch"
-              : "persistence_post",
+          phase,
           timeout_ms: 0,
           timeout_kind: "execution_budget",
         });
-        return Promise.reject(
-          new QuoteExecutionTimeoutError(
-            path.includes("actions/quote") ? "provider_request" : "persistence",
-            true,
-          ),
-        );
+        return Promise.reject(new QuoteExecutionTimeoutError(phase, true));
       }
       const controller = executionMode ? new AbortController() : undefined;
       const request = this.ports.request<T>(path, {
@@ -308,29 +318,19 @@ export class InsuranceAssistantOperations {
           new QuoteExecutionTimeoutError("persistence", true),
         );
       }
-      const effectiveTimeout = Math.min(requestTimeoutMs, remaining);
+      const timeoutMs = isProviderAction ? providerTimeoutMs : requestTimeoutMs;
+      const effectiveTimeout = Math.min(timeoutMs, remaining);
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
           const deadlineExpired = remainingExecutionMs() <= 0;
           controller?.abort();
           logQuoteEvent("whatsapp_quote_request_timed_out", {
-            phase: path.includes("actions/quote")
-              ? "provider_request"
-              : method.toLowerCase() === "patch"
-                ? "persistence_patch"
-                : "persistence_post",
+            phase,
             timeout_ms: effectiveTimeout,
             timeout_kind: deadlineExpired ? "execution_budget" : "request",
           });
-          reject(
-            new QuoteExecutionTimeoutError(
-              path.includes("actions/quote")
-                ? "provider_request"
-                : "persistence",
-              deadlineExpired,
-            ),
-          );
+          reject(new QuoteExecutionTimeoutError(phase, deadlineExpired));
         }, effectiveTimeout);
       });
       return Promise.race([request, timeout]).finally(() => {
