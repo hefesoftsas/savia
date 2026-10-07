@@ -205,6 +205,10 @@
     {
       "filename": "0047_whatsapp_contact_access_fingerprint.sql",
       "sha256": "e0b621a39e98db1bd9f9c7aa4d7608bc1740410e1225162b075ad47313bec7bf"
+    },
+    {
+      "filename": "0048_whatsapp_action_queue_timestamp.sql",
+      "sha256": "468beb134d34381cff330f2ec478eea14f5dd038847b3f8fc89f3c4bbc7846e4"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -15927,6 +15931,14 @@
         {
           "cid": 17,
           "name": "lease_until",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 18,
+          "name": "queued_at",
           "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,

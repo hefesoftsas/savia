@@ -19,10 +19,15 @@ export async function processChannelActions(
     .run();
   const rows = await db
     .prepare(
-      "SELECT id,action_json,created_at FROM whatsapp_channel_actions WHERE status='queued' ORDER BY created_at LIMIT ?",
+      "SELECT id,action_json,created_at,queued_at FROM whatsapp_channel_actions WHERE status='queued' ORDER BY queued_at,created_at LIMIT ?",
     )
     .bind(Math.max(1, Math.min(limit, 10)))
-    .all<{ id: string; action_json: string; created_at: string }>();
+    .all<{
+      id: string;
+      action_json: string;
+      created_at: string;
+      queued_at: string | null;
+    }>();
   let completed = 0,
     uncertain = 0;
   for (const row of rows.results) {
@@ -39,7 +44,10 @@ export async function processChannelActions(
       JSON.stringify({
         event: "whatsapp_channel_action_started",
         action_id: row.id,
-        queue_wait_ms: Math.max(0, startedAt - Date.parse(row.created_at)),
+        queue_wait_ms: Math.max(
+          0,
+          startedAt - Date.parse(row.queued_at ?? row.created_at),
+        ),
       }),
     );
     let outcome: ActionOutcome;

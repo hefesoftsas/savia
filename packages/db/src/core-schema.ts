@@ -1086,6 +1086,7 @@ export const whatsappChannelActions = sqliteTable("whatsapp_channel_actions", {
   attempts: integer("attempts").notNull().default(0),
   expiresAt: text("expires_at").notNull(),
   createdAt: text("created_at").notNull(),
+  queuedAt: text("queued_at"),
   resultJson: text("result_json"),
   outboundMessageId: text("outbound_message_id"),
   deliveryState: text("delivery_state"),
