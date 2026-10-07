@@ -274,6 +274,7 @@ export function createChannelOperationAdapter(
     if (!session) return undefined;
     const selected = await employee(session);
     let preview: NativeReply | string | undefined;
+    let quoteFailed = false;
     const choice =
       input?.native?.kind === "choice"
         ? input.native.id
@@ -444,6 +445,12 @@ export function createChannelOperationAdapter(
           throw new Error("No enabled quote products");
       } catch {
         verifiedQuoteForm = null;
+        // Catalog discovery also runs during unrelated employee turns. Only
+        // an explicit quote request treats discovery failure as a closed flow.
+        quoteFailed =
+          /\b(cotizar|cotizame|cotiza|nueva cotizacion|otra cotizacion|una nueva|reintentar? (?:la |una )?cotizacion|volver a cotizar|quiero (?:una )?cotizacion|hacer (?:una )?cotizacion)\b/.test(
+            normalized,
+          );
         effectiveAccess = {
           ...session.access,
           capabilities: session.access.capabilities.filter(
@@ -571,9 +578,33 @@ export function createChannelOperationAdapter(
               }),
           }
         : {}),
-      read: (name, data) =>
-        read(binding, session, name, data, verifiedQuoteForm ?? undefined),
-      prepare: prepareOperation,
+      read: async (name, data) => {
+        try {
+          return await read(
+            binding,
+            session,
+            name,
+            data,
+            verifiedQuoteForm ?? undefined,
+          );
+        } catch (error) {
+          if (
+            name === "savia_get_quote_form" ||
+            name === "savia_get_quote_summary"
+          )
+            quoteFailed = true;
+          throw error;
+        }
+      },
+      prepare: async (domain, command, value) => {
+        try {
+          return await prepareOperation(domain, command, value);
+        } catch (error) {
+          if (domain === "insurance" && command === "quote-auto")
+            quoteFailed = true;
+          throw error;
+        }
+      },
     });
 
     if (authorizedConsentPrompt) {
@@ -584,6 +615,7 @@ export function createChannelOperationAdapter(
         return {
           tools: {},
           system,
+          quoteFailed: () => true,
           directReply: humanSupportRecoveryReply(
             currentSettings?.config.humanSupportContact,
           ),
@@ -727,7 +759,12 @@ export function createChannelOperationAdapter(
       }
     }
 
-    return { system, tools, reply: () => preview };
+    return {
+      system,
+      tools,
+      reply: () => preview,
+      quoteFailed: () => quoteFailed,
+    };
   }
 
   async function execute(

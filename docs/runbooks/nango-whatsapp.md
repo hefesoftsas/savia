@@ -409,6 +409,19 @@ revoked deliveries become terminal. Expired deliveries remain dormant until a
 valid inbound opens a new reply window, then resume through the same access checks;
 neither state keeps the coordinator awake. Failures before attempting a send can retry normally.
 
+After a quote-auto operation ends in a terminal completed, failed, or uncertain
+result, an acknowledged result message includes the main task menu and starts a
+fresh contact generation. A terminal quote preparation or catalog failure that
+is acknowledged follows the same lifecycle, as does an exhausted model-generation
+failure for a quote flow. The current draft, employee selection, buffered input
+and reset challenge are cleared only after the acknowledgement is durable; an
+uncertain outbound send does not reset the conversation. Prior conversational
+history remains in its original generation and is excluded from the new
+conversation. A `history_pending` repair performs the same reset without sending
+the message again. The quote, action, dispatch and audit records remain in their
+originating generation for follow-up by an operator, while the new conversation
+starts with no selected employee or prior quote context.
+
 Contacts can request a fresh conversation with the exact command
 `Borrar mis datos y empezar de nuevo`. The server returns a contact-bound,
 five-minute confirmation code: `BORRAR <code>`. A bare `Sí` does not confirm;

@@ -7,7 +7,10 @@ import {
 } from "../assistant/operation-adapter";
 import { processChannelActions } from "./action-jobs";
 import { WhatsappChannelRepository } from "./channel-repository";
-import { createRoutedWhatsappGenerator } from "./channel-runtime";
+import {
+  prepareFailedQuoteReply,
+  createRoutedWhatsappGenerator,
+} from "./channel-runtime";
 import { CompanionService } from "../companion/service";
 import { whatsappIntakeContributions } from "@savia/release-catalog/whatsapp";
 import {
@@ -25,7 +28,6 @@ import type { WhatsappRouteDependencies } from "../routes/whatsapp";
 import { WhatsappInboundRepository } from "./inbound-repository";
 import { drainWhatsappInbox, processWhatsappInbox } from "./inbound-processor";
 import { createWhatsappAssistant, sendWhatsappReply } from "./assistant";
-import { humanSupportRecoveryReply } from "./human-support";
 import { VirtualEmployeesRepository } from "../assistant/virtual-employees";
 import { retrieveRelevantChunks, type RagEnvironment } from "../assistant/rag";
 import type { AssistantConfigurationRepository } from "../assistant/configuration";
@@ -78,6 +80,8 @@ export function whatsappInboundFromEnvironment(
   };
   const generate = createWhatsappAssistant({
     humanSupportContact,
+    quoteFailureReply: (binding, input) =>
+      prepareFailedQuoteReply(channelRepository, binding, input),
     ...(operations ? { capabilities: operations.capabilities } : {}),
     configuration,
     prepareInput: createWhatsappMediaInput(
@@ -162,8 +166,7 @@ export function whatsappInboundFromEnvironment(
       scope?: WhatsappQueueScope;
     }) => {
       const processingDependencies = {
-        recoveryReply: async (binding) =>
-          humanSupportRecoveryReply(await humanSupportContact(binding)),
+        recoveryReply: routed.recoveryReply,
         generate: routed.generate,
         authorizeReply: routed.authorizeReply,
         afterReply: routed.afterReply,

@@ -109,3 +109,28 @@ it("shows incomplete quote states and relevant persistence warnings without expo
   expect(text).toContain("Puedes preguntarme por esta cotización");
   expect(text).not.toContain("https://internal.example.test");
 });
+
+it("appends the actual task menu to a terminal quote failure and keeps it within WhatsApp limits", () => {
+  const menu =
+    "¿Qué deseas hacer? Escribe menú o inicio para volver aquí.\n\n1. Consultar seguros\n2. Asistencia vial\n\nResponde con el número de la opción.";
+  const text = actionResultText(
+    "Alice",
+    "quote-auto",
+    { state: "failed", message: "No fue posible completar la cotización." },
+    "",
+    menu,
+  );
+  expect(text).toContain("No fue posible completar la cotización.");
+  expect(text).toContain(menu);
+
+  const longMenu = "Menú\n" + "x".repeat(5000);
+  const bounded = actionResultText(
+    "Alice",
+    "quote-auto",
+    { state: "completed", result: { reference: "COT-test" } },
+    "",
+    longMenu,
+  );
+  expect(bounded.length).toBeLessThanOrEqual(4096);
+  expect(bounded).toContain("Menú\n");
+});

@@ -66,6 +66,10 @@ export type WhatsappAssistantDependencies = {
     configuration: EffectiveAssistantConfiguration,
   ): Promise<{ text: string; attachments?: WhatsappAttachment[] }>;
   complete?: (input: CompletionInput) => Promise<string>;
+  quoteFailureReply?(
+    binding: WhatsappAssistantBinding,
+    input: WhatsappInboundInput,
+  ): Promise<string | NativeReply>;
   capabilities?(
     binding: WhatsappAssistantBinding,
     input?: WhatsappInboundInput,
@@ -74,6 +78,7 @@ export type WhatsappAssistantDependencies = {
         tools: ToolSet;
         system: string;
         directReply?: string | NativeReply;
+        quoteFailed?(): boolean;
         reply?(): NativeReply | string | undefined;
       }
     | undefined
@@ -168,6 +173,12 @@ export function createWhatsappAssistant(
     timing("configuration");
     const capabilities = await dependencies.capabilities?.(binding, input);
     timing("capabilities");
+    if (
+      capabilities?.quoteFailed?.() &&
+      input &&
+      dependencies.quoteFailureReply
+    )
+      return dependencies.quoteFailureReply(binding, input);
     if (capabilities?.directReply) return capabilities.directReply;
     const prepared =
       input && dependencies.prepareInput
@@ -223,6 +234,12 @@ export function createWhatsappAssistant(
       })
     ).trim();
     timing("model_and_tools");
+    if (
+      capabilities?.quoteFailed?.() &&
+      input &&
+      dependencies.quoteFailureReply
+    )
+      return dependencies.quoteFailureReply(binding, input);
     const confirmation = capabilities?.reply?.();
     if (confirmation) return confirmation;
     if (binding.native && text.startsWith("{")) {

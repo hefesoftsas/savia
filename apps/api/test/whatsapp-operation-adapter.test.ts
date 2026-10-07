@@ -138,14 +138,28 @@ it("removes quote tools and product claims when preflight cannot verify a catalo
         new Response("unavailable", { status: 503 })) as typeof fetch,
   });
 
-  const capabilities = await adapter.capabilities({
-    ...binding,
-    channelSession: session,
-  });
+  const capabilities = await adapter.capabilities(
+    {
+      ...binding,
+      channelSession: session,
+    },
+    { text: "Una nueva" } as any,
+  );
   expect(capabilities?.tools).not.toHaveProperty("savia_get_quote_form");
   expect(capabilities?.tools).not.toHaveProperty("savia_lookup_quote_vehicle");
   expect(capabilities?.system).toMatch(/catalog could not be verified/i);
   expect(capabilities?.system).not.toMatch(/Hogar|Vida|Salud/i);
+  expect(capabilities?.quoteFailed?.()).toBe(true);
+  const greeting = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: "Hola" } as any,
+  );
+  expect(greeting?.quoteFailed?.()).toBe(false);
+  const information = await adapter.capabilities(
+    { ...binding, channelSession: session },
+    { text: "Qué seguros ofrecen" } as any,
+  );
+  expect(information?.quoteFailed?.()).toBe(false);
 });
 
 it("prepares a staff quote after AUTORIZO using the same validated draft", async () => {

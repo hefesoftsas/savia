@@ -164,7 +164,7 @@ export async function processWhatsappInbox(
       // Persist and authorize the recovery reply through the same send path.
       outgoing =
         (await dependencies
-          .recoveryReply?.(binding)
+          .recoveryReply?.(binding, item)
           .catch(() => humanSupportRecoveryReply())) ??
         humanSupportRecoveryReply();
       reply = outgoing;

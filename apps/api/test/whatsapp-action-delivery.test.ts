@@ -111,7 +111,7 @@ const partial: ActionOutcome = {
   },
 };
 
-it("delivers partial results once and supplies them to the next employee turn", async () => {
+it("delivers partial results, shows the task menu, and starts the next turn fresh", async () => {
   const s = await setup(partial);
   await Promise.all([s.deliver(), s.deliver()]);
   await s.deliver();
@@ -140,11 +140,21 @@ it("delivers partial results once and supplies them to the next employee turn", 
     timestamp: new Date().toISOString(),
   };
   await s.repository.receive(input);
-  await routed.generate(s.binding, [], input.text, input);
-  expect(complete.mock.calls[0]?.[1]).toContainEqual({
-    role: "assistant",
-    content: sentText?.replace("Test employee · Asistente virtual\n\n", ""),
+  const nextReply = await routed.generate(s.binding, [], input.text, input);
+  expect(sentText).toContain("¿Qué deseas hacer?");
+  expect(String(nextReply)).toContain("¿Qué deseas hacer?");
+  expect(complete).not.toHaveBeenCalled();
+  const nextAccess = await s.repo.getAccess({
+    tenantId: s.tenantId,
+    connectionId: s.connectionId,
+    contact: s.session.access.contact,
   });
+  expect(nextAccess.generation).not.toBe(s.session.access.generation);
+  expect(await s.repo.getSession(nextAccess)).toBeNull();
+  expect((await s.history()).results).toHaveLength(1);
+  expect((await s.history()).results[0]?.generation).toBe(
+    s.session.access.generation,
+  );
 });
 
 it("does not add uncertain deliveries to history or retry their sends", async () => {
@@ -213,9 +223,17 @@ it("recovers an acknowledged send's failed history write without sending again",
   await s.deliver();
   await s.deliver();
   expect(s.send).toHaveBeenCalledTimes(1);
+  expect(s.send.mock.calls[0]?.[1]).toContain("¿Qué deseas hacer?");
   const history = (await s.history()).results;
   expect(history).toHaveLength(1);
   expect(history[0]?.assistant_text).toBe(s.send.mock.calls[0]?.[1]);
+  const freshAccess = await s.repo.getAccess({
+    tenantId: s.tenantId,
+    connectionId: s.connectionId,
+    contact: s.session.access.contact,
+  });
+  expect(freshAccess.generation).not.toBe(s.session.access.generation);
+  expect(await s.repo.getSession(freshAccess)).toBeNull();
 });
 
 it("repairs acknowledged history after the contact authorization changes", async () => {
