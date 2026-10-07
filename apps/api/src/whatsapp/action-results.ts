@@ -81,7 +81,9 @@ export function actionResultText(
     outcome.state !== "completed" ? outcome.message : "",
     noPrice ? "No recibí ofertas con precio." : "",
     noPrice ? humanSupportContactText(humanSupportContact) : "",
-    "Puedes preguntarme por esta cotización o escribir menú para elegir otra tarea.",
+    menuText
+      ? "Elige una opción del menú para empezar una nueva tarea."
+      : "Puedes preguntarme por esta cotización o escribir menú para elegir otra tarea.",
   ]
     .filter(Boolean)
     .join("\n");

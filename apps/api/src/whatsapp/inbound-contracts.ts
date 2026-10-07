@@ -58,6 +58,10 @@ export type WhatsappInboundDependencies = {
     binding: WhatsappAssistantBinding,
     input: WhatsappInboundInput,
   ): Promise<boolean>;
+  completionStatements?(
+    binding: WhatsappAssistantBinding,
+    input: WhatsappInboundInput,
+  ): Promise<D1PreparedStatement[]>;
   afterReply?(
     binding: WhatsappAssistantBinding,
     input: WhatsappInboundInput,

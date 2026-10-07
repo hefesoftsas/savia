@@ -123,6 +123,22 @@ it("appends the actual task menu to a terminal quote failure and keeps it within
   expect(text).toContain("No fue posible completar la cotización.");
   expect(text).toContain(menu);
 
+  const completedWithMenu = actionResultText(
+    "Alice",
+    "quote-auto",
+    {
+      state: "completed",
+      result: { reference: "COT-menu", pricedOffers: 1 },
+    },
+    "",
+    menu,
+  );
+  expect(completedWithMenu).toContain(menu);
+  expect(completedWithMenu).not.toContain(
+    "Puedes preguntarme por esta cotización",
+  );
+  expect(completedWithMenu).toContain("empezar una nueva tarea");
+
   const longMenu = "Menú\n" + "x".repeat(5000);
   const bounded = actionResultText(
     "Alice",

@@ -197,3 +197,80 @@ it("returns to the menu when model retries are exhausted", async () => {
     draft_json: null,
   });
 });
+
+it("commits the reset with inbox completion even when post-reply history fails", async () => {
+  const s = await setup();
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    expect(
+      await processWhatsappInbox(s.repository, {
+        ...s.routed,
+        afterReply: async () => {
+          throw new Error("history unavailable");
+        },
+        send: async () => "wamid.atomic-reset",
+      }),
+    ).toMatchObject({ processed: 1 });
+    expect(await s.contact()).toMatchObject({
+      employee_id: null,
+      draft_json: null,
+    });
+  } finally {
+    error.mockRestore();
+  }
+});
+
+it("rolls back inbox completion and the reset together when persistence fails", async () => {
+  const s = await setup();
+  const binding = (await s.repository.resolve(s.phoneNumberId, s.wabaId))!;
+  await s.routed.generate(binding, [], s.input.text, s.input);
+  await env.DB.prepare(
+    "UPDATE whatsapp_inbox SET state='responding',lease_token='atomic-token' WHERE message_id=?",
+  )
+    .bind(s.input.messageId)
+    .run();
+  const statements = await s.routed.completionStatements(binding, s.input);
+  expect(statements).toHaveLength(2);
+  await expect(
+    s.repository.complete(s.input.messageId, "atomic-token", "wamid.rollback", [
+      ...statements,
+      env.DB.prepare("INSERT INTO missing_atomic_test_table VALUES(1)"),
+    ]),
+  ).rejects.toThrow();
+  expect(await s.contact()).toMatchObject({
+    generation: s.access.generation,
+    employee_id: s.employeeId,
+    draft_json: "private draft",
+  });
+  expect(
+    await env.DB.prepare(
+      "SELECT state,outbound_message_id FROM whatsapp_inbox WHERE message_id=?",
+    )
+      .bind(s.input.messageId)
+      .first(),
+  ).toMatchObject({ state: "responding", outbound_message_id: null });
+});
+
+it("does not dispatch when atomic completion preparation fails", async () => {
+  const s = await setup();
+  const send = vi.fn().mockResolvedValue("must-not-send");
+  expect(
+    await processWhatsappInbox(s.repository, {
+      ...s.routed,
+      completionStatements: async () => {
+        throw new Error("snapshot unavailable");
+      },
+      send,
+    }),
+  ).toMatchObject({ processed: 0, failed: 1 });
+  expect(send).not.toHaveBeenCalled();
+  expect(await s.contact()).toMatchObject({
+    generation: s.access.generation,
+    draft_json: "private draft",
+  });
+  expect(
+    await env.DB.prepare("SELECT state FROM whatsapp_inbox WHERE message_id=?")
+      .bind(s.input.messageId)
+      .first(),
+  ).toMatchObject({ state: "pending" });
+});

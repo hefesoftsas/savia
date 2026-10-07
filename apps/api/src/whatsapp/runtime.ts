@@ -169,6 +169,7 @@ export function whatsappInboundFromEnvironment(
         recoveryReply: routed.recoveryReply,
         generate: routed.generate,
         authorizeReply: routed.authorizeReply,
+        completionStatements: routed.completionStatements,
         afterReply: routed.afterReply,
         indicator: async (binding, messageId) => {
           if (binding.native?.readReceipts || binding.native?.typingIndicator)

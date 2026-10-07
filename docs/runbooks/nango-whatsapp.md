@@ -432,7 +432,9 @@ fresh contact generation. A terminal quote preparation or catalog failure that
 is acknowledged follows the same lifecycle, as does an exhausted model-generation
 failure for a quote flow. The current draft, employee selection, buffered input
 and reset challenge are cleared only after the acknowledgement is durable; an
-uncertain outbound send does not reset the conversation. Prior conversational
+uncertain outbound send does not reset the conversation. For a terminal inbound
+quote failure, the prepared reset and inbox completion commit in the same database
+transaction, so a later history write failure cannot leave the old draft active. Prior conversational
 history remains in its original generation and is excluded from the new
 conversation. A `history_pending` repair performs the same reset without sending
 the message again. The quote, action, dispatch and audit records remain in their

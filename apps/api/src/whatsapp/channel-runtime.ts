@@ -381,6 +381,22 @@ export function createRoutedWhatsappGenerator(
       );
       return humanSupportRecoveryReply(settings?.config.humanSupportContact);
     },
+    async completionStatements(
+      binding: WhatsappAssistantBinding,
+      input: WhatsappInboundInput,
+    ) {
+      const saved = await snapshot(input.messageId);
+      if (!saved?.session || !saved.quoteReset) return [];
+      // Inbox completion and the quote reset share one transaction. A later
+      // history write failure cannot leave a completed reply with an old draft.
+      return repository.quoteLifecycleResetStatements(
+        saved.session.access,
+        saved.session.selectionRevision,
+        saved.session.employeeId,
+        saved.quoteReset,
+        { kind: "inbound-reply", messageId: input.messageId },
+      );
+    },
     async afterReply(
       binding: WhatsappAssistantBinding,
       input: WhatsappInboundInput,
@@ -437,7 +453,15 @@ export function createRoutedWhatsappGenerator(
             : []),
         ]);
         if (saved.quoteReset) {
-          const applied = persisted[1]?.meta.changes === 1;
+          const current = await repository.db
+            .prepare(
+              "SELECT generation FROM whatsapp_channel_contacts WHERE connection_id=? AND contact=?",
+            )
+            .bind(binding.connectionId, saved.session.access.contact)
+            .first<{ generation: string }>();
+          const applied =
+            persisted[1]?.meta.changes === 1 ||
+            current?.generation === saved.quoteReset.generation;
           logWhatsappDiagnostic(
             "whatsapp_quote_lifecycle_reset",
             {
@@ -464,9 +488,8 @@ export function createRoutedWhatsappGenerator(
             },
             {
               stage: "after_reply",
-              outcome: "failed",
+              outcome: "history_failed",
               duration_ms: Math.max(0, Date.now() - resetStartedAt),
-              reset_applied: false,
               error_code: diagnosticErrorCode(error),
             },
           );
