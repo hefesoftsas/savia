@@ -49,10 +49,15 @@ export type WhatsappChatMessage = {
   content: string;
 };
 
+export type WhatsappRecoveryContext = {
+  reason: "timeout" | "aborted" | "generation_failed";
+};
+
 export type WhatsappInboundDependencies = {
   recoveryReply?(
     binding: WhatsappAssistantBinding,
     input: WhatsappInboundInput,
+    context?: WhatsappRecoveryContext,
   ): Promise<string>;
   authorizeReply?(
     binding: WhatsappAssistantBinding,

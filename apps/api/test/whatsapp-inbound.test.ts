@@ -725,6 +725,114 @@ describe("WhatsApp inbound persistence and processing", () => {
     expect(send).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    ["TimeoutError", "timeout"],
+    ["AbortError", "aborted"],
+  ] as const)(
+    "sends the recovery reply immediately after a first-attempt %s",
+    async (errorName, reason) => {
+      const s = await setup();
+      await s.repository.receive(inbound(s));
+      const generate = vi.fn(async () => {
+        throw new DOMException("private model detail", errorName);
+      });
+      const reply = "Please contact a human advisor for help.";
+      const recoveryReply = vi.fn(async (_binding, _input, context) => {
+        expect(context).toEqual({ reason });
+        return reply;
+      });
+      const send = vi.fn(async (_binding, text) => {
+        expect(text).toBe(reply);
+        const saved = await env.DB.prepare(
+          "SELECT state,reply_text FROM whatsapp_inbox WHERE message_id=?",
+        )
+          .bind(`wamid-${s.tenantId}`)
+          .first();
+        expect(saved).toEqual({ state: "responding", reply_text: reply });
+        return `recovery-${s.tenantId}`;
+      });
+
+      expect(
+        await processWhatsappInbox(s.repository, {
+          generate,
+          recoveryReply,
+          send,
+        }),
+      ).toEqual({ processed: 1, failed: 0 });
+      expect(generate).toHaveBeenCalledOnce();
+      expect(recoveryReply).toHaveBeenCalledOnce();
+      expect(send).toHaveBeenCalledOnce();
+      expect(
+        await env.DB.prepare(
+          "SELECT state,generation_attempts,failure_code FROM whatsapp_inbox WHERE message_id=?",
+        )
+          .bind(`wamid-${s.tenantId}`)
+          .first(),
+      ).toEqual({
+        state: "completed",
+        generation_attempts: 1,
+        failure_code: null,
+      });
+    },
+  );
+
+  it("keeps ordinary first-attempt generation failures retryable", async () => {
+    const s = await setup();
+    await s.repository.receive(inbound(s));
+    const recoveryReply = vi.fn(async () => "unused");
+    const send = vi.fn(async () => "unused");
+
+    expect(
+      await processWhatsappInbox(s.repository, {
+        generate: async () => {
+          throw new Error("ordinary model failure");
+        },
+        recoveryReply,
+        send,
+      }),
+    ).toEqual({ processed: 0, failed: 1 });
+    expect(recoveryReply).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      await env.DB.prepare(
+        "SELECT state,generation_attempts,failure_code FROM whatsapp_inbox WHERE message_id=?",
+      )
+        .bind(`wamid-${s.tenantId}`)
+        .first(),
+    ).toMatchObject({
+      state: "pending",
+      generation_attempts: 1,
+      failure_code: null,
+    });
+  });
+
+  it("blocks timeout recovery after access revocation", async () => {
+    const s = await setup();
+    await s.repository.receive(inbound(s));
+    const recoveryReply = vi.fn(async () => "Recovery reply");
+    const send = vi.fn(async () => "unused");
+
+    expect(
+      await processWhatsappInbox(s.repository, {
+        generate: async () => {
+          throw new DOMException("deadline exceeded", "TimeoutError");
+        },
+        recoveryReply,
+        authorizeReply: async () => false,
+        send,
+      }),
+    ).toEqual({ processed: 0, failed: 1 });
+    expect(recoveryReply).toHaveBeenCalledOnce();
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      await env.DB.prepare(
+        "SELECT state,failure_code FROM whatsapp_inbox WHERE message_id=?",
+      )
+        .bind(`wamid-${s.tenantId}`)
+        .first(),
+    ).toEqual({ state: "failed", failure_code: "channel_access_revoked" });
+  });
+
   it("does not send an exhausted-generation recovery reply after access revocation", async () => {
     const s = await setup();
     await s.repository.receive(inbound(s));

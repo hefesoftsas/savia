@@ -576,8 +576,10 @@ it("removes quote tools and product claims when preflight cannot verify a catalo
 
 it("prepares a staff quote after AUTORIZO using the same validated draft", async () => {
   const { repo, session, binding } = await selectedSession(true);
+  let settingsReads = 0;
   const backend: typeof fetch = async (url) => {
-    if (new URL(String(url)).pathname.endsWith("/settings"))
+    if (new URL(String(url)).pathname.endsWith("/settings")) {
+      settingsReads++;
       return Response.json({
         data: {
           value: {
@@ -588,6 +590,7 @@ it("prepares a staff quote after AUTORIZO using the same validated draft", async
           },
         },
       });
+    }
     throw new Error(`Unexpected request ${String(url)}`);
   };
   const adapter = createChannelOperationAdapter({
@@ -622,6 +625,11 @@ it("prepares a staff quote after AUTORIZO using the same validated draft", async
     ...binding,
     channelSession: session,
   });
+  expect(firstTurn!.system).toContain('"vehicle.fasecoldaCode"');
+  expect(firstTurn!.system).toMatch(
+    /already provided.*skip.*savia_get_quote_form/i,
+  );
+  expect(settingsReads).toBe(1);
   await (firstTurn!.tools.savia_update_task_draft as any).execute({
     fields: {
       vehicle: quote.vehicle,
@@ -646,6 +654,7 @@ it("prepares a staff quote after AUTORIZO using the same validated draft", async
     { ...binding, channelSession: session },
     { text: "AUTORIZO" } as any,
   );
+  expect(settingsReads).toBe(2);
   expect(afterAuthorization!.tools).not.toHaveProperty("savia_prepare_command");
   expect(afterAuthorization!.directReply).toMatchObject({ kind: "buttons" });
   expect((afterAuthorization!.directReply as any).text).not.toMatch(

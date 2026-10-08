@@ -24,6 +24,22 @@ import type {
 
 import { humanSupportInstructions } from "./human-support";
 
+/** Keep the newest context within a budget; persisted history is unchanged. */
+function recentContext(history: WhatsappChatMessage[]): WhatsappChatMessage[] {
+  let remaining = 8000;
+  const messages: WhatsappChatMessage[] = [];
+  for (const entry of history.slice(-12).reverse()) {
+    if (!remaining) break;
+    const content = entry.content.slice(
+      0,
+      Math.min(remaining, entry.role === "assistant" ? 1024 : 4096),
+    );
+    messages.push({ role: entry.role, content });
+    remaining -= content.length;
+  }
+  return messages.reverse();
+}
+
 export type WhatsappAttachment = {
   type: "image" | "file";
   data: Uint8Array;
@@ -37,6 +53,7 @@ type CompletionInput = {
   model: string;
   system: string;
   tools?: ToolSet;
+  stopAfterTools?(): boolean;
   messages: WhatsappChatMessage[];
   attachments?: WhatsappAttachment[];
 };
@@ -126,7 +143,17 @@ async function complete(input: CompletionInput): Promise<string> {
             },
           ]
         : input.messages,
-      ...(input.tools ? { tools: input.tools, stopWhen: isStepCount(8) } : {}),
+      ...(input.tools
+        ? {
+            tools: input.tools,
+            stopWhen: [isStepCount(5), () => input.stopAfterTools?.() === true],
+            prepareStep: ({ stepNumber }: { stepNumber: number }) =>
+              stepNumber >= 4 ? { toolChoice: "none" as const } : {},
+          }
+        : {}),
+      providerOptions: {
+        openrouter: { reasoning: { effort: "none", exclude: true } },
+      },
       onLanguageModelCallStart: ({ callId }) => {
         pendingCalls.set(callId, Date.now());
         logWhatsappDiagnostic("whatsapp_model_call", context, {
@@ -254,29 +281,50 @@ export function createWhatsappAssistant(
       .filter(Boolean)
       .join("\n\n");
     timing("prompt");
-    const text = (
-      await traceWhatsappOperation(diagnosticContext, "model_and_tools", () =>
-        (dependencies.complete ?? complete)({
-          diagnosticContext,
-          apiKey,
-          model,
-          system,
-          ...(capabilities && Object.keys(capabilities.tools).length
-            ? { tools: capabilities.tools }
-            : {}),
-          ...(prepared.attachments?.length
-            ? { attachments: prepared.attachments }
-            : {}),
-          messages: [
-            ...history.slice(-20).map(({ role, content }) => ({
-              role,
-              content: content.slice(0, 4096),
-            })),
-            { role: "user", content: message },
-          ],
-        }),
+    let text: string;
+    try {
+      text = (
+        await traceWhatsappOperation(diagnosticContext, "model_and_tools", () =>
+          (dependencies.complete ?? complete)({
+            diagnosticContext,
+            apiKey,
+            model,
+            system,
+            stopAfterTools: () =>
+              Boolean(capabilities?.reply?.() || capabilities?.quoteFailed?.()),
+            ...(capabilities && Object.keys(capabilities.tools).length
+              ? { tools: capabilities.tools }
+              : {}),
+            ...(prepared.attachments?.length
+              ? { attachments: prepared.attachments }
+              : {}),
+            messages: [
+              ...recentContext(history),
+              { role: "user", content: message },
+            ],
+          }),
+        )
+      ).trim();
+    } catch (error) {
+      if (
+        capabilities?.quoteFailed?.() &&
+        input &&
+        dependencies.quoteFailureReply
       )
-    ).trim();
+        return dependencies.quoteFailureReply(binding, input);
+      const confirmation = capabilities?.reply?.();
+      if (
+        confirmation &&
+        ["timeout", "aborted"].includes(diagnosticErrorCode(error))
+      ) {
+        logWhatsappDiagnostic("whatsapp_assistant_timing", diagnosticContext, {
+          stage: "model_and_tools",
+          outcome: "prepared_reply_reused",
+        });
+        return confirmation;
+      }
+      throw error;
+    }
     timing("model_and_tools");
     if (
       capabilities?.quoteFailed?.() &&

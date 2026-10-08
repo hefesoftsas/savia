@@ -3,6 +3,7 @@ import type {
   WhatsappInboundDependencies,
   WhatsappInboundInput,
   WhatsappChatMessage,
+  WhatsappRecoveryContext,
 } from "./inbound-contracts";
 import type { ChannelMenu, EmployeeSession } from "./channel-contracts";
 import { WhatsappChannelRepository } from "./channel-repository";
@@ -471,7 +472,10 @@ export function createRoutedWhatsappGenerator(
     async recoveryReply(
       binding: WhatsappAssistantBinding,
       input: WhatsappInboundInput,
+      context?: WhatsappRecoveryContext,
     ) {
+      if (context?.reason === "timeout" || context?.reason === "aborted")
+        return "El asistente tardó demasiado en responder. Puedes continuar desde este punto o escribir menú para elegir otra tarea.";
       const saved = await snapshot(input.messageId);
       if (
         saved?.session?.access.capabilities.some(

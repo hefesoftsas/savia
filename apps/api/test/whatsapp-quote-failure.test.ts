@@ -352,6 +352,44 @@ it("returns to the menu when model retries are exhausted", async () => {
   });
 });
 
+it("keeps the selected task and persisted draft after a model timeout", async () => {
+  const s = await setup();
+  const generate = vi.fn(async () => {
+    throw new DOMException("model deadline", "TimeoutError");
+  });
+  const routed = createRoutedWhatsappGenerator(s.repo, generate);
+  const send = vi.fn(async (_binding, reply) => {
+    expect(reply).toContain("continuar");
+    return "wamid.timeout-recovery";
+  });
+  expect(await processWhatsappInbox(s.repository, { ...routed, send })).toEqual(
+    { processed: 1, failed: 0 },
+  );
+  expect(generate).toHaveBeenCalledOnce();
+  expect(send).toHaveBeenCalledOnce();
+  expect(await s.contact()).toMatchObject({
+    generation: s.access.generation,
+    employee_id: s.employeeId,
+    draft_json: "private draft",
+  });
+  const snapshot = await env.DB.prepare(
+    "SELECT state,generation_attempts,routing_snapshot FROM whatsapp_inbox WHERE message_id=?",
+  )
+    .bind(s.input.messageId)
+    .first<{
+      state: string;
+      generation_attempts: number;
+      routing_snapshot: string;
+    }>();
+  expect(snapshot).toMatchObject({
+    state: "completed",
+    generation_attempts: 1,
+  });
+  expect(JSON.parse(snapshot!.routing_snapshot)).not.toHaveProperty(
+    "quoteReset",
+  );
+});
+
 it("commits the reset with inbox completion even when post-reply history fails", async () => {
   const s = await setup();
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
