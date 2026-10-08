@@ -59,6 +59,7 @@ export function useStudioSidebarNavigation(enabled: boolean): {
     topics: ["studio", "records"],
     tenantId: tenant?.tenantId,
     enabled: enabled && !!tenant,
+    refreshOnInitialConnect: Boolean(services.localData),
     refresh: () => setRemoteRevision((value) => value + 1),
   });
   useRealtimeRefresh({

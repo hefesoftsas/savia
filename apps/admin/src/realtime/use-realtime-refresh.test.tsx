@@ -37,6 +37,20 @@ it("does not refresh a newly opened read model on its first acknowledgement", as
   expect(result.current.changed).toBe(false);
 });
 
+it("catches up on the first acknowledgement when the opening read can be cached", async () => {
+  const refresh = vi.fn();
+  renderHook(() =>
+    useRealtimeRefresh({
+      topics: ["studio"],
+      refreshOnInitialConnect: true,
+      refresh,
+    }),
+  );
+  act(() => connection().onConnected());
+  await tick();
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
 it("coalesces bursts, filters unrelated hints and catches up after reconnect", async () => {
   const refresh = vi.fn();
   renderHook(() =>
@@ -139,16 +153,24 @@ it("retains a reload action after a failed refresh", async () => {
   expect(result.current.changed).toBe(true);
 });
 
-it("does not label a newly opened draft stale on its first acknowledgement", async () => {
-  const refresh = vi.fn();
-  const { result } = renderHook(() =>
-    useRealtimeRefresh({ topics: ["studio"], blocked: true, refresh }),
-  );
-  act(() => connection().onConnected());
-  await tick();
-  expect(result.current.changed).toBe(false);
-  act(() => connection().onConnected());
-  await tick();
-  expect(result.current.changed).toBe(true);
-  expect(refresh).not.toHaveBeenCalled();
-});
+it.each([false, true])(
+  "does not label a newly opened draft stale on its first acknowledgement (initial catch-up: %s)",
+  async (refreshOnInitialConnect) => {
+    const refresh = vi.fn();
+    const { result } = renderHook(() =>
+      useRealtimeRefresh({
+        topics: ["studio"],
+        blocked: true,
+        refreshOnInitialConnect,
+        refresh,
+      }),
+    );
+    act(() => connection().onConnected());
+    await tick();
+    expect(result.current.changed).toBe(false);
+    act(() => connection().onConnected());
+    await tick();
+    expect(result.current.changed).toBe(true);
+    expect(refresh).not.toHaveBeenCalled();
+  },
+);
