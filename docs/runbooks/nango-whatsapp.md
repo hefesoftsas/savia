@@ -245,9 +245,29 @@ Individual batches retain the bounded media and model timeouts, leaving room
 inside the alarm or scheduled Worker lifetime. Overlapping retries retain atomic message
 claims and per-contact leases. Leases serialize each
 contact's conversation and fence stale processors. A four-minute processing
-lease accommodates media transcription followed by AI completion. Generation retries are
-bounded; after the final generation failure, a safe recovery message follows the
-same access checks and durable send path. Replies use a natural, concise tone,
+lease accommodates media transcription followed by AI completion. Model timeouts
+and aborts immediately use the authorized, durable recovery send path instead of
+replaying the entire tool loop up to three times. Recovery preserves the selected
+task and saved draft so the contact can continue; it does not claim unsaved input
+was stored. Other generation failures retain bounded retries and recovery after
+exhaustion. `whatsapp_inbound_generation_error` records the attempt, bounded error
+category and retry decision without raw error details.
+
+The conversation model retains a 60-second overall deadline, uses the configured
+authorized model with reasoning disabled, and allows at most four tool steps
+followed by a reply-only fifth step. A verified server-prepared consent or
+confirmation reply stops further model calls; that reply can also be recovered
+after a subsequent model timeout. Server authorization and field validation
+still apply. Model context includes at most the latest 12 history entries within
+8,000 characters, with prior assistant replies capped at 1,024 characters and
+prior user messages at 4,096. Current input retains its separate 20,000-character
+limit; backend history and saved task fields remain unchanged.
+Quote intake receives the current verified form requirements during catalog
+preflight and can skip the redundant form-read tool step. The read tool remains
+available when requirements are absent. Preparation reuses the same-turn form
+snapshot; execution still verifies current authorization and enabled products.
+
+Replies use a natural, concise tone,
 avoid repeated greetings and generic service lists, and stay transparent about
 the virtual assistant identity. Failed consultations or operations explain the
 problem and ask the user to contact an advisor directly, without inventing contact
@@ -449,7 +469,8 @@ After a quote-auto operation ends in a terminal completed, failed, or uncertain
 result, an acknowledged result message includes the main task menu and starts a
 fresh contact generation. A terminal quote preparation or catalog failure that
 is acknowledged follows the same lifecycle, as does an exhausted model-generation
-failure for a quote flow. The current draft, employee selection, buffered input
+failure for a quote flow, excluding model timeouts and aborts before completion.
+Those deadline recoveries retain the current task and draft. The current draft, employee selection, buffered input
 and reset challenge are cleared only after the acknowledgement is durable; an
 uncertain outbound send does not reset the conversation. For a terminal inbound
 quote failure, the prepared reset and inbox completion commit in the same database

@@ -8,6 +8,7 @@ import {
 import type {
   WhatsappAssistantBinding,
   WhatsappInboundDependencies,
+  WhatsappRecoveryContext,
 } from "./inbound-contracts";
 import {
   GENERATION_ATTEMPTS,
@@ -153,18 +154,35 @@ export async function processWhatsappInbox(
       if (!reply || reply.length > MAX_REPLY_LENGTH)
         throw new Error("Generated reply is empty or too long");
       timing("generation", generationStartedAt);
-    } catch {
+    } catch (error) {
       timing("generation", generationStartedAt, "failed");
-      console.error("WHATSAPP_GENERATION_FAILED", { attempt: item.attempts });
-      if (item.attempts < GENERATION_ATTEMPTS) {
+      const reason =
+        error instanceof Error && error.name === "TimeoutError"
+          ? "timeout"
+          : error instanceof Error && error.name === "AbortError"
+            ? "aborted"
+            : "generation_failed";
+      const retry =
+        reason === "generation_failed" && item.attempts < GENERATION_ATTEMPTS;
+      console.info(
+        JSON.stringify({
+          event: "whatsapp_inbound_generation_error",
+          message_id: item.messageId,
+          attempt: item.attempts,
+          error_code: reason,
+          retry_decision: retry ? "retry_generation" : "send_recovery",
+        }),
+      );
+      if (retry) {
         await repository.retryGeneration(item.messageId, token, item.attempts);
         failed++;
         continue;
       }
       // Persist and authorize the recovery reply through the same send path.
+      const recoveryContext: WhatsappRecoveryContext = { reason };
       outgoing =
         (await dependencies
-          .recoveryReply?.(binding, item)
+          .recoveryReply?.(binding, item, recoveryContext)
           .catch(() => humanSupportRecoveryReply())) ??
         humanSupportRecoveryReply();
       reply = outgoing;
