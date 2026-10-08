@@ -67,8 +67,11 @@ export function useRealtimeRefresh({
     onConnected: () => {
       const reconnect = connected.current;
       connected.current = true;
-      // An initial acknowledgement is not evidence of a remote edit.
-      if (reconnect || !latest.current.blocked) schedule();
+      // Opening a screen already loads its read model. The first socket
+      // acknowledgement is not a change hint; refreshing here fans out into
+      // account/identity events and puts visible UI back into loading states.
+      // Later acknowledgements catch up after a connection gap.
+      if (reconnect) schedule();
     },
     onEvent: (event) => {
       if (!latest.current.accepts || latest.current.accepts(event)) schedule();

@@ -26,6 +26,17 @@ const tick = async () =>
     await vi.advanceTimersByTimeAsync(200);
   });
 
+it("does not refresh a newly opened read model on its first acknowledgement", async () => {
+  const refresh = vi.fn();
+  const { result } = renderHook(() =>
+    useRealtimeRefresh({ topics: ["account"], refresh }),
+  );
+  act(() => connection().onConnected());
+  await tick();
+  expect(refresh).not.toHaveBeenCalled();
+  expect(result.current.changed).toBe(false);
+});
+
 it("coalesces bursts, filters unrelated hints and catches up after reconnect", async () => {
   const refresh = vi.fn();
   renderHook(() =>
@@ -36,6 +47,9 @@ it("coalesces bursts, filters unrelated hints and catches up after reconnect", a
       accepts: (event) => event.collection === "branding",
     }),
   );
+  act(() => connection().onConnected());
+  await tick();
+  expect(refresh).not.toHaveBeenCalled();
   act(() =>
     connection().onEvent({
       topic: "settings",
@@ -87,14 +101,32 @@ it("cancels queued work when the tenant changes or the view unmounts", async () 
       useRealtimeRefresh({ topics: ["settings"], tenantId, refresh }),
     { initialProps: { tenantId: 1 } },
   );
-  act(() => connection().onConnected());
+  act(() => connection().onEvent({ topic: "settings", type: "updated" }));
   rerender({ tenantId: 2 });
   await tick();
   expect(refresh).not.toHaveBeenCalled();
-  act(() => connection().onConnected());
+  act(() => connection().onEvent({ topic: "settings", type: "updated" }));
   unmount();
   await tick();
   expect(refresh).not.toHaveBeenCalled();
+});
+
+it("treats a different tenant's first acknowledgement as initial", async () => {
+  const refresh = vi.fn();
+  const { rerender } = renderHook(
+    ({ tenantId }) =>
+      useRealtimeRefresh({ topics: ["settings"], tenantId, refresh }),
+    { initialProps: { tenantId: 1 } },
+  );
+  act(() => connection().onConnected());
+  await tick();
+  rerender({ tenantId: 2 });
+  act(() => connection().onConnected());
+  await tick();
+  expect(refresh).not.toHaveBeenCalled();
+  act(() => connection().onConnected());
+  await tick();
+  expect(refresh).toHaveBeenCalledOnce();
 });
 
 it("retains a reload action after a failed refresh", async () => {
@@ -102,7 +134,7 @@ it("retains a reload action after a failed refresh", async () => {
   const { result } = renderHook(() =>
     useRealtimeRefresh({ topics: ["settings"], refresh }),
   );
-  act(() => connection().onConnected());
+  act(() => connection().onEvent({ topic: "settings", type: "updated" }));
   await tick();
   expect(result.current.changed).toBe(true);
 });

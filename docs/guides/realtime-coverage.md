@@ -1,12 +1,12 @@
 # Automatic refresh coverage
 
-Last reviewed: 2026-09-28.
+Last reviewed: 2026-10-08.
 
 ## Contract
 
 Savia sends authenticated WebSocket change hints and reloads data through the normal authorized APIs. Messages never contain record bodies, credentials or notification contents. Platform administration uses the platform room; tenant data uses `tenant:<id>`; personal data uses a self-only `principal:<id>` room. Tenant 0 is the platform workspace, not a bypass for another tenant's authorization.
 
-Components share a socket per room within each browser tab. Topic changes rebuild the subscription; reconnect acknowledgements refresh the subscribed read models to recover missed events. Bursts are coalesced for 200 ms. The permanent “En vivo” badge has been removed. Absence of that badge does not disable automatic refresh.
+Components share a socket per room within each browser tab. Topic changes rebuild the subscription; reconnect acknowledgements refresh the subscribed read models to recover missed events. The first connection acknowledgement does not refresh generic read models: each screen loads its data when opened. Real change hints and later reconnect acknowledgements still refresh them. This avoids a redundant account/identity refresh burst and loading flicker after opening a page. Studio workspace synchronization retains its separate connection catch-up behavior. Bursts are coalesced for 200 ms. The permanent “En vivo” badge has been removed. Absence of that badge does not disable automatic refresh.
 
 Editable state is preserved: administrative drafts defer refresh and offer an explicit reload/discard action. Record edit dialogs keep their own unsaved inputs while read models update. Designer sessions keep their starting schema until explicitly reloaded; workflow and role editors retain their revision guards. Clean read models refresh automatically. A change hint does not grant permissions: every subsequent read/write is authorized on the server.
 
@@ -31,6 +31,7 @@ Editable state is preserved: administrative drafts defer refresh and offer an ex
 - A platform-wide marketplace release outside the tenant installation API does not fan out to every tenant's open catalog. Reopening/refreshing the catalog fetches those releases; tenant install/enable changes do propagate.
 - Third-party plugin iframe internals control their own data subscriptions. Savia refreshes their installation/catalog state; arbitrary custom plugin UI is not automatically made realtime by this transport.
 - When the WebSocket service is unavailable, existing screen-specific polling/manual refresh remains available. There is no global polling loop. Offline workspace synchronization has a separate lifecycle.
+- Generic read models rely on their opening read until subscription is established. A change between that read and the first acknowledgement can be missed until the next hint, manual refresh or reconnection; the transport has no replay cursor.
 - Change hints are not a durable event stream. Reconnection performs an authoritative refresh; this is recovery of current state, not replay of every intermediate transition.
 
 ## Implementation references
