@@ -7,10 +7,18 @@ import {
   waitFor,
 } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { QuoteLinkManager } from "./quote-link-manager";
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-07T13:00:00.000Z"));
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 const row = {
   id: "quote-link-1",
