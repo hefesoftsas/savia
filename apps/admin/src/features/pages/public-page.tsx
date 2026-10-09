@@ -424,9 +424,11 @@ export function PublicPage({
     import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin
   ).replace(/\/$/, "");
   const endpoint = `${apiBase}/api/public/pages/${encodeURIComponent(token)}${pageId ? `/pages/${encodeURIComponent(pageId)}` : ""}`;
+  const [loadedEndpoint, setLoadedEndpoint] = useState<string>();
   useEffect(() => {
     const controller = new AbortController();
     setData(undefined);
+    setLoadedEndpoint(undefined);
     setError("");
     setLoading(true);
     void fetch(endpoint, {
@@ -435,6 +437,7 @@ export function PublicPage({
       signal: controller.signal,
     })
       .then(async (response) => {
+        if (controller.signal.aborted) return;
         if (!response.ok) {
           setError(
             response.status === 404 || response.status === 410
@@ -444,28 +447,33 @@ export function PublicPage({
           return;
         }
         const parsed = parsePublicPage(await response.json());
+        if (controller.signal.aborted) return;
         if (!parsed) {
           setError("load");
           return;
         }
-        if (!controller.signal.aborted) setData(parsed);
+        setData(parsed);
       })
       .catch(() => {
         if (!controller.signal.aborted) setError("load");
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoadedEndpoint(endpoint);
+          setLoading(false);
+        }
       });
     return () => controller.abort();
   }, [endpoint]);
+  const scopeCurrent = loadedEndpoint === endpoint;
   return (
     <main className="public-page" lang={locale}>
       <header className="public-page-header">
         <a href={`/public/pages/${encodeURIComponent(token)}`}>
-          {data?.root.title ?? "Savia"}
+          {(scopeCurrent ? data?.root.title : undefined) ?? "Savia"}
         </a>
       </header>
-      {loading ? (
+      {loading || !scopeCurrent ? (
         <p role="status">{t("Loading public page")}</p>
       ) : error ? (
         <section role="alert" className="public-page-error">

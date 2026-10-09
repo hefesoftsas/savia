@@ -35,7 +35,7 @@ if (typeof window !== "undefined") {
     cache = new WeakMap();
   };
   window.addEventListener("savia:session-cleared", reset);
-  window.addEventListener("savia:identity-changed", reset);
+  window.addEventListener("savia:principal-changed", reset);
 }
 export function isCalendarSourcesClient(
   value: unknown,
@@ -262,10 +262,10 @@ export function useCalendarSources(
       publish(empty(Boolean(client)));
       void refresh(false);
     };
-    window.addEventListener("savia:identity-changed", reset);
+    window.addEventListener("savia:principal-changed", reset);
     window.addEventListener("savia:session-cleared", reset);
     return () => {
-      window.removeEventListener("savia:identity-changed", reset);
+      window.removeEventListener("savia:principal-changed", reset);
       window.removeEventListener("savia:session-cleared", reset);
     };
   }, [client, publish, refresh]);

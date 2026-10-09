@@ -118,3 +118,24 @@ it("does not make an unrecognized URL clickable", async () => {
     screen.queryByRole("button", { name: /copy quote link/i }),
   ).not.toBeInTheDocument();
 });
+
+it("removes the previous tenant's loaded links before opening a new tenant", async () => {
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ items: [row] }))
+    .mockResolvedValueOnce(Response.json({ items: [] }));
+  const view = render(<QuoteLinkManager tenantId={7} request={request} />);
+  fireEvent.click(screen.getByText("Shared quote results"));
+  await screen.findByRole("link", { name: /open quote link/i });
+  view.rerender(<QuoteLinkManager tenantId={8} request={request} />);
+  expect(
+    screen.queryByRole("link", { name: /open quote link/i }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText("Shared quote results"));
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith("/api/tenants/8/quote-links"),
+  );
+  expect(
+    screen.queryByRole("link", { name: /open quote link/i }),
+  ).not.toBeInTheDocument();
+});

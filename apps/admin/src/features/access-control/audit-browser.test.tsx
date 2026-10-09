@@ -91,7 +91,9 @@ it("does not display cached summaries or snapshots after an authorization failur
     screen.getByRole("button", { name: "View changes to reviewer" }),
   );
   await screen.findByText("Old label");
-  client.listAudit.mockRejectedValue(new Error("Access denied"));
+  client.listAudit.mockRejectedValue(
+    Object.assign(new Error("Access denied"), { status: 403 }),
+  );
   fireEvent.click(screen.getByRole("button", { name: "Refresh history" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Access denied");
   expect(screen.queryByText("Ada")).not.toBeInTheDocument();
@@ -110,6 +112,51 @@ it("clears old scope data while the new scope loads", async () => {
   expect(screen.queryByText("Ada")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Loading history");
   expect(client.getAudit).not.toHaveBeenCalled();
+});
+it("keeps loaded history visible while a same-scope refresh is pending", async () => {
+  const { client } = mount();
+  expect(await screen.findByText("Ada")).toBeInTheDocument();
+  let finishRefresh!: (page: {
+    data: (typeof entry)[];
+    nextCursor: null;
+  }) => void;
+  client.listAudit.mockImplementationOnce(
+    () => new Promise((resolve) => (finishRefresh = resolve)),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Refresh history" }));
+
+  expect(screen.getByText("Ada")).toBeInTheDocument();
+  finishRefresh({ data: [entry], nextCursor: null });
+  await waitFor(() => expect(client.listAudit).toHaveBeenCalledTimes(2));
+});
+it("keeps selected audit detail visible while it is revalidated", async () => {
+  const { client, queryClient } = mount();
+  expect(await screen.findByText("Ada")).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "View changes to reviewer" }),
+  );
+  expect(await screen.findByText("Old label")).toBeInTheDocument();
+  let finishRefresh!: (detail: {
+    before: { label: string };
+    after: { label: string };
+  }) => void;
+  client.getAudit.mockImplementationOnce(
+    () => new Promise((resolve) => (finishRefresh = resolve)),
+  );
+
+  void queryClient.invalidateQueries({
+    queryKey: ["access-control", "audit-detail", "tenant:101", "event-1"],
+  });
+
+  await waitFor(() => expect(client.getAudit).toHaveBeenCalledTimes(2));
+  expect(screen.getByText("Old label")).toBeInTheDocument();
+  finishRefresh({
+    ...entry,
+    before: { label: "Old label" },
+    after: { label: "New label" },
+  });
+  expect(await screen.findByText("New label")).toBeInTheDocument();
 });
 it("rejects reversed date filters before requesting history", async () => {
   const { client } = mount();

@@ -222,7 +222,8 @@ function TenantListActions() {
   const queryClient = useQueryClient();
   useRealtimeTopics({
     topics: ["tenants"],
-    onConnected: () => {
+    onConnected: (reason) => {
+      if (reason === "subscription-change") return;
       void queryClient.invalidateQueries({ queryKey: ["tenants"] });
     },
     onEvent: (event) => {

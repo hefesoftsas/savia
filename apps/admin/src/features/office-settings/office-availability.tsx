@@ -58,22 +58,28 @@ export function OfficeAvailabilityProvider({
     const update = () => {
       void refresh();
     };
-    const identity = () => {
+    const principalChanged = () => {
       setState({ ...unavailable, path });
       void refresh();
     };
+    const identityChanged = () => void refresh();
     window.addEventListener("focus", update);
     window.addEventListener("savia:office-settings-changed", update);
-    window.addEventListener("savia:identity-changed", identity);
-    window.addEventListener("savia:active-tenant-changed", identity);
-    window.addEventListener("savia:session-cleared", identity);
+    window.addEventListener("savia:identity-changed", identityChanged);
+    window.addEventListener("savia:principal-changed", principalChanged);
+    window.addEventListener("savia:active-tenant-changed", principalChanged);
+    window.addEventListener("savia:session-cleared", principalChanged);
     return () => {
       generation.current++;
       window.removeEventListener("focus", update);
       window.removeEventListener("savia:office-settings-changed", update);
-      window.removeEventListener("savia:identity-changed", identity);
-      window.removeEventListener("savia:active-tenant-changed", identity);
-      window.removeEventListener("savia:session-cleared", identity);
+      window.removeEventListener("savia:identity-changed", identityChanged);
+      window.removeEventListener("savia:principal-changed", principalChanged);
+      window.removeEventListener(
+        "savia:active-tenant-changed",
+        principalChanged,
+      );
+      window.removeEventListener("savia:session-cleared", principalChanged);
     };
   }, [refresh, path]);
   return (

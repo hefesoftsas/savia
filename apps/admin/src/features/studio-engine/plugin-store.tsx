@@ -31,6 +31,7 @@ import {
   type StoreConnectorDeclaration,
 } from "./store-connections";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
+import { isReadAccessDenied } from "@/queries/read-state";
 
 type StoreManifest = {
   id: string;
@@ -160,8 +161,21 @@ export default function PluginStoreManager({
   }
   async function reload() {
     const generation = ++listGeneration.current;
-    const items = await loadItems();
-    if (generation === listGeneration.current) setItems(items);
+    try {
+      const items = await loadItems();
+      if (generation === listGeneration.current) {
+        setItems(items);
+        setError("");
+      }
+    } catch (reason) {
+      if (generation === listGeneration.current && isReadAccessDenied(reason)) {
+        setItems([]);
+        setOpenPluginId(null);
+        setDeleteTarget(null);
+        setError(message(reason));
+      }
+      throw reason;
+    }
   }
 
   async function reloadRemoteChanges() {
@@ -202,7 +216,10 @@ export default function PluginStoreManager({
         if (active && generation === listGeneration.current) setItems(items);
       })
       .catch((reason) => {
-        if (active) setError(message(reason));
+        if (active && generation === listGeneration.current) {
+          if (isReadAccessDenied(reason)) setItems([]);
+          setError(message(reason));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);

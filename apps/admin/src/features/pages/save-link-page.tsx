@@ -136,13 +136,13 @@ export function SaveLinkPage({
     window.addEventListener("online", connectivity);
     window.addEventListener("offline", connectivity);
     window.addEventListener("savia:session-cleared", sessionEnded);
-    window.addEventListener("savia:identity-changed", reset);
+    window.addEventListener("savia:principal-changed", reset);
     return () => {
       active.current = false;
       window.removeEventListener("online", connectivity);
       window.removeEventListener("offline", connectivity);
       window.removeEventListener("savia:session-cleared", sessionEnded);
-      window.removeEventListener("savia:identity-changed", reset);
+      window.removeEventListener("savia:principal-changed", reset);
     };
   }, []);
 

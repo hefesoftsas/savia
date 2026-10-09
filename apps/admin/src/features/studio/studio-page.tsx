@@ -15,6 +15,7 @@ import { useCanAccess } from "ra-core";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { AppServices } from "@/app-services";
 import { createEmbeddedTransport } from "@/api/embedded-transport";
+import { invalidateTenantWorkspaces } from "@/api/tenant-workspaces-client";
 import { Label } from "@/components/ui/label";
 import { RouteLoading } from "@/components/admin/route-loading";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -28,10 +29,12 @@ import {
 import { setStudioRuntime } from "@/features/studio-engine/runtime";
 import {
   getStudioQueryClient,
+  clearStudioQueryCache,
   pruneStudioQueryCache,
   setStudioQueryOwner,
   studioCacheOwner,
 } from "@/features/studio-engine/studio-query-cache";
+import { isReadAccessDenied } from "@/queries/read-state";
 import type { QueryClient } from "@tanstack/react-query";
 import { LocalSyncStatus } from "@/local-data/sync-status";
 import type { LocalWorkspace } from "@/local-data/workspaces";
@@ -92,12 +95,19 @@ export function StudioPage({
           knownTenantKeys.current = keys;
         })
         .catch((cause) => {
-          if (active && current === request)
+          if (active && current === request) {
+            if (isReadAccessDenied(cause)) {
+              setTenants([]);
+              knownTenantKeys.current = null;
+              clearStudioQueryCache();
+              invalidateTenantWorkspaces();
+            }
             setError(
               cause instanceof Error
                 ? cause.message
                 : t("No se pudieron cargar los tenants."),
             );
+          }
         })
         .finally(() => active && current === request && setLoading(false));
     };

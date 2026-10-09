@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "./app-services";
 import { App } from "./app";
+import { rotateSessionScope } from "./auth/session-scope";
 import { clearSharedLink, updateSharedLink } from "./pwa/share-target";
 
 type AgencyListResult = {
@@ -162,6 +163,26 @@ function mockAccountRequests(actionPath: string) {
 }
 
 describe("App", () => {
+  it("retains the workspace for profile updates and remounts it for principal replacement", async () => {
+    const services = createServices();
+    render(<App services={services} />);
+    const heading = await screen.findByRole(
+      "heading",
+      { name: "Integraciones" },
+      { timeout: 10000 },
+    );
+    act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+    expect(screen.getByRole("heading", { name: "Integraciones" })).toBe(
+      heading,
+    );
+    act(() => rotateSessionScope("principal-change"));
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Integraciones" })).not.toBe(
+        heading,
+      ),
+    );
+  });
+
   afterEach(() => {
     cleanup();
     clearSharedLink();
@@ -307,7 +328,11 @@ describe("App", () => {
     render(<App services={services} />);
 
     expect(
-      await screen.findByRole("heading", { name: "Mi día" }),
+      await screen.findByRole(
+        "heading",
+        { name: "Mi día" },
+        { timeout: 10000 },
+      ),
     ).toBeVisible();
     expect(screen.getByRole("link", { name: "Mi día" })).toHaveAttribute(
       "href",

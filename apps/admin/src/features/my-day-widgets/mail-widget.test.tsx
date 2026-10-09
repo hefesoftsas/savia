@@ -114,7 +114,7 @@ it("clears identity state and ignores old pending mailbox responses", async () =
     .mockResolvedValue([]);
   render(<Inbox service={service} />);
   await waitFor(() => expect(service.listMessages).toHaveBeenCalledOnce());
-  act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+  act(() => window.dispatchEvent(new Event("savia:principal-changed")));
   await act(async () =>
     resolve([
       {

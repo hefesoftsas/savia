@@ -2,11 +2,31 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { render } from "./locale-test-render";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import PluginStoreManager from "../plugin-store";
 import { api } from "../api";
+
+const realtime = vi.hoisted(() => ({ refreshes: [] as Array<() => unknown> }));
+
+vi.mock("@/realtime/use-realtime-refresh", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/realtime/use-realtime-refresh")>();
+  return {
+    ...actual,
+    useRealtimeRefresh: ({ refresh }: { refresh: () => unknown }) => {
+      realtime.refreshes.push(refresh);
+      return { changed: false, reload: vi.fn() };
+    },
+  };
+});
 
 vi.mock("../api", () => ({ api: vi.fn(), apiFetch: vi.fn() }));
 vi.mock("../custom-plugin-frame", () => ({
@@ -18,6 +38,7 @@ vi.mock("../custom-plugin-frame", () => ({
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  realtime.refreshes = [];
 });
 
 function CurrentRoute() {
@@ -218,4 +239,53 @@ it("opens the dedicated plugin studio for new and source-backed projects", async
   expect(screen.getByTestId("current-route")).toHaveTextContent(
     "/plugin-studio?tenantId=0&source=custom.demo&version=1.0.0",
   );
+});
+
+it("ignores a stale initial-load error after a newer refresh succeeds", async () => {
+  let rejectInitial!: (reason: Error) => void;
+  let requestCount = 0;
+  vi.mocked(api).mockImplementation(async (path) => {
+    if (path !== "/plugin-store")
+      throw new Error(`Unexpected API request: ${path}`);
+    requestCount += 1;
+    if (requestCount === 1)
+      return new Promise((_resolve, reject) => {
+        rejectInitial = reject;
+      });
+    return { data: [item] };
+  });
+  renderStore({ onChanged: () => undefined });
+  await waitFor(() => expect(rejectInitial).toBeTypeOf("function"));
+
+  await act(async () => {
+    await realtime.refreshes.at(-1)?.();
+  });
+
+  await act(async () => {
+    rejectInitial(new Error("Obsolete initial failure"));
+  });
+
+  expect(await screen.findByText("Demo")).toBeVisible();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it("removes protected plugins after a denied background read", async () => {
+  const denied = Object.assign(new Error("Access revoked"), { status: 403 });
+  let denyReads = false;
+  vi.mocked(api).mockImplementation(async (path) => {
+    if (path !== "/plugin-store")
+      throw new Error(`Unexpected API request: ${path}`);
+    if (denyReads) throw denied;
+    return { data: [{ ...item }] };
+  });
+  renderStore({ onChanged: () => undefined });
+
+  expect(await screen.findByText("Demo")).toBeVisible();
+  denyReads = true;
+  await act(async () => {
+    await expect(realtime.refreshes.at(-1)?.()).rejects.toBe(denied);
+  });
+
+  expect(screen.queryByText("Demo")).not.toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("Access revoked");
 });

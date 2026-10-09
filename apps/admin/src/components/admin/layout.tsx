@@ -1,3 +1,5 @@
+import { TenantScopeBoundary } from "@/features/tenants/tenant-scope-boundary";
+import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 import { BrandingRealtimeSync } from "@/realtime/branding-realtime";
 import { DeploymentUpdateNotice } from "@/pwa/deployment-recovery-ui";
 import { PwaInstallBanner } from "@/pwa";
@@ -144,6 +146,7 @@ function LayoutSidebarTrigger() {
 }
 
 export const Layout = (props: CoreLayoutProps) => {
+  const tenant = useCurrentTenant();
   const [errorInfo, setErrorInfo] = useState<ErrorInfo | undefined>(undefined);
   const handleError = (_: unknown, info: ErrorInfo) => {
     setErrorInfo(info);
@@ -196,7 +199,12 @@ export const Layout = (props: CoreLayoutProps) => {
           >
             <Suspense fallback={<Loading />}>
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pb-6 sm:px-4">
-                {props.children}
+                <TenantScopeBoundary
+                  status={tenant.scopeStatus}
+                  retry={tenant.retry}
+                >
+                  {props.children}
+                </TenantScopeBoundary>
               </div>
             </Suspense>
           </ErrorBoundary>

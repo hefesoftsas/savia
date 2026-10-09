@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiClientError } from "@/api/api-client";
+import { isReadAccessDenied } from "@/queries/read-state";
 import { useAppServices } from "./assistant-context";
 import {
   AssistantThreadsClient,
@@ -75,6 +76,25 @@ export function useAssistantThreads(
     activeRecordRef.current = thread;
     if (mounted.current) setActiveRecordState(thread);
   }, []);
+  const clearDeniedRead = useCallback(
+    (readError: unknown) => {
+      if (!isReadAccessDenied(readError)) return false;
+      // Invalidate in-flight list/detail reads before clearing every protected
+      // view so a late response cannot repopulate state after access is denied.
+      generation.current++;
+      records.current = [];
+      publish([]);
+      setActiveRecord(null);
+      selectedRef.current = null;
+      setSelected(null);
+      pending.current = null;
+      setLoading(false);
+      setSaving(false);
+      setError(readError);
+      return true;
+    },
+    [publish, setActiveRecord],
+  );
   const select = useCallback(
     (id: string) => {
       selectedRef.current = id;
@@ -116,8 +136,9 @@ export function useAssistantThreads(
             mounted.current &&
             version === generation.current &&
             selectedRef.current === id
-          )
-            setError(e);
+          ) {
+            if (!clearDeniedRead(e)) setError(e);
+          }
         })
         .finally(() => {
           if (
@@ -128,7 +149,7 @@ export function useAssistantThreads(
             setLoading(false);
         });
     },
-    [client, setActiveRecord, userId],
+    [clearDeniedRead, client, setActiveRecord, userId],
   );
   useEffect(() => {
     mounted.current = true;
@@ -180,8 +201,17 @@ export function useAssistantThreads(
       refreshing.current = true;
       if (force) setLoading(true);
       const version = generation.current;
+      const read = async <T>(request: Promise<T>): Promise<T> => {
+        try {
+          return await request;
+        } catch (readError) {
+          if (mounted.current && version === generation.current)
+            clearDeniedRead(readError);
+          throw readError;
+        }
+      };
       try {
-        const items = await client.list(contextRef.current);
+        const items = await read(client.list(contextRef.current));
         if (
           !mounted.current ||
           version !== generation.current ||
@@ -208,7 +238,9 @@ export function useAssistantThreads(
             setActiveRecord(null);
           } else {
             try {
-              const previousDetail = await client.get(previouslySelected.id);
+              const previousDetail = await read(
+                client.get(previouslySelected.id),
+              );
               if (
                 !mounted.current ||
                 version !== generation.current ||
@@ -217,6 +249,7 @@ export function useAssistantThreads(
                 return;
               items.push(summarizeThread(previousDetail));
             } catch (e) {
+              if (isReadAccessDenied(e)) throw e;
               if (!force)
                 throw new ApiClientError(
                   409,
@@ -255,7 +288,7 @@ export function useAssistantThreads(
           } catch (e) {
             if (!(e instanceof ApiClientError) || e.status !== 409 || !ctx)
               throw e;
-            const refreshed = await client.list(ctx);
+            const refreshed = await read(client.list(ctx));
             if (
               !mounted.current ||
               version !== generation.current ||
@@ -282,7 +315,7 @@ export function useAssistantThreads(
           selectedDetail?.id !== target.id ||
           selectedDetail.revision !== target.revision
         ) {
-          selectedDetail = await client.get(target.id);
+          selectedDetail = await read(client.get(target.id));
           if (
             !mounted.current ||
             version !== generation.current ||
@@ -317,7 +350,7 @@ export function useAssistantThreads(
         }
       }
     },
-    [client, publish, select, setActiveRecord, userId],
+    [clearDeniedRead, client, publish, select, setActiveRecord, userId],
   );
   refreshRef.current = refresh;
   useEffect(() => {

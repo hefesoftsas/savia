@@ -1,5 +1,11 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
-import { render } from "../studio-engine/test/locale-test-render";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
+import { render as localeRender } from "../studio-engine/test/locale-test-render";
+import {
+  QueryClient,
+  QueryClientProvider,
+  type QueryKey,
+} from "@tanstack/react-query";
+import type { ReactElement, ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,13 +18,47 @@ import {
 const tenantState = vi.hoisted(() => ({
   id: null as number | null,
   isLoading: false,
+  scopeStatus: undefined as
+    "platform" | "loading" | "resolved" | "error" | "unavailable" | undefined,
+  scopeError: undefined as string | undefined,
+  retry: undefined as (() => unknown) | undefined,
+  refreshes: {} as Record<string, () => unknown>,
 }));
+
+vi.mock("@/realtime/use-realtime-query", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/realtime/use-realtime-query")>();
+  const { useQueryClient } = await import("@tanstack/react-query");
+  return {
+    ...actual,
+    useRealtimeQuery: ({
+      topics,
+      queryKeys,
+    }: {
+      topics: string[];
+      queryKeys: readonly QueryKey[];
+    }) => {
+      const client = useQueryClient();
+      const refresh = () =>
+        Promise.all(
+          queryKeys.map((queryKey) =>
+            client.invalidateQueries({ queryKey, exact: true }),
+          ),
+        );
+      tenantState.refreshes[topics.join(",")] = refresh;
+      return { changed: false, reload: refresh, status: "connected" };
+    },
+  };
+});
 
 vi.mock("@/features/tenants/use-current-tenant", () => ({
   useCurrentTenant: () => ({
     id: tenantState.id,
     isPlatformAdmin: false,
     isLoading: tenantState.isLoading,
+    scopeStatus: tenantState.scopeStatus,
+    scopeError: tenantState.scopeError,
+    retry: tenantState.retry,
   }),
 }));
 
@@ -26,7 +66,22 @@ afterEach(() => {
   cleanup();
   tenantState.id = null;
   tenantState.isLoading = false;
+  tenantState.scopeStatus = undefined;
+  tenantState.scopeError = undefined;
+  tenantState.retry = undefined;
+  tenantState.refreshes = {};
 });
+
+function render(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  return localeRender(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 const providers = [
   {
@@ -104,6 +159,92 @@ describe("CrmConnectionsPage", () => {
     expect(screen.getByRole("button", { name: "Conectar" })).toBeVisible();
     expect(screen.getAllByText("Disponible próximamente")).toHaveLength(3);
     expect(screen.queryByText("Sincronización automática")).toBeNull();
+  });
+
+  it("retains the same CRM row while a background read fails", async () => {
+    tenantState.id = 101;
+    const services = createServices();
+    render(
+      <MemoryRouter>
+        <CrmConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+    const connect = await screen.findByRole("button", { name: "Conectar" });
+    vi.mocked(services.crm.listProviders).mockRejectedValueOnce(
+      new Error("Temporary CRM read failure"),
+    );
+
+    await act(async () => {
+      await tenantState.refreshes.integrations?.();
+    });
+    await waitFor(() =>
+      expect(services.crm.listConnections).toHaveBeenCalledTimes(2),
+    );
+
+    await waitFor(() =>
+      expect(services.crm.listProviders).toHaveBeenCalledTimes(2),
+    );
+    expect(screen.getByRole("button", { name: "Conectar" })).toBe(connect);
+    expect(await screen.findByText(/Temporary CRM read failure/)).toBeVisible();
+  });
+
+  it("hides cached CRM rows after an access-denied refresh", async () => {
+    tenantState.id = 101;
+    const services = createServices();
+    vi.mocked(services.crm.listConnections).mockResolvedValueOnce([
+      {
+        id: "connection-1",
+        agencyId: 101,
+        provider: "hubspot",
+        status: "connected",
+        externalAccountLabel: "Acme Insurance",
+        scopes: [],
+        lastValidatedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    render(
+      <MemoryRouter>
+        <CrmConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Acme Insurance");
+    vi.mocked(services.crm.listConnections).mockRejectedValueOnce(
+      Object.assign(new Error("Access revoked"), { status: 403 }),
+    );
+
+    await act(async () => {
+      await tenantState.refreshes.integrations?.();
+    });
+    await waitFor(() =>
+      expect(services.crm.listConnections).toHaveBeenCalledTimes(2),
+    );
+
+    expect(screen.queryByText("Acme Insurance")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Conectar" })).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent("Access revoked");
+    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
+  });
+
+  it("blocks CRM reads while the dedicated tenant scope is unresolved", async () => {
+    tenantState.scopeStatus = "error";
+    tenantState.scopeError = "Unable to resolve this tenant.";
+    tenantState.retry = vi.fn();
+    const services = createServices();
+    render(
+      <MemoryRouter>
+        <CrmConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to resolve this tenant.",
+    );
+    expect(services.crm.listProviders).not.toHaveBeenCalled();
+    expect(services.crm.listConnections).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(tenantState.retry).toHaveBeenCalledOnce();
   });
 
   it("identifies every CRM with its accessible brand logo", async () => {
@@ -536,7 +677,9 @@ describe("CrmConnectionsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "CRM", level: 2 }),
     ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Conectar" })).toBeVisible();
+    expect(
+      await screen.findByRole("button", { name: "Conectar" }),
+    ).toBeVisible();
   });
 });
 

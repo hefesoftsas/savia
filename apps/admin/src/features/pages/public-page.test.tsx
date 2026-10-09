@@ -122,6 +122,43 @@ it("accepts only HTTP, HTTPS, and mail links", () => {
   expect(safePublicHref("data:text/html,unsafe")).toBeUndefined();
 });
 
+it("removes public page content when navigation switches to a revoked share token", async () => {
+  const firstToken = "share-token-abcdefghijklmnop";
+  const revokedToken = "revoked-token-abcdefghijkl";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://savia.test");
+      if (url.pathname.includes(encodeURIComponent(revokedToken)))
+        return new Response(null, { status: 410 });
+      return Response.json({
+        data: {
+          root: { id: "root", title: "Confidential handbook" },
+          page: {
+            id: "root",
+            title: "Private operations notes",
+            kind: "page",
+            content: [{ type: "p", children: [{ text: "Old share content" }] }],
+          },
+          children: [],
+          breadcrumbs: [],
+        },
+      });
+    }),
+  );
+
+  const page = render(<PublicPage token={firstToken} />);
+  expect(
+    await screen.findByRole("heading", { name: "Private operations notes" }),
+  ).toBeInTheDocument();
+  page.rerender(<PublicPage token={revokedToken} />);
+
+  expect(
+    await screen.findByRole("heading", { name: "Public page unavailable" }),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Old share content")).not.toBeInTheDocument();
+});
+
 it("loads attachment bytes without credentials and uses a local blob URL", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
   Object.defineProperty(URL, "createObjectURL", {

@@ -162,7 +162,7 @@ it("selects Teams channels, shows their team, and loads another page", async () 
   );
 });
 
-it("discards channel results when the authenticated identity changes", async () => {
+it("discards channel results when the authenticated principal changes", async () => {
   const client = clientFactory();
   client.listConnections.mockResolvedValue([connected("slack")] as never);
   let resolveChannels!: (value: unknown) => void;
@@ -176,7 +176,7 @@ it("discards channel results when the authenticated identity changes", async () 
     expect(client.listCollaborationChannels).toHaveBeenCalledTimes(1),
   );
   const focusCleanup = waitForFocusScopeUnmount(screen.getByRole("dialog"));
-  window.dispatchEvent(new Event("savia:identity-changed"));
+  window.dispatchEvent(new Event("savia:principal-changed"));
   resolveChannels({
     channels: [{ id: "old-user-channel", name: "Private" }],
     nextCursor: null,

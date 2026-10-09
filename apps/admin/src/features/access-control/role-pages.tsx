@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { createAccessControlClient } from "@/api/access-control-client";
+import { isReadAccessDenied } from "@/queries/read-state";
 import type { AppServices } from "@/app-services";
 import { RoleEditor } from "./role-editor";
 import { AssignmentEditor } from "./assignment-editor";
@@ -120,7 +121,7 @@ export function RolePages({ services }: { services: AppServices }) {
       {!error && (!roles.data || !catalog.data) && (
         <p role="status">{t("Loading permissions…")}</p>
       )}
-      {roles.data && catalog.data && !error && (
+      {roles.data && catalog.data && !isReadAccessDenied(error) && (
         <Tabs defaultValue="roles" key={scope}>
           <TabsList className="[&>[role=tab]]:max-sm:min-h-11">
             <TabsTrigger value="roles">{t("Roles")}</TabsTrigger>

@@ -1,8 +1,26 @@
 import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef } from "react";
 import { parseTenantSlugFromHostname } from "@savia/tenant-host";
 import { usePermissions } from "ra-core";
-import { useAppServices } from "@/features/assistant/assistant-context";
+import { useQuery, QueryClient } from "@tanstack/react-query";
+import type { ApiClient } from "@/api/api-client";
+import { createAdminQueryClient } from "@/queries/query-policy";
+import { readKey } from "@/queries/query-keys";
+import { useSessionGeneration } from "@/auth/session-scope";
+import { useOptionalAppServices } from "@/features/assistant/assistant-context";
+import { currentTenantQueryOptions } from "./current-tenant-query";
+
+const fallbackClients = new WeakMap<ApiClient, QueryClient>();
+
+function queryClientFor(apiClient?: ApiClient): QueryClient | undefined {
+  if (!apiClient) return undefined;
+  let client = fallbackClients.get(apiClient);
+  if (!client) {
+    client = createAdminQueryClient();
+    fallbackClients.set(apiClient, client);
+  }
+  return client;
+}
 
 export type CurrentTenantInfo = {
   isDedicated: boolean;
@@ -13,6 +31,9 @@ export type CurrentTenantInfo = {
   monogram: string;
   isPlatformAdmin: boolean;
   isLoading: boolean;
+  scopeStatus?: "platform" | "loading" | "resolved" | "error" | "unavailable";
+  scopeError?: string;
+  retry?: () => void | Promise<unknown>;
 };
 
 export function formatSlugToDisplayName(slug: string): string {
@@ -33,6 +54,14 @@ export function useCurrentTenant(options?: {
   const slug = useMemo(() => parseTenantSlugFromHostname(hostname), [hostname]);
   const isDedicated = Boolean(slug) || Boolean(branding);
   const fallbackName = slug ? formatSlugToDisplayName(slug) : "Savia";
+  const appServices = useOptionalAppServices();
+  const apiClient = appServices?.apiClient;
+  const sessionGeneration = useSessionGeneration();
+  const standaloneQueryClient = useRef<QueryClient | null>(null);
+  const queryClient =
+    appServices?.queryClient ??
+    queryClientFor(apiClient) ??
+    (standaloneQueryClient.current ??= createAdminQueryClient());
 
   let isPlatformAdmin = false;
   try {
@@ -48,90 +77,65 @@ export function useCurrentTenant(options?: {
     // Outside react-admin context (e.g. unit tests)
   }
 
-  const [tenantData, setTenantData] = useState<{
-    name: string;
-    kind: "commercial" | "platform";
-    id: number | null;
-    isLoading: boolean;
-  }>({
-    name: fallbackName,
-    kind: isDedicated ? "commercial" : "platform",
-    id: null,
-    isLoading: isDedicated,
-  });
-
-  let appServices: ReturnType<typeof useAppServices> | undefined;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    appServices = useAppServices();
-  } catch {
-    // Outside services provider
-  }
-
-  useEffect(() => {
-    if (!isDedicated) {
-      setTenantData({
-        name: "Savia",
-        kind: "platform",
-        id: null,
-        isLoading: false,
-      });
-      return;
-    }
-
-    if (!appServices?.apiClient) {
-      setTenantData({
-        name: fallbackName,
-        kind: "commercial",
-        id: null,
-        isLoading: false,
-      });
-      return;
-    }
-
-    let isMounted = true;
-    appServices.apiClient
-      .get<{
-        data: {
-          name: string;
-          kind: "commercial" | "platform";
-          id: number | null;
-        };
-      }>("/v1/tenants/current")
-      .then((response) => {
-        if (!isMounted || !response?.data) return;
-        setTenantData({
-          name: response.data.name || fallbackName,
-          kind: response.data.kind || "commercial",
-          id: response.data.id,
-          isLoading: false,
-        });
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setTenantData((prev) => ({
-          ...prev,
-          name: fallbackName,
-          isLoading: false,
-        }));
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isDedicated, slug, fallbackName, appServices?.apiClient]);
-
-  const name = branding?.displayName || tenantData.name || fallbackName;
+  const enabled = Boolean(isDedicated && hostname && apiClient);
+  const tenantQuery = useQuery(
+    apiClient && hostname
+      ? {
+          ...currentTenantQueryOptions({
+            apiClient,
+            sessionGeneration,
+            hostname,
+          }),
+          enabled,
+        }
+      : {
+          queryKey: readKey(
+            {
+              sessionGeneration,
+              kind: isDedicated ? "tenant" : "platform",
+              id: hostname || "unavailable",
+            },
+            "current-tenant",
+            { hostname },
+          ),
+          queryFn: async () => undefined,
+          enabled: false,
+        },
+    queryClient,
+  );
+  const tenantData = tenantQuery.data?.data;
+  const hasValidTenantId =
+    typeof tenantData?.id === "number" &&
+    Number.isSafeInteger(tenantData.id) &&
+    tenantData.id > 0;
+  const scopeStatus = !isDedicated
+    ? "platform"
+    : !enabled
+      ? "unavailable"
+      : tenantQuery.isPending
+        ? "loading"
+        : hasValidTenantId
+          ? "resolved"
+          : "error";
+  const kind = tenantData?.kind ?? (isDedicated ? "commercial" : "platform");
+  const name = branding?.displayName || tenantData?.name || fallbackName;
   const monogram = name.charAt(0).toUpperCase() || "S";
 
   return {
     isDedicated,
     slug,
     name,
-    kind: tenantData.kind,
-    id: tenantData.id,
+    kind,
+    id: tenantData?.id ?? null,
     monogram,
     isPlatformAdmin,
-    isLoading: tenantData.isLoading,
+    isLoading: enabled && tenantQuery.isPending,
+    scopeStatus,
+    ...(scopeStatus === "error"
+      ? {
+          scopeError: "Unable to resolve this tenant. Retry to try again.",
+          retry: () => tenantQuery.refetch(),
+        }
+      : {}),
   };
 }

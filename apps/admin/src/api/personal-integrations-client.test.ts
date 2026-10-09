@@ -32,7 +32,7 @@ it("does not reuse connection requests across authenticated identities", async (
   const client = new PersonalIntegrationsClient({ get } as never);
   const first = client.listConnections();
 
-  window.dispatchEvent(new Event("savia:identity-changed"));
+  window.dispatchEvent(new Event("savia:principal-changed"));
   await expect(client.listConnections()).resolves.toEqual([]);
   resolveFirst({
     data: [
@@ -257,4 +257,13 @@ it("invalidates cached connections and notifies Pages after disconnect", async (
   await expect(client.listConnections()).resolves.toEqual([]);
   expect(get).toHaveBeenCalledTimes(2);
   window.removeEventListener("savia:personal-integrations-changed", changed);
+});
+
+it("keeps loaded personal connections on a same-principal profile update", async () => {
+  const get = vi.fn().mockResolvedValue({ data: [] });
+  const client = new PersonalIntegrationsClient({ get } as never);
+  await client.listConnections();
+  window.dispatchEvent(new Event("savia:identity-changed"));
+  await client.listConnections();
+  expect(get).toHaveBeenCalledTimes(1);
 });

@@ -1,5 +1,11 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
-import { render } from "../studio-engine/test/locale-test-render";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
+import { render as localeRender } from "../studio-engine/test/locale-test-render";
+import {
+  QueryClient,
+  QueryClientProvider,
+  type QueryKey,
+} from "@tanstack/react-query";
+import type { ReactElement, ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -10,9 +16,51 @@ import {
   type PersonalNangoConnectFactory,
 } from "./personal-integrations-page";
 
+const realtime = vi.hoisted(() => ({
+  refreshes: {} as Record<string, () => unknown>,
+}));
+
+vi.mock("@/realtime/use-realtime-query", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/realtime/use-realtime-query")>();
+  const { useQueryClient } = await import("@tanstack/react-query");
+  return {
+    ...actual,
+    useRealtimeQuery: ({
+      topics,
+      queryKeys,
+    }: {
+      topics: string[];
+      queryKeys: readonly QueryKey[];
+    }) => {
+      const client = useQueryClient();
+      const refresh = () =>
+        Promise.all(
+          queryKeys.map((queryKey) =>
+            client.invalidateQueries({ queryKey, exact: true }),
+          ),
+        );
+      realtime.refreshes[topics.join(",")] = refresh;
+      return { changed: false, reload: refresh, status: "connected" };
+    },
+  };
+});
+
+function render(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  return localeRender(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  realtime.refreshes = {};
 });
 
 const providers = [
@@ -246,7 +294,9 @@ describe("PersonalIntegrationsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Integraciones" }),
     ).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Google" })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { name: "Google" }),
+    ).toBeVisible();
     expect(screen.getByRole("heading", { name: "Microsoft" })).toBeVisible();
     expect(screen.getByLabelText("Logo de Google Calendar")).toBeVisible();
     expect(
@@ -277,6 +327,116 @@ describe("PersonalIntegrationsPage", () => {
     );
   });
 
+  it("does not reload CRM when the parent recreates its services wrapper", async () => {
+    const services = createServices();
+    const { rerender } = render(
+      <MemoryRouter>
+        <PersonalIntegrationsPage services={services} />
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("tab", { name: "CRM" }));
+    await waitFor(() =>
+      expect(services.crm.listProviders).toHaveBeenCalledTimes(1),
+    );
+
+    rerender(
+      <MemoryRouter>
+        <PersonalIntegrationsPage services={{ ...services }} />
+      </MemoryRouter>,
+    );
+
+    expect(services.crm.listProviders).toHaveBeenCalledTimes(1);
+    expect(services.crm.listConnections).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains loaded connections and row identity during a failed background refresh", async () => {
+    const services = createServices();
+    vi.mocked(
+      services.personalIntegrations.listConnections,
+    ).mockResolvedValueOnce([
+      {
+        id: "connection-1",
+        provider: "google_drive",
+        status: "connected",
+        externalAccountLabel: "member@example.com",
+        scopes: [],
+        lastValidatedAt: null,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      },
+    ]);
+    render(
+      <MemoryRouter>
+        <PersonalIntegrationsPage services={services} />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/member@example.com/);
+    const connection = screen.getByText(/member@example.com/);
+    vi.mocked(
+      services.personalIntegrations.listConnections,
+    ).mockRejectedValueOnce(new Error("Temporary read failure"));
+
+    await act(async () => {
+      await realtime.refreshes["personal-integrations"]?.();
+    });
+    await waitFor(() =>
+      expect(
+        services.personalIntegrations.listConnections,
+      ).toHaveBeenCalledTimes(2),
+    );
+    expect(screen.getByText(/member@example.com/)).toBe(connection);
+    expect(
+      await screen.findByText(
+        /No pudimos cargar el estado de las integraciones/,
+      ),
+    ).toBeVisible();
+  });
+
+  it("hides cached personal connections after an access-denied refresh", async () => {
+    const services = createServices();
+    vi.mocked(
+      services.personalIntegrations.listConnections,
+    ).mockResolvedValueOnce([
+      {
+        id: "connection-1",
+        provider: "google_drive",
+        status: "connected",
+        externalAccountLabel: "member@example.com",
+        scopes: [],
+        lastValidatedAt: null,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      },
+    ]);
+    render(
+      <MemoryRouter>
+        <PersonalIntegrationsPage services={services} />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/member@example.com/);
+    vi.mocked(
+      services.personalIntegrations.listConnections,
+    ).mockRejectedValueOnce(
+      Object.assign(new Error("Access revoked"), { status: 403 }),
+    );
+
+    await act(async () => {
+      await realtime.refreshes["personal-integrations"]?.();
+    });
+    await waitFor(() =>
+      expect(
+        services.personalIntegrations.listConnections,
+      ).toHaveBeenCalledTimes(2),
+    );
+
+    expect(screen.queryByText(/member@example.com/)).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "No pudimos cargar el estado de las integraciones.",
+    );
+    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
+  });
+
   it("shows the six personal Google and Microsoft integrations", async () => {
     const services = createServices();
 
@@ -289,7 +449,9 @@ describe("PersonalIntegrationsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Integraciones" }),
     ).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Google" })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { name: "Google" }),
+    ).toBeVisible();
     expect(screen.getByRole("heading", { name: "Microsoft" })).toBeVisible();
     for (const provider of providers) {
       expect(screen.getByText(provider.displayName)).toBeVisible();
@@ -473,7 +635,9 @@ describe("PersonalIntegrationsPage", () => {
       </MemoryRouter>,
     );
     await screen.findByRole("heading", { name: "Integraciones" });
-    await user.click(screen.getAllByRole("button", { name: "Conectar" })[0]);
+    await user.click(
+      (await screen.findAllByRole("button", { name: "Conectar" }))[0]!,
+    );
 
     expect(
       services.personalIntegrations.createConnectSession,

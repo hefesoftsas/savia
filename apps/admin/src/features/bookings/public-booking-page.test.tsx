@@ -44,11 +44,11 @@ const catalog = {
   professionals: [{ id: "pro-1", name: "Ari Ramirez" }],
 };
 
-function mountPage() {
+function mountPage(pageToken = token) {
   return render(
     <StoreContextProvider value={memoryStore({ locale: "en" })}>
       <AppLocaleProvider>
-        <PublicBookingPage token={token} />
+        <PublicBookingPage token={pageToken} />
       </AppLocaleProvider>
     </StoreContextProvider>,
   );
@@ -69,6 +69,47 @@ async function chooseAvailability() {
   fireEvent.click(await screen.findByRole("button", { name: "9:00 AM" }));
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 }
+
+it("does not carry contact details into another public booking link", async () => {
+  const nextToken = "another-public-token-1234567890";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://savia.test");
+      if (url.pathname.endsWith("/availability")) return availabilityResponse();
+      return Response.json({
+        data: {
+          ...catalog,
+          title: url.pathname.endsWith(encodeURIComponent(nextToken))
+            ? "Another link"
+            : "Original link",
+          captcha: { captchaProvider: "disabled" },
+        },
+      });
+    }),
+  );
+
+  const page = mountPage();
+  await chooseAvailability();
+  fireEvent.change(screen.getByLabelText("Your name"), {
+    target: { value: "Casey Example" },
+  });
+  fireEvent.change(screen.getByLabelText("Email"), {
+    target: { value: "casey@example.test" },
+  });
+
+  page.rerender(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <AppLocaleProvider>
+        <PublicBookingPage token={nextToken} />
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+  await chooseAvailability();
+
+  expect(screen.getByLabelText("Your name")).toHaveValue("");
+  expect(screen.getByLabelText("Email")).toHaveValue("");
+});
 
 it("starts a personal one-service link at inline availability and never asks for a professional", async () => {
   const requested: URL[] = [];

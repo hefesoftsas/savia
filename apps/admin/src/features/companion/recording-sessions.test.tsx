@@ -57,6 +57,255 @@ const session = (id: string): RecordingSession => ({
     summary: null,
   },
 });
+
+it("hides sessions from the prior API scope while the new list is loading", async () => {
+  let oldListCalls = 0;
+  let resolveOldRefresh!: (response: Response) => void;
+  const oldApi = new ApiClient({
+    baseUrl: "https://old.savia.test",
+    tokenSource: { getAccessToken: async () => "old" },
+    fetcher: async (input) => {
+      if (new URL(String(input)).pathname !== "/v1/companion/sessions")
+        return Response.json(session("old"));
+      oldListCalls += 1;
+      if (oldListCalls === 1)
+        return Response.json({ sessions: [session("old")], cursor: null });
+      return new Promise((resolve) => (resolveOldRefresh = resolve));
+    },
+  });
+  const newApi = new ApiClient({
+    baseUrl: "https://new.savia.test",
+    tokenSource: { getAccessToken: async () => "new" },
+    fetcher: async (input) =>
+      new URL(String(input)).pathname === "/v1/companion/sessions"
+        ? Response.json({ sessions: [session("new")], cursor: null })
+        : Response.json(session("new")),
+  });
+  const store = memoryStore({ locale: "en" });
+  const view = render(
+    <StoreContextProvider value={store}>
+      <RecordingSessions api={oldApi} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+
+  await screen.findByRole("heading", { name: "Interview old" });
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  await waitFor(() => expect(oldListCalls).toBe(2));
+  view.rerender(
+    <StoreContextProvider value={store}>
+      <RecordingSessions api={newApi} />
+    </StoreContextProvider>,
+  );
+
+  expect(screen.queryAllByText("Interview old")).toHaveLength(0);
+  await screen.findByRole("heading", { name: "Interview new" });
+  resolveOldRefresh(
+    Response.json({ sessions: [session("late-old")], cursor: null }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("heading", { name: "Interview new" }),
+    ).toBeInTheDocument(),
+  );
+  expect(
+    screen.queryByRole("heading", { name: "Interview late-old" }),
+  ).toBeNull();
+});
+
+it("clears protected sessions on 403 and allows a retry", async () => {
+  let listCalls = 0;
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      if (new URL(String(input)).pathname === "/v1/companion/sessions") {
+        listCalls += 1;
+        if (listCalls === 2)
+          return Response.json(
+            { error: { message: "Denied" } },
+            { status: 403 },
+          );
+        if (listCalls === 4)
+          return Response.json(
+            { error: { message: "Temporary network failure" } },
+            { status: 503 },
+          );
+        return Response.json({ sessions: [session("private")], cursor: null });
+      }
+      return Response.json(session("private"));
+    },
+  });
+  const user = userEvent.setup();
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+
+  expect(
+    await screen.findByRole("heading", { name: "Interview private" }),
+  ).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  expect(
+    screen.queryByRole("heading", { name: "Interview private" }),
+  ).toBeNull();
+  expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(
+    await screen.findByRole("heading", { name: "Interview private" }),
+  ).toBeVisible();
+
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  expect(
+    screen.getByRole("heading", { name: "Interview private" }),
+  ).toBeVisible();
+});
+
+it("hides selected session details after a 403 and allows a retry", async () => {
+  let denyDetail = false;
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/v1/companion/sessions")
+        return Response.json({ sessions: [session("private")], cursor: null });
+      if (path === "/v1/companion/sessions/private") {
+        if (denyDetail)
+          return Response.json(
+            { error: { message: "Details denied" } },
+            { status: 403 },
+          );
+        return Response.json(session("private"));
+      }
+      return Response.json(session("private"));
+    },
+  });
+  const user = userEvent.setup();
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+
+  expect(await screen.findByTestId("recording-assistant")).toBeVisible();
+  denyDetail = true;
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  expect(screen.queryByTestId("recording-assistant")).toBeNull();
+  denyDetail = false;
+  await user.click(screen.getByRole("button", { name: /Interview private/ }));
+  expect(await screen.findByTestId("recording-assistant")).toBeVisible();
+});
+
+it.each([403, 503])(
+  "shows an initial %s sessions failure without claiming the list is empty",
+  async (status) => {
+    let listCalls = 0;
+    const api = new ApiClient({
+      baseUrl: "https://savia.test",
+      tokenSource: { getAccessToken: async () => "test" },
+      fetcher: async (input) => {
+        if (new URL(String(input)).pathname !== "/v1/companion/sessions")
+          return Response.json(session("one"));
+        listCalls += 1;
+        if (listCalls === 1)
+          return Response.json(
+            { error: { message: "List unavailable" } },
+            { status },
+          );
+        return Response.json({ sessions: [], cursor: null });
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <StoreContextProvider value={memoryStore({ locale: "en" })}>
+        <RecordingSessions api={api} />
+      </StoreContextProvider>,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load recordings.",
+    );
+    expect(
+      screen.queryByRole("heading", { name: "No recording sessions yet" }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(
+      await screen.findByRole("heading", { name: "No recording sessions yet" }),
+    ).toBeVisible();
+  },
+);
+
+it("does not reuse an old successful sessions marker after changing API scopes", async () => {
+  let firstListCalls = 0;
+  let secondListCalls = 0;
+  const firstApi = new ApiClient({
+    baseUrl: "https://first.savia.test",
+    tokenSource: { getAccessToken: async () => "first" },
+    fetcher: async () => {
+      firstListCalls += 1;
+      if (firstListCalls === 1)
+        return Response.json({ sessions: [], cursor: null });
+      return Response.json(
+        { error: { message: "First scope unavailable" } },
+        { status: 503 },
+      );
+    },
+  });
+  const secondApi = new ApiClient({
+    baseUrl: "https://second.savia.test",
+    tokenSource: { getAccessToken: async () => "second" },
+    fetcher: async () => {
+      secondListCalls += 1;
+      return Response.json(
+        { error: { message: "Second scope unavailable" } },
+        { status: 503 },
+      );
+    },
+  });
+  const store = memoryStore({ locale: "en" });
+  const renderPage = (api: ApiClient) => (
+    <StoreContextProvider value={store}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>
+  );
+  const view = render(renderPage(firstApi));
+  expect(
+    await screen.findByRole("heading", { name: "No recording sessions yet" }),
+  ).toBeVisible();
+
+  view.rerender(renderPage(secondApi));
+  await waitFor(() => expect(secondListCalls).toBe(1));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  view.rerender(renderPage(firstApi));
+  await waitFor(() => expect(firstListCalls).toBe(2));
+  await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  expect(
+    screen.queryByRole("heading", { name: "No recording sessions yet" }),
+  ).toBeNull();
+});
+
 it("keeps retry acknowledgement for ambiguous processing and passes session context to chat", async () => {
   const submissions: { path: string; body: unknown }[] = [];
   const api = new ApiClient({

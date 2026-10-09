@@ -51,7 +51,7 @@ export function UserMenu({ children }: UserMenuProps) {
     refresh: async () => {
       window.dispatchEvent(new Event("savia:account-changed"));
       window.dispatchEvent(new Event("savia:identity-changed"));
-      await cache.invalidateQueries({ queryKey: ["auth"] });
+      await cache.invalidateQueries({ queryKey: ["auth", "getPermissions"] });
     },
   });
   const logout = useLogout();

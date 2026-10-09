@@ -18,6 +18,8 @@ export function useAccessRealtime(scope: string) {
     tenantId,
     enabled: tenantId !== undefined,
     onEvent: refresh,
-    onConnected: refresh,
+    onConnected: (reason) => {
+      if (reason !== "subscription-change") refresh();
+    },
   });
 }

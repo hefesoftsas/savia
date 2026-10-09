@@ -12,6 +12,7 @@ import {
 import { render } from "./locale-test-render";
 import Root from "../app";
 import { setStudioRuntime } from "../runtime";
+import { createStudioQueryClient } from "../studio-query-cache";
 import { makeConfig } from "@savia/studio-shared/metadata";
 
 afterEach(async () => {
@@ -120,6 +121,90 @@ it("keeps configuration entry in the view controls instead of duplicating it in 
   expect(
     screen.queryByRole("checkbox", { name: "Seleccionar página" }),
   ).not.toBeInTheDocument();
+});
+
+it("retains the loaded record table when a same-scope refresh fails transiently", async () => {
+  let recordReads = 0;
+  const transport = vi.fn(async (path: string) => {
+    if (path === "/api/objects")
+      return Response.json({ data: [agencyProfiles] });
+    if (path === "/api/views/agency_profiles")
+      return Response.json({ data: [], default: null });
+    if (path.startsWith("/api/records/agency_profiles")) {
+      recordReads += 1;
+      if (recordReads > 1) throw new Error("Temporary record refresh failure");
+      return Response.json({
+        data: [{ id: "agency-1", displayName: "Savia" }],
+        total: 1,
+      });
+    }
+    return Response.json({ data: {} });
+  });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
+  const queryClient = createStudioQueryClient();
+
+  render(
+    <Root
+      embedded
+      queryClient={queryClient}
+      search="object=agency_profiles&view=records"
+    />,
+  );
+  expect(await screen.findByText("Savia")).toBeVisible();
+  expect(recordReads).toBe(1);
+
+  void queryClient.invalidateQueries({ refetchType: "active" });
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Temporary record refresh failure",
+  );
+  await waitFor(() => expect(recordReads).toBe(2));
+  expect(screen.getByText("Savia")).toBeVisible();
+});
+
+it("hides cached record rows after a same-scope 403 refresh", async () => {
+  let recordReads = 0;
+  const transport = vi.fn(async (path: string) => {
+    if (path === "/api/objects")
+      return Response.json({ data: [agencyProfiles] });
+    if (path === "/api/views/agency_profiles")
+      return Response.json({ data: [], default: null });
+    if (path.startsWith("/api/records/agency_profiles")) {
+      recordReads += 1;
+      if (recordReads > 1)
+        return Response.json(
+          { message: "Permission revoked" },
+          { status: 403 },
+        );
+      return Response.json({
+        data: [{ id: "agency-1", displayName: "Savia" }],
+        total: 1,
+      });
+    }
+    return Response.json({ data: {} });
+  });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
+  const queryClient = createStudioQueryClient();
+
+  render(
+    <Root
+      embedded
+      queryClient={queryClient}
+      search="object=agency_profiles&view=records"
+    />,
+  );
+  expect(await screen.findByText("Savia")).toBeVisible();
+  expect(recordReads).toBe(1);
+
+  void queryClient.invalidateQueries({ refetchType: "active" });
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    /403|forbidden|permission/i,
+  );
+  await waitFor(() => expect(recordReads).toBe(2));
+  await waitFor(() =>
+    expect(screen.queryByText("Savia")).not.toBeInTheDocument(),
+  );
 });
 
 it("shows CRM as the first icon-only records column", async () => {

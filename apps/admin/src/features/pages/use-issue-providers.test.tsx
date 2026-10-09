@@ -92,6 +92,33 @@ describe("page issue provider visibility", () => {
     expect(result.current).toEqual([]);
   });
 
+  it("does not reload provider availability after a profile-only refresh", async () => {
+    const source = fixture();
+    const { result } = renderHook(() => useIssueProviders(source.api));
+    await waitFor(() => expect(result.current).toEqual(["jira", "github"]));
+
+    await act(async () =>
+      window.dispatchEvent(new Event("savia:identity-changed")),
+    );
+
+    expect(result.current).toEqual(["jira", "github"]);
+    expect(source.get).toHaveBeenCalledTimes(2);
+  });
+
+  it("hides previous providers until the replacement principal is checked", async () => {
+    const source = fixture();
+    const { result } = renderHook(() => useIssueProviders(source.api));
+    await waitFor(() => expect(result.current).toEqual(["jira", "github"]));
+    source.get.mockImplementation(() => new Promise(() => {}));
+
+    await act(async () =>
+      window.dispatchEvent(new Event("savia:principal-changed")),
+    );
+
+    expect(result.current).toEqual([]);
+    expect(source.get).toHaveBeenCalledTimes(4);
+  });
+
   it("does not apply an old request after the session is cleared", async () => {
     const resolves: Array<(value: unknown) => void> = [];
     const get = vi.fn(
@@ -146,76 +173,74 @@ describe("page issue provider visibility", () => {
     });
   });
 
-  it.each(["savia:personal-integrations-changed", "savia:identity-changed"])(
-    "starts a fresh request after %s during revalidation",
-    async (event) => {
-      const source = fixture();
-      const { result } = renderHook(() => useIssueProviders(source.api));
-      await waitFor(() => expect(result.current).toEqual(["jira", "github"]));
+  it("starts a fresh request after integration changes during revalidation", async () => {
+    const event = "savia:personal-integrations-changed";
+    const source = fixture();
+    const { result } = renderHook(() => useIssueProviders(source.api));
+    await waitFor(() => expect(result.current).toEqual(["jira", "github"]));
 
-      const pending: Array<{
-        path: string;
-        resolve: (value: any) => void;
-      }> = [];
-      source.get.mockImplementation(
-        (path: string) =>
-          new Promise((resolve) => {
-            pending.push({ path, resolve });
-          }),
-      );
+    const pending: Array<{
+      path: string;
+      resolve: (value: any) => void;
+    }> = [];
+    source.get.mockImplementation(
+      (path: string) =>
+        new Promise((resolve) => {
+          pending.push({ path, resolve });
+        }),
+    );
 
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(source.get).toHaveBeenCalledTimes(4);
+
+    source.setStatus("disconnected");
+    await act(async () => {
+      window.dispatchEvent(new Event(event));
+    });
+    expect(source.get).toHaveBeenCalledTimes(6);
+
+    const resolvePair = async (start: number, status: string) => {
       await act(async () => {
-        window.dispatchEvent(new Event("focus"));
+        for (const request of pending.slice(start, start + 2)) {
+          request.resolve({
+            data: request.path.endsWith("/providers")
+              ? [
+                  {
+                    id: "jira",
+                    attributes: { availability: "enabled" },
+                  },
+                  {
+                    id: "github",
+                    attributes: { availability: "enabled" },
+                  },
+                ]
+              : [
+                  {
+                    id: "connection-1",
+                    attributes: {
+                      provider: "jira",
+                      status,
+                    },
+                  },
+                  {
+                    id: "connection-2",
+                    attributes: {
+                      provider: "github",
+                      status,
+                    },
+                  },
+                ],
+          });
+        }
       });
-      expect(source.get).toHaveBeenCalledTimes(4);
+    };
 
-      source.setStatus("disconnected");
-      await act(async () => {
-        window.dispatchEvent(new Event(event));
-      });
-      expect(source.get).toHaveBeenCalledTimes(6);
+    await resolvePair(0, "connected");
+    expect(result.current).toEqual(["jira", "github"]);
 
-      const resolvePair = async (start: number, status: string) => {
-        await act(async () => {
-          for (const request of pending.slice(start, start + 2)) {
-            request.resolve({
-              data: request.path.endsWith("/providers")
-                ? [
-                    {
-                      id: "jira",
-                      attributes: { availability: "enabled" },
-                    },
-                    {
-                      id: "github",
-                      attributes: { availability: "enabled" },
-                    },
-                  ]
-                : [
-                    {
-                      id: "connection-1",
-                      attributes: {
-                        provider: "jira",
-                        status,
-                      },
-                    },
-                    {
-                      id: "connection-2",
-                      attributes: {
-                        provider: "github",
-                        status,
-                      },
-                    },
-                  ],
-            });
-          }
-        });
-      };
-
-      await resolvePair(0, "connected");
-      expect(result.current).toEqual(["jira", "github"]);
-
-      await resolvePair(2, "disconnected");
-      await waitFor(() => expect(result.current).toEqual([]));
-    },
-  );
+    await resolvePair(2, "disconnected");
+    await waitFor(() => expect(result.current).toEqual([]));
+  });
 });

@@ -230,11 +230,11 @@ it("preserves the incoming draft when an expired session requires login", async 
   expect(screen.getByRole("button", { name: "Guardar enlace" })).toBeDisabled();
 });
 
-it("clears the draft when the authenticated identity changes", async () => {
+it("clears the draft when the authenticated principal changes", async () => {
   shared();
   setup();
   await screen.findByText(/alex@example.com/);
-  act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+  act(() => window.dispatchEvent(new Event("savia:principal-changed")));
   expect(readSharedLink()).toBeNull();
   expect(screen.getByLabelText("Enlace")).toHaveValue("");
   expect(screen.getByRole("button", { name: "Guardar enlace" })).toBeDisabled();

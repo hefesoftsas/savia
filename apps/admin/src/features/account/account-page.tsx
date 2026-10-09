@@ -1,16 +1,23 @@
 import type { ApiClient } from "@/api/api-client";
 import { PersonalApiKeysPanel } from "./personal-api-keys";
 import { personalApiKeyMessages } from "@/i18n/locales/personal-api-keys";
-import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
+import { useRealtimeQuery } from "@/realtime/use-realtime-query";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
 import {
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
 } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionGeneration } from "@/auth/session-scope";
+import { readKey } from "@/queries/query-keys";
+import { isReadAccessDenied } from "@/queries/read-state";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
 import {
   Camera,
   CircleAlert,
@@ -116,7 +123,11 @@ async function accountRequest(
       ...init.headers,
     },
   });
-  if (!response.ok) throw new Error(await responseMessage(response));
+  if (!response.ok) {
+    throw Object.assign(new Error(await responseMessage(response)), {
+      status: response.status,
+    });
+  }
   return response;
 }
 
@@ -148,9 +159,41 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
       : message;
   const translate = useTranslate();
   const [activeTab, setActiveTab] = useState<AccountTab>("profile");
-  const [account, setAccount] = useState<Account | null>(null);
-  const [accountError, setAccountError] = useState<string | null>(null);
-  const [loadingAccount, setLoadingAccount] = useState(true);
+  const queryClient = useQueryClient();
+  const sessionGeneration = useSessionGeneration();
+  const queryKey = useMemo(
+    () =>
+      readKey(
+        { sessionGeneration, kind: "principal", id: "current" },
+        "account",
+        { apiUrl },
+      ),
+    [apiUrl, sessionGeneration],
+  );
+  const accountRead = useQuery({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      const response = await accountRequest(apiUrl, "/api/auth/get-session", {
+        signal,
+      });
+      return accountFromSession(await response.json(), apiUrl);
+    },
+  });
+  const accessDenied = isReadAccessDenied(accountRead.error);
+  const account = accessDenied ? null : (accountRead.data ?? null);
+  const loadingAccount =
+    accountRead.isPending && accountRead.data === undefined;
+  const accountError = accountRead.error
+    ? accountRead.error instanceof Error
+      ? accountRead.error.message
+      : translate("savia.account.errors.loadAccount", {
+          _: "No fue posible cargar los datos de tu cuenta.",
+        })
+    : null;
+  const refreshAccount = useCallback(
+    () => queryClient.invalidateQueries({ queryKey, exact: true }),
+    [queryClient, queryKey],
+  );
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmedPassword, setConfirmedPassword] = useState("");
@@ -168,30 +211,7 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
   const [removingAvatar, setRemovingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  const loadAccount = async () => {
-    setLoadingAccount(true);
-    setAccountError(null);
-    try {
-      const response = await accountRequest(apiUrl, "/api/auth/get-session");
-      setAccount(accountFromSession(await response.json(), apiUrl));
-    } catch (error) {
-      setAccountError(
-        error instanceof Error
-          ? error.message
-          : translate("savia.account.errors.loadAccount", {
-              _: "No fue posible cargar los datos de tu cuenta.",
-            }),
-      );
-    } finally {
-      setLoadingAccount(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadAccount();
-  }, [apiUrl]);
-
-  useRealtimeRefresh({ topics: ["account"], refresh: loadAccount });
+  useRealtimeQuery({ topics: ["account"], queryKeys: [queryKey] });
 
   useEffect(
     () => () => {
@@ -222,7 +242,7 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
       await uploadAccountAvatar(apiUrl, file, {
         onProgress: setAvatarProgress,
       });
-      await loadAccount();
+      await refreshAccount();
       notifyIdentityChanged();
       setAvatarPreview(null);
     } catch (error) {
@@ -246,7 +266,7 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
       await accountRequest(apiUrl, "/v1/account/avatar", {
         method: "DELETE",
       });
-      await loadAccount();
+      await refreshAccount();
       notifyIdentityChanged();
     } catch (error) {
       setAvatarError(
@@ -325,7 +345,7 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
         body: JSON.stringify({ password: mfaPassword }),
       });
       setMfaPassword("");
-      setAccount((current) =>
+      queryClient.setQueryData<Account | undefined>(queryKey, (current) =>
         current ? { ...current, twoFactorEnabled: false } : current,
       );
       setMfaSuccess(true);
@@ -399,6 +419,17 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
                   _: "Datos básicos asociados a tu sesión en Savia.",
                 })}
               </CardDescription>
+              {account ? (
+                <ReadRefreshStatus
+                  refreshing={accountRead.isFetching}
+                  error={
+                    accountRead.isError
+                      ? localError(accountError ?? "")
+                      : undefined
+                  }
+                  onRetry={() => void accountRead.refetch()}
+                />
+              ) : null}
             </CardHeader>
             <CardContent>
               {loadingAccount ? (
@@ -408,7 +439,7 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
                     _: "Cargando tu cuenta…",
                   })}
                 </p>
-              ) : accountError ? (
+              ) : accountError && !account ? (
                 <div className="space-y-3">
                   <Alert variant="destructive">
                     <CircleAlert />
@@ -416,15 +447,17 @@ export function AccountPage({ apiUrl, api }: AccountPageProps) {
                       {localError(accountError)}
                     </AlertDescription>
                   </Alert>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="max-sm:h-11"
-                    onClick={() => void loadAccount()}
-                  >
-                    {translate("ra.action.retry", { _: "Reintentar" })}
-                  </Button>
+                  {!accessDenied ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="max-sm:h-11"
+                      onClick={() => void accountRead.refetch()}
+                    >
+                      {translate("ra.action.retry", { _: "Reintentar" })}
+                    </Button>
+                  ) : null}
                 </div>
               ) : account ? (
                 <div className="space-y-6">

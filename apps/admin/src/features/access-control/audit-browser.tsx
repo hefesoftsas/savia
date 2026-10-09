@@ -18,6 +18,7 @@ import type {
   AuditFilters,
   AccessAuditDetail,
 } from "@/api/access-control-client";
+import { isReadAccessDenied } from "@/queries/read-state";
 
 type Client = Pick<AccessControlClient, "listAudit" | "getAudit">;
 const actionLabels = {
@@ -178,6 +179,8 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
   const status = (detail.error as { status?: number } | null)?.status;
   const historyError =
     query.error ?? ([401, 403].includes(status ?? 0) ? detail.error : null);
+  const historyDenied =
+    isReadAccessDenied(query.error) || isReadAccessDenied(detail.error);
   useEffect(() => {
     if (selected) detailHeading.current?.focus();
   }, [selected]);
@@ -325,11 +328,12 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
             <span className="sr-only sm:not-sr-only">{t("Retry history")}</span>
           </Button>
         </div>
-      ) : query.isPending || query.isFetching || !query.data ? (
+      ) : null}
+      {query.isPending || (!query.data && !historyError) ? (
         <p role="status" className="py-8 text-sm text-muted-foreground">
           {t("Loading history…")}
         </p>
-      ) : (
+      ) : query.data && !historyDenied ? (
         <>
           {query.data.data.length === 0 ? (
             <p className="py-8 text-sm text-muted-foreground">
@@ -494,15 +498,16 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                     </span>
                   </Button>
                 </div>
-              ) : detail.isPending || detail.isFetching ? (
+              ) : null}
+              {detail.isPending || (!detail.data && !detail.isError) ? (
                 <p role="status">{t("Loading changes…")}</p>
-              ) : detail.data ? (
+              ) : detail.data && !isReadAccessDenied(detail.error) ? (
                 <AuditDetail entry={detail.data} />
               ) : null}
             </section>
           )}
         </>
-      )}
+      ) : null}
     </section>
   );
 }

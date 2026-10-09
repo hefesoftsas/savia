@@ -30,24 +30,46 @@ export function useRealtimeRefresh({
   const scope = `${enabled}:${tenantId ?? "self"}:${[...topics].sort().join(",")}`;
   const generation = useRef(0);
   const connected = useRef(false);
+  const inFlight = useRef<{
+    generation: number;
+    promise: Promise<void>;
+  } | null>(null);
+  const followUp = useRef<number | undefined>(undefined);
   useEffect(() => {
     generation.current++;
     connected.current = false;
+    followUp.current = undefined;
     setChanged(false);
     return () => {
       generation.current++;
       clearTimeout(timer.current);
     };
   }, [scope]);
-  const reload = useCallback(async () => {
+  const reload = useCallback(async function reload() {
     clearTimeout(timer.current);
     const token = generation.current;
-    try {
-      await latest.current.refresh();
-      if (token === generation.current) setChanged(false);
-    } catch {
-      if (token === generation.current) setChanged(true);
+    if (inFlight.current?.generation === token) {
+      followUp.current = token;
+      return inFlight.current.promise;
     }
+    const task = { generation: token, promise: Promise.resolve() };
+    inFlight.current = task;
+    task.promise = (async () => {
+      try {
+        await latest.current.refresh();
+        if (token === generation.current) setChanged(false);
+      } catch {
+        if (token === generation.current) setChanged(true);
+      } finally {
+        if (inFlight.current === task) inFlight.current = null;
+        if (followUp.current === token && token === generation.current) {
+          followUp.current = undefined;
+          if (latest.current.blocked) setChanged(true);
+          else await reload();
+        }
+      }
+    })();
+    return task.promise;
   }, []);
   const wasBlocked = useRef(blocked);
   useEffect(() => {
@@ -67,13 +89,18 @@ export function useRealtimeRefresh({
     topics,
     tenantId,
     enabled,
-    onConnected: () => {
-      const reconnect = connected.current;
+    onConnected: (reason) => {
+      const reconnect = reason ? reason === "recovered" : connected.current;
       connected.current = true;
       // Fresh opening reads need no global account/identity refresh burst.
       // Cache-first consumers can request catch-up, while an initial
       // acknowledgement must not mark editable drafts stale.
-      if (reconnect || (refreshOnInitialConnect && !latest.current.blocked))
+      if (
+        reconnect ||
+        (reason !== "subscription-change" &&
+          refreshOnInitialConnect &&
+          !latest.current.blocked)
+      )
         schedule();
     },
     onEvent: (event) => {

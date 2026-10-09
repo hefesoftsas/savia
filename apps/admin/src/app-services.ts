@@ -17,7 +17,7 @@ import { BetterAuthOAuthSession } from "./auth/better-auth-oauth-session";
 import { createReactAdminAuthProvider } from "./auth/react-admin-auth-provider";
 import { createLocalSession } from "./local-data/session";
 import { createWorkspaceManager } from "./local-data/workspaces";
-import { QueryClient } from "@tanstack/react-query";
+import { createAdminQueryClient } from "./queries/query-policy";
 import { clearStudioQueryCache } from "@/features/studio-engine/studio-query-cache";
 import { clearAllSaviaRequestSnapshots } from "@/features/savia-request/savia-request-cache";
 import { clearCachedTenantOptions } from "@/features/savia-request/savia-request-scope";
@@ -33,18 +33,24 @@ export function createAppServices() {
     baseUrl: apiUrl,
     tokenSource: authSession,
   });
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        networkMode: "always",
-        retry: 1,
-        staleTime: 30_000,
-        gcTime: 5 * 60_000,
-        refetchOnWindowFocus: false,
-      },
-      mutations: { networkMode: "always", retry: false },
-    },
-  });
+  const queryClient = createAdminQueryClient();
+  if (typeof window !== "undefined")
+    window.addEventListener("savia:principal-changed", (event) => {
+      // Logout keeps mounted auth checks until asynchronous logout cleanup
+      // completes. A different owner must prove identity/permissions afresh.
+      const logout =
+        (event as CustomEvent<{ reason: string }>).detail?.reason === "logout";
+      const filters = {
+        predicate: (query: { queryKey: readonly unknown[] }) =>
+          !logout || query.queryKey[0] !== "auth",
+      };
+      void queryClient.cancelQueries(filters);
+      queryClient.removeQueries(filters);
+      invalidateTenantWorkspaces();
+      clearStudioQueryCache();
+      clearAllSaviaRequestSnapshots();
+      clearCachedTenantOptions();
+    });
   const localData = createWorkspaceManager(authSession, apiClient, apiUrl);
   const clearOfflineData = async () => {
     invalidateTenantWorkspaces();

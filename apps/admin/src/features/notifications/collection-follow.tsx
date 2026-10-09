@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useTranslate } from "ra-core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { useSessionGeneration } from "@/auth/session-scope";
 import { notificationClient, type NotificationClient } from "./client";
+import { notificationReadKey } from "./queries";
 
 export function CollectionFollow({
   collection,
@@ -13,10 +15,11 @@ export function CollectionFollow({
 }) {
   const translate = useTranslate();
   const queryClient = useQueryClient();
+  const sessionGeneration = useSessionGeneration();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const follows = useQuery({
-    queryKey: ["notifications", "follows"],
+    queryKey: notificationReadKey(sessionGeneration, "follows"),
     queryFn: () => client.follows(),
   });
   const following = follows.data?.includes(collection) ?? false;
@@ -28,7 +31,7 @@ export function CollectionFollow({
       if (following) await client.unfollow(collection);
       else await client.follow(collection);
       await queryClient.invalidateQueries({
-        queryKey: ["notifications", "follows"],
+        queryKey: notificationReadKey(sessionGeneration, "follows"),
       });
     } catch {
       setError(translate("savia.notificationInbox.actionError"));
