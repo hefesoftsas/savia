@@ -1,9 +1,15 @@
+import {
+  tenantPurgePlan,
+  deleteTenantFiles,
+  tenantCompanionKeys,
+} from "./tenant-purge";
 import { resolveTenantSlug, tenantSlugExists } from "../tenant-slugs";
 import {
   TenantSlugConflictError,
   tenantSlugCandidate,
   tenantSlugChangeStatements,
 } from "../tenant-slug-assignment";
+import { guard, transaction } from "@savia/studio-server/services";
 import { dialectFor } from "@savia/db/dialect";
 import { tableNames, foreignKeys } from "../lib/database-schema";
 import { deleteTenantBrandingAssets } from "../tenant-branding/service";
@@ -262,8 +268,14 @@ const deleteDefinition = createRoute({
   method: "delete",
   path: "/v1/tenants/{tenantId}",
   tags,
-  request: { params },
-  responses: { 204: { description: "Deleted" }, ...errors },
+  request: {
+    params,
+    query: z.object({
+      cascade: z.enum(["true", "false"]).optional(),
+      confirmation: z.string().optional(),
+    }),
+  },
+  responses: { 204: { description: "Deleted" }, ...errors, 503: errorResponse },
 });
 type TenantRow = Omit<z.infer<typeof tenantSchema>, "isActive"> & {
   isActive: number;
@@ -682,10 +694,99 @@ export function registerTenantRoutes(
     const id = c.req.valid("param").tenantId;
     // Memberships and tenant records must not be orphaned by tenant removal.
     const commercial = await db
-      .prepare("SELECT 1 FROM tenants WHERE id=? AND kind='commercial'")
+      .prepare("SELECT name FROM tenants WHERE id=? AND kind='commercial'")
       .bind(id)
-      .first();
+      .first<{ name: string }>();
     if (!commercial) return c.json(missing, 404);
+    const query = c.req.valid("query");
+    const cascade = query.cascade === "true";
+    if (cascade && query.confirmation !== commercial.name)
+      return c.json(
+        {
+          error: {
+            code: "TENANT_CONFIRMATION_REQUIRED",
+            message:
+              "Escribe el nombre exacto del tenant para eliminarlo con todos sus datos.",
+          },
+        },
+        400,
+      );
+    if (cascade) {
+      if (!documents || !saviaRequestService)
+        return c.json(
+          {
+            error: {
+              code: "TENANT_CLEANUP_UNAVAILABLE",
+              message:
+                "El almacenamiento o Savia Request no está disponible para eliminar toda la data del tenant.",
+            },
+          },
+          503,
+        );
+      // Disable access before inventory so new tenant requests cannot add data.
+      await deleteTenantBrandingAssets(db, documents, id);
+      const plan = await tenantPurgePlan(db, id);
+      const companionKeys = await tenantCompanionKeys(documents, id);
+      if (saviaRequestService) {
+        try {
+          const result = await saviaRequestService.fetch(
+            new Request(
+              `https://savia-request.internal/api/admin/tenants/tenant:${id}`,
+              {
+                method: "DELETE",
+                headers: { "content-type": "application/json" },
+                body: "{}",
+              },
+            ),
+          );
+          if (!result.ok) throw new Error(`HTTP ${result.status}`);
+        } catch {
+          return c.json(
+            {
+              error: {
+                code: "TENANT_CLEANUP_UNAVAILABLE",
+                message:
+                  "No se pudo eliminar la data de Savia Request. El tenant queda inactivo; reintenta la eliminación.",
+              },
+            },
+            503,
+          );
+        }
+      }
+      const stillConfirmed = await db
+        .prepare(
+          "SELECT 1 FROM tenants WHERE id=? AND kind='commercial' AND name=? AND is_active=0",
+        )
+        .bind(id, commercial.name)
+        .first();
+      if (!stillConfirmed)
+        return c.json(
+          {
+            error: {
+              code: "TENANT_CONFIRMATION_REQUIRED",
+              message:
+                "El tenant cambió durante la eliminación. Recarga y confirma con su nombre actual.",
+            },
+          },
+          409,
+        );
+      await deleteEmailSettings?.(id);
+      await deleteTenantFiles(documents, [
+        ...new Set([...plan.keys, ...companionKeys]),
+      ]);
+      const unchanged = guard(
+        db,
+        "SELECT EXISTS(SELECT 1 FROM tenants WHERE id=? AND kind='commercial' AND name=? AND is_active=0)",
+        [id, commercial.name],
+      );
+      await transaction(db, [
+        unchanged.start,
+        ...plan.statements,
+        unchanged.end,
+      ]);
+      notifyTenantRoom(realtime, c, "tenants", "deleted", id);
+      return c.body(null, 204);
+    }
     if (await hasRestrictingTenantReference(db, id))
       return c.json(conflict, 409);
     const linked = await db

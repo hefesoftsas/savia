@@ -14,6 +14,11 @@ import {
   required,
   useCreatePath,
   useRecordContext,
+  useDelete,
+  useNotify,
+  usePermissions,
+  useRedirect,
+  useRefresh,
   useTranslate,
 } from "ra-core";
 import { TenantUserCapacity } from "@/features/users/tenant-user-capacity";
@@ -22,7 +27,7 @@ import { TenantApiKeysPanel } from "@/features/tenant-api-keys/tenant-api-keys";
 import { TenantSignInLinks } from "@/features/tenant-sso/tenant-sign-in-links";
 import { useWatch } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
-import { Building2 } from "lucide-react";
+import { Building2, Trash2 } from "lucide-react";
 import {
   AutocompleteInput,
   BooleanInput,
@@ -38,11 +43,62 @@ import {
   SimpleForm,
   TextInput,
 } from "@/components/admin";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { applyRealtimeListEvent } from "@/realtime/realtime-list";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
 import type { UserRecord } from "@/api/identity-user-data-provider";
 import type { TenantRecord } from "@/api/tenant-data-provider";
+import type { AuthPermissions } from "@/auth/auth-session";
+import { isOfflineError } from "@/offline/offline-error";
+
+function tenantCascadeDeleteErrorMessage(
+  error: unknown,
+): keyof typeof tenantSettingsMessages {
+  const code = tenantCascadeDeleteErrorCode(error);
+  const candidate =
+    typeof error === "object" && error !== null
+      ? (error as Record<string, unknown>)
+      : {};
+
+  if (code === "TENANT_CLEANUP_UNAVAILABLE")
+    return "Some cleanup services are unavailable. Refresh the tenant and retry the deletion.";
+  if (isOfflineError(error))
+    return "The tenant could not be fully deleted. Retry the deletion or contact a platform administrator.";
+  if (code === "TENANT_CONFIRMATION_REQUIRED" || candidate.status === 409)
+    return "The tenant name changed or did not match. Refresh the tenant and confirm using its current name.";
+  if (code === "TENANT_NOT_FOUND" || candidate.status === 404)
+    return "This tenant no longer exists. Return to the tenant list and refresh it.";
+  return "Could not delete the tenant. Retry or contact a platform administrator.";
+}
+
+function tenantCascadeDeleteErrorCode(error: unknown): string | undefined {
+  const candidate =
+    typeof error === "object" && error !== null
+      ? (error as Record<string, unknown>)
+      : {};
+  const nested =
+    typeof candidate.body === "object" && candidate.body !== null
+      ? (candidate.body as Record<string, unknown>).error
+      : undefined;
+  const nestedRecord =
+    typeof nested === "object" && nested !== null
+      ? (nested as Record<string, unknown>)
+      : undefined;
+  const code =
+    (typeof candidate.code === "string" && candidate.code) ||
+    (typeof nestedRecord?.code === "string" ? nestedRecord.code : undefined);
+  return code;
+}
 
 function TenantFields() {
   const translate = useTranslate();
@@ -521,7 +577,143 @@ function TenantEditSections() {
 
 function TenantEditBody() {
   const record = useRecordContext<TenantRecord>();
-  return <TenantEditSections key={record?.id} />;
+  return (
+    <>
+      <TenantEditSections key={record?.id} />
+      <TenantCascadeDelete key={record?.id} />
+    </>
+  );
+}
+
+function TenantCascadeDelete() {
+  const record = useRecordContext<TenantRecord>();
+  const { permissions, isPending } = usePermissions<AuthPermissions>();
+  const translate = useTranslate();
+  const t = useMessages(tenantSettingsMessages);
+  const notify = useNotify();
+  const redirect = useRedirect();
+  const refresh = useRefresh();
+  const [deleteTenant, { isPending: isDeleting }] = useDelete();
+  const [isOpen, setIsOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
+
+  if (
+    !record ||
+    record.kind !== "commercial" ||
+    isPending ||
+    !permissions?.canManageIdentity
+  ) {
+    return null;
+  }
+
+  const matchesName = confirmation === record.name;
+  const close = () => {
+    if (isDeleting) return;
+    setIsOpen(false);
+    setConfirmation("");
+  };
+  const handleDelete = () => {
+    if (!matchesName || isDeleting) return;
+    deleteTenant(
+      "tenants",
+      {
+        id: record.id,
+        previousData: record,
+        meta: { cascade: true, confirmation: record.name },
+      },
+      {
+        mutationMode: "pessimistic",
+        onSuccess: () => {
+          setIsOpen(false);
+          redirect("list", "tenants");
+        },
+        onError: (error: unknown) => {
+          const message = tenantCascadeDeleteErrorMessage(error);
+          notify(t(message), { type: "error" });
+          const code = tenantCascadeDeleteErrorCode(error);
+          const status =
+            typeof error === "object" && error !== null && "status" in error
+              ? error.status
+              : undefined;
+          if (
+            code === "TENANT_CLEANUP_UNAVAILABLE" ||
+            code === "TENANT_CONFIRMATION_REQUIRED" ||
+            status === 409
+          ) {
+            refresh();
+          }
+        },
+      },
+    );
+  };
+
+  return (
+    <section className="mt-8 max-w-2xl border-t pt-6">
+      <h2 className="text-lg font-semibold text-destructive">
+        {t("Delete tenant and all its data")}
+      </h2>
+      <p className="mt-2 max-w-prose text-sm text-muted-foreground">
+        {t(
+          "Permanently removes this commercial tenant and its associated data. This action cannot be undone.",
+        )}
+      </p>
+      <Button
+        type="button"
+        variant="destructive"
+        className="mt-4 min-h-11"
+        onClick={() => setIsOpen(true)}
+      >
+        <Trash2 className="size-4" aria-hidden="true" />
+        {t("Delete tenant and all its data")}
+      </Button>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("Delete tenant and all its data")}</DialogTitle>
+            <DialogDescription className="leading-relaxed break-words">
+              {t(
+                "Permanently removes this commercial tenant and its associated data. This action cannot be undone.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <label
+              htmlFor="tenant-delete-confirmation"
+              className="min-w-0 break-words text-sm"
+            >
+              {t("Type %{name} to confirm", { name: record.name })}
+            </label>
+            <Input
+              id="tenant-delete-confirmation"
+              autoComplete="off"
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              disabled={isDeleting}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={close}
+              disabled={isDeleting}
+            >
+              {translate("ra.action.cancel", { _: "Cancelar" })}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={!matchesName || isDeleting}
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+              {isDeleting ? t("Deleting…") : t("Delete permanently")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
 }
 
 function TenantEdit() {

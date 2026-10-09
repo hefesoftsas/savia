@@ -22405,7 +22405,10 @@ export interface paths {
     post?: never;
     delete: {
       parameters: {
-        query?: never;
+        query?: {
+          cascade?: "true" | "false";
+          confirmation?: string;
+        };
         header?: never;
         path: {
           tenantId: number | null;
@@ -22465,6 +22468,20 @@ export interface paths {
         };
         /** @description Rejected */
         409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Rejected */
+        503: {
           headers: {
             [name: string]: unknown;
           };

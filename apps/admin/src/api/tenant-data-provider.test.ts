@@ -168,4 +168,18 @@ describe("tenant data provider", () => {
     await provider.delete("tenants", { id: 101, previousData: tenant });
     expect(client.delete).toHaveBeenCalledWith("/v1/tenants/101");
   });
+
+  it("sends cascade deletion only when explicitly requested and confirms the tenant name", async () => {
+    const { client, provider } = setup();
+
+    await provider.delete("tenants", {
+      id: 101,
+      previousData: tenant,
+      meta: { cascade: true, confirmation: "Comunidad del Norte" },
+    });
+
+    expect(client.delete).toHaveBeenCalledWith(
+      "/v1/tenants/101?cascade=true&confirmation=Comunidad+del+Norte",
+    );
+  });
 });

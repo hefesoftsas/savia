@@ -34,8 +34,17 @@ export function createTenantDataProvider(
 > {
   return {
     async delete(_resource, params) {
+      const meta = params.meta as
+        { cascade?: boolean; confirmation?: string } | undefined;
+      const query =
+        meta?.cascade === true
+          ? `?${new URLSearchParams({
+              cascade: "true",
+              confirmation: meta.confirmation ?? "",
+            })}`
+          : "";
       await client.delete(
-        `/v1/tenants/${encodeURIComponent(String(params.id))}`,
+        `/v1/tenants/${encodeURIComponent(String(params.id))}${query}`,
       );
       return { data: params.previousData as never };
     },
