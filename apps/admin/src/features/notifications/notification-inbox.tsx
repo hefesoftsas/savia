@@ -73,8 +73,7 @@ export function NotificationInbox({
         exact: true,
       }),
       queryClient.invalidateQueries({
-        queryKey: notificationReadKey(sessionGeneration, "inbox", filter),
-        exact: true,
+        queryKey: notificationReadKey(sessionGeneration, "inbox"),
       }),
     ]);
 
