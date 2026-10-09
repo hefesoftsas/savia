@@ -87,8 +87,9 @@ export function useAssistantThreads(
       setActiveRecord(null);
       selectedRef.current = null;
       setSelected(null);
+      pending.current = null;
       setLoading(false);
-      setSaving(Boolean(pending.current));
+      setSaving(false);
       setError(readError);
       return true;
     },

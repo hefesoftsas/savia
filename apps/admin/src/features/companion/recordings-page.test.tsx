@@ -488,6 +488,71 @@ it("waits for the initial list before enabling uploads", async () => {
   );
 });
 
+it.each([403, 503])(
+  "shows an initial %s list failure without claiming there are no recordings",
+  async (status) => {
+    const client = mockClient();
+    client.list
+      .mockRejectedValueOnce(
+        new ApiClientError(status, "read-failed", "List unavailable"),
+      )
+      .mockResolvedValueOnce({ recordings: [], cursor: null });
+    const user = userEvent.setup();
+    show(client);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "List unavailable",
+    );
+    expect(screen.queryByText("No recordings yet")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Upload recording" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Record audio" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText("No recordings yet")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Upload recording" }),
+    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Record audio" })).toBeEnabled();
+  },
+);
+
+it("does not reuse an old successful list marker after changing API scopes", async () => {
+  const firstClient = mockClient();
+  firstClient.list
+    .mockResolvedValueOnce({ recordings: [], cursor: null })
+    .mockRejectedValueOnce(
+      new ApiClientError(503, "unavailable", "First scope unavailable"),
+    );
+  const failedClient = mockClient();
+  failedClient.list.mockRejectedValue(
+    new ApiClientError(503, "unavailable", "Second scope unavailable"),
+  );
+  const store = memoryStore({ locale: "en" });
+  const renderPage = (client: ReturnType<typeof mockClient>) => (
+    <StoreContextProvider value={store}>
+      <CompanionRecordingsPage
+        client={client as unknown as CompanionRecordingsClient}
+      />
+    </StoreContextProvider>
+  );
+  const view = render(renderPage(firstClient));
+  expect(await screen.findByText("No recordings yet")).toBeVisible();
+
+  view.rerender(renderPage(failedClient));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Second scope unavailable",
+  );
+  view.rerender(renderPage(firstClient));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "First scope unavailable",
+  );
+  expect(screen.queryByText("No recordings yet")).not.toBeInTheDocument();
+});
+
 it("continues an empty filtered page to find visible recordings", async () => {
   const client = mockClient();
   client.list.mockResolvedValueOnce({

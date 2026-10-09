@@ -16,6 +16,7 @@ function server() {
   let offline = false;
   let activeTenantId = 101;
   let listFailureStatus: number | null = null;
+  let saveFailureStatus: number | null = null;
   let deniedDetailId: string | null = null;
   let hiddenThreadId: string | null = null;
   let nextListGate:
@@ -29,6 +30,15 @@ function server() {
         finished: () => void;
       }
     | undefined;
+  let nextSaveGate:
+    | {
+        wait: Promise<void>;
+        started: () => void;
+        release: () => void;
+        finished: () => void;
+      }
+    | undefined;
+  let saveRequests = 0;
   const device = () => {
     const apiClient = new ApiClient({
       baseUrl: "https://savia.test",
@@ -38,6 +48,23 @@ function server() {
         const url = new URL(String(input));
         const id = url.pathname.split("/").pop()!;
         if (init?.method === "PUT") {
+          saveRequests += 1;
+          const saveGate = nextSaveGate;
+          nextSaveGate = undefined;
+          if (saveGate) {
+            saveGate.started();
+            await saveGate.wait;
+          }
+          if (saveFailureStatus)
+            return Response.json(
+              {
+                error: {
+                  code: "WRITE_FAILED",
+                  message: `Write denied ${saveFailureStatus}`,
+                },
+              },
+              { status: saveFailureStatus },
+            );
           const body = JSON.parse(String(init.body));
           const current = threads.get(id);
           if ((current?.revision ?? 0) !== body.expectedRevision)
@@ -59,6 +86,7 @@ function server() {
             updatedAt: new Date().toISOString(),
           };
           threads.set(id, next);
+          saveGate?.finished();
           return Response.json(next);
         }
         if (url.pathname === "/api/assistant/threads") {
@@ -149,6 +177,9 @@ function server() {
     failListWith: (status: number | null) => {
       listFailureStatus = status;
     },
+    failSaveWith: (status: number | null) => {
+      saveFailureStatus = status;
+    },
     denyDetail: (id: string) => {
       deniedDetailId = id;
     },
@@ -182,6 +213,22 @@ function server() {
         release,
       };
     },
+    pauseNextSave: () => {
+      let markStarted!: () => void;
+      let markFinished!: () => void;
+      let release!: () => void;
+      const started = new Promise<void>((resolve) => (markStarted = resolve));
+      const finished = new Promise<void>((resolve) => (markFinished = resolve));
+      const wait = new Promise<void>((resolve) => (release = resolve));
+      nextSaveGate = {
+        wait,
+        started: markStarted,
+        release,
+        finished: markFinished,
+      };
+      return { started, finished, release };
+    },
+    saveCount: () => saveRequests,
     disconnect: () => {
       offline = true;
     },
@@ -479,6 +526,83 @@ it("does not turn a denied selected-thread read into a revision conflict", async
   expect(view.result.current.conflict).toBe(false);
   expect(view.result.current.threads).toEqual([]);
   expect(view.result.current.activeThread).toBeNull();
+});
+
+it("clears the pending draft queue when read access is denied during a save", async () => {
+  localStorage.clear();
+  const api = server();
+  const current = savedThread("thread-1", "First", messages);
+  api.threads.set(current.id, current);
+  const view = renderHook(() => useAssistantThreads(true), {
+    wrapper: api.device(),
+  });
+  await waitFor(() =>
+    expect(view.result.current.activeThread?.id).toBe(current.id),
+  );
+  const draft = [
+    {
+      id: "m2",
+      role: "user" as const,
+      parts: [{ type: "text", text: "Private draft" }],
+    },
+  ];
+  const gate = api.pauseNextSave();
+  let save = Promise.resolve();
+  act(() => {
+    save = view.result.current.save(current.id, draft);
+  });
+  await gate.started;
+
+  api.failListWith(403);
+  await act(async () => {
+    await view.result.current.refresh(true);
+  });
+  expect(view.result.current.threads).toEqual([]);
+  expect(view.result.current.activeThread).toBeNull();
+  expect(view.result.current.saving).toBe(false);
+
+  await act(async () => {
+    gate.release();
+    await gate.finished;
+    await save;
+  });
+  expect(api.saveCount()).toBe(1);
+  expect(view.result.current.threads).toEqual([]);
+  expect(view.result.current.activeThread).toBeNull();
+  expect(view.result.current.saving).toBe(false);
+});
+
+it("keeps a draft when the explicit thread write is denied", async () => {
+  localStorage.clear();
+  const api = server();
+  const current = savedThread("thread-1", "First", messages);
+  api.threads.set(current.id, current);
+  const view = renderHook(() => useAssistantThreads(true), {
+    wrapper: api.device(),
+  });
+  await waitFor(() =>
+    expect(view.result.current.activeThread?.id).toBe(current.id),
+  );
+  const draft = [
+    {
+      id: "m2",
+      role: "user" as const,
+      parts: [{ type: "text", text: "Keep this on write denial" }],
+    },
+  ];
+  api.failSaveWith(403);
+
+  await act(async () => {
+    await expect(
+      view.result.current.save(current.id, draft),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  expect(view.result.current.activeThread?.messages).toEqual(draft);
+  expect(view.result.current.threads.map((thread) => thread.id)).toContain(
+    current.id,
+  );
+  expect(view.result.current.error).toMatchObject({ status: 403 });
 });
 
 it("retains thread drafts after a transient refresh failure", async () => {

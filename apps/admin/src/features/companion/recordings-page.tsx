@@ -133,6 +133,8 @@ function AudioFilesPage({
     [cursor, setCursor] = useState<string | null>(null);
   const [loadedListClient, setLoadedListClient] =
     useState<CompanionRecordingsClient | null>(null);
+  const [successfulListClient, setSuccessfulListClient] =
+    useState<CompanionRecordingsClient | null>(null);
   const [selected, setSelected] = useState<Recording | null>(null),
     [notes, setNotes] = useState<RecordingNotes | null>(null);
   const [audio, setAudio] = useState<string | null>(null),
@@ -156,6 +158,7 @@ function AudioFilesPage({
     inFlight = useRef(false);
   const listGeneration = useRef(0);
   const hasCurrentList = loadedListClient === client;
+  const hasSuccessfulList = successfulListClient === client;
   const source = (r: Recording) =>
     r.name ??
     t(
@@ -188,6 +191,7 @@ function AudioFilesPage({
         result = await client.list(result.cursor);
       }
       if (!mounted.current || request !== listGeneration.current) return;
+      setSuccessfulListClient(client);
       setRecordings((previous) =>
         next
           ? [
@@ -220,6 +224,11 @@ function AudioFilesPage({
           setSelected(null);
           setAudio(null);
           setNotes(null);
+          setSuccessfulListClient(null);
+        }
+        if (isReadAccessDenied(e)) {
+          setUploadOpen(false);
+          setCaptureOpen(false);
         }
       }
     } finally {
@@ -366,7 +375,11 @@ function AudioFilesPage({
             variant="outline"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={
-              !hasCurrentList || loading || processing || uploading || deleting
+              !hasSuccessfulList ||
+              loading ||
+              processing ||
+              uploading ||
+              deleting
             }
             onClick={() => setCaptureOpen(true)}
           >
@@ -377,7 +390,11 @@ function AudioFilesPage({
             size="sm"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
             disabled={
-              !hasCurrentList || loading || processing || uploading || deleting
+              !hasSuccessfulList ||
+              loading ||
+              processing ||
+              uploading ||
+              deleting
             }
             onClick={() => setUploadOpen(true)}
           >
@@ -454,7 +471,7 @@ function AudioFilesPage({
         >
           {t("Loading recordings…")}
         </p>
-      ) : !recordings.length ? (
+      ) : !hasSuccessfulList ? null : !recordings.length ? (
         <section className="py-20 text-center">
           <AudioLines
             className="mx-auto mb-5 size-7 text-muted-foreground"

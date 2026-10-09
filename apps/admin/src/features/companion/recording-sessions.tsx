@@ -71,10 +71,13 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [loadedListClient, setLoadedListClient] =
     useState<CompanionSessionsClient | null>(null);
+  const [successfulListClient, setSuccessfulListClient] =
+    useState<CompanionSessionsClient | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const generation = useRef(0);
   const hasCurrentScope = loadedListClient === client;
+  const hasSuccessfulList = successfulListClient === client;
   const handleDetailDenied = useCallback(() => {
     setSelected(null);
     setError(true);
@@ -87,6 +90,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
     try {
       const result = await client.list(next);
       if (version !== generation.current) return;
+      setSuccessfulListClient(client);
       setSessions((previous) =>
         next
           ? [
@@ -111,6 +115,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
           setSessions([]);
           setCursor(null);
           setSelected(null);
+          setSuccessfulListClient(null);
         }
       }
     } finally {
@@ -156,7 +161,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
       )}
       {!hasCurrentScope || (loading && !sessions.length) ? (
         <p role="status">{t("Loading recordings…")}</p>
-      ) : !sessions.length ? (
+      ) : !hasSuccessfulList ? null : !sessions.length ? (
         <div className="border-t py-12">
           <AudioLines
             className="mb-4 size-8 text-muted-foreground"
