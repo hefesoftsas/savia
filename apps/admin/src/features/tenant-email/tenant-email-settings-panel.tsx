@@ -170,7 +170,7 @@ export function TenantEmailSettingsPanel({
             <div className="h-4 w-48 animate-pulse rounded bg-muted" />
             <div className="h-9 w-full max-w-md animate-pulse rounded bg-muted" />
           </div>
-        ) : error ? (
+        ) : error && !settings ? (
           <div className="grid gap-2">
             <p role="alert" className="text-sm text-destructive">
               {error}
@@ -263,6 +263,11 @@ export function TenantEmailSettingsPanel({
                   onChange={(event) => setFrom(event.target.value)}
                 />
               </label>
+              {error ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              ) : null}
               {notice ? (
                 <p role="status" className="text-sm sm:col-span-2">
                   {notice}

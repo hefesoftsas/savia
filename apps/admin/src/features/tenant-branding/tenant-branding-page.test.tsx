@@ -14,6 +14,15 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { AppServices } from "@/app-services";
 import { ApiClientError } from "@/api/api-client";
 import { TenantBrandingPage } from "./tenant-branding-page";
+const realtime = vi.hoisted(() => ({
+  refresh: undefined as undefined | (() => void),
+}));
+vi.mock("@/realtime/use-realtime-refresh", () => ({
+  useRealtimeRefresh: (options: { refresh: () => void }) => {
+    realtime.refresh = options.refresh;
+    return { changed: false };
+  },
+}));
 const branding = {
   displayName: "Agencia Uno",
   loginTitle: "Bienvenido",
@@ -499,4 +508,74 @@ it("offers sign-in again when the session expires instead of a dead reload", asy
   expect(
     screen.getByRole("button", { name: "Volver a cargar" }),
   ).toBeInTheDocument();
+});
+
+it("keeps branding fields and selected tab mounted during pending and failed background reads", async () => {
+  let rejectRefresh!: (cause: Error) => void;
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true })
+    .mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectRefresh = reject;
+        }),
+    );
+  render(<TenantBrandingPage services={service(get)} />);
+  await screen.findByLabelText("Nombre visible");
+  await selectTab("Pantalla de acceso");
+  const title = screen.getByLabelText("Título de acceso");
+  title.focus();
+  act(() => realtime.refresh?.());
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(3));
+  expect(screen.getByLabelText("Título de acceso")).toBe(title);
+  expect(title).toHaveFocus();
+  await act(async () => rejectRefresh(new Error("Offline")));
+  expect(screen.getByLabelText("Título de acceso")).toBe(title);
+  expect(title).toHaveValue("Bienvenido");
+});
+
+it("removes loaded branding fields when a background read is forbidden", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true })
+    .mockRejectedValueOnce(
+      new ApiClientError(403, "FORBIDDEN", "Access denied"),
+    );
+  render(<TenantBrandingPage services={service(get)} />);
+  await screen.findByLabelText("Nombre visible");
+  act(() => realtime.refresh?.());
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(3));
+  await waitFor(() =>
+    expect(screen.queryByLabelText("Nombre visible")).not.toBeInTheDocument(),
+  );
+});
+
+it("preserves edits made while a clean branding refresh is pending", async () => {
+  let finish!: (value: unknown) => void;
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+  render(<TenantBrandingPage services={service(get)} />);
+  const name = await screen.findByLabelText("Nombre visible");
+  act(() => realtime.refresh?.());
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(3));
+  fireEvent.change(name, { target: { value: "Local draft" } });
+  await act(async () =>
+    finish({
+      data: { ...branding, displayName: "Remote name", version: 2 },
+      canManage: true,
+    }),
+  );
+  expect(screen.getByLabelText("Nombre visible")).toBe(name);
+  expect(name).toHaveValue("Local draft");
 });

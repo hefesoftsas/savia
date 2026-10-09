@@ -7,6 +7,7 @@ import type { AppServices } from "@/app-services";
 import { StudioTenantCredentialsSection } from "./studio-tenant-credentials-section";
 
 const testState = vi.hoisted(() => ({
+  tenantReads: vi.fn(),
   workspaces: [] as Array<{
     id: string;
     tenantId: number;
@@ -38,7 +39,10 @@ vi.mock("@/features/studio/studio-tenants", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@/features/studio/studio-tenants")
   >()),
-  listStudioTenants: async () => testState.workspaces,
+  listStudioTenants: async () => {
+    testState.tenantReads();
+    return testState.workspaces;
+  },
 }));
 
 vi.mock("@/api/embedded-transport", () => ({
@@ -236,4 +240,21 @@ it("opens office administration for the selected tenant", async () => {
   expect(screen.getByRole("tabpanel")).toHaveTextContent(
     "Office settings for tenant 102",
   );
+});
+
+it("does not refetch workspaces when only the services wrapper changes", async () => {
+  testState.tenantReads.mockClear();
+  testState.workspaces = [workspace(101)];
+  const view = render(
+    <MemoryRouter>
+      <StudioTenantCredentialsSection services={services} />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(testState.tenantReads).toHaveBeenCalledTimes(1));
+  view.rerender(
+    <MemoryRouter>
+      <StudioTenantCredentialsSection services={{ ...services }} />
+    </MemoryRouter>,
+  );
+  expect(testState.tenantReads).toHaveBeenCalledTimes(1);
 });

@@ -107,8 +107,15 @@ function safeHref(value: string) {
   }
 }
 
+export function QuoteLinkManager(props: {
+  tenantId: number;
+  request: (path: string, init?: RequestInit) => Promise<Response>;
+}) {
+  return <ScopedQuoteLinkManager key={props.tenantId} {...props} />;
+}
+
 /** Owner-only list for revoking the seven-day quote links published by WhatsApp. */
-export function QuoteLinkManager({
+function ScopedQuoteLinkManager({
   tenantId,
   request,
 }: {

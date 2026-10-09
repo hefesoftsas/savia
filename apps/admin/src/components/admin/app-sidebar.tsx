@@ -544,7 +544,7 @@ export function AppSidebar() {
     return () => {
       active = false;
     };
-  }, [isLoading, services]);
+  }, [isLoading, services.userPreferences]);
 
   useRealtimeRefresh({
     topics: ["account"],

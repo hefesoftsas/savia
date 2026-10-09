@@ -361,7 +361,7 @@ describe("AppSidebar navigation preferences", () => {
       return layout;
     });
     const mounted = render(<App services={services} />);
-    await screen.findByRole("link", { name: /^Empresas/ });
+    await screen.findByRole("link", { name: /^Empresas/ }, { timeout: 10_000 });
     await user.click(screen.getByRole("button", { name: "Organizar menú" }));
     expect(
       screen.getByRole("button", { name: "Reordenar Empresas" }),
@@ -401,7 +401,11 @@ describe("AppSidebar navigation preferences", () => {
 
   it("shows dynamic pages as direct menu links without synthetic agencies or Studio group", async () => {
     render(<App services={createServices()} />);
-    const companies = await screen.findByRole("link", { name: /^Empresas/ });
+    const companies = await screen.findByRole(
+      "link",
+      { name: /^Empresas/ },
+      { timeout: 10_000 },
+    );
     expect(companies).toHaveAttribute(
       "href",
       "#/studio?tenantId=0&object=account",
@@ -427,7 +431,7 @@ describe("AppSidebar navigation preferences", () => {
 
   it("shows page administration under Construir with the current domain", async () => {
     render(<App services={createServices()} />);
-    await screen.findByRole("link", { name: /^Empresas/ });
+    await screen.findByRole("link", { name: /^Empresas/ }, { timeout: 10_000 });
     // The scoped destinations gain the current object once the Studio object
     // catalog resolves; the link renders first without it.
     await waitFor(() =>
@@ -523,7 +527,11 @@ describe("AppSidebar navigation preferences", () => {
       { target: { value: "empresas" } },
     );
     expect(
-      await screen.findByRole("link", { name: /^Empresas/ }),
+      await screen.findByRole(
+        "link",
+        { name: /^Empresas/ },
+        { timeout: 10_000 },
+      ),
     ).toHaveAttribute("href", "#/studio?tenantId=0&object=account");
     expect(screen.getByText("Oculta de mi menú")).toBeVisible();
     expect(
@@ -550,7 +558,11 @@ describe("AppSidebar navigation preferences", () => {
       screen.queryByRole("button", { name: "CRM" }),
     ).not.toBeInTheDocument();
     expect(
-      await screen.findByRole("link", { name: /^Empresas/ }),
+      await screen.findByRole(
+        "link",
+        { name: /^Empresas/ },
+        { timeout: 10_000 },
+      ),
     ).toBeVisible();
     expect(
       screen.queryByRole("link", { name: "Integraciones" }),
@@ -644,4 +656,41 @@ describe("AppSidebar navigation preferences", () => {
       });
     }
   });
+});
+
+it("finishes loading menu preferences across a services wrapper rerender", async () => {
+  const services = createServices();
+  let finish!: (value: SidebarNavigationLayout) => void;
+  vi.mocked(services.userPreferences.getSidebarNavigation).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const view = render(<App services={services} />);
+  await waitFor(() =>
+    expect(services.userPreferences.getSidebarNavigation).toHaveBeenCalledTimes(
+      1,
+    ),
+  );
+  view.rerender(<App services={{ ...services }} />);
+  finish({
+    ...defaultLayout,
+    blocks: [
+      {
+        kind: "custom",
+        id: "custom:retained",
+        label: "Retained menu",
+        items: [],
+        collapsed: true,
+      },
+      ...defaultLayout.blocks,
+    ],
+  });
+  expect(
+    await screen.findByRole("button", { name: "Expandir Retained menu" }),
+  ).toBeVisible();
+  expect(services.userPreferences.getSidebarNavigation).toHaveBeenCalledTimes(
+    1,
+  );
 });

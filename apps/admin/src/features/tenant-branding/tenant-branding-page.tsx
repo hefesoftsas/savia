@@ -1,3 +1,5 @@
+import { isReadAccessDenied } from "@/queries/read-state";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
@@ -341,6 +343,15 @@ function BrandingEditor({
   const alive = useRef(true);
   const busy = useRef(false);
   const uploadRequest = useRef<AbortController | null>(null);
+  const loadedScope = useRef<
+    | {
+        apiClient: AppServices["apiClient"];
+        path: string;
+      }
+    | undefined
+  >(undefined);
+  const editRevision = useRef(0);
+  const [refreshError, setRefreshError] = useState("");
   const path = `/v1/tenants/${encodeURIComponent(tenantId)}/branding`;
   function clearPreviews() {
     for (const url of Object.values(objectUrls.current))
@@ -362,14 +373,22 @@ function BrandingEditor({
   }, []);
   useEffect(() => {
     const controller = new AbortController();
+    const startedRevision = editRevision.current;
+    const sameScope =
+      loadedScope.current?.apiClient === services.apiClient &&
+      loadedScope.current?.path === path;
     setLoading(true);
-    setError("");
-    setNotice("");
-    setConflict(false);
-    setDraft(undefined);
-    setSaved(undefined);
-    setCanManage(false);
-    clearPreviews();
+    setRefreshError("");
+    if (!sameScope) {
+      loadedScope.current = undefined;
+      setError("");
+      setNotice("");
+      setConflict(false);
+      setDraft(undefined);
+      setSaved(undefined);
+      setCanManage(false);
+      clearPreviews();
+    }
     void services.apiClient
       .get<{ data: unknown; canManage: boolean }>(path, {
         signal: controller.signal,
@@ -378,12 +397,28 @@ function BrandingEditor({
         if (controller.signal.aborted) return;
         const value = parseTenantBranding(response.data);
         if (!value) throw new Error("Invalid branding");
-        setDraft(value);
+        loadedScope.current = { apiClient: services.apiClient, path };
+        const editedDuringRead =
+          sameScope && editRevision.current !== startedRevision;
+        setConflict(editedDuringRead);
+        if (!editedDuringRead) {
+          clearPreviews();
+          setDraft(value);
+        }
         setSaved(value);
         setCanManage(response.canManage === true);
       })
       .catch((cause) => {
-        if (!controller.signal.aborted) setError(message(cause));
+        if (!controller.signal.aborted) {
+          if (isReadAccessDenied(cause)) {
+            loadedScope.current = undefined;
+            setDraft(undefined);
+            setSaved(undefined);
+            setCanManage(false);
+            setError(message(cause));
+          } else if (sameScope) setRefreshError(message(cause));
+          else setError(message(cause));
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -394,6 +429,7 @@ function BrandingEditor({
     key: Key,
     value: TenantBranding[Key],
   ) {
+    editRevision.current += 1;
     setDraft((current) => (current ? { ...current, [key]: value } : current));
     setNotice("");
   }
@@ -552,7 +588,12 @@ function BrandingEditor({
     setPreviews((previous) => ({ ...previous, [kind]: undefined }));
     edit(`${kind}Url`, null);
   }
-  if (loading)
+  if (
+    (loading && !draft) ||
+    (loadedScope.current &&
+      (loadedScope.current.apiClient !== services.apiClient ||
+        loadedScope.current.path !== path))
+  )
     return (
       <>
         <TenantAccessUrl slug={slug} />
@@ -588,6 +629,13 @@ function BrandingEditor({
   } as CSSProperties;
   return (
     <div className="tenant-branding-layout" data-active-tab={activeTab}>
+      <ReadRefreshStatus
+        refreshing={loading}
+        error={refreshError}
+        onRetry={
+          dirty || pending ? undefined : () => setReload((value) => value + 1)
+        }
+      />
       <Tabs
         className="tenant-branding-tabs"
         defaultValue="identity"
