@@ -101,7 +101,8 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
    sections remain available. Unsaved
    number edits are retained while untouched number fields receive current
    metadata. Failed background reads show an error and retain the last loaded
-   settings; the next successful refresh clears that error. Switching tenants
+   settings; the next successful refresh clears that error. Starting a user
+   action clears stale refresh errors so its result remains visible. Switching tenants
    still hides the previous tenant's settings until the new scope loads.
 2. **Conectar** creates a short-lived Nango Connect session for that tenant.
    The browser receives only the session token and the public Nango URLs.

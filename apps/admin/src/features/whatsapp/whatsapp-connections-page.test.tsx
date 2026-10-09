@@ -121,6 +121,115 @@ function createServices() {
 }
 
 describe("WhatsappConnectionsPage", () => {
+  it("does not let a late background failure hide a newer send result", async () => {
+    tenantState.id = 101;
+    const user = userEvent.setup();
+    const services = createServices();
+    const connection = await services.whatsapp.complete("connection-1", {
+      agencyId: 101,
+    });
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      { ...connection, phoneNumberId: "12345" },
+    ]);
+    vi.mocked(services.whatsapp.testSend).mockResolvedValue({
+      messageId: "wamid.test",
+    });
+    render(
+      <MemoryRouter>
+        <WhatsappConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("button", { name: "Desconectar" });
+    await user.type(
+      screen.getByRole("textbox", { name: "Destino" }),
+      "+573001234567",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Texto" }),
+      "Hello from Savia",
+    );
+    let rejectRead!: (reason: Error) => void;
+    vi.mocked(services.whatsapp.listConnections).mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectRead = reject;
+      }),
+    );
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = Promise.resolve(realtime.refresh?.());
+    });
+    await user.click(screen.getByRole("button", { name: "Enviar prueba" }));
+    await screen.findByText("Mensaje de prueba aceptado (wamid.test).");
+    await act(async () => {
+      rejectRead(new Error("Late background failure"));
+      await pending;
+    });
+    expect(
+      screen.getByText("Mensaje de prueba aceptado (wamid.test)."),
+    ).toBeVisible();
+    expect(screen.queryByText("Late background failure")).toBeNull();
+  });
+
+  it.each([
+    ["send", "Mensaje de prueba aceptado (wamid.test)."],
+    ["number", "Number update rejected"],
+    ["connect", "Connect session unavailable"],
+  ])(
+    "shows %s action feedback after a background read failure",
+    async (action, message) => {
+      tenantState.id = 101;
+      const user = userEvent.setup();
+      const services = createServices();
+      const connection = await services.whatsapp.complete("connection-1", {
+        agencyId: 101,
+      });
+      vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+        { ...connection, phoneNumberId: "12345" },
+      ]);
+      vi.mocked(services.whatsapp.testSend).mockResolvedValue({
+        messageId: "wamid.test",
+      });
+      vi.mocked(services.whatsapp.updateNumber).mockRejectedValue(
+        new Error("Number update rejected"),
+      );
+      vi.mocked(services.whatsapp.createConnectSession).mockRejectedValue(
+        new Error("Connect session unavailable"),
+      );
+      render(
+        <MemoryRouter>
+          <WhatsappConnectionsPage services={services} />
+        </MemoryRouter>,
+      );
+      await screen.findByRole("button", { name: "Desconectar" });
+      vi.mocked(services.whatsapp.listConnections).mockRejectedValueOnce(
+        new Error("Background read failed"),
+      );
+      await act(async () => {
+        await realtime.refresh?.();
+      });
+      expect(screen.getByText("Background read failed")).toBeVisible();
+      if (action === "send") {
+        await user.type(
+          screen.getByRole("textbox", { name: "Destino" }),
+          "+573001234567",
+        );
+        await user.type(
+          screen.getByRole("textbox", { name: "Texto" }),
+          "Hello from Savia",
+        );
+        await user.click(screen.getByRole("button", { name: "Enviar prueba" }));
+      } else {
+        await user.click(
+          screen.getByRole("button", {
+            name: action === "number" ? "Vincular número" : "Reconectar",
+          }),
+        );
+      }
+      expect(await screen.findByText(message)).toBeVisible();
+      expect(screen.queryByText("Background read failed")).toBeNull();
+    },
+  );
+
   it("preserves edited number fields while refreshing untouched fields", async () => {
     tenantState.id = 101;
     const user = userEvent.setup();
