@@ -58,11 +58,13 @@ it("lists, opens, copies, and marks a quote link revoked only after the API ackn
   expect((await screen.findAllByText("Revoked")).length).toBeGreaterThanOrEqual(
     1,
   );
-  expect(request.mock.calls).toEqual([
-    ["/api/tenants/7/quote-links"],
-    ["/api/tenants/7/quote-links/quote-link-1", { method: "DELETE" }],
-    ["/api/tenants/7/quote-links"],
-  ]);
+  await waitFor(() =>
+    expect(request.mock.calls).toEqual([
+      ["/api/tenants/7/quote-links"],
+      ["/api/tenants/7/quote-links/quote-link-1", { method: "DELETE" }],
+      ["/api/tenants/7/quote-links"],
+    ]),
+  );
 });
 
 it("does not mark a quote link revoked when the delete request fails", async () => {

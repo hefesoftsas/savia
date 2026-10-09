@@ -123,6 +123,7 @@ export function WhatsappConnectionsPage({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [loadedTenantId, setLoadedTenantId] = useState<number | null>();
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [displayPhoneNumber, setDisplayPhoneNumber] = useState("");
@@ -131,10 +132,11 @@ export function WhatsappConnectionsPage({
   const [testText, setTestText] = useState("");
   const [section, setSection] = useState("conexion");
   const refreshRequestId = useRef(0);
+  const actionFeedbackVersion = useRef(0);
   const latestTenant = useRef(currentTenant);
   latestTenant.current = currentTenant;
 
-  async function refresh() {
+  async function refresh({ preserveDrafts = false } = {}) {
     if (latestTenant.current.id !== currentTenant.id) return;
     if (currentTenant.isLoading || latestTenant.current.isLoading) {
       setLoading(true);
@@ -145,9 +147,14 @@ export function WhatsappConnectionsPage({
     }
 
     const requestId = ++refreshRequestId.current;
+    const requestFeedbackVersion = actionFeedbackVersion.current;
     const requestTenantId = currentTenant.id;
-    setLoading(true);
-    setFeedback(null);
+    const keepVisible = loadedTenantId === requestTenantId && provider !== null;
+    if (!keepVisible) {
+      setLoading(true);
+      setRefreshError(null);
+    }
+    if (!preserveDrafts) setFeedback(null);
     try {
       const [nextProviders, nextConnections] = await Promise.all([
         services.whatsapp.listProviders(requestTenantId ?? undefined),
@@ -161,20 +168,39 @@ export function WhatsappConnectionsPage({
       setProvider(nextProviders[0] ?? null);
       const next = nextConnections[0] ?? null;
       setConnection(next);
-      setPhoneNumberId(next?.phoneNumberId ?? "");
-      setDisplayPhoneNumber(next?.displayPhoneNumber ?? "");
-      setWabaId(next?.wabaId ?? "");
+      const keepEditedNumber = preserveDrafts && keepVisible;
+      setPhoneNumberId((value) =>
+        keepEditedNumber && value !== (connection?.phoneNumberId ?? "")
+          ? value
+          : (next?.phoneNumberId ?? ""),
+      );
+      setDisplayPhoneNumber((value) =>
+        keepEditedNumber && value !== (connection?.displayPhoneNumber ?? "")
+          ? value
+          : (next?.displayPhoneNumber ?? ""),
+      );
+      setWabaId((value) =>
+        keepEditedNumber && value !== (connection?.wabaId ?? "")
+          ? value
+          : (next?.wabaId ?? ""),
+      );
       setLoadedTenantId(requestTenantId);
+      setRefreshError(null);
     } catch (exception) {
       if (
         requestId !== refreshRequestId.current ||
         requestTenantId !== latestTenant.current.id
       )
         return;
-      setFeedback(feedbackFrom(exception));
-      setProvider(null);
-      setConnection(null);
-      setLoadedTenantId(requestTenantId);
+      if (keepVisible) {
+        if (requestFeedbackVersion === actionFeedbackVersion.current)
+          setRefreshError(feedbackFrom(exception));
+      } else {
+        setFeedback(feedbackFrom(exception));
+        setProvider(null);
+        setConnection(null);
+        setLoadedTenantId(requestTenantId);
+      }
     } finally {
       if (
         requestId === refreshRequestId.current &&
@@ -197,7 +223,7 @@ export function WhatsappConnectionsPage({
     return () => {
       refreshRequestId.current += 1;
     };
-  }, [services, currentTenant.id, currentTenant.isLoading]);
+  }, [services.whatsapp, currentTenant.id, currentTenant.isLoading]);
 
   useRealtimeRefresh({
     topics: ["integrations"],
@@ -205,7 +231,7 @@ export function WhatsappConnectionsPage({
       ? 0
       : (currentTenant.id ?? undefined),
     enabled: !currentTenant.isLoading,
-    refresh,
+    refresh: () => refresh({ preserveDrafts: true }),
   });
 
   const tenantDataIsCurrent =
@@ -229,6 +255,13 @@ export function WhatsappConnectionsPage({
     }
   }, [canConfigureAssistant, canConfigureChannel, showAdvanced, section]);
 
+  function showActionFeedback(message: string | null) {
+    if (currentTenant.id !== latestTenant.current.id) return;
+    actionFeedbackVersion.current += 1;
+    setRefreshError(null);
+    setFeedback(message);
+  }
+
   async function completeConnection(nangoConnectionId: string) {
     const requestTenantId = currentTenant.id;
     try {
@@ -243,11 +276,11 @@ export function WhatsappConnectionsPage({
         ...(wabaId.trim() ? { wabaId: wabaId.trim() } : {}),
       });
       if (latestTenant.current.id === requestTenantId)
-        setFeedback("La conexión de WhatsApp quedó validada.");
+        showActionFeedback("La conexión de WhatsApp quedó validada.");
       await refresh();
     } catch (exception) {
       if (latestTenant.current.id === requestTenantId)
-        setFeedback(feedbackFrom(exception));
+        showActionFeedback(feedbackFrom(exception));
     } finally {
       setBusy(false);
     }
@@ -255,14 +288,15 @@ export function WhatsappConnectionsPage({
 
   async function beginConnection(reconnect = false) {
     if (!enabled || busy) return;
+    showActionFeedback(null);
     if (connected && !reconnect) {
       setBusy(true);
       try {
         await services.whatsapp.disconnect(currentTenant.id ?? undefined);
-        setFeedback("La conexión de WhatsApp se desconectó.");
+        showActionFeedback("La conexión de WhatsApp se desconectó.");
         await refresh();
       } catch (exception) {
-        setFeedback(feedbackFrom(exception));
+        showActionFeedback(feedbackFrom(exception));
       } finally {
         setBusy(false);
       }
@@ -270,7 +304,6 @@ export function WhatsappConnectionsPage({
     }
 
     setBusy(true);
-    setFeedback(null);
     try {
       const session = await services.whatsapp.createConnectSession(
         reconnect ||
@@ -290,7 +323,7 @@ export function WhatsappConnectionsPage({
             const connectionId = connectionIdFromEvent(event);
             if (!connectionId) {
               setBusy(false);
-              setFeedback(
+              showActionFeedback(
                 "No se recibió una conexión válida. Intenta conectar de nuevo.",
               );
               return;
@@ -301,24 +334,25 @@ export function WhatsappConnectionsPage({
           if (type === "close") {
             if (terminalEventReceived) return;
             setBusy(false);
-            setFeedback("La ventana de conexión se cerró sin cambios.");
+            showActionFeedback("La ventana de conexión se cerró sin cambios.");
             return;
           }
           if (type === "error") {
             terminalEventReceived = true;
             setBusy(false);
-            setFeedback("No fue posible completar la autorización.");
+            showActionFeedback("No fue posible completar la autorización.");
           }
         },
       });
     } catch (exception) {
       setBusy(false);
-      setFeedback(feedbackFrom(exception));
+      showActionFeedback(feedbackFrom(exception));
     }
   }
 
   async function saveNumber() {
     if (!enabled || busy || !phoneNumberId.trim()) return;
+    showActionFeedback(null);
     setBusy(true);
     try {
       await services.whatsapp.updateNumber({
@@ -329,10 +363,10 @@ export function WhatsappConnectionsPage({
           : {}),
         ...(wabaId.trim() ? { wabaId: wabaId.trim() } : {}),
       });
-      setFeedback("El número de WhatsApp quedó vinculado y validado.");
+      showActionFeedback("El número de WhatsApp quedó vinculado y validado.");
       await refresh();
     } catch (exception) {
-      setFeedback(feedbackFrom(exception));
+      showActionFeedback(feedbackFrom(exception));
     } finally {
       setBusy(false);
     }
@@ -340,8 +374,9 @@ export function WhatsappConnectionsPage({
 
   async function sendTest() {
     if (!enabled || busy || currentTenant.id === null) return;
+    showActionFeedback(null);
     if (!testTo.trim() || !testText.trim()) {
-      setFeedback("Indica el destino y el texto del mensaje de prueba.");
+      showActionFeedback("Indica el destino y el texto del mensaje de prueba.");
       return;
     }
     setBusy(true);
@@ -351,9 +386,9 @@ export function WhatsappConnectionsPage({
         to: testTo.trim(),
         text: testText.trim(),
       });
-      setFeedback(`Mensaje de prueba aceptado (${result.messageId}).`);
+      showActionFeedback(`Mensaje de prueba aceptado (${result.messageId}).`);
     } catch (exception) {
-      setFeedback(feedbackFrom(exception));
+      showActionFeedback(feedbackFrom(exception));
     } finally {
       setBusy(false);
     }
@@ -518,13 +553,13 @@ export function WhatsappConnectionsPage({
 
   const content = (
     <>
-      {tenantDataIsCurrent && feedback ? (
+      {tenantDataIsCurrent && (refreshError || feedback) ? (
         <div
           className="integrations-feedback flex items-start gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
           role="status"
         >
           <CircleAlert className="mt-0.5 size-4 shrink-0 text-primary" />
-          <p className="leading-6">{feedback}</p>
+          <p className="leading-6">{refreshError || feedback}</p>
         </div>
       ) : null}
 

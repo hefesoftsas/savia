@@ -51,7 +51,7 @@ export function WhatsappAssistantSettings({
     return () => {
       current = false;
     };
-  }, [services, tenantId]);
+  }, [services.whatsapp, tenantId]);
 
   async function save() {
     if (!employeeId || busy || !configuration) return;
