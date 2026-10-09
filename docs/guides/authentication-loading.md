@@ -54,6 +54,12 @@ while asynchronous cleanup is still pending can trigger another authentication
 check and repeated logout, leaving the current tab blank. Query cleanup still
 runs if workspace cleanup fails.
 
+Logout still rotates the session read generation to invalidate protected reads,
+but only principal replacement changes the application subtree key. Keep React
+Admin mounted during logout so its active logout hook can finish cleanup and
+redirect. Remounting that boundary on every session clear restarts Office
+availability and appearance reads and can cause a repeated logout/request loop.
+
 If the browser does not finish an OAuth redirect within ten seconds, the page
 restores its content and exposes **Continue to Savia** as a normal link to the
 same server-provided destination. It preserves the authorization, PKCE and MFA
