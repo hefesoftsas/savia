@@ -59,6 +59,7 @@ import { OperationError, OperationPager, TaskPanel } from "./operations";
 import "./operations.css";
 import { RecordChatShareAction } from "./record-chat-share";
 import { useOptionalAppServices } from "@/features/assistant/assistant-context";
+import { isReadAccessDenied } from "@/queries/read-state";
 
 type Relation = {
   object: string;
@@ -481,6 +482,24 @@ export default function RecordDetail({
     } finally {
       setSaving(false);
     }
+  }
+  if (isReadAccessDenied(detail.error)) {
+    return (
+      <Dialog open onOpenChange={(open) => !open && onClose()}>
+        <DialogContent
+          className="record-detail-dialog"
+          aria-describedby={undefined}
+        >
+          <DialogHeader>
+            <DialogTitle>Registro no disponible</DialogTitle>
+          </DialogHeader>
+          <p role="alert">{detail.error?.message}</p>
+          <Button variant="outline" onClick={onClose}>
+            Cerrar
+          </Button>
+        </DialogContent>
+      </Dialog>
+    );
   }
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>

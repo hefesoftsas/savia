@@ -171,6 +171,88 @@ it("hides configuration from roles without schema access", () => {
 });
 
 import RecordDetail from "../record-detail";
+import { createStudioQueryClient } from "../studio-query-cache";
+it("removes record details from the open view after a same-scope 403", async () => {
+  const record = { id: "one", name: "Protected record" };
+  let detailReads = 0;
+  vi.mocked(api).mockImplementation(async (path) => {
+    if (path.startsWith("/record-detail/")) {
+      detailReads += 1;
+      if (detailReads > 1)
+        throw Object.assign(new Error("Record access revoked"), {
+          status: 403,
+        });
+      return { data: { record, relations: [] } };
+    }
+    return { data: [], total: 0 };
+  });
+  const queryClient = createStudioQueryClient();
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RecordDetail
+        object={object}
+        record={record}
+        onEdit={vi.fn()}
+        onClose={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Protected record" }),
+  ).toBeVisible();
+
+  void queryClient.invalidateQueries({
+    queryKey: ["record-detail", "contacts", "one"],
+  });
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Record access revoked",
+  );
+  await waitFor(() => expect(detailReads).toBe(2));
+  expect(
+    screen.queryByRole("heading", { name: "Protected record" }),
+  ).not.toBeInTheDocument();
+});
+it("keeps the existing record visible while a detail refresh reports an error", async () => {
+  const record = { id: "one", name: "Current record" };
+  let detailReads = 0;
+  vi.mocked(api).mockImplementation(async (path) => {
+    if (path.startsWith("/record-detail/")) {
+      detailReads += 1;
+      if (detailReads > 1) throw new Error("Temporary detail refresh failure");
+      return { data: { record, relations: [] } };
+    }
+    return { data: [], total: 0 };
+  });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RecordDetail
+        object={object}
+        record={record}
+        onEdit={vi.fn()}
+        onClose={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Current record" }),
+  ).toBeVisible();
+
+  void queryClient.invalidateQueries({
+    queryKey: ["record-detail", "contacts", "one"],
+  });
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Temporary detail refresh failure",
+  );
+  expect(screen.getByRole("heading", { name: "Current record" })).toBeVisible();
+  await waitFor(() => expect(detailReads).toBe(2));
+});
 it("mounts history only when its tab is opened, including read-only custom roles", async () => {
   const record = { id: "one", name: "Current" };
   vi.mocked(api).mockImplementation(async (path) =>
