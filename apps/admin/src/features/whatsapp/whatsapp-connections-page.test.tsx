@@ -219,6 +219,7 @@ describe("WhatsappConnectionsPage", () => {
   });
 
   it("shows number linking and test send once connected", async () => {
+    const user = userEvent.setup();
     tenantState.id = 101;
     const services = createServices();
     vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
@@ -246,6 +247,14 @@ describe("WhatsappConnectionsPage", () => {
     await screen.findByRole("button", { name: "Desconectar" });
     expect(screen.getByText("+573001234567 · Acme")).toBeVisible();
     expect(screen.getByRole("button", { name: "Enviar prueba" })).toBeVisible();
+    expect(screen.queryByText(/Nango/i)).toBeNull();
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Ayuda: Número de WhatsApp" }),
+    );
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Savia valida el número antes de vincularlo.",
+    );
   });
 
   it("keeps a saved assistant available to disable after disconnect", async () => {

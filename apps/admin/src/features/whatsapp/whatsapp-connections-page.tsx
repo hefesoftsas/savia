@@ -99,7 +99,7 @@ function providerHint(
       : connection.displayPhoneNumber;
   if (connection) return "Vincula el número de WhatsApp Business abajo.";
   if (provider.availability !== "enabled") return "Configuración pendiente";
-  return "Conecta tu cuenta de WhatsApp Business vía Nango";
+  return "Conecta tu cuenta de WhatsApp Business";
 }
 
 function feedbackFrom(exception: unknown): string {
@@ -290,7 +290,9 @@ export function WhatsappConnectionsPage({
             const connectionId = connectionIdFromEvent(event);
             if (!connectionId) {
               setBusy(false);
-              setFeedback("Nango no informó una conexión válida.");
+              setFeedback(
+                "No se recibió una conexión válida. Intenta conectar de nuevo.",
+              );
               return;
             }
             void completeConnection(connectionId);
@@ -369,7 +371,7 @@ export function WhatsappConnectionsPage({
   const connectionGroup = (
     <IntegrationGroup
       title="WhatsApp"
-      description="Conecta tu cuenta de WhatsApp Business vía Nango para activar el asistente y el menú."
+      help="Conecta tu cuenta de WhatsApp Business para activar el asistente y el menú. Las credenciales se gestionan de forma segura."
     >
       {loading || !tenantDataIsCurrent || !provider ? (
         <li className="px-5 py-4">
@@ -412,7 +414,7 @@ export function WhatsappConnectionsPage({
             }
           />
           {provider.availability !== "enabled" ? (
-            <IntegrationGroupEmpty message="Un administrador debe crear la integración whatsapp-business en Nango. Después podrás conectar tu cuenta aquí." />
+            <IntegrationGroupEmpty message="Un administrador debe habilitar la integración de WhatsApp Business. Después podrás conectar tu cuenta aquí." />
           ) : null}
         </>
       )}
@@ -422,7 +424,7 @@ export function WhatsappConnectionsPage({
   const numberGroup = (
     <IntegrationGroup
       title="Número de WhatsApp"
-      description="Vincula el número que usarán los mensajes. Savia lo valida contra la API vía Nango."
+      help="Vincula el número que usarán los mensajes. Los identificadores del número y de la cuenta de WhatsApp Business (WABA) están en la configuración de Meta. Savia valida el número antes de vincularlo."
     >
       <li className="space-y-4 px-5 py-5 sm:px-6">
         <div className="grid gap-3 sm:grid-cols-3">
@@ -464,9 +466,6 @@ export function WhatsappConnectionsPage({
           >
             Vincular número
           </Button>
-          <p className="text-xs leading-5 text-muted-foreground">
-            Los tokens quedan en Nango.
-          </p>
         </div>
       </li>
     </IntegrationGroup>

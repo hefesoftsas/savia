@@ -2,6 +2,7 @@ import type { ElementType, ReactNode } from "react";
 import { CheckCircle2, Info, LoaderCircle, Plug } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import {
   Tooltip,
   TooltipContent,
@@ -76,11 +77,13 @@ export function IntegrationGroup({
   title,
   headingId,
   description,
+  help,
   children,
 }: {
   title: string;
   headingId?: string;
   description?: string;
+  help?: string;
   children: ReactNode;
 }) {
   return (
@@ -89,12 +92,19 @@ export function IntegrationGroup({
       className="integrations-group overflow-hidden rounded-xl border bg-card"
     >
       <div className="integrations-group__header border-b px-5 py-3.5">
-        <h2
-          className="integrations-group__title text-sm font-semibold"
-          id={headingId}
-        >
-          {title}
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2
+            className="integrations-group__title text-sm font-semibold"
+            id={headingId}
+          >
+            {title}
+          </h2>
+          {help ? (
+            <div className="-my-2.5">
+              <HelpTooltip label={`Ayuda: ${title}`}>{help}</HelpTooltip>
+            </div>
+          ) : null}
+        </div>
         {description ? (
           <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
             {description}

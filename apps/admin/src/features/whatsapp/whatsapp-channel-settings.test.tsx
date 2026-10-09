@@ -55,11 +55,29 @@ it("loads the configured human support contact in admin channel settings", async
   const input = await screen.findByLabelText(/Contacto de atención humana/);
   expect(input).toHaveValue("https://support.example.test/contact");
   expect(
-    screen.getByText(/se mostrará cuando el asistente no pueda continuar/i),
-  ).toBeTruthy();
-  expect(
-    screen.getByText(/no inicia una transferencia automática/i),
-  ).toBeTruthy();
+    screen.queryByText(/se muestra cuando el asistente no puede continuar/i),
+  ).toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Ayuda sobre el contacto de atención humana",
+    }),
+  );
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    /no inicia una transferencia automática/i,
+  );
+});
+
+it("keeps the test-contact restriction available in staff help", async () => {
+  render(<WhatsappChannelSettings whatsapp={services()} tenantId={7} />);
+
+  await screen.findByText(/Números del personal interno/);
+  expect(screen.queryByText(/contactos de prueba.*controlan/i)).toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ayuda sobre números del personal" }),
+  );
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    /contactos de prueba del asistente controlan quién puede conversar/i,
+  );
 });
 
 it("saves a changed contact through the existing channel update and clears it", async () => {

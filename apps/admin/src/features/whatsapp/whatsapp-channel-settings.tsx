@@ -5,6 +5,7 @@ import type {
   WhatsappChannelState,
 } from "@/api/whatsapp-client";
 import { Button } from "@/components/ui/button";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { IntegrationGroup } from "@/features/personal-integrations/integration-ui";
 
 const empty: WhatsappChannelConfiguration = {
@@ -83,16 +84,17 @@ export function WhatsappChannelSettings({
   return (
     <IntegrationGroup
       title="Menú de tareas de WhatsApp"
-      description="El contacto elige qué desea hacer. Escribe menú o inicio para cambiar de tarea en cualquier momento."
+      help="El contacto elige qué desea hacer. Puede escribir menú o inicio para cambiar de tarea en cualquier momento."
     >
       <li className="space-y-6 px-5 py-5 sm:px-6">
         {state ? (
           <fieldset disabled={busy} className="space-y-6">
             <section className="space-y-3">
               <h3 className="text-sm font-semibold">Comportamiento</h3>
-              <label className="flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm">
+              <div className="flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm">
                 <input
                   type="checkbox"
+                  id="whatsapp-routing-enabled"
                   aria-label="Activar menú de tareas"
                   className="size-4 shrink-0"
                   checked={config.routingEnabled}
@@ -104,19 +106,29 @@ export function WhatsappChannelSettings({
                   }
                 />
                 <span>
-                  <span className="block font-medium">
-                    Activar menú de tareas
-                  </span>
-                  <span className="block text-xs text-muted-foreground">
-                    Muestra las tareas disponibles al iniciar la conversación.
+                  <span className="flex items-center gap-1 font-medium">
+                    <label htmlFor="whatsapp-routing-enabled">
+                      Activar menú de tareas
+                    </label>
+                    <HelpTooltip label="Ayuda sobre el menú de tareas">
+                      Muestra las tareas disponibles al iniciar la conversación.
+                    </HelpTooltip>
                   </span>
                 </span>
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">
-                  Contacto de atención humana (opcional)
-                </span>
+              </div>
+              <div className="block text-sm">
+                <div className="mb-1.5 flex items-center gap-1 font-medium">
+                  <label htmlFor="whatsapp-human-support-contact">
+                    Contacto de atención humana (opcional)
+                  </label>
+                  <HelpTooltip label="Ayuda sobre el contacto de atención humana">
+                    Indica un teléfono o enlace HTTPS. Se muestra cuando el
+                    asistente no puede continuar y no inicia una transferencia
+                    automática.
+                  </HelpTooltip>
+                </div>
                 <input
+                  id="whatsapp-human-support-contact"
                   className="block w-full max-w-xl rounded-md border bg-background p-2"
                   maxLength={240}
                   placeholder="+57 300 1234567 o https://…"
@@ -128,11 +140,7 @@ export function WhatsappChannelSettings({
                     }))
                   }
                 />
-                <span className="mt-1.5 block max-w-xl text-xs leading-5 text-muted-foreground">
-                  Teléfono o enlace HTTPS que se mostrará cuando el asistente no
-                  pueda continuar. No inicia una transferencia automática.
-                </span>
-              </label>
+              </div>
             </section>
 
             <section className="space-y-3">
@@ -273,9 +281,16 @@ export function WhatsappChannelSettings({
 
             <section className="space-y-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-sm font-semibold">
-                  Números del personal interno ({config.staff.length})
-                </h3>
+                <div className="flex items-center gap-1">
+                  <h3 className="text-sm font-semibold">
+                    Números del personal interno ({config.staff.length})
+                  </h3>
+                  <HelpTooltip label="Ayuda sobre números del personal">
+                    Este registro identifica al personal. Los contactos de
+                    prueba del asistente controlan quién puede conversar.
+                    Vincula una cuenta de Savia para usar sus permisos.
+                  </HelpTooltip>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -298,11 +313,6 @@ export function WhatsappChannelSettings({
                   Añadir personal
                 </Button>
               </div>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Este registro identifica al personal. Los contactos de prueba
-                del asistente controlan quién puede conversar. Vincula una
-                cuenta de Savia para usar sus permisos.
-              </p>
               {config.staff.length === 0 ? (
                 <p className="rounded-lg border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
                   Sin personal registrado. Añade los números internos que podrán

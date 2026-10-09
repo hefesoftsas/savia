@@ -81,7 +81,15 @@ it("enables read receipts with typing indicators and links model requirements", 
   await user.click(typing);
   expect(readReceipts).toBeChecked();
   expect(readReceipts).toBeDisabled();
-  expect(screen.getByText(/imágenes y PDF.*visión|vision/i)).toBeVisible();
+  expect(screen.queryByText(/imágenes y PDF.*visión|vision/i)).toBeNull();
+  await user.click(
+    screen.getByRole("button", {
+      name: "Ayuda sobre capacidades de medios",
+    }),
+  );
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    /imágenes y PDF requieren.*visión y archivos/i,
+  );
   expect(
     screen.getByRole("link", { name: "Configurar transcripción" }),
   ).toHaveAttribute("href", "/assistant-configuration");
@@ -97,6 +105,48 @@ it("enables read receipts with typing indicators and links model requirements", 
         }),
       }),
     ),
+  );
+});
+
+it("shows Meta, JSON, and test-send details only when requested", async () => {
+  setup();
+  const user = userEvent.setup();
+
+  await screen.findByRole("heading", { name: "Recursos publicados de Meta" });
+  expect(
+    screen.queryByText(/carga solo recursos reales disponibles/i),
+  ).toBeNull();
+  await user.click(
+    screen.getByRole("button", {
+      name: "Ayuda sobre recursos publicados de Meta",
+    }),
+  );
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    /recursos reales disponibles para el número conectado/i,
+  );
+
+  await user.click(screen.getByText("Ver editores JSON"));
+  expect(screen.queryByText(/cada Flow incluye flowId y screen/i)).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Ayuda sobre Flows" }));
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    /cada Flow incluye flowId y screen/i,
+  );
+
+  expect(
+    screen.getByLabelText(
+      "Confirmo consentimiento del destinatario para este mensaje de prueba",
+    ),
+  ).toBeVisible();
+  expect(
+    screen.queryByText(/genera una clave de idempotencia nueva/i),
+  ).toBeNull();
+  await user.click(
+    screen.getByRole("button", {
+      name: "Ayuda sobre pruebas de mensajes nativos",
+    }),
+  );
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    /consentimiento marcado y genera una clave de idempotencia nueva/i,
   );
 });
 
