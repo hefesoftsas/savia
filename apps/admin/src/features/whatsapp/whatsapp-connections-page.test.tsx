@@ -12,6 +12,7 @@ import {
 const tenantState = vi.hoisted(() => ({
   id: null as number | null,
   isLoading: false,
+  scopeStatus: undefined as "error" | "resolved" | undefined,
 }));
 
 const realtime = vi.hoisted(() => ({
@@ -30,6 +31,7 @@ vi.mock("@/features/tenants/use-current-tenant", () => ({
     id: tenantState.id,
     isPlatformAdmin: false,
     isLoading: tenantState.isLoading,
+    scopeStatus: tenantState.scopeStatus,
   }),
 }));
 
@@ -37,6 +39,7 @@ afterEach(() => {
   cleanup();
   tenantState.id = null;
   tenantState.isLoading = false;
+  tenantState.scopeStatus = undefined;
   realtime.refresh = undefined;
 });
 
@@ -657,4 +660,18 @@ describe("WhatsappConnectionsPage", () => {
       await screen.findByText("Native settings are not available"),
     ).toBeVisible();
   });
+});
+
+it("does not read a default WhatsApp scope when dedicated tenant resolution fails", async () => {
+  tenantState.id = null;
+  tenantState.scopeStatus = "error";
+  const services = createServices();
+  render(
+    <MemoryRouter>
+      <WhatsappConnectionsPage services={services as unknown as AppServices} />
+    </MemoryRouter>,
+  );
+  await act(async () => {});
+  expect(services.whatsapp.listProviders).not.toHaveBeenCalled();
+  expect(services.whatsapp.listConnections).not.toHaveBeenCalled();
 });

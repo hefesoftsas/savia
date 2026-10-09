@@ -31,6 +31,9 @@ export type CurrentTenantInfo = {
   monogram: string;
   isPlatformAdmin: boolean;
   isLoading: boolean;
+  scopeStatus?: "platform" | "loading" | "resolved" | "error" | "unavailable";
+  scopeError?: string;
+  retry?: () => void | Promise<unknown>;
 };
 
 export function formatSlugToDisplayName(slug: string): string {
@@ -101,6 +104,19 @@ export function useCurrentTenant(options?: {
     queryClient,
   );
   const tenantData = tenantQuery.data?.data;
+  const hasValidTenantId =
+    typeof tenantData?.id === "number" &&
+    Number.isSafeInteger(tenantData.id) &&
+    tenantData.id > 0;
+  const scopeStatus = !isDedicated
+    ? "platform"
+    : !enabled
+      ? "unavailable"
+      : tenantQuery.isPending
+        ? "loading"
+        : hasValidTenantId
+          ? "resolved"
+          : "error";
   const kind = tenantData?.kind ?? (isDedicated ? "commercial" : "platform");
   const name = branding?.displayName || tenantData?.name || fallbackName;
   const monogram = name.charAt(0).toUpperCase() || "S";
@@ -114,5 +130,12 @@ export function useCurrentTenant(options?: {
     monogram,
     isPlatformAdmin,
     isLoading: enabled && tenantQuery.isPending,
+    scopeStatus,
+    ...(scopeStatus === "error"
+      ? {
+          scopeError: "Unable to resolve this tenant. Retry to try again.",
+          retry: () => tenantQuery.refetch(),
+        }
+      : {}),
   };
 }

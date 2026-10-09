@@ -1,11 +1,36 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { render } from "@/features/studio-engine/test/locale-test-render";
 import type { VirtualEmployee } from "@/api/virtual-employees-client";
 import type { AppLocale } from "@/i18n/app-locale";
+import { rotateSessionScope } from "@/auth/session-scope";
+import { ApiClientError } from "@/api/api-client";
 import { VirtualEmployeesManagement } from "./virtual-employees-management";
+
+const realtimeRefreshes = vi.hoisted(
+  () => new Map<string, () => void | Promise<unknown>>(),
+);
+
+vi.mock("@/realtime/use-realtime-refresh", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/realtime/use-realtime-refresh")>();
+  return {
+    ...actual,
+    useRealtimeRefresh: (options: {
+      topics: string[];
+      tenantId?: number;
+      refresh: () => void | Promise<unknown>;
+    }) => {
+      realtimeRefreshes.set(
+        `${options.topics.join(",")}:${options.tenantId ?? "self"}`,
+        options.refresh,
+      );
+      return { changed: false, reload: async () => undefined };
+    },
+  };
+});
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -37,12 +62,14 @@ function makeEmployee(
 function setup({
   employees = [],
   locale = "es",
+  list,
 }: {
   employees?: VirtualEmployee[];
   locale?: AppLocale;
+  list?: ReturnType<typeof vi.fn>;
 } = {}) {
   const client = {
-    list: vi.fn().mockResolvedValue(employees),
+    list: list ?? vi.fn().mockResolvedValue(employees),
     listCollections: vi.fn().mockResolvedValue([
       { name: "customers", label: "Customers" },
       { name: "quotes", label: "Quotes" },
@@ -54,15 +81,20 @@ function setup({
     uploadFile: vi.fn(),
     deleteFile: vi.fn(),
   };
-  render(
+  const view = render(
     <VirtualEmployeesManagement
       client={client as never}
       assistantConfigClient={{ models: vi.fn().mockResolvedValue([]) } as never}
     />,
     { locale },
   );
-  return { client };
+  return { client, ...view };
 }
+
+afterEach(() => {
+  cleanup();
+  realtimeRefreshes.clear();
+});
 
 describe("virtual employee access modes", () => {
   it.each([
@@ -251,5 +283,173 @@ describe("virtual employee access modes", () => {
     );
     expect(client.create).not.toHaveBeenCalled();
     expect(client.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("virtual employee background reads", () => {
+  it("clears protected employees when a refresh is denied", async () => {
+    const employee = makeEmployee();
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce([employee])
+      .mockRejectedValueOnce(
+        new ApiClientError(403, "denied", "Permission revoked"),
+      );
+    setup({ employees: [employee], list });
+    await screen.findByText("Sofía");
+
+    await act(async () => {
+      await realtimeRefreshes.get("settings:self")?.();
+    });
+
+    expect(screen.queryByText("Sofía")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Permission revoked");
+  });
+
+  it("keeps a successful empty view mounted while an empty refresh is pending", async () => {
+    let resolveRefresh: ((value: VirtualEmployee[]) => void) | undefined;
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      )
+      .mockResolvedValueOnce([]);
+    setup({ list });
+    const emptyHeading = await screen.findByRole("heading", {
+      name: "No hay empleados virtuales",
+    });
+    const emptyView = emptyHeading.parentElement;
+
+    let refresh: Promise<unknown> | undefined;
+    act(() => {
+      refresh = Promise.resolve(realtimeRefreshes.get("settings:self")?.());
+    });
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+
+    expect(
+      screen.getByRole("heading", { name: "No hay empleados virtuales" })
+        .parentElement,
+    ).toBe(emptyView);
+    expect(screen.getByRole("status")).toHaveTextContent(/actualizando/i);
+    await act(async () => resolveRefresh?.([]));
+    await refresh;
+    expect(
+      screen.getByRole("heading", { name: "No hay empleados virtuales" })
+        .parentElement,
+    ).toBe(emptyView);
+  });
+
+  it("retains the loaded row and exposes retry after a transient read error", async () => {
+    const employee = makeEmployee();
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce([employee])
+      .mockRejectedValueOnce(new Error("Network unavailable"))
+      .mockResolvedValueOnce([employee]);
+    const { client } = setup({ employees: [employee], list });
+    const name = await screen.findByText("Sofía");
+    const row = name.closest("li");
+
+    await act(async () => {
+      await realtimeRefreshes.get("settings:self")?.();
+    });
+
+    expect(screen.getByText("Sofía").closest("li")).toBe(row);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Network unavailable");
+    await userEvent
+      .setup()
+      .click(within(status).getByRole("button", { name: /reintentar/i }));
+    await waitFor(() => expect(client.list).toHaveBeenCalledTimes(3));
+    expect(screen.getByText("Sofía").closest("li")).toBe(row);
+  });
+
+  it("does not let an old client read overwrite a new tenant's employees", async () => {
+    const firstEmployee = makeEmployee();
+    const { client: firstClient, rerender } = setup({
+      employees: [firstEmployee],
+    });
+    const secondClient = {
+      list: vi
+        .fn()
+        .mockResolvedValue([
+          { ...makeEmployee([]), id: "employee-2", name: "Nueva" },
+        ]),
+      listCollections: vi.fn().mockResolvedValue([]),
+      get: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      uploadFile: vi.fn(),
+      deleteFile: vi.fn(),
+    };
+    let resolveOldRead: ((value: VirtualEmployee[]) => void) | undefined;
+    await screen.findByText("Sofía");
+    firstClient.list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOldRead = resolve;
+        }),
+    );
+    const oldRefresh = realtimeRefreshes.get("settings:self");
+    act(() => {
+      void oldRefresh?.();
+    });
+    await waitFor(() => expect(firstClient.list).toHaveBeenCalledTimes(2));
+
+    rerender(
+      <VirtualEmployeesManagement
+        client={secondClient as never}
+        assistantConfigClient={
+          { models: vi.fn().mockResolvedValue([]) } as never
+        }
+      />,
+    );
+    await screen.findByRole("button", { name: "Editar" });
+    await screen.findByText("Nueva");
+    await act(async () => resolveOldRead?.([firstEmployee]));
+
+    expect(screen.getByText("Nueva")).toBeInTheDocument();
+    expect(screen.queryByText("Sofía")).not.toBeInTheDocument();
+    expect(secondClient.list).toHaveBeenCalledOnce();
+  });
+
+  it("refetches after principal replacement and ignores the old session result", async () => {
+    let resolveOldRead: ((value: VirtualEmployee[]) => void) | undefined;
+    let resolveNewRead: ((value: VirtualEmployee[]) => void) | undefined;
+    const list = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOldRead = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNewRead = resolve;
+          }),
+      );
+    const { client } = setup({ list });
+    await waitFor(() => expect(client.list).toHaveBeenCalledTimes(1));
+
+    act(() => rotateSessionScope("principal-change"));
+    await waitFor(() => expect(client.list).toHaveBeenCalledTimes(2));
+    const newEmployee = {
+      ...makeEmployee([]),
+      id: "employee-new",
+      name: "Nueva",
+    };
+    await act(async () => resolveNewRead?.([newEmployee]));
+    await screen.findByText("Nueva");
+    await act(async () => resolveOldRead?.([makeEmployee()]));
+
+    expect(screen.getByText("Nueva")).toBeInTheDocument();
+    expect(screen.queryByText("Sofía")).not.toBeInTheDocument();
   });
 });

@@ -1,10 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  fireEvent,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { NotificationBell } from "./notification-bell";
 import { NotificationInbox } from "./notification-inbox";
 import type { NotificationClient } from "./client";
+import { rotateSessionScope } from "@/auth/session-scope";
 
 afterEach(cleanup);
 
@@ -64,6 +71,21 @@ it("shows the unread badge and opens the inbox dialog", async () => {
     screen.getByRole("button", { name: "savia.notificationInbox.title (3)" }),
   );
   expect(await screen.findByRole("dialog")).toBeVisible();
+});
+
+it("reads a fresh notification count after the authenticated principal changes", async () => {
+  const unreadCount = vi.fn().mockResolvedValueOnce(4).mockResolvedValueOnce(1);
+  setup({ unreadCount });
+  expect(
+    await screen.findByLabelText("savia.notificationInbox.title (4)"),
+  ).toBeVisible();
+
+  act(() => rotateSessionScope("principal-change"));
+
+  expect(
+    await screen.findByLabelText("savia.notificationInbox.title (1)"),
+  ).toBeVisible();
+  expect(unreadCount).toHaveBeenCalledTimes(2);
 });
 
 it("paginates filters and retries failed mutations", async () => {

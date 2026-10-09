@@ -2,7 +2,7 @@ import {
   useRealtimeRefresh,
   RemoteChangesNotice,
 } from "@/realtime/use-realtime-refresh";
-import { useState, useEffect, useMemo, type ElementType } from "react";
+import { useState, useEffect, useMemo, useRef, type ElementType } from "react";
 import { toast } from "sonner";
 import {
   Briefcase,
@@ -60,6 +60,9 @@ import { useMessages } from "@/i18n/core";
 import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
 import { IntegrationHelpTooltip } from "./integration-ui";
 import { createTranslationEmployeeTemplate } from "./translation-employee-template";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
+import { useSessionGeneration } from "@/auth/session-scope";
+import { isReadAccessDenied } from "@/queries/read-state";
 
 type EmployeeAccessMode = "text" | "workspace";
 
@@ -88,6 +91,7 @@ export function VirtualEmployeesManagement({
   assistantConfigClient?: AssistantConfigurationClient;
 }) {
   const t = useMessages(personalIntegrationsMessages);
+  const sessionGeneration = useSessionGeneration();
   const [realtimeTenant, setRealtimeTenant] = useState<number>();
   useEffect(() => {
     let active = true;
@@ -102,6 +106,28 @@ export function VirtualEmployeesManagement({
     };
   }, [assistantConfigClient]);
   const [employees, setEmployees] = useState<VirtualEmployee[]>([]);
+  const [hasEmployeeData, setHasEmployeeData] = useState(false);
+  const [loadedEmployeeClient, setLoadedEmployeeClient] =
+    useState<VirtualEmployeesClient | null>(null);
+  const [loadedEmployeeSessionGeneration, setLoadedEmployeeSessionGeneration] =
+    useState<number | null>(null);
+  const [employeeReadError, setEmployeeReadError] = useState<string | null>(
+    null,
+  );
+  const [refreshingEmployees, setRefreshingEmployees] = useState(false);
+  const employeeReadGeneration = useRef(0);
+  const collectionsReadGeneration = useRef(0);
+  const currentClient = useRef(client);
+  const currentSessionGeneration = useRef(sessionGeneration);
+  if (
+    currentClient.current !== client ||
+    currentSessionGeneration.current !== sessionGeneration
+  ) {
+    currentClient.current = client;
+    currentSessionGeneration.current = sessionGeneration;
+    employeeReadGeneration.current += 1;
+    collectionsReadGeneration.current += 1;
+  }
   const [models, setModels] = useState<AssistantModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -125,6 +151,12 @@ export function VirtualEmployeesManagement({
   const [availableCollections, setAvailableCollections] = useState<
     SystemCollection[]
   >([]);
+  const [loadedCollectionsClient, setLoadedCollectionsClient] =
+    useState<VirtualEmployeesClient | null>(null);
+  const [
+    loadedCollectionsSessionGeneration,
+    setLoadedCollectionsSessionGeneration,
+  ] = useState<number | null>(null);
   const [loadingCollections, setLoadingCollections] = useState(false);
   const [model, setModel] = useState("");
   const [status, setStatus] = useState<"active" | "inactive">("active");
@@ -153,38 +185,111 @@ export function VirtualEmployeesManagement({
   }, [assistantConfigClient]);
 
   async function loadEmployees() {
-    setLoading(true);
+    const generation = ++employeeReadGeneration.current;
+    const hasCurrentData =
+      loadedEmployeeClient === client &&
+      loadedEmployeeSessionGeneration === sessionGeneration &&
+      hasEmployeeData;
+    if (hasCurrentData) setRefreshingEmployees(true);
+    else setLoading(true);
     try {
       if (!client || typeof client.list !== "function") {
+        if (generation !== employeeReadGeneration.current) return;
         setEmployees([]);
+        setHasEmployeeData(true);
+        setEmployeeReadError(null);
         return;
       }
       const data = await client.list();
+      if (
+        generation !== employeeReadGeneration.current ||
+        currentClient.current !== client ||
+        currentSessionGeneration.current !== sessionGeneration
+      )
+        return;
       setEmployees(data);
-    } catch (err: any) {
-      toast.error(err.message || t("Error al cargar empleados virtuales"));
+      setHasEmployeeData(true);
+      setLoadedEmployeeSessionGeneration(sessionGeneration);
+      setEmployeeReadError(null);
+    } catch (err: unknown) {
+      if (
+        generation !== employeeReadGeneration.current ||
+        currentClient.current !== client ||
+        currentSessionGeneration.current !== sessionGeneration
+      )
+        return;
+      setEmployeeReadError(
+        err instanceof Error
+          ? err.message
+          : t("Error al cargar empleados virtuales"),
+      );
+      if (isReadAccessDenied(err) || !hasCurrentData) {
+        setEmployees([]);
+        setHasEmployeeData(false);
+      }
     } finally {
-      setLoading(false);
+      if (
+        generation === employeeReadGeneration.current &&
+        currentClient.current === client &&
+        currentSessionGeneration.current === sessionGeneration
+      ) {
+        setLoading(false);
+        setRefreshingEmployees(false);
+        setLoadedEmployeeClient(client);
+        setLoadedEmployeeSessionGeneration(sessionGeneration);
+      }
     }
   }
 
   async function loadCollections() {
-    if (!client || typeof client.listCollections !== "function") return;
-    setLoadingCollections(true);
+    const generation = ++collectionsReadGeneration.current;
+    const hasCurrentCollections =
+      loadedCollectionsClient === client &&
+      loadedCollectionsSessionGeneration === sessionGeneration;
+    if (!hasCurrentCollections) setLoadingCollections(true);
     try {
+      if (!client || typeof client.listCollections !== "function") {
+        if (generation !== collectionsReadGeneration.current) return;
+        setAvailableCollections([]);
+        return;
+      }
       const data = await client.listCollections();
+      if (
+        generation !== collectionsReadGeneration.current ||
+        currentClient.current !== client ||
+        currentSessionGeneration.current !== sessionGeneration
+      )
+        return;
       setAvailableCollections(data);
-    } catch {
-      setAvailableCollections([]);
+    } catch (error) {
+      if (
+        generation === collectionsReadGeneration.current &&
+        currentClient.current === client &&
+        currentSessionGeneration.current === sessionGeneration
+      )
+        if (isReadAccessDenied(error) || !hasCurrentCollections)
+          setAvailableCollections([]);
     } finally {
-      setLoadingCollections(false);
+      if (
+        generation === collectionsReadGeneration.current &&
+        currentClient.current === client &&
+        currentSessionGeneration.current === sessionGeneration
+      ) {
+        setLoadingCollections(false);
+        setLoadedCollectionsClient(client);
+        setLoadedCollectionsSessionGeneration(sessionGeneration);
+      }
     }
   }
 
   useEffect(() => {
     void loadEmployees();
     void loadCollections();
-  }, [client]);
+    return () => {
+      employeeReadGeneration.current += 1;
+      collectionsReadGeneration.current += 1;
+    };
+  }, [client, sessionGeneration]);
 
   const remote = useRealtimeRefresh({
     topics: ["settings"],
@@ -405,7 +510,12 @@ export function VirtualEmployeesManagement({
   }
 
   const allKnownCollections = useMemo(() => {
-    const list = [...availableCollections];
+    const currentCollections =
+      loadedCollectionsClient === client &&
+      loadedCollectionsSessionGeneration === sessionGeneration
+        ? availableCollections
+        : [];
+    const list = [...currentCollections];
     for (const sel of selectedCollections) {
       if (sel !== "*" && !list.some((c) => c.name === sel)) {
         list.push({
@@ -415,7 +525,14 @@ export function VirtualEmployeesManagement({
       }
     }
     return list;
-  }, [availableCollections, selectedCollections]);
+  }, [
+    availableCollections,
+    client,
+    loadedCollectionsClient,
+    loadedCollectionsSessionGeneration,
+    selectedCollections,
+    sessionGeneration,
+  ]);
 
   const filteredCollections = useMemo(() => {
     const q = collectionSearch.toLowerCase().trim();
@@ -469,18 +586,47 @@ export function VirtualEmployeesManagement({
 
   const filteredEmployees = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return employees;
-    return employees.filter(
+    const currentEmployees =
+      loadedEmployeeClient === client &&
+      loadedEmployeeSessionGeneration === sessionGeneration &&
+      hasEmployeeData
+        ? employees
+        : [];
+    if (!q) return currentEmployees;
+    return currentEmployees.filter(
       (e) =>
         e.name.toLowerCase().includes(q) ||
         e.handle.toLowerCase().includes(q) ||
         (e.position && e.position.toLowerCase().includes(q)),
     );
-  }, [employees, search]);
+  }, [
+    client,
+    employees,
+    hasEmployeeData,
+    loadedEmployeeClient,
+    loadedEmployeeSessionGeneration,
+    search,
+    sessionGeneration,
+  ]);
+  const hasCurrentEmployeeData =
+    loadedEmployeeClient === client &&
+    loadedEmployeeSessionGeneration === sessionGeneration &&
+    hasEmployeeData;
+  const loadingCurrentEmployees =
+    loading ||
+    loadedEmployeeClient !== client ||
+    loadedEmployeeSessionGeneration !== sessionGeneration;
 
   return (
     <div className="space-y-6">
       <RemoteChangesNotice {...remote} />
+      {hasCurrentEmployeeData ? (
+        <ReadRefreshStatus
+          refreshing={refreshingEmployees}
+          error={employeeReadError ?? undefined}
+          onRetry={() => void loadEmployees()}
+        />
+      ) : null}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
         <div>
           <div className="flex items-center gap-1.5">
@@ -533,7 +679,7 @@ export function VirtualEmployeesManagement({
         </Badge>
       </div>
 
-      {loading ? (
+      {loadingCurrentEmployees ? (
         <div className="overflow-hidden rounded-xl border bg-card divide-y">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-4 p-4 animate-pulse">
@@ -546,6 +692,11 @@ export function VirtualEmployeesManagement({
             </div>
           ))}
         </div>
+      ) : employeeReadError && !hasCurrentEmployeeData ? (
+        <ReadRefreshStatus
+          error={employeeReadError}
+          onRetry={() => void loadEmployees()}
+        />
       ) : filteredEmployees.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed bg-card/40">
           <Bot className="size-12 text-muted-foreground mb-3" />

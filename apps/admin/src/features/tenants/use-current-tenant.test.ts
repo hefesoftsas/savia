@@ -54,6 +54,7 @@ describe("useCurrentTenant", () => {
       monogram: "S",
       isPlatformAdmin: false,
       isLoading: false,
+      scopeStatus: "platform",
     });
   });
 
@@ -224,5 +225,50 @@ describe("useCurrentTenant", () => {
 
     expect(result.current.name).toBe("Merka");
     expect(result.current.isLoading).toBe(false);
+    expect(result.current.scopeStatus).toBe("unavailable");
+  });
+
+  it("keeps dedicated reads blocked when tenant resolution fails and exposes retry", async () => {
+    const { get, services } = createServices(
+      vi.fn().mockRejectedValue(new Error("private upstream details")),
+    );
+    const { result } = renderHook(
+      () => useCurrentTenant({ hostname: "merka.savia.app.hefesoft.com" }),
+      { wrapper: servicesWrapper(services) },
+    );
+
+    await waitFor(() => expect(result.current.scopeStatus).toBe("error"), {
+      timeout: 3_000,
+    });
+    expect(result.current.id).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.scopeError).toBeTruthy();
+    expect(result.current.scopeError).not.toContain("private upstream");
+    expect(result.current.retry).toEqual(expect.any(Function));
+
+    get.mockResolvedValueOnce({
+      data: { name: "Merka", kind: "commercial", id: 42 },
+    });
+    await act(async () => {
+      await result.current.retry?.();
+    });
+    await waitFor(() => expect(result.current.scopeStatus).toBe("resolved"));
+    expect(result.current.id).toBe(42);
+  });
+
+  it("does not resolve a dedicated scope without a valid tenant id", async () => {
+    const { services } = createServices(
+      vi.fn().mockResolvedValue({
+        data: { name: "Merka", kind: "commercial", id: null },
+      }),
+    );
+    const { result } = renderHook(
+      () => useCurrentTenant({ hostname: "merka.savia.app.hefesoft.com" }),
+      { wrapper: servicesWrapper(services) },
+    );
+
+    await waitFor(() => expect(result.current.scopeStatus).toBe("error"));
+    expect(result.current.id).toBeNull();
+    expect(result.current.scopeError).toBeTruthy();
   });
 });

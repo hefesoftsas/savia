@@ -8,20 +8,46 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import {
   cleanup,
+  act,
   render as testingRender,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "@/app-services";
+import { ApiClientError } from "@/api/api-client";
 import {
   AssistantConfigurationPage,
   AssistantConfigurationPanel,
 } from "./assistant-configuration-page";
 
+const realtimeRefreshes = vi.hoisted(
+  () => new Map<string, () => void | Promise<unknown>>(),
+);
+
+vi.mock("@/realtime/use-realtime-refresh", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/realtime/use-realtime-refresh")>();
+  return {
+    ...actual,
+    useRealtimeRefresh: (options: {
+      topics: string[];
+      tenantId?: number;
+      refresh: () => void | Promise<unknown>;
+    }) => {
+      realtimeRefreshes.set(
+        `${options.topics.join(",")}:${options.tenantId ?? "self"}`,
+        options.refresh,
+      );
+      return { changed: false, reload: async () => undefined };
+    },
+  };
+});
+
 afterEach(cleanup);
+beforeEach(() => realtimeRefreshes.clear());
 
 function servicesWithSummary(
   overrides: Array<{ tenantId: number; model: string | null }> = [],
@@ -913,4 +939,129 @@ it("switches assistant settings without losing an unsaved key or model identifie
   );
   expect(services.assistantConfiguration.summary).toHaveBeenCalledTimes(1);
   expect(services.assistantConfiguration.saveGlobal).not.toHaveBeenCalled();
+});
+
+describe("assistant configuration background reads", () => {
+  it.each([401, 403])(
+    "clears loaded configuration and drafts when a refresh is denied with %i",
+    async (status) => {
+      const user = userEvent.setup();
+      const services = servicesWithSummary();
+      const initial = await services.assistantConfiguration.summary();
+      services.assistantConfiguration.summary = vi
+        .fn()
+        .mockResolvedValueOnce(initial)
+        .mockRejectedValueOnce(
+          new ApiClientError(status, "denied", "Permission revoked"),
+        );
+      render(<AssistantConfigurationPage services={services} />);
+      const keyInput = await screen.findByLabelText("Clave OpenRouter");
+      await user.type(keyInput, "unsaved-secret");
+
+      await act(async () => {
+        await realtimeRefreshes.get("settings:0")?.();
+      });
+
+      expect(screen.getByRole("alert")).toBeVisible();
+      expect(screen.queryByLabelText("Clave OpenRouter")).toBeNull();
+      expect(screen.queryByText("deepseek/deepseek-v4-flash")).toBeNull();
+    },
+  );
+
+  it("keeps loaded settings mounted while a clean background read is pending", async () => {
+    const services = servicesWithSummary();
+    const initial = await services.assistantConfiguration.summary();
+    let resolveRefresh: ((value: typeof initial) => void) | undefined;
+    services.assistantConfiguration.summary = vi
+      .fn()
+      .mockResolvedValueOnce(initial)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      );
+    render(<AssistantConfigurationPage services={services} />);
+    await screen.findByLabelText("Clave OpenRouter");
+    const tabList = screen.getByRole("tablist");
+
+    let refresh: Promise<unknown> | undefined;
+    act(() => {
+      refresh = Promise.resolve(realtimeRefreshes.get("settings:0")?.());
+    });
+    await waitFor(() =>
+      expect(services.assistantConfiguration.summary).toHaveBeenCalledTimes(2),
+    );
+
+    expect(screen.getByRole("tablist")).toBe(tabList);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /actualizando|updating/i,
+    );
+    await act(async () => resolveRefresh?.(initial));
+    await refresh;
+    expect(screen.getByRole("tablist")).toBe(tabList);
+  });
+
+  it("keeps a dirty key and loaded settings after a refresh fails", async () => {
+    const user = userEvent.setup();
+    const services = servicesWithSummary();
+    const initial = await services.assistantConfiguration.summary();
+    services.assistantConfiguration.summary = vi
+      .fn()
+      .mockResolvedValueOnce(initial)
+      .mockRejectedValueOnce(new Error("Network unavailable"));
+    render(<AssistantConfigurationPage services={services} />);
+    const keyInput = await screen.findByLabelText("Clave OpenRouter");
+    await user.type(keyInput, "unsaved-secret");
+    const tabList = screen.getByRole("tablist");
+
+    await act(async () => {
+      await realtimeRefreshes.get("settings:0")?.();
+    });
+
+    expect(screen.getByRole("tablist")).toBe(tabList);
+    expect(screen.getByLabelText("Clave OpenRouter")).toHaveValue(
+      "unsaved-secret",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Network unavailable");
+  });
+
+  it("ignores an older read that settles after the newer settings read", async () => {
+    const services = servicesWithSummary();
+    const initial = await services.assistantConfiguration.summary();
+    let resolveOlder: ((value: typeof initial) => void) | undefined;
+    let resolveNewer: ((value: typeof initial) => void) | undefined;
+    services.assistantConfiguration.summary = vi
+      .fn()
+      .mockResolvedValueOnce(initial)
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (resolveOlder = resolve)),
+      )
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (resolveNewer = resolve)),
+      );
+    render(<AssistantConfigurationPage services={services} />);
+    await screen.findByLabelText("Clave OpenRouter");
+    const refresh = realtimeRefreshes.get("settings:0");
+    let older: Promise<unknown> | undefined;
+    let newer: Promise<unknown> | undefined;
+    act(() => {
+      older = Promise.resolve(refresh?.());
+      newer = Promise.resolve(refresh?.());
+    });
+    await waitFor(() =>
+      expect(services.assistantConfiguration.summary).toHaveBeenCalledTimes(3),
+    );
+
+    const updated = {
+      ...initial,
+      global: { ...initial.global!, model: "newer/model" },
+    };
+    await act(async () => resolveNewer?.(updated));
+    await newer;
+    await act(async () => resolveOlder?.(initial));
+    await older;
+
+    expect(screen.getByLabelText("Modelo global")).toHaveValue("newer/model");
+  });
 });

@@ -24,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 import type { AppServices } from "@/app-services";
-import { ApiClientError } from "@/api/api-client";
+import { isReadAccessDenied } from "@/queries/read-state";
 import type {
   AssistantConfigurationKeyState,
   AssistantConfigurationSetting,
@@ -74,6 +74,7 @@ import {
 } from "@/features/service-credentials/credential-registry";
 import { ModelCapabilityBadges } from "./model-capability-badges";
 import { SettingsPanelSkeleton } from "@/components/admin/page-skeletons";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
 
 type ConfigurationServices = Pick<AppServices, "assistantConfiguration">;
 type ConfigurationTab = "global" | "tenant";
@@ -155,6 +156,7 @@ export function AssistantConfigurationPanel({
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [globalKey, setGlobalKey] = useState("");
@@ -198,6 +200,16 @@ export function AssistantConfigurationPanel({
   const [activeTab, setActiveTab] = useState<ConfigurationTab>(
     fixedTenantId === undefined ? "global" : "tenant",
   );
+  const readGeneration = useRef(0);
+  const readScope = useRef({ client, globalOnly, fixedTenantId });
+  if (
+    readScope.current.client !== client ||
+    readScope.current.globalOnly !== globalOnly ||
+    readScope.current.fixedTenantId !== fixedTenantId
+  ) {
+    readScope.current = { client, globalOnly, fixedTenantId };
+    readGeneration.current += 1;
+  }
 
   const selectedOverride = useMemo(
     () =>
@@ -227,10 +239,15 @@ export function AssistantConfigurationPanel({
     selectedTenantId,
   ]);
   const load = async () => {
+    const generation = ++readGeneration.current;
+    const scope = readScope.current;
     const snapshot = draftSnapshot.current;
     setLoading(true);
-    setError(null);
-    setAccessDenied(false);
+    if (summary === null) {
+      setError(null);
+      setAccessDenied(false);
+      setRefreshError(null);
+    }
     try {
       const [nextSummary, activeTenant] = await Promise.all([
         client.summary(),
@@ -238,6 +255,10 @@ export function AssistantConfigurationPanel({
           ? Promise.resolve({ tenants: [] })
           : client.activeTenant(),
       ]);
+      if (generation !== readGeneration.current || scope !== readScope.current)
+        return;
+      setRefreshError(null);
+      setAccessDenied(false);
       if (draftSnapshot.current !== snapshot) return;
       setSummary(nextSummary);
       const accessibleTenants = nextSummary.manageableTenantIds
@@ -296,24 +317,48 @@ export function AssistantConfigurationPanel({
         setTenantSpeechModel(setting?.speechModel ?? "");
       }
     } catch (exception) {
-      if (exception instanceof ApiClientError && exception.status === 403) {
+      if (generation !== readGeneration.current || scope !== readScope.current)
+        return;
+      if (isReadAccessDenied(exception)) {
         setAccessDenied(true);
+        setSummary(null);
+        setTenants([]);
+        setGlobalKey("");
+        setShowGlobalKey(false);
+        setGlobalModel("");
+        setGlobalAllowedModels(null);
+        setTranscriptionModel("");
+        setSummaryModel("");
+        setImageGenerationModel("");
+        setSpeechModel("");
+        setSelectedTenantId(fixedTenantId);
+        setTenantKey("");
+        setClearTenantKey(false);
+        setTenantModel("");
+        setTenantAllowedModels(null);
+        setTenantTranscriptionModel("");
+        setTenantSummaryModel("");
+        setTenantImageGenerationModel("");
+        setTenantSpeechModel("");
+        setError(null);
+        setRefreshError(null);
       } else {
-        setError(
-          failureMessage(
-            exception,
-            t("No fue posible cargar la configuración."),
-          ),
+        const message = failureMessage(
+          exception,
+          t("No fue posible cargar la configuración."),
         );
+        if (summary === null) setError(message);
+        else setRefreshError(message);
       }
     } finally {
-      setLoading(false);
+      if (generation === readGeneration.current && scope === readScope.current)
+        setLoading(false);
     }
   };
 
   useEffect(() => {
     void load();
-  }, [client]);
+  }, [client, fixedTenantId, globalOnly]);
 
   const draftDirty = Boolean(
     globalKey ||
@@ -645,7 +690,7 @@ export function AssistantConfigurationPanel({
     }
   };
 
-  if (loading) {
+  if (loading && summary === null) {
     if (embedded) {
       return <SettingsPanelSkeleton className="py-2" />;
     }
@@ -999,6 +1044,13 @@ export function AssistantConfigurationPanel({
           await remoteTenant.reload();
         }}
       />
+      {summary ? (
+        <ReadRefreshStatus
+          refreshing={loading}
+          error={refreshError ?? undefined}
+          onRetry={() => void load()}
+        />
+      ) : null}
       {embedded && globalOnly ? (
         <>
           <CredentialEntry

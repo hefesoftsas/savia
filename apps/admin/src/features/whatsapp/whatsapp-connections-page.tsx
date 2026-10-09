@@ -1,3 +1,4 @@
+import { TenantScopeBoundary } from "@/features/tenants/tenant-scope-boundary";
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 import { useEffect, useRef, useState } from "react";
@@ -135,10 +136,21 @@ export function WhatsappConnectionsPage({
   const actionFeedbackVersion = useRef(0);
   const latestTenant = useRef(currentTenant);
   latestTenant.current = currentTenant;
+  const scopeReady =
+    currentTenant.scopeStatus === undefined
+      ? !currentTenant.isLoading
+      : currentTenant.scopeStatus === "platform" ||
+        currentTenant.scopeStatus === "resolved";
 
   async function refresh({ preserveDrafts = false } = {}) {
     if (latestTenant.current.id !== currentTenant.id) return;
-    if (currentTenant.isLoading || latestTenant.current.isLoading) {
+    if (
+      !scopeReady ||
+      latestTenant.current.isLoading ||
+      (latestTenant.current.scopeStatus !== undefined &&
+        latestTenant.current.scopeStatus !== "platform" &&
+        latestTenant.current.scopeStatus !== "resolved")
+    ) {
       setLoading(true);
       setProvider(null);
       setConnection(null);
@@ -211,7 +223,7 @@ export function WhatsappConnectionsPage({
   }
 
   useEffect(() => {
-    if (currentTenant.isLoading) {
+    if (!scopeReady) {
       refreshRequestId.current += 1;
       setLoading(true);
       setProvider(null);
@@ -223,19 +235,23 @@ export function WhatsappConnectionsPage({
     return () => {
       refreshRequestId.current += 1;
     };
-  }, [services.whatsapp, currentTenant.id, currentTenant.isLoading]);
+  }, [
+    services.whatsapp,
+    currentTenant.id,
+    currentTenant.isLoading,
+    scopeReady,
+  ]);
 
   useRealtimeRefresh({
     topics: ["integrations"],
     tenantId: currentTenant.isPlatformAdmin
       ? 0
       : (currentTenant.id ?? undefined),
-    enabled: !currentTenant.isLoading,
+    enabled: scopeReady,
     refresh: () => refresh({ preserveDrafts: true }),
   });
 
-  const tenantDataIsCurrent =
-    !currentTenant.isLoading && loadedTenantId === currentTenant.id;
+  const tenantDataIsCurrent = scopeReady && loadedTenantId === currentTenant.id;
   const enabled = provider?.availability === "enabled";
   const connected = connection?.status === "connected";
   const canConfigureAssistant =
@@ -674,6 +690,15 @@ export function WhatsappConnectionsPage({
     </>
   );
 
+  if (!scopeReady)
+    return (
+      <TenantScopeBoundary
+        status={currentTenant.scopeStatus ?? "loading"}
+        retry={currentTenant.retry}
+      >
+        <span />
+      </TenantScopeBoundary>
+    );
   if (embedded) {
     return <>{content}</>;
   }

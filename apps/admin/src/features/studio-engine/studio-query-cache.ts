@@ -1,7 +1,9 @@
+import { createProtectedReadCache } from "@/queries/query-policy";
 import { QueryClient } from "@tanstack/react-query";
 
 export function createStudioQueryClient(): QueryClient {
   return new QueryClient({
+    queryCache: createProtectedReadCache(),
     defaultOptions: {
       queries: {
         retry: 0,
