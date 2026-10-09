@@ -28,3 +28,9 @@ export function deriveReadState({
   if (error != null) return "initial-error";
   return "initial";
 }
+
+export function isReadAccessDenied(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const status = (error as { status?: unknown }).status;
+  return status === 401 || status === 403;
+}
