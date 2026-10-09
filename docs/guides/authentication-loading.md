@@ -58,3 +58,10 @@ If the browser does not finish an OAuth redirect within ten seconds, the page
 restores its content and exposes **Continue to Savia** as a normal link to the
 same server-provided destination. It preserves the authorization, PKCE and MFA
 requirements; the link does not create a different session or grant.
+
+Profile refresh and background route reads do not re-enter the application boot
+splash. Actual principal replacement rotates the authenticated subtree and
+discards previous-owner state. Dedicated tenant lookup has a separate boundary:
+its initial failure offers retry and prevents protected default-scope reads while
+keeping sign-in available. See [stable background refresh](background-refresh.md)
+for read retention and authorization-denial rules.

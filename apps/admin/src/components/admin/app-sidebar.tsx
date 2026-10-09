@@ -944,10 +944,7 @@ export function AppSidebar() {
             </div>
           ) : null}
           {saveError ? (
-            <div
-              className="flex items-start gap-1.5 px-1"
-              role="alert"
-            >
+            <div className="flex items-start gap-1.5 px-1" role="alert">
               <p className="min-w-0 flex-1 text-xs text-destructive">
                 {saveError}
               </p>

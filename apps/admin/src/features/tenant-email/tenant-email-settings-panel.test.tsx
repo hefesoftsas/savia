@@ -59,14 +59,12 @@ it("loads redacted settings, retains blank passwords on save, tests delivery and
 
 it("retains SMTP draft fields and focus when saving fails", async () => {
   const apiClient = {
-    get: vi
-      .fn()
-      .mockResolvedValue({
-        configured: true,
-        host: "smtp.example.test",
-        username: "relay",
-        from: "mail@example.test",
-      }),
+    get: vi.fn().mockResolvedValue({
+      configured: true,
+      host: "smtp.example.test",
+      username: "relay",
+      from: "mail@example.test",
+    }),
     put: vi.fn().mockRejectedValue(new Error("Offline")),
   };
   render(

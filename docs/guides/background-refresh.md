@@ -8,7 +8,7 @@ Admin server reads use the existing memory-only TanStack Query client. `createAd
 
 New domain queries use `readKey` with session generation, principal/tenant/platform/public scope, resource and parameters. Never use previous-scope data as placeholder when a tenant, authenticated principal, record or public link changes. Keep raw tokens and credentials out of keys, logs and status copy. Public routes use opaque identifiers.
 
-`useCurrentTenant` shares one read per authenticated generation and hostname and forwards cancellation to the API. Normal app consumers share the app's QueryClient; standalone consumers have an in-memory client partitioned by API client.
+`useCurrentTenant` shares one read per authenticated generation and hostname and forwards cancellation to the API. Normal app consumers share the app's QueryClient; standalone consumers have an in-memory client partitioned by API client. Its `scopeStatus` distinguishes platform, loading, resolved, error and unavailable scopes. A failed dedicated-host lookup must not enable a default/personal tenant read. The authenticated layout blocks unresolved protected route content and offers retry; sign-in remains available.
 
 A same-principal account/profile change emits `savia:identity-changed` for identity display and `savia:account-changed` for preferences. It does not dispose unrelated editors or caches. Actual principal replacement or logout rotates the session generation and emits `savia:principal-changed`. Logout retains `savia:session-cleared` cleanup. Protected queries, old sockets and previous-owner permissions cannot survive owner replacement. Offline fallbacks must never reuse a different principal's permissions.
 
@@ -24,7 +24,35 @@ Use domain-specific invalidation. Account hints invalidate permissions and ident
 
 Keep draft state independent of server read models. Clean forms may adopt fresh values. Dirty/submitting forms defer refresh/reset and surface the existing remote-change notice. Revision conflicts, deleted records and revoked permissions retain explicit domain handling.
 
+The Admin and Studio QueryClient factories use `createProtectedReadCache`, which discards a denied query's cached data while preserving its error. Specialized manual loaders apply the same `isReadAccessDenied` check.
+
 Transient errors preserve the last successful data. Initial errors show a load error rather than a false empty success. A 401/403 or logout removes protected content; background error retention never overrides access checks. Scope/request generation guards prevent late completions from committing into a newer scope. A later action result takes precedence over older background errors.
+
+## New read models
+
+Use the application's QueryClient and a stable scope key. For example, a tenant detail reader can use the existing API client:
+
+```tsx
+const sessionGeneration = useSessionGeneration();
+const queryKey = readKey(
+  { sessionGeneration, kind: "tenant", id: String(tenantId) },
+  "tenant-details",
+);
+const read = useQuery({
+  queryKey,
+  enabled: scopeReady,
+  queryFn: ({ signal }) => apiClient.get(`/v1/tenants/${tenantId}`, { signal }),
+});
+useRealtimeQuery({
+  topics: ["tenants"],
+  tenantId,
+  enabled: scopeReady,
+  queryKeys: [queryKey],
+  blocked: dirty || saving,
+});
+```
+
+Render an initial skeleton only while there is no successful data. Keep the loaded subtree in place during `read.isFetching` and show `ReadRefreshStatus` beside it. Keep mutation feedback and read errors separate. When a refresh starts clean but the user edits before it finishes, compare the edit/request revision before adopting server values, as the branding editor does. A scope switch or denied read clears protected content.
 
 ## Verification and rollout
 
