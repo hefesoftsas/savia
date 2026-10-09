@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AppServices } from "@/app-services";
 import type { WhatsappAssistantConfiguration } from "@/api/whatsapp-client";
 import { Button } from "@/components/ui/button";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { IntegrationGroup } from "@/features/personal-integrations/integration-ui";
 
 export function WhatsappAssistantSettings({
@@ -88,7 +89,7 @@ export function WhatsappAssistantSettings({
   return (
     <IntegrationGroup
       title="Asistente de WhatsApp"
-      description="Elige qué empleado virtual responde y limita la conversación a tus contactos de prueba."
+      help="Elige qué empleado virtual responde. Cada contacto conserva su propia conversación."
     >
       <li className="space-y-5 px-5 py-5 sm:px-6">
         {loading ? (
@@ -141,12 +142,15 @@ export function WhatsappAssistantSettings({
               </div>
             </div>
             <div className="block text-sm">
-              <label
-                htmlFor="whatsapp-test-contacts"
-                className="mb-1.5 block font-medium"
-              >
-                Contactos de prueba
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="whatsapp-test-contacts" className="font-medium">
+                  Contactos de prueba
+                </label>
+                <HelpTooltip label="Ayuda: Contactos de prueba">
+                  Incluye el código de país y escribe un contacto por línea.
+                  Cada contacto conserva su propia conversación.
+                </HelpTooltip>
+              </div>
               <textarea
                 id="whatsapp-test-contacts"
                 aria-label="Contactos de prueba"
@@ -157,11 +161,6 @@ export function WhatsappAssistantSettings({
                 disabled={busy}
                 maxLength={1000}
               />
-              <p className="mt-1.5 block text-xs leading-5 text-muted-foreground">
-                Solo responderá a estos números. Incluye el código de país y
-                escribe un contacto por línea. Cada contacto conserva su propia
-                conversación.
-              </p>
             </div>
             {!configuration.webhookReady ? (
               <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">

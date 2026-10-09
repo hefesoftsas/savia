@@ -8,6 +8,7 @@ import type {
   WhatsappNativeState,
 } from "@/api/whatsapp-client";
 import { Button } from "@/components/ui/button";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Input } from "@/components/ui/input";
 import { IntegrationGroup } from "@/features/personal-integrations/integration-ui";
 
@@ -20,11 +21,11 @@ const flags = [
 ] as const;
 
 const resourceEditors = [
-  ["flows", "Flows (JSON; cada Flow incluye flowId y screen)"],
-  ["catalogs", "Catálogos y productos (JSON)"],
-  ["templates", "Plantillas aprobadas (JSON)"],
-  ["media", "Medios subidos (JSON)"],
-  ["locations", "Ubicaciones guardadas (JSON)"],
+  ["flows", "Flows"],
+  ["catalogs", "Catálogos y productos"],
+  ["templates", "Plantillas aprobadas"],
+  ["media", "Medios subidos"],
+  ["locations", "Ubicaciones guardadas"],
 ] as const;
 const kindLabels: Record<WhatsappNativeReply["kind"], string> = {
   text: "Texto",
@@ -38,6 +39,13 @@ const kindLabels: Record<WhatsappNativeReply["kind"], string> = {
 };
 
 type ResourceKey = (typeof resourceEditors)[number][0];
+const resourceEditorHelp: Record<ResourceKey, string> = {
+  flows: "Lista JSON de Flows. Cada Flow incluye flowId y screen.",
+  catalogs: "Lista JSON de catálogos y productos disponibles para tu cuenta.",
+  templates: "Lista JSON de plantillas aprobadas disponibles para tu cuenta.",
+  media: "Lista JSON de medios subidos disponibles para tu cuenta.",
+  locations: "Lista JSON de ubicaciones guardadas para tu cuenta.",
+};
 const initialJson = () => JSON.stringify([], null, 2);
 
 function makeIdempotencyKey(): string {
@@ -411,11 +419,17 @@ export function WhatsappNativeSettings({
   return (
     <IntegrationGroup
       title="Capacidades nativas de WhatsApp"
-      description="Configuración aislada por tenant. Las capacidades solo se envían al pulsar una acción de prueba."
+      help="Estas opciones se guardan para tu equipo. Guardar la configuración no envía mensajes; utiliza las acciones de prueba para probarlas."
     >
       <li className="space-y-6 px-5 py-5 sm:px-6">
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold">Capacidades</h3>
+          <div className="flex items-center gap-1">
+            <h3 className="text-sm font-semibold">Capacidades</h3>
+            <HelpTooltip label="Ayuda sobre capacidades de medios">
+              Imágenes y PDF requieren que el modelo del asistente admita visión
+              y archivos.
+            </HelpTooltip>
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {flags.map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 text-sm">
@@ -444,9 +458,8 @@ export function WhatsappNativeSettings({
               </label>
             ))}
           </div>
-          <p className="text-xs leading-5 text-muted-foreground">
-            Imágenes y PDF requieren que el modelo del asistente admita visión y
-            archivos. Para transcribir audio, configura un modelo compatible en{" "}
+          <p className="flex flex-wrap items-center gap-1 text-xs leading-5 text-muted-foreground">
+            Audio requiere un modelo compatible.
             <Link
               className="font-medium text-primary underline"
               to="/assistant-configuration"
@@ -458,12 +471,12 @@ export function WhatsappNativeSettings({
         </section>
 
         <section className="space-y-3">
-          <div>
+          <div className="flex items-center gap-1">
             <h3 className="text-sm font-medium">Recursos publicados de Meta</h3>
-            <p className="text-xs text-muted-foreground">
+            <HelpTooltip label="Ayuda sobre recursos publicados de Meta">
               Carga solo recursos reales disponibles para el número conectado;
               los cambios no se guardan hasta pulsar Guardar.
-            </p>
+            </HelpTooltip>
           </div>
           <Button
             size="sm"
@@ -544,20 +557,34 @@ export function WhatsappNativeSettings({
         </section>
 
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold">Recursos avanzados (JSON)</h3>
-          <p className="text-xs leading-5 text-muted-foreground">
-            Solo edita si conoces el formato. Los cambios no se guardan hasta
-            pulsar Guardar.
-          </p>
+          <div className="flex items-center gap-1">
+            <h3 className="text-sm font-semibold">Recursos avanzados</h3>
+            <HelpTooltip label="Ayuda sobre recursos avanzados">
+              Estos editores muestran listas JSON. Úsalos solo si conoces el
+              formato; los cambios se guardan al pulsar Guardar configuración
+              nativa.
+            </HelpTooltip>
+          </div>
           <details className="rounded-xl border">
             <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium">
               Ver editores JSON
             </summary>
             <div className="space-y-3 border-t px-4 py-4">
               {resourceEditors.map(([key, label]) => (
-                <label key={key} className="block text-sm">
-                  <span className="mb-1 block font-medium">{label}</span>
+                <div key={key} className="block text-sm">
+                  <div className="mb-1 flex items-center gap-1">
+                    <label
+                      htmlFor={`whatsapp-resource-${key}`}
+                      className="font-medium"
+                    >
+                      {label}
+                    </label>
+                    <HelpTooltip label={`Ayuda sobre ${label}`}>
+                      {resourceEditorHelp[key]}
+                    </HelpTooltip>
+                  </div>
                   <textarea
+                    id={`whatsapp-resource-${key}`}
                     className="min-h-24 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
                     value={rawResources[key]}
                     onChange={(event) =>
@@ -569,7 +596,7 @@ export function WhatsappNativeSettings({
                     disabled={busy}
                     spellCheck={false}
                   />
-                </label>
+                </div>
               ))}
             </div>
           </details>
@@ -623,12 +650,12 @@ export function WhatsappNativeSettings({
         ) : null}
 
         <section className="space-y-3 rounded-xl border bg-muted/20 p-4">
-          <div>
+          <div className="flex items-center gap-1">
             <h3 className="text-sm font-semibold">Probar mensaje nativo</h3>
-            <p className="text-xs text-muted-foreground">
+            <HelpTooltip label="Ayuda sobre pruebas de mensajes nativos">
               El envío requiere consentimiento marcado y genera una clave de
               idempotencia nueva. No se envía al guardar configuración.
-            </p>
+            </HelpTooltip>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">

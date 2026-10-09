@@ -92,6 +92,10 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
    **Menú y equipo**, and **Avanzado** show only the selected section. Switching
    sections preserves unsaved form edits; it does not save them or send messages.
    Sections remain subject to the tenant's connection and service availability.
+   Secondary explanations live behind labeled help buttons, available on hover,
+   keyboard focus, or tap. Operator-facing copy describes the WhatsApp action
+   rather than the connection broker. Connection errors, setup blockers, contact
+   restrictions, and recipient consent remain visible in the form.
 2. **Conectar** creates a short-lived Nango Connect session for that tenant.
    The browser receives only the session token and the public Nango URLs.
 3. The user authorizes the `whatsapp-business` integration in Nango with the
