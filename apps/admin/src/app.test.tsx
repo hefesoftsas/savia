@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "./app-services";
 import { App } from "./app";
 import { rotateSessionScope } from "./auth/session-scope";
+import { createReactAdminAuthProvider } from "./auth/react-admin-auth-provider";
 import { clearSharedLink, updateSharedLink } from "./pwa/share-target";
 
 type AgencyListResult = {
@@ -163,6 +164,66 @@ function mockAccountRequests(actionPath: string) {
 }
 
 describe("App", () => {
+  it("completes logout without remounting background readers during cleanup", async () => {
+    const services = createServices();
+    let finishCleanup!: () => void;
+    let startCleanup!: () => void;
+    const cleanupStarted = new Promise<void>((resolve) => {
+      startCleanup = resolve;
+    });
+    services.authSession.clearSession = async () => {
+      rotateSessionScope("logout");
+      window.dispatchEvent(new Event("savia:session-cleared"));
+    };
+    services.authSession.getAuthorizeUrl = () => "/login";
+    services.authSession.logout = async () => {
+      await services.authSession.clearSession();
+      return "/login";
+    };
+    services.authSession.getIdentity = async () => ({ id: "principal-1" });
+    services.authSession.getPermissions = async () => ({
+      canReadDocuments: true,
+      canExecuteCommands: false,
+      canManageIdentity: false,
+      memberships: [],
+    });
+    services.authProvider = createReactAdminAuthProvider(services.authSession, {
+      onLogout: () => {
+        startCleanup();
+        return new Promise<void>((resolve) => {
+          finishCleanup = resolve;
+        });
+      },
+    });
+    const user = userEvent.setup();
+    render(<App services={services} />);
+    await screen.findByRole(
+      "heading",
+      { name: "Integraciones" },
+      { timeout: 10000 },
+    );
+    const officeReads = () =>
+      vi
+        .mocked(services.apiClient.get)
+        .mock.calls.filter(([path]) => path === "/v1/office-settings").length;
+    const readsBeforeLogout = officeReads();
+    await user.click(
+      screen.getByRole("button", { name: "Abrir menú de cuenta" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitem", { name: /Cerrar sesión/i }),
+    );
+    await cleanupStarted;
+    // Only the existing availability reader reacts to the two invalidation events.
+    // Remounting would add another initial read and abandon the active logout hook.
+    expect(officeReads()).toBe(readsBeforeLogout + 2);
+    await act(async () => finishCleanup());
+    await waitFor(() => expect(window.location.hash).toBe("#/login"));
+    await waitFor(() =>
+      expect(services.authSession.login).toHaveBeenCalledTimes(1),
+    );
+  });
+
   it("retains the workspace for profile updates and remounts it for principal replacement", async () => {
     const services = createServices();
     render(<App services={services} />);

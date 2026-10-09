@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 let generation = 0;
+let principalGeneration = 0;
 
 export function getSessionGeneration(): number {
   return generation;
@@ -11,6 +12,7 @@ export function rotateSessionScope(
   reason: "logout" | "principal-change",
 ): void {
   generation += 1;
+  if (reason === "principal-change") principalGeneration += 1;
   if (typeof window !== "undefined")
     window.dispatchEvent(
       new CustomEvent("savia:principal-changed", { detail: { reason } }),
@@ -27,5 +29,14 @@ export function useSessionGeneration(): number {
     subscribe,
     getSessionGeneration,
     getSessionGeneration,
+  );
+}
+
+/** Keep the auth boundary mounted until its logout cleanup and redirect finish. */
+export function usePrincipalGeneration(): number {
+  return useSyncExternalStore(
+    subscribe,
+    () => principalGeneration,
+    () => principalGeneration,
   );
 }

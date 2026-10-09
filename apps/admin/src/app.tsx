@@ -27,7 +27,7 @@ import {
 } from "ra-core";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { createAdminQueryClient } from "./queries/query-policy";
-import { useSessionGeneration } from "./auth/session-scope";
+import { usePrincipalGeneration } from "./auth/session-scope";
 import { Navigate, Route } from "react-router-dom";
 import { getDefaultAppServices, type AppServices } from "@/app-services";
 import { preloadRouteModules } from "@/route-preload";
@@ -322,7 +322,7 @@ export function App({ services }: { services?: AppServices } = {}) {
     () => ({ ...appServices, queryClient }),
     [appServices, queryClient],
   );
-  const generation = useSessionGeneration();
+  const generation = usePrincipalGeneration();
   return (
     <QueryClientProvider client={queryClient}>
       <AppServicesProvider services={providedServices}>
