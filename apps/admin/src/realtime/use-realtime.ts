@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
+import { useSessionGeneration } from "@/auth/session-scope";
 import { useAppServices } from "@/features/assistant/assistant-context";
 import { useOnlineStatus } from "@/offline/use-online-status";
+
+export type RealtimeConnectionReason =
+  "initial" | "subscription-change" | "recovered";
 
 export type RealtimeStatus = "live" | "connecting" | "unavailable";
 
@@ -47,12 +51,13 @@ function isChangeEvent(message: unknown): message is RealtimeChangeEvent {
 type Listener = {
   topics: string[];
   status: (status: RealtimeStatus) => void;
-  connected: () => void;
+  connected: (reason: RealtimeConnectionReason) => void;
   event: (event: RealtimeChangeEvent) => void;
 };
 type SharedRoom = {
   listeners: Set<Listener>;
   topicsKey: string;
+  acknowledged?: boolean;
   status: RealtimeStatus;
   stop?: () => void;
   scheduled: boolean;
@@ -99,8 +104,10 @@ function subscribe(
       created.listeners.clear();
       if (rooms!.get(key) === created) rooms!.delete(key);
       window.removeEventListener("savia:session-cleared", created.dispose!);
+      window.removeEventListener("savia:principal-changed", created.dispose!);
     };
     window.addEventListener("savia:session-cleared", created.dispose);
+    window.addEventListener("savia:principal-changed", created.dispose);
   }
   const shared = room;
   const schedule = () => {
@@ -132,6 +139,11 @@ function subscribe(
         return;
       }
       if (topicsKey === shared.topicsKey && shared.stop) return;
+      const initialReason: RealtimeConnectionReason = !shared.acknowledged
+        ? "initial"
+        : shared.status === "live"
+          ? "subscription-change"
+          : "recovered";
       shared.stop?.();
       shared.topicsKey = topicsKey;
       shared.stop = connectRoom(
@@ -142,13 +154,15 @@ function subscribe(
           shared.status = status;
           for (const item of shared.listeners) item.status(status);
         },
-        () => {
-          for (const item of shared.listeners) item.connected();
+        (reason) => {
+          shared.acknowledged = true;
+          for (const item of shared.listeners) item.connected(reason);
         },
         (event) => {
           for (const item of shared.listeners)
             if (item.topics.includes(event.topic)) item.event(event);
         },
+        initialReason,
       );
     });
   };
@@ -160,7 +174,7 @@ function subscribe(
       shared.topicsKey.split(",").includes(topic),
     )
   )
-    listener.connected();
+    listener.connected("initial");
   schedule();
   return () => {
     shared.listeners.delete(listener);
@@ -173,8 +187,9 @@ function connectRoom(
   tenantId: number | undefined,
   topicsKey: string,
   setStatus: (status: RealtimeStatus) => void,
-  onConnected: () => void,
+  onConnected: (reason: RealtimeConnectionReason) => void,
   onEvent: (event: RealtimeChangeEvent) => void,
+  initialReason: RealtimeConnectionReason,
 ): () => void {
   let stopped = false;
   let socket: WebSocket | null = null;
@@ -182,6 +197,7 @@ function connectRoom(
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let backoffMs = 1000;
   let openedAt: number | undefined;
+  let connectedBefore = false;
   const wanted = topicsKey.split(",");
 
   const scheduleRetry = () => {
@@ -256,7 +272,8 @@ function connectRoom(
         setStatus("live");
         if (!acknowledged) {
           acknowledged = true;
-          onConnected();
+          onConnected(connectedBefore ? "recovered" : initialReason);
+          connectedBefore = true;
         }
         return;
       }
@@ -307,7 +324,7 @@ export function useRealtimeTopics({
   tenantId?: number;
   enabled?: boolean;
   onEvent?: (event: RealtimeChangeEvent) => void;
-  onConnected?: () => void;
+  onConnected?: (reason: RealtimeConnectionReason) => void;
 }): { status: RealtimeStatus; lastEvent: RealtimeChangeEvent | null } {
   let apiClient: ApiClient | undefined;
   try {
@@ -316,9 +333,14 @@ export function useRealtimeTopics({
     apiClient = undefined;
   }
   const online = useOnlineStatus();
+  const sessionGeneration = useSessionGeneration();
   const [status, setStatus] = useState<RealtimeStatus>("connecting");
   const [lastEvent, setLastEvent] = useState<RealtimeChangeEvent | null>(null);
   const callbacks = useRef({ onEvent, onConnected });
+  const acknowledgedScope = useRef<{
+    apiClient: ApiClient;
+    scope: string;
+  } | null>(null);
   callbacks.current = { onEvent, onConnected };
   const topicsKey = [...topics].sort().join(",");
   useEffect(() => {
@@ -330,12 +352,26 @@ export function useRealtimeTopics({
     return subscribe(apiClient, tenantId, {
       topics: topicsKey.split(","),
       status: setStatus,
-      connected: () => callbacks.current.onConnected?.(),
+      connected: (reason) => {
+        const scope = `${sessionGeneration}:${tenantId ?? "current"}:${topicsKey}`;
+        const sameScope =
+          acknowledgedScope.current?.apiClient === apiClient &&
+          acknowledgedScope.current.scope === scope;
+        // A surviving listener returning online is a recovery even if the
+        // room was disposed while offline. A new read scope starts fresh.
+        const effective = sameScope
+          ? reason === "initial"
+            ? "recovered"
+            : reason
+          : "initial";
+        acknowledgedScope.current = { apiClient, scope };
+        callbacks.current.onConnected?.(effective);
+      },
       event: (event) => {
         setLastEvent(event);
         callbacks.current.onEvent?.(event);
       },
     });
-  }, [apiClient, enabled, online, tenantId, topicsKey]);
+  }, [apiClient, enabled, online, tenantId, topicsKey, sessionGeneration]);
   return { status, lastEvent };
 }

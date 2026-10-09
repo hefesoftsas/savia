@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAppServices } from "./app-services";
+import { rotateSessionScope } from "./auth/session-scope";
 
 describe("app services offline wipe", () => {
   it("keeps auth queries mounted until asynchronous workspace cleanup finishes", async () => {
@@ -48,4 +49,26 @@ describe("app services offline wipe", () => {
       services.queryClient.getQueryData(["pipeline", "cotizaciones", {}]),
     ).toBeUndefined();
   });
+});
+
+it("preserves cached reads for profile changes and clears them for principal replacement", () => {
+  const services = createAppServices();
+  services.queryClient.setQueryData(["users", "getList", {}], {
+    data: [{ id: "old-owner-user" }],
+    total: 1,
+  });
+  services.queryClient.setQueryData(["auth", "getPermissions", {}], {
+    canManageIdentity: true,
+  });
+  window.dispatchEvent(new Event("savia:identity-changed"));
+  expect(
+    services.queryClient.getQueryData(["users", "getList", {}]),
+  ).toBeDefined();
+  rotateSessionScope("principal-change");
+  expect(
+    services.queryClient.getQueryData(["users", "getList", {}]),
+  ).toBeUndefined();
+  expect(
+    services.queryClient.getQueryData(["auth", "getPermissions", {}]),
+  ).toBeUndefined();
 });

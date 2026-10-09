@@ -1,9 +1,30 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type PropsWithChildren } from "react";
+import { AppServicesProvider } from "@/features/assistant/assistant-context";
+import { createAdminQueryClient } from "@/queries/query-policy";
+import { getSessionGeneration, rotateSessionScope } from "@/auth/session-scope";
+import type { AppServices } from "@/app-services";
+import type { ApiClient } from "@/api/api-client";
 import { describe, expect, it, vi } from "vitest";
 import {
   formatSlugToDisplayName,
   useCurrentTenant,
 } from "./use-current-tenant";
+
+function createServices(get = vi.fn()) {
+  return {
+    get,
+    services: {
+      apiClient: { get } as unknown as ApiClient,
+      queryClient: createAdminQueryClient(),
+    } as AppServices,
+  };
+}
+
+function servicesWrapper(services: AppServices) {
+  return ({ children }: PropsWithChildren) =>
+    createElement(AppServicesProvider, { services }, children);
+}
 
 describe("formatSlugToDisplayName", () => {
   it("formats single words to titlecase", () => {
@@ -12,7 +33,9 @@ describe("formatSlugToDisplayName", () => {
 
   it("formats hyphenated and underscored words with spaces and titlecase", () => {
     expect(formatSlugToDisplayName("merka-seguros")).toBe("Merka Seguros");
-    expect(formatSlugToDisplayName("alpha_beta-gamma")).toBe("Alpha Beta Gamma");
+    expect(formatSlugToDisplayName("alpha_beta-gamma")).toBe(
+      "Alpha Beta Gamma",
+    );
   });
 });
 
@@ -66,5 +89,140 @@ describe("useCurrentTenant", () => {
     expect(result.current.name).toBe("Merkaseguros");
     expect(result.current.monogram).toBe("M");
     expect(result.current.kind).toBe("commercial");
+  });
+
+  it("shares the current-tenant read between simultaneous consumers", async () => {
+    const response = {
+      data: { name: "Merka", kind: "commercial", id: 42 },
+    };
+    const { get, services } = createServices(
+      vi.fn().mockResolvedValue(response),
+    );
+    const wrapper = servicesWrapper(services);
+    const options = { hostname: "merka.savia.app.hefesoft.com" };
+    const first = renderHook(() => useCurrentTenant(options), { wrapper });
+    const second = renderHook(() => useCurrentTenant(options), { wrapper });
+
+    await waitFor(() => {
+      expect(first.result.current.name).toBe("Merka");
+      expect(second.result.current.name).toBe("Merka");
+    });
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reread the tenant when the same scope rerenders", async () => {
+    const { get, services } = createServices(
+      vi.fn().mockResolvedValue({
+        data: { name: "Merka", kind: "commercial", id: 42 },
+      }),
+    );
+    const { rerender } = renderHook(
+      ({ hostname }) => useCurrentTenant({ hostname }),
+      {
+        initialProps: { hostname: "merka.savia.app.hefesoft.com" },
+        wrapper: servicesWrapper(services),
+      },
+    );
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+
+    rerender({ hostname: "merka.savia.app.hefesoft.com" });
+    rerender({ hostname: "merka.savia.app.hefesoft.com" });
+
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not commit a previous hostname result after the hostname changes", async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    const { get, services } = createServices(
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            pending.push(resolve);
+          }),
+      ),
+    );
+    const { result, rerender } = renderHook(
+      ({ hostname }) => useCurrentTenant({ hostname }),
+      {
+        initialProps: { hostname: "old.savia.app.hefesoft.com" },
+        wrapper: servicesWrapper(services),
+      },
+    );
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+
+    rerender({ hostname: "new.savia.app.hefesoft.com" });
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      pending[1]?.({
+        data: { name: "New tenant", kind: "commercial", id: 2 },
+      });
+    });
+    await waitFor(() => expect(result.current.name).toBe("New tenant"));
+    await act(async () => {
+      pending[0]?.({
+        data: { name: "Old tenant", kind: "commercial", id: 1 },
+      });
+    });
+
+    expect(result.current.name).toBe("New tenant");
+    expect(result.current.id).toBe(2);
+  });
+
+  it("keeps the current view scoped to a new session generation", async () => {
+    const startGeneration = getSessionGeneration();
+    const pending: Array<(value: unknown) => void> = [];
+    const { get, services } = createServices(
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            pending.push(resolve);
+          }),
+      ),
+    );
+    const { result } = renderHook(
+      () => useCurrentTenant({ hostname: "merka.savia.app.hefesoft.com" }),
+      { wrapper: servicesWrapper(services) },
+    );
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+
+    act(() => rotateSessionScope("principal-change"));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      pending[1]?.({
+        data: { name: "New principal tenant", kind: "commercial", id: 2 },
+      });
+    });
+    await waitFor(() =>
+      expect(result.current.name).toBe("New principal tenant"),
+    );
+    await act(async () => {
+      pending[0]?.({
+        data: { name: "Old principal tenant", kind: "commercial", id: 1 },
+      });
+    });
+
+    expect(result.current.name).toBe("New principal tenant");
+    expect(getSessionGeneration()).toBe(startGeneration + 1);
+  });
+
+  it("does not request a tenant on the platform host", () => {
+    const { get, services } = createServices();
+    const { result } = renderHook(
+      () => useCurrentTenant({ hostname: "savia.app.hefesoft.com" }),
+      { wrapper: servicesWrapper(services) },
+    );
+
+    expect(result.current.kind).toBe("platform");
+    expect(result.current.isLoading).toBe(false);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("keeps standalone tenant identity available when services are absent", () => {
+    const { result } = renderHook(() =>
+      useCurrentTenant({ hostname: "merka.savia.app.hefesoft.com" }),
+    );
+
+    expect(result.current.name).toBe("Merka");
+    expect(result.current.isLoading).toBe(false);
   });
 });

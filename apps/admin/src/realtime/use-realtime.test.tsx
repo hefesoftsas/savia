@@ -3,6 +3,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { useRealtimeTopics } from "./use-realtime";
+import { rotateSessionScope } from "@/auth/session-scope";
 
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
@@ -422,5 +423,78 @@ it("disconnects pooled sockets when the authenticated session is cleared", async
       data: JSON.stringify({ topic: "users", type: "updated" }),
     }),
   );
+  expect(onEvent).not.toHaveBeenCalled();
+});
+
+it("labels topic replacement separately from recovery for existing subscribers", async () => {
+  vi.stubGlobal("WebSocket", MockWebSocket);
+  const post = vi.fn().mockResolvedValue({
+    data: {
+      room: "platform",
+      ticket: "ticket",
+      topics: ["users", "tenants"],
+      expiresAt: "future",
+    },
+  });
+  const services = servicesWith(post);
+  const connected = vi.fn();
+  function TopicProbe({
+    topics,
+    onConnected,
+  }: {
+    topics: string[];
+    onConnected?: (reason: string) => void;
+  }) {
+    useRealtimeTopics({ topics, onConnected });
+    return null;
+  }
+  function View({ extra }: { extra: boolean }) {
+    return (
+      <AppServicesProvider services={services}>
+        <TopicProbe topics={["users"]} onConnected={connected} />
+        {extra ? <TopicProbe topics={["tenants"]} /> : null}
+      </AppServicesProvider>
+    );
+  }
+  const { rerender } = render(<View extra={false} />);
+  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+  await act(async () => {
+    MockWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({ type: "connected" }),
+    });
+  });
+  expect(connected).toHaveBeenLastCalledWith("initial");
+  rerender(<View extra />);
+  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(2));
+  await act(async () => {
+    MockWebSocket.instances[1].onmessage?.({
+      data: JSON.stringify({ type: "connected" }),
+    });
+  });
+  expect(connected).toHaveBeenLastCalledWith("subscription-change");
+});
+
+it("replaces pooled sockets and ignores old hints when the principal changes", async () => {
+  vi.stubGlobal("WebSocket", MockWebSocket);
+  const post = vi
+    .fn()
+    .mockResolvedValue({ data: { room: "platform", ticket: "ticket" } });
+  const onEvent = vi.fn();
+  render(
+    <AppServicesProvider services={servicesWith(post)}>
+      <Probe onEvent={onEvent} />
+    </AppServicesProvider>,
+  );
+  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+  const old = MockWebSocket.instances[0];
+  await act(async () => {
+    rotateSessionScope("principal-change");
+  });
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+  await act(async () => {
+    old.onmessage?.({
+      data: JSON.stringify({ topic: "users", type: "updated" }),
+    });
+  });
   expect(onEvent).not.toHaveBeenCalled();
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { getSessionGeneration } from "./session-scope";
 import {
   BetterAuthOAuthSession,
   normalizeAvatarUrl,
@@ -835,8 +836,123 @@ describe("normalizeAvatarUrl", () => {
   });
 
   it("handles empty or whitespace strings safely", () => {
-    expect(normalizeAvatarUrl("", "https://savia-preview.hefesoft.com")).toBe("");
-    expect(normalizeAvatarUrl("   ", "https://savia-preview.hefesoft.com")).toBe("");
+    expect(normalizeAvatarUrl("", "https://savia-preview.hefesoft.com")).toBe(
+      "",
+    );
+    expect(
+      normalizeAvatarUrl("   ", "https://savia-preview.hefesoft.com"),
+    ).toBe("");
   });
 });
 
+it("rotates scope only when an authoritative identity changes principal", async () => {
+  let principal = "principal-a";
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith("/refresh"))
+      return Response.json({
+        access_token: "token",
+        expires_in: 300,
+        scope: "savia.api.read",
+      });
+    if (url.endsWith("/identity/me"))
+      return Response.json({
+        data: { id: principal, attributes: { displayName: "User" } },
+      });
+    return Response.json({ user: {} });
+  });
+  const session = new BetterAuthOAuthSession({
+    apiUrl: "https://savia.test",
+    fetcher,
+  });
+  await session.getIdentity();
+  const before = getSessionGeneration();
+  window.dispatchEvent(new Event("savia:identity-changed"));
+  await session.getIdentity();
+  expect(getSessionGeneration()).toBe(before);
+  principal = "principal-b";
+  window.dispatchEvent(new Event("savia:identity-changed"));
+  expect((await session.getIdentity()).id).toBe("principal-b");
+  expect(getSessionGeneration()).toBe(before + 1);
+});
+
+it("does not return an identity request that settles after logout", async () => {
+  let finish!: (response: Response) => void;
+  let started!: () => void;
+  const identityStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith("/refresh"))
+      return Response.json({
+        access_token: "token",
+        expires_in: 300,
+        scope: "savia.api.read",
+      });
+    if (url.endsWith("/identity/me")) {
+      started();
+      return new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    }
+    return Response.json({ user: {} });
+  });
+  const session = new BetterAuthOAuthSession({
+    apiUrl: "https://savia.test",
+    fetcher,
+  });
+  const pending = session.getIdentity();
+  const rejected = expect(pending).rejects.toThrow(/session changed/i);
+  await identityStarted;
+  await session.clearSession();
+  finish(
+    Response.json({
+      data: { id: "old-principal", attributes: { displayName: "Old user" } },
+    }),
+  );
+  await rejected;
+});
+
+it("does not reuse the previous principal permissions when token renewal fails", async () => {
+  let principal = "principal-a";
+  let offline = false;
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    if (offline) throw new TypeError("Failed to fetch");
+    const url = String(input);
+    if (url.endsWith("/refresh"))
+      return Response.json({
+        access_token: "token",
+        expires_in: 60,
+        scope: "savia.api.read savia.api.write",
+      });
+    if (url.endsWith("/identity/me"))
+      return Response.json({
+        data: {
+          id: principal,
+          attributes: {
+            displayName: "User",
+            globalRoles: principal === "principal-a" ? ["platform_admin"] : [],
+          },
+        },
+      });
+    return Response.json({ user: {} });
+  });
+  const session = new BetterAuthOAuthSession({
+    apiUrl: "https://savia.test",
+    fetcher,
+  });
+  expect((await session.getPermissions()).canManageIdentity).toBe(true);
+  principal = "principal-b";
+  window.dispatchEvent(new Event("savia:identity-changed"));
+  await session.getIdentity();
+  window.dispatchEvent(new Event("savia:identity-changed"));
+  offline = true;
+  const future = Date.now() + 120000;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(future);
+  try {
+    expect((await session.getPermissions()).canManageIdentity).toBe(false);
+  } finally {
+    clock.mockRestore();
+  }
+});

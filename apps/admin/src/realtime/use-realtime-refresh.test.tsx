@@ -13,7 +13,9 @@ const connection = () =>
       type: string;
       collection?: string;
     }) => void;
-    onConnected: () => void;
+    onConnected: (
+      reason?: "initial" | "subscription-change" | "recovered",
+    ) => void;
   };
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -174,3 +176,65 @@ it.each([false, true])(
     expect(refresh).not.toHaveBeenCalled();
   },
 );
+
+it("does not treat subscription replacement as transport recovery", async () => {
+  const refresh = vi.fn();
+  renderHook(() => useRealtimeRefresh({ topics: ["settings"], refresh }));
+  act(() => connection().onConnected("initial"));
+  await tick();
+  act(() => connection().onConnected("subscription-change"));
+  await tick();
+  expect(refresh).not.toHaveBeenCalled();
+  act(() => connection().onConnected("recovered"));
+  await tick();
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
+it("serializes hints received during a read into one follow-up", async () => {
+  let finish!: () => void;
+  const first = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const refresh = vi
+    .fn()
+    .mockReturnValueOnce(first)
+    .mockResolvedValue(undefined);
+  renderHook(() => useRealtimeRefresh({ topics: ["settings"], refresh }));
+  act(() => connection().onEvent({ topic: "settings", type: "updated" }));
+  await tick();
+  for (let i = 0; i < 10; i++)
+    act(() => connection().onEvent({ topic: "settings", type: "updated" }));
+  await tick();
+  expect(refresh).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    finish();
+    await first;
+  });
+  expect(refresh).toHaveBeenCalledTimes(2);
+});
+
+it("drops an in-flight follow-up after the tenant changes", async () => {
+  let finish!: () => void;
+  const first = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const refresh = vi
+    .fn()
+    .mockReturnValueOnce(first)
+    .mockResolvedValue(undefined);
+  const { rerender } = renderHook(
+    ({ tenantId }) =>
+      useRealtimeRefresh({ topics: ["settings"], tenantId, refresh }),
+    { initialProps: { tenantId: 1 } },
+  );
+  act(() => connection().onEvent({ topic: "settings", type: "updated" }));
+  await tick();
+  act(() => connection().onEvent({ topic: "settings", type: "updated" }));
+  await tick();
+  rerender({ tenantId: 2 });
+  await act(async () => {
+    finish();
+    await first;
+  });
+  expect(refresh).toHaveBeenCalledTimes(1);
+});

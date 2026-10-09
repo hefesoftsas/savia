@@ -25,7 +25,9 @@ import {
   useTranslate,
   useCanAccess,
 } from "ra-core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { createAdminQueryClient } from "./queries/query-policy";
+import { useSessionGeneration } from "./auth/session-scope";
 import { Navigate, Route } from "react-router-dom";
 import { getDefaultAppServices, type AppServices } from "@/app-services";
 import { preloadRouteModules } from "@/route-preload";
@@ -308,43 +310,45 @@ function AuthLoadingFallback() {
   return <PwaSplash recoveryHref={getAdminAuthorizeUrl()} />;
 }
 
-export function App(props: { services?: AppServices } = {}) {
-  return (
-    <TenantBrandingProvider>
-      <AppContent {...props} />
-    </TenantBrandingProvider>
-  );
-}
-
-function AppContent({ services }: { services?: AppServices } = {}) {
-  const currentTenant = useCurrentTenant();
-  const pageTitle = currentTenant.isDedicated
-    ? `${currentTenant.name} | Savia`
-    : "Savia";
+export function App({ services }: { services?: AppServices } = {}) {
   const appServices = useMemo(
     () => services ?? getDefaultAppServices(),
     [services],
   );
-  // In-memory derived query results owned by app-services;
-  // injected services in tests may omit it, hence the fallback.
   const [queryClient] = useState(
-    () =>
-      appServices.queryClient ??
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            networkMode: "always",
-            retry: false,
-            // Sin staleTime cada montaje (StrictMode = x2) refetcheaba:
-            // de ahí identity/me y connections duplicados en el HAR.
-            staleTime: 30_000,
-            gcTime: 5 * 60_000,
-            refetchOnWindowFocus: false,
-          },
-          mutations: { networkMode: "always", retry: false },
-        },
-      }),
+    () => appServices.queryClient ?? createAdminQueryClient(),
   );
+  const providedServices = useMemo(
+    () => ({ ...appServices, queryClient }),
+    [appServices, queryClient],
+  );
+  const generation = useSessionGeneration();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppServicesProvider services={providedServices}>
+        <TenantBrandingProvider>
+          <AppContent
+            key={generation}
+            services={providedServices}
+            queryClient={queryClient}
+          />
+        </TenantBrandingProvider>
+      </AppServicesProvider>
+    </QueryClientProvider>
+  );
+}
+
+function AppContent({
+  services: appServices,
+  queryClient,
+}: {
+  services: AppServices;
+  queryClient: QueryClient;
+}) {
+  const currentTenant = useCurrentTenant();
+  const pageTitle = currentTenant.isDedicated
+    ? `${currentTenant.name} | Savia`
+    : "Savia";
   const [handlingCallback, setHandlingCallback] = useState(
     () => window.location.pathname === "/auth/callback",
   );
@@ -400,148 +404,140 @@ function AppContent({ services }: { services?: AppServices } = {}) {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AppServicesProvider services={appServices}>
-        <OfficeAvailabilityProvider apiClient={appServices.apiClient}>
-          <TenantTitleSync title={pageTitle} />
-          <OfflineBanner />
-          <Admin
-            authProvider={appServices.authProvider}
-            dataProvider={appServices.dataProvider}
-            disableTelemetry
-            error={TenantHostMismatchError}
-            // Same branded splash as the boot sequence: cold start shows a
-            // single continuous visual through the auth check.
-            loading={AuthLoadingFallback}
-            requireAuth
-            queryClient={queryClient}
-            store={adminStore}
-            title={pageTitle}
-          >
-            <Resource {...users} />
-            <Resource {...tenants} />
-            <CustomRoutes>
-              <Route
-                path="/tenant-branding"
-                element={<TenantBrandingRoute services={appServices} />}
-              />
-              <Route
-                path="/bookings"
-                element={<BookingRoute services={appServices} />}
-              />
-              <Route
-                path="/roles"
-                element={
-                  <Suspense fallback={<RouteLoading />}>
-                    <RolePages services={appServices} />
-                  </Suspense>
+    <OfficeAvailabilityProvider apiClient={appServices.apiClient}>
+      <TenantTitleSync title={pageTitle} />
+      <OfflineBanner />
+      <Admin
+        authProvider={appServices.authProvider}
+        dataProvider={appServices.dataProvider}
+        disableTelemetry
+        error={TenantHostMismatchError}
+        // Same branded splash as the boot sequence: cold start shows a
+        // single continuous visual through the auth check.
+        loading={AuthLoadingFallback}
+        requireAuth
+        queryClient={queryClient}
+        store={adminStore}
+        title={pageTitle}
+      >
+        <Resource {...users} />
+        <Resource {...tenants} />
+        <CustomRoutes>
+          <Route
+            path="/tenant-branding"
+            element={<TenantBrandingRoute services={appServices} />}
+          />
+          <Route
+            path="/bookings"
+            element={<BookingRoute services={appServices} />}
+          />
+          <Route
+            path="/roles"
+            element={
+              <Suspense fallback={<RouteLoading />}>
+                <RolePages services={appServices} />
+              </Suspense>
+            }
+          />
+          <Route path="/" element={<Navigate to="/my-day" replace />} />
+          <Route
+            path="/office-suite"
+            element={
+              <Suspense fallback={<RouteLoading />}>
+                <OfficeSuiteAccess>
+                  <OfficeSuitePage services={appServices} />
+                </OfficeSuiteAccess>
+              </Suspense>
+            }
+          />
+          <Route
+            path="/pages/:pageId?"
+            element={
+              <Suspense fallback={<RouteLoading />}>
+                <PagesPage services={appServices} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/save-link"
+            element={
+              <Suspense fallback={<RouteLoading />}>
+                <SaveLinkPage services={appServices} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/studio"
+            element={<StudioRoute services={appServices} />}
+          />
+          <Route
+            path="/plugin-studio"
+            element={<PluginStudioRoute services={appServices} />}
+          />
+          {/* Fase 1: alias legacy — #/crm sigue funcionando, canónica es #/studio */}
+          <Route path="/crm" element={<StudioRoute services={appServices} />} />
+          <Route
+            path="/savia-request"
+            element={<SaviaRequestRoute services={appServices} />}
+          />
+          <Route
+            path="/savia-request/docs"
+            element={<SaviaRequestRoute docs services={appServices} />}
+          />
+          <Route
+            path="/auto-light-quotes/*"
+            element={<Navigate replace to="/savia-request" />}
+          />
+          <Route
+            path="/crm-connections"
+            element={<Navigate replace to="/my-integrations" />}
+          />
+          <Route
+            path="/my-integrations"
+            element={<PersonalIntegrationsRoute services={appServices} />}
+          />
+          <Route
+            path="/my-day"
+            element={<MyDayRoute services={appServices} />}
+          />
+          <Route
+            path="/notifications"
+            element={
+              <Suspense fallback={<RouteLoading />}>
+                <NotificationInboxPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/provider-credentials"
+            element={<Navigate to="/savia-request" replace />}
+          />
+          <Route
+            path="/account"
+            element={
+              <AccountRoute
+                services={appServices}
+                apiUrl={
+                  import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin
                 }
               />
-              <Route path="/" element={<Navigate to="/my-day" replace />} />
-              <Route
-                path="/office-suite"
-                element={
-                  <Suspense fallback={<RouteLoading />}>
-                    <OfficeSuiteAccess>
-                      <OfficeSuitePage services={appServices} />
-                    </OfficeSuiteAccess>
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/pages/:pageId?"
-                element={
-                  <Suspense fallback={<RouteLoading />}>
-                    <PagesPage services={appServices} />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/save-link"
-                element={
-                  <Suspense fallback={<RouteLoading />}>
-                    <SaveLinkPage services={appServices} />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/studio"
-                element={<StudioRoute services={appServices} />}
-              />
-              <Route
-                path="/plugin-studio"
-                element={<PluginStudioRoute services={appServices} />}
-              />
-              {/* Fase 1: alias legacy — #/crm sigue funcionando, canónica es #/studio */}
-              <Route
-                path="/crm"
-                element={<StudioRoute services={appServices} />}
-              />
-              <Route
-                path="/savia-request"
-                element={<SaviaRequestRoute services={appServices} />}
-              />
-              <Route
-                path="/savia-request/docs"
-                element={<SaviaRequestRoute docs services={appServices} />}
-              />
-              <Route
-                path="/auto-light-quotes/*"
-                element={<Navigate replace to="/savia-request" />}
-              />
-              <Route
-                path="/crm-connections"
-                element={<Navigate replace to="/my-integrations" />}
-              />
-              <Route
-                path="/my-integrations"
-                element={<PersonalIntegrationsRoute services={appServices} />}
-              />
-              <Route
-                path="/my-day"
-                element={<MyDayRoute services={appServices} />}
-              />
-              <Route
-                path="/notifications"
-                element={
-                  <Suspense fallback={<RouteLoading />}>
-                    <NotificationInboxPage />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/provider-credentials"
-                element={<Navigate to="/savia-request" replace />}
-              />
-              <Route
-                path="/account"
-                element={
-                  <AccountRoute
-                    services={appServices}
-                    apiUrl={
-                      import.meta.env.VITE_SAVIA_API_URL ??
-                      window.location.origin
-                    }
-                  />
-                }
-              />
-              <Route
-                path="/service-credentials"
-                element={<ServiceCredentialsRoute services={appServices} />}
-              />
-              <Route
-                path="/assistant-configuration"
-                element={<Navigate to="/service-credentials" replace />}
-              />
-              <Route
-                path="/companion-recordings"
-                element={<CompanionRecordingsRoute services={appServices} />}
-              />
-            </CustomRoutes>
-          </Admin>
-        </OfficeAvailabilityProvider>
-      </AppServicesProvider>
-    </QueryClientProvider>
+            }
+          />
+          <Route
+            path="/service-credentials"
+            element={<ServiceCredentialsRoute services={appServices} />}
+          />
+          <Route
+            path="/assistant-configuration"
+            element={<Navigate to="/service-credentials" replace />}
+          />
+          <Route
+            path="/companion-recordings"
+            element={<CompanionRecordingsRoute services={appServices} />}
+          />
+        </CustomRoutes>
+      </Admin>
+    </OfficeAvailabilityProvider>
   );
 }
 
