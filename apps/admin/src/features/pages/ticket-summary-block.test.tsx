@@ -213,7 +213,7 @@ it("clears reader data immediately on identity or session changes and ignores st
     />,
   );
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
-  act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+  act(() => window.dispatchEvent(new Event("savia:principal-changed")));
   expect(
     screen.queryByRole("link", {
       name: /OPS-41.*Restore the release pipeline/,
@@ -277,7 +277,7 @@ it("does not carry a queued refresh across reader identity invalidation", async 
     screen
       .getByRole("button", { name: "Refresh" })
       .dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    window.dispatchEvent(new Event("savia:identity-changed"));
+    window.dispatchEvent(new Event("savia:principal-changed"));
   });
   rerender(
     <TicketSummaryBlock
@@ -368,7 +368,7 @@ it("rejects an invalid project key or empty statuses before saving config", () =
   expect(onConfigChange).not.toHaveBeenCalled();
 });
 
-it.each(["savia:identity-changed", "savia:session-cleared"])(
+it.each(["savia:principal-changed", "savia:session-cleared"])(
   "clears an already rendered personal summary on %s",
   async (eventName) => {
     render(

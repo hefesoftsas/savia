@@ -253,7 +253,7 @@ function clearAgendaCache() {
 
 if (typeof window !== "undefined") {
   window.addEventListener("savia:session-cleared", clearAgendaCache);
-  window.addEventListener("savia:identity-changed", clearAgendaCache);
+  window.addEventListener("savia:principal-changed", clearAgendaCache);
 }
 
 export const CALENDAR_CONNECT_MESSAGE =
@@ -708,10 +708,10 @@ export function useMyDayAgenda(
       void refresh(true);
     };
     window.addEventListener("savia:session-cleared", reset);
-    window.addEventListener("savia:identity-changed", reset);
+    window.addEventListener("savia:principal-changed", reset);
     return () => {
       window.removeEventListener("savia:session-cleared", reset);
-      window.removeEventListener("savia:identity-changed", reset);
+      window.removeEventListener("savia:principal-changed", reset);
     };
   }, [personalIntegrations, refresh]);
 
@@ -1132,10 +1132,10 @@ export function QuickTaskWidgetBody({
       setSelectedDestination("");
     };
     reset();
-    window.addEventListener("savia:identity-changed", reset);
+    window.addEventListener("savia:principal-changed", reset);
     window.addEventListener("savia:session-cleared", reset);
     return () => {
-      window.removeEventListener("savia:identity-changed", reset);
+      window.removeEventListener("savia:principal-changed", reset);
       window.removeEventListener("savia:session-cleared", reset);
     };
   }, [personalIntegrations]);

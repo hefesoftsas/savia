@@ -252,7 +252,7 @@ export default function PluginProjectWorkspace({
       onClose();
     };
     window.addEventListener("savia:session-cleared", leave);
-    window.addEventListener("savia:identity-changed", leave);
+    window.addEventListener("savia:principal-changed", leave);
     const guard = (event: BeforeUnloadEvent) => {
       if (session.current && !session.current.isSaved) {
         event.preventDefault();
@@ -267,7 +267,7 @@ export default function PluginProjectWorkspace({
       session.current?.dispose();
       window.removeEventListener("beforeunload", guard);
       window.removeEventListener("savia:session-cleared", leave);
-      window.removeEventListener("savia:identity-changed", leave);
+      window.removeEventListener("savia:principal-changed", leave);
     };
     // The direct-source route is captured on mount. Clearing its query after
     // opening must not re-run the import and create a duplicate draft.

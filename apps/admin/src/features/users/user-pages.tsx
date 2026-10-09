@@ -408,7 +408,8 @@ function UserListActions() {
   const queryClient = useQueryClient();
   useRealtimeTopics({
     topics: ["users"],
-    onConnected: () => {
+    onConnected: (reason) => {
+      if (reason === "subscription-change") return;
       void queryClient.invalidateQueries({ queryKey: ["users"] });
       void queryClient.invalidateQueries({
         queryKey: ["tenant-user-capacity"],

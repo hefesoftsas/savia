@@ -188,11 +188,11 @@ export function CalendarView({
       setDeleteError(null);
       deleteGeneration.current += 1;
     };
-    window.addEventListener("savia:identity-changed", reset);
+    window.addEventListener("savia:principal-changed", reset);
     window.addEventListener("savia:session-cleared", reset);
     window.addEventListener("savia:personal-integrations-changed", reset);
     return () => {
-      window.removeEventListener("savia:identity-changed", reset);
+      window.removeEventListener("savia:principal-changed", reset);
       window.removeEventListener("savia:session-cleared", reset);
       window.removeEventListener("savia:personal-integrations-changed", reset);
     };

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, screen } from "@testing-library/react";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import { render as renderLocalized } from "../studio-engine/test/locale-test-render";
 const render: typeof renderLocalized = (ui, options) =>
   renderLocalized(ui, { ...options, locale: "en" });
@@ -198,7 +198,140 @@ it("reports total failure instead of rendering an empty success state", async ()
   expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
 });
 
-it("ignores an office settings response from the previous identity", async () => {
+it("retains the same document row during a failed same-scope refresh", async () => {
+  let rejectRefresh!: (error: Error) => void;
+  let settingsReads = 0;
+  const apiClient = {
+    get: vi.fn((path: string) => {
+      if (path === "/v1/office-settings") {
+        settingsReads += 1;
+        return settingsReads === 1
+          ? Promise.resolve({ data: { enabled: true } })
+          : new Promise<{ data: { enabled: boolean } }>((_resolve, reject) => {
+              rejectRefresh = reject;
+            });
+      }
+      if (path === "/v1/office-documents")
+        return Promise.resolve({
+          data: [
+            {
+              id: "saved-1",
+              name: "Keep this document",
+              updatedAt: "2026-10-03T12:00:00Z",
+            },
+          ],
+        });
+      if (path === "/v1/connected-office-documents")
+        return Promise.resolve({ data: [] });
+      throw new Error(`Unexpected API path: ${path}`);
+    }),
+  };
+
+  render(<OfficeDocumentsWidgetBody apiClient={apiClient as never} />);
+  const documentRow = await screen.findByRole("link", {
+    name: /Keep this document/,
+  });
+  act(() => window.dispatchEvent(new Event("focus")));
+  await waitFor(() => expect(settingsReads).toBe(2));
+  expect(screen.getByRole("link", { name: /Keep this document/ })).toBe(
+    documentRow,
+  );
+
+  await act(async () => rejectRefresh(new Error("temporarily offline")));
+
+  expect(screen.getByRole("link", { name: /Keep this document/ })).toBe(
+    documentRow,
+  );
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Refresh failed: Could not load recent documents.",
+  );
+});
+
+it("removes a document immediately when its refreshed read is denied", async () => {
+  let documentsReads = 0;
+  const denied = Object.assign(new Error("forbidden"), { status: 403 });
+  const apiClient = {
+    get: vi.fn((path: string) => {
+      if (path === "/v1/office-settings")
+        return Promise.resolve({ data: { enabled: true } });
+      if (path === "/v1/office-documents") {
+        documentsReads += 1;
+        return documentsReads === 1
+          ? Promise.resolve({
+              data: [
+                {
+                  id: "saved-1",
+                  name: "No longer accessible",
+                  updatedAt: "2026-10-03T12:00:00Z",
+                },
+              ],
+            })
+          : Promise.reject(denied);
+      }
+      if (path === "/v1/connected-office-documents")
+        return Promise.resolve({ data: [] });
+      throw new Error(`Unexpected API path: ${path}`);
+    }),
+  };
+
+  render(<OfficeDocumentsWidgetBody apiClient={apiClient as never} />);
+  const protectedDocument = await screen.findByRole("link", {
+    name: /No longer accessible/,
+  });
+  act(() => window.dispatchEvent(new Event("focus")));
+
+  await waitFor(() => expect(documentsReads).toBe(2));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("link", { name: /No longer accessible/ }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(protectedDocument).not.toBeInTheDocument();
+});
+
+it("drops a previously listed document when its refreshed read is forbidden", async () => {
+  let documentReads = 0;
+  const apiClient = {
+    get: vi.fn((path: string) => {
+      if (path === "/v1/office-settings")
+        return Promise.resolve({ data: { enabled: true } });
+      if (path === "/v1/office-documents") {
+        documentReads += 1;
+        if (documentReads > 1)
+          return Promise.reject(
+            Object.assign(new Error("forbidden"), { status: 403 }),
+          );
+        return Promise.resolve({
+          data: [
+            {
+              id: "saved-1",
+              name: "Restricted document",
+              updatedAt: "2026-10-03T12:00:00Z",
+            },
+          ],
+        });
+      }
+      if (path === "/v1/connected-office-documents")
+        return Promise.resolve({ data: [] });
+      throw new Error(`Unexpected API path: ${path}`);
+    }),
+  };
+
+  render(<OfficeDocumentsWidgetBody apiClient={apiClient as never} />);
+  expect(
+    await screen.findByRole("link", { name: /Restricted document/ }),
+  ).toBeVisible();
+  act(() => window.dispatchEvent(new Event("focus")));
+
+  await waitFor(() => expect(documentReads).toBe(2));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("link", { name: /Restricted document/ }),
+    ).not.toBeInTheDocument(),
+  );
+});
+
+it("ignores an office settings response from the previous principal", async () => {
   let resolvePrevious!: (value: { data: { enabled: boolean } }) => void;
   const previousSettings = new Promise<{ data: { enabled: boolean } }>(
     (resolve) => {
@@ -215,7 +348,7 @@ it("ignores an office settings response from the previous identity", async () =>
   };
 
   render(<OfficeDocumentsWidgetBody apiClient={apiClient as never} />);
-  window.dispatchEvent(new Event("savia:identity-changed"));
+  window.dispatchEvent(new Event("savia:principal-changed"));
   expect(
     await screen.findByText("Office suite is disabled for this workspace."),
   ).toBeVisible();

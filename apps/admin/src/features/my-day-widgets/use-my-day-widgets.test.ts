@@ -78,7 +78,7 @@ describe("useMyDayWidgets", () => {
     await waitFor(() => expect(first.result.current.loading).toBe(false));
     first.unmount();
 
-    window.dispatchEvent(new Event("savia:identity-changed"));
+    window.dispatchEvent(new Event("savia:principal-changed"));
     const second = renderHook(() => useMyDayWidgets(preferences as never));
 
     expect(second.result.current.loading).toBe(true);
@@ -86,7 +86,7 @@ describe("useMyDayWidgets", () => {
     await waitFor(() => expect(second.result.current.loading).toBe(false));
   });
 
-  it("reloads a mounted layout after the authenticated identity changes", async () => {
+  it("reloads a mounted layout after principal replacement", async () => {
     const preferences = createPreferences([
       {
         id: "w_old_user",
@@ -102,10 +102,29 @@ describe("useMyDayWidgets", () => {
       widgets: [],
     });
 
-    window.dispatchEvent(new Event("savia:identity-changed"));
+    window.dispatchEvent(new Event("savia:principal-changed"));
 
     await waitFor(() => expect(result.current.widgets).toEqual([]));
     expect(result.current.loading).toBe(false);
+  });
+
+  it("keeps the loaded layout when the same principal profile refreshes", async () => {
+    const preferences = createPreferences([
+      {
+        id: "w_saved",
+        apiBasePath: "/v1/studio/0",
+        collection: "polizas",
+        kind: "items",
+      },
+    ]);
+    const { result } = renderHook(() => useMyDayWidgets(preferences as never));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.widgets.map(({ id }) => id)).toEqual(["w_saved"]);
+    expect(preferences.getMyDayWidgets).toHaveBeenCalledOnce();
   });
 
   it("does not show a previous client's layout while the new client loads", async () => {

@@ -76,7 +76,7 @@ it("bounds a stalled document read, including a stalled token lookup", async () 
   await vi.advanceTimersByTimeAsync(15_000);
   await assertion;
 });
-it.each(["savia:session-cleared", "savia:identity-changed"])(
+it.each(["savia:session-cleared", "savia:principal-changed"])(
   "discards retained documents on %s",
   async (event) => {
     const { client, fetcher } = setup();
@@ -89,6 +89,16 @@ it.each(["savia:session-cleared", "savia:identity-changed"])(
     expect(fetcher).toHaveBeenCalledTimes(2);
   },
 );
+
+it("retains the private document cache after a same-principal profile refresh", async () => {
+  const { client, fetcher } = setup();
+  await client.get("notes");
+
+  window.dispatchEvent(new Event("savia:identity-changed"));
+
+  expect(await client.get("notes")).toEqual(page);
+  expect(fetcher).toHaveBeenCalledOnce();
+});
 
 it("does not let a delayed document read overwrite a successful save", async () => {
   const { client, fetcher } = setup();

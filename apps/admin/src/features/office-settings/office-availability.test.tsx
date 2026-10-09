@@ -46,6 +46,35 @@ it("fails closed and refreshes after an administrator disables office", async ()
   act(() => window.dispatchEvent(new Event("focus")));
   await screen.findByText("Office unavailable");
 });
+it("rechecks profile-scoped availability without hiding the current state", async () => {
+  let release!: (response: Response) => void;
+  let holdRefresh = false;
+  const client = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => null },
+    fetcher: async () =>
+      holdRefresh
+        ? await new Promise<Response>((resolve) => {
+            release = resolve;
+          })
+        : Response.json({ data: { enabled: true } }),
+  });
+  render(
+    <OfficeAvailabilityProvider apiClient={client}>
+      <Access />
+    </OfficeAvailabilityProvider>,
+  );
+  await screen.findByText("Office available");
+  holdRefresh = true;
+
+  act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  expect(screen.getByText("Office available")).toBeVisible();
+  expect(screen.queryByText("Checking")).not.toBeInTheDocument();
+  await act(async () => release(Response.json({ data: { enabled: false } })));
+  expect(screen.getByText("Office unavailable")).toBeVisible();
+});
 it("never carries enabled state or a late response into a different tenant", async () => {
   let pending: ((response: Response) => void) | undefined;
   const paths: string[] = [];

@@ -40,7 +40,7 @@ function nextLayoutRevision(client: UserPreferencesClient): number {
 
 if (typeof window !== "undefined") {
   window.addEventListener("savia:session-cleared", clearLayoutCache);
-  window.addEventListener("savia:identity-changed", clearLayoutCache);
+  window.addEventListener("savia:principal-changed", clearLayoutCache);
 }
 
 export function useMyDayWidgets(
@@ -80,10 +80,10 @@ export function useMyDayWidgets(
       setCurrentSessionGeneration(sessionGeneration);
     };
     window.addEventListener("savia:session-cleared", clear);
-    window.addEventListener("savia:identity-changed", clear);
+    window.addEventListener("savia:principal-changed", clear);
     return () => {
       window.removeEventListener("savia:session-cleared", clear);
-      window.removeEventListener("savia:identity-changed", clear);
+      window.removeEventListener("savia:principal-changed", clear);
     };
   }, [userPreferences]);
 

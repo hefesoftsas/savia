@@ -89,7 +89,7 @@ let pageCursors = new WeakMap<
   Map<string, { cursor: string; expires: number }>
 >();
 if (typeof window !== "undefined") {
-  for (const event of ["savia:identity-changed", "savia:session-cleared"])
+  for (const event of ["savia:principal-changed", "savia:session-cleared"])
     window.addEventListener(event, () => {
       pageCursors = new WeakMap();
     });

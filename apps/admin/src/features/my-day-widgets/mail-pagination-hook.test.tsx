@@ -99,7 +99,7 @@ it("clears unreadable history on denied pagination", async () => {
   expect(result.current.messages).toEqual([]);
   expect(result.current.hasMore?.gmail).toBe(false);
 });
-it("coalesces pagination and ignores a previous identity's pending response", async () => {
+it("coalesces pagination and ignores a previous principal's pending response", async () => {
   const client = service();
   const { result } = renderHook(() => useMyDayMail(client as PersonalMailLike));
   await waitFor(() => expect(result.current.messages).toHaveLength(1));
@@ -119,7 +119,7 @@ it("coalesces pagination and ignores a previous identity's pending response", as
     void result.current.loadMore!();
   });
   expect(client.listMessagePage).toHaveBeenCalledTimes(2);
-  act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+  act(() => window.dispatchEvent(new Event("savia:principal-changed")));
   await act(async () => {
     resolve({ messages: [message("old-identity")], nextCursor: null });
     await first;

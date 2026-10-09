@@ -201,14 +201,14 @@ describe("shared calendar lifecycle", () => {
     expect(result.current.sources).toEqual([]);
     expect(result.current.events).toEqual([]);
   });
-  it("clears private data immediately when the identity changes", async () => {
+  it("clears private data immediately when the principal changes", async () => {
     const service = client();
     const { result } = renderHook(() => useCalendarSources(service, range));
     await waitFor(() => expect(result.current.events).toHaveLength(1));
     vi.mocked(service.listCalendarSources).mockImplementation(
       () => new Promise(() => {}),
     );
-    act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+    act(() => window.dispatchEvent(new Event("savia:principal-changed")));
     expect(result.current.sources).toEqual([]);
     expect(result.current.events).toEqual([]);
   });

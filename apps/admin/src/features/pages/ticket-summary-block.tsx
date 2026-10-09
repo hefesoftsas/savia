@@ -246,20 +246,20 @@ export function TicketSummaryBlock({
       setFailed(false);
       setSuspended(suspend);
     };
-    const identityChanged = () => clear(true);
+    const principalChanged = () => clear(true);
     const sessionCleared = () => clear(true);
     const integrationsChanged = () => {
       clear(false);
       setReloadKey((value) => value + 1);
     };
-    window.addEventListener("savia:identity-changed", identityChanged);
+    window.addEventListener("savia:principal-changed", principalChanged);
     window.addEventListener("savia:session-cleared", sessionCleared);
     window.addEventListener(
       "savia:personal-integrations-changed",
       integrationsChanged,
     );
     return () => {
-      window.removeEventListener("savia:identity-changed", identityChanged);
+      window.removeEventListener("savia:principal-changed", principalChanged);
       window.removeEventListener("savia:session-cleared", sessionCleared);
       window.removeEventListener(
         "savia:personal-integrations-changed",

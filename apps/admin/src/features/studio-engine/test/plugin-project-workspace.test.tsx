@@ -411,7 +411,7 @@ it("does not load another account’s browser recovery", async () => {
   fireEvent.click(await screen.findByText("Draft"));
   expect(await screen.findByLabelText("source")).toHaveValue("original");
 });
-it("closes on identity changes so reopening captures a fresh identity and request controller", async () => {
+it("closes on principal replacement so reopening captures a fresh identity and request controller", async () => {
   const transport = vi.fn(async (path: string, _init?: RequestInit) =>
     Response.json(
       path === "/api/plugin-projects"
@@ -427,7 +427,7 @@ it("closes on identity changes so reopening captures a fresh identity and reques
     <Workspace tenantId={1} onClose={close} onPublished={() => {}} />,
   );
   await screen.findByText("Draft");
-  fireEvent(window, new Event("savia:identity-changed"));
+  fireEvent(window, new Event("savia:principal-changed"));
   expect(close).toHaveBeenCalledOnce();
   first.unmount();
   render(<Workspace tenantId={1} onClose={close} onPublished={() => {}} />);
@@ -436,4 +436,28 @@ it("closes on identity changes so reopening captures a fresh identity and reques
     .map((call) => (call[1] as RequestInit)?.signal)
     .filter(Boolean);
   expect(signals.at(-1)?.aborted).toBe(false);
+});
+it("keeps an open project workspace mounted after a same-principal profile refresh", async () => {
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path) =>
+      Response.json(
+        path === "/api/plugin-projects"
+          ? { data: [{ id, label: "Draft" }] }
+          : path.endsWith("/registry")
+            ? { canPublish: false }
+            : { data: { id, files, history: [], version: 1 } },
+      ),
+  });
+  const close = vi.fn();
+  render(<Workspace tenantId={1} onClose={close} onPublished={() => {}} />);
+  fireEvent.click(await screen.findByText("Draft"));
+  const editor = await screen.findByLabelText("source");
+  fireEvent.change(editor, { target: { value: "unsaved source" } });
+
+  fireEvent(window, new Event("savia:identity-changed"));
+
+  expect(close).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("source")).toHaveValue("unsaved source");
 });
