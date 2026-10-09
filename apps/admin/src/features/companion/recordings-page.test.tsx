@@ -254,6 +254,126 @@ it("exposes an empty state without fictional samples", async () => {
   expect(await screen.findByText("No recordings yet")).toBeVisible();
   expect(client.audio).not.toHaveBeenCalled();
 });
+
+it("hides the previous account list immediately and ignores its late refresh", async () => {
+  let resolveOldRefresh!: (value: {
+    recordings: (typeof recording)[];
+    cursor: null;
+  }) => void;
+  const oldClient = mockClient();
+  const oldRecording = { ...recording, name: "Old account recording" };
+  oldClient.list
+    .mockResolvedValueOnce({ recordings: [oldRecording], cursor: null })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOldRefresh = resolve;
+        }),
+    );
+  const newClient = mockClient();
+  newClient.list.mockResolvedValue({
+    recordings: [{ ...recording, id: "new", name: "New account recording" }],
+    cursor: null,
+  });
+  const store = memoryStore({ locale: "en" });
+  const view = render(
+    <StoreContextProvider value={store}>
+      <CompanionRecordingsPage
+        client={oldClient as unknown as CompanionRecordingsClient}
+      />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+
+  await screen.findByRole("button", { name: /Old account recording/ });
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  await waitFor(() => expect(oldClient.list).toHaveBeenCalledTimes(2));
+
+  view.rerender(
+    <StoreContextProvider value={store}>
+      <CompanionRecordingsPage
+        client={newClient as unknown as CompanionRecordingsClient}
+      />
+    </StoreContextProvider>,
+  );
+
+  expect(screen.queryAllByText("Old account recording")).toHaveLength(0);
+  await screen.findByRole("button", { name: /New account recording/ });
+  const lateRecording = {
+    ...recording,
+    name: "Late old account recording",
+  };
+  resolveOldRefresh({
+    recordings: [lateRecording],
+    cursor: null,
+  });
+  await waitFor(() =>
+    expect(
+      screen.queryAllByText("New account recording").length,
+    ).toBeGreaterThan(0),
+  );
+  expect(
+    screen.queryByText("Late old account recording"),
+  ).not.toBeInTheDocument();
+});
+
+it("clears protected recordings on 403 and lets the user retry", async () => {
+  const client = mockClient();
+  client.list
+    .mockResolvedValueOnce({ recordings: [recording], cursor: null })
+    .mockRejectedValueOnce(new ApiClientError(403, "forbidden", "Denied"))
+    .mockResolvedValueOnce({ recordings: [recording], cursor: null })
+    .mockRejectedValueOnce(
+      new ApiClientError(503, "unavailable", "Temporary network failure"),
+    );
+  const user = userEvent.setup();
+  show(client);
+
+  await screen.findByRole("button", { name: /System audio/ });
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Denied");
+  expect(screen.queryByRole("button", { name: /System audio/ })).toBeNull();
+  expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(
+    await screen.findByRole("button", { name: /System audio/ }),
+  ).toBeVisible();
+
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Temporary network failure",
+  );
+  expect(screen.getByRole("button", { name: /System audio/ })).toBeVisible();
+});
+
+it("hides selected detail data when its media or notes read is denied", async () => {
+  const client = mockClient();
+  const savedNotes = {
+    transcript: {
+      text: "Private saved transcript",
+      source: "system" as const,
+      model: "fixture",
+      durationSeconds: 10,
+    },
+    summary: null,
+  };
+  client.notes.mockResolvedValue(savedNotes);
+  const user = userEvent.setup();
+  show(client);
+
+  expect(await screen.findByTestId("recording-assistant")).toBeVisible();
+  client.audio.mockRejectedValueOnce(
+    new ApiClientError(403, "forbidden", "Audio denied"),
+  );
+  client.notes.mockResolvedValueOnce(savedNotes);
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Audio denied");
+  expect(screen.queryByTestId("recording-assistant")).toBeNull();
+  expect(screen.getByRole("button", { name: /System audio/ })).toBeVisible();
+});
+
 it("uploads from disk and selects the saved recording without processing it", async () => {
   const client = {
     ...mockClient(),

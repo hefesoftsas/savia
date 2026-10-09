@@ -1,7 +1,16 @@
 import "./recording-sessions.css";
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AudioLines, Download, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
+import { isReadAccessDenied } from "@/queries/read-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,11 +69,19 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
   const [sessions, setSessions] = useState<RecordingSession[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [loadedListClient, setLoadedListClient] =
+    useState<CompanionSessionsClient | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const generation = useRef(0);
+  const hasCurrentScope = loadedListClient === client;
+  const handleDetailDenied = useCallback(() => {
+    setSelected(null);
+    setError(true);
+  }, []);
   async function load(next?: string) {
     const version = ++generation.current;
+    const hadCurrentScope = loadedListClient === client;
     setLoading(true);
     setError(false);
     try {
@@ -87,10 +104,20 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
             ? current
             : (result.sessions[0]?.id ?? null),
         );
-    } catch {
-      if (version === generation.current) setError(true);
+    } catch (error) {
+      if (version === generation.current) {
+        setError(true);
+        if (!hadCurrentScope || isReadAccessDenied(error)) {
+          setSessions([]);
+          setCursor(null);
+          setSelected(null);
+        }
+      }
     } finally {
-      if (version === generation.current) setLoading(false);
+      if (version === generation.current) {
+        setLoading(false);
+        setLoadedListClient(client);
+      }
     }
   }
   useEffect(() => {
@@ -115,7 +142,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
         </div>
         <Button
           variant="outline"
-          disabled={loading}
+          disabled={loading || !hasCurrentScope}
           onClick={() => void load()}
         >
           <RefreshCw className="size-4" aria-hidden="true" />
@@ -127,7 +154,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
           {t("Unable to load recordings.")}
         </p>
       )}
-      {loading && !sessions.length ? (
+      {!hasCurrentScope || (loading && !sessions.length) ? (
         <p role="status">{t("Loading recordings…")}</p>
       ) : !sessions.length ? (
         <div className="border-t py-12">
@@ -153,7 +180,10 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
                   <button
                     className={`w-full rounded-md px-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-ring ${selected === item.id ? "bg-muted" : "hover:bg-muted/50"}`}
                     aria-current={selected === item.id ? "true" : undefined}
-                    onClick={() => setSelected(item.id)}
+                    onClick={() => {
+                      setError(false);
+                      setSelected(item.id);
+                    }}
                   >
                     <span className="block break-words font-medium">
                       {item.name}
@@ -179,7 +209,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
             {cursor && (
               <Button
                 variant="ghost"
-                disabled={loading}
+                disabled={loading || !hasCurrentScope}
                 onClick={() => void load(cursor)}
               >
                 {t("Load more")}
@@ -191,6 +221,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
               key={session.id}
               initial={session}
               client={client}
+              onReadDenied={handleDetailDenied}
               onRenamed={(id, name) =>
                 setSessions((previous) =>
                   previous.map((item) =>
@@ -215,11 +246,13 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
 function SessionDetail({
   initial,
   client,
+  onReadDenied,
   onRenamed,
   onDeleted,
 }: {
   initial: RecordingSession;
   client: CompanionSessionsClient;
+  onReadDenied: () => void;
   onRenamed: (id: string, name: string) => void;
   onDeleted: (id: string) => void;
 }) {
@@ -260,11 +293,14 @@ function SessionDetail({
         if (!abort.signal.aborted && revision === nameRevision.current)
           setSession(next);
       })
-      .catch(() => {
-        if (!abort.signal.aborted) setError(true);
+      .catch((error) => {
+        if (!abort.signal.aborted) {
+          if (isReadAccessDenied(error)) onReadDenied();
+          else setError(true);
+        }
       });
     return () => abort.abort();
-  }, [initial, client]);
+  }, [initial, client, onReadDenied]);
   useEffect(() => {
     if (!editing) setDraftName(session.name);
   }, [session.name, editing]);
@@ -287,8 +323,14 @@ function SessionDetail({
           setSession(next);
           setError(false);
         }
-      } catch {
-        if (!abort.signal.aborted) setError(true);
+      } catch (error) {
+        if (!abort.signal.aborted) {
+          if (isReadAccessDenied(error)) {
+            onReadDenied();
+            return;
+          }
+          setError(true);
+        }
       }
       if (!abort.signal.aborted) timer = setTimeout(() => void poll(), 5000);
     };
@@ -297,7 +339,7 @@ function SessionDetail({
       abort.abort();
       clearTimeout(timer);
     };
-  }, [client, initial.id, running]);
+  }, [client, initial.id, onReadDenied, running]);
   async function run(cancel: boolean) {
     if (inFlight.current) return;
     inFlight.current = true;
