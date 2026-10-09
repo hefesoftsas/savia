@@ -123,6 +123,7 @@ export function WhatsappConnectionsPage({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [loadedTenantId, setLoadedTenantId] = useState<number | null>();
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [displayPhoneNumber, setDisplayPhoneNumber] = useState("");
@@ -134,7 +135,7 @@ export function WhatsappConnectionsPage({
   const latestTenant = useRef(currentTenant);
   latestTenant.current = currentTenant;
 
-  async function refresh() {
+  async function refresh({ preserveDrafts = false } = {}) {
     if (latestTenant.current.id !== currentTenant.id) return;
     if (currentTenant.isLoading || latestTenant.current.isLoading) {
       setLoading(true);
@@ -146,8 +147,12 @@ export function WhatsappConnectionsPage({
 
     const requestId = ++refreshRequestId.current;
     const requestTenantId = currentTenant.id;
-    setLoading(true);
-    setFeedback(null);
+    const keepVisible = loadedTenantId === requestTenantId && provider !== null;
+    if (!keepVisible) {
+      setLoading(true);
+      setRefreshError(null);
+    }
+    if (!preserveDrafts) setFeedback(null);
     try {
       const [nextProviders, nextConnections] = await Promise.all([
         services.whatsapp.listProviders(requestTenantId ?? undefined),
@@ -161,20 +166,38 @@ export function WhatsappConnectionsPage({
       setProvider(nextProviders[0] ?? null);
       const next = nextConnections[0] ?? null;
       setConnection(next);
-      setPhoneNumberId(next?.phoneNumberId ?? "");
-      setDisplayPhoneNumber(next?.displayPhoneNumber ?? "");
-      setWabaId(next?.wabaId ?? "");
+      const keepEditedNumber = preserveDrafts && keepVisible;
+      setPhoneNumberId((value) =>
+        keepEditedNumber && value !== (connection?.phoneNumberId ?? "")
+          ? value
+          : (next?.phoneNumberId ?? ""),
+      );
+      setDisplayPhoneNumber((value) =>
+        keepEditedNumber && value !== (connection?.displayPhoneNumber ?? "")
+          ? value
+          : (next?.displayPhoneNumber ?? ""),
+      );
+      setWabaId((value) =>
+        keepEditedNumber && value !== (connection?.wabaId ?? "")
+          ? value
+          : (next?.wabaId ?? ""),
+      );
       setLoadedTenantId(requestTenantId);
+      setRefreshError(null);
     } catch (exception) {
       if (
         requestId !== refreshRequestId.current ||
         requestTenantId !== latestTenant.current.id
       )
         return;
-      setFeedback(feedbackFrom(exception));
-      setProvider(null);
-      setConnection(null);
-      setLoadedTenantId(requestTenantId);
+      if (keepVisible) {
+        setRefreshError(feedbackFrom(exception));
+      } else {
+        setFeedback(feedbackFrom(exception));
+        setProvider(null);
+        setConnection(null);
+        setLoadedTenantId(requestTenantId);
+      }
     } finally {
       if (
         requestId === refreshRequestId.current &&
@@ -197,7 +220,7 @@ export function WhatsappConnectionsPage({
     return () => {
       refreshRequestId.current += 1;
     };
-  }, [services, currentTenant.id, currentTenant.isLoading]);
+  }, [services.whatsapp, currentTenant.id, currentTenant.isLoading]);
 
   useRealtimeRefresh({
     topics: ["integrations"],
@@ -205,7 +228,7 @@ export function WhatsappConnectionsPage({
       ? 0
       : (currentTenant.id ?? undefined),
     enabled: !currentTenant.isLoading,
-    refresh,
+    refresh: () => refresh({ preserveDrafts: true }),
   });
 
   const tenantDataIsCurrent =
@@ -518,13 +541,13 @@ export function WhatsappConnectionsPage({
 
   const content = (
     <>
-      {tenantDataIsCurrent && feedback ? (
+      {tenantDataIsCurrent && (refreshError || feedback) ? (
         <div
           className="integrations-feedback flex items-start gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
           role="status"
         >
           <CircleAlert className="mt-0.5 size-4 shrink-0 text-primary" />
-          <p className="leading-6">{feedback}</p>
+          <p className="leading-6">{refreshError || feedback}</p>
         </div>
       ) : null}
 

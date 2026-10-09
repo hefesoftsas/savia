@@ -110,8 +110,20 @@ function subscribe(
     queueMicrotask(() => {
       shared.scheduled = false;
       if (shared.disposed) return;
+      const requestedTopics = new Set(
+        [...shared.listeners].flatMap((item) => item.topics),
+      );
+      // Principal topics share one authorization scope. Subscribe to the
+      // complete set up front so mounting a route-specific principal listener
+      // does not replace the account/notifications socket and trigger a broad
+      // reconnect refresh across the app.
       const topicsKey = [
-        ...new Set([...shared.listeners].flatMap((item) => item.topics)),
+        ...new Set([
+          ...requestedTopics,
+          ...(requestedTopics.size > 0 && key === "self"
+            ? PERSONAL_TOPICS
+            : []),
+        ]),
       ]
         .sort()
         .join(",");

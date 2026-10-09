@@ -288,6 +288,7 @@ it("shares one room socket across components and filters their topics", async ()
     .mockResolvedValue({ data: { room: "principal:self", ticket: "shared" } });
   const account = vi.fn();
   const notifications = vi.fn();
+  const personalIntegrations = vi.fn();
   function Subscriber({
     topic,
     listener,
@@ -308,7 +309,7 @@ it("shares one room socket across components and filters their topics", async ()
   await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
   expect(post).toHaveBeenCalledTimes(1);
   expect(post).toHaveBeenCalledWith("/v1/realtime/ticket", {
-    topics: ["account", "notifications"],
+    topics: ["account", "notifications", "personal-integrations"],
   });
   const first = MockWebSocket.instances[0];
   await act(async () =>
@@ -320,21 +321,47 @@ it("shares one room socket across components and filters their topics", async ()
   expect(notifications).not.toHaveBeenCalled();
   rerender(
     <AppServicesProvider services={services}>
+      <Subscriber topic="account" listener={account} />
       <Subscriber topic="notifications" listener={notifications} />
+      <Subscriber
+        topic="personal-integrations"
+        listener={personalIntegrations}
+      />
     </AppServicesProvider>,
   );
-  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(2));
+  await act(async () => Promise.resolve());
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(MockWebSocket.instances).toHaveLength(1);
   await act(async () =>
     first.onmessage?.({
       data: JSON.stringify({ topic: "notifications", type: "updated" }),
     }),
   );
-  expect(notifications).not.toHaveBeenCalled();
+  expect(notifications).toHaveBeenCalledOnce();
   await act(async () =>
-    MockWebSocket.instances[1].onmessage?.({
-      data: JSON.stringify({ topic: "notifications", type: "updated" }),
+    first.onmessage?.({
+      data: JSON.stringify({ topic: "personal-integrations", type: "updated" }),
     }),
   );
+  expect(personalIntegrations).toHaveBeenCalledOnce();
+  expect(account).toHaveBeenCalledOnce();
+  expect(notifications).toHaveBeenCalledOnce();
+  rerender(
+    <AppServicesProvider services={services}>
+      <Subscriber topic="account" listener={account} />
+      <Subscriber topic="notifications" listener={notifications} />
+    </AppServicesProvider>,
+  );
+  await act(async () => Promise.resolve());
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(MockWebSocket.instances).toHaveLength(1);
+  await act(async () =>
+    first.onmessage?.({
+      data: JSON.stringify({ topic: "personal-integrations", type: "updated" }),
+    }),
+  );
+  expect(personalIntegrations).toHaveBeenCalledOnce();
+  expect(account).toHaveBeenCalledOnce();
   expect(notifications).toHaveBeenCalledOnce();
   unmount();
 });
@@ -366,7 +393,9 @@ it("does not share tickets between tenants or between tenant and personal rooms"
     expect.arrayContaining([
       { topics: ["records"], tenantId: 1 },
       { topics: ["records"], tenantId: 2 },
-      { topics: ["account"] },
+      {
+        topics: ["account", "notifications", "personal-integrations"],
+      },
     ]),
   );
 });

@@ -96,6 +96,13 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
    keyboard focus, or tap. Operator-facing copy describes the WhatsApp action
    rather than the connection broker. Connection errors, setup blockers, contact
    restrictions, and recipient consent remain visible in the form.
+   Same-tenant connection updates run in the background without replacing the
+   section menu or remounting assistant, channel, and native settings while those
+   sections remain available. Unsaved
+   number edits are retained while untouched number fields receive current
+   metadata. Failed background reads show an error and retain the last loaded
+   settings; the next successful refresh clears that error. Switching tenants
+   still hides the previous tenant's settings until the new scope loads.
 2. **Conectar** creates a short-lived Nango Connect session for that tenant.
    The browser receives only the session token and the public Nango URLs.
 3. The user authorizes the `whatsapp-business` integration in Nango with the
