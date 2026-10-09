@@ -67,6 +67,18 @@ function createServices() {
         webhookReady: false,
       }),
       updateAssistant: vi.fn(),
+      getChannel: vi.fn().mockResolvedValue({
+        configuration: {
+          routingEnabled: false,
+          tasks: [],
+          staff: [],
+          internalCapabilities: [],
+          externalCapabilities: [],
+        },
+        employees: [],
+        members: [],
+      }),
+      updateChannel: vi.fn(),
       getNative: vi.fn().mockResolvedValue({
         configuration: {
           replyButtons: false,
@@ -97,6 +109,54 @@ function createServices() {
 }
 
 describe("WhatsappConnectionsPage", () => {
+  it("shows only the selected section and preserves unsaved assistant changes", async () => {
+    tenantState.id = 101;
+    const user = userEvent.setup();
+    const services = createServices();
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      await services.whatsapp.complete("connection-1", { agencyId: 101 }),
+    ]);
+
+    render(
+      <MemoryRouter>
+        <WhatsappConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("tab", { name: "Avanzado" });
+    const expectOnlySelectedPanel = () => {
+      const panels = screen.getAllByRole("tabpanel", { hidden: true });
+      expect(panels).toHaveLength(4);
+      for (const panel of panels) {
+        if (panel.dataset.state === "active") expect(panel).toBeVisible();
+        else expect(panel).not.toBeVisible();
+      }
+    };
+    expectOnlySelectedPanel();
+    await user.click(screen.getByRole("tab", { name: "Conexión" }));
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("tab", { name: "Asistente IA" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Asistente IA" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expectOnlySelectedPanel();
+    const contacts = await screen.findByRole("textbox", {
+      name: "Contactos de prueba",
+    });
+    await user.type(contacts, "+573028648594");
+    for (const name of ["Menú y equipo", "Avanzado", "Conexión"]) {
+      await user.click(screen.getByRole("tab", { name }));
+      expectOnlySelectedPanel();
+    }
+    await user.click(screen.getByRole("tab", { name: "Asistente IA" }));
+    expectOnlySelectedPanel();
+    expect(
+      screen.getByRole("textbox", { name: "Contactos de prueba" }),
+    ).toHaveValue("+573028648594");
+    expect(services.whatsapp.updateAssistant).not.toHaveBeenCalled();
+  });
+
   it("renders the WhatsApp integration with its brand logo", async () => {
     const services = createServices();
 

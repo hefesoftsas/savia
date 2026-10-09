@@ -538,32 +538,42 @@ export function WhatsappConnectionsPage({
         <Tabs
           value={section}
           onValueChange={setSection}
-          className="w-full space-y-4"
+          orientation="vertical"
+          className="w-full flex-col gap-4 sm:flex-row sm:items-start sm:gap-6"
         >
-          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 p-1">
-            <TabsTrigger value="conexion" className="gap-1.5">
+          <TabsList
+            aria-label="Configuración de WhatsApp"
+            className="w-full gap-1 p-1 sm:w-48 sm:shrink-0"
+          >
+            <TabsTrigger value="conexion" className="min-h-11 gap-2 px-3">
               <Plug aria-hidden="true" />
               Conexión
             </TabsTrigger>
-            <TabsTrigger value="asistente" className="gap-1.5">
+            <TabsTrigger value="asistente" className="min-h-11 gap-2 px-3">
               <Bot aria-hidden="true" />
               Asistente IA
             </TabsTrigger>
             {canConfigureChannel ? (
-              <TabsTrigger value="menu" className="gap-1.5">
+              <TabsTrigger value="menu" className="min-h-11 gap-2 px-3">
                 <ListChecks aria-hidden="true" />
                 Menú y equipo
               </TabsTrigger>
             ) : null}
             {showAdvanced ? (
-              <TabsTrigger value="avanzado" className="gap-1.5">
+              <TabsTrigger value="avanzado" className="min-h-11 gap-2 px-3">
                 <FlaskConical aria-hidden="true" />
                 Avanzado
               </TabsTrigger>
             ) : null}
           </TabsList>
 
-          <TabsContent value="conexion" forceMount className="space-y-4">
+          {/* Keep drafts mounted while excluding inactive forms from view and focus. */}
+          <TabsContent
+            value="conexion"
+            forceMount
+            hidden={section !== "conexion"}
+            className="min-w-0 space-y-4 data-[state=inactive]:hidden"
+          >
             {connectionGroup}
             {showAdvanced ? (
               <>
@@ -580,7 +590,12 @@ export function WhatsappConnectionsPage({
             )}
           </TabsContent>
 
-          <TabsContent value="asistente" forceMount className="space-y-4">
+          <TabsContent
+            value="asistente"
+            forceMount
+            hidden={section !== "asistente"}
+            className="min-w-0 space-y-4 data-[state=inactive]:hidden"
+          >
             {currentTenant.id !== null ? (
               <WhatsappAssistantSettings
                 key={currentTenant.id}
@@ -592,7 +607,12 @@ export function WhatsappConnectionsPage({
           </TabsContent>
 
           {canConfigureChannel && currentTenant.id !== null ? (
-            <TabsContent value="menu" forceMount className="space-y-4">
+            <TabsContent
+              value="menu"
+              forceMount
+              hidden={section !== "menu"}
+              className="min-w-0 space-y-4 data-[state=inactive]:hidden"
+            >
               <WhatsappChannelSettings
                 key={`channel-${currentTenant.id}`}
                 whatsapp={services.whatsapp}
@@ -602,7 +622,12 @@ export function WhatsappConnectionsPage({
           ) : null}
 
           {showAdvanced && currentTenant.id !== null ? (
-            <TabsContent value="avanzado" forceMount className="space-y-4">
+            <TabsContent
+              value="avanzado"
+              forceMount
+              hidden={section !== "avanzado"}
+              className="min-w-0 space-y-4 data-[state=inactive]:hidden"
+            >
               <WhatsappNativeSettings
                 key={`native-${currentTenant.id}`}
                 services={services}

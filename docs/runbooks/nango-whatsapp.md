@@ -87,6 +87,11 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
 
 1. A user with an active tenant membership opens
    `#/my-integrations?tab=whatsapp` (WhatsApp row, brand logo).
+   WhatsApp settings use a left-side section menu on desktop and a compact
+   vertical menu above the content on mobile. **Conexión**, **Asistente IA**,
+   **Menú y equipo**, and **Avanzado** show only the selected section. Switching
+   sections preserves unsaved form edits; it does not save them or send messages.
+   Sections remain subject to the tenant's connection and service availability.
 2. **Conectar** creates a short-lived Nango Connect session for that tenant.
    The browser receives only the session token and the public Nango URLs.
 3. The user authorizes the `whatsapp-business` integration in Nango with the
