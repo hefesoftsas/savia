@@ -219,6 +219,7 @@ export const recordsMessages = {
     "Fechar configurações",
   ],
   "Cerrar edición": ["Cerrar edición", "Close editor", "Fechar edição"],
+  Cerrar: ["Cerrar", "Close", "Fechar"],
   "Clear rating": ["Borrar calificación", "Clear rating", "Limpar avaliação"],
   "Columnas de la tabla": [
     "Columnas de la tabla",
@@ -646,6 +647,11 @@ export const recordsMessages = {
   "Referencia:": ["Referencia:", "Reference:", "Referência:"],
   Registrar: ["Registrar", "Record", "Registrar"],
   Registro: ["Registro", "Record", "Registro"],
+  "Registro no disponible": [
+    "Registro no disponible",
+    "Record unavailable",
+    "Registro indisponível",
+  ],
   "Registro de": ["Registro de", "Record of", "Registro de"],
   "Registros disponibles": [
     "Registros disponibles",

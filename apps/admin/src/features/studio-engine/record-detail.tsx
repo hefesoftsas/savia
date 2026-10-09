@@ -491,11 +491,11 @@ export default function RecordDetail({
           aria-describedby={undefined}
         >
           <DialogHeader>
-            <DialogTitle>Registro no disponible</DialogTitle>
+            <DialogTitle>{t("Registro no disponible")}</DialogTitle>
           </DialogHeader>
           <p role="alert">{detail.error?.message}</p>
           <Button variant="outline" onClick={onClose}>
-            Cerrar
+            {t("Cerrar")}
           </Button>
         </DialogContent>
       </Dialog>

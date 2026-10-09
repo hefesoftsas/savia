@@ -201,6 +201,13 @@ it("removes record details from the open view after a same-scope 403", async () 
   expect(
     await screen.findByRole("heading", { name: "Protected record" }),
   ).toBeVisible();
+  await waitFor(() => {
+    expect(
+      queryClient.getQueryState(["record-detail", "contacts", "one", 1])
+        ?.status,
+    ).toBe("success");
+    expect(detailReads).toBe(1);
+  });
 
   void queryClient.invalidateQueries({
     queryKey: ["record-detail", "contacts", "one"],
@@ -242,6 +249,13 @@ it("keeps the existing record visible while a detail refresh reports an error", 
   expect(
     await screen.findByRole("heading", { name: "Current record" }),
   ).toBeVisible();
+  await waitFor(() => {
+    expect(
+      queryClient.getQueryState(["record-detail", "contacts", "one", 1])
+        ?.status,
+    ).toBe("success");
+    expect(detailReads).toBe(1);
+  });
 
   void queryClient.invalidateQueries({
     queryKey: ["record-detail", "contacts", "one"],
