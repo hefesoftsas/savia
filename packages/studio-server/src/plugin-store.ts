@@ -49,6 +49,7 @@ import { audit } from "./services";
 import type { Hono } from "hono";
 import { registerPluginRegistry } from "./plugin-registry";
 import {
+  parsePluginOriginalSourceFiles,
   pluginStoreSourceFilesSchema,
   type PluginStoreSourceFiles,
 } from "@savia/studio-shared/plugin-projects";
@@ -280,27 +281,39 @@ export async function parsePluginStoreZip(
   }
   const sourceEntry = byName.get("src/entry.tsx");
   const previewEntry = byName.get("src/preview.json");
-  const sourceFiles = sourceEntry
-    ? pluginStoreSourceFilesSchema.parse({
-        "entry.tsx": new TextDecoder().decode(sourceEntry.data),
-        "savia-extension.json": new TextDecoder().decode(manifestEntry.data),
-        "store.json": storeEntry
-          ? new TextDecoder().decode(storeEntry.data)
-          : JSON.stringify({
-              format: "savia.store",
-              formatVersion: 1,
-              actions: [],
-              connectors: [],
-              collections: [],
-              bundles: [],
-              widgets: [],
-              screens: [],
-            }),
-        "preview.json": previewEntry
-          ? new TextDecoder().decode(previewEntry.data)
-          : JSON.stringify({ collections: {}, settings: {} }),
-      })
+  const originalSourceEntry = byName.get("src/original-source.json");
+  const originalSource = originalSourceEntry
+    ? new TextDecoder().decode(originalSourceEntry.data)
     : undefined;
+  if (originalSource !== undefined)
+    parsePluginOriginalSourceFiles(originalSource);
+  const sourceFiles =
+    sourceEntry || originalSourceEntry
+      ? pluginStoreSourceFilesSchema.parse({
+          "entry.tsx": sourceEntry
+            ? new TextDecoder().decode(sourceEntry.data)
+            : entryJs,
+          "savia-extension.json": new TextDecoder().decode(manifestEntry.data),
+          "store.json": storeEntry
+            ? new TextDecoder().decode(storeEntry.data)
+            : JSON.stringify({
+                format: "savia.store",
+                formatVersion: 1,
+                actions: [],
+                connectors: [],
+                collections: [],
+                bundles: [],
+                widgets: [],
+                screens: [],
+              }),
+          "preview.json": previewEntry
+            ? new TextDecoder().decode(previewEntry.data)
+            : JSON.stringify({ collections: {}, settings: {} }),
+          ...(originalSource === undefined
+            ? {}
+            : { "original-source.json": originalSource }),
+        })
+      : undefined;
   return {
     manifest,
     entryJs,
@@ -1652,7 +1665,7 @@ export function registerPluginStore(
         const files = pluginStoreSourceFilesSchema.parse(
           JSON.parse(source.files),
         );
-        return c.json({ data: { files } });
+        return c.json({ data: { files, synthesized: false } });
       } catch {
         return fail("Plugin source is unavailable.", 404);
       }

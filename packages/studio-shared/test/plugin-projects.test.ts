@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   PLUGIN_PROJECT_MAX_BYTES,
+  parsePluginOriginalSourceFiles,
+  pluginOriginalSourceFilesSchema,
   pluginProjectFilesSchema,
   pluginProjectSaveSchema,
 } from "../src/plugin-projects";
@@ -15,6 +17,49 @@ function files(entry: string) {
 }
 
 describe("plugin project file limits", () => {
+  it("accepts a bounded original source archive in project files", () => {
+    const originalSource = JSON.stringify({
+      "packages/insurance-demo/src/admin.tsx": "export function Screen() {}",
+      "packages/studio-shared/src/plugin-api.ts": "export type PluginApi = {};",
+    });
+    expect(() =>
+      pluginProjectFilesSchema.parse({
+        ...files("compiled entry"),
+        "original-source.json": originalSource,
+      }),
+    ).not.toThrow();
+    expect(parsePluginOriginalSourceFiles(originalSource)).toEqual({
+      "packages/insurance-demo/src/admin.tsx": "export function Screen() {}",
+      "packages/studio-shared/src/plugin-api.ts": "export type PluginApi = {};",
+    });
+  });
+
+  it("rejects unsafe paths and unsupported files in original source", () => {
+    for (const source of [
+      { "../secret.ts": "x" },
+      { "/etc/passwd.ts": "x" },
+      { "packages\\demo\\src\\entry.tsx": "x" },
+      { "packages/demo/src/constructor.ts": "x" },
+      { "packages/demo/src/readme.md": "x" },
+    ])
+      expect(() => pluginOriginalSourceFilesSchema.parse(source)).toThrow();
+  });
+
+  it("bounds original source file count and UTF-8 bytes", () => {
+    const tooMany = Object.fromEntries(
+      Array.from({ length: 257 }, (_, index) => [
+        `packages/demo/src/${index}.ts`,
+        "x",
+      ]),
+    );
+    expect(() => pluginOriginalSourceFilesSchema.parse(tooMany)).toThrow();
+    expect(() =>
+      pluginOriginalSourceFilesSchema.parse({
+        "packages/demo/src/large.ts": "😀".repeat(600_000),
+      }),
+    ).toThrow();
+  });
+
   it("allows compiled entries above the normal 100 KB authoring file limit", () => {
     expect(() =>
       pluginProjectFilesSchema.parse(files("x".repeat(120 * 1024))),

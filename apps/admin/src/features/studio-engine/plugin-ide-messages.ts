@@ -44,6 +44,16 @@ export const pluginIdeMessages = {
   typescriptLanguage: ["TypeScript JSX", "TypeScript JSX", "TypeScript JSX"],
   jsonLanguage: ["JSON", "JSON", "JSON"],
   explorer: ["Explorador", "Explorer", "Explorador"],
+  originalSource: [
+    "Código fuente original",
+    "Original source code",
+    "Código-fonte original",
+  ],
+  originalSourceHint: [
+    "Archivos originales de la versión publicada, solo para consulta. La vista previa y la publicación usan entry.tsx.",
+    "Original files from the published version, for reference only. Preview and publication use entry.tsx.",
+    "Arquivos originais da versão publicada, apenas para consulta. A prévia e a publicação usam entry.tsx.",
+  ],
   openFiles: ["Archivos abiertos", "Open files", "Arquivos abertos"],
   closeFile: ["Cerrar", "Close", "Fechar"],
   review: ["Revisar", "Review", "Revisar"],

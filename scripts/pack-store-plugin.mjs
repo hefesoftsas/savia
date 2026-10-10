@@ -217,6 +217,36 @@ function packageStorePlugin({ portDir, outputPath, versionOverride }) {
       );
     }
     assertBundle(readFileSync(bundlePath, "utf8"));
+    // Retain workspace-owned source exactly as authored for UI inspection.
+    // The build graph excludes unrelated workspace files.
+    const inputs = Object.keys(
+      JSON.parse(readFileSync(join(temporaryRoot, "metafile.json"), "utf8"))
+        .inputs,
+    ).map((path) => resolve(workspaceRoot, path));
+    const originals = {};
+    for (const path of inputs.sort()) {
+      const name = relative(workspaceRoot, path).split("\\").join("/");
+      if (
+        name.startsWith("../") ||
+        name.includes("node_modules/") ||
+        !/\.(?:tsx?|jsx?|css|json)$/.test(name)
+      )
+        continue;
+      originals[name] = readFileSync(path, "utf8");
+    }
+    const originalSource = JSON.stringify(originals);
+    if (
+      Object.keys(originals).length > 256 ||
+      Buffer.byteLength(originalSource) > MAX_ENTRY_BYTES
+    )
+      fail(
+        "el código fuente original supera el límite de 256 archivos o 2 MB.",
+      );
+    mkdirSync(join(stagingRoot, "src"), { recursive: true });
+    writeFileSync(
+      join(stagingRoot, "src", "original-source.json"),
+      originalSource,
+    );
     if (versionOverride === undefined)
       cpSync(
         join(portRoot, "savia-extension.json"),
@@ -227,7 +257,11 @@ function packageStorePlugin({ portDir, outputPath, versionOverride }) {
         join(stagingRoot, "savia-extension.json"),
         JSON.stringify(manifest, null, 2),
       );
-    const zipInputs = ["savia-extension.json", "dist/plugin.js"];
+    const zipInputs = [
+      "savia-extension.json",
+      "dist/plugin.js",
+      "src/original-source.json",
+    ];
     if (store) {
       cpSync(join(portRoot, "store.json"), join(stagingRoot, "store.json"));
       zipInputs.splice(1, 0, "store.json");
@@ -254,10 +288,7 @@ function packageStorePlugin({ portDir, outputPath, versionOverride }) {
       artifactPath: relative(workspaceRoot, artifact),
       sha256,
       manifest,
-      inputs: Object.keys(
-        JSON.parse(readFileSync(join(temporaryRoot, "metafile.json"), "utf8"))
-          .inputs,
-      ).map((path) => resolve(workspaceRoot, path)),
+      inputs,
     };
   } finally {
     rmSync(temporaryRoot, { force: true, recursive: true });

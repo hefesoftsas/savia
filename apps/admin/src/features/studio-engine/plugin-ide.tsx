@@ -1,10 +1,14 @@
-import { PLUGIN_PROJECT_MAX_BYTES } from "@savia/studio-shared/plugin-projects";
+import {
+  PLUGIN_PROJECT_MAX_BYTES,
+  pluginOriginalSourceFilesSchema,
+} from "@savia/studio-shared/plugin-projects";
 import {
   useEffect,
   useLayoutEffect,
   useRef,
   useId,
   useState,
+  useMemo,
   type ReactNode,
 } from "react";
 import {
@@ -129,6 +133,22 @@ export default function PluginIde({
   const draftCallback = useRef(onDraftChange);
   draftCallback.current = onDraftChange;
   const [selected, setSelected] = useState<keyof IdeFiles>("entry.tsx");
+  const originalArchive = files["original-source.json"];
+  const originalFiles = useMemo(
+    () =>
+      originalArchive
+        ? pluginOriginalSourceFilesSchema.parse(JSON.parse(originalArchive))
+        : {},
+    [originalArchive],
+  );
+  const [selectedOriginal, setSelectedOriginal] = useState<string | null>(
+    () =>
+      Object.keys(originalFiles).find((name) =>
+        /(?:^|\/)entry\.(?:tsx|jsx|js)$/.test(name),
+      ) ??
+      Object.keys(originalFiles)[0] ??
+      null,
+  );
   const [prompt, setPrompt] = useState("");
   const [history, setHistory] = useState<ChatMessage[]>(initialHistory ?? []);
   const [proposal, setProposal] = useState<Proposal | null>(null);
@@ -206,6 +226,7 @@ export default function PluginIde({
     if (element) element.scrollTop = element.scrollHeight;
   }, [history, generating, proposal, chatError, streamingMessage, queue]);
   function openFile(name: keyof IdeFiles) {
+    setSelectedOriginal(null);
     setSelected(name);
     setOpenFiles((current) =>
       current.includes(name) ? current : [...current, name],
@@ -304,6 +325,8 @@ export default function PluginIde({
 
   function replaceFiles(next: IdeFiles) {
     currentPreview.current = null;
+    if (next["original-source.json"] !== files["original-source.json"])
+      setSelectedOriginal(null);
     setFiles(next);
     setPreview(null);
     setError("");
@@ -356,6 +379,8 @@ export default function PluginIde({
         ? history.slice(0, -1)
         : history);
     const baseFiles = context?.files ?? proposal?.files ?? files;
+    const { "original-source.json": originalSource, ...authoringFiles } =
+      baseFiles;
     setLastPrompt(requestPrompt);
     setChatError("");
     setHistory(
@@ -368,7 +393,9 @@ export default function PluginIde({
     setStreamingMessage("");
     setLiveUsage(null);
     setEstimatedInput(
-      Math.ceil((requestPrompt.length + JSON.stringify(baseFiles).length) / 4),
+      Math.ceil(
+        (requestPrompt.length + JSON.stringify(authoringFiles).length) / 4,
+      ),
     );
     setError("");
     let streamedText = "";
@@ -386,7 +413,7 @@ export default function PluginIde({
             body: JSON.stringify({
               tenantId,
               prompt: requestPrompt,
-              files: baseFiles,
+              files: authoringFiles,
               history: priorHistory.slice(-10).map((item) => ({
                 role: item.role,
                 content: item.content.slice(0, 4000),
@@ -451,7 +478,10 @@ export default function PluginIde({
       if (!active.current || operation.current !== requestId) return;
       if (currentSnapshot.current !== snapshot) throw new Error(t("stale"));
       // Treat the response as data, including when returned by a proxy.
-      const proposedFiles = pluginAuthoringResultSchema.parse(result).files;
+      const proposedFiles = {
+        ...pluginAuthoringResultSchema.parse(result).files,
+        ...(originalSource ? { "original-source.json": originalSource } : {}),
+      };
       setProposal({ message: result.message, files: proposedFiles });
       const nextHistory = [
         ...priorHistory,
@@ -913,7 +943,11 @@ export default function PluginIde({
             <aside className="plugin-ide-explorer" aria-label={t("files")}>
               <h3 className="plugin-ide-panel-title">{t("explorer")}</h3>
               <PluginFileTree
-                names={Object.keys(files) as (keyof IdeFiles)[]}
+                names={
+                  Object.keys(files).filter(
+                    (name) => name !== "original-source.json",
+                  ) as (keyof IdeFiles)[]
+                }
                 selected={selected}
                 projectName={projectName}
                 label={t("files")}
@@ -922,6 +956,24 @@ export default function PluginIde({
               <p className="plugin-ide-explorer-hint">
                 {t("projectFilesHint")}
               </p>
+              {Object.keys(originalFiles).length > 0 && (
+                <>
+                  <PluginFileTree
+                    names={Object.keys(originalFiles)}
+                    selected={selectedOriginal ?? ""}
+                    projectName={t("originalSource")}
+                    label={t("originalSource")}
+                    onSelect={(name) => {
+                      setSelectedOriginal(name);
+                      setReviewFile(null);
+                      setPane("code");
+                    }}
+                  />
+                  <p className="plugin-ide-explorer-hint">
+                    {t("originalSourceHint")}
+                  </p>
+                </>
+              )}
             </aside>
           </Allotment.Pane>
           <Allotment.Pane
@@ -966,7 +1018,10 @@ export default function PluginIde({
                     role="presentation"
                     className="plugin-ide-editor-tab"
                     data-active={
-                      pane !== "preview" && selected === name && !reviewFile
+                      pane !== "preview" &&
+                      selected === name &&
+                      !reviewFile &&
+                      !selectedOriginal
                     }
                     key={name}
                   >
@@ -975,12 +1030,18 @@ export default function PluginIde({
                       id={`${panelId}-${name}`}
                       aria-controls={`${panelId}-code`}
                       tabIndex={
-                        pane !== "preview" && selected === name && !reviewFile
+                        pane !== "preview" &&
+                        selected === name &&
+                        !reviewFile &&
+                        !selectedOriginal
                           ? 0
                           : -1
                       }
                       aria-selected={
-                        pane !== "preview" && selected === name && !reviewFile
+                        pane !== "preview" &&
+                        selected === name &&
+                        !reviewFile &&
+                        !selectedOriginal
                       }
                       onClick={() => openFile(name)}
                     >
@@ -1004,6 +1065,18 @@ export default function PluginIde({
                     )}
                   </div>
                 ))}
+                {selectedOriginal && (
+                  <button
+                    role="tab"
+                    id={`${panelId}-original-source-tab`}
+                    aria-controls={`${panelId}-code`}
+                    aria-selected={pane !== "preview"}
+                    className="plugin-ide-special-tab"
+                    onClick={() => setPane("code")}
+                  >
+                    {selectedOriginal}
+                  </button>
+                )}
                 {reviewFile && proposal && (
                   <button
                     role="tab"
@@ -1033,7 +1106,11 @@ export default function PluginIde({
               <section
                 id={`${panelId}-code`}
                 role="tabpanel"
-                aria-labelledby={`${panelId}-${reviewFile ? "review" : selected}`}
+                aria-labelledby={
+                  selectedOriginal
+                    ? `${panelId}-original-source-tab`
+                    : `${panelId}-${reviewFile ? "review" : selected}`
+                }
                 className="plugin-ide-code"
                 hidden={pane === "preview"}
                 aria-label={t("codeTab")}
@@ -1041,7 +1118,8 @@ export default function PluginIde({
                 <div className="plugin-ide-breadcrumb">
                   <span>{projectName}</span>
                   <span>/</span>
-                  <span>{reviewFile ?? selected}</span>
+                  <span>{selectedOriginal ?? reviewFile ?? selected}</span>
+                  {selectedOriginal && <span>{t("originalSource")}</span>}
                   {reviewFile && <span>{t("proposed")}</span>}
                 </div>
                 <div className="plugin-ide-editors">
@@ -1049,10 +1127,12 @@ export default function PluginIde({
                     <div
                       className="plugin-ide-editor-document"
                       key={name}
-                      hidden={selected !== name || !!reviewFile}
+                      hidden={
+                        selected !== name || !!reviewFile || !!selectedOriginal
+                      }
                     >
                       <MonacoCodeEditor
-                        value={files[name]}
+                        value={files[name] ?? ""}
                         onChange={(value) => {
                           setUndo(null);
                           replaceFiles({ ...files, [name]: value });
@@ -1090,11 +1170,28 @@ export default function PluginIde({
                       />
                     </div>
                   ))}
+                  {selectedOriginal && (
+                    <MonacoCodeEditor
+                      key={selectedOriginal}
+                      value={originalFiles[selectedOriginal] ?? ""}
+                      onChange={() => {}}
+                      language={
+                        selectedOriginal.endsWith(".css")
+                          ? "css"
+                          : selectedOriginal.endsWith(".json")
+                            ? "json"
+                            : "typescript"
+                      }
+                      ariaLabel={selectedOriginal}
+                      readOnly
+                      height={520}
+                    />
+                  )}
                   {reviewFile && proposal && (
                     <PluginDiffEditor
                       key={reviewFile}
-                      original={files[reviewFile]}
-                      modified={proposal.files[reviewFile]}
+                      original={files[reviewFile] ?? ""}
+                      modified={proposal.files[reviewFile] ?? ""}
                       filename={reviewFile}
                       originalLabel={t("currentCode")}
                       modifiedLabel={t("proposedCode")}
@@ -1310,6 +1407,7 @@ export default function PluginIde({
                         key={name}
                         onClick={() => {
                           setReviewFile(name);
+                          setSelectedOriginal(null);
                           setPane("code");
                         }}
                       >

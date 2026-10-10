@@ -135,6 +135,49 @@ function previewReady() {
   );
 }
 
+it("shows original workspace modules as read-only source without changing the executable entry", () => {
+  const entry = "export function render() {}";
+  const original =
+    'import { Screen } from "./screen";\nexport function render() { return Screen; }';
+  const draft = vi.fn();
+  render(
+    <PluginIde
+      tenantId={12}
+      onClose={() => {}}
+      onPublished={() => {}}
+      onDraftChange={draft}
+      initialFiles={{
+        "entry.tsx": entry,
+        "savia-extension.json": '{"id":"custom.demo","version":"1.0.0"}',
+        "store.json": "{}",
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          "store-ports/demo/entry.tsx": original,
+        }),
+      }}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Archivos", exact: true }),
+  );
+  fireEvent.click(
+    screen.getByRole("treeitem", {
+      name: "store-ports/demo/entry.tsx",
+      exact: true,
+    }),
+  );
+  const source = screen.getByRole("textbox", {
+    name: "store-ports/demo/entry.tsx",
+  });
+  expect(source).toHaveValue(original);
+  expect(source).toHaveAttribute("readonly");
+  fireEvent.click(screen.getByRole("tab", { name: "entry.tsx", exact: true }));
+  expect(screen.getByRole("textbox", { name: "entry.tsx" })).toHaveValue(entry);
+  expect(draft.mock.calls.at(-1)?.[0].files["original-source.json"]).toContain(
+    "store-ports/demo/entry.tsx",
+  );
+});
+
 it("publishes and activates only a successfully previewed revision and invalidates it after edits", async () => {
   mocks.compile.mockResolvedValue({
     entryJs: "compiled",

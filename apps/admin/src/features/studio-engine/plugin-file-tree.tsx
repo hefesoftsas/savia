@@ -6,20 +6,19 @@ import {
   FileJson,
   FolderOpen,
 } from "lucide-react";
-import type { IdeFiles } from "./plugin-ide-project";
 
-export function PluginFileTree({
+export function PluginFileTree<Name extends string>({
   names,
   selected,
   projectName,
   label,
   onSelect,
 }: {
-  names: (keyof IdeFiles)[];
-  selected: keyof IdeFiles;
+  names: Name[];
+  selected: string;
   projectName: string;
   label: string;
-  onSelect: (name: keyof IdeFiles) => void;
+  onSelect: (name: Name) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [focused, setFocused] = useState<string>(selected);
@@ -73,7 +72,7 @@ export function PluginFileTree({
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           if (name === "root") setExpanded(!expanded);
-          else onSelect(name as keyof IdeFiles);
+          else onSelect(name as Name);
         }
       }}
     >
@@ -116,8 +115,8 @@ export function PluginFileTree({
                   onSelect(name);
                 }}
               >
-                {name.endsWith("tsx") ? <FileCode2 /> : <FileJson />}
-                <span>{name}</span>
+                {name.endsWith(".json") ? <FileJson /> : <FileCode2 />}
+                <span title={name}>{name}</span>
               </div>
             ))}
           </div>

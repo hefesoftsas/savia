@@ -18,6 +18,7 @@ export type IdeFiles = {
   "savia-extension.json": string;
   "store.json": string;
   "preview.json": string;
+  "original-source.json"?: string;
 };
 
 export type PluginIdeFixtures = {
@@ -48,8 +49,12 @@ function validateIdeFiles(value: unknown): IdeFiles {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Project files must be an object.");
   const record = value as Record<string, unknown>;
-  if (Object.keys(record).length !== projectFileNames.length)
-    throw new Error("Project must contain exactly the four supported files.");
+  if (
+    Object.keys(record).some(
+      (name) => ![...projectFileNames, "original-source.json"].includes(name),
+    )
+  )
+    throw new Error("Project contains unsupported files.");
   const files = pluginProjectFilesSchema.parse(record);
   const bytes = new TextEncoder().encode(JSON.stringify(files)).byteLength;
   if (bytes > MAX_PROJECT_BYTES)
@@ -202,6 +207,14 @@ export async function packagePluginProject(files: IdeFiles): Promise<{
     { name: "store.json", data: json(compiled.store) },
     { name: "src/entry.tsx", data: files["entry.tsx"] },
     { name: "src/preview.json", data: files["preview.json"] },
+    ...(files["original-source.json"]
+      ? [
+          {
+            name: "src/original-source.json",
+            data: files["original-source.json"],
+          },
+        ]
+      : []),
   ];
   const { encodeStoredZip } = await import("./plugin-ide-zip");
   return {

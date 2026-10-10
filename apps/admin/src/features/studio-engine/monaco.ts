@@ -21,6 +21,7 @@ async function loadBundledMonaco(): Promise<MonacoModule> {
   // The package root resolves to the AMD loader; the ESM entry below is the
   // documented Vite-compatible build (same module monacopilot binds to).
   const monaco = await import("monaco-editor/esm/vs/editor/editor.api");
+  await import("monaco-editor/esm/vs/basic-languages/css/css.contribution");
   const [
     { default: EditorWorker },
     { default: JsonWorker },
