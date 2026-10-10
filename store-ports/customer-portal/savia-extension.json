@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.customer-portal",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "label": "Portal del cliente",
   "description": "Comparte información y recibe solicitudes mediante accesos limitados.",
   "labels": {

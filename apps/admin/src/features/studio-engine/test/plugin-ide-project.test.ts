@@ -229,6 +229,20 @@ export function render(element) { element.textContent = "Activities"; }`;
     expect(packaged.entryJs).toContain("SaviaPluginReact");
   });
 
+  it("preserves original source through portable project backups and publication", async () => {
+    const archive = JSON.stringify({
+      "store-ports/demo/entry.tsx": 'import { Screen } from "./screen";',
+      "packages/demo/src/screen.tsx":
+        "export const Screen = () => <h1>Original</h1>;",
+    });
+    const files = { ...createPluginProject(), "original-source.json": archive };
+    expect(parsePluginProject(serializePluginProject(files))).toEqual(files);
+    const packaged = await packagePluginProject(files);
+    const zip = new TextDecoder().decode(await packaged.blob.arrayBuffer());
+    expect(zip).toContain("src/original-source.json");
+    expect(zip).toContain(archive);
+  });
+
   it("creates an opaque no-network preview document with escaped user code and session messages", () => {
     const preview = createPluginPreviewDocument(
       "export function render() { return null; }\n</script><script>alert(1)</script>",

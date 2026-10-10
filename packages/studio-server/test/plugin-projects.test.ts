@@ -229,6 +229,45 @@ describe("durable plugin projects and release source", () => {
     ).toBe(404);
   });
 
+  it("recovers editable compiled entry alongside original source archive", async () => {
+    const entry = "export function render(el) { el.textContent = 'compiled'; }";
+    const originalSource = JSON.stringify({
+      "packages/insurance-demo/src/admin.tsx":
+        "export function Screen() { return <main>Original</main>; }",
+      "packages/insurance-demo/src/admin.css": ".screen { color: red; }",
+    });
+    const parsed = await parsePluginStoreZip(
+      zip([
+        ["savia-extension.json", manifest],
+        ["dist/plugin.js", entry],
+        ["src/original-source.json", originalSource],
+      ]),
+    );
+    expect(parsed.sourceFiles?.["entry.tsx"]).toBe(entry);
+    expect(parsed.sourceFiles?.["original-source.json"]).toBe(originalSource);
+    expect(parsed.sourceFiles?.["savia-extension.json"]).toContain(
+      "project-test",
+    );
+    expect(parsed.sourceFiles?.["store.json"]).toContain("savia.store");
+  });
+
+  it("rejects malformed or unsafe original source archives", async () => {
+    for (const originalSource of [
+      "not json",
+      JSON.stringify({ "../secret.ts": "export const secret = 1;" }),
+      JSON.stringify({ "packages/demo/entry.md": "not source" }),
+    ])
+      await expect(
+        parsePluginStoreZip(
+          zip([
+            ["savia-extension.json", manifest],
+            ["dist/plugin.js", "export function render() {}"],
+            ["src/original-source.json", originalSource],
+          ]),
+        ),
+      ).rejects.toThrow();
+  });
+
   it("stores source with the artifact and returns it only for releases that have it", async () => {
     const sourceZip = zip([
       ["savia-extension.json", manifest],
@@ -238,6 +277,13 @@ describe("durable plugin projects and release source", () => {
         "export function Plugin() { return <main>Saved source</main>; }",
       ],
       ["src/preview.json", '{"collections":{},"settings":{}}'],
+      [
+        "src/original-source.json",
+        JSON.stringify({
+          "packages/insurance-demo/src/admin.tsx":
+            "export function Screen() {}",
+        }),
+      ],
     ]);
     const parsed = await parsePluginStoreZip(sourceZip);
     expect(parsed.sourceFiles?.["entry.tsx"]).toContain("Saved source");
@@ -274,8 +320,11 @@ describe("durable plugin projects and release source", () => {
       platform.env,
     );
     expect(recovered.status).toBe(200);
-    expect(((await recovered.json()) as any).data.files["entry.tsx"]).toContain(
-      "Saved source",
+    const recoveredBody = (await recovered.json()) as any;
+    expect(recoveredBody.data.synthesized).toBe(false);
+    expect(recoveredBody.data.files["entry.tsx"]).toContain("Saved source");
+    expect(recoveredBody.data.files["original-source.json"]).toContain(
+      "insurance-demo/src/admin.tsx",
     );
 
     const changedSourceZip = zip([

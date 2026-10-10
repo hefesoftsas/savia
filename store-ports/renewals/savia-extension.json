@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.renewals",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "label": "Renovaciones",
   "description": "Vencimientos, negociación y cierre de renovaciones de pólizas.",
   "labels": {

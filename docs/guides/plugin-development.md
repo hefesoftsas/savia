@@ -257,7 +257,17 @@ before unloading while a server save is still pending. Do not close the page unt
 “Project saved” appears if browser recovery storage is unavailable.
 
 **Edit source** on a store release creates a new project from its retained source
-and increments a plain semantic patch version. Older packages uploaded without
+and increments a plain semantic patch version. Repository-built catalog ZIPs include
+`src/original-source.json`, a map of workspace-owned files from the build graph,
+including original TSX, JavaScript, and CSS. The editor's **Original source code**
+tree displays those files read-only with their repository paths. Third-party
+dependencies and unrelated workspace files are excluded. Preview and publication
+continue to use the executable `entry.tsx`; the original file map is retained for
+inspection, not rebuilt by the single-module editor. Saving, exporting, importing,
+and publishing preserve the map. Reopen a published release to obtain newly
+attached originals; existing drafts are not overwritten.
+
+Older packages uploaded without
 authoring sources open the retained compiled JavaScript together with the original
 manifest and store configuration. A notice identifies this as a compiled copy; original TSX
 cannot be reconstructed from the bundle. Preview runs the actual plugin rather
@@ -265,7 +275,7 @@ than a replacement starter. Reopen the published version to recover it; existing
 projects created from the older counter fallback remain separate drafts. Runtime artifacts and sources are retained atomically;
 published source versions are immutable. The **Create plugin** project list also offers
 published store versions to open as new projects. **Export project**
-and **Import project** remain available for portable four-file JSON backups (chat
+and **Import project** remain available for portable JSON backups (chat
 history is saved in server projects but is not included in that portable export).
 
 Deployment requires database migration `0038_plugin_authoring_projects.sql` (D1
@@ -279,5 +289,6 @@ or grant direct network access. Use the repository SDK/build workflow for plugin
 requiring extra bundled libraries. AI authoring files remain limited to 100 KB.
 Saved editor projects accept up to 2 MB in `entry.tsx` for compiled release recovery, 100 KB per configuration
 file, and 5 MB for serialized project JSON (including escape sequences);
+the optional original source archive accepts up to 256 files and 2 MB.
 preview fixtures allow up to 200 records per collection. Existing store artifact
 size and quota limits apply independently.
