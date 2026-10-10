@@ -1,5 +1,4 @@
 export const pluginIdeMessages = {
-  jsonLanguage: ["JSON", "JSON", "JSON"],
   cssLanguage: ["CSS", "CSS", "CSS"],
   svgLanguage: ["SVG", "SVG", "SVG"],
   javascriptLanguage: ["JavaScript", "JavaScript", "JavaScript"],
