@@ -35,7 +35,7 @@ export function findMissingPluginSourceAssets(archive: string): string[] {
   for (const [name, text] of Object.entries(files)) {
     if (!/\.(?:tsx?|jsx?)$/.test(name)) continue;
     for (const match of text.matchAll(
-      /(?:from\s*|import\s*)["']([^"']+\.(?:svg|png|webp))["']/g,
+      /(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)["']([^"']+\.(?:svg|png|webp))["']/g,
     )) {
       if (!match[1].startsWith(".")) continue;
       const path = normalizePath(

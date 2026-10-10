@@ -14,6 +14,7 @@ import {
 } from "../plugin-ide-project";
 import { PLUGIN_PROJECT_MAX_BYTES } from "@savia/studio-shared/plugin-projects";
 import { createPluginPreviewDocument } from "../plugin-ide-preview";
+import { findMissingPluginSourceAssets } from "../plugin-source-compiler";
 
 function withEntry(entry: string): IdeFiles {
   return { ...createPluginProject(), "entry.tsx": entry };
@@ -52,71 +53,81 @@ export function render(element) { element.textContent = "Activities"; }`;
     expect(element.textContent).toBe("Activities");
   });
 
-  it("compiles the real packaged activities release for editor preview", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "savia-ide-activities-"));
-    const artifact = join(directory, "activities.zip");
-    try {
-      execFileSync(process.execPath, [
-        resolve("../../scripts/pack-store-plugin.mjs"),
-        "store-ports/activities",
-        "--output",
-        artifact,
-      ]);
-      const extract = (path: string) =>
-        execFileSync("unzip", ["-p", artifact, path], {
-          encoding: "utf8",
-          maxBuffer: 3 * 1024 * 1024,
-        });
-      const files: IdeFiles = {
-        "entry.tsx": extract("dist/plugin.js"),
-        "original-source.json": extract("src/original-source.json"),
-        "savia-extension.json": extract("savia-extension.json"),
-        "store.json": extract("store.json"),
-        "preview.json": '{"collections":{},"settings":{}}',
-      };
-      const compiled = await compilePluginProject(files);
-      expect(compiled.manifest.id).toBe("insurance.activities");
-      expect(compiled.entryJs).toContain("insurance_activities");
-      const html = createPluginPreviewDocument(
-        compiled.entryJs,
-        compiled.fixtures,
-        compiled.store,
-        "activities-session",
-        "es",
-      );
-      const dom = new JSDOM(html, {
-        runScripts: "outside-only",
-        pretendToBeVisual: true,
-      });
+  it.each([
+    { port: "activities", content: "Nueva actividad" },
+    { port: "quotes", content: "Preparar cotización" },
+  ])(
+    "renders the packaged $port release from original modules",
+    async ({ port, content }) => {
+      const directory = mkdtempSync(join(tmpdir(), `savia-ide-${port}-`));
+      const artifact = join(directory, `${port}.zip`);
       try {
-        Object.assign(dom.window, { structuredClone });
-        const executable =
-          compiled.entryJs.replace(/export const /g, "const ") +
-          "; return {render, renderPanel, widgets, screens};";
-        dom.window.eval(`window.__testPlugin = (() => { ${executable} })();`);
-        const script = dom.window.document
-          .querySelector('script[type="module"]')!
-          .textContent!.replace(
-            /const sourceUrl = .*?\n\s*const plugin = await import\(sourceUrl\);\n\s*URL\.revokeObjectURL\(sourceUrl\);/s,
-            "const plugin = window.__testPlugin;",
+        execFileSync(process.execPath, [
+          resolve("../../scripts/pack-store-plugin.mjs"),
+          `store-ports/${port}`,
+          "--output",
+          artifact,
+        ]);
+        const extract = (path: string) =>
+          execFileSync("unzip", ["-p", artifact, path], {
+            encoding: "utf8",
+            maxBuffer: 3 * 1024 * 1024,
+          });
+        const files: IdeFiles = {
+          "entry.tsx": extract("dist/plugin.js"),
+          "original-source.json": extract("src/original-source.json"),
+          "savia-extension.json": extract("savia-extension.json"),
+          "store.json": extract("store.json"),
+          "preview.json": '{"collections":{},"settings":{}}',
+        };
+        const compiled = await compilePluginProject(files);
+        expect(compiled.manifest.id).toBe(`insurance.${port}`);
+        const html = createPluginPreviewDocument(
+          compiled.entryJs,
+          compiled.fixtures,
+          compiled.store,
+          `${port}-session`,
+          "es",
+        );
+        const dom = new JSDOM(html, {
+          runScripts: "outside-only",
+          pretendToBeVisual: true,
+        });
+        try {
+          Object.assign(dom.window, { structuredClone });
+          const executable =
+            compiled.entryJs.replace(/export const /g, "const ") +
+            "; return {render, renderPanel, widgets, screens};";
+          dom.window.eval(`window.__testPlugin = (() => { ${executable} })();`);
+          const script = dom.window.document
+            .querySelector('script[type="module"]')!
+            .textContent!.replace(
+              /const sourceUrl = .*?\n\s*const plugin = await import\(sourceUrl\);\n\s*URL\.revokeObjectURL\(sourceUrl\);/s,
+              "const plugin = window.__testPlugin;",
+            );
+          dom.window.eval(
+            `window.__completion = (async () => { ${script} })();`,
           );
-        dom.window.eval(`window.__completion = (async () => { ${script} })();`);
-        await (dom.window as unknown as { __completion: Promise<void> })
-          .__completion;
-        await vi.waitFor(() =>
-          expect(
-            dom.window.document.getElementById("root")!.textContent,
-          ).toContain("Nueva actividad"),
+          await (dom.window as unknown as { __completion: Promise<void> })
+            .__completion;
+          await vi.waitFor(() =>
+            expect(
+              dom.window.document.getElementById("root")!.textContent,
+            ).toContain(content),
+          );
+        } finally {
+          dom.window.close();
+        }
+
+        expect(parsePluginProject(serializePluginProject(files))).toEqual(
+          files,
         );
       } finally {
-        dom.window.close();
+        rmSync(directory, { recursive: true, force: true });
       }
-
-      expect(parsePluginProject(serializePluginProject(files))).toEqual(files);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  }, 60000);
+    },
+    60000,
+  );
 
   it("rebuilds every shipped plugin from its retained source graph", async () => {
     const directory = mkdtempSync(join(tmpdir(), "savia-source-builds-"));
@@ -300,6 +311,18 @@ export function render(element) { element.textContent = "Activities"; }`;
       ".edited-original { color: red; }",
     );
     expect(compiled.entryJs).not.toMatch(/\brequire\s*\(/);
+  });
+
+  it("detects omitted historical assets in static, dynamic and CommonJS imports", () => {
+    expect(
+      findMissingPluginSourceAssets(
+        JSON.stringify({
+          "demo/entry.tsx":
+            'import icon from "./icon.svg"; import("./photo.png"); require("./banner.webp");',
+          "demo/icon.svg": "<svg/>",
+        }),
+      ),
+    ).toEqual(["demo/photo.png", "demo/banner.webp"]);
   });
 
   it("loads literal dynamic source modules asynchronously and preserves JSON and image imports", async () => {

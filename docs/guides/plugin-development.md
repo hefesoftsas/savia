@@ -297,7 +297,9 @@ in `PLUGIN_REGISTRY_TENANTS`; see [the registry guide](plugin-registry.md).
 
 AI authoring supports one TSX module, built-in React, and the Savia host API.
 Manual source editing additionally supports the retained multi-module build graph
-and the shipped dependencies described above. It does not install arbitrary npm dependencies, run Node processes,
+and the shipped dependencies described above. Preview settings start from the
+package's `store.json` defaults, with `preview.json` settings overriding matching
+keys; mock preview changes do not modify workspace settings. It does not install arbitrary npm dependencies, run Node processes,
 or grant direct network access. Use the repository SDK/build workflow for plugins
 requiring extra bundled libraries. AI authoring files remain limited to 100 KB.
 Saved editor projects accept up to 2 MB in `entry.tsx` for compiled release recovery, 100 KB per configuration

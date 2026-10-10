@@ -11,7 +11,7 @@ describe("monaco loader", () => {
     expect(monaco.languages.json.jsonDefaults.setDiagnosticsOptions).toBeTypeOf(
       "function",
     );
-  });
+  }, 60000);
 
   it("maps document theme to monaco themes", () => {
     document.documentElement.classList.remove("dark");

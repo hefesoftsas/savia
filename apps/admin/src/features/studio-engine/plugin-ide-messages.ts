@@ -54,6 +54,13 @@ export const pluginIdeMessages = {
     "Edit the plugin files. Preview and publication build these changes as a new version.",
     "Edite os arquivos do plugin. A prévia e a publicação compilam essas alterações como uma nova versão.",
   ],
+  editLatest: ["Editar última versión", "Edit latest", "Editar última versão"],
+  olderVersions: [
+    "Versiones anteriores (%{count})",
+    "Older versions (%{count})",
+    "Versões anteriores (%{count})",
+  ],
+  useAsBase: ["Usar como base", "Use as base", "Usar como base"],
   sourceChatHint: [
     "Modifica este plugin desde el editor de código. El asistente aún no edita proyectos con varios módulos.",
     "Edit this plugin in the code editor. The assistant does not yet edit projects with multiple modules.",

@@ -648,20 +648,14 @@ export default function PluginStoreManager({
                           })
                         }
                       >
-                        {locale.startsWith("es")
-                          ? "Editar última versión"
-                          : locale.startsWith("pt")
-                            ? "Editar última versão"
-                            : "Edit latest"}
+                        {ideT("editLatest")}
                       </Button>
                       {group.versions.length > 1 ? (
                         <details className="basis-full text-sm">
                           <summary className="cursor-pointer text-muted-foreground">
-                            {locale.startsWith("es")
-                              ? `Versiones anteriores (${group.versions.length - 1})`
-                              : locale.startsWith("pt")
-                                ? `Versões anteriores (${group.versions.length - 1})`
-                                : `Older versions (${group.versions.length - 1})`}
+                            {ideT("olderVersions", {
+                              count: group.versions.length - 1,
+                            })}
                           </summary>
                           <div className="mt-2 grid gap-2">
                             {group.versions.slice(1).map((version) => (
@@ -682,11 +676,7 @@ export default function PluginStoreManager({
                                     })
                                   }
                                 >
-                                  {locale.startsWith("es")
-                                    ? "Usar como base"
-                                    : locale.startsWith("pt")
-                                      ? "Usar como base"
-                                      : "Use as base"}
+                                  {ideT("useAsBase")}
                                 </Button>
                               </div>
                             ))}
