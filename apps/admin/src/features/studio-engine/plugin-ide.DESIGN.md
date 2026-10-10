@@ -62,3 +62,10 @@ Retained archive source editors show syntax diagnostics; full semantic diagnosti
 dependency/type environment that retained archives do not ship. Preview resolves
 the actual import graph and reports compiler errors before publication. Standalone
 entry files retain full semantic diagnostics.
+
+The Search view complements the filename filter and Monaco's in-file Find. It
+searches project source/configuration text with Ctrl/Cmd+Shift+F, groups matches by
+path and shows line snippets. Selecting a result opens the file and selects the
+match in its existing Monaco model. Keep search state across views; exclude binary
+assets and compiled recovery bundles when original sources exist. Cap results at
+500 and invite a narrower query.
