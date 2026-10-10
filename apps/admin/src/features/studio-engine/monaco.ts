@@ -11,7 +11,10 @@ export type MonacoEditorInstance = {
   onDidChangeModelContent: (listener: () => void) => void;
   layout: () => void;
   updateOptions: (options: Record<string, unknown>) => void;
-};
+} & Pick<
+  Monaco.editor.IStandaloneCodeEditor,
+  "setSelection" | "revealRangeInCenter" | "focus"
+>;
 
 const SAVIA_THEME_NAME = "savia-plugin-ide-theme";
 
