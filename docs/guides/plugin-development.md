@@ -153,10 +153,15 @@ workspace. Choose an authorized workspace, then create or reopen a saved project
 The store's **Create plugin** and **Edit source** actions also open this workspace.
 The editor, compiler and React runtime load on demand.
 
-Desktop opens with a keyboard-accessible file explorer, Monaco editor and Savia AI
-conversation. Drag the separators to resize panels, or hide Files/Chat from the
-workspace toolbar. Files open in tabs; returning to a file preserves its editor
-and undo history during the session. Preview is another editor tab. Narrow layouts
+Desktop opens with a hierarchical file explorer and Monaco editor; open the Savia
+AI conversation from **Chat** when needed. Expand folders with the mouse or arrow
+keys, and use **Find files** to filter paths. Drag separators to resize panels,
+or hide Files/Chat from the workspace toolbar. Source files and configuration files
+open in separate closable tabs; returning to a file preserves its editor and undo
+history during the session. Archived source files appear under **src** so their
+filenames remain distinct from the project's configuration files. Monaco includes syntax highlighting, line numbers,
+folding, suggestions, and Find/Replace (Ctrl/Cmd+F). Preview is another editor tab.
+Below 600px of available workspace width, narrow layouts
 show **Files**, **Code**, **Preview** or **Chat** one at a time, without resetting
 source or the running plugin. Monaco is bundled with the app shell (no CDN), and
 `entry.tsx` offers ghost-text inline completions from the workspace's

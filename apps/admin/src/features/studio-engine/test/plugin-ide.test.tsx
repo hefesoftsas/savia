@@ -117,6 +117,158 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+it("keeps source files in separate closable tabs and filters the explorer", async () => {
+  const entry = "store-ports/demo/entry.tsx";
+  const module = "packages/demo/src/screen.tsx";
+  const entryTab = `src/${entry}`;
+  const moduleTab = `src/${module}`;
+  render(
+    <PluginIde
+      tenantId={2}
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+      initialFiles={{
+        "entry.tsx": "export function render() {}",
+        "savia-extension.json": '{"id":"custom.demo","version":"1.0.1"}',
+        "store.json": "{}",
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          [entry]: "// Entry source",
+          [module]: "// Screen source",
+        }),
+      }}
+    />,
+  );
+  for (const folder of [
+    "src/packages",
+    "src/packages/demo",
+    "src/packages/demo/src",
+  ]) {
+    fireEvent.click(
+      screen
+        .getByRole("treeitem", { name: folder, exact: true })
+        .querySelector(".plugin-file-tree-row")!,
+    );
+  }
+  fireEvent.click(
+    screen.getByRole("treeitem", { name: moduleTab, exact: true }),
+  );
+  expect(
+    screen.getByRole("tab", { name: entryTab, exact: true }),
+  ).toHaveAttribute("aria-selected", "false");
+  expect(
+    screen.getByRole("tab", { name: moduleTab, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  fireEvent.change(screen.getByRole("textbox", { name: module, exact: true }), {
+    target: { value: "// Edited screen" },
+  });
+  fireEvent.click(screen.getByRole("tab", { name: entryTab, exact: true }));
+  fireEvent.click(screen.getByRole("tab", { name: moduleTab, exact: true }));
+  expect(
+    screen.getByRole("textbox", { name: module, exact: true }),
+  ).toHaveValue("// Edited screen");
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: `Cerrar ${moduleTab}`,
+      exact: true,
+    }),
+  );
+  expect(
+    screen.queryByRole("tab", { name: moduleTab, exact: true }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("tab", { name: entryTab, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  fireEvent.change(
+    screen.getByRole("searchbox", { name: "Buscar archivos", exact: true }),
+    { target: { value: "screen" } },
+  );
+  expect(
+    screen.queryByRole("treeitem", { name: entryTab, exact: true }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("treeitem", { name: moduleTab, exact: true }),
+  ).toBeInTheDocument();
+});
+
+it("keeps archived root files separate from project config files", async () => {
+  const onDraftChange = vi.fn();
+  const entry = "src/entry.tsx";
+  const sourceStore = "src/store.json";
+  render(
+    <PluginIde
+      tenantId={2}
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+      onDraftChange={onDraftChange}
+      initialFiles={{
+        "entry.tsx": "export function render() {}",
+        "savia-extension.json": '{"id":"custom.demo","version":"1.0.1"}',
+        "store.json": '{"project":"before"}',
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          "entry.tsx": "// archived entry",
+          "store.json": '{"source":"before"}',
+        }),
+      }}
+    />,
+  );
+
+  expect(screen.getByRole("tab", { name: entry, exact: true })).toBeVisible();
+  fireEvent.click(
+    screen.getByRole("treeitem", { name: "store.json", exact: true }),
+  );
+  expect(
+    screen.getByRole("tab", { name: "store.json", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+    {
+      target: { value: '{"project":"edited"}' },
+    },
+  );
+  await waitFor(() =>
+    expect(onDraftChange.mock.lastCall?.[0].files["store.json"]).toBe(
+      '{"project":"edited"}',
+    ),
+  );
+
+  fireEvent.click(
+    screen.getByRole("treeitem", { name: sourceStore, exact: true }),
+  );
+  expect(
+    screen.getByRole("tab", { name: "store.json", exact: true }),
+  ).toHaveAttribute("aria-selected", "false");
+  expect(
+    screen.getByRole("tab", { name: sourceStore, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  expect(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+  ).toHaveValue('{"source":"before"}');
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+    {
+      target: { value: '{"source":"edited"}' },
+    },
+  );
+  await waitFor(() => {
+    const draft = onDraftChange.mock.lastCall?.[0].files;
+    expect(draft?.["store.json"]).toBe('{"project":"edited"}');
+    expect(
+      JSON.parse(draft?.["original-source.json"] ?? "{}")["store.json"],
+    ).toBe('{"source":"edited"}');
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "store.json", exact: true }));
+  expect(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+  ).toHaveValue('{"project":"edited"}');
+  fireEvent.click(screen.getByRole("tab", { name: sourceStore, exact: true }));
+  expect(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+  ).toHaveValue('{"source":"edited"}');
+});
+
 function previewReady() {
   const frame = screen.getByTitle(
     "Vista previa del plugin",
@@ -162,7 +314,7 @@ it("shows editable workspace source and hides the retained compiled entry", () =
   );
   fireEvent.click(
     screen.getByRole("treeitem", {
-      name: "store-ports/demo/entry.tsx",
+      name: "src/store-ports/demo/entry.tsx",
       exact: true,
     }),
   );
@@ -174,6 +326,12 @@ it("shows editable workspace source and hides the retained compiled entry", () =
   expect(
     screen.queryByRole("tab", { name: "entry.tsx", exact: true }),
   ).toBeNull();
+  expect(
+    screen.getByRole("tab", {
+      name: "src/store-ports/demo/entry.tsx",
+      exact: true,
+    }),
+  ).toBeInTheDocument();
   expect(draft.mock.calls.at(-1)?.[0].files["original-source.json"]).toContain(
     "store-ports/demo/entry.tsx",
   );

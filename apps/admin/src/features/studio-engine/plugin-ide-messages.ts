@@ -1,4 +1,8 @@
 export const pluginIdeMessages = {
+  cssLanguage: ["CSS", "CSS", "CSS"],
+  svgLanguage: ["SVG", "SVG", "SVG"],
+  javascriptLanguage: ["JavaScript", "JavaScript", "JavaScript"],
+  typescriptSourceLanguage: ["TypeScript", "TypeScript", "TypeScript"],
   elapsedSeconds: ["%{seconds} s", "%{seconds} s", "%{seconds} s"],
   generationTimeout: [
     "La IA no respondió a tiempo. Tu código está intacto. Reintenta; puedes probar el código actual mientras esperas.",
@@ -44,6 +48,7 @@ export const pluginIdeMessages = {
   typescriptLanguage: ["TypeScript JSX", "TypeScript JSX", "TypeScript JSX"],
   jsonLanguage: ["JSON", "JSON", "JSON"],
   explorer: ["Explorador", "Explorer", "Explorador"],
+  filterFiles: ["Buscar archivos", "Find files", "Buscar arquivos"],
   originalSource: [
     "Código fuente original",
     "Original source code",
