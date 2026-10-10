@@ -44,7 +44,7 @@ export function MonacoCodeEditor({
 }: {
   value: string;
   onChange: (value: string) => void;
-  language: "html" | "javascript" | "typescript" | "json";
+  language: "html" | "javascript" | "typescript" | "json" | "css";
   readOnly?: boolean;
   contextDeclarations?: string;
   height?: number;
