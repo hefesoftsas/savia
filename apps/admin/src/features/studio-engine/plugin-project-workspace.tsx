@@ -14,7 +14,35 @@ import {
   type SaveState,
 } from "./plugin-project-session";
 import { pluginProjectSaveSchema } from "@savia/studio-shared/plugin-projects";
+import { compareSolutionVersions } from "@savia/studio-shared/solution-package";
+import { findMissingPluginSourceAssets } from "./plugin-source-compiler";
 type Project = RecoveryDraft & { id: string; updatedAt: string };
+type StoreCatalogItem = { id: string; label: string; version: string };
+
+function groupStoreVersions(items: StoreCatalogItem[]) {
+  const byId = new Map<string, StoreCatalogItem[]>();
+  for (const item of items) {
+    const versions = byId.get(item.id);
+    if (versions) versions.push(item);
+    else byId.set(item.id, [item]);
+  }
+  return [...byId.entries()]
+    .map(([id, versions]) => {
+      const sorted = [...versions].sort((a, b) =>
+        compareSolutionVersions(b.version, a.version),
+      );
+      return { id, latest: sorted[0], older: sorted.slice(1) };
+    })
+    .sort((a, b) => a.latest.label.localeCompare(b.latest.label));
+}
+
+function nextPatchVersion(version: string): string {
+  const parts = version.split(".");
+  if (parts.length !== 3 || parts.some((part) => !/^\d+$/.test(part)))
+    throw new Error(`Cannot increment invalid plugin version: ${version}`);
+  return `${parts[0]}.${parts[1]}.${(BigInt(parts[2]) + 1n).toString()}`;
+}
+
 export default function PluginProjectWorkspace({
   tenantId,
   source,
@@ -167,20 +195,69 @@ export default function PluginProjectWorkspace({
     }>(
       `/plugin-store/${encodeURIComponent(sourceId)}/source?version=${encodeURIComponent(sourceVersion)}`,
     );
-    const files = { ...response.data.files };
-    const manifest = JSON.parse(files["savia-extension.json"]);
-    const parts = String(manifest.version).split(".");
-    if (parts.length === 3 && parts.every((part) => /^\d+$/.test(part)))
-      manifest.version = `${parts[0]}.${parts[1]}.${Number(parts[2]) + 1}`;
-    files["savia-extension.json"] = JSON.stringify(manifest, null, 2);
-    if ((response.data as { synthesized?: boolean }).synthesized)
-      setNotice(
+    const catalog = await request<{
+      data: Array<{
+        manifest: { id: string; label?: string };
+        version: string;
+      }>;
+    }>("/plugin-store");
+    const versions = catalog.data
+      .filter(
+        (item) =>
+          item?.manifest?.id === sourceId && typeof item.version === "string",
+      )
+      .map((item) => item.version);
+    if (!versions.includes(sourceVersion))
+      throw new Error(
         tr(
-          "Este plugin no incluía su código fuente; se abrió una copia de su JavaScript compilado.",
-          "This plugin did not include its source; a copy of its compiled JavaScript was opened.",
-          "Este plugin não incluía seu código-fonte; uma cópia do JavaScript compilado foi aberta.",
+          "La versión seleccionada ya no está disponible. Actualiza el catálogo e inténtalo de nuevo.",
+          "The selected release is no longer available. Refresh the catalog and try again.",
+          "A versão selecionada não está mais disponível. Atualize o catálogo e tente novamente.",
         ),
       );
+    const latestVersion = versions.reduce((latest, candidate) =>
+      compareSolutionVersions(candidate, latest) > 0 ? candidate : latest,
+    );
+    const files = { ...response.data.files };
+    const missingAssets = files["original-source.json"]
+      ? findMissingPluginSourceAssets(files["original-source.json"])
+      : [];
+    if (missingAssets.length) {
+      const compiled = await transport(
+        `/api/plugin-store/${encodeURIComponent(sourceId)}/entry?version=${encodeURIComponent(sourceVersion)}`,
+        { method: "GET", signal: requests.signal },
+      );
+      if (!compiled.ok)
+        throw new Error("Could not recover the compiled plugin entry.");
+      files["entry.tsx"] = await compiled.text();
+      delete files["original-source.json"];
+    }
+    const manifest = JSON.parse(files["savia-extension.json"]);
+    const targetVersion = nextPatchVersion(latestVersion);
+    manifest.version = targetVersion;
+    files["savia-extension.json"] = JSON.stringify(manifest, null, 2);
+    const notices = [
+      tr(
+        `Se abrió ${sourceVersion} como base; el nuevo borrador será ${targetVersion} (última publicada: ${latestVersion}).`,
+        `Opened ${sourceVersion} as the base; the new draft will be ${targetVersion} (latest release: ${latestVersion}).`,
+        `A versão ${sourceVersion} foi aberta como base; o novo rascunho será ${targetVersion} (última publicada: ${latestVersion}).`,
+      ),
+      (response.data as { synthesized?: boolean }).synthesized
+        ? tr(
+            "Este plugin no incluía su código fuente; se abrió una copia de su JavaScript compilado.",
+            "This plugin did not include its source; a copy of its compiled JavaScript was opened.",
+            "Este plugin não incluía seu código-fonte; uma cópia do JavaScript compilado foi aberta.",
+          )
+        : "",
+      missingAssets.length
+        ? tr(
+            "Esta versión no conserva todos sus archivos fuente; se recuperó su JavaScript compilado como base editable.",
+            "This release does not retain all of its source files; its compiled JavaScript was recovered as the editable base.",
+            "Esta versão não conserva todos os arquivos-fonte; seu JavaScript compilado foi recuperado como base editável.",
+          )
+        : "",
+    ].filter(Boolean);
+    setNotice(notices.join(" "));
     await create({ files, history: [] });
   }
   useEffect(() => {
@@ -314,6 +391,7 @@ export default function PluginProjectWorkspace({
       fail(reason);
     }
   }
+  const groupedStoreItems = groupStoreVersions(storeItems);
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {project ? (
@@ -553,36 +631,77 @@ export default function PluginProjectWorkspace({
               </h2>
               <p className="text-sm text-muted-foreground">
                 {tr(
-                  "Elige una versión publicada para editarla como un proyecto nuevo.",
-                  "Pick a published version to edit it as a new project.",
-                  "Escolha uma versão publicada para editá-la como um novo projeto.",
+                  "La última versión inicia una actualización. Las anteriores solo sirven como base para un nuevo borrador.",
+                  "Start an update from the latest release. Older releases are available only as bases for a new draft.",
+                  "Comece uma atualização a partir da última versão. As versões anteriores só podem ser usadas como base para um novo rascunho.",
                 )}
               </p>
               <ul className="divide-y">
-                {storeItems.map((item) => (
-                  <li
-                    key={`${item.id}@${item.version}`}
-                    className="flex min-w-0 items-center gap-3 py-2"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {item.label}{" "}
-                      <span className="text-xs text-muted-foreground">
-                        {item.version}
+                {groupedStoreItems.map(({ id, latest, older }) => (
+                  <li key={id} className="py-2">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        {latest.label}{" "}
+                        <span className="text-xs text-muted-foreground">
+                          {latest.version}
+                        </span>
                       </span>
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      disabled={acting}
-                      onClick={() =>
-                        void action(() =>
-                          importFromStore(item.id, item.version),
-                        )
-                      }
-                    >
-                      {tr("Editar", "Edit", "Editar")}
-                    </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        disabled={acting}
+                        onClick={() =>
+                          void action(() => importFromStore(id, latest.version))
+                        }
+                      >
+                        {tr(
+                          "Editar última versión",
+                          "Edit latest",
+                          "Editar última versão",
+                        )}
+                      </Button>
+                    </div>
+                    {older.length > 0 && (
+                      <details className="mt-2 pl-3 text-sm">
+                        <summary className="cursor-pointer text-muted-foreground">
+                          {tr(
+                            `Versiones anteriores (${older.length})`,
+                            `Older versions (${older.length})`,
+                            `Versões anteriores (${older.length})`,
+                          )}
+                        </summary>
+                        <ul className="mt-1 divide-y border-l pl-3">
+                          {older.map((item) => (
+                            <li
+                              key={`${item.id}@${item.version}`}
+                              className="flex min-w-0 items-center gap-3 py-2"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-sm">
+                                {item.version}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="shrink-0"
+                                disabled={acting}
+                                onClick={() =>
+                                  void action(() =>
+                                    importFromStore(item.id, item.version),
+                                  )
+                                }
+                              >
+                                {tr(
+                                  "Usar como base",
+                                  "Use as base",
+                                  "Usar como base",
+                                )}
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                   </li>
                 ))}
               </ul>

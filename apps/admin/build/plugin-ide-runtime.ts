@@ -5,12 +5,50 @@ import { fileURLToPath } from "node:url";
 /** Builds the React runtime used by the plugin IDE's self-contained artifact. */
 export function pluginIdeRuntimePlugin(): Plugin {
   let bundled: Promise<string> | undefined;
+  let vendors: Promise<Record<string, string>> | undefined;
   return {
     name: "savia-plugin-ide-runtime",
     resolveId(id) {
-      if (id === "virtual:savia-plugin-ide-runtime") return `\0${id}`;
+      if (
+        [
+          "virtual:savia-plugin-ide-runtime",
+          "virtual:savia-plugin-ide-vendors",
+        ].includes(id)
+      )
+        return `\0${id}`;
     },
     async load(id) {
+      if (id === "\0virtual:savia-plugin-ide-vendors") {
+        vendors ??= Promise.all(
+          (
+            [
+              ["zod", "SaviaPluginZod", new URL("../", import.meta.url)],
+              [
+                "pdf-lib",
+                "SaviaPluginPdf",
+                new URL("../../../packages/insurance-quotes/", import.meta.url),
+              ],
+            ] as const
+          ).map(async ([name, globalName, directory]) => {
+            const result = await build({
+              stdin: {
+                contents: `export * from "${name}";`,
+                resolveDir: fileURLToPath(directory),
+                sourcefile: "plugin-vendor.js",
+              },
+              bundle: true,
+              write: false,
+              format: "iife",
+              globalName: String(globalName),
+              platform: "browser",
+              minify: true,
+              define: { "process.env.NODE_ENV": '"production"' },
+            });
+            return [String(name), result.outputFiles[0].text] as const;
+          }),
+        ).then(Object.fromEntries);
+        return `export default ${JSON.stringify(await vendors)}`;
+      }
       if (id !== "\0virtual:savia-plugin-ide-runtime") return;
       bundled ??= build({
         entryPoints: [

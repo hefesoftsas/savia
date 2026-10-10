@@ -135,7 +135,7 @@ function previewReady() {
   );
 }
 
-it("shows original workspace modules as read-only source without changing the executable entry", () => {
+it("shows editable workspace source and hides the retained compiled entry", () => {
   const entry = "export function render() {}";
   const original =
     'import { Screen } from "./screen";\nexport function render() { return Screen; }';
@@ -170,12 +170,36 @@ it("shows original workspace modules as read-only source without changing the ex
     name: "store-ports/demo/entry.tsx",
   });
   expect(source).toHaveValue(original);
-  expect(source).toHaveAttribute("readonly");
-  fireEvent.click(screen.getByRole("tab", { name: "entry.tsx", exact: true }));
-  expect(screen.getByRole("textbox", { name: "entry.tsx" })).toHaveValue(entry);
+  expect(source).not.toHaveAttribute("readonly");
+  expect(
+    screen.queryByRole("tab", { name: "entry.tsx", exact: true }),
+  ).toBeNull();
   expect(draft.mock.calls.at(-1)?.[0].files["original-source.json"]).toContain(
     "store-ports/demo/entry.tsx",
   );
+});
+
+it("keeps multi-module editing in the code editor instead of generating an ignored compiled entry", () => {
+  render(
+    <PluginIde
+      tenantId={12}
+      onClose={() => {}}
+      onPublished={() => {}}
+      initialFiles={{
+        "entry.tsx": "export function render() {}",
+        "savia-extension.json": '{"id":"custom.demo","version":"1.0.0"}',
+        "store.json": "{}",
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          "demo/entry.tsx": "export function render() {}",
+        }),
+      }}
+    />,
+  );
+  expect(screen.getByLabelText("Describe tu plugin")).toBeDisabled();
+  expect(
+    screen.getByText(/El asistente aún no edita proyectos/),
+  ).toBeInTheDocument();
 });
 
 it("publishes and activates only a successfully previewed revision and invalidates it after edits", async () => {
@@ -932,4 +956,56 @@ it("keeps a full-queue prompt in the composer instead of discarding it", async (
   fireEvent.change(composer, { target: { value: "Keep this prompt" } });
   fireEvent.click(screen.getByRole("button", { name: "Encolar mensaje" }));
   expect(composer).toHaveValue("Keep this prompt");
+});
+
+it("edits original modules and saves the source archive used by preview", async () => {
+  const onDraftChange = vi.fn();
+  const name = "store-ports/demo/entry.tsx";
+  const initialFiles = {
+    "entry.tsx": "export function render() {}",
+    "savia-extension.json": '{"id":"custom.demo","version":"1.0.1"}',
+    "store.json": "{}",
+    "preview.json": "{}",
+    "original-source.json": JSON.stringify({
+      [name]: "export function render() { /* before */ }",
+    }),
+  };
+  render(
+    <PluginIde
+      tenantId={2}
+      initialFiles={initialFiles}
+      onDraftChange={onDraftChange}
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+    />,
+  );
+  const editor = screen.getByRole("textbox", { name, exact: true });
+  expect(editor).not.toHaveAttribute("readonly");
+  fireEvent.change(editor, {
+    target: { value: "export function render() { /* after */ }" },
+  });
+  await waitFor(() =>
+    expect(
+      JSON.parse(onDraftChange.mock.lastCall![0].files["original-source.json"])[
+        name
+      ],
+    ).toContain("after"),
+  );
+  expect(screen.getByRole("textbox", { name, exact: true })).toHaveValue(
+    "export function render() { /* after */ }",
+  );
+  mocks.compile.mockResolvedValue({
+    entryJs: "export function render() {}",
+    manifest: {},
+    store: {},
+    fixtures: {},
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ejecutar vista previa" }),
+  );
+  await waitFor(() =>
+    expect(
+      JSON.parse(mocks.compile.mock.lastCall![0]["original-source.json"])[name],
+    ).toContain("after"),
+  );
 });

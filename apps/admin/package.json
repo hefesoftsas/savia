@@ -55,6 +55,7 @@
     "@thesvg/react": "^3.3.2",
     "@uiw/react-codemirror": "^4.25.11",
     "@xyflow/react": "12.10.0",
+    "acorn": "8.18.0",
     "ai": "7.0.91",
     "allotment": "1.20.5",
     "altcha": "3.2.2",

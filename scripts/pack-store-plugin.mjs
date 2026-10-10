@@ -229,10 +229,12 @@ function packageStorePlugin({ portDir, outputPath, versionOverride }) {
       if (
         name.startsWith("../") ||
         name.includes("node_modules/") ||
-        !/\.(?:tsx?|jsx?|css|json)$/.test(name)
+        !/\.(?:tsx?|jsx?|css|json|svg|png|webp)$/.test(name)
       )
         continue;
-      originals[name] = readFileSync(path, "utf8");
+      originals[name] = /\.(png|webp)$/.test(name)
+        ? `data:image/${name.endsWith(".png") ? "png" : "webp"};base64,${readFileSync(path).toString("base64")}`
+        : readFileSync(path, "utf8");
     }
     const originalSource = JSON.stringify(originals);
     if (

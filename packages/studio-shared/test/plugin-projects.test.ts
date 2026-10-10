@@ -34,6 +34,18 @@ describe("plugin project file limits", () => {
     });
   });
 
+  it("retains bounded image assets required by original modules", () => {
+    expect(
+      parsePluginOriginalSourceFiles(
+        JSON.stringify({
+          "demo/brand.svg": '<svg xmlns="http://www.w3.org/2000/svg"/>',
+          "demo/brand.png": "data:image/png;base64,aW1hZ2U=",
+          "demo/brand.webp": "data:image/webp;base64,aW1hZ2U=",
+        }),
+      ),
+    ).toHaveProperty("demo/brand.svg");
+  });
+
   it("rejects unsafe paths and unsupported files in original source", () => {
     for (const source of [
       { "../secret.ts": "x" },
