@@ -175,3 +175,45 @@ it("keeps project and file node identities separate and activates full paths", (
   fireEvent.click(leaf);
   expect(select).toHaveBeenCalledExactlyOnceWith("src/long-name.tsx");
 });
+
+it("reveals filtered matches under a collapsed project and restores collapse", () => {
+  const props = {
+    names: ["src/index.tsx"],
+    selected: "src/index.tsx",
+    projectName: "custom.demo",
+    label: "Files",
+    onSelect: vi.fn(),
+  };
+  const { rerender } = render(<PluginFileTree {...props} />);
+  const root = screen.getByRole("treeitem", { name: "custom.demo" });
+  fireEvent.click(root.querySelector(".plugin-file-tree-row")!);
+  expect(root).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByRole("treeitem", { name: "src/index.tsx" })).toBeNull();
+
+  rerender(<PluginFileTree {...props} filterActive />);
+  expect(root).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("treeitem", { name: "src/index.tsx" })).toBeVisible();
+
+  rerender(<PluginFileTree {...props} />);
+  expect(root).toHaveAttribute("aria-expanded", "false");
+  expect(root).toHaveAttribute("tabindex", "0");
+  expect(screen.queryByRole("treeitem", { name: "src/index.tsx" })).toBeNull();
+});
+
+it("opens a collapsed project when the external selection changes", () => {
+  const props = {
+    names: ["src/first.tsx", "src/next.tsx"],
+    selected: "src/first.tsx",
+    projectName: "custom.demo",
+    label: "Files",
+    onSelect: vi.fn(),
+  };
+  const { rerender } = render(<PluginFileTree {...props} />);
+  const root = screen.getByRole("treeitem", { name: "custom.demo" });
+  fireEvent.click(root.querySelector(".plugin-file-tree-row")!);
+  expect(root).toHaveAttribute("aria-expanded", "false");
+
+  rerender(<PluginFileTree {...props} selected="src/next.tsx" />);
+  expect(root).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("treeitem", { name: "src/next.tsx" })).toBeVisible();
+});

@@ -158,7 +158,8 @@ AI conversation from **Chat** when needed. Expand folders with the mouse or arro
 keys, and use **Find files** to filter paths. Drag separators to resize panels,
 or hide Files/Chat from the workspace toolbar. Source files and configuration files
 open in separate closable tabs; returning to a file preserves its editor and undo
-history during the session. Monaco includes syntax highlighting, line numbers,
+history during the session. Archived source files appear under **src** so their
+filenames remain distinct from the project's configuration files. Monaco includes syntax highlighting, line numbers,
 folding, suggestions, and Find/Replace (Ctrl/Cmd+F). Preview is another editor tab.
 Below 600px of available workspace width, narrow layouts
 show **Files**, **Code**, **Preview** or **Chat** one at a time, without resetting

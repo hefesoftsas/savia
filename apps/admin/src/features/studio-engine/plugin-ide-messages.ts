@@ -1,4 +1,9 @@
 export const pluginIdeMessages = {
+  jsonLanguage: ["JSON", "JSON", "JSON"],
+  cssLanguage: ["CSS", "CSS", "CSS"],
+  svgLanguage: ["SVG", "SVG", "SVG"],
+  javascriptLanguage: ["JavaScript", "JavaScript", "JavaScript"],
+  typescriptSourceLanguage: ["TypeScript", "TypeScript", "TypeScript"],
   elapsedSeconds: ["%{seconds} s", "%{seconds} s", "%{seconds} s"],
   generationTimeout: [
     "La IA no respondió a tiempo. Tu código está intacto. Reintenta; puedes probar el código actual mientras esperas.",

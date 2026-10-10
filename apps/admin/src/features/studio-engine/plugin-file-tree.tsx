@@ -126,14 +126,19 @@ export function PluginFileTree<Name extends string>({
       return next;
     });
     setFocused((current) => {
+      if (!filterActive && !rootExpanded) return ROOT_ID;
       if (names.includes(selected as Name)) return `file:${selected}`;
       return validNodeIds.has(current) ? current : ROOT_ID;
     });
-  }, [names, selected, validNodeIds]);
+  }, [filterActive, names, rootExpanded, selected, validNodeIds]);
+
+  useEffect(() => {
+    setRootExpanded(true);
+  }, [selected]);
 
   function isExpanded(id: string) {
     return id === ROOT_ID
-      ? rootExpanded
+      ? filterActive || rootExpanded
       : filterActive || expandedFolders.has(id);
   }
 
@@ -251,6 +256,8 @@ export function PluginFileTree<Name extends string>({
     });
   }
 
+  const rootIsExpanded = isExpanded(ROOT_ID);
+
   return (
     <div
       ref={tree}
@@ -303,7 +310,7 @@ export function PluginFileTree<Name extends string>({
     >
       <div
         role="treeitem"
-        aria-expanded={rootExpanded}
+        aria-expanded={rootIsExpanded}
         aria-level={1}
         aria-label={projectName}
         data-tree-id={ROOT_ID}
@@ -322,14 +329,14 @@ export function PluginFileTree<Name extends string>({
           onClick={(event) => {
             event.stopPropagation();
             focus(ROOT_ID);
-            setRootExpanded(!rootExpanded);
+            setRootExpanded(!rootIsExpanded);
           }}
         >
-          {rootExpanded ? <ChevronDown /> : <ChevronRight />}
-          {rootExpanded ? <FolderOpen /> : <Folder />}
+          {rootIsExpanded ? <ChevronDown /> : <ChevronRight />}
+          {rootIsExpanded ? <FolderOpen /> : <Folder />}
           <span>{projectName}</span>
         </div>
-        {rootExpanded && (
+        {rootIsExpanded && (
           <div role="group" aria-label={projectName}>
             {renderNodes(nodes, 2)}
           </div>

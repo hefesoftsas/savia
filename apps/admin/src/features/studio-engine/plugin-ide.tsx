@@ -150,8 +150,9 @@ export default function PluginIde({
       null,
   );
   const [openFiles, setOpenFiles] = useState<string[]>(() => [
-    selectedOriginal ?? "entry.tsx",
+    selectedOriginal ? `src/${selectedOriginal}` : "entry.tsx",
   ]);
+  const activeFile = selectedOriginal ? `src/${selectedOriginal}` : selected;
   const [visitedOriginal, setVisitedOriginal] = useState<string[]>(() =>
     selectedOriginal ? [selectedOriginal] : [],
   );
@@ -232,16 +233,18 @@ export default function PluginIde({
     if (element) element.scrollTop = element.scrollHeight;
   }, [history, generating, proposal, chatError, streamingMessage, queue]);
   function openFile(name: string) {
-    const original = Object.hasOwn(originalFiles, name);
+    const sourcePath = name.startsWith("src/") ? name.slice(4) : null;
+    const original =
+      sourcePath !== null && Object.hasOwn(originalFiles, sourcePath);
     if (!original && !Object.hasOwn(files, name)) return;
-    setSelectedOriginal(original ? name : null);
+    setSelectedOriginal(original ? sourcePath : null);
     if (!original) setSelected(name as keyof IdeFiles);
     setOpenFiles((current) =>
       current.includes(name) ? current : [...current, name],
     );
     if (original) {
       setVisitedOriginal((current) =>
-        current.includes(name) ? current : [...current, name],
+        current.includes(sourcePath!) ? current : [...current, sourcePath!],
       );
     } else {
       const projectFile = name as keyof IdeFiles;
@@ -256,7 +259,7 @@ export default function PluginIde({
     const next = openFiles.filter((file) => file !== name);
     if (!next.length) return;
     setOpenFiles(next);
-    if ((selectedOriginal ?? selected) === name) openFile(next.at(-1)!);
+    if (activeFile === name) openFile(next.at(-1)!);
   }
 
   useEffect(() => {
@@ -372,15 +375,17 @@ export default function PluginIde({
       setOpenFiles((current) => {
         const retained = current.filter(
           (name) =>
-            names.includes(name) ||
+            (name.startsWith("src/") && names.includes(name.slice(4))) ||
             (Object.hasOwn(next, name) &&
               name !== "original-source.json" &&
               !(entry && name === "entry.tsx")),
         );
         const active =
           selectedOriginal && names.includes(selectedOriginal)
-            ? selectedOriginal
-            : (entry ?? selected);
+            ? `src/${selectedOriginal}`
+            : entry
+              ? `src/${entry}`
+              : selected;
         return retained.includes(active) ? retained : [...retained, active];
       });
     }
@@ -1016,11 +1021,11 @@ export default function PluginIde({
                       name !== "original-source.json" &&
                       !(originalArchive && name === "entry.tsx"),
                   ),
-                  ...Object.keys(originalFiles),
+                  ...Object.keys(originalFiles).map((name) => `src/${name}`),
                 ].filter((name) =>
                   name.toLowerCase().includes(fileFilter.trim().toLowerCase()),
                 )}
-                selected={selectedOriginal ?? selected}
+                selected={activeFile}
                 projectName={projectName}
                 label={t("files")}
                 onSelect={openFile}
@@ -1070,9 +1075,7 @@ export default function PluginIde({
                     role="presentation"
                     className="plugin-ide-editor-tab"
                     data-active={
-                      pane !== "preview" &&
-                      (selectedOriginal ?? selected) === name &&
-                      !reviewFile
+                      pane !== "preview" && activeFile === name && !reviewFile
                     }
                     key={name}
                   >
@@ -1083,16 +1086,12 @@ export default function PluginIde({
                       id={`${panelId}-${name}`}
                       aria-controls={`${panelId}-code`}
                       tabIndex={
-                        pane !== "preview" &&
-                        (selectedOriginal ?? selected) === name &&
-                        !reviewFile
+                        pane !== "preview" && activeFile === name && !reviewFile
                           ? 0
                           : -1
                       }
                       aria-selected={
-                        pane !== "preview" &&
-                        (selectedOriginal ?? selected) === name &&
-                        !reviewFile
+                        pane !== "preview" && activeFile === name && !reviewFile
                       }
                       onClick={() => openFile(name)}
                     >
@@ -1141,7 +1140,7 @@ export default function PluginIde({
                 role="tabpanel"
                 aria-labelledby={
                   selectedOriginal
-                    ? `${panelId}-${selectedOriginal}`
+                    ? `${panelId}-src/${selectedOriginal}`
                     : `${panelId}-${reviewFile ? "review" : selected}`
                 }
                 className="plugin-ide-code"
@@ -1590,15 +1589,15 @@ export default function PluginIde({
         <span role="status">{saveStatus ?? t("draft")}</span>
         <span>
           {(selectedOriginal ?? selected).endsWith(".json")
-            ? "JSON"
+            ? t("jsonLanguage")
             : (selectedOriginal ?? selected).endsWith(".css")
-              ? "CSS"
+              ? t("cssLanguage")
               : (selectedOriginal ?? selected).endsWith(".svg")
-                ? "SVG"
+                ? t("svgLanguage")
                 : /\.(?:js|jsx)$/.test(selectedOriginal ?? selected)
-                  ? "JavaScript"
+                  ? t("javascriptLanguage")
                   : (selectedOriginal ?? selected).endsWith(".ts")
-                    ? "TypeScript"
+                    ? t("typescriptSourceLanguage")
                     : t("typescriptLanguage")}
         </span>
         {undo && (
