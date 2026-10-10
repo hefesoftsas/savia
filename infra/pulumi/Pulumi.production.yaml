@@ -1,0 +1,8 @@
+config:
+  cloudflare:apiToken:
+    fn::secret:
+      ciphertext: ZAQAAAAAAA== # replace with `pulumi config set --secret cloudflare:apiToken`
+  savia-cloudflare:accountId: REPLACE_WITH_ACCOUNT_ID
+  savia-cloudflare:environment: production
+  savia-cloudflare:publicOrigin: https://savia.app.hefesoft.com
+  savia-cloudflare:documentsBucket: savia-documents

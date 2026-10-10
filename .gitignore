@@ -49,3 +49,7 @@ volumes/
 .DS_Store
 .idea/
 *.swp
+
+# Pulumi self-managed state and data backups (never commit)
+infra/pulumi/.pulumi-state/
+infra/pulumi/backups/

@@ -1,0 +1,28 @@
+{
+  "name": "@savia/cloudflare-infra",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Pulumi program for Savia Cloudflare stateful infrastructure (D1 + R2)",
+  "scripts": {
+    "preview": "pulumi preview",
+    "up": "pulumi up",
+    "render": "node render-from-outputs.mjs",
+    "backup": "node backup.mjs",
+    "restore": "node restore.mjs",
+    "destroy": "node destroy.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test naming.test.mjs outputs.test.mjs render-from-outputs.test.mjs destroy.test.mjs backup.test.mjs restore.test.mjs"
+  },
+  "dependencies": {
+    "@pulumi/cloudflare": "^6.21.0",
+    "@pulumi/pulumi": "^3.150.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
