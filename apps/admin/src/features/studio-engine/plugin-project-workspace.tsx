@@ -96,6 +96,7 @@ export default function PluginProjectWorkspace({
   const owner = useRef("");
   const latest = useRef<ProjectDraft | null>(null);
   const mounted = useRef(true);
+  const storeCatalogRequest = useRef(0);
   const key = (id: string) =>
     `savia:plugin-project:${encodeURIComponent(owner.current)}:${tenantId}:${id}`;
   function activate(value: Project) {
@@ -168,6 +169,55 @@ export default function PluginProjectWorkspace({
   function fail(reason: unknown) {
     if (mounted.current)
       setError(reason instanceof Error ? reason.message : String(reason));
+  }
+  async function refreshStoreCatalog(isCancelled: () => boolean = () => false) {
+    const requestId = ++storeCatalogRequest.current;
+    const result = await request<{
+      data: Array<{
+        manifest: { id: string; label?: string };
+        version: string;
+      }>;
+    }>("/plugin-store");
+    if (!Array.isArray(result.data)) return;
+    const items = result.data
+      .filter(
+        (item) =>
+          item &&
+          typeof item.manifest?.id === "string" &&
+          typeof item.version === "string",
+      )
+      .map((item) => ({
+        id: item.manifest.id,
+        label:
+          typeof item.manifest.label === "string" && item.manifest.label.trim()
+            ? item.manifest.label
+            : item.manifest.id,
+        version: item.version,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    if (
+      mounted.current &&
+      !isCancelled() &&
+      requestId === storeCatalogRequest.current
+    )
+      setStoreItems(items);
+  }
+  async function handlePublished() {
+    await onPublished();
+    if (!mounted.current) return;
+    try {
+      await refreshStoreCatalog();
+      if (mounted.current) setError("");
+    } catch {
+      if (mounted.current)
+        setError(
+          tr(
+            "El plugin se publicó, pero no se pudo actualizar el catálogo. Recarga la página para volver a intentarlo.",
+            "The plugin was published, but the catalog could not be refreshed. Reload the page to try again.",
+            "O plugin foi publicado, mas não foi possível atualizar o catálogo. Recarregue a página para tentar novamente.",
+          ),
+        );
+    }
   }
   function formatUpdatedAt(value: string): string {
     const date = new Date(value);
@@ -273,36 +323,9 @@ export default function PluginProjectWorkspace({
       );
       if (cancelled) return;
       setProjects(result.data);
-      void request<{
-        data: Array<{
-          manifest: { id: string; label?: string };
-          version: string;
-        }>;
-      }>("/plugin-store")
-        .then((store) => {
-          if (cancelled || !Array.isArray(store.data)) return;
-          const items = store.data
-            .filter(
-              (item) =>
-                item &&
-                typeof item.manifest?.id === "string" &&
-                typeof item.version === "string",
-            )
-            .map((item) => ({
-              id: item.manifest.id,
-              label:
-                typeof item.manifest.label === "string" &&
-                item.manifest.label.trim()
-                  ? item.manifest.label
-                  : item.manifest.id,
-              version: item.version,
-            }))
-            .sort((a, b) => a.label.localeCompare(b.label));
-          if (!cancelled) setStoreItems(items);
-        })
-        .catch(() => {
-          /* The store list is best-effort; projects remain usable. */
-        });
+      void refreshStoreCatalog(() => cancelled).catch(() => {
+        /* The store list is best-effort; projects remain usable. */
+      });
       if (source) {
         await importFromStore(source.id, source.version);
         if (cancelled) return;
@@ -493,7 +516,7 @@ export default function PluginProjectWorkspace({
               }}
               canPublishShared={canPublishShared}
               onClose={() => void close()}
-              onPublished={onPublished}
+              onPublished={handlePublished}
             />
           </div>
         </section>
