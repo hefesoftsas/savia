@@ -120,6 +120,29 @@ export function exportsForRender({ authD1Id, domainD1Id, names }) {
   });
 }
 
+// Cloudflare account IDs are 32 lowercase hex chars. Validating before
+// interpolating into API URLs / endpoints (CodeQL: incomplete URL
+// sanitization) and failing fast on typos.
+export function assertAccountId(accountId) {
+  if (typeof accountId !== "string" || !/^[0-9a-f]{32}$/.test(accountId))
+    throw new Error("accountId must be a 32-char lowercase hex string");
+  return accountId;
+}
+
+// R2 keys become local file paths in backups. Reject traversal and
+// absolute paths: tenant-controlled names must never escape destDir.
+export function assertSafeR2Key(key) {
+  if (
+    typeof key !== "string" ||
+    key === "" ||
+    key.startsWith("/") ||
+    key.includes("\\") ||
+    key.split("/").includes("..")
+  )
+    throw new Error(`Refusing unsafe R2 key: ${key}`);
+  return key;
+}
+
 // Deletion protection per stack. Production resources are created with
 // Pulumi `protect: true` and destroying the stack additionally requires
 // an explicit acknowledgement flag (see destroy.mjs). Preview stacks stay

@@ -49,6 +49,18 @@ function isAlreadyGone(error) {
   );
 }
 
+// The confirmation guards use the CLI stack name, but the bucket comes
+// from the stack's own config. If a stack named `preview` were ever
+// configured with environment=production, emptying "its" bucket would hit
+// production data with preview-level confirmation. Refuse the mismatch.
+export function assertStackMatches(outputs, plan) {
+  if (outputs?.resolvedEnvironment !== plan.environment) {
+    throw new Error(
+      `Stack ${plan.stack} resolves to environment ${outputs?.resolvedEnvironment}, refusing to destroy`,
+    );
+  }
+}
+
 async function runWrangler(args, cwd) {
   const { stdout } = await execFileAsync(
     "pnpm",
@@ -107,8 +119,9 @@ async function main() {
     );
     return;
   }
+  const outputs = await stackOutputs(pulumiCwd, plan.stack);
+  assertStackMatches(outputs, plan);
   if (!plan.skipEmptyBucket) {
-    const outputs = await stackOutputs(pulumiCwd, plan.stack);
     const bucket = outputs.documentsBucketName;
     try {
       const removed = await emptyBucketForDestroy(bucket, repoRoot);

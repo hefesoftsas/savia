@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseDestroyArgs } from "./destroy.mjs";
+import { parseDestroyArgs, assertStackMatches } from "./destroy.mjs";
 
 describe("pulumi destroy guards", () => {
   it("plans preview destroy with --dry-run", () => {
@@ -31,5 +31,18 @@ describe("pulumi destroy guards", () => {
   it("rejects unknown stacks", () => {
     assert.throws(() => parseDestroyArgs(["--stack", "qa", "--dry-run"]));
     assert.throws(() => parseDestroyArgs(["--dry-run"]));
+  });
+
+  it("refuses stacks resolving to another environment", () => {
+    assertStackMatches(
+      { resolvedEnvironment: "preview" },
+      { stack: "preview", environment: "preview" },
+    );
+    assert.throws(() =>
+      assertStackMatches(
+        { resolvedEnvironment: "production" },
+        { stack: "preview", environment: "preview" },
+      ),
+    );
   });
 });

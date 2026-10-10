@@ -9,6 +9,8 @@ import {
   buildD1ExecuteCommand,
   buildR2RestoreCommand,
   listLocalFiles,
+  needsMigrations,
+  readSidecar,
 } from "./restore.mjs";
 
 const MANIFEST = {
@@ -61,7 +63,7 @@ describe("pulumi restore", () => {
     const [sync, syncArgs] = buildR2RestoreCommand({
       bucket: "savia-documents",
       sourceDir: "/out/r2",
-      accountId: "abc123",
+      accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
     });
     assert.equal(sync, "aws");
     assert.deepEqual(syncArgs.slice(0, 3), [
@@ -78,5 +80,26 @@ describe("pulumi restore", () => {
     await writeFile(join(base, "a", "b", "c.txt"), "x");
     await writeFile(join(base, "root.txt"), "y");
     assert.deepEqual(await listLocalFiles(base), ["a/b/c.txt", "root.txt"]);
+  });
+
+  it("detects table dumps needing migrations first", () => {
+    assert.equal(
+      needsMigrations({ d1Methods: { a: "export", b: "table-dump" } }),
+      true,
+    );
+    assert.equal(needsMigrations({ d1Methods: { a: "export" } }), false);
+    assert.equal(needsMigrations({}), false);
+    assert.equal(needsMigrations(null), false);
+  });
+
+  it("reads the metadata sidecar tolerantly", async () => {
+    const base = await mkdtemp(join(tmpdir(), "r2-sidecar-"));
+    const file = join(base, "r2-metadata.json");
+    await writeFile(file, JSON.stringify({ "a.txt": { customMetadata: { t: "1" } } }));
+    assert.deepEqual(await readSidecar(file), {
+      "a.txt": { customMetadata: { t: "1" } },
+    });
+    assert.deepEqual(await readSidecar(join(base, "missing.json")), {});
+    assert.deepEqual(await readSidecar(null), {});
   });
 });

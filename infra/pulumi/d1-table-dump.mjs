@@ -18,6 +18,15 @@ export const FTS_SHADOW_SUFFIXES = Object.freeze([
   "_stat",
 ]);
 
+// Platform tables reject direct reads (SQLITE_AUTH) by design; skipping
+// them is safe. Anything else unreadable fails the backup loudly — a
+// silent skip could hide an entire production table.
+export const PLATFORM_UNREADABLE_TABLES = Object.freeze(["_cf_KV"]);
+
+export function isPlatformTable(name) {
+  return PLATFORM_UNREADABLE_TABLES.includes(name);
+}
+
 export function shadowTablesFor(ftsName) {
   return FTS_SHADOW_SUFFIXES.map((suffix) => `${ftsName}${suffix}`);
 }
@@ -188,9 +197,15 @@ export async function dumpDatabase({
       dumped.push(table);
     } catch (error) {
       // Platform tables such as _cf_KV reject direct reads (SQLITE_AUTH);
-      // record and continue so one unreadable table never sinks a backup.
-      skipped.push(`${table} (unreadable: ${error.message.slice(0, 80)})`);
-      continue;
+      // record and continue. App-table failures abort: a backup missing a
+      // production table must never report success.
+      if (isPlatformTable(table)) {
+        skipped.push(`${table} (platform table, unreadable by design)`);
+        continue;
+      }
+      throw new Error(
+        `Refusing to finish backup with unreadable table ${table}: ${error.message.slice(0, 120)}`,
+      );
     }
   }
   return Object.freeze({

@@ -42,12 +42,18 @@ export function renderEnvFromOutputs(outputs, outputRoot) {
     publicOrigin: outputs.resolvedPublicOrigin,
     environment: outputs.resolvedEnvironment,
   };
+  const searchIndex =
+    typeof outputs.vectorizeIndex === "string" &&
+    outputs.vectorizeIndex.trim() !== ""
+      ? outputs.vectorizeIndex.trim()
+      : null;
   return Object.freeze({
     ...exportsForRender({
       authD1Id: outputs.authD1Id,
       domainD1Id: outputs.domainD1Id,
       names,
     }),
+    ...(searchIndex ? { SAVIA_PAGES_SEARCH_INDEX: searchIndex } : {}),
     SAVIA_DEPLOY_CONFIG_ROOT: outputRoot,
   });
 }

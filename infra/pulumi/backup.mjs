@@ -8,7 +8,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { normalizeEnvironment } from "./naming.mjs";
+import {
+  normalizeEnvironment,
+  assertAccountId,
+  assertSafeR2Key,
+} from "./naming.mjs";
 import { parseStackOutputs } from "./outputs.mjs";
 import {
   isVirtualTableExportError,
@@ -68,8 +72,8 @@ export function buildD1ExportCommand(dbName, outputFile) {
 
 // aws s3 sync s3://<bucket> <dest> --endpoint-url https://<account>.r2.cloudflarestorage.com
 export function buildR2SyncCommand({ bucket, destDir, accountId }) {
-  if (!bucket || !destDir || !accountId)
-    throw new Error("bucket, destDir and accountId are required");
+  if (!bucket || !destDir) throw new Error("bucket and destDir are required");
+  assertAccountId(accountId);
   return [
     "aws",
     [
@@ -91,8 +95,8 @@ export function hasS3Credentials(env = process.env) {
 // wrangler (needs only CLOUDFLARE_API_TOKEN). Slower than `aws s3 sync`
 // but requires nothing else.
 export function buildR2ObjectGetCommand({ bucket, key, destFile }) {
-  if (!bucket || !key || !destFile)
-    throw new Error("bucket, key and destFile are required");
+  if (!bucket || !destFile) throw new Error("bucket and destFile required");
+  assertSafeR2Key(key);
   return [
     "pnpm",
     [
@@ -111,35 +115,40 @@ export function buildR2ObjectGetCommand({ bucket, key, destFile }) {
   ];
 }
 
-export function buildR2ObjectPutCommand({ bucket, key, sourceFile }) {
-  if (!bucket || !key || !sourceFile)
-    throw new Error("bucket, key and sourceFile are required");
-  return [
-    "pnpm",
-    [
-      "--filter",
-      "@savia/api",
-      "exec",
-      "wrangler",
-      "r2",
-      "object",
-      "put",
-      `${bucket}/${key}`,
-      "--remote",
-      "--file",
-      sourceFile,
-    ],
+export function buildR2ObjectPutCommand({ bucket, key, sourceFile, contentType, contentEncoding }) {
+  if (!bucket || !sourceFile) throw new Error("bucket and sourceFile required");
+  assertSafeR2Key(key);
+  const args = [
+    "--filter",
+    "@savia/api",
+    "exec",
+    "wrangler",
+    "r2",
+    "object",
+    "put",
+    `${bucket}/${key}`,
+    "--remote",
+    "--file",
+    sourceFile,
   ];
+  // wrangler put supports content headers but not custom metadata; the
+  // sidecar preserves the rest for manual recovery (see runbook).
+  if (contentType) args.push("--content-type", contentType);
+  if (contentEncoding) args.push("--content-encoding", contentEncoding);
+  return ["pnpm", args];
 }
 
-// Native R2 listing API (paginated). Used by the object-get fallback and
-// to size buckets without extra tooling.
+// Native R2 listing API (paginated until the cursor is exhausted — never
+// silently truncate). Captures HTTP + custom metadata for the sidecar.
 export async function listR2Objects({ bucket, accountId, token }) {
   if (!bucket || !accountId || !token)
     throw new Error("bucket, accountId and token are required");
+  assertAccountId(accountId);
   const objects = [];
   let cursor = null;
-  for (let pages = 0; pages < 50; pages++) {
+  for (let pages = 0; ; pages++) {
+    if (pages >= 10000)
+      throw new Error("R2 listing exceeded 10M objects, refusing to continue");
     const url =
       `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucket}/objects?per_page=1000` +
       (cursor ? `&cursor=${encodeURIComponent(cursor)}` : "");
@@ -153,7 +162,12 @@ export async function listR2Objects({ bucket, accountId, token }) {
       );
     }
     for (const object of payload.result ?? []) {
-      objects.push({ key: object.key, size: object.size ?? 0 });
+      objects.push({
+        key: object.key,
+        size: object.size ?? 0,
+        httpMetadata: object.http_metadata ?? {},
+        customMetadata: object.custom_metadata ?? {},
+      });
     }
     cursor = payload.result_info?.cursor ?? null;
     if (!cursor) break;
@@ -263,21 +277,31 @@ async function main() {
         accountId,
         token,
       });
-      for (const { key } of objects) {
-        const destFile = join(destDir, key);
+      const metadata = {};
+      for (const object of objects) {
+        // Validate before joining: a malicious key must never escape destDir.
+        assertSafeR2Key(object.key);
+        const destFile = join(destDir, object.key);
         await mkdir(dirname(destFile), { recursive: true });
         const [command, args] = buildR2ObjectGetCommand({
           bucket: outputs.documentsBucketName,
-          key,
+          key: object.key,
           destFile,
         });
         await execFileAsync(command, args, { cwd: repoRoot });
+        metadata[object.key] = {
+          httpMetadata: object.httpMetadata,
+          customMetadata: object.customMetadata,
+        };
       }
+      const metadataFile = join(outDir, "r2-metadata.json");
+      await writeFile(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`);
       r2 = {
         bucket: outputs.documentsBucketName,
         path: destDir,
         method: "object-get",
         objects: objects.length,
+        metadataFile,
       };
       console.log(
         `Downloaded ${objects.length} R2 object(s) from ${outputs.documentsBucketName}`,

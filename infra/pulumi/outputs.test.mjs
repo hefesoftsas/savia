@@ -47,4 +47,22 @@ describe("pulumi stack outputs", () => {
     assert.equal(env.SAVIA_DEPLOY_ENVIRONMENT, "preview");
     assert.equal(env.SAVIA_DEPLOY_CONFIG_ROOT, "/repo");
   });
+
+  it("forwards the vectorize index only when configured", () => {
+    assert.equal(
+      renderEnvFromOutputs(
+        { ...OUTPUTS, vectorizeIndex: "savia-pages-search-preview" },
+        "/repo",
+      ).SAVIA_PAGES_SEARCH_INDEX,
+      "savia-pages-search-preview",
+    );
+    for (const vectorizeIndex of [undefined, null, "  "]) {
+      assert.ok(
+        !("SAVIA_PAGES_SEARCH_INDEX" in renderEnvFromOutputs(
+          { ...OUTPUTS, vectorizeIndex },
+          "/repo",
+        )),
+      );
+    }
+  });
 });

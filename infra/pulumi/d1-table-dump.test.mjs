@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   shadowTablesFor,
   isSkippedTable,
+  isPlatformTable,
   quoteIdent,
   formatValue,
   buildInsert,
@@ -17,6 +18,8 @@ describe("pulumi d1 table dump", () => {
     assert.equal(isSkippedTable("search_fts", ["search_fts"]), true);
     assert.equal(isSkippedTable("search_fts_data", ["search_fts"]), true);
     assert.equal(isSkippedTable("tenants", ["search_fts"]), false);
+    assert.equal(isPlatformTable("_cf_KV"), true);
+    assert.equal(isPlatformTable("tenants"), false);
   });
 
   it("quotes identifiers and formats values", () => {

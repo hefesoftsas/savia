@@ -11,6 +11,7 @@ import { join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { buildR2ObjectPutCommand } from "./backup.mjs";
+import { assertAccountId, assertSafeR2Key } from "./naming.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -19,6 +20,7 @@ export function parseRestoreArgs(argv) {
   const dryRun = argv.includes("--dry-run");
   const apply = argv.includes("--apply");
   const skipInfra = argv.includes("--skip-infra");
+  const skipMigrations = argv.includes("--skip-migrations");
   if (!dryRun && !apply) {
     throw new Error(
       "Refusing to restore without --apply (or use --dry-run to plan)",
@@ -34,7 +36,26 @@ export function parseRestoreArgs(argv) {
       "Restore requires --confirm-restore <preview|production>",
     );
   }
-  return { manifest, dryRun, skipInfra, confirm };
+  return { manifest, dryRun, skipInfra, skipMigrations, confirm };
+}
+
+// Table dumps carry data but no schema: migrations must create tables,
+// triggers, and the FTS5 definition before the dump is loaded (and the
+// FTS5 index rebuilds via triggers on INSERT).
+export function needsMigrations(manifest) {
+  return Object.values(manifest?.d1Methods ?? {}).includes("table-dump");
+}
+
+// Reads the R2 metadata sidecar written by the object-get backup.
+// Returns {} when the backup used s3-sync (metadata preserved natively)
+// or the sidecar is missing.
+export async function readSidecar(metadataFile) {
+  if (!metadataFile) return {};
+  try {
+    return JSON.parse(await readFile(metadataFile, "utf8"));
+  } catch {
+    return {};
+  }
 }
 
 // Lists files under dir as slash-separated keys (R2 object names).
@@ -98,8 +119,8 @@ export function buildD1ExecuteCommand(dbName, sqlFile) {
 
 // aws s3 sync <dir> s3://<bucket> --endpoint-url https://<account>.r2.cloudflarestorage.com
 export function buildR2RestoreCommand({ bucket, sourceDir, accountId }) {
-  if (!bucket || !sourceDir || !accountId)
-    throw new Error("bucket, sourceDir and accountId are required");
+  if (!bucket || !sourceDir) throw new Error("bucket and sourceDir required");
+  assertAccountId(accountId);
   return [
     "aws",
     [
@@ -143,6 +164,16 @@ async function main() {
       stdio: "inherit",
     });
   }
+  if (needsMigrations(manifest) && !plan.skipMigrations) {
+    await execFileAsync("node", ["scripts/apply-d1-migrations.mjs"], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        CLOUDFLARE_DATABASE_ID: manifest.pulumiOutputs.domainD1Id,
+      },
+    });
+    console.log("Applied D1 migrations before loading table dumps");
+  }
   for (const [dbName, sqlFile] of Object.entries(manifest.d1)) {
     const [command, args] = buildD1ExecuteCommand(
       dbNames[dbName] ?? dbName,
@@ -153,11 +184,25 @@ async function main() {
   }
   if (manifest.r2) {
     if (manifest.r2.method === "object-get") {
+      const sidecar = await readSidecar(manifest.r2.metadataFile);
+      if (
+        Object.values(sidecar).some(
+          (meta) => Object.keys(meta?.customMetadata ?? {}).length > 0,
+        )
+      ) {
+        console.log(
+          "WARNING: backup holds customMetadata that wrangler put cannot reapply; reapply it manually from r2-metadata.json",
+        );
+      }
       for (const key of await listLocalFiles(manifest.r2.path)) {
+        assertSafeR2Key(key);
+        const meta = sidecar[key] ?? {};
         const [command, args] = buildR2ObjectPutCommand({
           bucket,
           key,
           sourceFile: join(manifest.r2.path, ...key.split("/")),
+          contentType: meta.httpMetadata?.contentType,
+          contentEncoding: meta.httpMetadata?.contentEncoding,
         });
         await execFileAsync(command, args, { cwd: repoRoot });
       }

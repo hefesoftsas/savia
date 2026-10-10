@@ -41,15 +41,24 @@ describe("pulumi backup", () => {
   });
 
   it("builds R2 sync commands against the account endpoint", () => {
+    const accountId = "08a0d36f8b0357684f83e4bfeb6628b6";
     const [command, args] = buildR2SyncCommand({
       bucket: "savia-documents",
       destDir: "/out/r2",
-      accountId: "abc123",
+      accountId,
     });
     assert.equal(command, "aws");
     assert.deepEqual(args.slice(0, 3), ["s3", "sync", "s3://savia-documents"]);
-    assert.ok(
-      args.includes("https://abc123.r2.cloudflarestorage.com"),
+    assert.equal(
+      args[args.indexOf("--endpoint-url") + 1],
+      `https://${accountId}.r2.cloudflarestorage.com`,
+    );
+    assert.throws(() =>
+      buildR2SyncCommand({
+        bucket: "savia-documents",
+        destDir: "/out/r2",
+        accountId: "not-hex",
+      }),
     );
   });
 
@@ -79,11 +88,19 @@ describe("pulumi backup", () => {
       bucket: "b",
       key: "a/c.txt",
       sourceFile: "/out/a/c.txt",
+      contentType: "text/plain",
     });
     assert.ok(putArgs.includes("put"));
     assert.ok(putArgs.includes("b/a/c.txt"));
+    assert.deepEqual(
+      putArgs.slice(putArgs.indexOf("--content-type"), putArgs.indexOf("--content-type") + 2),
+      ["--content-type", "text/plain"],
+    );
     assert.throws(() =>
       buildR2ObjectGetCommand({ bucket: "b", key: "", destFile: "/o" }),
+    );
+    assert.throws(() =>
+      buildR2ObjectGetCommand({ bucket: "b", key: "a/../../x", destFile: "/o" }),
     );
   });
 
