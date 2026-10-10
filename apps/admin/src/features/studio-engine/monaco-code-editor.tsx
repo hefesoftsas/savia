@@ -39,6 +39,7 @@ export function MonacoCodeEditor({
   placeholder,
   ariaLabel,
   readOnly = false,
+  semanticValidation = true,
   contextDeclarations,
   inlineCompletion,
 }: {
@@ -46,6 +47,7 @@ export function MonacoCodeEditor({
   onChange: (value: string) => void;
   language: "html" | "javascript" | "typescript" | "json" | "css";
   readOnly?: boolean;
+  semanticValidation?: boolean;
   contextDeclarations?: string;
   height?: number;
   placeholder?: string;
@@ -83,6 +85,16 @@ export function MonacoCodeEditor({
     loadMonaco()
       .then(async (monaco) => {
         if (disposed || !containerRef.current) return;
+        if (language === "typescript" || language === "javascript") {
+          const defaults =
+            language === "typescript"
+              ? monaco.languages.typescript.typescriptDefaults
+              : monaco.languages.typescript.javascriptDefaults;
+          defaults.setDiagnosticsOptions({
+            noSemanticValidation: !semanticValidation,
+            noSyntaxValidation: false,
+          });
+        }
         if (language === "typescript") {
           monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
             jsx: 2,
@@ -206,7 +218,7 @@ export function MonacoCodeEditor({
       editorRef.current = null;
       setStatus("loading");
     };
-  }, [ariaLabel, language, contextDeclarations]);
+  }, [ariaLabel, language, contextDeclarations, semanticValidation]);
 
   useEffect(() => {
     editorRef.current?.updateOptions({ readOnly });

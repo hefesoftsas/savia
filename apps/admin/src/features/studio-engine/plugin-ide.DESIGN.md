@@ -57,3 +57,8 @@ accessible labels and tooltips. Matching paths expand while filtering. Source
 files and configuration files share closable tabs and preserve mounted Monaco
 models when switching. Monaco bundles tokenizers and standalone contributions
 for syntax colors, Find/Replace, folding, bracket guides and suggestions.
+
+Retained archive source editors show syntax diagnostics; full semantic diagnostics require a
+dependency/type environment that retained archives do not ship. Preview resolves
+the actual import graph and reports compiler errors before publication. Standalone
+entry files retain full semantic diagnostics.
