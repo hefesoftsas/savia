@@ -263,6 +263,8 @@ into a new project, with its target version incremented from the current catalog
 latest version (not from the historical version). Published releases remain
 immutable; publishing a new version at or below the catalog latest is rejected.
 Identical retries of an existing release remain idempotent.
+After publishing, the project picker refreshes its catalog before returning so
+its latest-version actions reflect the new release.
 
 Repository-built ZIPs include `src/original-source.json`, a map of workspace-owned
 files from the build graph, including original TSX, JavaScript, CSS, JSON, and image

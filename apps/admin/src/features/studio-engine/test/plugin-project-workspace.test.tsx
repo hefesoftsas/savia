@@ -18,26 +18,41 @@ vi.mock("../plugin-ide", () => ({
     initialFiles,
     onDraftChange,
     onClose,
+    onPublished,
     saveStatus,
     backLabel,
-  }: any) => (
-    <div>
-      <p data-testid="save-status">{saveStatus}</p>
-      <textarea
-        aria-label="source"
-        defaultValue={initialFiles["entry.tsx"]}
-        onChange={(event) =>
-          onDraftChange({
-            files: { ...initialFiles, "entry.tsx": event.target.value },
-            history: [],
-          })
-        }
-      />
-      <button type="button" aria-label={backLabel} onClick={onClose}>
-        Close editor
-      </button>
-    </div>
-  ),
+  }: any) => {
+    const [publishedCallbackComplete, setPublishedCallbackComplete] =
+      React.useState(false);
+    return (
+      <div>
+        <p data-testid="save-status">{saveStatus}</p>
+        <textarea
+          aria-label="source"
+          defaultValue={initialFiles["entry.tsx"]}
+          onChange={(event) =>
+            onDraftChange({
+              files: { ...initialFiles, "entry.tsx": event.target.value },
+              history: [],
+            })
+          }
+        />
+        <button type="button" aria-label={backLabel} onClick={onClose}>
+          Close editor
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            await onPublished();
+            setPublishedCallbackComplete(true);
+          }}
+        >
+          Publish release
+        </button>
+        {publishedCallbackComplete && <p>Publication callback completed</p>}
+      </div>
+    );
+  },
 }));
 const files = {
   "entry.tsx": "original",
@@ -50,6 +65,129 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   vi.clearAllMocks();
+});
+it("refreshes the store picker after publication and before returning to projects", async () => {
+  const calls: string[] = [];
+  let latestVersion = "1.1.7";
+  let finishPublication!: () => void;
+  const onPublished = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finishPublication = () => {
+          latestVersion = "1.1.8";
+          resolve();
+        };
+      }),
+  );
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path, init) => {
+      calls.push(path);
+      if (path === "/api/plugin-projects")
+        return Response.json({
+          data: [{ id, label: "Draft", updatedAt: "today", version: 1 }],
+        });
+      if (path === `/api/plugin-projects/${id}`)
+        return Response.json({ data: { id, files, history: [], version: 1 } });
+      if (path === "/api/plugin-store")
+        return Response.json({
+          data: ["1.1.7", ...(latestVersion === "1.1.8" ? ["1.1.8"] : [])].map(
+            (version) => ({
+              manifest: { id: "custom.demo", label: "Demo" },
+              version,
+            }),
+          ),
+        });
+      if (path.endsWith("/registry"))
+        return Response.json({ canPublish: false });
+      if (init?.method === "PUT")
+        return Response.json({
+          data: { id, files, history: [], version: 2 },
+        });
+      throw new Error(`Unexpected request: ${path}`);
+    },
+  });
+  render(
+    <Workspace tenantId={1} onClose={() => {}} onPublished={onPublished} />,
+  );
+  fireEvent.click(await screen.findByText("Draft"));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Publish release" }),
+  );
+  expect(calls.filter((path) => path === "/api/plugin-store")).toHaveLength(1);
+  finishPublication();
+  await waitFor(() =>
+    expect(calls.filter((path) => path === "/api/plugin-store")).toHaveLength(
+      2,
+    ),
+  );
+  expect(onPublished).toHaveBeenCalledOnce();
+  expect(
+    await screen.findByText("Publication callback completed"),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Volver a proyectos" }));
+
+  expect(await screen.findByText("1.1.8")).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Editar última versión" }),
+  ).toBeVisible();
+  fireEvent.click(screen.getByText("Versiones anteriores (1)"));
+  expect(screen.getByText("1.1.7")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Usar como base" })).toBeVisible();
+});
+it("keeps publication successful when the follow-up catalog refresh fails", async () => {
+  let catalogRequests = 0;
+  const onPublished = vi.fn(async () => {});
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path, init) => {
+      if (path === "/api/plugin-projects")
+        return Response.json({
+          data: [{ id, label: "Draft", updatedAt: "today", version: 1 }],
+        });
+      if (path === `/api/plugin-projects/${id}`)
+        return Response.json({ data: { id, files, history: [], version: 1 } });
+      if (path === "/api/plugin-store") {
+        catalogRequests++;
+        return catalogRequests === 1
+          ? Response.json({
+              data: [
+                {
+                  manifest: { id: "custom.demo", label: "Demo" },
+                  version: "1.1.7",
+                },
+              ],
+            })
+          : Response.json({ error: "catalog unavailable" }, { status: 503 });
+      }
+      if (path.endsWith("/registry"))
+        return Response.json({ canPublish: false });
+      if (init?.method === "PUT")
+        return Response.json({
+          data: { id, files, history: [], version: 2 },
+        });
+      throw new Error(`Unexpected request: ${path}`);
+    },
+  });
+  render(
+    <Workspace tenantId={1} onClose={() => {}} onPublished={onPublished} />,
+  );
+  fireEvent.click(await screen.findByText("Draft"));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Publish release" }),
+  );
+
+  expect(
+    await screen.findByText("Publication callback completed"),
+  ).toBeVisible();
+  expect(onPublished).toHaveBeenCalledOnce();
+  expect(
+    screen.getByText(
+      /El plugin se publicó, pero no se pudo actualizar el catálogo\. Recarga la página/i,
+    ),
+  ).toBeVisible();
 });
 it("resumes server drafts and saves through the original tenant transport after navigation", async () => {
   const calls: { path: string; body: any }[] = [];
