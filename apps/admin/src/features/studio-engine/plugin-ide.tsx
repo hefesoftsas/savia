@@ -325,8 +325,20 @@ export default function PluginIde({
 
   function replaceFiles(next: IdeFiles) {
     currentPreview.current = null;
-    if (next["original-source.json"] !== files["original-source.json"])
-      setSelectedOriginal(null);
+    if (next["original-source.json"] !== files["original-source.json"]) {
+      const names = next["original-source.json"]
+        ? Object.keys(
+            pluginOriginalSourceFilesSchema.parse(
+              JSON.parse(next["original-source.json"]),
+            ),
+          )
+        : [];
+      setSelectedOriginal(
+        names.find((name) => /(?:^|\/)entry\.(?:tsx|jsx|js)$/.test(name)) ??
+          names[0] ??
+          null,
+      );
+    }
     setFiles(next);
     setPreview(null);
     setError("");
@@ -357,7 +369,7 @@ export default function PluginIde({
   }
   async function generate(input = prompt) {
     const requestPrompt = input.trim();
-    if (!requestPrompt || busy) return;
+    if (!requestPrompt || busy || originalArchive) return;
     if (generating) {
       if (enqueuePrompt(requestPrompt) && input === prompt) setPrompt("");
       return;
@@ -945,7 +957,9 @@ export default function PluginIde({
               <PluginFileTree
                 names={
                   Object.keys(files).filter(
-                    (name) => name !== "original-source.json",
+                    (name) =>
+                      name !== "original-source.json" &&
+                      !(originalArchive && name === "entry.tsx"),
                   ) as (keyof IdeFiles)[]
                 }
                 selected={selected}
@@ -1013,58 +1027,60 @@ export default function PluginIde({
                   }
                 }}
               >
-                {openFiles.map((name) => (
-                  <div
-                    role="presentation"
-                    className="plugin-ide-editor-tab"
-                    data-active={
-                      pane !== "preview" &&
-                      selected === name &&
-                      !reviewFile &&
-                      !selectedOriginal
-                    }
-                    key={name}
-                  >
-                    <button
-                      role="tab"
-                      id={`${panelId}-${name}`}
-                      aria-controls={`${panelId}-code`}
-                      tabIndex={
-                        pane !== "preview" &&
-                        selected === name &&
-                        !reviewFile &&
-                        !selectedOriginal
-                          ? 0
-                          : -1
-                      }
-                      aria-selected={
+                {openFiles
+                  .filter((name) => !(originalArchive && name === "entry.tsx"))
+                  .map((name) => (
+                    <div
+                      role="presentation"
+                      className="plugin-ide-editor-tab"
+                      data-active={
                         pane !== "preview" &&
                         selected === name &&
                         !reviewFile &&
                         !selectedOriginal
                       }
-                      onClick={() => openFile(name)}
+                      key={name}
                     >
-                      <FileCode2 />
-                      {name}
-                    </button>
-                    {openFiles.length > 1 && (
                       <button
-                        className="plugin-ide-close-tab"
-                        aria-label={`${t("closeFile")} ${name}`}
-                        onClick={() => {
-                          const next = openFiles.filter(
-                            (file) => file !== name,
-                          );
-                          setOpenFiles(next);
-                          if (selected === name) openFile(next[0]);
-                        }}
+                        role="tab"
+                        id={`${panelId}-${name}`}
+                        aria-controls={`${panelId}-code`}
+                        tabIndex={
+                          pane !== "preview" &&
+                          selected === name &&
+                          !reviewFile &&
+                          !selectedOriginal
+                            ? 0
+                            : -1
+                        }
+                        aria-selected={
+                          pane !== "preview" &&
+                          selected === name &&
+                          !reviewFile &&
+                          !selectedOriginal
+                        }
+                        onClick={() => openFile(name)}
                       >
-                        <X />
+                        <FileCode2 />
+                        {name}
                       </button>
-                    )}
-                  </div>
-                ))}
+                      {openFiles.length > 1 && (
+                        <button
+                          className="plugin-ide-close-tab"
+                          aria-label={`${t("closeFile")} ${name}`}
+                          onClick={() => {
+                            const next = openFiles.filter(
+                              (file) => file !== name,
+                            );
+                            setOpenFiles(next);
+                            if (selected === name) openFile(next[0]);
+                          }}
+                        >
+                          <X />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 {selectedOriginal && (
                   <button
                     role="tab"
@@ -1123,67 +1139,92 @@ export default function PluginIde({
                   {reviewFile && <span>{t("proposed")}</span>}
                 </div>
                 <div className="plugin-ide-editors">
-                  {visitedFiles.map((name) => (
-                    <div
-                      className="plugin-ide-editor-document"
-                      key={name}
-                      hidden={
-                        selected !== name || !!reviewFile || !!selectedOriginal
-                      }
-                    >
-                      <MonacoCodeEditor
-                        value={files[name] ?? ""}
-                        onChange={(value) => {
-                          setUndo(null);
-                          replaceFiles({ ...files, [name]: value });
-                        }}
-                        language={name === "entry.tsx" ? "typescript" : "json"}
-                        ariaLabel={name}
-                        inlineCompletion={
-                          name === "entry.tsx"
-                            ? {
-                                filename: "entry.tsx",
-                                fetchCompletion: async (prefix, suffix) => {
-                                  try {
-                                    const result = await apiClient.post<{
-                                      completion: string;
-                                    }>("/api/assistant/plugin-completion", {
-                                      tenantId,
-                                      filename: "entry.tsx",
-                                      prefix,
-                                      suffix,
-                                    });
-                                    return result.completion?.trim()
-                                      ? result.completion
-                                      : null;
-                                  } catch {
-                                    // Inline completions are best-effort.
-                                    return null;
-                                  }
-                                },
-                              }
-                            : undefined
+                  {visitedFiles
+                    .filter((name) => !originalArchive || name !== "entry.tsx")
+                    .map((name) => (
+                      <div
+                        className="plugin-ide-editor-document"
+                        key={name}
+                        hidden={
+                          selected !== name ||
+                          !!reviewFile ||
+                          !!selectedOriginal
                         }
-                        readOnly={locked}
-                        contextDeclarations={pluginIdeDeclarations}
-                        height={520}
-                      />
-                    </div>
-                  ))}
+                      >
+                        <MonacoCodeEditor
+                          value={files[name] ?? ""}
+                          onChange={(value) => {
+                            setUndo(null);
+                            replaceFiles({ ...files, [name]: value });
+                          }}
+                          language={
+                            name === "entry.tsx" ? "typescript" : "json"
+                          }
+                          ariaLabel={name}
+                          inlineCompletion={
+                            name === "entry.tsx"
+                              ? {
+                                  filename: "entry.tsx",
+                                  fetchCompletion: async (prefix, suffix) => {
+                                    try {
+                                      const result = await apiClient.post<{
+                                        completion: string;
+                                      }>("/api/assistant/plugin-completion", {
+                                        tenantId,
+                                        filename: "entry.tsx",
+                                        prefix,
+                                        suffix,
+                                      });
+                                      return result.completion?.trim()
+                                        ? result.completion
+                                        : null;
+                                    } catch {
+                                      // Inline completions are best-effort.
+                                      return null;
+                                    }
+                                  },
+                                }
+                              : undefined
+                          }
+                          readOnly={
+                            locked ||
+                            (!!originalArchive && name === "entry.tsx")
+                          }
+                          contextDeclarations={pluginIdeDeclarations}
+                          height={520}
+                        />
+                      </div>
+                    ))}
                   {selectedOriginal && (
                     <MonacoCodeEditor
                       key={selectedOriginal}
                       value={originalFiles[selectedOriginal] ?? ""}
-                      onChange={() => {}}
+                      onChange={(value) => {
+                        setUndo(null);
+                        const name = selectedOriginal;
+                        replaceFiles({
+                          ...files,
+                          "original-source.json": JSON.stringify({
+                            ...originalFiles,
+                            [name]: value,
+                          }),
+                        });
+                        setSelectedOriginal(name);
+                      }}
                       language={
                         selectedOriginal.endsWith(".css")
                           ? "css"
                           : selectedOriginal.endsWith(".json")
                             ? "json"
-                            : "typescript"
+                            : selectedOriginal.endsWith(".svg")
+                              ? "html"
+                              : "typescript"
                       }
                       ariaLabel={selectedOriginal}
-                      readOnly
+                      readOnly={
+                        locked || /\.(?:png|webp)$/.test(selectedOriginal)
+                      }
+                      contextDeclarations={pluginIdeDeclarations}
                       height={520}
                     />
                   )}
@@ -1276,23 +1317,27 @@ export default function PluginIde({
                 {!history.length && (
                   <div className="plugin-ide-chat-welcome">
                     <h4>{t("welcome")}</h4>
-                    <p>{t("welcomeHint")}</p>
-                    <div className="plugin-ide-suggestions">
-                      {["suggestTasks", "suggestDashboard"].map((key) => (
-                        <button
-                          key={key}
-                          onClick={() => {
-                            setPrompt(t(key as "suggestTasks"));
-                            document
-                              .getElementById("plugin-ide-prompt")
-                              ?.focus();
-                          }}
-                        >
-                          {t(key as "suggestTasks")}
-                          <ArrowUp />
-                        </button>
-                      ))}
-                    </div>
+                    <p>
+                      {t(originalArchive ? "sourceChatHint" : "welcomeHint")}
+                    </p>
+                    {!originalArchive && (
+                      <div className="plugin-ide-suggestions">
+                        {["suggestTasks", "suggestDashboard"].map((key) => (
+                          <button
+                            key={key}
+                            onClick={() => {
+                              setPrompt(t(key as "suggestTasks"));
+                              document
+                                .getElementById("plugin-ide-prompt")
+                                ?.focus();
+                            }}
+                          >
+                            {t(key as "suggestTasks")}
+                            <ArrowUp />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 {history.map((item, index) => (
@@ -1459,7 +1504,7 @@ export default function PluginIde({
                     value={prompt}
                     maxLength={8000}
                     rows={3}
-                    disabled={!!busy}
+                    disabled={!!busy || !!originalArchive}
                     placeholder={
                       generating ? t("queuePlaceholder") : t("placeholder")
                     }
@@ -1503,7 +1548,7 @@ export default function PluginIde({
                     <Button
                       type="submit"
                       size="icon"
-                      disabled={!!busy || !prompt.trim()}
+                      disabled={!!busy || !!originalArchive || !prompt.trim()}
                       aria-label={generating ? t("queueSend") : t("send")}
                       title={generating ? t("queueSend") : undefined}
                     >

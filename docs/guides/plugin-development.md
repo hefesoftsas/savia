@@ -256,19 +256,33 @@ pending edits across reloads when local storage is available. The editor warns
 before unloading while a server save is still pending. Do not close the page until
 “Project saved” appears if browser recovery storage is unavailable.
 
-**Edit source** on a store release creates a new project from its retained source
-and increments a plain semantic patch version. Repository-built catalog ZIPs include
-`src/original-source.json`, a map of workspace-owned files from the build graph,
-including original TSX, JavaScript, and CSS. The editor's **Original source code**
-tree displays those files read-only with their repository paths. Third-party
-dependencies and unrelated workspace files are excluded. Preview and publication
-continue to use the executable `entry.tsx`; the original file map is retained for
-inspection, not rebuilt by the single-module editor. Saving, exporting, importing,
-and publishing preserve the map. Reopen a published release to obtain newly
-attached originals; existing drafts are not overwritten.
+The store project list groups releases by plugin ID and sorts semantic versions newest
+first. **Edit latest version** creates an editable project from the latest release.
+Historical releases offer **Use as base**: the selected release's files are copied
+into a new project, with its target version incremented from the current catalog
+latest version (not from the historical version). Published releases remain
+immutable; publishing a new version at or below the catalog latest is rejected.
+Identical retries of an existing release remain idempotent.
+
+Repository-built ZIPs include `src/original-source.json`, a map of workspace-owned
+files from the build graph, including original TSX, JavaScript, CSS, JSON, and image
+assets. The editor opens the source entry in Monaco and lets users edit source
+modules and text assets with their repository paths. Retained PNG/WebP data URIs
+are read-only. Preview and publication compile the edited module graph, including
+relative imports, `@savia` workspace aliases, CSS, and literal dynamic imports.
+Archives must contain exactly one source entry module; ambiguous entries are
+rejected rather than selecting a dependency by filename ordering.
+React, Zod, and PDF-lib are bundled locally; no dependency is downloaded during
+compilation. The old compiled entry is kept only for exact runtime recovery and
+is hidden while complete originals are available. Saving, exporting, importing,
+and publishing preserve the source map. The assistant currently supports
+single-module projects; edit multi-module originals directly in the code editor.
+Reopen a published release to obtain newly attached originals; existing drafts
+are not overwritten.
 
 Older packages uploaded without
-authoring sources open the retained compiled JavaScript together with the original
+authoring sources, or whose historical source archives omitted required image
+assets, open the retained compiled JavaScript together with the original
 manifest and store configuration. A notice identifies this as a compiled copy; original TSX
 cannot be reconstructed from the bundle. Preview runs the actual plugin rather
 than a replacement starter. Reopen the published version to recover it; existing
@@ -283,8 +297,11 @@ or the matching PostgreSQL migration), the API and admin bundles, and existing
 workspace AI configuration. Shared publication additionally needs `publishToken`
 in `PLUGIN_REGISTRY_TENANTS`; see [the registry guide](plugin-registry.md).
 
-This first authoring contract supports one TSX module, built-in React, and the
-Savia host API. It does not install arbitrary npm dependencies, run Node processes,
+AI authoring supports one TSX module, built-in React, and the Savia host API.
+Manual source editing additionally supports the retained multi-module build graph
+and the shipped dependencies described above. Preview settings start from the
+package's `store.json` defaults, with `preview.json` settings overriding matching
+keys; mock preview changes do not modify workspace settings. It does not install arbitrary npm dependencies, run Node processes,
 or grant direct network access. Use the repository SDK/build workflow for plugins
 requiring extra bundled libraries. AI authoring files remain limited to 100 KB.
 Saved editor projects accept up to 2 MB in `entry.tsx` for compiled release recovery, 100 KB per configuration

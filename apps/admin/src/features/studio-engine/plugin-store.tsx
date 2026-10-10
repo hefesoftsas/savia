@@ -648,8 +648,41 @@ export default function PluginStoreManager({
                           })
                         }
                       >
-                        {ideT("editSource")}
+                        {ideT("editLatest")}
                       </Button>
+                      {group.versions.length > 1 ? (
+                        <details className="basis-full text-sm">
+                          <summary className="cursor-pointer text-muted-foreground">
+                            {ideT("olderVersions", {
+                              count: group.versions.length - 1,
+                            })}
+                          </summary>
+                          <div className="mt-2 grid gap-2">
+                            {group.versions.slice(1).map((version) => (
+                              <div
+                                key={version.version}
+                                className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5"
+                              >
+                                <span className="font-mono text-xs">
+                                  {version.version}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    openPluginStudio({
+                                      id: version.manifest.id,
+                                      version: version.version,
+                                    })
+                                  }
+                                >
+                                  {ideT("useAsBase")}
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
                       {!item.installed ? (
                         <Button
                           size="sm"

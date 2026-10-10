@@ -195,6 +195,19 @@ it("agrupa varias versiones del mismo plugin en una sola tarjeta", async () => {
   expect(screen.getByText("2.0.3")).toBeInTheDocument();
   expect(screen.getByText("4 versiones")).toBeInTheDocument();
   expect(screen.getByText("Mostrando 1 de 1 plugins")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Editar última versión" }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "Editar código" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText("Versiones anteriores (3)"));
+  fireEvent.click(
+    screen.getAllByRole("button", { name: "Usar como base" })[0],
+  );
+  expect(screen.getByTestId("current-route")).toHaveTextContent(
+    "/plugin-studio?tenantId=0&source=custom.demo&version=2.0.0",
+  );
 });
 
 it("omits plugins already included in application activation from the unified catalog", async () => {
@@ -235,7 +248,9 @@ it("opens the dedicated plugin studio for new and source-backed projects", async
     "/plugin-studio?tenantId=0",
   );
 
-  fireEvent.click(await screen.findByRole("button", { name: "Editar código" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Editar última versión" }),
+  );
   expect(screen.getByTestId("current-route")).toHaveTextContent(
     "/plugin-studio?tenantId=0&source=custom.demo&version=1.0.0",
   );

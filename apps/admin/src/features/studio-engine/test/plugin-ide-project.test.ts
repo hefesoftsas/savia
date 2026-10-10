@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -14,6 +14,10 @@ import {
 } from "../plugin-ide-project";
 import { PLUGIN_PROJECT_MAX_BYTES } from "@savia/studio-shared/plugin-projects";
 import { createPluginPreviewDocument } from "../plugin-ide-preview";
+import {
+  findMissingPluginSourceAssets,
+  pluginSourceEntry,
+} from "../plugin-source-compiler";
 
 function withEntry(entry: string): IdeFiles {
   return { ...createPluginProject(), "entry.tsx": entry };
@@ -52,77 +56,135 @@ export function render(element) { element.textContent = "Activities"; }`;
     expect(element.textContent).toBe("Activities");
   });
 
-  it("compiles the real packaged activities release for editor preview", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "savia-ide-activities-"));
-    const artifact = join(directory, "activities.zip");
-    try {
-      execFileSync(process.execPath, [
-        resolve("../../scripts/pack-store-plugin.mjs"),
-        "store-ports/activities",
-        "--output",
-        artifact,
-      ]);
-      const extract = (path: string) =>
-        execFileSync("unzip", ["-p", artifact, path], {
-          encoding: "utf8",
-          maxBuffer: 3 * 1024 * 1024,
-        });
-      const files: IdeFiles = {
-        "entry.tsx": extract("dist/plugin.js"),
-        "savia-extension.json": extract("savia-extension.json"),
-        "store.json": extract("store.json"),
-        "preview.json": '{"collections":{},"settings":{}}',
-      };
-      const compiled = await compilePluginProject(files);
-      expect(compiled.manifest.id).toBe("insurance.activities");
-      expect(compiled.entryJs).toContain("insurance_activities");
-      const html = createPluginPreviewDocument(
-        compiled.entryJs,
-        compiled.fixtures,
-        compiled.store,
-        "activities-session",
-        "es",
-      );
-      const dom = new JSDOM(html, {
-        runScripts: "outside-only",
-        pretendToBeVisual: true,
-      });
+  it.each([
+    { port: "activities", content: "Nueva actividad" },
+    { port: "quotes", content: "Preparar cotización" },
+  ])(
+    "renders the packaged $port release from original modules",
+    async ({ port, content }) => {
+      const directory = mkdtempSync(join(tmpdir(), `savia-ide-${port}-`));
+      const artifact = join(directory, `${port}.zip`);
       try {
-        Object.assign(dom.window, { structuredClone });
-        const executable = compiled.entryJs.replace(
-          /export\s*\{([^}]+)\};?/,
-          (_match, exports: string) => {
-            const properties = exports.split(",").map((entry) => {
-              const [local, name = local] = entry.trim().split(/\s+as\s+/);
-              return `${name}: ${local}`;
-            });
-            return `return {${properties.join(",")}};`;
-          },
+        execFileSync(process.execPath, [
+          resolve("../../scripts/pack-store-plugin.mjs"),
+          `store-ports/${port}`,
+          "--output",
+          artifact,
+        ]);
+        const extract = (path: string) =>
+          execFileSync("unzip", ["-p", artifact, path], {
+            encoding: "utf8",
+            maxBuffer: 3 * 1024 * 1024,
+          });
+        const files: IdeFiles = {
+          "entry.tsx": extract("dist/plugin.js"),
+          "original-source.json": extract("src/original-source.json"),
+          "savia-extension.json": extract("savia-extension.json"),
+          "store.json": extract("store.json"),
+          "preview.json": '{"collections":{},"settings":{}}',
+        };
+        const compiled = await compilePluginProject(files);
+        expect(compiled.manifest.id).toBe(`insurance.${port}`);
+        const html = createPluginPreviewDocument(
+          compiled.entryJs,
+          compiled.fixtures,
+          compiled.store,
+          `${port}-session`,
+          "es",
         );
-        dom.window.eval(`window.__testPlugin = (() => { ${executable} })();`);
-        const script = dom.window.document
-          .querySelector('script[type="module"]')!
-          .textContent!.replace(
-            /const sourceUrl = .*?\n\s*const plugin = await import\(sourceUrl\);\n\s*URL\.revokeObjectURL\(sourceUrl\);/s,
-            "const plugin = window.__testPlugin;",
+        const dom = new JSDOM(html, {
+          runScripts: "outside-only",
+          pretendToBeVisual: true,
+        });
+        try {
+          Object.assign(dom.window, { structuredClone });
+          const executable =
+            compiled.entryJs.replace(/export const /g, "const ") +
+            "; return {render, renderPanel, widgets, screens};";
+          dom.window.eval(`window.__testPlugin = (() => { ${executable} })();`);
+          const script = dom.window.document
+            .querySelector('script[type="module"]')!
+            .textContent!.replace(
+              /const sourceUrl = .*?\n\s*const plugin = await import\(sourceUrl\);\n\s*URL\.revokeObjectURL\(sourceUrl\);/s,
+              "const plugin = window.__testPlugin;",
+            );
+          dom.window.eval(
+            `window.__completion = (async () => { ${script} })();`,
           );
-        dom.window.eval(`window.__completion = (async () => { ${script} })();`);
-        await (dom.window as unknown as { __completion: Promise<void> })
-          .__completion;
-        await vi.waitFor(() =>
-          expect(
-            dom.window.document.getElementById("root")!.textContent,
-          ).toContain("Nueva actividad"),
+          await (dom.window as unknown as { __completion: Promise<void> })
+            .__completion;
+          await vi.waitFor(() =>
+            expect(
+              dom.window.document.getElementById("root")!.textContent,
+            ).toContain(content),
+          );
+        } finally {
+          dom.window.close();
+        }
+
+        expect(parsePluginProject(serializePluginProject(files))).toEqual(
+          files,
         );
       } finally {
-        dom.window.close();
+        rmSync(directory, { recursive: true, force: true });
       }
+    },
+    60000,
+  );
 
-      expect(parsePluginProject(serializePluginProject(files))).toEqual(files);
+  it("rebuilds every shipped plugin from its retained source graph", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "savia-source-builds-"));
+    try {
+      for (const port of readdirSync(resolve("../../store-ports"))) {
+        const artifact = join(directory, `${port}.zip`);
+        execFileSync(process.execPath, [
+          resolve("../../scripts/pack-store-plugin.mjs"),
+          `store-ports/${port}`,
+          "--output",
+          artifact,
+        ]);
+        const extract = (path: string) =>
+          execFileSync("unzip", ["-p", artifact, path], {
+            encoding: "utf8",
+            maxBuffer: 4 * 1024 * 1024,
+          });
+        const source = extract("src/original-source.json");
+        const compiled = await compilePluginProject({
+          "entry.tsx": extract("dist/plugin.js"),
+          "savia-extension.json": extract("savia-extension.json"),
+          "store.json": extract("store.json"),
+          "preview.json": '{"collections":{},"settings":{}}',
+          "original-source.json": source,
+        });
+        expect(compiled.entryJs, port).toContain("__saviaModules");
+        expect(
+          new TextEncoder().encode(compiled.entryJs).length,
+          port,
+        ).toBeLessThan(2 * 1024 * 1024);
+        const originals = JSON.parse(source);
+        const entry = Object.keys(originals).find((name) =>
+          /(?:^|\/)entry\.(tsx|jsx|js)$/.test(name),
+        )!;
+        const changed = {
+          ...originals,
+          [entry]:
+            originals[entry] + "\n// Original source compilation verified.",
+        };
+        const edited = await compilePluginProject({
+          "entry.tsx": extract("dist/plugin.js"),
+          "savia-extension.json": extract("savia-extension.json"),
+          "store.json": extract("store.json"),
+          "preview.json": '{"collections":{},"settings":{}}',
+          "original-source.json": JSON.stringify(changed),
+        });
+        expect(edited.entryJs, port).toContain(
+          "Original source compilation verified.",
+        );
+      }
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 90000);
 
   it("rejects invalid metadata and entry source that imports or uses unsafe APIs", async () => {
     const project = createPluginProject();
@@ -229,9 +291,120 @@ export function render(element) { element.textContent = "Activities"; }`;
     expect(packaged.entryJs).toContain("SaviaPluginReact");
   });
 
+  it("builds edited modules and CSS from the source archive rather than the retained bundle", async () => {
+    const archive = {
+      "store-ports/demo/entry.tsx":
+        'import { title } from "./screen"; import "./entry.css"; export function render(el) { el.textContent = title; }',
+      "store-ports/demo/screen.ts": 'export const title = "Edited original";',
+      "store-ports/demo/entry.css": ".edited-original { color: red; }",
+    };
+    const compiled = await compilePluginProject({
+      ...withEntry(
+        'export function render(el) { el.textContent = "Old bundle"; }',
+      ),
+      "original-source.json": JSON.stringify(archive),
+    });
+    const render = new Function(
+      compiled.entryJs.replace(/export const /g, "const ") + "; return render;",
+    )();
+    const element = document.createElement("div");
+    render(element);
+    expect(element.textContent).toBe("Edited original");
+    expect(document.head.textContent).toContain(
+      ".edited-original { color: red; }",
+    );
+    expect(compiled.entryJs).not.toMatch(/\brequire\s*\(/);
+  });
+
+  it("rejects ambiguous source entries rather than publishing a dependency as the plugin", () => {
+    expect(() =>
+      pluginSourceEntry({
+        "packages/helper/entry.tsx": "",
+        "store-ports/demo/entry.tsx": "",
+      }),
+    ).toThrow("ambiguous entry modules");
+  });
+
+  it("escapes HTML-sensitive module paths and CSS while preserving runtime values", async () => {
+    const compiled = await compilePluginProject({
+      ...createPluginProject(),
+      "original-source.json": JSON.stringify({
+        "demo/entry.tsx":
+          'import { value } from "./</script>.ts"; import "./entry.css"; export function render(el) { el.textContent = value; }',
+        "demo/</script>.ts": 'export const value = "safe";',
+        "demo/entry.css": "/* </script> & \u2028 \u2029 */",
+      }),
+    });
+    expect(compiled.entryJs).not.toContain("</script>");
+    expect(compiled.entryJs).toContain("\\u003c/script\\u003e");
+    const render = new Function(
+      compiled.entryJs.replace(/export const /g, "const ") + "; return render;",
+    )() as (element: HTMLElement) => void;
+    const element = document.createElement("div");
+    render(element);
+    expect(element.textContent).toBe("safe");
+    expect(document.head.textContent).toContain("/* </script> &");
+  });
+
+  it("detects omitted historical assets in static, dynamic and CommonJS imports", () => {
+    expect(
+      findMissingPluginSourceAssets(
+        JSON.stringify({
+          "demo/entry.tsx":
+            'import icon from "./icon.svg"; import("./photo.png"); require("./banner.webp");',
+          "demo/icon.svg": "<svg/>",
+        }),
+      ),
+    ).toEqual(["demo/photo.png", "demo/banner.webp"]);
+  });
+
+  it("loads literal dynamic source modules asynchronously and preserves JSON and image imports", async () => {
+    const compiled = await compilePluginProject({
+      ...createPluginProject(),
+      "original-source.json": JSON.stringify({
+        "demo/entry.tsx":
+          'import data from "./data.json"; import image from "./logo.svg"; export async function render(el) { const lazy = await import("./lazy"); el.textContent = data.title + lazy.value + image; }',
+        "demo/lazy.ts":
+          '/* import("./missing") */ export const value = " loaded ";',
+        "demo/data.json": '{"title":"Original"}',
+        "demo/logo.svg": '<svg xmlns="http://www.w3.org/2000/svg"/>',
+      }),
+    });
+    const render = new Function(
+      compiled.entryJs.replace(/export const /g, "const ") + "; return render;",
+    )() as (element: HTMLElement) => Promise<void>;
+    const element = document.createElement("div");
+    await render(element);
+    expect(element.textContent).toContain(
+      "Original loaded data:image/svg+xml,",
+    );
+    await expect(
+      compilePluginProject({
+        ...createPluginProject(),
+        "original-source.json": JSON.stringify({
+          "demo/entry.tsx":
+            "export function render(path) { return import(path); }",
+        }),
+      }),
+    ).rejects.toThrow("literal module path");
+  });
+
+  it("rejects missing modules and unbundled dependencies with source diagnostics", async () => {
+    for (const specifier of ["./missing", "unknown-library"]) {
+      const files = {
+        ...createPluginProject(),
+        "original-source.json": JSON.stringify({
+          "demo/entry.tsx": `import { value } from "${specifier}"; export function render(el) { el.textContent = value; }`,
+        }),
+      };
+      await expect(compilePluginProject(files)).rejects.toThrow(specifier);
+    }
+  });
+
   it("preserves original source through portable project backups and publication", async () => {
     const archive = JSON.stringify({
-      "store-ports/demo/entry.tsx": 'import { Screen } from "./screen";',
+      "store-ports/demo/entry.tsx":
+        'import { Screen } from "../../packages/demo/src/screen"; export function render(el) { el.textContent = "Original"; } export { Screen };',
       "packages/demo/src/screen.tsx":
         "export const Screen = () => <h1>Original</h1>;",
     });
@@ -414,7 +587,14 @@ export function render(element) { element.textContent = "Activities"; }`;
     execute(dom.window);
     await (dom.window as unknown as { __completion: Promise<void> })
       .__completion;
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          kind: "error",
+          message: "late preview error",
+        }),
+      ),
+    );
     expect(messages.filter((message) => message.kind === "log")).toHaveLength(
       50,
     );

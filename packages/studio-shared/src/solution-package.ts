@@ -87,9 +87,14 @@ export function canonicalJson(value: unknown): string {
 }
 
 export function compareSolutionVersions(a: string, b: string): number {
-  const left = a.split(".").map(Number),
-    right = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++)
+  const left = a.split("."),
+    right = b.split(".");
+  // Validated versions contain canonical decimal triplets, up to 30 characters.
+  // Text comparison avoids rounding components beyond Number.MAX_SAFE_INTEGER.
+  for (let i = 0; i < 3; i++) {
+    if (left[i].length !== right[i].length)
+      return left[i].length < right[i].length ? -1 : 1;
     if (left[i] !== right[i]) return left[i] < right[i] ? -1 : 1;
+  }
   return 0;
 }

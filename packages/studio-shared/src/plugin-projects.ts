@@ -43,7 +43,7 @@ const originalSourcePathSchema = z.string().refine((path) => {
     )
   )
     return false;
-  return /\.(?:ts|tsx|js|jsx|css|json)$/.test(path);
+  return /\.(?:ts|tsx|js|jsx|css|json|svg|png|webp)$/.test(path);
 }, "Original source paths must be canonical workspace-relative source files");
 
 export const pluginOriginalSourceMapSchema = z
