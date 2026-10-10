@@ -729,6 +729,7 @@ p.plugin-ide-usage {
 }
 .plugin-project-search-file h3 small {
   display: block;
+  font-size: 11px;
   color: var(--ide-secondary);
   font-weight: 400;
   overflow: hidden;
@@ -764,5 +765,15 @@ p.plugin-ide-usage {
   .plugin-project-search-file button {
     min-height: 44px;
     align-items: center;
+  }
+}
+@container (max-width: 480px) {
+  .plugin-ide-navigation button {
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 4px;
+    font-size: 11px;
+    line-height: 1.2;
   }
 }

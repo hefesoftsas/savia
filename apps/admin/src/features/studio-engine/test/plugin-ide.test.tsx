@@ -1214,7 +1214,10 @@ it("searches project content and opens an archived match at its line", async () 
   const query = screen.getByRole("searchbox", { name: "Buscar en el código" });
   fireEvent.change(query, { target: { value: "needle" } });
   fireEvent.click(
-    screen.getByRole("button", { name: `src/${path}:2:7`, exact: true }),
+    screen.getByRole("button", {
+      name: `src/${path}:2:7 const needle = 1;`,
+      exact: true,
+    }),
   );
   const editor = screen.getByRole("textbox", { name: path, exact: true });
   expect(editor).toHaveAttribute(
@@ -1238,7 +1241,10 @@ it("offers a visible content search for standalone projects and updates matches 
     { target: { value: "render" } },
   );
   fireEvent.click(
-    screen.getByRole("button", { name: "entry.tsx:1:17", exact: true }),
+    screen.getByRole("button", {
+      name: "entry.tsx:1:17 export function render() {}",
+      exact: true,
+    }),
   );
   const entry = screen.getByRole("textbox", { name: "entry.tsx", exact: true });
   expect(entry).toHaveAttribute(

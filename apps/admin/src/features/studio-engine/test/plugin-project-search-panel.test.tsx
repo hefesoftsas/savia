@@ -61,12 +61,12 @@ it("renders accessible empty and result states and forwards the selected match",
   ).toBeInTheDocument();
   expect(
     screen
-      .getByRole("button", { name: "src/main.tsx:1:3" })
+      .getByRole("button", { name: /src\/main\.tsx:1:3\s+render\(\)/ })
       .querySelector("code"),
   ).toHaveTextContent("render()");
 
   const match = screen.getByRole("button", {
-    name: "src/main.tsx:1:3",
+    name: /src\/main\.tsx:1:3\s+render\(\)/,
   });
   fireEvent.click(match);
   expect(onSelect).toHaveBeenCalledWith({
@@ -107,6 +107,10 @@ it("bounds long line snippets and highlights the literal match", () => {
   expect(
     screen.getByRole("heading", { name: "src/deep/module.ts" }),
   ).toBeInTheDocument();
+  const resultButton = screen.getByRole("button", {
+    name: /src\/deep\/module\.ts:1:221.*needle/,
+  });
+  expect(resultButton.getAttribute("aria-label")?.length).toBeLessThan(200);
   const snippet = screen.getByText("needle", { selector: "mark" });
   expect(snippet).toHaveTextContent("needle");
   expect(snippet.closest("code")?.textContent?.length).toBeLessThanOrEqual(162);

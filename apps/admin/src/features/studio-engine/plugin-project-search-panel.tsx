@@ -98,7 +98,7 @@ export function PluginProjectSearchPanel({
                       >
                         <button
                           type="button"
-                          aria-label={`${match.path}:${match.lineNumber}:${match.column}`}
+                          aria-label={`${match.path}:${match.lineNumber}:${match.column} ${getSnippet(match).text}`}
                           onClick={() => onSelect(match)}
                         >
                           <span>
