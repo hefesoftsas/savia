@@ -82,9 +82,16 @@ function streamPayload(callIndex = 0) {
 }
 vi.mock("../api", () => ({ pluginApi: mocks.publish }));
 vi.mock("../monaco-code-editor", () => ({
-  MonacoCodeEditor: ({ value, onChange, ariaLabel, readOnly }: any) => (
+  MonacoCodeEditor: ({
+    value,
+    onChange,
+    ariaLabel,
+    readOnly,
+    semanticValidation,
+  }: any) => (
     <textarea
       aria-label={ariaLabel}
+      data-semantic-validation={semanticValidation !== false}
       value={value}
       readOnly={readOnly}
       onChange={(e) => onChange(e.target.value)}
@@ -117,6 +124,13 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+it("keeps semantic diagnostics for standalone entry files", () => {
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  expect(
+    screen.getByRole("textbox", { name: "entry.tsx", exact: true }),
+  ).toHaveAttribute("data-semantic-validation", "true");
+});
+
 it("keeps source files in separate closable tabs and filters the explorer", async () => {
   const entry = "store-ports/demo/entry.tsx";
   const module = "packages/demo/src/screen.tsx";
@@ -139,6 +153,9 @@ it("keeps source files in separate closable tabs and filters the explorer", asyn
       }}
     />,
   );
+  expect(
+    screen.getByRole("textbox", { name: entry, exact: true }),
+  ).toHaveAttribute("data-semantic-validation", "false");
   for (const folder of [
     "src/packages",
     "src/packages/demo",

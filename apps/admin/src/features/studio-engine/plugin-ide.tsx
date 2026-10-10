@@ -1209,7 +1209,6 @@ export default function PluginIde({
                             (!!originalArchive && name === "entry.tsx")
                           }
                           contextDeclarations={pluginIdeDeclarations}
-                          semanticValidation={false}
                           height={520}
                         />
                       </div>
