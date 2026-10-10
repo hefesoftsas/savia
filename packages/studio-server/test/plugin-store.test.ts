@@ -97,6 +97,7 @@ function pluginZip(
     entry?: string;
     store?: Record<string, unknown>;
     badStore?: boolean;
+    sourceEntry?: string;
   } = {},
   options: { deflate?: boolean; omitEntry?: boolean } = {},
 ): Uint8Array {
@@ -137,6 +138,12 @@ function pluginZip(
     files.push({
       name: "store.json",
       data: text("no es json"),
+      deflate: options.deflate,
+    });
+  if (overrides.sourceEntry !== undefined)
+    files.push({
+      name: "src/entry.tsx",
+      data: text(overrides.sourceEntry),
       deflate: options.deflate,
     });
   return makeZip(files);
@@ -206,6 +213,7 @@ async function uploadZip(
   tenant: string,
   zip: Uint8Array,
   name = "plugin.zip",
+  env: typeof platform.env = platform.env,
 ): Promise<Response> {
   const form = new FormData();
   form.set(
@@ -215,8 +223,78 @@ async function uploadZip(
   return app(tenant).request(
     "http://localhost/api/plugin-store/upload",
     { method: "POST", body: form },
-    platform.env,
+    env,
   );
+}
+
+function raceStoreWritesAfterRead(db: D1Database): D1Database {
+  const writeVersions = new WeakMap<object, string>();
+  let latestReads = 0;
+  let releaseLatestReads!: () => void;
+  const bothLatestReads = new Promise<void>((resolve) => {
+    releaseLatestReads = resolve;
+  });
+  let releaseHigherWrite!: () => void;
+  const higherWriteFinished = new Promise<void>((resolve) => {
+    releaseHigherWrite = resolve;
+  });
+  const latestReadSql =
+    "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?";
+  return new Proxy(db, {
+    get(target, property) {
+      if (property === "prepare")
+        return (query: string) => {
+          const statement = target.prepare(query);
+          return new Proxy(statement, {
+            get(prepared, method) {
+              if (method === "bind")
+                return (...values: unknown[]) => {
+                  const bound = prepared.bind(...values);
+                  const normalizedQuery = query.trimStart();
+                  if (
+                    normalizedQuery.startsWith(
+                      "INSERT INTO plugin_store_artifacts",
+                    )
+                  )
+                    writeVersions.set(bound, String(values[2]));
+                  else if (
+                    normalizedQuery.startsWith("WITH candidate(p0,p1,p2) AS") &&
+                    normalizedQuery.includes(
+                      "INSERT INTO plugin_store_artifacts",
+                    )
+                  )
+                    writeVersions.set(
+                      bound,
+                      values.slice(0, 3).map(String).join("."),
+                    );
+                  return bound;
+                };
+              if (method === "all" && query === latestReadSql)
+                return async (...values: unknown[]) => {
+                  const result = await prepared.all(...values);
+                  if (++latestReads === 2) releaseLatestReads();
+                  await bothLatestReads;
+                  return result;
+                };
+              const value = Reflect.get(prepared, method, prepared);
+              return typeof value === "function" ? value.bind(prepared) : value;
+            },
+          });
+        };
+      if (property === "batch")
+        return async (statements: D1PreparedStatement[]) => {
+          const version = statements
+            .map((statement) => writeVersions.get(statement))
+            .find(Boolean);
+          if (version === "1.4.4") await higherWriteFinished;
+          const result = await target.batch(statements);
+          if (version === "1.4.5") releaseHigherWrite();
+          return result;
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
 }
 
 beforeAll(async () => {
@@ -981,6 +1059,76 @@ describe("plugin store por tenant", () => {
       (await uploadZip(tenant, pluginZip({ manifest: { version: "1.4.4" } })))
         .status,
     ).toBe(200);
+  });
+
+  it("orders long numeric version components without floating-point rounding", async () => {
+    const tenant = "store-large-version-components";
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({ manifest: { version: "9007199254740992.0.0" } }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({ manifest: { version: "9007199254740993.0.0" } }),
+        )
+      ).status,
+    ).toBe(200);
+  });
+
+  it("serializes concurrent version checks and stores source only for the winning artifact", async () => {
+    const tenant = "store-monotonic-race";
+    expect(
+      (await uploadZip(tenant, pluginZip({ manifest: { version: "1.4.3" } })))
+        .status,
+    ).toBe(200);
+    const env = {
+      ...platform.env,
+      DB: raceStoreWritesAfterRead(platform.env.DB),
+    };
+    const [higher, lower] = await Promise.all([
+      uploadZip(
+        tenant,
+        pluginZip({
+          manifest: { version: "1.4.5" },
+          sourceEntry: "export const render = () => 'higher';",
+        }),
+        "higher.zip",
+        env,
+      ),
+      uploadZip(
+        tenant,
+        pluginZip({
+          manifest: { version: "1.4.4" },
+          sourceEntry: "export const render = () => 'lower';",
+        }),
+        "lower.zip",
+        env,
+      ),
+    ]);
+
+    expect(higher.status, await higher.clone().text()).toBe(200);
+    expect(lower.status, await lower.clone().text()).toBe(409);
+    const artifacts = await platform.env.DB.prepare(
+      "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=? ORDER BY version",
+    )
+      .bind(tenant, "custom.demo")
+      .all<{ version: string }>();
+    expect(artifacts.results.map((row) => row.version)).toEqual([
+      "1.4.3",
+      "1.4.5",
+    ]);
+    const sources = await platform.env.DB.prepare(
+      "SELECT version FROM plugin_store_sources WHERE tenant_id=? AND id=? ORDER BY version",
+    )
+      .bind(tenant, "custom.demo")
+      .all<{ version: string }>();
+    expect(sources.results.map((row) => row.version)).toEqual(["1.4.5"]);
   });
 
   it("aplica cuota de 10 versiones por plugin.", async () => {

@@ -270,6 +270,8 @@ assets. The editor opens the source entry in Monaco and lets users edit source
 modules and text assets with their repository paths. Retained PNG/WebP data URIs
 are read-only. Preview and publication compile the edited module graph, including
 relative imports, `@savia` workspace aliases, CSS, and literal dynamic imports.
+Archives must contain exactly one source entry module; ambiguous entries are
+rejected rather than selecting a dependency by filename ordering.
 React, Zod, and PDF-lib are bundled locally; no dependency is downloaded during
 compilation. The old compiled entry is kept only for exact runtime recovery and
 is hidden while complete originals are available. Saving, exporting, importing,

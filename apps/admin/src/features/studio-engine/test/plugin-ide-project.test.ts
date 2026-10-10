@@ -14,7 +14,10 @@ import {
 } from "../plugin-ide-project";
 import { PLUGIN_PROJECT_MAX_BYTES } from "@savia/studio-shared/plugin-projects";
 import { createPluginPreviewDocument } from "../plugin-ide-preview";
-import { findMissingPluginSourceAssets } from "../plugin-source-compiler";
+import {
+  findMissingPluginSourceAssets,
+  pluginSourceEntry,
+} from "../plugin-source-compiler";
 
 function withEntry(entry: string): IdeFiles {
   return { ...createPluginProject(), "entry.tsx": entry };
@@ -311,6 +314,36 @@ export function render(element) { element.textContent = "Activities"; }`;
       ".edited-original { color: red; }",
     );
     expect(compiled.entryJs).not.toMatch(/\brequire\s*\(/);
+  });
+
+  it("rejects ambiguous source entries rather than publishing a dependency as the plugin", () => {
+    expect(() =>
+      pluginSourceEntry({
+        "packages/helper/entry.tsx": "",
+        "store-ports/demo/entry.tsx": "",
+      }),
+    ).toThrow("ambiguous entry modules");
+  });
+
+  it("escapes HTML-sensitive module paths and CSS while preserving runtime values", async () => {
+    const compiled = await compilePluginProject({
+      ...createPluginProject(),
+      "original-source.json": JSON.stringify({
+        "demo/entry.tsx":
+          'import { value } from "./</script>.ts"; import "./entry.css"; export function render(el) { el.textContent = value; }',
+        "demo/</script>.ts": 'export const value = "safe";',
+        "demo/entry.css": "/* </script> & \u2028 \u2029 */",
+      }),
+    });
+    expect(compiled.entryJs).not.toContain("</script>");
+    expect(compiled.entryJs).toContain("\\u003c/script\\u003e");
+    const render = new Function(
+      compiled.entryJs.replace(/export const /g, "const ") + "; return render;",
+    )() as (element: HTMLElement) => void;
+    const element = document.createElement("div");
+    render(element);
+    expect(element.textContent).toBe("safe");
+    expect(document.head.textContent).toContain("/* </script> &");
   });
 
   it("detects omitted historical assets in static, dynamic and CommonJS imports", () => {

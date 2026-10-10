@@ -445,44 +445,67 @@ export async function persistParsedStoreArtifact(
   }
   if (parsed.store && !hasConfigColumn)
     fail("Este entorno aún no soporta store.json (migración pendiente).", 428);
-  const artifactStatement = hasConfigColumn
-    ? db
-        .prepare(
-          `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,store_json,sha256,size_bytes,created_by)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
-        )
-        .bind(
-          tenant,
-          parsed.manifest.id,
-          parsed.manifest.version,
-          canonicalJson(parsed.manifest),
-          parsed.entryJs,
-          parsed.store ? canonicalJson(parsed.store) : null,
-          parsed.sha256,
-          parsed.sizeBytes,
-          principalId,
-        )
-    : db
-        .prepare(
-          `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes,created_by)
-         VALUES (?,?,?,?,?,?,?,?)`,
-        )
-        .bind(
-          tenant,
-          parsed.manifest.id,
-          parsed.manifest.version,
-          canonicalJson(parsed.manifest),
-          parsed.entryJs,
-          parsed.sha256,
-          parsed.sizeBytes,
-          principalId,
-        );
+  const [major, minor, patch] = parsed.manifest.version.split(".");
+  const nextVersionParts = [major, minor, patch] as const;
+  const versionPart = (index: number) =>
+    `substr(substr(version,instr(version,'.')+1),${index === 1 ? `1,instr(substr(version,instr(version,'.')+1),'.')-1` : `instr(substr(version,instr(version,'.')+1),'.')+1`})`;
+  const existingMajor = "substr(version,1,instr(version,'.')-1)";
+  const existingMinor = versionPart(1);
+  const existingPatch = versionPart(2);
+  // Versions are validated decimal triplets (up to 30 chars total). Compare
+  // zero-padded text so SQLite never rounds a large component through INTEGER.
+  const padded = (part: string) =>
+    `substr('000000000000000000000000000000'||${part},-30)`;
+  const artifactColumns = hasConfigColumn
+    ? "tenant_id,id,version,manifest,entry_js,store_json,sha256,size_bytes,created_by"
+    : "tenant_id,id,version,manifest,entry_js,sha256,size_bytes,created_by";
+  const artifactValues = hasConfigColumn
+    ? [
+        tenant,
+        parsed.manifest.id,
+        parsed.manifest.version,
+        canonicalJson(parsed.manifest),
+        parsed.entryJs,
+        parsed.store ? canonicalJson(parsed.store) : null,
+        parsed.sha256,
+        parsed.sizeBytes,
+        principalId,
+      ]
+    : [
+        tenant,
+        parsed.manifest.id,
+        parsed.manifest.version,
+        canonicalJson(parsed.manifest),
+        parsed.entryJs,
+        parsed.sha256,
+        parsed.sizeBytes,
+        principalId,
+      ];
+  const artifactStatement = db
+    .prepare(
+      `WITH candidate(p0,p1,p2) AS (VALUES (?,?,?)),
+       existing_parts AS (
+         SELECT ${existingMajor} AS p0, ${existingMinor} AS p1, ${existingPatch} AS p2
+         FROM plugin_store_artifacts WHERE tenant_id=? AND id=?
+       )
+       INSERT INTO plugin_store_artifacts(${artifactColumns})
+       SELECT ${artifactValues.map(() => "?").join(",")} FROM candidate c
+       WHERE NOT EXISTS (
+         SELECT 1 FROM existing_parts e
+         WHERE ${padded("e.p0")} > ${padded("c.p0")}
+            OR (${padded("e.p0")} = ${padded("c.p0")} AND ${padded("e.p1")} > ${padded("c.p1")})
+            OR (${padded("e.p0")} = ${padded("c.p0")} AND ${padded("e.p1")} = ${padded("c.p1")} AND ${padded("e.p2")} >= ${padded("c.p2")})
+       )`,
+    )
+    .bind(...nextVersionParts, tenant, parsed.manifest.id, ...artifactValues);
   const statements = [artifactStatement];
+  // D1 batch is transactional; only attach authored sources if the guarded
+  // artifact statement inserted its row.
   if (parsed.sourceFiles)
     statements.push(
       db
         .prepare(
-          "INSERT INTO plugin_store_sources(tenant_id,id,version,files) VALUES(?,?,?,?)",
+          "INSERT INTO plugin_store_sources(tenant_id,id,version,files) SELECT ?,?,?,? WHERE changes()=1",
         )
         .bind(
           tenant,
@@ -491,7 +514,35 @@ export async function persistParsedStoreArtifact(
           storedSourceFiles,
         ),
     );
-  await db.batch(statements);
+  const results = await db.batch(statements);
+  if (results[0]?.meta?.changes !== 1) {
+    const sameVersion = await db
+      .prepare(
+        "SELECT * FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+      )
+      .bind(tenant, parsed.manifest.id, parsed.manifest.version)
+      .first();
+    if (sameVersion)
+      return persistParsedStoreArtifact(db, tenant, principalId, parsed);
+    const latestVersions = await db
+      .prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+      .bind(tenant, parsed.manifest.id)
+      .all<{ version: string }>();
+    const latestVersion = latestVersions.results.reduce<string | null>(
+      (latest, candidate) =>
+        latest === null ||
+        compareSolutionVersions(candidate.version, latest) > 0
+          ? candidate.version
+          : latest,
+      null,
+    );
+    fail(
+      `La nueva versión debe ser mayor que la última versión publicada (${latestVersion ?? "desconocida"}).`,
+      409,
+    );
+  }
   await audit(
     db,
     tenant,

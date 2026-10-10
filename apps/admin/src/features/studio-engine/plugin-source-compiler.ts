@@ -5,14 +5,34 @@ import { validatePluginEntrySource } from "@savia/studio-shared/plugin-store";
 
 export function pluginSourceEntry(files: Record<string, string>): string {
   const names = Object.keys(files);
-  const entry = names.find((name) =>
+  const entries = names.filter((name) =>
     /(?:^|\/)entry\.(?:tsx|jsx|js)$/.test(name),
   );
+  if (entries.length > 1)
+    throw new Error(
+      `Plugin source has ambiguous entry modules: ${entries.join(", ")}.`,
+    );
+  const entry = entries[0];
   if (!entry)
     throw new Error(
       "Plugin source must include an entry.tsx, entry.jsx or entry.js module.",
     );
   return entry;
+}
+
+/** Serialize code literals safely even if a consumer embeds the bundle in HTML. */
+function javascriptLiteral(value: unknown): string {
+  const json = JSON.stringify(value);
+  if (json === undefined)
+    throw new Error("Cannot serialize an undefined code literal.");
+  const escapes: Record<string, string> = {
+    "<": "\\u003c",
+    ">": "\\u003e",
+    "&": "\\u0026",
+    "\u2028": "\\u2028",
+    "\u2029": "\\u2029",
+  };
+  return json.replace(/[<>&\u2028\u2029]/g, (character) => escapes[character]);
 }
 
 function normalizePath(path: string): string {
@@ -97,15 +117,15 @@ export async function compilePluginSourceArchive(
     const source = files[name];
     let code: string;
     if (name.endsWith(".css")) {
-      code = `const style = document.createElement("style"); style.textContent = ${JSON.stringify(source)}; document.head.appendChild(style);`;
+      code = `const style = document.createElement("style"); style.textContent = ${javascriptLiteral(source)}; document.head.appendChild(style);`;
     } else if (name.endsWith(".json")) {
-      code = `module.exports = ${JSON.stringify(JSON.parse(source))};`;
+      code = `module.exports = ${javascriptLiteral(JSON.parse(source))};`;
     } else if (/\.(png|webp)$/.test(name)) {
       if (!/^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=]+$/.test(source))
         throw new Error(`Invalid retained image: ${name}`);
-      code = `module.exports = ${JSON.stringify(source)};`;
+      code = `module.exports = ${javascriptLiteral(source)};`;
     } else if (name.endsWith(".svg")) {
-      code = `module.exports = ${JSON.stringify(`data:image/svg+xml,${encodeURIComponent(source)}`)};`;
+      code = `module.exports = ${javascriptLiteral(`data:image/svg+xml,${encodeURIComponent(source)}`)};`;
     } else {
       code = transform(source, {
         transforms: ["typescript", "jsx", "imports"],
@@ -145,7 +165,7 @@ export async function compilePluginSourceArchive(
             );
           const dependency = resolve(literal.value, name);
           visit(dependency);
-          const loaded = `__saviaImport(${JSON.stringify(dependency)})`;
+          const loaded = `__saviaImport(${javascriptLiteral(dependency)})`;
           replacements.push({
             start: node.start as number,
             end: node.end as number,
@@ -180,8 +200,8 @@ export async function compilePluginSourceArchive(
     runtimeBundle,
     ...dependencies,
     "const React = SaviaPluginReact.React;",
-    `const __saviaVendors = {${[...vendors].map((name) => `${JSON.stringify(name)}: ${registry[name]}`).join(",")}};`,
-    `const __saviaModules = {${[...modules].map(([name, code]) => `${JSON.stringify(name)}: (module, exports, __saviaImport) => {\n${code}\n}`).join(",\n")}};`,
+    `const __saviaVendors = {${[...vendors].map((name) => `${javascriptLiteral(name)}: ${registry[name]}`).join(",")}};`,
+    `const __saviaModules = {${[...modules].map(([name, code]) => `${javascriptLiteral(name)}: (module, exports, __saviaImport) => {\n${code}\n}`).join(",\n")}};`,
     "const __saviaCache = Object.create(null);",
     `function __saviaImport(name) {
       if (Object.hasOwn(__saviaVendors, name)) return __saviaVendors[name];
@@ -190,7 +210,7 @@ export async function compilePluginSourceArchive(
       const module = { exports: {} }; __saviaCache[name] = module;
       __saviaModules[name](module, module.exports, __saviaImport); return module.exports;
     }`,
-    `const __saviaEntry = __saviaImport(${JSON.stringify(entry)});`,
+    `const __saviaEntry = __saviaImport(${javascriptLiteral(entry)});`,
     ...["render", "renderPanel", "widgets", "screens"].map(
       (name) => `export const ${name} = __saviaEntry.${name};`,
     ),
