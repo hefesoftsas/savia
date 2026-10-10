@@ -1,3 +1,4 @@
+import { PLUGIN_PROJECT_MAX_BYTES } from "@savia/studio-shared/plugin-projects";
 import {
   useEffect,
   useLayoutEffect,
@@ -132,9 +133,9 @@ export default function PluginIde({
   const [history, setHistory] = useState<ChatMessage[]>(initialHistory ?? []);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [undo, setUndo] = useState<IdeFiles | null>(null);
-  const [busy, setBusy] = useState<"compile" | "publish" | "import" | null>(
-    null,
-  );
+  const [busy, setBusy] = useState<
+    "compile" | "publish" | "activate" | "import" | null
+  >(null);
   const [generating, setGenerating] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
   const [liveUsage, setLiveUsage] = useState<{
@@ -174,6 +175,7 @@ export default function PluginIde({
     version: string;
     snapshot: string;
     destination: "tenant" | "shared";
+    activated: boolean;
   } | null>(null);
   useEffect(() => {
     draftCallback.current?.({
@@ -559,7 +561,39 @@ export default function PluginIde({
       if (active.current) setBusy(null);
     }
   }
-  async function publish() {
+  async function installPublished(release: { id: string; version: string }) {
+    await pluginApi(
+      `/extensions/${encodeURIComponent(release.id)}/install`,
+      "POST",
+      { version: release.version },
+    );
+    if (!active.current) return;
+    setPublished((current) =>
+      current?.id === release.id && current.version === release.version
+        ? { ...current, activated: true }
+        : current,
+    );
+  }
+  async function activatePublished() {
+    if (
+      locked ||
+      !published ||
+      published.destination !== "tenant" ||
+      published.activated
+    )
+      return;
+    setBusy("activate");
+    setError("");
+    try {
+      await installPublished(published);
+      if (active.current) await onPublished();
+    } catch (reason) {
+      if (active.current) setError(message(reason));
+    } finally {
+      if (active.current) setBusy(null);
+    }
+  }
+  async function publish(activate = destination === "tenant") {
     if (locked || preview?.state !== "ready" || preview.snapshot !== snapshot)
       return;
     const revision = snapshot;
@@ -594,8 +628,21 @@ export default function PluginIde({
         form,
       );
       if (!active.current) return;
-      setPublished({ ...response.data, snapshot: revision, destination });
-      // Keep the publication receipt even when refreshing the catalog fails.
+      setPublished({
+        ...response.data,
+        snapshot: revision,
+        destination,
+        activated: false,
+      });
+      if (activate && destination === "tenant") {
+        try {
+          await installPublished(response.data);
+        } catch (reason) {
+          if (active.current) setError(message(reason));
+        }
+      }
+      if (!active.current) return;
+      // Keep the publication receipt even when activation or catalog refresh fails.
       await onPublished();
     } catch (reason) {
       if (active.current) setError(message(reason));
@@ -622,7 +669,7 @@ export default function PluginIde({
     if (!file || locked) return;
     setBusy("import");
     try {
-      if (file.size > 512 * 1024) throw new Error(t("tooLarge"));
+      if (file.size > PLUGIN_PROJECT_MAX_BYTES) throw new Error(t("tooLarge"));
       const next = parsePluginProject(await file.text());
       if (!active.current || !window.confirm(t("importConfirm"))) return;
       replaceFiles(next);
@@ -695,11 +742,24 @@ export default function PluginIde({
           <Button
             size="sm"
             disabled={!canPublish}
-            aria-label={t(busy === "publish" ? "publishing" : "publish")}
+            aria-label={t(
+              busy === "publish"
+                ? "publishing"
+                : destination === "tenant"
+                  ? "publishAndActivate"
+                  : "publish",
+            )}
+            title={!canPublish ? t("previewBeforePublish") : undefined}
             onClick={() => void publish()}
           >
             <Upload aria-hidden="true" />
-            {t(busy === "publish" ? "publishing" : "publishShort")}
+            {t(
+              busy === "publish"
+                ? "publishing"
+                : destination === "tenant"
+                  ? "publishAndActivateShort"
+                  : "publishShort",
+            )}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -713,6 +773,15 @@ export default function PluginIde({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {destination === "tenant" && (
+                <DropdownMenuItem
+                  disabled={!canPublish}
+                  onSelect={() => void publish(false)}
+                >
+                  <Upload aria-hidden="true" />
+                  {t("publishOnly")}
+                </DropdownMenuItem>
+              )}
               {preview && (
                 <DropdownMenuItem
                   onSelect={() => {
@@ -815,10 +884,22 @@ export default function PluginIde({
             {t(
               published.destination === "shared"
                 ? "sharedPublished"
-                : "published",
+                : published.activated
+                  ? "publishedActive"
+                  : "published",
             )}
             : {published.id} · {published.version}. {t("versionHint")}
           </span>
+          {published.destination === "tenant" && !published.activated && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={locked}
+              onClick={() => void activatePublished()}
+            >
+              {t(busy === "activate" ? "activating" : "activateVersion")}
+            </Button>
+          )}
         </div>
       )}
       <div className="plugin-ide-workbench">

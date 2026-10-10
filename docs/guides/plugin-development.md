@@ -236,7 +236,11 @@ Publication is enabled only after the current revision previews successfully.
 Any edit invalidates that preview. The preview gate is checked immediately before
 upload starts; a later runtime error does not roll back an acknowledged release.
 **Publish to store** uploads the validated ZIP
-to this workspace's store; installation is a separate store action. Existing
+to this workspace's store and activates that exact version in the workspace.
+For an installed plugin with the same ID, this updates its active version.
+**Publish without activating** in project options retains a catalog-only release.
+If activation fails, the publication receipt offers **Activate this version**
+to retry without uploading again. Existing
 permission checks, quotas and immutable versions still apply. Increment the
 manifest version for a changed release. When the deployment explicitly configures
 a separate registry publisher credential, a destination selector also offers the
@@ -254,10 +258,12 @@ before unloading while a server save is still pending. Do not close the page unt
 
 **Edit source** on a store release creates a new project from its retained source
 and increments a plain semantic patch version. Older packages uploaded without
-authoring sources open as a synthesized editable copy built from the retained
-manifest and store configuration, with a notice that the original source was
-not stored. Runtime artifacts and sources are retained atomically; published
-source versions are immutable. The **Create plugin** project list also offers
+authoring sources open the retained compiled JavaScript together with the original
+manifest and store configuration. A notice identifies this as a compiled copy; original TSX
+cannot be reconstructed from the bundle. Preview runs the actual plugin rather
+than a replacement starter. Reopen the published version to recover it; existing
+projects created from the older counter fallback remain separate drafts. Runtime artifacts and sources are retained atomically;
+published source versions are immutable. The **Create plugin** project list also offers
 published store versions to open as new projects. **Export project**
 and **Import project** remain available for portable four-file JSON backups (chat
 history is saved in server projects but is not included in that portable export).
@@ -270,6 +276,8 @@ in `PLUGIN_REGISTRY_TENANTS`; see [the registry guide](plugin-registry.md).
 This first authoring contract supports one TSX module, built-in React, and the
 Savia host API. It does not install arbitrary npm dependencies, run Node processes,
 or grant direct network access. Use the repository SDK/build workflow for plugins
-requiring extra bundled libraries. Each authoring file is limited to 100 KB;
+requiring extra bundled libraries. AI authoring files remain limited to 100 KB.
+Saved editor projects accept up to 2 MB in `entry.tsx` for compiled release recovery, 100 KB per configuration
+file, and 5 MB for serialized project JSON (including escape sequences);
 preview fixtures allow up to 200 records per collection. Existing store artifact
 size and quota limits apply independently.
