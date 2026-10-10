@@ -231,15 +231,24 @@ export default function PluginIde({
     const element = conversation.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [history, generating, proposal, chatError, streamingMessage, queue]);
-  function openFile(name: keyof IdeFiles) {
+  function openFile(name: string) {
     const original = Object.hasOwn(originalFiles, name);
+    if (!original && !Object.hasOwn(files, name)) return;
     setSelectedOriginal(original ? name : null);
-    if (!original) setSelected(name);
+    if (!original) setSelected(name as keyof IdeFiles);
     setOpenFiles((current) =>
       current.includes(name) ? current : [...current, name],
     );
-    const visit = original ? setVisitedOriginal : setVisitedFiles;
-    visit((current) => (current.includes(name) ? current : [...current, name]));
+    if (original) {
+      setVisitedOriginal((current) =>
+        current.includes(name) ? current : [...current, name],
+      );
+    } else {
+      const projectFile = name as keyof IdeFiles;
+      setVisitedFiles((current) =>
+        current.includes(projectFile) ? current : [...current, projectFile],
+      );
+    }
     setReviewFile(null);
     setPane("code");
   }

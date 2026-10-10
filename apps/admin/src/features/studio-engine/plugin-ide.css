@@ -178,7 +178,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.plugin-file-tree-root {
+.plugin-file-tree-root > .plugin-file-tree-row {
   font-weight: 600;
 }
 .plugin-file-tree-file {
