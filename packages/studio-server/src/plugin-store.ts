@@ -412,6 +412,28 @@ export async function persistParsedStoreArtifact(
     };
   }
 
+  const catalogVersions = await db
+    .prepare(
+      "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+    )
+    .bind(tenant, parsed.manifest.id)
+    .all<{ version: string }>();
+  const latestVersion = catalogVersions.results.reduce<string | null>(
+    (latest, candidate) =>
+      latest === null || compareSolutionVersions(candidate.version, latest) > 0
+        ? candidate.version
+        : latest,
+    null,
+  );
+  if (
+    latestVersion !== null &&
+    compareSolutionVersions(parsed.manifest.version, latestVersion) <= 0
+  )
+    fail(
+      `La nueva versión debe ser mayor que la última versión publicada (${latestVersion}).`,
+      409,
+    );
+
   await assertStoreQuota(db, tenant, parsed.manifest.id, parsed.sizeBytes);
   let hasConfigColumn = true;
   try {

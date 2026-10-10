@@ -50,9 +50,14 @@ export const pluginIdeMessages = {
     "Código-fonte original",
   ],
   originalSourceHint: [
-    "Archivos originales de la versión publicada, solo para consulta. La vista previa y la publicación usan entry.tsx.",
-    "Original files from the published version, for reference only. Preview and publication use entry.tsx.",
-    "Arquivos originais da versão publicada, apenas para consulta. A prévia e a publicação usam entry.tsx.",
+    "Edita los archivos del plugin. La vista previa y la publicación compilan estos cambios como una versión nueva.",
+    "Edit the plugin files. Preview and publication build these changes as a new version.",
+    "Edite os arquivos do plugin. A prévia e a publicação compilam essas alterações como uma nova versão.",
+  ],
+  sourceChatHint: [
+    "Modifica este plugin desde el editor de código. El asistente aún no edita proyectos con varios módulos.",
+    "Edit this plugin in the code editor. The assistant does not yet edit projects with multiple modules.",
+    "Modifique este plugin no editor de código. O assistente ainda não edita projetos com vários módulos.",
   ],
   openFiles: ["Archivos abiertos", "Open files", "Arquivos abertos"],
   closeFile: ["Cerrar", "Close", "Fechar"],

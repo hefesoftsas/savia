@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import { MonacoCodeEditor } from "../monaco-code-editor";
 
@@ -173,6 +173,29 @@ it("initializes with the latest content if it changes during lazy loading", asyn
     resolve(monaco());
   });
   expect(mocks.create.mock.results[0].value.getValue()).toBe("newest");
+});
+
+it("keeps the labeled fallback editable and monospaced when Monaco fails to load", async () => {
+  mocks.load.mockRejectedValue(new Error("Monaco unavailable"));
+  const change = vi.fn();
+  render(
+    <MonacoCodeEditor
+      value="const answer = 42;"
+      language="typescript"
+      ariaLabel="Plugin entry source"
+      onChange={change}
+    />,
+  );
+
+  const fallback = await screen.findByRole("textbox", {
+    name: "Plugin entry source",
+  });
+  expect(fallback).toHaveValue("const answer = 42;");
+  expect(fallback).not.toHaveAttribute("readonly");
+  expect(fallback).toHaveStyle({ fontFamily: "ui-monospace, monospace" });
+
+  fireEvent.change(fallback, { target: { value: "export default 42;" } });
+  expect(change).toHaveBeenCalledWith("export default 42;");
 });
 
 it("changes read-only mode without discarding the editor and its undo history", async () => {

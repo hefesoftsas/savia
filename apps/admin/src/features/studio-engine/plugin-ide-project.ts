@@ -13,6 +13,8 @@ import {
   PLUGIN_PROJECT_MAX_BYTES as MAX_PROJECT_BYTES,
 } from "@savia/studio-shared/plugin-projects";
 
+import { compilePluginSourceArchive } from "./plugin-source-compiler";
+
 export type IdeFiles = {
   "entry.tsx": string;
   "savia-extension.json": string;
@@ -147,6 +149,12 @@ export async function compilePluginProject(filesInput: IdeFiles): Promise<{
   for (const collection of store.collections)
     sanitizeStoreCollection(collection);
   const fixtures = parseFixtures(files["preview.json"]);
+  if (files["original-source.json"]) {
+    const entryJs = await compilePluginSourceArchive(
+      files["original-source.json"],
+    );
+    return { entryJs, manifest, store, fixtures };
+  }
   rejectSourceImports(files["entry.tsx"]);
   validatePluginEntrySource(files["entry.tsx"]);
 

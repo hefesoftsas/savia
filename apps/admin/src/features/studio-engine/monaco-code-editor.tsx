@@ -228,6 +228,7 @@ export function MonacoCodeEditor({
         spellCheck={false}
         aria-label={ariaLabel}
         placeholder={placeholder}
+        style={{ fontFamily: "ui-monospace, monospace" }}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />

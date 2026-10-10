@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "custom.http-echo",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "label": "Eco HTTP (demo)",
   "description": "Demuestra conectores declarativos: llama un endpoint del tenant con secretos.",
   "labels": {

@@ -956,6 +956,33 @@ describe("plugin store por tenant", () => {
     expect(installedBody.data.version).toBe("1.10.0");
   });
 
+  it("rejects new releases below the current latest but permits unchanged retries", async () => {
+    const tenant = "store-monotonic-version";
+    expect(
+      (await uploadZip(tenant, pluginZip({ manifest: { version: "1.4.3" } })))
+        .status,
+    ).toBe(200);
+
+    const oldRetry = await uploadZip(
+      tenant,
+      pluginZip({ manifest: { version: "1.4.3" } }),
+    );
+    expect(oldRetry.status).toBe(200);
+    expect(((await oldRetry.json()) as any).data.deduped).toBe(true);
+
+    const lower = await uploadZip(
+      tenant,
+      pluginZip({ manifest: { version: "1.2.0" } }),
+    );
+    expect(lower.status).toBe(409);
+    expect(await lower.text()).toContain("mayor");
+
+    expect(
+      (await uploadZip(tenant, pluginZip({ manifest: { version: "1.4.4" } })))
+        .status,
+    ).toBe(200);
+  });
+
   it("aplica cuota de 10 versiones por plugin.", async () => {
     const tenant = "store-quota";
     for (let minor = 0; minor < 10; minor++) {

@@ -648,8 +648,51 @@ export default function PluginStoreManager({
                           })
                         }
                       >
-                        {ideT("editSource")}
+                        {locale.startsWith("es")
+                          ? "Editar última versión"
+                          : locale.startsWith("pt")
+                            ? "Editar última versão"
+                            : "Edit latest"}
                       </Button>
+                      {group.versions.length > 1 ? (
+                        <details className="basis-full text-sm">
+                          <summary className="cursor-pointer text-muted-foreground">
+                            {locale.startsWith("es")
+                              ? `Versiones anteriores (${group.versions.length - 1})`
+                              : locale.startsWith("pt")
+                                ? `Versões anteriores (${group.versions.length - 1})`
+                                : `Older versions (${group.versions.length - 1})`}
+                          </summary>
+                          <div className="mt-2 grid gap-2">
+                            {group.versions.slice(1).map((version) => (
+                              <div
+                                key={version.version}
+                                className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5"
+                              >
+                                <span className="font-mono text-xs">
+                                  {version.version}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    openPluginStudio({
+                                      id: version.manifest.id,
+                                      version: version.version,
+                                    })
+                                  }
+                                >
+                                  {locale.startsWith("es")
+                                    ? "Usar como base"
+                                    : locale.startsWith("pt")
+                                      ? "Usar como base"
+                                      : "Use as base"}
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
                       {!item.installed ? (
                         <Button
                           size="sm"

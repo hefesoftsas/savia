@@ -128,6 +128,15 @@ it("loads the selected release source into a new project and clears the deep lin
     pluginTransport: async (path, init) => {
       calls.push(path);
       if (path === "/api/plugin-projects") return Response.json({ data: [] });
+      if (path === "/api/plugin-store")
+        return Response.json({
+          data: [
+            {
+              manifest: { id: "custom.demo", label: "Demo" },
+              version: "1.0.0",
+            },
+          ],
+        });
       if (path.startsWith("/api/plugin-store/custom.demo/source?"))
         return Response.json({ data: { files, history: [] } });
       if (path.endsWith("/registry"))
@@ -203,13 +212,176 @@ it("lists published store versions and opens the selected one as a new project",
   });
   render(<Workspace tenantId={1} onClose={() => {}} onPublished={() => {}} />);
   expect(await screen.findByText("Abrir un plugin existente")).toBeVisible();
-  fireEvent.click(await screen.findByRole("button", { name: "Editar" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Editar última versión" }),
+  );
   expect(await screen.findByLabelText("source")).toHaveValue("original");
   expect(
     calls.some(
       (path) => path === "/api/plugin-store/custom.demo/source?version=1.0.0",
     ),
   ).toBe(true);
+});
+it("marks only latest release for editing and forks older source at latest plus one patch", async () => {
+  const calls: { path: string; body: any }[] = [];
+  const catalog = [
+    {
+      manifest: { id: "custom.demo", label: "Demo", version: "1.2.0" },
+      version: "1.2.0",
+    },
+    {
+      manifest: { id: "custom.demo", label: "Demo", version: "1.4.3" },
+      version: "1.4.3",
+    },
+  ];
+  const oldFiles = {
+    ...files,
+    "savia-extension.json": JSON.stringify({
+      format: "savia.extension",
+      formatVersion: 1,
+      id: "custom.demo",
+      version: "1.2.0",
+      label: "Demo",
+      description: "Demo plugin.",
+      requires: [],
+      apiVersion: 1,
+    }),
+  };
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path, init) => {
+      calls.push({
+        path,
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      if (path === "/api/plugin-projects") return Response.json({ data: [] });
+      if (path === "/api/plugin-store") return Response.json({ data: catalog });
+      if (path === "/api/plugin-store/custom.demo/source?version=1.2.0")
+        return Response.json({ data: { files: oldFiles, history: [] } });
+      if (path.endsWith("/registry"))
+        return Response.json({ canPublish: false });
+      if (init?.method === "PUT") {
+        return Response.json({
+          data: {
+            id: "older-base-draft",
+            label: "Demo",
+            files: JSON.parse(String(init.body)).files,
+            history: [],
+            version: 1,
+            updatedAt: "today",
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    },
+  });
+  render(<Workspace tenantId={1} onClose={() => {}} onPublished={() => {}} />);
+
+  expect(
+    await screen.findByRole("button", { name: "Editar última versión" }),
+  ).toBeVisible();
+  expect(
+    screen.getByText("Versiones anteriores (1)").closest("details"),
+  ).not.toHaveAttribute("open");
+  fireEvent.click(screen.getByText("Versiones anteriores (1)"));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Usar como base" }),
+  );
+
+  expect(await screen.findByLabelText("source")).toHaveValue("original");
+  await waitFor(() =>
+    expect(
+      calls.filter((call) => call.path === "/api/plugin-store"),
+    ).toHaveLength(2),
+  );
+  const fork = calls.find((call) => call.body?.version === 0);
+  expect(fork?.body.files["savia-extension.json"]).toContain(
+    '"version": "1.4.4"',
+  );
+  expect(
+    calls.some(
+      (call) =>
+        call.path === "/api/plugin-store/custom.demo/source?version=1.2.0",
+    ),
+  ).toBe(true);
+  expect(
+    calls.some(
+      (call) =>
+        call.path === "/api/plugin-store/custom.demo/source?version=1.4.3",
+    ),
+  ).toBe(false);
+});
+it("recovers compiled JavaScript when an older source archive omits imported assets", async () => {
+  const calls: { path: string; body: any }[] = [];
+  const incompleteSource = {
+    ...files,
+    "original-source.json": JSON.stringify({
+      "src/entry.tsx":
+        'import logo from "./logo.svg"; export const render = () => logo;',
+    }),
+  };
+  const compiledEntry = "export const render = () => 'retained runtime';";
+  setStudioRuntime({
+    embedded: true,
+    tenantId: 1,
+    pluginTransport: async (path, init) => {
+      calls.push({
+        path,
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      if (path === "/api/plugin-projects") return Response.json({ data: [] });
+      if (path === "/api/plugin-store")
+        return Response.json({
+          data: [
+            {
+              manifest: { id: "custom.demo", label: "Demo" },
+              version: "1.0.0",
+            },
+          ],
+        });
+      if (path === "/api/plugin-store/custom.demo/source?version=1.0.0")
+        return Response.json({
+          data: { files: incompleteSource, history: [], synthesized: false },
+        });
+      if (path === "/api/plugin-store/custom.demo/entry?version=1.0.0")
+        return new Response(compiledEntry, {
+          headers: { "content-type": "text/javascript" },
+        });
+      if (path.endsWith("/registry"))
+        return Response.json({ canPublish: false });
+      if (init?.method === "PUT")
+        return Response.json({
+          data: {
+            id: "recovered-draft",
+            label: "Demo",
+            files: JSON.parse(String(init.body)).files,
+            history: [],
+            version: 1,
+            updatedAt: "today",
+          },
+        });
+      throw new Error(`Unexpected request: ${path}`);
+    },
+  });
+  render(<Workspace tenantId={1} onClose={() => {}} onPublished={() => {}} />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Editar última versión" }),
+  );
+  expect(await screen.findByLabelText("source")).toHaveValue(compiledEntry);
+  expect(
+    await screen.findByText(/no conserva todos sus archivos fuente/i),
+  ).toBeVisible();
+  await waitFor(() =>
+    expect(
+      calls.some(
+        (call) =>
+          call.body?.version === 0 &&
+          call.body.files["entry.tsx"] === compiledEntry &&
+          !call.body.files["original-source.json"],
+      ),
+    ).toBe(true),
+  );
 });
 it("shows a compact localized date instead of the raw timestamp", async () => {
   const updatedAt = "2026-10-04T21:40:44.008Z";
@@ -236,6 +408,15 @@ it("shows a dismissible notice when the store source was synthesized", async () 
     tenantId: 1,
     pluginTransport: async (path, init) => {
       if (path === "/api/plugin-projects") return Response.json({ data: [] });
+      if (path === "/api/plugin-store")
+        return Response.json({
+          data: [
+            {
+              manifest: { id: "custom.demo", label: "Demo" },
+              version: "1.0.0",
+            },
+          ],
+        });
       if (path.startsWith("/api/plugin-store/custom.demo/source?"))
         return Response.json({
           data: { files, history: [], synthesized: true },
