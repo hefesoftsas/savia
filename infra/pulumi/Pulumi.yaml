@@ -1,0 +1,19 @@
+name: savia-cloudflare
+description: Savia Cloudflare stateful infrastructure (D1 + R2). Worker code still deploys via Wrangler.
+runtime: nodejs
+template:
+  config:
+    cloudflare:apiToken:
+      description: Cloudflare API token (Workers + D1 + R2)
+      secret: true
+    savia-cloudflare:accountId:
+      description: Cloudflare account ID
+    savia-cloudflare:environment:
+      description: preview or production
+      default: preview
+    savia-cloudflare:publicOrigin:
+      description: Public HTTPS origin (must be isolated per environment)
+    savia-cloudflare:documentsBucket:
+      description: R2 documents bucket (must be isolated per environment)
+    savia-cloudflare:pagesSearchIndex:
+      description: Optional Vectorize index name (preview must use the preview index)
