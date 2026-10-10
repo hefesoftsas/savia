@@ -9,6 +9,11 @@ import type { Env } from "./context";
 import { fail } from "./context";
 import type { PluginStoreOptions } from "./plugin-store";
 
+import {
+  encodePluginFilesJson,
+  decodePluginFilesJson,
+} from "./plugin-file-storage";
+
 const MAX_PROJECTS_PER_SCOPE = 100;
 
 type ProjectRow = {
@@ -33,10 +38,12 @@ function projectLabel(filesJson: string): string {
   }
 }
 
-function toProject(row: ProjectRow) {
+async function toProject(row: ProjectRow) {
   return {
     id: row.id,
-    files: JSON.parse(row.files) as PluginProjectFiles,
+    files: JSON.parse(
+      await decodePluginFilesJson(row.files),
+    ) as PluginProjectFiles,
     history: JSON.parse(row.history) as Array<{
       role: "user" | "assistant";
       content: string;
@@ -117,7 +124,7 @@ export function registerPluginProjects(
       .bind(tenant, principalId, id.data)
       .first<ProjectRow>();
     if (!row) return fail("Plugin project not found.", 404);
-    return c.json({ data: toProject(row) });
+    return c.json({ data: await toProject(row) });
   });
 
   app.put("/api/plugin-projects/:id", async (c) => {
@@ -137,7 +144,9 @@ export function registerPluginProjects(
     const parsed = pluginProjectSaveSchema.safeParse(input);
     if (!parsed.success) return fail("Invalid plugin project.", 422);
     const now = new Date().toISOString();
-    const label = projectLabel(JSON.stringify(parsed.data.files));
+    const filesJson = JSON.stringify(parsed.data.files);
+    const label = projectLabel(filesJson);
+    const storedFiles = await encodePluginFilesJson(filesJson);
     if (parsed.data.version === 0) {
       let inserted: { meta: { changes: number } };
       try {
@@ -151,7 +160,7 @@ export function registerPluginProjects(
             principalId,
             id.data,
             label,
-            JSON.stringify(parsed.data.files),
+            storedFiles,
             JSON.stringify(parsed.data.history),
             now,
             tenant,
@@ -174,7 +183,7 @@ export function registerPluginProjects(
       )
         .bind(
           label,
-          JSON.stringify(parsed.data.files),
+          storedFiles,
           JSON.stringify(parsed.data.history),
           now,
           tenant,

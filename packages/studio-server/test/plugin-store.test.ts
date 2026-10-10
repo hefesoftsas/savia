@@ -972,6 +972,33 @@ describe("plugin store por tenant", () => {
     expect(rejected.status).toBe(409);
   });
 
+  it("allows catalogs above 20 MiB but keeps the 64 MiB tenant limit", async () => {
+    const seedUsage = async (tenant: string, sizeBytes: number) => {
+      await platform.env.DB.prepare(
+        "INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes) VALUES (?,?,?,?,?,?,?)",
+      )
+        .bind(
+          tenant,
+          "custom.seed",
+          "1.0.0",
+          JSON.stringify({ id: "custom.seed", version: "1.0.0" }),
+          "export function render() {}",
+          "seed",
+          sizeBytes,
+        )
+        .run();
+    };
+
+    const catalogTenant = "store-quota-catalog-over-20";
+    await seedUsage(catalogTenant, 25 * 1024 * 1024);
+    const accepted = await uploadZip(catalogTenant, pluginZip());
+    expect(accepted.status, await accepted.text()).toBe(200);
+
+    const fullTenant = "store-quota-over-64";
+    await seedUsage(fullTenant, 64 * 1024 * 1024);
+    expect((await uploadZip(fullTenant, pluginZip())).status).toBe(413);
+  });
+
   it("rechaza versiones duplicadas con distinto contenido.", async () => {
     const tenant = "store-dedupe";
     const first = await uploadZip(tenant, pluginZip());

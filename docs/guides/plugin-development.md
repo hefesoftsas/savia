@@ -290,5 +290,11 @@ requiring extra bundled libraries. AI authoring files remain limited to 100 KB.
 Saved editor projects accept up to 2 MB in `entry.tsx` for compiled release recovery, 100 KB per configuration
 file, and 5 MB for serialized project JSON (including escape sequences);
 the optional original source archive accepts up to 256 files and 2 MB.
-preview fixtures allow up to 200 records per collection. Existing store artifact
-size and quota limits apply independently.
+preview fixtures allow up to 200 records per collection. Store artifacts are
+limited to 6 MB each, with a 64 MiB aggregate quota per tenant and up to 10
+versions per plugin.
+
+Large retained source records and editor drafts are compressed transparently on
+backend storage to fit the database row limit. The API and editor recover the
+exact original file text; existing uncompressed records remain readable. Records
+that still exceed the storage limit after compression are rejected before writing.

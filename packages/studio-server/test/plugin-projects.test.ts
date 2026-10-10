@@ -10,6 +10,20 @@ let platform: Awaited<
 >;
 
 const encoder = new TextEncoder();
+const MIB = 1024 * 1024;
+
+function largeSourceFixture() {
+  const entry = `/*${"e".repeat(1_200_000)}*/\nexport function Plugin() { return <main>Large draft</main>; }`;
+  const originalModule = `/*${"o".repeat(1_100_000)}*/\nexport function Original() { return <main>Original source</main>; }`;
+  const originalSource = JSON.stringify({
+    "packages/large-plugin/src/plugin.tsx": originalModule,
+  });
+  return { entry, originalModule, originalSource };
+}
+
+function byteLength(value: string): number {
+  return encoder.encode(value).byteLength;
+}
 
 function zip(files: Array<[string, string]>): Uint8Array {
   const chunks: Uint8Array[] = [];
@@ -229,6 +243,70 @@ describe("durable plugin projects and release source", () => {
     ).toBe(404);
   });
 
+  it("round-trips large original sources in draft storage below the D1 row limit", async () => {
+    const id = "e684bf6d-ab86-42e5-ae84-2f1a3fd0b2cb";
+    const { entry, originalSource } = largeSourceFixture();
+    expect(byteLength(entry)).toBeGreaterThan(1_200_000);
+    expect(byteLength(entry)).toBeLessThan(2 * MIB);
+    expect(byteLength(originalSource)).toBeGreaterThan(1_100_000);
+    expect(byteLength(originalSource)).toBeLessThan(2 * MIB);
+    const draftFiles = {
+      "entry.tsx": entry,
+      "savia-extension.json": manifest,
+      "store.json": "{}",
+      "preview.json": "{}",
+      "original-source.json": originalSource,
+    };
+
+    const saved = await request(
+      "large-draft",
+      "owner",
+      `/api/plugin-projects/${id}`,
+      "PUT",
+      { files: draftFiles, history: [], version: 0 },
+    );
+    expect(saved.status, JSON.stringify(saved.body).slice(0, 500)).toBe(200);
+    expect(saved.body.data.files).toEqual(draftFiles);
+    const stored = await platform.env.DB.prepare(
+      "SELECT files FROM plugin_authoring_projects WHERE tenant_id=? AND principal_id=? AND id=?",
+    )
+      .bind("large-draft", "owner", id)
+      .first<{ files: string }>();
+    expect(stored).toBeTruthy();
+    expect(byteLength(stored!.files)).toBeLessThan(1_800_000);
+
+    const loaded = await request(
+      "large-draft",
+      "owner",
+      `/api/plugin-projects/${id}`,
+    );
+    expect(loaded.status).toBe(200);
+    expect(loaded.body.data.files).toEqual(draftFiles);
+
+    const updatedFiles = {
+      ...draftFiles,
+      "entry.tsx": `${entry}\n// updated draft`,
+    };
+    const updated = await request(
+      "large-draft",
+      "owner",
+      `/api/plugin-projects/${id}`,
+      "PUT",
+      { files: updatedFiles, history: [], version: 1 },
+    );
+    expect(updated.status, JSON.stringify(updated.body).slice(0, 500)).toBe(
+      200,
+    );
+    expect(updated.body.data.files).toEqual(updatedFiles);
+    const reloaded = await request(
+      "large-draft",
+      "owner",
+      `/api/plugin-projects/${id}`,
+    );
+    expect(reloaded.status).toBe(200);
+    expect(reloaded.body.data.files).toEqual(updatedFiles);
+  });
+
   it("recovers editable compiled entry alongside original source archive", async () => {
     const entry = "export function render(el) { el.textContent = 'compiled'; }";
     const originalSource = JSON.stringify({
@@ -445,5 +523,76 @@ describe("durable plugin projects and release source", () => {
       platform.env,
     );
     expect(deletedSource.status).toBe(404);
+  });
+
+  it("stores and dedupes large original-source archives without exceeding D1 row limits", async () => {
+    const tenant = "large-store-source";
+    const { entry, originalModule, originalSource } = largeSourceFixture();
+    const largeManifest = JSON.stringify({
+      ...JSON.parse(manifest),
+      id: "custom.large-source",
+    });
+    const makeZip = (sourceArchive: string) =>
+      zip([
+        ["savia-extension.json", largeManifest],
+        ["dist/plugin.js", "export function render() {}"],
+        ["src/entry.tsx", entry],
+        ["src/preview.json", "{}"],
+        ["src/original-source.json", sourceArchive],
+      ]);
+    const sourceZip = makeZip(originalSource);
+    expect(byteLength(entry)).toBeGreaterThan(1_200_000);
+    expect(byteLength(originalSource)).toBeGreaterThan(1_100_000);
+
+    const upload = async (archive: Uint8Array) => {
+      const form = new FormData();
+      form.set(
+        "file",
+        new File([archive as BlobPart], "large-source.zip", {
+          type: "application/zip",
+        }),
+      );
+      return app(tenant, "admin").request(
+        "http://localhost/api/plugin-store/upload",
+        { method: "POST", body: form },
+        platform.env,
+      );
+    };
+
+    const first = await upload(sourceZip);
+    expect(first.status, (await first.text()).slice(0, 500)).toBe(200);
+    const duplicate = await upload(sourceZip);
+    expect(duplicate.status).toBe(200);
+    expect(((await duplicate.json()) as any).data.deduped).toBe(true);
+
+    const stored = await platform.env.DB.prepare(
+      "SELECT files FROM plugin_store_sources WHERE tenant_id=? AND id=? AND version=?",
+    )
+      .bind(tenant, "custom.large-source", "1.0.0")
+      .first<{ files: string }>();
+    expect(stored).toBeTruthy();
+    expect(byteLength(stored!.files)).toBeLessThan(1_800_000);
+
+    const recovered = await app(tenant, "admin").request(
+      "http://localhost/api/plugin-store/custom.large-source/source?version=1.0.0",
+      {},
+      platform.env,
+    );
+    expect(recovered.status).toBe(200);
+    const recoveredBody = (await recovered.json()) as any;
+    expect(recoveredBody.data.files["entry.tsx"]).toBe(entry);
+    expect(recoveredBody.data.files["original-source.json"]).toBe(
+      originalSource,
+    );
+    expect(
+      JSON.parse(recoveredBody.data.files["original-source.json"])[
+        "packages/large-plugin/src/plugin.tsx"
+      ],
+    ).toBe(originalModule);
+
+    const changedOriginal = makeZip(
+      originalSource.replace("Original source", "Changed original"),
+    );
+    expect((await upload(changedOriginal)).status).toBe(409);
   });
 });
