@@ -6,9 +6,11 @@
 // Afterwards run scripts/apply-d1-migrations.mjs to catch up with any
 // migrations newer than the backup, then redeploy workers via CI.
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { buildR2ObjectPutCommand } from "./backup.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,6 +35,20 @@ export function parseRestoreArgs(argv) {
     );
   }
   return { manifest, dryRun, skipInfra, confirm };
+}
+
+// Lists files under dir as slash-separated keys (R2 object names).
+export async function listLocalFiles(dir, base = dir) {
+  const entries = [];
+  for (const name of await readdir(dir)) {
+    const full = join(dir, name);
+    if ((await stat(full)).isDirectory()) {
+      entries.push(...(await listLocalFiles(full, base)));
+    } else {
+      entries.push(relative(base, full).split(sep).join("/"));
+    }
+  }
+  return entries.sort();
 }
 
 function flagValue(argv, flag) {
@@ -136,13 +152,25 @@ async function main() {
     console.log(`Restored D1 ${dbName}`);
   }
   if (manifest.r2) {
-    const [command, args] = buildR2RestoreCommand({
-      bucket,
-      sourceDir: manifest.r2.path,
-      accountId,
-    });
-    await execFileAsync(command, args, { cwd: repoRoot });
-    console.log(`Restored R2 ${bucket}`);
+    if (manifest.r2.method === "object-get") {
+      for (const key of await listLocalFiles(manifest.r2.path)) {
+        const [command, args] = buildR2ObjectPutCommand({
+          bucket,
+          key,
+          sourceFile: join(manifest.r2.path, ...key.split("/")),
+        });
+        await execFileAsync(command, args, { cwd: repoRoot });
+      }
+      console.log(`Restored R2 ${bucket} object by object`);
+    } else {
+      const [command, args] = buildR2RestoreCommand({
+        bucket,
+        sourceDir: manifest.r2.path,
+        accountId,
+      });
+      await execFileAsync(command, args, { cwd: repoRoot });
+      console.log(`Restored R2 ${bucket}`);
+    }
   }
   console.log(
     "Restore complete. Next: node scripts/apply-d1-migrations.mjs, then redeploy workers via CI.",

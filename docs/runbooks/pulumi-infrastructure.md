@@ -70,10 +70,20 @@ node backup.mjs --stack production --apply            # D1 exports + R2 sync
 node backup.mjs --stack production --apply --skip-r2  # metadata-only
 ```
 
+Databases with FTS5 virtual tables cannot use `wrangler d1 export`
+(Cloudflare refuses); backup falls back automatically to a table-by-table
+INSERT dump and records skipped objects (FTS5 index + shadows, platform
+`_cf_KV`) in the manifest. On restore, replay migrations first (schema,
+triggers, FTS5 definition), then load the dump — the FTS5 index rebuilds
+via triggers. `d1-table-dump.mjs` holds the dump logic and its tests.
+
 Manifests land in `infra/pulumi/backups/<stack>/<timestamp>/` (gitignored).
-R2 sync needs `CLOUDFLARE_ACCOUNT_ID` plus S3-compatible R2 credentials and
-AWS CLI. Suggested targets: RPO 24h, RTO 4h; verify with a quarterly
-preview restore drill.
+With S3-compatible R2 credentials + AWS CLI, R2 uses `aws s3 sync`;
+without them it falls back to per-object `wrangler r2 object get` (only
+needs `CLOUDFLARE_API_TOKEN`). Verify downloads by MD5-vs-etag, and by
+direct API byte-compare when R2 list metadata is stale (seen on
+overwritten office-runtime objects). Suggested targets: RPO 24h, RTO 4h;
+verify with a quarterly preview restore drill.
 
 ## Restore (disaster)
 

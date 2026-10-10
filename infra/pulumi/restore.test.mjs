@@ -1,10 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   parseRestoreArgs,
   validateManifest,
   buildD1ExecuteCommand,
   buildR2RestoreCommand,
+  listLocalFiles,
 } from "./restore.mjs";
 
 const MANIFEST = {
@@ -66,5 +70,13 @@ describe("pulumi restore", () => {
       "/out/r2",
     ]);
     assert.ok(syncArgs.includes("s3://savia-documents"));
+  });
+
+  it("lists local backup files as object keys", async () => {
+    const base = await mkdtemp(join(tmpdir(), "r2-restore-"));
+    await mkdir(join(base, "a", "b"), { recursive: true });
+    await writeFile(join(base, "a", "b", "c.txt"), "x");
+    await writeFile(join(base, "root.txt"), "y");
+    assert.deepEqual(await listLocalFiles(base), ["a/b/c.txt", "root.txt"]);
   });
 });

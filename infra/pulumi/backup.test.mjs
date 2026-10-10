@@ -4,6 +4,9 @@ import {
   parseBackupArgs,
   buildD1ExportCommand,
   buildR2SyncCommand,
+  buildR2ObjectGetCommand,
+  buildR2ObjectPutCommand,
+  hasS3Credentials,
   manifestFor,
 } from "./backup.mjs";
 
@@ -50,8 +53,7 @@ describe("pulumi backup", () => {
     );
   });
 
-  it("builds a restore-ready manifest", () => {
-    const manifest = manifestFor({
+  it("builds a restore-ready manifest", () => {    const manifest = manifestFor({
       stack: "preview",
       outputs: { documentsBucketName: "b" },
       files: { "savia-auth-preview": "/out/d1/a.sql" },
@@ -60,5 +62,40 @@ describe("pulumi backup", () => {
     assert.equal(manifest.version, 1);
     assert.equal(manifest.stack, "preview");
     assert.ok(manifest.createdAt);
+  });
+
+  it("builds per-object R2 get/put commands", () => {
+    const [get, getArgs] = buildR2ObjectGetCommand({
+      bucket: "b",
+      key: "a/c.txt",
+      destFile: "/out/a/c.txt",
+    });
+    assert.equal(get, "pnpm");
+    assert.ok(getArgs.includes("get"));
+    assert.ok(getArgs.includes("b/a/c.txt"));
+    assert.ok(getArgs.includes("--remote"));
+    assert.ok(getArgs.includes("/out/a/c.txt"));
+    const [, putArgs] = buildR2ObjectPutCommand({
+      bucket: "b",
+      key: "a/c.txt",
+      sourceFile: "/out/a/c.txt",
+    });
+    assert.ok(putArgs.includes("put"));
+    assert.ok(putArgs.includes("b/a/c.txt"));
+    assert.throws(() =>
+      buildR2ObjectGetCommand({ bucket: "b", key: "", destFile: "/o" }),
+    );
+  });
+
+  it("detects S3 credentials from env", () => {
+    assert.equal(
+      hasS3Credentials({ AWS_ACCESS_KEY_ID: "id", AWS_SECRET_ACCESS_KEY: "s" }),
+      true,
+    );
+    assert.equal(hasS3Credentials({}), false);
+    assert.equal(
+      hasS3Credentials({ AWS_ACCESS_KEY_ID: "id" }),
+      false,
+    );
   });
 });
