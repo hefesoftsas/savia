@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import {
   createPluginProject,
@@ -8,6 +12,7 @@ import {
   serializePluginProject,
   type IdeFiles,
 } from "../plugin-ide-project";
+import { PLUGIN_PROJECT_MAX_BYTES } from "@savia/studio-shared/plugin-projects";
 import { createPluginPreviewDocument } from "../plugin-ide-preview";
 
 function withEntry(entry: string): IdeFiles {
@@ -31,6 +36,92 @@ describe("plugin IDE project", () => {
       manifest,
       fixtures: { collections: {}, settings: {} },
     });
+  });
+
+  it("opens and compiles a retained runtime bundle larger than the authoring limit", async () => {
+    const source = `/*${"compiled".repeat(20_000)}*/
+export function render(element) { element.textContent = "Activities"; }`;
+    const files = withEntry(source);
+    expect(parsePluginProject(serializePluginProject(files))).toEqual(files);
+    const compiled = await compilePluginProject(files);
+    const render = new Function(
+      `${compiled.entryJs.replace("export function render", "function render")}; return render;`,
+    )();
+    const element = document.createElement("div");
+    render(element);
+    expect(element.textContent).toBe("Activities");
+  });
+
+  it("compiles the real packaged activities release for editor preview", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "savia-ide-activities-"));
+    const artifact = join(directory, "activities.zip");
+    try {
+      execFileSync(process.execPath, [
+        resolve("../../scripts/pack-store-plugin.mjs"),
+        "store-ports/activities",
+        "--output",
+        artifact,
+      ]);
+      const extract = (path: string) =>
+        execFileSync("unzip", ["-p", artifact, path], {
+          encoding: "utf8",
+          maxBuffer: 3 * 1024 * 1024,
+        });
+      const files: IdeFiles = {
+        "entry.tsx": extract("dist/plugin.js"),
+        "savia-extension.json": extract("savia-extension.json"),
+        "store.json": extract("store.json"),
+        "preview.json": '{"collections":{},"settings":{}}',
+      };
+      const compiled = await compilePluginProject(files);
+      expect(compiled.manifest.id).toBe("insurance.activities");
+      expect(compiled.entryJs).toContain("insurance_activities");
+      const html = createPluginPreviewDocument(
+        compiled.entryJs,
+        compiled.fixtures,
+        compiled.store,
+        "activities-session",
+        "es",
+      );
+      const dom = new JSDOM(html, {
+        runScripts: "outside-only",
+        pretendToBeVisual: true,
+      });
+      try {
+        Object.assign(dom.window, { structuredClone });
+        const executable = compiled.entryJs.replace(
+          /export\s*\{([^}]+)\};?/,
+          (_match, exports: string) => {
+            const properties = exports.split(",").map((entry) => {
+              const [local, name = local] = entry.trim().split(/\s+as\s+/);
+              return `${name}: ${local}`;
+            });
+            return `return {${properties.join(",")}};`;
+          },
+        );
+        dom.window.eval(`window.__testPlugin = (() => { ${executable} })();`);
+        const script = dom.window.document
+          .querySelector('script[type="module"]')!
+          .textContent!.replace(
+            /const sourceUrl = .*?\n\s*const plugin = await import\(sourceUrl\);\n\s*URL\.revokeObjectURL\(sourceUrl\);/s,
+            "const plugin = window.__testPlugin;",
+          );
+        dom.window.eval(`window.__completion = (async () => { ${script} })();`);
+        await (dom.window as unknown as { __completion: Promise<void> })
+          .__completion;
+        await vi.waitFor(() =>
+          expect(
+            dom.window.document.getElementById("root")!.textContent,
+          ).toContain("Nueva actividad"),
+        );
+      } finally {
+        dom.window.close();
+      }
+
+      expect(parsePluginProject(serializePluginProject(files))).toEqual(files);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("rejects invalid metadata and entry source that imports or uses unsafe APIs", async () => {
@@ -64,18 +155,20 @@ describe("plugin IDE project", () => {
         }),
       ),
     ).toThrow();
-    expect(() => parsePluginProject("x".repeat(512 * 1024 + 1))).toThrow();
+    expect(() =>
+      parsePluginProject("x".repeat(PLUGIN_PROJECT_MAX_BYTES + 1)),
+    ).toThrow();
   });
 
   it("rejects a serialized wrapper that expands beyond the shared project limit", () => {
-    const quoted = '"'.repeat(100 * 1024);
+    const quoted = "\u0000".repeat(2 * 1024 * 1024);
     const files: IdeFiles = {
       "entry.tsx": quoted,
-      "savia-extension.json": quoted,
-      "store.json": quoted,
-      "preview.json": quoted,
+      "savia-extension.json": "{}",
+      "store.json": "{}",
+      "preview.json": "{}",
     };
-    expect(() => serializePluginProject(files)).toThrow(/512 KB/i);
+    expect(() => serializePluginProject(files)).toThrow(/5 MB/i);
   });
 
   it("uses shared authoring bounds and rejects dangerous fixture object keys", async () => {
@@ -83,7 +176,7 @@ describe("plugin IDE project", () => {
     await expect(
       compilePluginProject({
         ...files,
-        "entry.tsx": "x".repeat(100 * 1024 + 1),
+        "entry.tsx": "x".repeat(2 * 1024 * 1024 + 1),
       }),
     ).rejects.toThrow();
     const tooManyFixtures = {

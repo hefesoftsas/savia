@@ -135,7 +135,7 @@ function previewReady() {
   );
 }
 
-it("publishes only a successfully previewed revision and invalidates it after edits", async () => {
+it("publishes and activates only a successfully previewed revision and invalidates it after edits", async () => {
   mocks.compile.mockResolvedValue({
     entryJs: "compiled",
     fixtures: {},
@@ -151,7 +151,7 @@ it("publishes only a successfully previewed revision and invalidates it after ed
   });
   render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   fireEvent.click(
     screen.getByRole("button", { name: "Ejecutar vista previa" }),
@@ -160,7 +160,9 @@ it("publishes only a successfully previewed revision and invalidates it after ed
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
   fireEvent.change(
@@ -170,7 +172,7 @@ it("publishes only a successfully previewed revision and invalidates it after ed
     },
   );
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   fireEvent.click(
     screen.getByRole("button", { name: "Ejecutar vista previa" }),
@@ -179,16 +181,161 @@ it("publishes only a successfully previewed revision and invalidates it after ed
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Publicar en el store" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
+  );
   expect(await screen.findByText(/custom.demo · 1.0.0/)).toBeInTheDocument();
   expect(mocks.publish).toHaveBeenCalledWith(
     "/plugin-store/upload",
     "POST",
     expect.any(FormData),
   );
+  await waitFor(() =>
+    expect(mocks.publish).toHaveBeenCalledWith(
+      "/extensions/custom.demo/install",
+      "POST",
+      { version: "1.0.0" },
+    ),
+  );
+  expect(
+    await screen.findByText(/Publicado y activo en este espacio/),
+  ).toBeInTheDocument();
+});
+
+it("keeps a published version when activation fails and retries without uploading again", async () => {
+  mocks.compile.mockResolvedValue({
+    entryJs: "compiled",
+    fixtures: {},
+    store: {},
+  });
+  mocks.pack.mockResolvedValue({
+    entryJs: "compiled",
+    manifest: { id: "custom.demo", version: "1.0.0" },
+    blob: new Blob(["zip"]),
+  });
+  mocks.publish
+    .mockResolvedValueOnce({ data: { id: "custom.demo", version: "1.0.0" } })
+    .mockRejectedValueOnce(new Error("Activation failed"))
+    .mockResolvedValueOnce({
+      data: { id: "custom.demo", version: "1.0.0", enabled: true },
+    });
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ejecutar vista previa" }),
+  );
+  await screen.findByTitle("Vista previa del plugin");
+  previewReady();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Activation failed",
+  );
+  expect(screen.getByText(/custom.demo · 1.0.0/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Activar esta versión" }));
+  expect(
+    await screen.findByText(/Publicado y activo en este espacio/),
+  ).toBeInTheDocument();
+  expect(
+    mocks.publish.mock.calls.filter(
+      ([path]) => path === "/plugin-store/upload",
+    ),
+  ).toHaveLength(1);
+  expect(
+    mocks.publish.mock.calls.filter(
+      ([path]) => path === "/extensions/custom.demo/install",
+    ),
+  ).toHaveLength(2);
+});
+
+it("publishes without activating when selected in project options", async () => {
+  mocks.compile.mockResolvedValue({
+    entryJs: "compiled",
+    fixtures: {},
+    store: {},
+  });
+  mocks.pack.mockResolvedValue({
+    entryJs: "compiled",
+    manifest: { id: "custom.demo", version: "1.0.0" },
+    blob: new Blob(["zip"]),
+  });
+  mocks.publish.mockResolvedValue({
+    data: { id: "custom.demo", version: "1.0.0" },
+  });
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ejecutar vista previa" }),
+  );
+  await screen.findByTitle("Vista previa del plugin");
+  previewReady();
+  fireEvent.pointerDown(
+    screen.getByRole("button", { name: "Opciones del proyecto" }),
+    { button: 0, ctrlKey: false },
+  );
+  fireEvent.click(
+    await screen.findByRole("menuitem", { name: "Publicar sin activar" }),
+  );
+  expect(
+    await screen.findByRole("button", { name: "Activar esta versión" }),
+  ).toBeEnabled();
+  expect(mocks.publish).toHaveBeenCalledTimes(1);
+  expect(mocks.publish).toHaveBeenCalledWith(
+    "/plugin-store/upload",
+    "POST",
+    expect.any(FormData),
+  );
+});
+
+it("publishes shared releases without installing them in the workspace", async () => {
+  mocks.compile.mockResolvedValue({
+    entryJs: "compiled",
+    fixtures: {},
+    store: {},
+  });
+  mocks.pack.mockResolvedValue({
+    entryJs: "compiled",
+    manifest: { id: "custom.demo", version: "1.0.0" },
+    blob: new Blob(["zip"]),
+  });
+  mocks.publish.mockResolvedValue({
+    data: { id: "custom.demo", version: "1.0.0" },
+  });
+  render(
+    <PluginIde
+      tenantId={2}
+      canPublishShared
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+    />,
+  );
+  fireEvent.pointerDown(
+    screen.getByRole("button", { name: "Opciones del proyecto" }),
+    { button: 0, ctrlKey: false },
+  );
+  fireEvent.click(
+    await screen.findByRole("menuitemradio", { name: "Catálogo compartido" }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ejecutar vista previa" }),
+  );
+  await screen.findByTitle("Vista previa del plugin");
+  previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "Publicar en el store" }));
+  await screen.findByText(/custom.demo · 1.0.0/);
+  expect(mocks.publish).toHaveBeenCalledTimes(1);
+  expect(mocks.publish).toHaveBeenCalledWith(
+    "/plugin-store/registry/publish",
+    "POST",
+    expect.any(FormData),
+  );
+  expect(
+    screen.queryByRole("button", { name: "Activar esta versión" }),
+  ).not.toBeInTheDocument();
 });
 
 it("keeps AI changes as a proposal until applied and supports undo", async () => {
@@ -240,10 +387,14 @@ it("preserves editable source and reports upload failures without claiming publi
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Publicar en el store" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
+  );
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Version already exists",
   );
@@ -273,12 +424,14 @@ it("ignores readiness messages from another frame and blocks publication after r
   };
   fireEvent(window, new MessageEvent("message", { source: window, data }));
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
   fireEvent(
@@ -290,11 +443,11 @@ it("ignores readiness messages from another frame and blocks publication after r
   );
   expect(screen.getByRole("alert")).toHaveTextContent("Render failed");
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   previewReady();
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
 });
 
@@ -354,10 +507,14 @@ it("does not upload if preview fails while the package is being prepared", async
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Publicar en el store" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
+  );
   fireEvent(
     window,
     new MessageEvent("message", {
@@ -517,11 +674,11 @@ it("runs preview while AI is pending without clearing the generation state", asy
   fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
   expect(screen.getByRole("button", { name: "Cancelar" })).toBeInTheDocument();
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeEnabled();
 });
 

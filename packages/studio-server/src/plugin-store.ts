@@ -1657,28 +1657,36 @@ export function registerPluginStore(
         return fail("Plugin source is unavailable.", 404);
       }
     }
-    // Releases uploaded without src/entry.tsx (legacy store ZIPs) have no
-    // stored source. Synthesize an editable copy from the artifact so the
-    // plugin IDE can still open them instead of failing with 404.
+    // Legacy store ZIPs have no authored source. Recover the retained compiled
+    // entry so the plugin IDE shows the actual runtime instead of a fake starter.
     let artifact: {
       manifest: string;
+      entry_js: string;
       store_json?: string | null;
     } | null = null;
     try {
       artifact = await c.env.DB.prepare(
-        "SELECT manifest,store_json FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+        "SELECT manifest,entry_js,store_json FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
       )
         .bind(tenant, id, version)
-        .first<{ manifest: string; store_json: string | null }>();
+        .first<{
+          manifest: string;
+          entry_js: string;
+          store_json: string | null;
+        }>();
     } catch {
       try {
         const legacy = await c.env.DB.prepare(
-          "SELECT manifest FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+          "SELECT manifest,entry_js FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
         )
           .bind(tenant, id, version)
-          .first<{ manifest: string }>();
+          .first<{ manifest: string; entry_js: string }>();
         artifact = legacy
-          ? { manifest: legacy.manifest, store_json: null }
+          ? {
+              manifest: legacy.manifest,
+              entry_js: legacy.entry_js,
+              store_json: null,
+            }
           : null;
       } catch {
         artifact = null;
@@ -1686,6 +1694,11 @@ export function registerPluginStore(
     }
     if (!artifact) {
       return fail("Plugin source is not available for this version.", 404);
+    }
+    try {
+      validatePluginEntrySource(artifact.entry_js);
+    } catch {
+      return fail("Plugin source is unavailable.", 404);
     }
     let manifestText = artifact.manifest;
     try {
@@ -1711,7 +1724,7 @@ export function registerPluginStore(
       }
     }
     const files: PluginStoreSourceFiles = {
-      "entry.tsx": `// Editable copy of ${id}@${version}.\n// The uploaded ZIP did not include src/entry.tsx, so this starter replaces the original bundle.\n// Adapt the UI below; publishing creates a new version and keeps the previous artifact.\nexport function render(element: HTMLElement, savia: any) {\n  const root = createRoot(element);\n\n  function Plugin() {\n    const [value, setValue] = React.useState(0);\n    return (\n      <section style={{ padding: 20 }}>\n        <h2>Savia plugin</h2>\n        <p>Counter: {value}</p>\n        <button onClick={() => setValue((current) => current + 1)}>Add one</button>\n      </section>\n    );\n  }\n\n  root.render(<Plugin />);\n  return () => root.unmount();\n}\n`,
+      "entry.tsx": artifact.entry_js,
       "savia-extension.json": manifestText.endsWith("\n")
         ? manifestText
         : `${manifestText}\n`,
@@ -1723,7 +1736,9 @@ export function registerPluginStore(
     } catch {
       return fail("Plugin source is unavailable.", 404);
     }
-    return c.json({ data: { files, synthesized: true } });
+    return c.json({
+      data: { files, synthesized: true, sourceKind: "compiled" as const },
+    });
   });
 
   app.get("/api/plugin-store/:id/shell", async (c) => {
@@ -1745,7 +1760,15 @@ export function registerPluginStore(
     );
     const screen = c.req.query("screen");
     const view = c.req.query("view");
-    const context = { ...(screen ? { screen, view: view || "records" } : {}), ...(c.req.query("panel") === "1" ? { panel: "1", ...(c.req.query("standby") === "1" ? { standby: "1" } : {}) } : {}) };
+    const context = {
+      ...(screen ? { screen, view: view || "records" } : {}),
+      ...(c.req.query("panel") === "1"
+        ? {
+            panel: "1",
+            ...(c.req.query("standby") === "1" ? { standby: "1" } : {}),
+          }
+        : {}),
+    };
     return new Response(
       shellHtml(
         id,

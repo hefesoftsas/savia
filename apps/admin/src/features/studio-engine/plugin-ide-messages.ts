@@ -108,6 +108,37 @@ export const pluginIdeMessages = {
     "Arquivos do projeto",
   ],
   tryPreview: ["Probar", "Run", "Testar"],
+  publishAndActivate: [
+    "Publicar y activar en este espacio",
+    "Publish and activate in this workspace",
+    "Publicar e ativar neste espaço",
+  ],
+  publishAndActivateShort: [
+    "Publicar y activar",
+    "Publish and activate",
+    "Publicar e ativar",
+  ],
+  publishOnly: [
+    "Publicar sin activar",
+    "Publish without activating",
+    "Publicar sem ativar",
+  ],
+  activateVersion: [
+    "Activar esta versión",
+    "Activate this version",
+    "Ativar esta versão",
+  ],
+  activating: ["Activando…", "Activating…", "Ativando…"],
+  publishedActive: [
+    "Publicado y activo en este espacio",
+    "Published and active in this workspace",
+    "Publicado e ativo neste espaço",
+  ],
+  previewBeforePublish: [
+    "Prueba el plugin antes de publicar",
+    "Preview the plugin before publishing",
+    "Teste o plugin antes de publicar",
+  ],
   publishShort: ["Publicar", "Publish", "Publicar"],
   projectOptions: [
     "Opciones del proyecto",
@@ -254,8 +285,8 @@ export const pluginIdeMessages = {
     "O projeto mudou. Execute a prévia novamente.",
   ],
   tooLarge: [
-    "El proyecto supera el tamaño máximo de 512 KB.",
-    "The project exceeds the 512 KB limit.",
-    "O projeto excede o limite de 512 KB.",
+    "El proyecto supera el tamaño máximo de 5 MB.",
+    "The project exceeds the 5 MB limit.",
+    "O projeto excede o limite de 5 MB.",
   ],
 } as const;

@@ -328,6 +328,52 @@ describe("durable plugin projects and release source", () => {
       "custom.old-project",
     );
 
+    const compiledEntry = `/* ${"legacy compiled bundle ".repeat(6000)} */\nexport function render() {}`;
+    expect(new TextEncoder().encode(compiledEntry).byteLength).toBeGreaterThan(
+      100 * 1024,
+    );
+    const compiledZip = zip([
+      [
+        "savia-extension.json",
+        JSON.stringify({
+          ...JSON.parse(manifest),
+          id: "custom.compiled-project",
+        }),
+      ],
+      ["dist/plugin.js", compiledEntry],
+    ]);
+    const compiledForm = new FormData();
+    compiledForm.set(
+      "file",
+      new File([compiledZip as BlobPart], "compiled.zip"),
+    );
+    expect(
+      (
+        await sourceApp.request(
+          "http://localhost/api/plugin-store/upload",
+          { method: "POST", body: compiledForm },
+          platform.env,
+        )
+      ).status,
+    ).toBe(200);
+    const compiledSource = await sourceApp.request(
+      "http://localhost/api/plugin-store/custom.compiled-project/source?version=1.0.0",
+      {},
+      platform.env,
+    );
+    expect(compiledSource.status).toBe(200);
+    const compiledBody = (await compiledSource.json()) as {
+      data: {
+        files: Record<string, string>;
+        synthesized?: boolean;
+        sourceKind?: string;
+      };
+    };
+    expect(compiledBody.data.synthesized).toBe(true);
+    expect(compiledBody.data.sourceKind).toBe("compiled");
+    expect(compiledBody.data.files["entry.tsx"]).toBe(compiledEntry);
+    expect(compiledBody.data.files["entry.tsx"]).not.toContain("Counter:");
+
     const disabled = await sourceApp.request(
       "http://localhost/api/extensions/custom.project-test",
       {

@@ -7,10 +7,11 @@ import {
   type PluginStoreManifest,
   type StoreJson,
 } from "@savia/studio-shared/plugin-store";
+import { pluginAuthoringPreviewSchema } from "@savia/studio-shared/plugin-authoring";
 import {
-  pluginAuthoringFilesSchema,
-  pluginAuthoringPreviewSchema,
-} from "@savia/studio-shared/plugin-authoring";
+  pluginProjectFilesSchema,
+  PLUGIN_PROJECT_MAX_BYTES as MAX_PROJECT_BYTES,
+} from "@savia/studio-shared/plugin-projects";
 
 export type IdeFiles = {
   "entry.tsx": string;
@@ -24,7 +25,6 @@ export type PluginIdeFixtures = {
   settings: Record<string, unknown>;
 };
 
-const MAX_PROJECT_BYTES = 512 * 1024;
 const projectFileNames = [
   "entry.tsx",
   "savia-extension.json",
@@ -50,10 +50,10 @@ function validateIdeFiles(value: unknown): IdeFiles {
   const record = value as Record<string, unknown>;
   if (Object.keys(record).length !== projectFileNames.length)
     throw new Error("Project must contain exactly the four supported files.");
-  const files = pluginAuthoringFilesSchema.parse(record);
+  const files = pluginProjectFilesSchema.parse(record);
   const bytes = new TextEncoder().encode(JSON.stringify(files)).byteLength;
   if (bytes > MAX_PROJECT_BYTES)
-    throw new Error("Project exceeds the 512 KB limit.");
+    throw new Error("Project exceeds the 5 MB limit.");
   return files;
 }
 
@@ -121,7 +121,7 @@ export function createPluginProject(): IdeFiles {
 }
 
 function rejectSourceImports(source: string): void {
-  if (/\bimport\s*(?:\(|[\w{*'"])/.test(source))
+  if (/\bimport\b\s*(?:\(|[\w{*'"])/.test(source))
     throw new Error(
       "Plugin source cannot contain imports; runtime modules are injected by Savia.",
     );
@@ -169,13 +169,13 @@ export function serializePluginProject(filesInput: IdeFiles): string {
     files,
   });
   if (new TextEncoder().encode(serialized).byteLength > MAX_PROJECT_BYTES)
-    throw new Error("Project exceeds the 512 KB limit.");
+    throw new Error("Project exceeds the 5 MB limit.");
   return serialized;
 }
 
 export function parsePluginProject(text: string): IdeFiles {
   if (new TextEncoder().encode(text).byteLength > MAX_PROJECT_BYTES)
-    throw new Error("Project exceeds the 512 KB limit.");
+    throw new Error("Project exceeds the 5 MB limit.");
   const value = parseJson(text, "Project");
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Project must be an object.");

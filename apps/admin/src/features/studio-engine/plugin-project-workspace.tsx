@@ -176,9 +176,9 @@ export default function PluginProjectWorkspace({
     if ((response.data as { synthesized?: boolean }).synthesized)
       setNotice(
         tr(
-          "Este plugin no incluía su código fuente; se abrió una copia editable como base.",
-          "This plugin did not include its source; an editable copy was opened as a starting point.",
-          "Este plugin não incluía seu código-fonte; uma cópia editável foi aberta como base.",
+          "Este plugin no incluía su código fuente; se abrió una copia de su JavaScript compilado.",
+          "This plugin did not include its source; a copy of its compiled JavaScript was opened.",
+          "Este plugin não incluía seu código-fonte; uma cópia do JavaScript compilado foi aberta.",
         ),
       );
     await create({ files, history: [] });
