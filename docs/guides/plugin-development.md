@@ -160,9 +160,15 @@ or hide Files/Chat from the workspace toolbar. Source files and configuration fi
 open in separate closable tabs; returning to a file preserves its editor and undo
 history during the session. Archived source files appear under **src** so their
 filenames remain distinct from the project's configuration files. Monaco includes syntax highlighting, line numbers,
-folding, suggestions, and Find/Replace (Ctrl/Cmd+F). Preview is another editor tab.
+folding, suggestions, and Find/Replace (Ctrl/Cmd+F). **Search** (Ctrl/Cmd+Shift+F)
+searches literal text across all editable source and configuration files, ignoring
+case. Results are grouped by file with line numbers; selecting one opens its tab,
+scrolls to the line, and selects the match. Results update with edits. Binary assets
+and the compiled recovery bundle are excluded when original sources are present.
+The first 500 matches are shown; refine the query if the limit is reached.
+Preview is another editor tab.
 Below 600px of available workspace width, narrow layouts
-show **Files**, **Code**, **Preview** or **Chat** one at a time, without resetting
+show **Files**, **Search**, **Code**, **Preview** or **Chat** one at a time, without resetting
 source or the running plugin. Monaco is bundled with the app shell (no CDN), and
 `entry.tsx` offers ghost-text inline completions from the workspace's
 server-side AI configuration; provider keys never reach the browser.

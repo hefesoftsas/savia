@@ -676,3 +676,104 @@ p.plugin-ide-usage {
     flex-wrap: wrap;
   }
 }
+
+.plugin-project-search-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.plugin-project-search-panel > h2 {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--ide-line);
+}
+.plugin-project-search-panel > input {
+  margin: 8px;
+  width: calc(100% - 16px);
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--ide-line);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+}
+.plugin-project-search-panel > input:focus-visible,
+.plugin-project-search-file button:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+.plugin-project-search-panel > p {
+  padding: 0 12px 8px;
+  color: var(--ide-secondary);
+  font-size: 12px;
+}
+.plugin-project-search-results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.plugin-project-search-file h3 {
+  padding: 8px 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plugin-project-search-file h3 small {
+  display: block;
+  font-size: 11px;
+  color: var(--ide-secondary);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plugin-project-search-file button {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 12px;
+  text-align: left;
+  font-size: 12px;
+}
+.plugin-project-search-file button:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.plugin-project-search-file button > span {
+  flex-shrink: 0;
+  color: var(--ide-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.plugin-project-search-file code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+  font-family: var(--font-mono);
+}
+.plugin-project-search-file mark {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: inherit;
+}
+@container (max-width: 599px) {
+  .plugin-project-search-file button {
+    min-height: 44px;
+    align-items: center;
+  }
+}
+@container (max-width: 480px) {
+  .plugin-ide-navigation button {
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+}

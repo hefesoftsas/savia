@@ -14,6 +14,7 @@ import {
 import {
   ArrowLeft,
   Files,
+  Search,
   Check,
   Bot,
   ArrowUp,
@@ -43,6 +44,8 @@ import {
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { AssistantMarkdown } from "@/features/assistant/assistant-response-ui";
+import { PluginProjectSearchPanel } from "./plugin-project-search-panel";
+import type { PluginProjectSearchMatch } from "./plugin-project-search";
 import { PluginFileTree } from "./plugin-file-tree";
 import { PluginDiffEditor } from "./plugin-diff-editor";
 import { Textarea } from "@/components/ui/textarea";
@@ -111,12 +114,17 @@ export default function PluginIde({
   const t = useMessages(pluginIdeMessages);
   const panelId = useId();
   const [wide, setWide] = useState(false);
-  const [pane, setPane] = useState<"files" | "chat" | "code" | "preview">(
-    "code",
-  );
+  const [pane, setPane] = useState<
+    "files" | "search" | "chat" | "code" | "preview"
+  >("code");
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [fileFilter, setFileFilter] = useState("");
+  const [sidebarView, setSidebarView] = useState<"files" | "search">("files");
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const [searchSelection, setSearchSelection] =
+    useState<PluginProjectSearchMatch | null>(null);
   const [reviewFile, setReviewFile] = useState<keyof IdeFiles | null>(null);
   const [visitedFiles, setVisitedFiles] = useState<(keyof IdeFiles)[]>([
     "entry.tsx",
@@ -140,6 +148,24 @@ export default function PluginIde({
         ? pluginOriginalSourceFilesSchema.parse(JSON.parse(originalArchive))
         : {},
     [originalArchive],
+  );
+  const searchableFiles = useMemo(
+    () => ({
+      ...Object.fromEntries(
+        Object.entries(files).filter(
+          ([name]) =>
+            name !== "original-source.json" &&
+            !(originalArchive && name === "entry.tsx"),
+        ),
+      ),
+      ...Object.fromEntries(
+        Object.entries(originalFiles).map(([name, text]) => [
+          `src/${name}`,
+          text,
+        ]),
+      ),
+    }),
+    [files, originalArchive, originalFiles],
   );
   const [selectedOriginal, setSelectedOriginal] = useState<string | null>(
     () =>
@@ -233,6 +259,7 @@ export default function PluginIde({
     if (element) element.scrollTop = element.scrollHeight;
   }, [history, generating, proposal, chatError, streamingMessage, queue]);
   function openFile(name: string) {
+    setSearchSelection(null);
     const sourcePath = name.startsWith("src/") ? name.slice(4) : null;
     const original =
       sourcePath !== null && Object.hasOwn(originalFiles, sourcePath);
@@ -254,6 +281,16 @@ export default function PluginIde({
     }
     setReviewFile(null);
     setPane("code");
+  }
+  function openSearch() {
+    requestAnimationFrame(() => searchInput.current?.focus());
+    setSidebarView("search");
+    setExplorerOpen(true);
+    if (!wide) setPane("search");
+  }
+  function openSearchMatch(match: PluginProjectSearchMatch) {
+    openFile(match.path);
+    setSearchSelection({ ...match });
   }
   function closeFile(name: string) {
     const next = openFiles.filter((file) => file !== name);
@@ -795,7 +832,22 @@ export default function PluginIde({
     preview.snapshot === snapshot &&
     (published?.snapshot !== snapshot || published.destination !== destination);
   return (
-    <section ref={surface} className="plugin-ide" aria-label={t("title")}>
+    <section
+      ref={surface}
+      className="plugin-ide"
+      aria-label={t("title")}
+      onKeyDownCapture={(event) => {
+        if (
+          (event.ctrlKey || event.metaKey) &&
+          event.shiftKey &&
+          event.key.toLowerCase() === "f"
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          openSearch();
+        }
+      }}
+    >
       <header className="plugin-ide-header">
         <div className="plugin-ide-heading">
           <Button
@@ -929,13 +981,28 @@ export default function PluginIde({
       <nav className="plugin-ide-navigation" aria-label={t("workspaceViews")}>
         <button
           type="button"
-          aria-pressed={wide ? explorerOpen : pane === "files"}
-          onClick={() =>
-            wide ? setExplorerOpen(!explorerOpen) : setPane("files")
+          aria-pressed={
+            wide ? explorerOpen && sidebarView === "files" : pane === "files"
           }
+          onClick={() => {
+            setSidebarView("files");
+            if (wide) setExplorerOpen(sidebarView !== "files" || !explorerOpen);
+            else setPane("files");
+          }}
         >
           <Files />
           {t("files")}
+        </button>
+        <button
+          type="button"
+          title={t("searchShortcut")}
+          aria-pressed={
+            wide ? explorerOpen && sidebarView === "search" : pane === "search"
+          }
+          onClick={openSearch}
+        >
+          <Search />
+          {t("search")}
         </button>
         <button
           type="button"
@@ -1002,35 +1069,63 @@ export default function PluginIde({
             preferredSize={220}
             minSize={wide ? 160 : 0}
             maxSize={wide ? 360 : Infinity}
-            visible={wide ? explorerOpen : pane === "files"}
+            visible={
+              wide ? explorerOpen : pane === "files" || pane === "search"
+            }
           >
-            <aside className="plugin-ide-explorer" aria-label={t("files")}>
-              <h3 className="plugin-ide-panel-title">{t("explorer")}</h3>
-              <input
-                type="search"
-                className="plugin-ide-file-filter"
-                aria-label={t("filterFiles")}
-                placeholder={t("filterFiles")}
-                value={fileFilter}
-                onChange={(event) => setFileFilter(event.target.value)}
-              />
-              <PluginFileTree
-                names={[
-                  ...Object.keys(files).filter(
-                    (name) =>
-                      name !== "original-source.json" &&
-                      !(originalArchive && name === "entry.tsx"),
-                  ),
-                  ...Object.keys(originalFiles).map((name) => `src/${name}`),
-                ].filter((name) =>
-                  name.toLowerCase().includes(fileFilter.trim().toLowerCase()),
-                )}
-                selected={activeFile}
-                projectName={projectName}
-                label={t("files")}
-                onSelect={openFile}
-                filterActive={!!fileFilter.trim()}
-              />
+            <aside
+              className="plugin-ide-explorer"
+              aria-label={t(sidebarView === "search" ? "search" : "files")}
+            >
+              {sidebarView === "search" ? (
+                <PluginProjectSearchPanel
+                  inputRef={searchInput}
+                  files={searchableFiles}
+                  query={searchQuery}
+                  onQueryChange={setSearchQuery}
+                  onSelect={openSearchMatch}
+                  labels={{
+                    search: t("searchCode"),
+                    placeholder: t("searchPlaceholder"),
+                    noResults: t("searchNoResults"),
+                    resultCount: (count) => t("searchResultCount", { count }),
+                    truncated: t("searchTruncated"),
+                  }}
+                />
+              ) : (
+                <>
+                  <h3 className="plugin-ide-panel-title">{t("explorer")}</h3>
+                  <input
+                    type="search"
+                    className="plugin-ide-file-filter"
+                    aria-label={t("filterFiles")}
+                    placeholder={t("filterFiles")}
+                    value={fileFilter}
+                    onChange={(event) => setFileFilter(event.target.value)}
+                  />
+                  <PluginFileTree
+                    names={[
+                      ...Object.keys(files).filter(
+                        (name) =>
+                          name !== "original-source.json" &&
+                          !(originalArchive && name === "entry.tsx"),
+                      ),
+                      ...Object.keys(originalFiles).map(
+                        (name) => `src/${name}`,
+                      ),
+                    ].filter((name) =>
+                      name
+                        .toLowerCase()
+                        .includes(fileFilter.trim().toLowerCase()),
+                    )}
+                    selected={activeFile}
+                    projectName={projectName}
+                    label={t("files")}
+                    onSelect={openFile}
+                    filterActive={!!fileFilter.trim()}
+                  />
+                </>
+              )}
             </aside>
           </Allotment.Pane>
           <Allotment.Pane
@@ -1179,6 +1274,11 @@ export default function PluginIde({
                             name === "entry.tsx" ? "typescript" : "json"
                           }
                           ariaLabel={name}
+                          selection={
+                            searchSelection?.path === name
+                              ? searchSelection
+                              : undefined
+                          }
                           inlineCompletion={
                             name === "entry.tsx"
                               ? {
@@ -1245,6 +1345,11 @@ export default function PluginIde({
                                     : "typescript"
                           }
                           ariaLabel={name}
+                          selection={
+                            searchSelection?.path === `src/${name}`
+                              ? searchSelection
+                              : undefined
+                          }
                           readOnly={locked || /\.(?:png|webp)$/.test(name)}
                           contextDeclarations={pluginIdeDeclarations}
                           semanticValidation={false}

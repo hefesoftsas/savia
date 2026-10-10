@@ -41,6 +41,7 @@ export function MonacoCodeEditor({
   readOnly = false,
   semanticValidation = true,
   contextDeclarations,
+  selection,
   inlineCompletion,
 }: {
   value: string;
@@ -52,6 +53,7 @@ export function MonacoCodeEditor({
   height?: number;
   placeholder?: string;
   ariaLabel: string;
+  selection?: { lineNumber: number; column: number; endColumn: number };
   inlineCompletion?: {
     filename: string;
     fetchCompletion: (prefix: string, suffix: string) => Promise<string | null>;
@@ -223,6 +225,21 @@ export function MonacoCodeEditor({
   useEffect(() => {
     editorRef.current?.updateOptions({ readOnly });
   }, [readOnly]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || status !== "ready" || !selection) return;
+    const range = {
+      startLineNumber: selection.lineNumber,
+      startColumn: selection.column,
+      endLineNumber: selection.lineNumber,
+      endColumn: selection.endColumn,
+    };
+    editor.layout();
+    editor.setSelection(range);
+    editor.revealRangeInCenter(range);
+    editor.focus();
+  }, [selection, status]);
 
   useEffect(() => {
     const editor = editorRef.current;

@@ -47,6 +47,33 @@ export const pluginIdeMessages = {
   shortTitle: ["Plugin", "Plugin", "Plugin"],
   typescriptLanguage: ["TypeScript JSX", "TypeScript JSX", "TypeScript JSX"],
   jsonLanguage: ["JSON", "JSON", "JSON"],
+  search: ["Buscar", "Search", "Buscar"],
+  searchCode: ["Buscar en el código", "Search code", "Buscar no código"],
+  searchPlaceholder: [
+    "Texto en todo el plugin",
+    "Text across the plugin",
+    "Texto em todo o plugin",
+  ],
+  searchShortcut: [
+    "Buscar en todo el plugin (Ctrl/Cmd+Shift+F)",
+    "Search the plugin (Ctrl/Cmd+Shift+F)",
+    "Buscar no plugin (Ctrl/Cmd+Shift+F)",
+  ],
+  searchNoResults: [
+    "Sin coincidencias",
+    "No matches",
+    "Nenhuma correspondência",
+  ],
+  searchResultCount: [
+    "%{count} coincidencias",
+    "%{count} matches",
+    "%{count} correspondências",
+  ],
+  searchTruncated: [
+    "Se muestran las primeras 500 coincidencias. Refina la búsqueda.",
+    "Showing the first 500 matches. Refine your search.",
+    "Mostrando as primeiras 500 correspondências. Refine a busca.",
+  ],
   explorer: ["Explorador", "Explorer", "Explorador"],
   filterFiles: ["Buscar archivos", "Find files", "Buscar arquivos"],
   originalSource: [
