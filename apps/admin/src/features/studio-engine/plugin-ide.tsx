@@ -1209,6 +1209,7 @@ export default function PluginIde({
                             (!!originalArchive && name === "entry.tsx")
                           }
                           contextDeclarations={pluginIdeDeclarations}
+                          semanticValidation={false}
                           height={520}
                         />
                       </div>
@@ -1247,6 +1248,7 @@ export default function PluginIde({
                           ariaLabel={name}
                           readOnly={locked || /\.(?:png|webp)$/.test(name)}
                           contextDeclarations={pluginIdeDeclarations}
+                          semanticValidation={false}
                           height={520}
                         />
                       </div>

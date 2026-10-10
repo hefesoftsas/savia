@@ -167,6 +167,12 @@ source or the running plugin. Monaco is bundled with the app shell (no CDN), and
 `entry.tsx` offers ghost-text inline completions from the workspace's
 server-side AI configuration; provider keys never reach the browser.
 
+Plugin Studio enables Monaco syntax diagnostics and completion. Semantic type
+diagnostics are disabled because retained archives do not include the complete
+dependency and type-only source environment. **Preview** resolves the actual
+retained import graph and supported runtime dependencies and reports compilation
+errors before publication. Other code editor surfaces retain semantic diagnostics.
+
 Send a request with Enter (Shift+Enter inserts a line break). The request appears
 immediately and the assistant answer streams live, with input/output token usage
 (↑/↓) beside the pending indicator and under the finished answer. While a

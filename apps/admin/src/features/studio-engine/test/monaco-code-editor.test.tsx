@@ -42,7 +42,11 @@ function monaco() {
       typescript: {
         typescriptDefaults: {
           setCompilerOptions: vi.fn(),
+          setDiagnosticsOptions: vi.fn(),
           addExtraLib: vi.fn(),
+        },
+        javascriptDefaults: {
+          setDiagnosticsOptions: vi.fn(),
         },
       },
     },
@@ -122,6 +126,61 @@ it("uses readable IDE defaults with horizontal scrolling", async () => {
     guides: { bracketPairs: true, indentation: true },
   });
 });
+
+it.each(["typescript", "javascript"] as const)(
+  "keeps semantic diagnostics enabled by default for %s",
+  async (language) => {
+    const instance = monaco();
+    mocks.load.mockResolvedValue(instance);
+    render(
+      <MonacoCodeEditor
+        value="const answer = 42;"
+        language={language}
+        ariaLabel="code"
+        onChange={vi.fn()}
+      />,
+    );
+
+    const defaults =
+      language === "typescript"
+        ? instance.languages.typescript.typescriptDefaults
+        : instance.languages.typescript.javascriptDefaults;
+    await waitFor(() =>
+      expect(defaults.setDiagnosticsOptions).toHaveBeenCalledWith({
+        noSemanticValidation: false,
+        noSyntaxValidation: false,
+      }),
+    );
+  },
+);
+
+it.each(["typescript", "javascript"] as const)(
+  "can disable semantic diagnostics for %s while preserving syntax diagnostics",
+  async (language) => {
+    const instance = monaco();
+    mocks.load.mockResolvedValue(instance);
+    render(
+      <MonacoCodeEditor
+        value="const answer = 42;"
+        language={language}
+        ariaLabel="code"
+        onChange={vi.fn()}
+        semanticValidation={false}
+      />,
+    );
+
+    const defaults =
+      language === "typescript"
+        ? instance.languages.typescript.typescriptDefaults
+        : instance.languages.typescript.javascriptDefaults;
+    await waitFor(() =>
+      expect(defaults.setDiagnosticsOptions).toHaveBeenCalledWith({
+        noSemanticValidation: true,
+        noSyntaxValidation: false,
+      }),
+    );
+  },
+);
 
 it("delegates inline completions to the provided fetcher and stays silent on failure", async () => {
   copilotMocks.register.mockReturnValue({
