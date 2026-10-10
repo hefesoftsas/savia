@@ -46,6 +46,10 @@ import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
 import { z } from "zod";
 import { type Env, fail } from "./context";
 import { audit } from "./services";
+import {
+  encodePluginFilesJson,
+  decodePluginFilesJson,
+} from "./plugin-file-storage";
 import type { Hono } from "hono";
 import { registerPluginRegistry } from "./plugin-registry";
 import {
@@ -66,9 +70,9 @@ export type PluginStoreOptions = {
   }) => Promise<boolean> | boolean;
 };
 
-/** Cuotas por tenant: 10 versiones por plugin, 20 MB agregados. */
+/** Per-tenant quotas: 10 versions per plugin, 64 MiB in total. */
 export const PLUGIN_STORE_MAX_VERSIONS_PER_ID = 10;
-export const PLUGIN_STORE_MAX_BYTES_PER_TENANT = 20 * 1024 * 1024;
+export const PLUGIN_STORE_MAX_BYTES_PER_TENANT = 64 * 1024 * 1024;
 
 async function assertStoreQuota(
   db: D1Database,
@@ -91,7 +95,7 @@ async function assertStoreQuota(
       409,
     );
   if (usage.total_bytes + sizeBytes > PLUGIN_STORE_MAX_BYTES_PER_TENANT)
-    fail("El espacio alcanzó la cuota de 20 MB del store.", 413);
+    fail("El espacio alcanzó la cuota de 64 MiB del store.", 413);
 }
 
 export type ParsedStoreZip = {
@@ -331,6 +335,9 @@ export async function persistParsedStoreArtifact(
   principalId: string | null,
   parsed: ParsedStoreZip,
 ): Promise<StoreUploadResult> {
+  const storedSourceFiles = parsed.sourceFiles
+    ? await encodePluginFilesJson(canonicalJson(parsed.sourceFiles))
+    : undefined;
   const existing = await db
     .prepare(
       "SELECT * FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
@@ -363,7 +370,7 @@ export async function persistParsedStoreArtifact(
         .first<{ files: string }>();
       if (
         source &&
-        canonicalJson(JSON.parse(source.files)) !==
+        canonicalJson(JSON.parse(await decodePluginFilesJson(source.files))) !==
           canonicalJson(parsed.sourceFiles)
       )
         fail("Esta versión ya existe con otro código fuente.", 409);
@@ -377,7 +384,7 @@ export async function persistParsedStoreArtifact(
               tenant,
               parsed.manifest.id,
               parsed.manifest.version,
-              canonicalJson(parsed.sourceFiles),
+              storedSourceFiles,
             )
             .run();
         } catch {
@@ -389,8 +396,9 @@ export async function persistParsedStoreArtifact(
             .first<{ files: string }>();
           if (
             !concurrentSource ||
-            canonicalJson(JSON.parse(concurrentSource.files)) !==
-              canonicalJson(parsed.sourceFiles)
+            canonicalJson(
+              JSON.parse(await decodePluginFilesJson(concurrentSource.files)),
+            ) !== canonicalJson(parsed.sourceFiles)
           )
             fail("Esta versión ya existe con otro código fuente.", 409);
         }
@@ -458,7 +466,7 @@ export async function persistParsedStoreArtifact(
           tenant,
           parsed.manifest.id,
           parsed.manifest.version,
-          canonicalJson(parsed.sourceFiles),
+          storedSourceFiles,
         ),
     );
   await db.batch(statements);
@@ -1663,7 +1671,7 @@ export function registerPluginStore(
     if (source) {
       try {
         const files = pluginStoreSourceFilesSchema.parse(
-          JSON.parse(source.files),
+          JSON.parse(await decodePluginFilesJson(source.files)),
         );
         return c.json({ data: { files, synthesized: false } });
       } catch {
