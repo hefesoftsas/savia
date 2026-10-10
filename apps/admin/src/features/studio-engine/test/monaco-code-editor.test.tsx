@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { render } from "./locale-test-render";
 import { MonacoCodeEditor } from "../monaco-code-editor";
 
@@ -90,6 +96,31 @@ it("does not report an AI/programmatic replacement as a manual edit", async () =
   );
   expect(change).not.toHaveBeenCalled();
   expect(mocks.create.mock.results[0].value.getValue()).toBe("new");
+});
+
+it("uses readable IDE defaults with horizontal scrolling", async () => {
+  mocks.load.mockResolvedValue(monaco());
+  render(
+    <MonacoCodeEditor
+      value="source"
+      language="typescript"
+      ariaLabel="code"
+      onChange={vi.fn()}
+    />,
+  );
+
+  await waitFor(() => expect(mocks.create).toHaveBeenCalled());
+  expect(mocks.create.mock.calls[0][1]).toMatchObject({
+    fontSize: 14,
+    lineHeight: 22,
+    fontLigatures: false,
+    minimap: { enabled: false },
+    wordWrap: "off",
+    folding: true,
+    showFoldingControls: "always",
+    bracketPairColorization: { enabled: true },
+    guides: { bracketPairs: true, indentation: true },
+  });
 });
 
 it("delegates inline completions to the provided fetcher and stays silent on failure", async () => {

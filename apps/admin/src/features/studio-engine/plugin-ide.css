@@ -136,21 +136,44 @@
   font-weight: 400;
   color: var(--ide-secondary);
 }
+.plugin-ide-file-filter {
+  margin: 8px;
+  width: calc(100% - 16px);
+  padding: 5px 8px;
+  min-height: 30px;
+  border: 1px solid var(--ide-line);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+}
+.plugin-ide-file-filter:focus-visible {
+  outline: 1px solid var(--ring);
+}
 .plugin-file-tree {
-  padding-top: 8px;
+  flex: 1;
+  min-height: 0;
+  padding: 0 0 8px;
   overflow: auto;
 }
 .plugin-file-tree-root,
+.plugin-file-tree-folder,
 .plugin-file-tree-file {
+  display: block;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.plugin-file-tree-row {
   display: flex;
   align-items: center;
   gap: 7px;
-  height: 32px;
+  min-height: 28px;
   padding: 0 10px;
   white-space: nowrap;
   cursor: pointer;
 }
 .plugin-file-tree-root span,
+.plugin-file-tree-folder span,
 .plugin-file-tree-file span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -159,13 +182,22 @@
   font-weight: 600;
 }
 .plugin-file-tree-file {
-  padding-left: 29px;
   font-size: 12px;
+}
+.plugin-file-tree-folder {
+  font-size: 12px;
+}
+.plugin-file-tree-row {
+  padding-left: calc(8px + var(--tree-depth, 0) * 12px);
+}
+.plugin-file-tree-file > .plugin-file-tree-row {
+  padding-left: calc(30px + var(--tree-depth, 0) * 12px);
 }
 .plugin-file-tree-file svg {
   color: var(--ide-secondary);
 }
-.plugin-file-tree-file:hover {
+.plugin-file-tree-file:hover,
+.plugin-file-tree-folder > .plugin-file-tree-row:hover {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 .plugin-file-tree-file[aria-selected="true"] {
@@ -584,7 +616,7 @@ p.plugin-ide-usage {
   align-items: center;
   gap: 5px;
 }
-@container (max-width: 849px) {
+@container (max-width: 599px) {
   .plugin-ide-project-name {
     display: none;
   }
@@ -614,9 +646,8 @@ p.plugin-ide-usage {
     min-width: 36px;
     min-height: 36px;
   }
-  .plugin-file-tree-file,
-  .plugin-file-tree-root {
-    height: 44px;
+  .plugin-file-tree-row {
+    min-height: 44px;
   }
   .plugin-ide-heading h2 {
     font-size: 12px;

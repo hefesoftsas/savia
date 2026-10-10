@@ -115,9 +115,9 @@ export default function PluginIde({
     "code",
   );
   const [explorerOpen, setExplorerOpen] = useState(true);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [fileFilter, setFileFilter] = useState("");
   const [reviewFile, setReviewFile] = useState<keyof IdeFiles | null>(null);
-  const [openFiles, setOpenFiles] = useState<(keyof IdeFiles)[]>(["entry.tsx"]);
   const [visitedFiles, setVisitedFiles] = useState<(keyof IdeFiles)[]>([
     "entry.tsx",
   ]);
@@ -148,6 +148,12 @@ export default function PluginIde({
       ) ??
       Object.keys(originalFiles)[0] ??
       null,
+  );
+  const [openFiles, setOpenFiles] = useState<string[]>(() => [
+    selectedOriginal ?? "entry.tsx",
+  ]);
+  const [visitedOriginal, setVisitedOriginal] = useState<string[]>(() =>
+    selectedOriginal ? [selectedOriginal] : [],
   );
   const [prompt, setPrompt] = useState("");
   const [history, setHistory] = useState<ChatMessage[]>(initialHistory ?? []);
@@ -215,7 +221,7 @@ export default function PluginIde({
   useEffect(() => {
     if (!surface.current) return;
     const update = () =>
-      setWide(surface.current!.getBoundingClientRect().width >= 850);
+      setWide(surface.current!.getBoundingClientRect().width >= 600);
     update();
     const observer = new ResizeObserver(update);
     observer.observe(surface.current);
@@ -226,16 +232,22 @@ export default function PluginIde({
     if (element) element.scrollTop = element.scrollHeight;
   }, [history, generating, proposal, chatError, streamingMessage, queue]);
   function openFile(name: keyof IdeFiles) {
-    setSelectedOriginal(null);
-    setSelected(name);
+    const original = Object.hasOwn(originalFiles, name);
+    setSelectedOriginal(original ? name : null);
+    if (!original) setSelected(name);
     setOpenFiles((current) =>
       current.includes(name) ? current : [...current, name],
     );
-    setVisitedFiles((current) =>
-      current.includes(name) ? current : [...current, name],
-    );
+    const visit = original ? setVisitedOriginal : setVisitedFiles;
+    visit((current) => (current.includes(name) ? current : [...current, name]));
     setReviewFile(null);
     setPane("code");
+  }
+  function closeFile(name: string) {
+    const next = openFiles.filter((file) => file !== name);
+    if (!next.length) return;
+    setOpenFiles(next);
+    if ((selectedOriginal ?? selected) === name) openFile(next.at(-1)!);
   }
 
   useEffect(() => {
@@ -333,11 +345,35 @@ export default function PluginIde({
             ),
           )
         : [];
-      setSelectedOriginal(
+      const entry =
         names.find((name) => /(?:^|\/)entry\.(?:tsx|jsx|js)$/.test(name)) ??
-          names[0] ??
-          null,
+        names[0] ??
+        null;
+      setSelectedOriginal((current) =>
+        current && names.includes(current) ? current : entry,
       );
+      setVisitedOriginal((current) =>
+        Array.from(
+          new Set([
+            ...current.filter((name) => names.includes(name)),
+            ...(entry ? [entry] : []),
+          ]),
+        ),
+      );
+      setOpenFiles((current) => {
+        const retained = current.filter(
+          (name) =>
+            names.includes(name) ||
+            (Object.hasOwn(next, name) &&
+              name !== "original-source.json" &&
+              !(entry && name === "entry.tsx")),
+        );
+        const active =
+          selectedOriginal && names.includes(selectedOriginal)
+            ? selectedOriginal
+            : (entry ?? selected);
+        return retained.includes(active) ? retained : [...retained, active];
+      });
     }
     setFiles(next);
     setPreview(null);
@@ -768,7 +804,9 @@ export default function PluginIde({
             <span className="plugin-ide-title-full">{t("title")}</span>
             <span className="plugin-ide-title-short">{t("shortTitle")}</span>
           </h2>
-          <span className="plugin-ide-project-name">{projectName}</span>
+          <span className="plugin-ide-project-name" title={projectName}>
+            {projectName}
+          </span>
         </div>
         <div className="plugin-ide-actions">
           <Button
@@ -945,49 +983,40 @@ export default function PluginIde({
         </div>
       )}
       <div className="plugin-ide-workbench">
-        <Allotment defaultSizes={[190, 640, 320]}>
+        <Allotment defaultSizes={[220, 640, 300]}>
           <Allotment.Pane
-            preferredSize={190}
-            minSize={wide ? 150 : 0}
-            maxSize={wide ? 300 : Infinity}
+            preferredSize={220}
+            minSize={wide ? 160 : 0}
+            maxSize={wide ? 360 : Infinity}
             visible={wide ? explorerOpen : pane === "files"}
           >
             <aside className="plugin-ide-explorer" aria-label={t("files")}>
               <h3 className="plugin-ide-panel-title">{t("explorer")}</h3>
+              <input
+                type="search"
+                className="plugin-ide-file-filter"
+                aria-label={t("filterFiles")}
+                placeholder={t("filterFiles")}
+                value={fileFilter}
+                onChange={(event) => setFileFilter(event.target.value)}
+              />
               <PluginFileTree
-                names={
-                  Object.keys(files).filter(
+                names={[
+                  ...Object.keys(files).filter(
                     (name) =>
                       name !== "original-source.json" &&
                       !(originalArchive && name === "entry.tsx"),
-                  ) as (keyof IdeFiles)[]
-                }
-                selected={selected}
+                  ),
+                  ...Object.keys(originalFiles),
+                ].filter((name) =>
+                  name.toLowerCase().includes(fileFilter.trim().toLowerCase()),
+                )}
+                selected={selectedOriginal ?? selected}
                 projectName={projectName}
                 label={t("files")}
                 onSelect={openFile}
+                filterActive={!!fileFilter.trim()}
               />
-              <p className="plugin-ide-explorer-hint">
-                {t("projectFilesHint")}
-              </p>
-              {Object.keys(originalFiles).length > 0 && (
-                <>
-                  <PluginFileTree
-                    names={Object.keys(originalFiles)}
-                    selected={selectedOriginal ?? ""}
-                    projectName={t("originalSource")}
-                    label={t("originalSource")}
-                    onSelect={(name) => {
-                      setSelectedOriginal(name);
-                      setReviewFile(null);
-                      setPane("code");
-                    }}
-                  />
-                  <p className="plugin-ide-explorer-hint">
-                    {t("originalSourceHint")}
-                  </p>
-                </>
-              )}
             </aside>
           </Allotment.Pane>
           <Allotment.Pane
@@ -1027,72 +1056,51 @@ export default function PluginIde({
                   }
                 }}
               >
-                {openFiles
-                  .filter((name) => !(originalArchive && name === "entry.tsx"))
-                  .map((name) => (
-                    <div
-                      role="presentation"
-                      className="plugin-ide-editor-tab"
-                      data-active={
-                        pane !== "preview" &&
-                        selected === name &&
-                        !reviewFile &&
-                        !selectedOriginal
-                      }
-                      key={name}
-                    >
-                      <button
-                        role="tab"
-                        id={`${panelId}-${name}`}
-                        aria-controls={`${panelId}-code`}
-                        tabIndex={
-                          pane !== "preview" &&
-                          selected === name &&
-                          !reviewFile &&
-                          !selectedOriginal
-                            ? 0
-                            : -1
-                        }
-                        aria-selected={
-                          pane !== "preview" &&
-                          selected === name &&
-                          !reviewFile &&
-                          !selectedOriginal
-                        }
-                        onClick={() => openFile(name)}
-                      >
-                        <FileCode2 />
-                        {name}
-                      </button>
-                      {openFiles.length > 1 && (
-                        <button
-                          className="plugin-ide-close-tab"
-                          aria-label={`${t("closeFile")} ${name}`}
-                          onClick={() => {
-                            const next = openFiles.filter(
-                              (file) => file !== name,
-                            );
-                            setOpenFiles(next);
-                            if (selected === name) openFile(next[0]);
-                          }}
-                        >
-                          <X />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                {selectedOriginal && (
-                  <button
-                    role="tab"
-                    id={`${panelId}-original-source-tab`}
-                    aria-controls={`${panelId}-code`}
-                    aria-selected={pane !== "preview"}
-                    className="plugin-ide-special-tab"
-                    onClick={() => setPane("code")}
+                {openFiles.map((name) => (
+                  <div
+                    role="presentation"
+                    className="plugin-ide-editor-tab"
+                    data-active={
+                      pane !== "preview" &&
+                      (selectedOriginal ?? selected) === name &&
+                      !reviewFile
+                    }
+                    key={name}
                   >
-                    {selectedOriginal}
-                  </button>
-                )}
+                    <button
+                      role="tab"
+                      aria-label={name}
+                      title={name}
+                      id={`${panelId}-${name}`}
+                      aria-controls={`${panelId}-code`}
+                      tabIndex={
+                        pane !== "preview" &&
+                        (selectedOriginal ?? selected) === name &&
+                        !reviewFile
+                          ? 0
+                          : -1
+                      }
+                      aria-selected={
+                        pane !== "preview" &&
+                        (selectedOriginal ?? selected) === name &&
+                        !reviewFile
+                      }
+                      onClick={() => openFile(name)}
+                    >
+                      <FileCode2 />
+                      {name.split("/").at(-1)}
+                    </button>
+                    {openFiles.length > 1 && (
+                      <button
+                        className="plugin-ide-close-tab"
+                        aria-label={`${t("closeFile")} ${name}`}
+                        onClick={() => closeFile(name)}
+                      >
+                        <X />
+                      </button>
+                    )}
+                  </div>
+                ))}
                 {reviewFile && proposal && (
                   <button
                     role="tab"
@@ -1124,7 +1132,7 @@ export default function PluginIde({
                 role="tabpanel"
                 aria-labelledby={
                   selectedOriginal
-                    ? `${panelId}-original-source-tab`
+                    ? `${panelId}-${selectedOriginal}`
                     : `${panelId}-${reviewFile ? "review" : selected}`
                 }
                 className="plugin-ide-code"
@@ -1134,7 +1142,9 @@ export default function PluginIde({
                 <div className="plugin-ide-breadcrumb">
                   <span>{projectName}</span>
                   <span>/</span>
-                  <span>{selectedOriginal ?? reviewFile ?? selected}</span>
+                  <span title={selectedOriginal ?? reviewFile ?? selected}>
+                    {selectedOriginal ?? reviewFile ?? selected}
+                  </span>
                   {selectedOriginal && <span>{t("originalSource")}</span>}
                   {reviewFile && <span>{t("proposed")}</span>}
                 </div>
@@ -1195,39 +1205,44 @@ export default function PluginIde({
                         />
                       </div>
                     ))}
-                  {selectedOriginal && (
-                    <MonacoCodeEditor
-                      key={selectedOriginal}
-                      value={originalFiles[selectedOriginal] ?? ""}
-                      onChange={(value) => {
-                        setUndo(null);
-                        const name = selectedOriginal;
-                        replaceFiles({
-                          ...files,
-                          "original-source.json": JSON.stringify({
-                            ...originalFiles,
-                            [name]: value,
-                          }),
-                        });
-                        setSelectedOriginal(name);
-                      }}
-                      language={
-                        selectedOriginal.endsWith(".css")
-                          ? "css"
-                          : selectedOriginal.endsWith(".json")
-                            ? "json"
-                            : selectedOriginal.endsWith(".svg")
-                              ? "html"
-                              : "typescript"
-                      }
-                      ariaLabel={selectedOriginal}
-                      readOnly={
-                        locked || /\.(?:png|webp)$/.test(selectedOriginal)
-                      }
-                      contextDeclarations={pluginIdeDeclarations}
-                      height={520}
-                    />
-                  )}
+                  {visitedOriginal
+                    .filter((name) => Object.hasOwn(originalFiles, name))
+                    .map((name) => (
+                      <div
+                        key={name}
+                        className="plugin-ide-editor-document"
+                        hidden={name !== selectedOriginal || !!reviewFile}
+                      >
+                        <MonacoCodeEditor
+                          value={originalFiles[name] ?? ""}
+                          onChange={(value) => {
+                            setUndo(null);
+                            replaceFiles({
+                              ...files,
+                              "original-source.json": JSON.stringify({
+                                ...originalFiles,
+                                [name]: value,
+                              }),
+                            });
+                          }}
+                          language={
+                            name.endsWith(".css")
+                              ? "css"
+                              : name.endsWith(".json")
+                                ? "json"
+                                : name.endsWith(".svg")
+                                  ? "html"
+                                  : /\.(?:js|jsx)$/.test(name)
+                                    ? "javascript"
+                                    : "typescript"
+                          }
+                          ariaLabel={name}
+                          readOnly={locked || /\.(?:png|webp)$/.test(name)}
+                          contextDeclarations={pluginIdeDeclarations}
+                          height={520}
+                        />
+                      </div>
+                    ))}
                   {reviewFile && proposal && (
                     <PluginDiffEditor
                       key={reviewFile}
@@ -1565,7 +1580,17 @@ export default function PluginIde({
       <footer className="plugin-ide-statusbar">
         <span role="status">{saveStatus ?? t("draft")}</span>
         <span>
-          {t(selected === "entry.tsx" ? "typescriptLanguage" : "jsonLanguage")}
+          {(selectedOriginal ?? selected).endsWith(".json")
+            ? "JSON"
+            : (selectedOriginal ?? selected).endsWith(".css")
+              ? "CSS"
+              : (selectedOriginal ?? selected).endsWith(".svg")
+                ? "SVG"
+                : /\.(?:js|jsx)$/.test(selectedOriginal ?? selected)
+                  ? "JavaScript"
+                  : (selectedOriginal ?? selected).endsWith(".ts")
+                    ? "TypeScript"
+                    : t("typescriptLanguage")}
         </span>
         {undo && (
           <button

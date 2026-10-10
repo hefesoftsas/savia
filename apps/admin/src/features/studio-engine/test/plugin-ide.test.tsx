@@ -117,6 +117,71 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+it("keeps source files in separate closable tabs and filters the explorer", async () => {
+  const entry = "store-ports/demo/entry.tsx";
+  const module = "packages/demo/src/screen.tsx";
+  render(
+    <PluginIde
+      tenantId={2}
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+      initialFiles={{
+        "entry.tsx": "export function render() {}",
+        "savia-extension.json": '{"id":"custom.demo","version":"1.0.1"}',
+        "store.json": "{}",
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          [entry]: "// Entry source",
+          [module]: "// Screen source",
+        }),
+      }}
+    />,
+  );
+  for (const folder of ["packages", "packages/demo", "packages/demo/src"]) {
+    fireEvent.click(
+      screen
+        .getByRole("treeitem", { name: folder, exact: true })
+        .querySelector(".plugin-file-tree-row")!,
+    );
+  }
+  fireEvent.click(screen.getByRole("treeitem", { name: module, exact: true }));
+  expect(screen.getByRole("tab", { name: entry, exact: true })).toHaveAttribute(
+    "aria-selected",
+    "false",
+  );
+  expect(
+    screen.getByRole("tab", { name: module, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  fireEvent.change(screen.getByRole("textbox", { name: module, exact: true }), {
+    target: { value: "// Edited screen" },
+  });
+  fireEvent.click(screen.getByRole("tab", { name: entry, exact: true }));
+  fireEvent.click(screen.getByRole("tab", { name: module, exact: true }));
+  expect(
+    screen.getByRole("textbox", { name: module, exact: true }),
+  ).toHaveValue("// Edited screen");
+  fireEvent.click(
+    screen.getByRole("button", { name: `Cerrar ${module}`, exact: true }),
+  );
+  expect(
+    screen.queryByRole("tab", { name: module, exact: true }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: entry, exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  fireEvent.change(
+    screen.getByRole("searchbox", { name: "Buscar archivos", exact: true }),
+    { target: { value: "screen" } },
+  );
+  expect(
+    screen.queryByRole("treeitem", { name: entry, exact: true }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("treeitem", { name: module, exact: true }),
+  ).toBeInTheDocument();
+});
+
 function previewReady() {
   const frame = screen.getByTitle(
     "Vista previa del plugin",
