@@ -57,6 +57,7 @@ import {
   pluginStoreSourceFilesSchema,
   type PluginStoreSourceFiles,
 } from "@savia/studio-shared/plugin-projects";
+import { registerPluginEditorExtensions } from "./plugin-editor-extensions";
 import { registerPluginProjects } from "./plugin-projects";
 
 export type PluginStoreOptions = {
@@ -1557,6 +1558,7 @@ export function registerPluginStore(
 ) {
   registerPluginRegistry(app, options);
   registerPluginProjects(app, options);
+  registerPluginEditorExtensions(app, options);
 
   app.get("/api/plugin-store", async (c) => {
     const tenant = c.get("tenant");

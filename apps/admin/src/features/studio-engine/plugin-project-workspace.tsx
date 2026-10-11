@@ -126,11 +126,13 @@ export default function PluginProjectWorkspace({
       files: draft.files,
       history: draft.history,
       editorExtensions: value.editorExtensions ?? [],
+      installedEditorExtensions: value.installedEditorExtensions ?? [],
     };
     const initial = {
       files: value.files,
       history: value.history,
       editorExtensions: value.editorExtensions ?? [],
+      installedEditorExtensions: value.installedEditorExtensions ?? [],
     };
     const current = new PluginProjectSession(
       value.version,
@@ -152,7 +154,11 @@ export default function PluginProjectWorkspace({
       (input) => {
         try {
           if (input) {
-            const { editorExtensions: _editorExtensions, ...recovery } = input;
+            const {
+              editorExtensions: _editorExtensions,
+              installedEditorExtensions: _installed,
+              ...recovery
+            } = input;
             localStorage.setItem(key(value.id), JSON.stringify(recovery));
           } else localStorage.removeItem(key(value.id));
         } catch {
@@ -175,6 +181,7 @@ export default function PluginProjectWorkspace({
       ...value,
       ...draft,
       editorExtensions: value.editorExtensions ?? [],
+      installedEditorExtensions: value.installedEditorExtensions ?? [],
     });
     setStatus({ state: "saved" });
     if (recovery)
@@ -182,6 +189,7 @@ export default function PluginProjectWorkspace({
         files: recovery.files,
         history: recovery.history,
         editorExtensions: value.editorExtensions ?? [],
+        installedEditorExtensions: value.installedEditorExtensions ?? [],
       });
   }
   function fail(reason: unknown) {
@@ -510,6 +518,10 @@ export default function PluginProjectWorkspace({
               tenantId={tenantId}
               initialFiles={project.files}
               initialHistory={project.history}
+              projectId={project.id}
+              initialInstalledEditorExtensions={
+                project.installedEditorExtensions
+              }
               initialEditorExtensions={project.editorExtensions}
               backLabel={tr(
                 "Volver a proyectos",
@@ -529,6 +541,13 @@ export default function PluginProjectWorkspace({
                       : tr("Guardando…", "Saving…", "Salvando…")}
                 </span>
               }
+              onInstalledExtensionsChange={async (draft) => {
+                latest.current = draft;
+                if (!session.current)
+                  throw new Error("Project session is unavailable.");
+                session.current.update(draft);
+                await session.current.flush();
+              }}
               onDraftChange={(draft) => {
                 latest.current = draft;
                 session.current?.update(draft);

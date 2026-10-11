@@ -1,0 +1,12 @@
+{
+  "name": "savia-plugin-editor-preview",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-31",
+  "workers_dev": true,
+  "assets": {
+    "directory": "../admin/dist-plugin-editor",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "none",
+  },
+}

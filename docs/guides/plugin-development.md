@@ -337,7 +337,7 @@ backend storage to fit the database row limit. The API and editor recover the
 exact original file text; existing uncompressed records remain readable. Records
 that still exceed the storage limit after compression are rejected before writing.
 
-## Verified editor web extensions
+## Editor extensions
 
 The plugin editor's **Extensions** panel enables reviewed web extensions for the
 current project. The initial catalog contains **Prettier** (`savia.formatter`)
@@ -345,6 +345,32 @@ for TS/TSX, JS/JSX, JSON, CSS and HTML, and **React snippets**
 (`savia.react-snippets`) for React components (`sfc`) and state (`useState`).
 Use **Format document** or Shift+Alt+F to format, and Ctrl+Space to open
 completion suggestions. Disable an extension to unregister its providers.
+
+These reviewed bundled extensions are separate from extensions installed from
+the marketplace. A project manager can search the Open VSX registry or upload a
+`.vsix` package in the Extensions panel. Savia inspects the package before
+installation and shows its publisher, version, license, compatibility, and
+declared dependencies. Installing and updating are explicit actions; registry
+metadata or a successful inspection never installs or enables code by itself.
+
+Packages are limited to 20 MiB compressed, 64 MiB expanded, 10,000 files, and
+8 MiB per file. Installed package storage is limited to 128 MiB per tenant;
+each project can reference up to 32 installations. Enabling a theme selects
+its matching light or dark theme. Snippet contributions become editor completions.
+
+Only browser-compatible VS Code web extensions can run. An extension that
+requires Node.js, a terminal, native modules, or unsupported VS Code APIs stays
+unavailable in this editor. Dependencies must be installed explicitly. Installed
+packages are immutable and project settings pin the chosen installation and
+digest. Updating a pinned extension requires an explicit update; removing a
+package is blocked while any project still references it. Project extension
+references are saved in the backend and restored when reopening the project.
+
+Third-party extensions run in a separately hosted, cross-origin WebWorker
+runtime. They do not receive Savia application cookies or access to the parent
+page. Installation and project changes require the existing project management
+permission. Review the publisher, license, and package details before enabling
+an extension in a project.
 
 Enabling an extension starts an isolated VS Code API editor with retained file
 models, undo history, project search navigation, and the existing draft/preview
@@ -359,10 +385,8 @@ The standalone editor document is excluded from the offline app-shell fallback
 at both `/plugin-editor.html` and Cloudflare's canonical `/plugin-editor` URL,
 including query strings. Keep both routes excluded when changing PWA routing.
 
-This catalog uses reviewed Savia web extensions; it does not accept arbitrary
-VSIX files, Marketplace installation, Node extensions, or terminal extensions.
-The same-origin iframe isolates editor services, not untrusted code. Supporting
-unreviewed extensions would require a separate security boundary and permission
-model. Add catalog entries only after reviewing their browser compatibility and
-capabilities, updating the shared allowlist and runtime lifecycle, and verifying
-enable, disable, persistence, formatting/completions and read-only behavior.
+The preview editor currently searches Open VSX and also accepts local VSIX
+uploads; it does not use Microsoft's Marketplace. A package that fails the
+browser compatibility checks cannot be activated even if it can be inspected.
+The same-origin bundled-extension fallback remains available when the isolated
+runtime is unavailable, but marketplace and VSIX extensions stay disabled.

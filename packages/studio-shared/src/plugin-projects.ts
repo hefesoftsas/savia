@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { projectEditorExtensionReferencesSchema } from "./plugin-editor-extensions";
 import { PLUGIN_STORE_MAX_ENTRY_BYTES } from "./plugin-store";
 
 const metadataFile = z
@@ -152,6 +153,7 @@ export const pluginProjectSaveSchema = z
             message: "Editor extension IDs must be unique",
           });
       }),
+    installedEditorExtensions: projectEditorExtensionReferencesSchema.default([]),
     version: z.number().int().nonnegative(),
   })
   .strict()

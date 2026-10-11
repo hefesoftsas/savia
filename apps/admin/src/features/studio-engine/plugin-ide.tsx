@@ -92,10 +92,18 @@ type Preview = {
 };
 
 import { PluginEditorExtensionsPanel } from "./plugin-editor-extensions-panel";
+import { createEmbeddedTransport } from "@/api/embedded-transport";
+import { getStudioRuntime } from "./runtime";
+import { PluginEditorExtensionClient } from "./plugin-editor-extension-client";
+import type { ProjectEditorExtensionReference } from "@savia/studio-shared/plugin-editor-extensions";
+import { resolvePluginEditorRuntimeUrl } from "./plugin-editor-session";
 import { PluginVscodeEditor } from "./plugin-vscode-editor";
 
 export default function PluginIde({
   tenantId,
+  projectId = "draft",
+  initialInstalledEditorExtensions = [],
+  onInstalledExtensionsChange,
   onClose,
   onPublished,
   initialFiles,
@@ -107,6 +115,9 @@ export default function PluginIde({
   backLabel,
 }: {
   tenantId: number;
+  projectId?: string;
+  initialInstalledEditorExtensions?: ProjectEditorExtensionReference[];
+  onInstalledExtensionsChange?: (draft: ProjectDraft) => Promise<void>;
   saveStatus?: ReactNode;
   backLabel?: string;
   initialFiles?: IdeFiles;
@@ -133,7 +144,26 @@ export default function PluginIde({
     initialEditorExtensions,
   );
   const [extensionsStarted, setExtensionsStarted] = useState(
-    initialEditorExtensions.length > 0,
+    initialEditorExtensions.length > 0 ||
+      initialInstalledEditorExtensions.length > 0,
+  );
+  const [installedEditorExtensions, setInstalledEditorExtensions] = useState(
+    initialInstalledEditorExtensions,
+  );
+  const [activationErrors, setActivationErrors] = useState<
+    Record<string, string>
+  >({});
+  const extensionRollback = useRef<{
+    previous: ProjectEditorExtensionReference[];
+    pending: Set<string>;
+    next: ProjectEditorExtensionReference[];
+    applied: boolean;
+    resolve(): void;
+    reject(error: Error): void;
+  } | null>(null);
+  const runtimeAvailable = !!resolvePluginEditorRuntimeUrl(
+    import.meta.env.VITE_PLUGIN_EDITOR_RUNTIME_URL,
+    location.origin,
   );
   const [formatRequest, setFormatRequest] = useState(0);
   const [editorError, setEditorError] = useState("");
@@ -150,6 +180,17 @@ export default function PluginIde({
   const conversation = useRef<HTMLDivElement>(null);
   const locale = useAppLocale();
   const { apiClient } = useAppServices();
+  const extensionClient = useMemo(
+    () =>
+      new PluginEditorExtensionClient(
+        getStudioRuntime().pluginTransport ??
+          createEmbeddedTransport(
+            apiClient,
+            getStudioRuntime().apiBasePath ?? `/v1/studio/${tenantId}`,
+          ),
+      ),
+    [apiClient, tenantId],
+  );
   const [files, setFiles] = useState<IdeFiles>(
     () => initialFiles ?? createPluginProject(),
   );
@@ -250,12 +291,104 @@ export default function PluginIde({
     draftCallback.current?.({
       files,
       editorExtensions,
+      installedEditorExtensions,
       history: history.slice(-10).map((item) => ({
         role: item.role,
         content: item.content.slice(0, 4000),
       })),
     });
-  }, [files, history, editorExtensions]);
+  }, [files, history, editorExtensions, installedEditorExtensions]);
+  const extensionSessionActive = useRef(true);
+  const latestExtensionDraft = useRef<ProjectDraft>({
+    files,
+    editorExtensions,
+    history,
+  });
+  latestExtensionDraft.current = {
+    files,
+    editorExtensions,
+    history: history.slice(-10).map((item) => ({
+      role: item.role,
+      content: item.content.slice(0, 4000),
+    })),
+  };
+  useEffect(() => {
+    extensionSessionActive.current = true;
+    return () => {
+      extensionSessionActive.current = false;
+      extensionRollback.current?.reject(new Error("Editor session ended."));
+    };
+  }, []);
+  async function changeInstalledExtensions(
+    next: ProjectEditorExtensionReference[],
+  ) {
+    if (extensionRollback.current)
+      throw new Error("An extension change is already in progress.");
+    if (!onInstalledExtensionsChange)
+      throw new Error("Project persistence is unavailable.");
+    const previous = installedEditorExtensions;
+    const draft: ProjectDraft = {
+      files,
+      editorExtensions,
+      installedEditorExtensions: next,
+      history: history.slice(-10).map((item) => ({
+        role: item.role,
+        content: item.content.slice(0, 4000),
+      })),
+    };
+    // Set the transition before persistence so concurrent actions cannot replace it.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const applied = new Promise<void>((resolve, reject) => {
+      extensionRollback.current = {
+        previous,
+        next,
+        applied: false,
+        pending: new Set(
+          next
+            .filter(
+              (ref) =>
+                !previous.some(
+                  (old) => old.installationId === ref.installationId,
+                ),
+            )
+            .map((ref) => ref.installationId),
+        ),
+        resolve,
+        reject,
+      };
+      timer = setTimeout(
+        () => reject(new Error("Extension synchronization timed out.")),
+        120000,
+      );
+    });
+    // Avoid an unhandled rejection while the backend save is pending.
+    void applied.catch(() => {});
+    try {
+      await onInstalledExtensionsChange(draft);
+      if (!extensionSessionActive.current)
+        throw new Error("Editor session ended.");
+      setInstalledEditorExtensions(next);
+      setExtensionsStarted(true);
+      await applied;
+    } catch (error) {
+      if (extensionSessionActive.current) {
+        await onInstalledExtensionsChange({
+          ...latestExtensionDraft.current,
+          installedEditorExtensions: previous,
+        });
+        setInstalledEditorExtensions(previous);
+      }
+      throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
+      extensionRollback.current = null;
+    }
+  }
+  function finishExtensionTransition() {
+    const transition = extensionRollback.current;
+    if (transition?.applied && !transition.pending.size) transition.resolve();
+  }
+
   const snapshot = JSON.stringify(files);
   const savedSnapshot = useRef(snapshot);
   const currentSnapshot = useRef(snapshot);
@@ -1120,6 +1253,11 @@ export default function PluginIde({
             >
               {sidebarView === "extensions" ? (
                 <PluginEditorExtensionsPanel
+                  client={extensionClient}
+                  runtimeAvailable={runtimeAvailable}
+                  installedReferences={installedEditorExtensions}
+                  onInstalledChange={(next) => changeInstalledExtensions(next)}
+                  activationErrors={activationErrors}
                   enabled={editorExtensions}
                   disabled={locked}
                   error={editorError}
@@ -1299,7 +1437,8 @@ export default function PluginIde({
                   <span title={selectedOriginal ?? reviewFile ?? selected}>
                     {selectedOriginal ?? reviewFile ?? selected}
                   </span>
-                  {editorExtensions.includes("savia.formatter") && (
+                  {(editorExtensions.includes("savia.formatter") ||
+                    installedEditorExtensions.length > 0) && (
                     <button
                       type="button"
                       disabled={locked}
@@ -1314,6 +1453,52 @@ export default function PluginIde({
                 <div className="plugin-ide-editors">
                   {extensionsStarted && (
                     <PluginVscodeEditor
+                      projectId={projectId}
+                      installedExtensions={installedEditorExtensions}
+                      loadInstalledExtension={async (reference) => {
+                        const installations = await extensionClient.list();
+                        const installation = installations.find(
+                          (item) =>
+                            item.installationId === reference.installationId &&
+                            item.sha256 === reference.sha256,
+                        );
+                        if (!installation)
+                          throw new Error(
+                            "Installed extension is unavailable.",
+                          );
+                        const bytes = await extensionClient.downloadPackage(
+                          reference.installationId,
+                        );
+                        return { installation, bytes };
+                      }}
+                      onExtensionStatus={(id, error) => {
+                        setActivationErrors((current) => {
+                          const next = { ...current };
+                          if (error) next[id] = error;
+                          else delete next[id];
+                          return next;
+                        });
+                        const transition = extensionRollback.current;
+                        if (transition?.pending.has(id)) {
+                          transition.pending.delete(id);
+                          if (error) transition.reject(new Error(error));
+                          else finishExtensionTransition();
+                        }
+                      }}
+                      onExtensionsApplied={(references, error) => {
+                        const transition = extensionRollback.current;
+                        if (
+                          !transition ||
+                          JSON.stringify(references) !==
+                            JSON.stringify(transition.next)
+                        )
+                          return;
+                        if (error) transition.reject(new Error(error));
+                        else {
+                          transition.applied = true;
+                          finishExtensionTransition();
+                        }
+                      }}
                       files={Object.fromEntries(
                         Object.entries(searchableFiles).filter(
                           ([name]) =>

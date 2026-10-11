@@ -104,6 +104,63 @@ async function request(
   return { status: response.status, body: (await response.json()) as any };
 }
 
+async function seedEditorExtensionInstallation(
+  tenant: string,
+  principalId: string,
+  installationId: string,
+  sha256: string,
+) {
+  const objectKey = `plugin-editor/${tenant}/${principalId}/artifacts/${sha256}.vsix`;
+  const metadata = {
+    id: "Acme.example",
+    publisher: "Acme",
+    name: "example",
+    version: "1.0.0",
+    sha256,
+    license: "MIT",
+    compressedBytes: 1,
+    expandedBytes: 2,
+    dependencies: [],
+    compatibility: { supported: true, reason: null },
+  };
+  await platform.env.FILES.put(objectKey, new Uint8Array([1]));
+  await platform.env.DB.prepare(
+    `INSERT INTO plugin_editor_extension_artifacts
+     (tenant_id,principal_id,sha256,object_key,compressed_bytes,expanded_bytes,created_at,reference_count)
+     VALUES(?,?,?,?,?,?,?,1)`,
+  )
+    .bind(
+      tenant,
+      principalId,
+      sha256,
+      objectKey,
+      1,
+      2,
+      new Date().toISOString(),
+    )
+    .run();
+  await platform.env.DB.prepare(
+    `INSERT INTO plugin_editor_extension_installations
+     (id,tenant_id,principal_id,publisher,name,version,sha256,metadata_json,source,object_key,created_at)
+     VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      installationId,
+      tenant,
+      principalId,
+      metadata.publisher,
+      metadata.name,
+      metadata.version,
+      sha256,
+      JSON.stringify(metadata),
+      "vsix",
+      objectKey,
+      new Date().toISOString(),
+    )
+    .run();
+  return { installationId, sha256 };
+}
+
 beforeAll(async () => {
   platform = await getPlatformProxy({
     configPath: "wrangler.jsonc",
@@ -238,6 +295,182 @@ describe("durable plugin projects and release source", () => {
         )
       ).status,
     ).toBe(404);
+  });
+
+  it("persists owned installed extension digests and keeps project saves CAS-protected", async () => {
+    const tenant = "project-editor-refs";
+    const principalId = "owner";
+    const projectId = "a3e6b43c-3cf0-4d3b-91fb-f5b3a087d001";
+    const reference = await seedEditorExtensionInstallation(
+      tenant,
+      principalId,
+      "0012b7b8-63c6-4bc0-b250-a635f708c001",
+      "a".repeat(64),
+    );
+    const projectFiles = {
+      "entry.tsx": "export default () => <main />;",
+      "savia-extension.json": "{ invalid draft json",
+      "store.json": "{}",
+      "preview.json": "{}",
+    };
+    const saved = await request(
+      tenant,
+      principalId,
+      `/api/plugin-projects/${projectId}`,
+      "PUT",
+      {
+        files: projectFiles,
+        history: [],
+        version: 0,
+        installedEditorExtensions: [reference],
+      },
+    );
+    expect(saved.status).toBe(200);
+    expect(saved.body.data.installedEditorExtensions).toEqual([reference]);
+
+    const loaded = await request(
+      tenant,
+      principalId,
+      `/api/plugin-projects/${projectId}`,
+    );
+    expect(loaded.status).toBe(200);
+    expect(loaded.body.data.installedEditorExtensions).toEqual([reference]);
+
+    const staleSave = await request(
+      tenant,
+      principalId,
+      `/api/plugin-projects/${projectId}`,
+      "PUT",
+      {
+        files: projectFiles,
+        history: [],
+        version: 0,
+        installedEditorExtensions: [reference],
+      },
+    );
+    expect(staleSave.status).toBe(409);
+    expect(
+      (await request(tenant, principalId, `/api/plugin-projects/${projectId}`))
+        .body.data.version,
+    ).toBe(1);
+  });
+
+  it("rejects foreign-scope installations and digest mismatches in project references", async () => {
+    const tenant = "project-editor-ref-scope";
+    const principalId = "owner";
+    const own = await seedEditorExtensionInstallation(
+      tenant,
+      principalId,
+      "0012b7b8-63c6-4bc0-b250-a635f708c002",
+      "b".repeat(64),
+    );
+    const foreignTenant = await seedEditorExtensionInstallation(
+      "project-editor-ref-other-tenant",
+      principalId,
+      "0012b7b8-63c6-4bc0-b250-a635f708c003",
+      "c".repeat(64),
+    );
+    const foreignPrincipal = await seedEditorExtensionInstallation(
+      tenant,
+      "another-owner",
+      "0012b7b8-63c6-4bc0-b250-a635f708c004",
+      "d".repeat(64),
+    );
+    const projectFiles = {
+      "entry.tsx": "draft",
+      "savia-extension.json": "{}",
+      "store.json": "{}",
+      "preview.json": "{}",
+    };
+    for (const [projectId, reference] of [
+      ["b3e6b43c-3cf0-4d3b-91fb-f5b3a087d001", foreignTenant],
+      ["c3e6b43c-3cf0-4d3b-91fb-f5b3a087d001", foreignPrincipal],
+      [
+        "d3e6b43c-3cf0-4d3b-91fb-f5b3a087d001",
+        { ...own, sha256: "e".repeat(64) },
+      ],
+    ] as const) {
+      const result = await request(
+        tenant,
+        principalId,
+        `/api/plugin-projects/${projectId}`,
+        "PUT",
+        {
+          files: projectFiles,
+          history: [],
+          version: 0,
+          installedEditorExtensions: [reference],
+        },
+      );
+      expect(result.status).toBe(422);
+      expect(
+        await platform.env.DB.prepare(
+          "SELECT 1 FROM plugin_authoring_projects WHERE tenant_id=? AND principal_id=? AND id=?",
+        )
+          .bind(tenant, principalId, projectId)
+          .first(),
+      ).toBeNull();
+    }
+  });
+
+  it("blocks uninstall while a project references an installation, then allows it after removal", async () => {
+    const tenant = "project-editor-ref-uninstall";
+    const principalId = "owner";
+    const projectId = "e3e6b43c-3cf0-4d3b-91fb-f5b3a087d001";
+    const reference = await seedEditorExtensionInstallation(
+      tenant,
+      principalId,
+      "0012b7b8-63c6-4bc0-b250-a635f708c005",
+      "f".repeat(64),
+    );
+    const projectFiles = {
+      "entry.tsx": "draft",
+      "savia-extension.json": "{}",
+      "store.json": "{}",
+      "preview.json": "{}",
+    };
+    const saved = await request(
+      tenant,
+      principalId,
+      `/api/plugin-projects/${projectId}`,
+      "PUT",
+      {
+        files: projectFiles,
+        history: [],
+        version: 0,
+        installedEditorExtensions: [reference],
+      },
+    );
+    expect(saved.status).toBe(200);
+
+    const uninstall = () =>
+      app(tenant, principalId).request(
+        `http://localhost/api/plugin-editor-extensions/installed/${reference.installationId}`,
+        { method: "DELETE" },
+        platform.env,
+      );
+    const blocked = await uninstall();
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toEqual({
+      error: "Extension is referenced by projects.",
+      projectIds: [projectId],
+    });
+
+    const unpinned = await request(
+      tenant,
+      principalId,
+      `/api/plugin-projects/${projectId}`,
+      "PUT",
+      {
+        files: projectFiles,
+        history: [],
+        version: 1,
+        installedEditorExtensions: [],
+      },
+    );
+    expect(unpinned.status).toBe(200);
+    expect(unpinned.body.data.installedEditorExtensions).toEqual([]);
+    expect((await uninstall()).status).toBe(204);
   });
 
   it("denies unauthenticated and non-admin project access", async () => {
