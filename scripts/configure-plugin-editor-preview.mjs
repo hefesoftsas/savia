@@ -5,6 +5,55 @@ import { pathToFileURL } from "node:url";
 const EXPECTED_HOST =
   /^savia-plugin-editor-preview\.[a-z0-9-]+\.workers\.dev$/i;
 const READINESS_PATH = "/plugin-editor";
+const READINESS_ATTEMPTS = 12;
+const READINESS_RETRY_DELAY_MS = 2500;
+const READINESS_FETCH_TIMEOUT_MS = 5000;
+const RETRYABLE_READINESS_STATUSES = new Set([404, 502, 503, 504]);
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function fetchReadiness(url, fetchImpl, sleepImpl) {
+  let lastNetworkError;
+  for (let attempt = 1; attempt <= READINESS_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      READINESS_FETCH_TIMEOUT_MS,
+    );
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        redirect: "error",
+        signal: controller.signal,
+      });
+    } catch (error) {
+      lastNetworkError = error;
+      if (attempt === READINESS_ATTEMPTS) {
+        throw new Error(
+          `Plugin editor runtime readiness request failed after ${attempt} attempts: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (response) {
+      if (!RETRYABLE_READINESS_STATUSES.has(response.status)) return response;
+      if (attempt === READINESS_ATTEMPTS) {
+        throw new Error(
+          `Plugin editor runtime readiness returned HTTP ${response.status} after ${attempt} attempts`,
+        );
+      }
+    }
+
+    await sleepImpl(READINESS_RETRY_DELAY_MS);
+  }
+  throw new Error(
+    `Plugin editor runtime readiness request failed: ${String(lastNetworkError)}`,
+  );
+}
 
 export function validateDeploymentUrl(value) {
   if (typeof value !== "string" || value.length > 512) {
@@ -42,11 +91,12 @@ export async function configurePluginEditorPreview({
   deploymentUrl,
   githubEnvPath,
   fetchImpl = fetch,
+  sleepImpl = sleep,
 }) {
   if (!githubEnvPath) throw new Error("GITHUB_ENV is required");
   const origin = validateDeploymentUrl(deploymentUrl);
   const readinessUrl = new URL(READINESS_PATH, origin);
-  const response = await fetchImpl(readinessUrl, { redirect: "error" });
+  const response = await fetchReadiness(readinessUrl, fetchImpl, sleepImpl);
 
   if (!response.ok) {
     throw new Error(

@@ -372,6 +372,10 @@ page. Installation and project changes require the existing project management
 permission. Review the publisher, license, and package details before enabling
 an extension in a project.
 
+Preview deployment waits for the isolated runtime before building the parent
+application. Bounded readiness retries allow a newly published origin to
+propagate; missing isolation headers or cookies still fail the deployment.
+
 Enabling an extension starts an isolated VS Code API editor with retained file
 models, undo history, project search navigation, and the existing draft/preview
 publication flow. The isolated editor retains the plugin's React, JSX and

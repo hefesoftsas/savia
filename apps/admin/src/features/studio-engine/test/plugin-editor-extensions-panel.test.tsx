@@ -18,7 +18,7 @@ it("filters the verified catalog and enables then disables an extension by ID", 
     screen.getByRole("heading", { name: "Extensions" }),
   ).toBeInTheDocument();
   expect(
-    screen.getByText(/Verified catalog of VS Code web extensions/),
+    screen.getByText(/Catalog of VS Code web extensions/),
   ).toBeInTheDocument();
   expect(screen.getByText("Prettier")).toBeInTheDocument();
   expect(screen.getByText("React snippets")).toBeInTheDocument();
@@ -169,8 +169,60 @@ it("searches, inspects, installs explicitly, and persists enable and disable cha
       runtimeAvailable
     />,
   );
+  expect(screen.getByText("Enabled")).toBeInTheDocument();
+  expect(screen.queryByText("Activation pending")).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "Disable" }));
   await waitFor(() => expect(onInstalledChange).toHaveBeenLastCalledWith([]));
+});
+
+it("shows activation pending until the reference synchronization finishes", async () => {
+  let finishChange!: () => void;
+  const onInstalledChange = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finishChange = resolve;
+      }),
+  );
+  const client = {
+    list: vi.fn().mockResolvedValue([installedExample]),
+  } as unknown as PluginEditorExtensionClient;
+  const { rerender } = render(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+      installedReferences={[]}
+      onInstalledChange={onInstalledChange}
+      runtimeAvailable
+    />,
+    { locale: "en" },
+  );
+  fireEvent.click(screen.getByRole("tab", { name: "Installed" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Enable" }));
+  await waitFor(() => expect(onInstalledChange).toHaveBeenCalledTimes(1));
+
+  rerender(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+      installedReferences={[
+        {
+          installationId: installedExample.installationId,
+          sha256: installedExample.sha256,
+        },
+      ]}
+      onInstalledChange={onInstalledChange}
+      runtimeAvailable
+    />,
+    { locale: "en" },
+  );
+  expect(screen.getByText("Activation pending")).toBeInTheDocument();
+  expect(screen.queryByText("Enabled")).not.toBeInTheDocument();
+
+  finishChange();
+  await waitFor(() => expect(screen.getByText("Enabled")).toBeInTheDocument());
+  expect(screen.queryByText("Activation pending")).not.toBeInTheDocument();
 });
 
 it("shows incompatibility reasons, blocks installation without the isolated runtime, and validates uploads", async () => {
@@ -256,23 +308,21 @@ it("updates an enabled version directly from Marketplace before the Installed ta
   const change = vi.fn().mockResolvedValue(undefined);
   const client = {
     list: vi.fn().mockResolvedValue([old]),
-    search: vi
-      .fn()
-      .mockResolvedValue({
-        results: [
-          {
-            publisher: old.publisher,
-            name: old.name,
-            version: next.version,
-            displayName: "Example",
-            description: null,
-            license: "MIT",
-          },
-        ],
-        offset: 0,
-        totalSize: 1,
-        nextOffset: null,
-      }),
+    search: vi.fn().mockResolvedValue({
+      results: [
+        {
+          publisher: old.publisher,
+          name: old.name,
+          version: next.version,
+          displayName: "Example",
+          description: null,
+          license: "MIT",
+        },
+      ],
+      offset: 0,
+      totalSize: 1,
+      nextOffset: null,
+    }),
     inspectMarketplace: vi
       .fn()
       .mockResolvedValue({ ...compatibleInspection, metadata: next }),

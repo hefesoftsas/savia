@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PluginEditorExtensionClient,
   PluginEditorExtensionClientError,
+  type MarketplaceExtension,
 } from "../plugin-editor-extension-client";
 
 const installed = {
@@ -66,7 +67,26 @@ describe("PluginEditorExtensionClient", () => {
         body: file,
       }),
     );
-    await client.inspectMarketplace({
+    const marketplaceResult: MarketplaceExtension = {
+      publisher: "Acme",
+      name: "example",
+      version: "1.0.0",
+      displayName: "Example Extension",
+      description: "A sample extension from Open VSX.",
+      license: "MIT",
+    };
+    await client.inspectMarketplace(marketplaceResult);
+    const marketplaceRequest = JSON.parse(
+      fetcher.mock.calls[1]?.[1]?.body as string,
+    ) as Record<string, unknown>;
+    expect(Object.keys(marketplaceRequest).sort()).toEqual([
+      "name",
+      "publisher",
+      "source",
+      "version",
+    ]);
+    expect(marketplaceRequest).toEqual({
+      source: "open-vsx",
       publisher: "Acme",
       name: "example",
       version: "1.0.0",

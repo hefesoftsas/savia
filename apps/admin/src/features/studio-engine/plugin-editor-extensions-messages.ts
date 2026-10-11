@@ -7,9 +7,9 @@ export const pluginEditorExtensionsMessages = {
     "Buscar por nome ou função",
   ],
   catalogNote: [
-    "Catálogo verificado de extensiones web de VS Code. Las extensiones de Node o de Marketplace aún no son compatibles.",
-    "Verified catalog of VS Code web extensions. Node and Marketplace extensions are not supported yet.",
-    "Catálogo verificado de extensões web do VS Code. Extensões de Node e do Marketplace ainda não são compatíveis.",
+    "Catálogo de extensiones web de VS Code. Puedes instalar desde Open VSX o subir un VSIX. Las extensiones que requieren Node.js no son compatibles.",
+    "Catalog of VS Code web extensions. Install from Open VSX or upload a VSIX. Extensions requiring Node.js are not supported.",
+    "Catálogo de extensões web do VS Code. Instale pelo Open VSX ou envie um VSIX. Extensões que exigem Node.js não são compatíveis.",
   ],
   enabled: ["Habilitada", "Enabled", "Ativada"],
   enable: ["Habilitar", "Enable", "Ativar"],
