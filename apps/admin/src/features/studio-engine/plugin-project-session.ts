@@ -1,7 +1,9 @@
+import type { ProjectEditorExtensionReference } from "@savia/studio-shared/plugin-editor-extensions";
 import type { IdeFiles } from "./plugin-ide-project";
 export type ProjectDraft = {
   files: IdeFiles;
   editorExtensions?: string[];
+  installedEditorExtensions?: ProjectEditorExtensionReference[];
   history: { role: "user" | "assistant"; content: string }[];
 };
 export type RecoveryDraft = ProjectDraft & { version: number };

@@ -9,12 +9,105 @@ function messageFrom(iframe: HTMLIFrameElement, data: unknown) {
     new MessageEvent("message", {
       source: iframe.contentWindow,
       origin: location.origin,
-      data,
+      data: {
+        session: Object.fromEntries(
+          new URLSearchParams(new URL(iframe.src).hash.slice(1)),
+        ),
+        message: data,
+      },
     }),
   );
 }
 
 describe("extension editor bridge", () => {
+  it("reports applied extension state only after the matching frame confirms it", () => {
+    const applied = vi.fn();
+    const props = {
+      files: { "entry.tsx": "source" },
+      activeFile: "entry.tsx",
+      extensions: [],
+      readOnly: false,
+      onChange: vi.fn(),
+      onSearch: vi.fn(),
+      onError: vi.fn(),
+      onExtensionsApplied: applied,
+    };
+    const view = render(<PluginVscodeEditor {...props} />);
+    const frame = view.container.querySelector("iframe")!;
+    expect(applied).not.toHaveBeenCalled();
+    messageFrom(frame, {
+      type: "savia-editor-state-applied",
+      installedExtensions: [],
+      error: "Extension host refused to stop.",
+    });
+    expect(applied).toHaveBeenCalledWith([], "Extension host refused to stop.");
+    expect(props.onChange).not.toHaveBeenCalled();
+  });
+  it("ignores oversize requests and drops late completion results after a project switch", async () => {
+    let finish!: (value: string) => void;
+    const fetchCompletion = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const props = {
+      files: { "entry.tsx": "source" },
+      activeFile: "entry.tsx",
+      extensions: [],
+      readOnly: false,
+      onChange: vi.fn(),
+      onSearch: vi.fn(),
+      onError: vi.fn(),
+      fetchCompletion,
+    };
+    const view = render(<PluginVscodeEditor {...props} projectId="first" />);
+    const old = view.container.querySelector("iframe")!;
+    const post = vi
+      .spyOn(old.contentWindow!, "postMessage")
+      .mockImplementation(() => {});
+    messageFrom(old, {
+      type: "savia-editor-completion",
+      requestId: "large",
+      prefix: "a".repeat(102401),
+      suffix: "",
+    });
+    expect(fetchCompletion).not.toHaveBeenCalled();
+    messageFrom(old, {
+      type: "savia-editor-completion",
+      requestId: "pending",
+      prefix: "source",
+      suffix: "",
+    });
+    expect(fetchCompletion).toHaveBeenCalledTimes(1);
+    view.rerender(<PluginVscodeEditor {...props} projectId="second" />);
+    finish("first project result");
+    await Promise.resolve();
+    expect(post).not.toHaveBeenCalled();
+    const current = view.container.querySelector("iframe")!;
+    expect(current).not.toBe(old);
+    const session = Object.fromEntries(
+      new URLSearchParams(new URL(old.src).hash.slice(1)),
+    );
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: current.contentWindow,
+        origin: location.origin,
+        data: {
+          session,
+          message: {
+            type: "savia-editor-change",
+            path: "entry.tsx",
+            value: "foreign",
+            sequence: 1,
+          },
+        },
+      }),
+    );
+    expect(props.onChange).not.toHaveBeenCalled();
+  });
+
   it("accepts sequenced edits from its own frame and acknowledges the latest controlled value", () => {
     const onChange = vi.fn();
     const props = {
@@ -52,7 +145,11 @@ describe("extension editor bridge", () => {
       <PluginVscodeEditor {...props} files={{ "src/entry.tsx": "after" }} />,
     );
     const states = postMessage.mock.calls
-      .map(([data]) => data as { type?: string; acknowledgements?: unknown })
+      .map(
+        ([data]) =>
+          (data as { message: { type?: string; acknowledgements?: unknown } })
+            .message,
+      )
       .filter((data) => data.type === "savia-editor-state");
     expect(states.at(-1)?.acknowledgements).toEqual({ "src/entry.tsx": 4 });
 
@@ -92,14 +189,18 @@ describe("extension editor bridge", () => {
     view.rerender(<PluginVscodeEditor {...props} formatRequest={2} />);
     expect(
       postMessage.mock.calls.filter(
-        ([data]) => (data as { type?: string }).type === "savia-editor-format",
+        ([data]) =>
+          (data as { message: { type?: string } }).message.type ===
+          "savia-editor-format",
       ),
     ).toHaveLength(0);
 
     messageFrom(iframe, { type: "savia-editor-ready" });
     const formatMessages = () =>
       postMessage.mock.calls.filter(
-        ([data]) => (data as { type?: string }).type === "savia-editor-format",
+        ([data]) =>
+          (data as { message: { type?: string } }).message.type ===
+          "savia-editor-format",
       );
     expect(formatMessages()).toHaveLength(2);
     view.rerender(<PluginVscodeEditor {...props} formatRequest={2} />);
@@ -137,9 +238,12 @@ describe("extension editor bridge", () => {
     await waitFor(() =>
       expect(postMessage).toHaveBeenCalledWith(
         {
-          type: "savia-editor-completion-result",
-          requestId: "request-1",
-          value: "completion",
+          session: expect.any(Object),
+          message: {
+            type: "savia-editor-completion-result",
+            requestId: "request-1",
+            value: "completion",
+          },
         },
         location.origin,
       ),
@@ -157,9 +261,12 @@ describe("extension editor bridge", () => {
     await waitFor(() =>
       expect(postMessage).toHaveBeenCalledWith(
         {
-          type: "savia-editor-completion-result",
-          requestId: "request-2",
-          value: null,
+          session: expect.any(Object),
+          message: {
+            type: "savia-editor-completion-result",
+            requestId: "request-2",
+            value: null,
+          },
         },
         location.origin,
       ),

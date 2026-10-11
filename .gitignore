@@ -49,3 +49,7 @@ volumes/
 .DS_Store
 .idea/
 *.swp
+
+# Isolated code editor build output
+apps/admin/dist-plugin-editor/
+apps/plugin-editor-runtime/.wrangler/

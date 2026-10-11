@@ -12,6 +12,7 @@ import {
 } from "@codingame/monaco-vscode-api/extensions";
 import * as monaco from "@codingame/monaco-vscode-editor-api";
 import getKeybindings from "@codingame/monaco-vscode-keybindings-service-override";
+import getSnippets from "@codingame/monaco-vscode-snippets-service-override";
 import getConfiguration from "@codingame/monaco-vscode-configuration-service-override";
 import "@codingame/monaco-vscode-editor-api/esm/vs/editor/browser/coreCommands";
 import "@codingame/monaco-vscode-api/vscode/vs/editor/contrib/suggest/browser/suggestController";
@@ -24,6 +25,12 @@ import getTextmate from "@codingame/monaco-vscode-textmate-service-override";
 import getExtensions from "@codingame/monaco-vscode-extensions-service-override";
 import "@codingame/monaco-vscode-typescript-basics-default-extension";
 import "@codingame/monaco-vscode-json-default-extension";
+import ExtensionHostWorkerUrl from "@codingame/monaco-vscode-api/workers/extensionHost.worker?worker&url";
+import {
+  acceptEditorEnvelope,
+  type EditorSession,
+  isIsolatedEditorRuntime,
+} from "./plugin-editor-session";
 import EditorWorker from "@codingame/monaco-vscode-editor-api/esm/vs/editor/editor.worker?worker";
 import TextmateWorker from "@codingame/monaco-vscode-textmate-service-override/worker?worker";
 import {
@@ -31,12 +38,30 @@ import {
   projectFileUri,
   type EditorState,
 } from "./plugin-vscode-protocol";
+import { EditorExtensionTransferReceiver } from "./plugin-editor-extension-transfer";
+import { InstalledEditorExtensionManager } from "./plugin-editor-installed-extensions";
 import { PluginEditorTypescriptClient } from "./plugin-editor-typescript-client";
 import { pluginIdeDeclarations } from "./plugin-ide-declarations";
 import { formatPluginDocument } from "./plugin-editor-format";
 
-const send = (data: unknown) =>
-  window.parent.postMessage(data, location.origin);
+const parameters = new URLSearchParams(location.hash.slice(1));
+const session: EditorSession = {
+  nonce: parameters.get("nonce") ?? "",
+  projectId: parameters.get("projectId") ?? "",
+  parentOrigin: parameters.get("parentOrigin") ?? "",
+};
+const send = (message: unknown) =>
+  window.parent.postMessage({ session, message }, session.parentOrigin);
+const isolated = isIsolatedEditorRuntime(
+  import.meta.env.SAVIA_ISOLATED_PLUGIN_EDITOR_BUILD === true,
+  location.origin,
+  session.parentOrigin,
+);
+const transfers = new EditorExtensionTransferReceiver();
+let rebindCore: () => Promise<void> = async () => {};
+const thirdParty = new InstalledEditorExtensionManager(isolated, () =>
+  rebindCore(),
+);
 let state: EditorState | undefined;
 let editor: monaco.editor.IStandaloneCodeEditor;
 let applying = false;
@@ -202,6 +227,14 @@ async function update(next: EditorState) {
     }
   }
   await extensions(next.extensions);
+  if (previous)
+    for (const reference of previous.installedExtensions)
+      if (
+        !next.installedExtensions.some(
+          (next) => next.installationId === reference.installationId,
+        )
+      )
+        await thirdParty.disable(reference.installationId);
   for (const [path, reference] of documents) {
     if (!Object.hasOwn(next.files, path)) {
       if (activeFile === path) editor.setModel(null);
@@ -250,7 +283,8 @@ async function update(next: EditorState) {
     editor.focus();
   }
   monaco.editor.setTheme(
-    next.theme.isDark ? "Default Dark Modern" : "Default Light Modern",
+    thirdParty.preferredTheme(next.theme.isDark) ??
+      (next.theme.isDark ? "Default Dark Modern" : "Default Light Modern"),
   );
   editor.updateOptions({ readOnly: next.readOnly, ariaLabel: activeFile });
   const key = JSON.stringify([next.activeFile, next.selectionId]);
@@ -270,17 +304,24 @@ async function update(next: EditorState) {
 
 async function start() {
   (window as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
+    getWorkerUrl: (_id: string, label: string) =>
+      label === "extensionHostWorkerMain" ? ExtensionHostWorkerUrl : "",
+    getWorkerOptions: (_id: string, label: string) => ({
+      type: "module",
+      name: label,
+    }),
     getWorker: (_id: string, label: string) =>
       label === "TextMateWorker" ? new TextmateWorker() : new EditorWorker(),
   };
   await initialize({
     ...getKeybindings(),
+    ...getSnippets(),
     ...getConfiguration(),
     ...getModels(),
     ...getLanguages(),
     ...getTextmate(),
     ...getTheme(),
-    ...getExtensions(),
+    ...getExtensions({ enableWorkerExtensionHost: isolated }),
   });
   // The plugin bundle supplies these globals. Keep them in the isolated
   // language workspace, outside the files saved or published by the parent.
@@ -308,58 +349,68 @@ async function start() {
     },
     ExtensionHostKind.LocalProcess,
   );
-  const contextApi = await contextExtension.getApi();
-  const contextProvider = contextApi.languages.registerCompletionItemProvider(
-    ["typescript", "typescriptreact", "javascript", "javascriptreact"].map(
-      (language) => ({ language, scheme: "file" }),
-    ),
-    {
-      async provideCompletionItems(document, position, token) {
-        if (!state || state.readOnly || token.isCancellationRequested)
-          return [];
-        const version = document.version;
-        const path = document.uri.path.replace(/^\/workspace\//, "");
-        if (!Object.hasOwn(state.files, path)) return [];
-        const files = completionFiles();
-        files[path] = document.getText();
-        const entries = await typescript.complete(
-          files,
-          path,
-          document.offsetAt(position),
-        );
-        const currentFiles = completionFiles();
-        if (
-          token.isCancellationRequested ||
-          state?.readOnly ||
-          document.version !== version ||
-          Object.keys(files).length !== Object.keys(currentFiles).length ||
-          Object.entries(files).some(
-            ([path, text]) => currentFiles[path] !== text,
-          )
-        )
-          return [];
-        const kinds: Record<string, number> = {
-          method: contextApi.CompletionItemKind.Method,
-          function: contextApi.CompletionItemKind.Function,
-          property: contextApi.CompletionItemKind.Property,
-          class: contextApi.CompletionItemKind.Class,
-          interface: contextApi.CompletionItemKind.Interface,
-          keyword: contextApi.CompletionItemKind.Keyword,
-        };
-        return entries.map((entry) => {
-          const item = new contextApi.CompletionItem(
-            entry.name,
-            kinds[entry.kind] ?? contextApi.CompletionItemKind.Variable,
+  async function bindContextProvider() {
+    const contextApi = await contextExtension.getApi();
+    return contextApi.languages.registerCompletionItemProvider(
+      ["typescript", "typescriptreact", "javascript", "javascriptreact"].map(
+        (language) => ({ language, scheme: "file" }),
+      ),
+      {
+        async provideCompletionItems(document, position, token) {
+          if (!state || state.readOnly || token.isCancellationRequested)
+            return [];
+          const version = document.version;
+          const path = document.uri.path.replace(/^\/workspace\//, "");
+          if (!Object.hasOwn(state.files, path)) return [];
+          const files = completionFiles();
+          files[path] = document.getText();
+          const entries = await typescript.complete(
+            files,
+            path,
+            document.offsetAt(position),
           );
-          item.insertText = entry.insertText ?? entry.name;
-          item.sortText = entry.sortText;
-          item.range = document.getWordRangeAtPosition(position);
-          return item;
-        });
+          const currentFiles = completionFiles();
+          if (
+            token.isCancellationRequested ||
+            state?.readOnly ||
+            document.version !== version ||
+            Object.keys(files).length !== Object.keys(currentFiles).length ||
+            Object.entries(files).some(
+              ([path, text]) => currentFiles[path] !== text,
+            )
+          )
+            return [];
+          const kinds: Record<string, number> = {
+            method: contextApi.CompletionItemKind.Method,
+            function: contextApi.CompletionItemKind.Function,
+            property: contextApi.CompletionItemKind.Property,
+            class: contextApi.CompletionItemKind.Class,
+            interface: contextApi.CompletionItemKind.Interface,
+            keyword: contextApi.CompletionItemKind.Keyword,
+          };
+          return entries.map((entry) => {
+            const item = new contextApi.CompletionItem(
+              entry.name,
+              kinds[entry.kind] ?? contextApi.CompletionItemKind.Variable,
+            );
+            item.insertText = entry.insertText ?? entry.name;
+            item.sortText = entry.sortText;
+            item.range = document.getWordRangeAtPosition(position);
+            return item;
+          });
+        },
       },
-    },
-    ".",
-  );
+      ".",
+    );
+  }
+  let contextProvider = await bindContextProvider();
+  rebindCore = async () => {
+    contextProvider.dispose();
+    contextProvider = await bindContextProvider();
+    const ids = state?.extensions ?? [];
+    await extensions([]);
+    await extensions(ids);
+  };
   window.addEventListener(
     "pagehide",
     () => {
@@ -450,22 +501,66 @@ async function start() {
     true,
   );
   window.addEventListener("message", (event) => {
-    if (event.source !== window.parent || event.origin !== location.origin)
-      return;
+    const data = acceptEditorEnvelope(
+      event,
+      window.parent,
+      session.parentOrigin,
+      session,
+    ) as Record<string, unknown> | null;
+    if (!data) return;
     if (
-      event.data?.type === "savia-editor-completion-result" &&
-      typeof event.data.requestId === "string"
+      data.type === "savia-editor-package" &&
+      typeof data.ackId === "string" &&
+      data.ackId.length <= 80
     ) {
-      completions.get(event.data.requestId)?.(
-        typeof event.data.value === "string" ? event.data.value : null,
+      chain = chain.then(async () => {
+        let error: string | undefined;
+        try {
+          if (!isolated || !state)
+            throw new Error("Isolated project session is not ready.");
+          const result = transfers.accept(data.payload);
+          if (result) {
+            const reference = state.installedExtensions.find(
+              (ref) =>
+                ref.installationId === result.installationId &&
+                ref.sha256 === result.sha256,
+            );
+            if (!reference)
+              throw new Error("Extension is not enabled for this project.");
+            await thirdParty.receive(
+              result.installationId,
+              result.sha256,
+              result.bytes,
+            );
+            await thirdParty.enable(reference);
+            monaco.editor.setTheme(
+              thirdParty.preferredTheme(state.theme.isDark) ??
+                (state.theme.isDark
+                  ? "Default Dark Modern"
+                  : "Default Light Modern"),
+            );
+          }
+        } catch (failure) {
+          error = String(failure).slice(0, 2000);
+          transfers.clear();
+        }
+        send({ type: "savia-editor-package-ack", ackId: data.ackId, error });
+      });
+      return;
+    }
+    if (
+      data?.type === "savia-editor-completion-result" &&
+      typeof data.requestId === "string"
+    ) {
+      completions.get(data.requestId)?.(
+        typeof data.value === "string" ? data.value : null,
       );
       return;
     }
-    if (event.data?.type === "savia-editor-format") {
+    if (data?.type === "savia-editor-format") {
       chain = chain
         .then(async () => {
-          if (state?.readOnly || !state?.extensions.includes("savia.formatter"))
-            return;
+          if (state?.readOnly) return;
           await editor.getAction("editor.action.formatDocument")?.run();
         })
         .catch((error) =>
@@ -476,11 +571,22 @@ async function start() {
         );
       return;
     }
-    const result = editorStateSchema.safeParse(event.data);
+    const result = editorStateSchema.safeParse(data);
     if (!result.success) return;
     chain = chain
-      .then(() => update(result.data))
+      .then(async () => {
+        await update(result.data);
+        send({
+          type: "savia-editor-state-applied",
+          installedExtensions: result.data.installedExtensions,
+        });
+      })
       .catch((error) => {
+        send({
+          type: "savia-editor-state-applied",
+          installedExtensions: result.data.installedExtensions,
+          error: String(error).slice(0, 2000),
+        });
         console.error("Savia extension editor update failed", error);
         send({
           type: "savia-editor-error",
@@ -488,6 +594,14 @@ async function start() {
         });
       });
   });
+  window.addEventListener(
+    "pagehide",
+    () => {
+      transfers.clear();
+      void thirdParty.dispose();
+    },
+    { once: true },
+  );
   send({ type: "savia-editor-ready" });
 }
 void start().catch((error) => {
