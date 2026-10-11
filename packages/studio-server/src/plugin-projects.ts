@@ -21,6 +21,7 @@ type ProjectRow = {
   label?: string;
   files: string;
   history: string;
+  editor_extensions?: string;
   version: number;
   updated_at: string;
 };
@@ -48,6 +49,7 @@ async function toProject(row: ProjectRow) {
       role: "user" | "assistant";
       content: string;
     }>,
+    editorExtensions: JSON.parse(row.editor_extensions ?? "[]") as string[],
     version: row.version,
     updatedAt: row.updated_at,
   };
@@ -118,7 +120,7 @@ export function registerPluginProjects(
       id.data,
     );
     const row = await c.env.DB.prepare(
-      `SELECT id,files,history,version,updated_at FROM plugin_authoring_projects
+      `SELECT id,files,history,editor_extensions,version,updated_at FROM plugin_authoring_projects
        WHERE tenant_id=? AND principal_id=? AND id=?`,
     )
       .bind(tenant, principalId, id.data)
@@ -151,8 +153,8 @@ export function registerPluginProjects(
       let inserted: { meta: { changes: number } };
       try {
         inserted = await c.env.DB.prepare(
-          `INSERT INTO plugin_authoring_projects(tenant_id,principal_id,id,label,files,history,version,updated_at)
-           SELECT ?,?,?,?,?,?,1,? WHERE
+          `INSERT INTO plugin_authoring_projects(tenant_id,principal_id,id,label,files,history,editor_extensions,version,updated_at)
+           SELECT ?,?,?,?,?,?,?,1,? WHERE
              (SELECT count(*) FROM plugin_authoring_projects WHERE tenant_id=? AND principal_id=?) < ?`,
         )
           .bind(
@@ -162,6 +164,7 @@ export function registerPluginProjects(
             label,
             storedFiles,
             JSON.stringify(parsed.data.history),
+            JSON.stringify(parsed.data.editorExtensions),
             now,
             tenant,
             principalId,
@@ -178,13 +181,14 @@ export function registerPluginProjects(
         );
     } else {
       const updated = await c.env.DB.prepare(
-        `UPDATE plugin_authoring_projects SET label=?,files=?,history=?,version=version+1,
+        `UPDATE plugin_authoring_projects SET label=?,files=?,history=?,editor_extensions=?,version=version+1,
              updated_at=? WHERE tenant_id=? AND principal_id=? AND id=? AND version=?`,
       )
         .bind(
           label,
           storedFiles,
           JSON.stringify(parsed.data.history),
+          JSON.stringify(parsed.data.editorExtensions),
           now,
           tenant,
           principalId,
@@ -200,6 +204,7 @@ export function registerPluginProjects(
         id: id.data,
         files: parsed.data.files,
         history: parsed.data.history,
+        editorExtensions: parsed.data.editorExtensions,
         version: parsed.data.version + 1,
         updatedAt: now,
       },

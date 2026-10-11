@@ -229,6 +229,10 @@
     {
       "filename": "0053_public_quote_links.sql",
       "sha256": "eb5fea0d519eb1d01393dd71afb41fcdde638bf6c764d5de61dea4be6bae509e"
+    },
+    {
+      "filename": "0054_plugin_project_editor_extensions.sql",
+      "sha256": "9d5eeb8f5862bb7e9a06641aef05331a929ed58535ac90f790aa6fe9385f7690"
     }
   ],
   "sqliteOnlyDerivedTables": [

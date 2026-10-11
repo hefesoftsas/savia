@@ -122,8 +122,16 @@ export default function PluginProjectWorkspace({
       return;
     }
     const draft: ProjectDraft = recovery ?? value;
-    latest.current = { files: draft.files, history: draft.history };
-    const initial = { files: value.files, history: value.history };
+    latest.current = {
+      files: draft.files,
+      history: draft.history,
+      editorExtensions: value.editorExtensions ?? [],
+    };
+    const initial = {
+      files: value.files,
+      history: value.history,
+      editorExtensions: value.editorExtensions ?? [],
+    };
     const current = new PluginProjectSession(
       value.version,
       initial,
@@ -143,8 +151,10 @@ export default function PluginProjectWorkspace({
       },
       (input) => {
         try {
-          if (input) localStorage.setItem(key(value.id), JSON.stringify(input));
-          else localStorage.removeItem(key(value.id));
+          if (input) {
+            const { editorExtensions: _editorExtensions, ...recovery } = input;
+            localStorage.setItem(key(value.id), JSON.stringify(recovery));
+          } else localStorage.removeItem(key(value.id));
         } catch {
           if (mounted.current)
             setError(
@@ -161,10 +171,18 @@ export default function PluginProjectWorkspace({
       },
     );
     session.current = current;
-    setProject({ ...value, ...draft });
+    setProject({
+      ...value,
+      ...draft,
+      editorExtensions: value.editorExtensions ?? [],
+    });
     setStatus({ state: "saved" });
     if (recovery)
-      current.update({ files: recovery.files, history: recovery.history });
+      current.update({
+        files: recovery.files,
+        history: recovery.history,
+        editorExtensions: value.editorExtensions ?? [],
+      });
   }
   function fail(reason: unknown) {
     if (mounted.current)
@@ -492,6 +510,7 @@ export default function PluginProjectWorkspace({
               tenantId={tenantId}
               initialFiles={project.files}
               initialHistory={project.history}
+              initialEditorExtensions={project.editorExtensions}
               backLabel={tr(
                 "Volver a proyectos",
                 "Back to plugin projects",

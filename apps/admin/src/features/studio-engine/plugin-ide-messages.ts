@@ -47,6 +47,8 @@ export const pluginIdeMessages = {
   shortTitle: ["Plugin", "Plugin", "Plugin"],
   typescriptLanguage: ["TypeScript JSX", "TypeScript JSX", "TypeScript JSX"],
   jsonLanguage: ["JSON", "JSON", "JSON"],
+  formatDocument: ["Formatear", "Format", "Formatar"],
+  editorExtensions: ["Extensiones", "Extensions", "Extensões"],
   search: ["Buscar", "Search", "Buscar"],
   searchCode: ["Buscar en el código", "Search code", "Buscar no código"],
   searchPlaceholder: [

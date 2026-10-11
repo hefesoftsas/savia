@@ -334,3 +334,26 @@ Large retained source records and editor drafts are compressed transparently on
 backend storage to fit the database row limit. The API and editor recover the
 exact original file text; existing uncompressed records remain readable. Records
 that still exceed the storage limit after compression are rejected before writing.
+
+## Verified editor web extensions
+
+The plugin editor's **Extensions** panel enables reviewed web extensions for the
+current project. The initial catalog contains **Prettier** (`savia.formatter`)
+for TS/TSX, JS/JSX, JSON, CSS and HTML, and **React snippets**
+(`savia.react-snippets`) for React components (`sfc`) and state (`useState`).
+Use **Format document** or Shift+Alt+F to format, and Ctrl+Space to open
+completion suggestions. Disable an extension to unregister its providers.
+
+Enabling an extension starts an isolated VS Code API editor with retained file
+models, undo history, project search navigation, and the existing draft/preview
+publication flow. Project extension settings are saved in the backend and
+restored when reopening the project; they are not part of the plugin ZIP or
+browser recovery storage. Versions opened for inspection remain read-only.
+
+This catalog uses reviewed Savia web extensions; it does not accept arbitrary
+VSIX files, Marketplace installation, Node extensions, or terminal extensions.
+The same-origin iframe isolates editor services, not untrusted code. Supporting
+unreviewed extensions would require a separate security boundary and permission
+model. Add catalog entries only after reviewing their browser compatibility and
+capabilities, updating the shared allowlist and runtime lifecycle, and verifying
+enable, disable, persistence, formatting/completions and read-only behavior.
