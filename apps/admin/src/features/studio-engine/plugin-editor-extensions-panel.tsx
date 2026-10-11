@@ -121,6 +121,7 @@ export function PluginEditorExtensionsPanel({
   const [installedError, setInstalledError] = useState("");
   const [searching, setSearching] = useState(Boolean(client));
   const [loadingInstalled, setLoadingInstalled] = useState(false);
+  const [installedReload, setInstalledReload] = useState(0);
   const searchController = useRef<AbortController | null>(null);
   const uploadController = useRef<AbortController | null>(null);
   const searchGeneration = useRef(0);
@@ -216,7 +217,7 @@ export function PluginEditorExtensionsPanel({
     return () => {
       current = false;
     };
-  }, [client]);
+  }, [client, installedReload]);
 
   const searchMarketplace = useCallback(
     async (offset = 0, searchQuery = query) => {
@@ -297,6 +298,7 @@ export function PluginEditorExtensionsPanel({
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
     searchDebounce.current = null;
     setSearching(Boolean(client));
+    setOperationError("");
     setSearchError("");
     setMarketplaceItems([]);
     setNextOffset(null);
@@ -306,7 +308,10 @@ export function PluginEditorExtensionsPanel({
   }
 
   function selectTab(nextTab: "marketplace" | "installed") {
+    skipNextDebounce.current = null;
     if (nextTab === "installed") {
+      if (installedError && !loadingInstalled)
+        setInstalledReload((current) => current + 1);
       searchGeneration.current += 1;
       searchController.current?.abort();
       searchController.current = null;
@@ -560,7 +565,9 @@ export function PluginEditorExtensionsPanel({
     if (!client) return;
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
     searchDebounce.current = null;
-    skipNextDebounce.current = query;
+    skipNextDebounce.current = tab === "installed" ? query : null;
+    setOperationError("");
+    setTab("marketplace");
     void searchMarketplace(0, query);
   }
 

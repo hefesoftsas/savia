@@ -665,3 +665,89 @@ it("does not reopen an old inspection after searching for another package", asyn
     await screen.findByRole("button", { name: "Inspect version" }),
   ).toBeEnabled();
 });
+
+it("retries a failed installed list when opening Installed", async () => {
+  const client = {
+    list: vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Temporary list failure"))
+      .mockResolvedValue([installedExample]),
+    search: vi.fn().mockResolvedValue({ results: [], nextOffset: null }),
+  } as unknown as PluginEditorExtensionClient;
+  render(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+    />,
+    { locale: "en" },
+  );
+  await waitFor(() => expect(client.list).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  fireEvent.click(screen.getByRole("tab", { name: "Installed" }));
+  expect(await screen.findByText("example")).toBeInTheDocument();
+  expect(screen.queryByText("Temporary list failure")).not.toBeInTheDocument();
+});
+
+it("clears an unrelated upload error when starting a marketplace query", async () => {
+  const client = {
+    list: vi.fn().mockResolvedValue([]),
+    search: vi.fn().mockResolvedValue({ results: [], nextOffset: null }),
+  } as unknown as PluginEditorExtensionClient;
+  render(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+    />,
+    { locale: "en" },
+  );
+  fireEvent.change(screen.getByLabelText("Upload VSIX"), {
+    target: { files: [new File(["invalid"], "sample.txt")] },
+  });
+  expect(
+    await screen.findByText("Choose a VSIX file up to 20 MiB."),
+  ).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("searchbox"), {
+    target: { value: "react" },
+  });
+  expect(
+    screen.queryByText("Choose a VSIX file up to 20 MiB."),
+  ).not.toBeInTheDocument();
+});
+
+it("resumes a canceled manual search when returning to Marketplace", async () => {
+  const result = {
+    results: [
+      {
+        publisher: "Acme",
+        name: "example",
+        version: "1.0.0",
+        displayName: "Example",
+      },
+    ],
+    nextOffset: null,
+  };
+  const client = {
+    list: vi.fn().mockResolvedValue([]),
+    search: vi
+      .fn()
+      .mockResolvedValueOnce(result)
+      .mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValue(result),
+  } as unknown as PluginEditorExtensionClient;
+  render(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+    />,
+    { locale: "en" },
+  );
+  expect(await screen.findByText("Example")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Installed" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Marketplace" }));
+  expect(await screen.findByText("Example")).toBeInTheDocument();
+  expect(client.search).toHaveBeenCalledTimes(3);
+});
