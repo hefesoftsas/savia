@@ -355,6 +355,10 @@ Project extension settings are saved in the backend and
 restored when reopening the project; they are not part of the plugin ZIP or
 browser recovery storage. Versions opened for inspection remain read-only.
 
+The standalone editor document is excluded from the offline app-shell fallback
+at both `/plugin-editor.html` and Cloudflare's canonical `/plugin-editor` URL,
+including query strings. Keep both routes excluded when changing PWA routing.
+
 This catalog uses reviewed Savia web extensions; it does not accept arbitrary
 VSIX files, Marketplace installation, Node extensions, or terminal extensions.
 The same-origin iframe isolates editor services, not untrusted code. Supporting
