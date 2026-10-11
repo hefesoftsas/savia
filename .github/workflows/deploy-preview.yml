@@ -176,6 +176,26 @@ jobs:
           workingDirectory: apps/api
           wranglerVersion: 4.127.1
 
+      - name: Build isolated plugin editor assets
+        run: pnpm --filter @savia/admin run build:plugin-editor
+        env:
+          NODE_OPTIONS: "--max-old-space-size=1536"
+
+      - name: Deploy isolated plugin editor runtime
+        id: plugin_editor
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config ../plugin-editor-runtime/wrangler.jsonc
+          workingDirectory: apps/api
+          wranglerVersion: 4.127.1
+
+      - name: Verify isolated runtime and configure admin origin
+        run: node scripts/configure-plugin-editor-preview.mjs
+        env:
+          PLUGIN_EDITOR_DEPLOYMENT_URL: ${{ steps.plugin_editor.outputs.deployment-url }}
+
       - name: Build admin assets
         run: pnpm --filter @savia/admin run build:assets
         env:
