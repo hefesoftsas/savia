@@ -1,4 +1,5 @@
 const OPEN_VSX_ORIGIN = "https://open-vsx.org";
+const OPEN_VSX_DOWNLOAD_CDN_ORIGIN = "https://openvsx.eclipsecontent.org";
 export const EDITOR_EXTENSION_MAX_COMPRESSED_BYTES = 20 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_MARKETPLACE_RESPONSE_BYTES = 1_048_576;
@@ -28,9 +29,13 @@ function safeCoordinate(value: string): boolean {
 async function fetchOpenVsx(
   url: URL,
   maxBytes = MAX_MARKETPLACE_RESPONSE_BYTES,
+  allowOfficialDownloadCdnRedirect = false,
 ): Promise<Uint8Array> {
   if (url.origin !== OPEN_VSX_ORIGIN || url.username || url.password)
     throw new Error("Open VSX returned an untrusted URL.");
+  const allowedRedirectOrigins = new Set([OPEN_VSX_ORIGIN]);
+  if (allowOfficialDownloadCdnRedirect)
+    allowedRedirectOrigins.add(OPEN_VSX_DOWNLOAD_CDN_ORIGIN);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -42,9 +47,14 @@ async function fetchOpenVsx(
         signal: controller.signal,
       });
       if (response.status < 300 || response.status >= 400) break;
+      const location = response.headers.get("location");
+      try {
+        await response.body?.cancel();
+      } catch {
+        // Redirect response bodies are discarded; cancellation failure is non-fatal.
+      }
       if (redirects >= 2)
         throw new Error("Open VSX returned too many redirects.");
-      const location = response.headers.get("location");
       if (!location)
         throw new Error("Open VSX returned a redirect without a location.");
       let next: URL;
@@ -53,7 +63,11 @@ async function fetchOpenVsx(
       } catch {
         throw new Error("Open VSX returned an invalid redirect.");
       }
-      if (next.origin !== OPEN_VSX_ORIGIN || next.username || next.password)
+      if (
+        !allowedRedirectOrigins.has(next.origin) ||
+        next.username ||
+        next.password
+      )
         throw new Error("Open VSX redirected to an untrusted origin.");
       requestUrl = next;
     }
@@ -211,5 +225,5 @@ export async function downloadOpenVsxVsix(
   const url = new URL(metadata.downloadUrl);
   if (url.origin !== OPEN_VSX_ORIGIN || url.username || url.password)
     throw new Error("Open VSX returned an untrusted download URL.");
-  return fetchOpenVsx(url, EDITOR_EXTENSION_MAX_COMPRESSED_BYTES);
+  return fetchOpenVsx(url, EDITOR_EXTENSION_MAX_COMPRESSED_BYTES, true);
 }
