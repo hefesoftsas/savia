@@ -57,7 +57,7 @@ export function pluginEditorOpenApiPaths() {
       get: {
         ...operation(
           "plugin_editor_marketplace_search",
-          "Search Open VSX",
+          "Browse or search Open VSX",
           object({
             results: { type: "array", maxItems: 20, items: item },
             offset: { type: "integer", minimum: 0 },
@@ -69,8 +69,8 @@ export function pluginEditorOpenApiPaths() {
           {
             name: "q",
             in: "query",
-            required: true,
-            schema: { type: "string", minLength: 1, maxLength: 200 },
+            description: "Omit or leave blank to browse popular extensions.",
+            schema: { type: "string", maxLength: 200 },
           },
           {
             name: "offset",

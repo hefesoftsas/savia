@@ -30,12 +30,14 @@ export const pluginEditorExtensionsMessages = {
     "Trechos sfc e useState para JSX e TSX.",
   ],
   loading: [
-    "Cargando editor de extensiones…",
-    "Loading extension editor…",
-    "Carregando editor de extensões…",
+    "Cargando extensiones…",
+    "Loading extensions…",
+    "Carregando extensões…",
   ],
   marketplace: ["Marketplace", "Marketplace", "Marketplace"],
   installedTab: ["Instaladas", "Installed", "Instaladas"],
+  builtIn: ["Incluidas", "Built-in", "Incluídas"],
+  installedGroup: ["Instaladas", "Installed", "Instaladas"],
   marketplaceSearch: [
     "Buscar en Open VSX",
     "Search Open VSX",
@@ -48,7 +50,7 @@ export const pluginEditorExtensionsMessages = {
   ],
   searchMarketplace: ["Buscar", "Search", "Buscar"],
   upload: ["Subir VSIX", "Upload VSIX", "Enviar VSIX"],
-  inspect: ["Inspeccionar versión", "Inspect version", "Inspecionar versão"],
+  inspect: ["Inspeccionar", "Inspect version", "Inspecionar"],
   inspectUpload: [
     "Inspeccionar archivo",
     "Inspect package",
