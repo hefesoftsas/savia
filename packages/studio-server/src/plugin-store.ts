@@ -859,12 +859,18 @@ async function latestArtifactRow<T>(
   return best;
 }
 
-export async function storePluginManifest(
+export type StoredPluginManifestRecord = {
+  manifest: PluginStoreManifest;
+  version: string;
+  storedManifest: string;
+};
+
+export async function storePluginManifestRecord(
   db: D1Database,
   tenant: string,
   id: string,
   version?: string,
-): Promise<PluginStoreManifest | null> {
+): Promise<StoredPluginManifestRecord | null> {
   if (!(await storeTableExists(db))) return null;
   const row = version
     ? await db
@@ -881,10 +887,25 @@ export async function storePluginManifest(
       );
   if (!row) return null;
   try {
-    return pluginStoreManifestSchema.parse(JSON.parse(row.manifest));
+    return {
+      manifest: pluginStoreManifestSchema.parse(JSON.parse(row.manifest)),
+      version: row.version,
+      storedManifest: row.manifest,
+    };
   } catch {
     return null;
   }
+}
+
+export async function storePluginManifest(
+  db: D1Database,
+  tenant: string,
+  id: string,
+  version?: string,
+): Promise<PluginStoreManifest | null> {
+  return (
+    (await storePluginManifestRecord(db, tenant, id, version))?.manifest ?? null
+  );
 }
 
 async function storeEntryJs(

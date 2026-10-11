@@ -21,6 +21,7 @@ import {
   storeObjectRequirements,
   storePluginCatalogWithConfigs,
   storePluginManifest,
+  storePluginManifestRecord,
 } from "./plugin-store";
 import { audit, guard, transaction } from "./services";
 import type { Hono } from "hono";
@@ -271,19 +272,27 @@ export function registerExtensions(
   ): Promise<{
     manifest: ExtensionManifest;
     builtIn: boolean;
-    store: boolean;
+    storeArtifact: { version: string; storedManifest: string } | null;
   } | null> {
     // Lo subido por el tenant prevalece sobre lo compilado: permite
     // migrar un plugin fuera del release sin cambiar su id.
-    const stored = await storePluginManifest(db, tenant, id, version);
-    if (stored) return { manifest: stored, builtIn: false, store: true };
+    const stored = await storePluginManifestRecord(db, tenant, id, version);
+    if (stored)
+      return {
+        manifest: stored.manifest,
+        builtIn: false,
+        storeArtifact: {
+          version: stored.version,
+          storedManifest: stored.storedManifest,
+        },
+      };
     if (version) return null;
     const compiled = registry.get(id);
     if (compiled)
       return {
         manifest: compiled.manifest,
         builtIn: compiled.builtIn === true,
-        store: false,
+        storeArtifact: null,
       };
     return null;
   }
@@ -417,11 +426,16 @@ export function registerExtensions(
           [tenant, id],
         );
     const manifest = canonicalJson(extension.manifest);
-    const storeArtifactGuard = extension.store
+    const storeArtifactGuard = extension.storeArtifact
       ? guard(
           c.env.DB,
           "SELECT count(*)=1 FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=? AND manifest=?",
-          [tenant, id, extension.manifest.version, manifest],
+          [
+            tenant,
+            id,
+            extension.storeArtifact.version,
+            extension.storeArtifact.storedManifest,
+          ],
         )
       : null;
     if (current) {
