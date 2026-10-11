@@ -1,3 +1,4 @@
+import { beginLogout } from "./logout-progress";
 import type { AuthProvider } from "ra-core";
 import { ApiClientError } from "../api/api-client";
 import type { AuthPermissions, AuthSession } from "./auth-session";
@@ -28,6 +29,9 @@ export function createReactAdminAuthProvider(
   return {
     login: () => session.login(),
     logout: async (params?: { logoutFromProvider?: boolean }) => {
+      const finishLogout = params?.logoutFromProvider
+        ? beginLogout()
+        : undefined;
       try {
         if (params?.logoutFromProvider) {
           // Keep mounted auth queries intact until the server clears its cookies.
@@ -43,6 +47,8 @@ export function createReactAdminAuthProvider(
           await options?.onLogout?.();
         } catch {
           // ignore cleanup failures on the way out
+        } finally {
+          finishLogout?.();
         }
       }
     },
