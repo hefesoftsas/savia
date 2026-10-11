@@ -64,9 +64,10 @@ function zip(files: Array<[string, Uint8Array]>) {
 function vsix(
   name = "example",
   browserSource = "export function activate() {}",
+  publisher = "Acme",
 ) {
   const manifest = {
-    publisher: "Acme",
+    publisher,
     name,
     version: "1.0.0",
     license: "MIT",
@@ -204,6 +205,7 @@ describe("scoped editor extension installation API", () => {
         body: JSON.stringify({ inspectionId }),
       });
     const installed = await install(first.body.inspectionId);
+    expect(installed.body.installation.publisher).toBe("Acme");
     const duplicateInspect = await req(
       "user-c",
       "/api/plugin-editor-extensions/inspect?source=vsix&fileName=two.vsix",
@@ -229,6 +231,22 @@ describe("scoped editor extension installation API", () => {
     );
     const conflict = await install(changed.body.inspectionId);
     expect(conflict.response.status).toBe(409);
+
+    const caseVariant = await req(
+      "user-c",
+      "/api/plugin-editor-extensions/inspect?source=vsix&fileName=case-variant.vsix",
+      {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream" },
+        body: vsix(
+          "repeat",
+          "export function activate() { return 3; }",
+          "acme",
+        ),
+      },
+    );
+    const caseVariantConflict = await install(caseVariant.body.inspectionId);
+    expect(caseVariantConflict.response.status).toBe(409);
 
     const projectId = crypto.randomUUID();
     await platform.env.DB.prepare(

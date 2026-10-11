@@ -283,13 +283,13 @@ export async function installStagedEditorExtension(
   const existing = await db
     .prepare(
       `SELECT id,metadata_json,source,created_at,object_key FROM plugin_editor_extension_installations
-     WHERE tenant_id=? AND principal_id=? AND publisher=? AND name=? AND version=?`,
+     WHERE tenant_id=? AND principal_id=? AND lower(publisher)=? AND lower(name)=? AND version=?`,
     )
     .bind(
       scope.tenantId,
       scope.principalId,
-      metadata.publisher,
-      metadata.name,
+      metadata.publisher.toLowerCase(),
+      metadata.name.toLowerCase(),
       metadata.version,
     )
     .first<InstallationRow>();
@@ -407,8 +407,8 @@ export async function installStagedEditorExtension(
         installationId,
         scope.tenantId,
         scope.principalId,
-        metadata.publisher,
-        metadata.name,
+        metadata.publisher.toLowerCase(),
+        metadata.name.toLowerCase(),
         metadata.version,
         metadata.sha256,
         JSON.stringify(metadata),
@@ -479,13 +479,13 @@ export async function installStagedEditorExtension(
     const raced = await db
       .prepare(
         `SELECT id,metadata_json,source,created_at FROM plugin_editor_extension_installations
-       WHERE tenant_id=? AND principal_id=? AND publisher=? AND name=? AND version=?`,
+       WHERE tenant_id=? AND principal_id=? AND lower(publisher)=? AND lower(name)=? AND version=?`,
       )
       .bind(
         scope.tenantId,
         scope.principalId,
-        metadata.publisher,
-        metadata.name,
+        metadata.publisher.toLowerCase(),
+        metadata.name.toLowerCase(),
         metadata.version,
       )
       .first<
