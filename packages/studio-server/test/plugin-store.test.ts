@@ -2689,6 +2689,78 @@ describe("release deployment worker", () => {
 });
 
 describe("explicit plugin store install versions", () => {
+  it("does not install or provision a store extension deleted after resolution", async () => {
+    const tenant = "store-install-delete-race";
+    expect(
+      (await uploadZip(tenant, pluginZip({ store: tareasStore }))).status,
+    ).toBe(200);
+
+    let installBatchStarted!: () => void;
+    let resumeInstallBatch!: () => void;
+    const batchStarted = new Promise<void>((resolve) => {
+      installBatchStarted = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      resumeInstallBatch = resolve;
+    });
+    let paused = false;
+    const guardedDb = new Proxy(platform.env.DB, {
+      get(target, property) {
+        if (property === "batch")
+          return async (statements: D1PreparedStatement[]) => {
+            if (!paused) {
+              paused = true;
+              installBatchStarted();
+              await resume;
+            }
+            return target.batch(statements);
+          };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const env = { ...platform.env, DB: guardedDb };
+    const pendingInstall = app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      env,
+    );
+
+    await batchStarted;
+    const deleted = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=1.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(deleted.status, await deleted.text()).toBe(200);
+    resumeInstallBatch();
+
+    const installed = await pendingInstall;
+    expect(installed.status).toBe(409);
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first(),
+    ).toBeNull();
+    expect(await storedObject(tenant, "tareas")).toBeNull();
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT count(*) as count FROM studio_schema_versions WHERE tenant_id=? AND object_name=?",
+      )
+        .bind(tenant, "tareas")
+        .first<{ count: number }>(),
+    ).toEqual({ count: 0 });
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT count(*) as count FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first<{ count: number }>(),
+    ).toEqual({ count: 0 });
+  });
+
   it("installs the requested version, rejects implicit downgrade, and permits only an explicit admin rollback", async () => {
     const older = pluginZip({ manifest: { version: "1.0.0" } });
     const newer = pluginZip({ manifest: { version: "2.0.0" } });
