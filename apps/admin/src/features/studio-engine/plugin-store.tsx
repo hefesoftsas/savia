@@ -7,7 +7,14 @@ import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { pluginIdeMessages } from "./plugin-ide-messages";
-import { PackageOpen, Search, ShieldCheck, Upload, X } from "lucide-react";
+import {
+  PackageOpen,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +25,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { api } from "./api";
 import { getStudioRuntime } from "./runtime";
@@ -32,6 +41,35 @@ import {
 } from "./store-connections";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
 import { isReadAccessDenied } from "@/queries/read-state";
+
+const deletionMessages = {
+  version: ["Eliminar versión", "Delete version", "Excluir versão"],
+  title: [
+    "Eliminar versión %{version}",
+    "Delete version %{version}",
+    "Excluir versão %{version}",
+  ],
+  description: [
+    "Se eliminará %{label} %{version} y su código fuente de este espacio. No podrás deshacerlo.",
+    "This removes %{label} %{version} and its source code from this workspace. This cannot be undone.",
+    "Isso exclui %{label} %{version} e seu código-fonte deste espaço. Não pode ser desfeito.",
+  ],
+  registry: [
+    "Eliminar también del catálogo compartido (R2)",
+    "Also delete from the shared catalog (R2)",
+    "Excluir também do catálogo compartilhado (R2)",
+  ],
+  registryWarning: [
+    "El ZIP dejará de estar disponible para descargarlo o importarlo en otros espacios. Las copias ya instaladas en otros espacios se conservan.",
+    "The ZIP will no longer be available for download or import in other workspaces. Copies already installed elsewhere are preserved.",
+    "O ZIP não estará mais disponível para download ou importação em outros espaços. As cópias já instaladas em outros espaços são preservadas.",
+  ],
+  active: [
+    "Desactiva esta versión antes de eliminarla.",
+    "Disable this version before deleting it.",
+    "Desative esta versão antes de excluí-la.",
+  ],
+} as const;
 
 type StoreManifest = {
   id: string;
@@ -126,6 +164,7 @@ export default function PluginStoreManager({
   hideBundledPlugins?: boolean;
 }) {
   const t = useMessages(automationMessages);
+  const deleteT = useMessages(deletionMessages);
   const ideT = useMessages(pluginIdeMessages);
   const navigate = useNavigate();
   const locale = useAppLocale();
@@ -140,7 +179,17 @@ export default function PluginStoreManager({
   const [openPluginId, setOpenPluginId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [deleteTarget, setDeleteTarget] = useState<GroupedPlugin | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    group: GroupedPlugin;
+    version?: string;
+  } | null>(null);
+  const [canDeleteFromRegistry, setCanDeleteFromRegistry] = useState(false);
+  const [deleteFromRegistry, setDeleteFromRegistry] = useState(false);
+
+  function confirmDeletion(group: GroupedPlugin, version?: string) {
+    setDeleteFromRegistry(canDeleteFromRegistry);
+    setDeleteTarget({ group, version });
+  }
 
   const message = (reason: unknown) =>
     reason instanceof Error
@@ -149,7 +198,9 @@ export default function PluginStoreManager({
 
   async function loadItems() {
     const [response, solutions] = await Promise.all([
-      api<{ data: StoreItem[] }>("/plugin-store"),
+      api<{ data: StoreItem[]; canDeleteFromRegistry?: boolean }>(
+        "/plugin-store",
+      ),
       hideBundledPlugins
         ? api<{ data: { manifest: { requires: string[] } }[] }>("/solutions")
         : Promise.resolve({ data: [] }),
@@ -157,14 +208,18 @@ export default function PluginStoreManager({
     const bundled = new Set(
       solutions.data.flatMap(({ manifest }) => manifest.requires),
     );
-    return response.data.filter((item) => !bundled.has(item.manifest.id));
+    return {
+      items: response.data.filter((item) => !bundled.has(item.manifest.id)),
+      canDeleteFromRegistry: response.canDeleteFromRegistry === true,
+    };
   }
   async function reload() {
     const generation = ++listGeneration.current;
     try {
-      const items = await loadItems();
+      const response = await loadItems();
       if (generation === listGeneration.current) {
-        setItems(items);
+        setItems(response.items);
+        setCanDeleteFromRegistry(response.canDeleteFromRegistry);
         setError("");
       }
     } catch (reason) {
@@ -212,8 +267,11 @@ export default function PluginStoreManager({
     let active = true;
     const generation = ++listGeneration.current;
     loadItems()
-      .then((items) => {
-        if (active && generation === listGeneration.current) setItems(items);
+      .then((response) => {
+        if (active && generation === listGeneration.current) {
+          setItems(response.items);
+          setCanDeleteFromRegistry(response.canDeleteFromRegistry);
+        }
       })
       .catch((reason) => {
         if (active && generation === listGeneration.current) {
@@ -318,8 +376,8 @@ export default function PluginStoreManager({
 
   const deleteLabel = deleteTarget
     ? resolveLocalizedContent(
-        deleteTarget.latest.manifest.label,
-        deleteTarget.latest.manifest.labels as never,
+        deleteTarget.group.latest.manifest.label,
+        deleteTarget.group.latest.manifest.labels as never,
         locale,
       )
     : "";
@@ -650,6 +708,24 @@ export default function PluginStoreManager({
                       >
                         {ideT("editLatest")}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={
+                          pending ||
+                          (active && item.installed?.version === item.version)
+                        }
+                        title={
+                          active && item.installed?.version === item.version
+                            ? deleteT("active")
+                            : undefined
+                        }
+                        aria-label={`${deleteT("version")} ${label} ${item.version}`}
+                        onClick={() => confirmDeletion(group, item.version)}
+                      >
+                        <Trash2 aria-hidden="true" className="size-4" />
+                        {deleteT("version")}
+                      </Button>
                       {group.versions.length > 1 ? (
                         <details className="basis-full text-sm">
                           <summary className="cursor-pointer text-muted-foreground">
@@ -666,18 +742,47 @@ export default function PluginStoreManager({
                                 <span className="font-mono text-xs">
                                   {version.version}
                                 </span>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    openPluginStudio({
-                                      id: version.manifest.id,
-                                      version: version.version,
-                                    })
-                                  }
-                                >
-                                  {ideT("useAsBase")}
-                                </Button>
+                                <div className="flex flex-wrap justify-end gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      openPluginStudio({
+                                        id: version.manifest.id,
+                                        version: version.version,
+                                      })
+                                    }
+                                  >
+                                    {ideT("useAsBase")}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={
+                                      pending ||
+                                      (active &&
+                                        item.installed?.version ===
+                                          version.version)
+                                    }
+                                    title={
+                                      active &&
+                                      item.installed?.version ===
+                                        version.version
+                                        ? deleteT("active")
+                                        : undefined
+                                    }
+                                    aria-label={`${deleteT("version")} ${label} ${version.version}`}
+                                    onClick={() =>
+                                      confirmDeletion(group, version.version)
+                                    }
+                                  >
+                                    <Trash2
+                                      aria-hidden="true"
+                                      className="size-4"
+                                    />
+                                    {deleteT("version")}
+                                  </Button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -763,7 +868,7 @@ export default function PluginStoreManager({
                           size="sm"
                           variant="ghost"
                           disabled={pending}
-                          onClick={() => setDeleteTarget(group)}
+                          onClick={() => confirmDeletion(group)}
                           aria-label={t("Eliminar %{value0}", {
                             value0: label,
                           })}
@@ -803,22 +908,53 @@ export default function PluginStoreManager({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("Eliminar plugin")}</DialogTitle>
+            <DialogTitle>
+              {deleteTarget?.version
+                ? deleteT("title", { version: deleteTarget.version })
+                : t("Eliminar plugin")}
+            </DialogTitle>
             <DialogDescription>
-              {t(
-                "Esta acción eliminará %{value0} de este espacio. No podrás deshacerla.",
-                { value0: deleteLabel || deleteTarget?.id || "" },
-              )}
-              {(deleteTarget?.versions.length ?? 0) > 1 ? (
+              {deleteTarget?.version
+                ? deleteT("description", {
+                    label: deleteLabel,
+                    version: deleteTarget.version,
+                  })
+                : t(
+                    "Esta acción eliminará %{value0} de este espacio. No podrás deshacerla.",
+                    { value0: deleteLabel || deleteTarget?.group.id || "" },
+                  )}
+              {!deleteTarget?.version &&
+              (deleteTarget?.group.versions.length ?? 0) > 1 ? (
                 <>
                   <br />
                   {t("Se eliminarán %{value0} versiones.", {
-                    value0: deleteTarget?.versions.length ?? 0,
+                    value0: deleteTarget?.group.versions.length ?? 0,
                   })}
                 </>
               ) : null}
             </DialogDescription>
           </DialogHeader>
+          {canDeleteFromRegistry ? (
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="delete-plugin-registry"
+                  checked={deleteFromRegistry}
+                  onCheckedChange={(value) =>
+                    setDeleteFromRegistry(value === true)
+                  }
+                />
+                <Label htmlFor="delete-plugin-registry">
+                  {deleteT("registry")}
+                </Label>
+              </div>
+              {deleteFromRegistry ? (
+                <p className="text-sm text-muted-foreground">
+                  {deleteT("registryWarning")}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <DialogFooter>
             <Button
               type="button"
@@ -830,13 +966,20 @@ export default function PluginStoreManager({
             <Button
               type="button"
               variant="destructive"
-              disabled={!deleteTarget || busy === deleteTarget.id}
+              disabled={!deleteTarget || busy === deleteTarget.group.id}
               onClick={() => {
                 const target = deleteTarget;
                 if (!target) return;
                 setDeleteTarget(null);
-                void run(target.id, () =>
-                  api(`/plugin-store/${target.id}`, "DELETE"),
+                const params = new URLSearchParams();
+                if (target.version) params.set("version", target.version);
+                if (deleteFromRegistry) params.set("registry", "true");
+                const suffix = params.size ? `?${params}` : "";
+                void run(target.group.id, () =>
+                  api(
+                    `/plugin-store/${encodeURIComponent(target.group.id)}${suffix}`,
+                    "DELETE",
+                  ),
                 );
               }}
             >

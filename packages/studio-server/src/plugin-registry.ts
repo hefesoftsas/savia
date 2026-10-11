@@ -78,6 +78,98 @@ async function fetchRegistry(url: URL, token: string): Promise<Response> {
   });
 }
 
+/** Delete one immutable release using only the dedicated publisher credential. */
+export class PluginRegistryDeleteError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "PluginRegistryDeleteError";
+  }
+}
+
+export async function deletePluginRegistryRelease(
+  config: NonNullable<PluginStoreOptions["pluginRegistry"]>,
+  pluginId: string,
+  version: string,
+): Promise<void> {
+  if (
+    !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(pluginId) ||
+    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(
+      version,
+    )
+  )
+    throw new Error("invalid registry release coordinates");
+  if (!config.url || !config.publishToken || /[\r\n]/.test(config.publishToken))
+    throw new Error("registry deletion is not configured");
+  const url = registryBaseUrl(config.url);
+  url.pathname = `/v1/plugins/${encodeURIComponent(pluginId)}/${encodeURIComponent(version)}`;
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${config.publishToken}` },
+    redirect: "error",
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (response.status === 404 || response.status === 403) {
+    let payload: unknown;
+    try {
+      payload = JSON.parse(
+        new TextDecoder().decode(await readBoundedBody(response, 8 * 1024)),
+      );
+    } catch {
+      throw new PluginRegistryDeleteError("registry release deletion failed");
+    }
+    const code =
+      payload &&
+      typeof payload === "object" &&
+      "error" in payload &&
+      payload.error &&
+      typeof payload.error === "object" &&
+      "code" in payload.error
+        ? payload.error.code
+        : undefined;
+    if (response.status === 404 && code === "RELEASE_NOT_FOUND") return;
+    if (response.status === 403 && code === "FORBIDDEN")
+      throw new PluginRegistryDeleteError(
+        "registry release is not owned by this publisher",
+        403,
+      );
+    throw new PluginRegistryDeleteError("registry release deletion failed");
+  }
+  if (!response.ok) {
+    if (response.body) await response.body.cancel().catch(() => undefined);
+    throw new PluginRegistryDeleteError("registry release deletion failed");
+  }
+  let receipt: unknown;
+  try {
+    receipt = JSON.parse(
+      new TextDecoder().decode(await readBoundedBody(response, 8 * 1024)),
+    );
+  } catch {
+    throw new PluginRegistryDeleteError(
+      "registry release deletion returned an invalid receipt",
+    );
+  }
+  const data =
+    receipt && typeof receipt === "object" && "data" in receipt
+      ? receipt.data
+      : undefined;
+  if (
+    !data ||
+    typeof data !== "object" ||
+    !("id" in data) ||
+    data.id !== pluginId ||
+    !("version" in data) ||
+    data.version !== version ||
+    !("deleted" in data) ||
+    data.deleted !== true
+  )
+    throw new PluginRegistryDeleteError(
+      "registry release deletion returned an invalid receipt",
+    );
+}
+
 async function readBoundedBody(
   response: Response,
   maximum = 6 * 1024 * 1024,

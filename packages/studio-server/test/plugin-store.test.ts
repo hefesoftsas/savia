@@ -11,7 +11,7 @@ import { createStudioApp } from "../src/index";
 import { ExtensionConnectionRepository } from "../src/extension-connections";
 import { ExtensionSettingsRepository } from "../src/extension-settings";
 import { isExtensionAvailable } from "../src/extensions";
-import { shellBootstrapJs } from "../src/plugin-store";
+import { shellBootstrapJs, type PluginStoreOptions } from "../src/plugin-store";
 import { verifyPluginEntryGrant } from "@savia/studio-shared/plugin-entry-grant";
 
 let platform: Awaited<
@@ -151,8 +151,8 @@ function pluginZip(
 
 const encryptionKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
 
-function app(tenant: string) {
-  return createStudioApp(tenant, { seedObjects: [] });
+function app(tenant: string, options: Partial<PluginStoreOptions> = {}) {
+  return createStudioApp(tenant, { seedObjects: [], ...options });
 }
 
 function appWithRuntime(tenant: string) {
@@ -1274,6 +1274,355 @@ describe("plugin store por tenant", () => {
     );
     expect(deleted.status, await deleted.text()).toBe(200);
   });
+
+  it("deletes one inactive version and its sources without removing a different installed version", async () => {
+    const tenant = "store-delete-one-version";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "1.0.0" },
+        sourceEntry: "export const old = true;",
+      }),
+    );
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "2.0.0" },
+        sourceEntry: "export const current = true;",
+      }),
+    );
+    await appWithRuntime(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+
+    const deleted = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=1.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(deleted.status, await deleted.text()).toBe(200);
+    const artifacts = await platform.env.DB.prepare(
+      "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=? ORDER BY version",
+    )
+      .bind(tenant, "custom.demo")
+      .all<{ version: string }>();
+    expect(artifacts.results.map(({ version }) => version)).toEqual(["2.0.0"]);
+    const sources = await platform.env.DB.prepare(
+      "SELECT version FROM plugin_store_sources WHERE tenant_id=? AND id=? ORDER BY version",
+    )
+      .bind(tenant, "custom.demo")
+      .all<{ version: string }>();
+    expect(sources.results.map(({ version }) => version)).toEqual(["2.0.0"]);
+    const installation = await platform.env.DB.prepare(
+      "SELECT version,enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+    )
+      .bind(tenant, "custom.demo")
+      .first<{ version: string; enabled: number }>();
+    expect(installation).toEqual({ version: "2.0.0", enabled: 1 });
+  });
+
+  it("blocks only deletion of the installed enabled version and returns 404 for missing versions", async () => {
+    const tenant = "store-delete-active-version";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "1.0.0" },
+        sourceEntry: "export const old = true;",
+      }),
+    );
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "2.0.0" },
+        sourceEntry: "export const current = true;",
+      }),
+    );
+    await appWithRuntime(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+
+    const activeVersion = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=2.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(activeVersion.status).toBe(409);
+    const oldVersion = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=1.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(oldVersion.status).toBe(200);
+    const missing = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=3.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(missing.status).toBe(404);
+    const stillInstalled = await platform.env.DB.prepare(
+      "SELECT version,enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+    )
+      .bind(tenant, "custom.demo")
+      .first<{ version: string; enabled: number }>();
+    expect(stillInstalled).toEqual({ version: "2.0.0", enabled: 1 });
+  });
+
+  it("validates deletion coordinates and keeps registry credentials unavailable without publish access", async () => {
+    const tenant = "store-delete-validation";
+    const rejected = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=not-a-version",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(rejected.status).toBe(400);
+
+    const response = await app(tenant, {
+      pluginRegistry: {
+        url: "https://registry.example",
+        token: "reader-secret",
+      },
+    }).request("http://localhost/api/plugin-store", {}, platform.env);
+    expect(await response.json()).toMatchObject({
+      canDeleteFromRegistry: false,
+    });
+  });
+
+  it("removes remote releases before local data and preserves local data on registry failure", async () => {
+    const tenant = "store-delete-registry-order";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "1.0.0" },
+        sourceEntry: "export const one = true;",
+      }),
+    );
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "2.0.0" },
+        sourceEntry: "export const two = true;",
+      }),
+    );
+    const fetchMock = vi.fn(async () => new Response(null, { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const failed = await app(tenant, {
+        pluginRegistry: {
+          url: "https://registry.example",
+          token: "reader-secret",
+          publishToken: "writer-secret",
+        },
+        canManageExtension: () => true,
+      }).request(
+        "http://localhost/api/plugin-store/custom.demo?version=1.0.0&registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+      expect(failed.status).toBe(502);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const stillLocal = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=? ORDER BY version",
+      )
+        .bind(tenant, "custom.demo")
+        .all<{ version: string }>();
+      expect(stillLocal.results.map(({ version }) => version)).toEqual([
+        "1.0.0",
+        "2.0.0",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("preserves a version activated during remote deletion and explains the shared ZIP is already gone", async () => {
+    const tenant = "store-delete-registry-activation-race";
+    await uploadZip(
+      tenant,
+      pluginZip({ sourceEntry: "export const source = true;" }),
+    );
+    const fetchMock = vi.fn(async () => {
+      await platform.env.DB.prepare(
+        "INSERT INTO studio_extension_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?)",
+      )
+        .bind(
+          tenant,
+          "custom.demo",
+          "1.0.0",
+          JSON.stringify({ id: "custom.demo" }),
+        )
+        .run();
+      return Response.json({
+        data: { id: "custom.demo", version: "1.0.0", deleted: true },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await app(tenant, {
+        pluginRegistry: {
+          url: "https://registry.example",
+          token: "reader-secret",
+          publishToken: "writer-secret",
+        },
+        canManageExtension: () => true,
+      }).request(
+        "http://localhost/api/plugin-store/custom.demo?version=1.0.0&registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+
+      expect(response.status).toBe(409);
+      expect(await response.text()).toContain(
+        "Se eliminaron los archivos del catálogo compartido",
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const artifact = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first<{ version: string }>();
+      expect(artifact).toEqual({ version: "1.0.0" });
+      const sources = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_sources WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .all<{ version: string }>();
+      expect(sources.results).toEqual([{ version: "1.0.0" }]);
+      const installation = await platform.env.DB.prepare(
+        "SELECT version,enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first<{ version: string; enabled: number }>();
+      expect(installation).toEqual({ version: "1.0.0", enabled: 1 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("requires registry delete permission and deletes each remote version before removing local versions", async () => {
+    const tenant = "store-delete-registry-success";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "1.0.0" },
+        sourceEntry: "export const one = true;",
+      }),
+    );
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "2.0.0" },
+        sourceEntry: "export const two = true;",
+      }),
+    );
+    const config = {
+      url: "https://registry.example",
+      token: "reader-secret",
+      publishToken: "writer-secret",
+    };
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.method).toBe("DELETE");
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer writer-secret",
+        );
+        return String(input).endsWith("/1.0.0")
+          ? Response.json({
+              data: { id: "custom.demo", version: "1.0.0", deleted: true },
+            })
+          : Response.json(
+              { error: { code: "RELEASE_NOT_FOUND" } },
+              { status: 404 },
+            );
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const forbidden = await app(tenant, {
+        pluginRegistry: config,
+      }).request(
+        "http://localhost/api/plugin-store/custom.demo?registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+      expect(forbidden.status).toBe(403);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      const allowedApp = app(tenant, {
+        pluginRegistry: config,
+        canManageExtension: () => true,
+      });
+      const capability = await allowedApp.request(
+        "http://localhost/api/plugin-store",
+        {},
+        platform.env,
+      );
+      expect(await capability.json()).toMatchObject({
+        canDeleteFromRegistry: true,
+      });
+      const deleted = await allowedApp.request(
+        "http://localhost/api/plugin-store/custom.demo?registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+      expect(deleted.status, await deleted.text()).toBe(200);
+      expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+        "https://registry.example/v1/plugins/custom.demo/1.0.0",
+        "https://registry.example/v1/plugins/custom.demo/2.0.0",
+      ]);
+      const remaining = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .all();
+      expect(remaining.results).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("explains publisher ownership failures and preserves the local copy", async () => {
+    const tenant = "store-delete-registry-owner";
+    await uploadZip(tenant, pluginZip());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          { error: { code: "FORBIDDEN", message: "Only publisher" } },
+          { status: 403 },
+        ),
+      ),
+    );
+    try {
+      const response = await app(tenant, {
+        pluginRegistry: {
+          url: "https://registry.example",
+          token: "reader-secret",
+          publishToken: "writer-secret",
+        },
+        canManageExtension: () => true,
+      }).request(
+        "http://localhost/api/plugin-store/custom.demo?version=1.0.0&registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+      expect(response.status).toBe(403);
+      expect(await response.text()).toContain(
+        "desmarcar la eliminación del registro",
+      );
+      const remaining = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .all();
+      expect(remaining.results).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 const quoteStore = {
@@ -2340,6 +2689,78 @@ describe("release deployment worker", () => {
 });
 
 describe("explicit plugin store install versions", () => {
+  it("does not install or provision a store extension deleted after resolution", async () => {
+    const tenant = "store-install-delete-race";
+    expect(
+      (await uploadZip(tenant, pluginZip({ store: tareasStore }))).status,
+    ).toBe(200);
+
+    let installBatchStarted!: () => void;
+    let resumeInstallBatch!: () => void;
+    const batchStarted = new Promise<void>((resolve) => {
+      installBatchStarted = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      resumeInstallBatch = resolve;
+    });
+    let paused = false;
+    const guardedDb = new Proxy(platform.env.DB, {
+      get(target, property) {
+        if (property === "batch")
+          return async (statements: D1PreparedStatement[]) => {
+            if (!paused) {
+              paused = true;
+              installBatchStarted();
+              await resume;
+            }
+            return target.batch(statements);
+          };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const env = { ...platform.env, DB: guardedDb };
+    const pendingInstall = app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      env,
+    );
+
+    await batchStarted;
+    const deleted = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=1.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(deleted.status, await deleted.text()).toBe(200);
+    resumeInstallBatch();
+
+    const installed = await pendingInstall;
+    expect(installed.status).toBe(409);
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first(),
+    ).toBeNull();
+    expect(await storedObject(tenant, "tareas")).toBeNull();
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT count(*) as count FROM studio_schema_versions WHERE tenant_id=? AND object_name=?",
+      )
+        .bind(tenant, "tareas")
+        .first<{ count: number }>(),
+    ).toEqual({ count: 0 });
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT count(*) as count FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first<{ count: number }>(),
+    ).toEqual({ count: 0 });
+  });
+
   it("installs the requested version, rejects implicit downgrade, and permits only an explicit admin rollback", async () => {
     const older = pluginZip({ manifest: { version: "1.0.0" } });
     const newer = pluginZip({ manifest: { version: "2.0.0" } });

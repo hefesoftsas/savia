@@ -407,3 +407,7 @@ to filter installed and bundled extensions with the current query. The fixed
 header includes Upload VSIX, and package inspection appears above the scrolling
 results before an explicit install or update. Marketplace listings can include
 desktop-only packages; inspection checks compatibility before installation.
+
+### Delete published versions
+
+Use **My plugins → Delete version** to remove a specific release, or expand **Older versions** to delete a historical release. Deleting an older release preserves the active installation; the active release must first be disabled. The confirmation can also remove its shared R2 ZIP when publisher credentials are configured. It is selected by default and warns that future imports elsewhere will no longer work. Local cleanup removes the release and source files while preserving editable drafts. See [registry deletion and ownership](plugin-registry.md#delete-a-release-from-the-ui) for failure and credential behavior.

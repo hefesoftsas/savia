@@ -51,7 +51,11 @@ import {
   decodePluginFilesJson,
 } from "./plugin-file-storage";
 import type { Hono } from "hono";
-import { registerPluginRegistry } from "./plugin-registry";
+import {
+  deletePluginRegistryRelease,
+  PluginRegistryDeleteError,
+  registerPluginRegistry,
+} from "./plugin-registry";
 import {
   parsePluginOriginalSourceFiles,
   pluginStoreSourceFilesSchema,
@@ -855,12 +859,18 @@ async function latestArtifactRow<T>(
   return best;
 }
 
-export async function storePluginManifest(
+export type StoredPluginManifestRecord = {
+  manifest: PluginStoreManifest;
+  version: string;
+  storedManifest: string;
+};
+
+export async function storePluginManifestRecord(
   db: D1Database,
   tenant: string,
   id: string,
   version?: string,
-): Promise<PluginStoreManifest | null> {
+): Promise<StoredPluginManifestRecord | null> {
   if (!(await storeTableExists(db))) return null;
   const row = version
     ? await db
@@ -877,10 +887,25 @@ export async function storePluginManifest(
       );
   if (!row) return null;
   try {
-    return pluginStoreManifestSchema.parse(JSON.parse(row.manifest));
+    return {
+      manifest: pluginStoreManifestSchema.parse(JSON.parse(row.manifest)),
+      version: row.version,
+      storedManifest: row.manifest,
+    };
   } catch {
     return null;
   }
+}
+
+export async function storePluginManifest(
+  db: D1Database,
+  tenant: string,
+  id: string,
+  version?: string,
+): Promise<PluginStoreManifest | null> {
+  return (
+    (await storePluginManifestRecord(db, tenant, id, version))?.manifest ?? null
+  );
 }
 
 async function storeEntryJs(
@@ -1562,7 +1587,9 @@ export function registerPluginStore(
 
   app.get("/api/plugin-store", async (c) => {
     const tenant = c.get("tenant");
-    if (!(await storeTableExists(c.env.DB))) return c.json({ data: [] });
+    const canDeleteFromRegistry = Boolean(options.pluginRegistry?.publishToken);
+    if (!(await storeTableExists(c.env.DB)))
+      return c.json({ data: [], canDeleteFromRegistry });
     let rows: StoreArtifactRow[];
     try {
       rows = (
@@ -1590,6 +1617,7 @@ export function registerPluginStore(
       .all<{ id: string; version: string; enabled: number }>();
     const state = new Map(installed.results.map((row) => [row.id, row]));
     return c.json({
+      canDeleteFromRegistry,
       data: rows.map((row) => ({
         manifest: JSON.parse(row.manifest),
         version: row.version,
@@ -1933,33 +1961,137 @@ export function registerPluginStore(
     const tenant = c.get("tenant");
     const id = c.req.param("id");
     const version = c.req.query("version");
-    await assertCanManage(c.get("tenant"), c.get("principalId"), options, id);
-    const active = await c.env.DB.prepare(
-      "SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+    const registryQuery = c.req.query("registry");
+    if (
+      registryQuery !== undefined &&
+      !["true", "false"].includes(registryQuery)
     )
-      .bind(tenant, id)
-      .first();
-    if (active)
-      return fail("Desactiva el plugin antes de eliminar su artefacto.", 409);
-    if (version) {
-      await c.env.DB.prepare(
-        "DELETE FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+      return fail("El parámetro registry no es válido.", 400);
+    const deleteFromRegistry = registryQuery === "true";
+    if (
+      version !== undefined &&
+      !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(
+        version,
       )
-        .bind(tenant, id, version)
-        .run();
+    )
+      return fail("La versión no es válida.", 400);
+
+    if (!deleteFromRegistry) {
+      await assertCanManage(c.get("tenant"), c.get("principalId"), options, id);
     } else {
-      await c.env.DB.prepare(
-        "DELETE FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
-      )
-        .bind(tenant, id)
-        .run();
+      if (!options.pluginRegistry?.publishToken)
+        return c.json(
+          { error: "La eliminación en el registro no está configurada." },
+          503,
+        );
+      if (!options.canManageExtension)
+        return fail("Se requiere permiso de administración del espacio.", 403);
+      const allowed = await options.canManageExtension({
+        tenantId: tenant,
+        principalId: c.get("principalId"),
+        extensionId: id,
+      });
+      if (!allowed)
+        return fail("Se requiere permiso de administración del espacio.", 403);
     }
-    await c.env.DB.prepare(
-      "DELETE FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+
+    const versions = await c.env.DB.prepare(
+      `SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?${version === undefined ? "" : " AND version=?"} ORDER BY version`,
+    )
+      .bind(...(version === undefined ? [tenant, id] : [tenant, id, version]))
+      .all<{ version: string }>();
+    if (!versions.results.length) return fail("La versión no existe.", 404);
+
+    const installations = await c.env.DB.prepare(
+      "SELECT version,enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
     )
       .bind(tenant, id)
-      .run()
-      .catch(() => undefined);
+      .all<{ version: string; enabled: number }>();
+    if (
+      installations.results.some(
+        (installation) =>
+          installation.enabled === 1 &&
+          (version === undefined || installation.version === version),
+      )
+    )
+      return fail("Desactiva el plugin antes de eliminar su artefacto.", 409);
+
+    if (deleteFromRegistry) {
+      try {
+        for (const release of versions.results)
+          await deletePluginRegistryRelease(
+            options.pluginRegistry!,
+            id,
+            release.version,
+          );
+      } catch (error) {
+        if (error instanceof PluginRegistryDeleteError && error.status === 403)
+          return fail(
+            "Solo puedes borrar del catálogo las versiones publicadas con la credencial de este espacio. Puedes desmarcar la eliminación del registro para borrar solo la copia local.",
+            403,
+          );
+        return fail("No se pudo eliminar la versión del registro.", 502);
+      }
+    }
+
+    const targetVersionPredicate =
+      version === undefined
+        ? ` AND version IN (${versions.results.map(() => "?").join(",")})`
+        : " AND version=?";
+    const targetVersionBinds =
+      version === undefined
+        ? versions.results.map((release) => release.version)
+        : [version];
+    const activeVersionPredicate =
+      version === undefined ? "" : " AND version=?";
+    const artifactDelete = c.env.DB.prepare(
+      `DELETE FROM plugin_store_artifacts WHERE tenant_id=? AND id=?${targetVersionPredicate}
+       AND NOT EXISTS (
+         SELECT 1 FROM studio_extension_installations
+         WHERE tenant_id=? AND id=? AND enabled=1${activeVersionPredicate}
+       )`,
+    ).bind(
+      tenant,
+      id,
+      ...targetVersionBinds,
+      tenant,
+      id,
+      ...(version === undefined ? [] : [version]),
+    );
+    const sourcesDelete = c.env.DB.prepare(
+      `DELETE FROM plugin_store_sources WHERE tenant_id=? AND id=?${targetVersionPredicate}
+       AND NOT EXISTS (
+         SELECT 1 FROM plugin_store_artifacts
+         WHERE tenant_id=? AND id=? AND version=plugin_store_sources.version
+       )`,
+    ).bind(tenant, id, ...targetVersionBinds, tenant, id);
+    const installationDelete = c.env.DB.prepare(
+      `DELETE FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=0${targetVersionPredicate}
+       AND NOT EXISTS (
+         SELECT 1 FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=studio_extension_installations.version
+       )`,
+    ).bind(tenant, id, ...targetVersionBinds, tenant, id);
+    const deleted = await c.env.DB.batch([
+      artifactDelete,
+      sourcesDelete,
+      installationDelete,
+    ]);
+    if ((deleted[0]?.meta?.changes ?? 0) < versions.results.length) {
+      const activeVersionPredicate = version ? " AND version=?" : "";
+      const activeNow = await c.env.DB.prepare(
+        `SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1${activeVersionPredicate}`,
+      )
+        .bind(...(version ? [tenant, id, version] : [tenant, id]))
+        .first();
+      return activeNow
+        ? fail(
+            deleteFromRegistry
+              ? "Se eliminaron los archivos del catálogo compartido, pero el plugin se activó durante el borrado y su copia local se conserva. Desactívalo antes de volver a eliminarlo."
+              : "Desactiva el plugin antes de eliminar su artefacto.",
+            409,
+          )
+        : fail("La versión no existe.", 404);
+    }
     return c.json({ data: { id, deleted: true } });
   });
 }
