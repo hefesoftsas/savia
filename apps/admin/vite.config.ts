@@ -132,7 +132,7 @@ export default defineConfig({
           /^\/s\/p(?:\/|\?|$)/,
           /^\/register(?:\/|\?|$)/,
           /^\/office(?:\/|$)/,
-          /^\/plugin-editor\.html$/,
+          /^\/plugin-editor(?:\.html)?(?:\/|\?|$)/,
         ],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
