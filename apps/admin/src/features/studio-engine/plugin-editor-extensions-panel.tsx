@@ -619,7 +619,7 @@ export function PluginEditorExtensionsPanel({
                         <p role="status">
                           {activationError
                             ? `${t("activationFailed")} ${activationError}`
-                            : t("pending")}
+                            : t("enabled")}
                         </p>
                       )}
                       {activationError && <p role="alert">{activationError}</p>}

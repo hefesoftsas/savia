@@ -18,7 +18,7 @@ it("filters the verified catalog and enables then disables an extension by ID", 
     screen.getByRole("heading", { name: "Extensions" }),
   ).toBeInTheDocument();
   expect(
-    screen.getByText(/Verified catalog of VS Code web extensions/),
+    screen.getByText(/Catalog of VS Code web extensions/),
   ).toBeInTheDocument();
   expect(screen.getByText("Prettier")).toBeInTheDocument();
   expect(screen.getByText("React snippets")).toBeInTheDocument();
@@ -169,6 +169,8 @@ it("searches, inspects, installs explicitly, and persists enable and disable cha
       runtimeAvailable
     />,
   );
+  expect(screen.getByText("Enabled")).toBeInTheDocument();
+  expect(screen.queryByText("Activation pending")).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "Disable" }));
   await waitFor(() => expect(onInstalledChange).toHaveBeenLastCalledWith([]));
 });
@@ -256,23 +258,21 @@ it("updates an enabled version directly from Marketplace before the Installed ta
   const change = vi.fn().mockResolvedValue(undefined);
   const client = {
     list: vi.fn().mockResolvedValue([old]),
-    search: vi
-      .fn()
-      .mockResolvedValue({
-        results: [
-          {
-            publisher: old.publisher,
-            name: old.name,
-            version: next.version,
-            displayName: "Example",
-            description: null,
-            license: "MIT",
-          },
-        ],
-        offset: 0,
-        totalSize: 1,
-        nextOffset: null,
-      }),
+    search: vi.fn().mockResolvedValue({
+      results: [
+        {
+          publisher: old.publisher,
+          name: old.name,
+          version: next.version,
+          displayName: "Example",
+          description: null,
+          license: "MIT",
+        },
+      ],
+      offset: 0,
+      totalSize: 1,
+      nextOffset: null,
+    }),
     inspectMarketplace: vi
       .fn()
       .mockResolvedValue({ ...compatibleInspection, metadata: next }),

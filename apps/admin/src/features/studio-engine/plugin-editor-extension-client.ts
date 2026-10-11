@@ -110,7 +110,12 @@ export class PluginEditorExtensionClient {
       await this.fetcher(`${apiPath}/inspect`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ source: "open-vsx", ...input }),
+        body: JSON.stringify({
+          source: "open-vsx",
+          publisher: input.publisher,
+          name: input.name,
+          version: input.version,
+        }),
       }),
     );
   }
