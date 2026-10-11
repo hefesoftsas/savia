@@ -12,6 +12,8 @@ import {
   uninstallOwnedEditorExtension,
 } from "../src/plugin-editor-extension-artifacts";
 import { EDITOR_EXTENSION_TENANT_QUOTA_BYTES } from "../src/plugin-editor-extension-artifacts";
+import { registerDialect } from "@savia/db/dialect";
+import { postgresDialect } from "@savia/db/postgres-dialect";
 import { PLUGIN_EDITOR_VSCODE_VERSION } from "@savia/studio-shared/plugin-editor-extensions";
 
 let platform: Awaited<
@@ -279,11 +281,59 @@ describe("scoped editor extension artifacts", () => {
     ).toBeNull();
   });
 
-  it("expires only the caller's staged inspections and preserves cleanup rows when object deletion fails", async () => {
+  it("uses the configured SQL dialect for project extension reference checks", async () => {
+    const statements: string[] = [];
+    const db = {
+      prepare(sql: string) {
+        statements.push(sql);
+        return {
+          bind() {
+            return this;
+          },
+          async first() {
+            return {
+              id: "install-dialect",
+              sha256: digest,
+              object_key: "artifact/dialect.vsix",
+            };
+          },
+          async all() {
+            return { results: [] };
+          },
+        };
+      },
+      async batch() {
+        return [{ meta: { changes: 0 } }];
+      },
+    } as unknown as D1Database;
+    registerDialect(db, postgresDialect);
+
+    await uninstallOwnedEditorExtension(db, platform.env.FILES, {
+      tenantId: tenant,
+      principalId: "owner",
+      installationId: "install-dialect",
+    });
+
+    const conditionalDelete = statements.find((sql) =>
+      sql.startsWith("DELETE FROM plugin_editor_extension_installations"),
+    );
+    const referenceLookup = statements.find((sql) =>
+      sql.startsWith("SELECT DISTINCT p.id"),
+    );
+    expect(conditionalDelete).toContain("LATERAL");
+    expect(conditionalDelete).toContain("jsonb_typeof");
+    expect(referenceLookup).toContain("LATERAL");
+    expect(referenceLookup).toContain("jsonb_typeof");
+    expect(conditionalDelete).not.toContain("json_extract");
+    expect(referenceLookup).not.toContain("json_extract");
+  });
+
+  it("sweeps expired inspections across one tenant and queues failed object cleanup durably", async () => {
     const expired = new Date(Date.now() - 60_000).toISOString();
     for (const [id, principal] of [
       ["expired-own", "owner"],
       ["expired-other", "other"],
+      ["expired-foreign-tenant", "owner"],
     ]) {
       const objectKey = `staging/${id}`;
       await platform.env.FILES.put(objectKey, new Uint8Array([1, 2, 3]));
@@ -293,7 +343,7 @@ describe("scoped editor extension artifacts", () => {
       )
         .bind(
           id,
-          tenant,
+          id === "expired-foreign-tenant" ? "other-tenant" : tenant,
           principal,
           "vsix",
           JSON.stringify(metadata),
@@ -308,19 +358,18 @@ describe("scoped editor extension artifacts", () => {
     await expireEditorExtensionInspections(
       platform.env.DB,
       platform.env.FILES,
-      { tenantId: tenant, principalId: "owner" },
+      { tenantId: tenant, principalId: "requester" },
     );
-    const own = await platform.env.DB.prepare(
-      "SELECT id FROM plugin_editor_extension_inspections WHERE id='expired-own'",
-    ).first();
-    const other = await platform.env.DB.prepare(
-      "SELECT id FROM plugin_editor_extension_inspections WHERE id='expired-other'",
-    ).first();
-    expect(own).toBeNull();
-    expect(other).not.toBeNull();
+    const remaining = await platform.env.DB.prepare(
+      "SELECT id FROM plugin_editor_extension_inspections WHERE id IN ('expired-own','expired-other','expired-foreign-tenant') ORDER BY id",
+    ).all<{ id: string }>();
+    expect(remaining.results.map((row) => row.id)).toEqual([
+      "expired-foreign-tenant",
+    ]);
     expect(await platform.env.FILES.get("staging/expired-own")).toBeNull();
+    expect(await platform.env.FILES.get("staging/expired-other")).toBeNull();
     expect(
-      await platform.env.FILES.get("staging/expired-other"),
+      await platform.env.FILES.get("staging/expired-foreign-tenant"),
     ).not.toBeNull();
 
     const failingFiles = {
@@ -328,6 +377,43 @@ describe("scoped editor extension artifacts", () => {
         throw new Error("R2 unavailable");
       },
     } as unknown as R2Bucket;
+    const failedCleanupKey = "staging/expired-delete-failure";
+    await platform.env.DB.prepare(
+      `INSERT INTO plugin_editor_extension_inspections(id,tenant_id,principal_id,source,metadata_json,manifest_json,object_key,created_at,expires_at,reservation_bytes)
+       VALUES(?,?,?,?,?,?,?,?,?,?)`,
+    )
+      .bind(
+        "expired-delete-failure",
+        tenant,
+        "another-principal",
+        "vsix",
+        JSON.stringify(metadata),
+        "{}",
+        failedCleanupKey,
+        expired,
+        expired,
+        3,
+      )
+      .run();
+    await expireEditorExtensionInspections(
+      platform.env.DB,
+      failingFiles,
+      { tenantId: tenant, principalId: "requester" },
+    );
+    const failedInspection = await platform.env.DB.prepare(
+      "SELECT 1 FROM plugin_editor_extension_inspections WHERE id='expired-delete-failure'",
+    ).first();
+    expect(failedInspection).toBeNull();
+    const queuedInspection = await platform.env.DB.prepare(
+      "SELECT tenant_id,principal_id FROM plugin_editor_extension_cleanup WHERE object_key=?",
+    )
+      .bind(failedCleanupKey)
+      .first<{ tenant_id: string; principal_id: string }>();
+    expect(queuedInspection).toEqual({
+      tenant_id: tenant,
+      principal_id: "another-principal",
+    });
+
     await platform.env.DB.prepare(
       "INSERT INTO plugin_editor_extension_cleanup(object_key,tenant_id,principal_id,created_at) VALUES(?,?,?,?)",
     )
@@ -337,7 +423,7 @@ describe("scoped editor extension artifacts", () => {
       await import("../src/plugin-editor-extension-artifacts");
     await cleanupEditorExtensionObjects(platform.env.DB, failingFiles, {
       tenantId: tenant,
-      principalId: "owner",
+      principalId: "requester",
     });
     const cleanup = await platform.env.DB.prepare(
       "SELECT object_key FROM plugin_editor_extension_cleanup WHERE object_key='retry/object'",

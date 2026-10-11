@@ -668,46 +668,61 @@ function importsNodeBuiltin(source: string): boolean {
   return false;
 }
 
-function parseSemver(version: string): number[] | null {
+type SemanticVersion = {
+  major: number;
+  minor: number;
+  patch: number;
+  prerelease: string[];
+};
+
+function parseSemver(version: string): SemanticVersion | null {
   const match =
     /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(
       version,
     );
   if (!match) return null;
-  const core = match.slice(1, 4).map(Number);
-  if (match[4]) {
-    const identifiers = match[4].split(".");
-    if (identifiers.some((part) => /^0\d+$/.test(part))) return null;
-  }
-  return [
-    ...core,
-    ...(match[4] ? [1] : [0]),
-    ...(match[4]
-      ?.split(".")
-      .map((part) => (/^\d+$/.test(part) ? Number(part) : part))
-      .map((part) => (typeof part === "number" ? part : Number.NaN)) ?? []),
-  ];
+  const prerelease = match[4]?.split(".") ?? [];
+  if (prerelease.some((part) => /^\d+$/.test(part) && /^0\d+$/.test(part)))
+    return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease,
+  };
 }
 
 function compareSemver(left: string, right: string): number {
   const a = parseSemver(left);
   const b = parseSemver(right);
   if (!a || !b) return Number.NaN;
-  for (let index = 0; index < 3; index++)
-    if (a[index] !== b[index]) return a[index] - b[index];
-  if (a[3] !== b[3]) return a[3] - b[3];
-  if (a[3] === 0) return 0;
-  const ap = left.split("-")[1].split("+")[0].split(".");
-  const bp = right.split("-")[1].split("+")[0].split(".");
-  for (let index = 0; index < Math.max(ap.length, bp.length); index++) {
-    if (ap[index] === undefined) return -1;
-    if (bp[index] === undefined) return 1;
-    if (ap[index] === bp[index]) continue;
-    const an = /^\d+$/.test(ap[index]);
-    const bn = /^\d+$/.test(bp[index]);
-    if (an && bn) return Number(ap[index]) - Number(bp[index]);
-    if (an !== bn) return an ? -1 : 1;
-    return ap[index] < bp[index] ? -1 : 1;
+  for (const key of ["major", "minor", "patch"] as const)
+    if (a[key] !== b[key]) return a[key] - b[key];
+  if (!a.prerelease.length || !b.prerelease.length)
+    return a.prerelease.length === b.prerelease.length
+      ? 0
+      : a.prerelease.length
+        ? -1
+        : 1;
+  for (
+    let index = 0;
+    index < Math.max(a.prerelease.length, b.prerelease.length);
+    index++
+  ) {
+    const leftId = a.prerelease[index];
+    const rightId = b.prerelease[index];
+    if (leftId === undefined) return -1;
+    if (rightId === undefined) return 1;
+    if (leftId === rightId) continue;
+    const leftNumeric = /^\d+$/.test(leftId);
+    const rightNumeric = /^\d+$/.test(rightId);
+    if (leftNumeric && rightNumeric) {
+      if (leftId.length !== rightId.length)
+        return leftId.length < rightId.length ? -1 : 1;
+      return leftId < rightId ? -1 : 1;
+    }
+    if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+    return leftId < rightId ? -1 : 1;
   }
   return 0;
 }
@@ -752,17 +767,24 @@ function compareToComparator(
   if (!match) return null;
   const operator = match[1] ?? "=";
   const target = match[2];
+  const exactVersion = parseSemver(target);
   if (operator === "^" || operator === "~") {
-    const partial = parsePartialVersion(target);
+    const partial = exactVersion
+      ? { lower: target, upper: null }
+      : parsePartialVersion(target);
     if (!partial) return null;
     const comparison = compareSemver(version, partial.lower);
     if (!Number.isFinite(comparison)) return null;
     const parts = target.split(".");
     const wildcardIndex = parts.findIndex((part) => /^(?:x|\*)$/i.test(part));
-    const specified = wildcardIndex < 0 ? parts.length : wildcardIndex;
-    const major = Number(parts[0]);
-    const minor = Number(parts[1] ?? 0);
-    const patch = Number(parts[2] ?? 0);
+    const specified = exactVersion
+      ? 3
+      : wildcardIndex < 0
+        ? parts.length
+        : wildcardIndex;
+    const major = exactVersion ? exactVersion.major : Number(parts[0]);
+    const minor = exactVersion ? exactVersion.minor : Number(parts[1] ?? 0);
+    const patch = exactVersion ? exactVersion.patch : Number(parts[2] ?? 0);
     const upper =
       operator === "~"
         ? specified <= 1
@@ -774,6 +796,16 @@ function compareToComparator(
             ? `0.${minor + 1}.0`
             : `0.0.${patch + 1}`;
     return comparison >= 0 && compareSemver(version, upper) < 0;
+  }
+  if (exactVersion) {
+    const comparison = compareSemver(version, target);
+    if (!Number.isFinite(comparison)) return null;
+    if (operator === "=") return comparison === 0;
+    if (operator === "<") return comparison < 0;
+    if (operator === "<=") return comparison <= 0;
+    if (operator === ">") return comparison > 0;
+    if (operator === ">=") return comparison >= 0;
+    return null;
   }
   const partial = parsePartialVersion(target);
   if (!partial || target.includes("*") || /x/i.test(target)) return null;
@@ -802,8 +834,12 @@ function satisfiesEngineRange(version: string, range: string): boolean | null {
     const trimmed = alternative.trim();
     const hyphen = /^(\S+)\s+-\s+(\S+)$/.exec(trimmed);
     if (hyphen) {
-      const low = parsePartialVersion(hyphen[1]);
-      const high = parsePartialVersion(hyphen[2]);
+      const low = parseSemver(hyphen[1])
+        ? { lower: hyphen[1], upper: null }
+        : parsePartialVersion(hyphen[1]);
+      const high = parseSemver(hyphen[2])
+        ? { lower: hyphen[2], upper: null }
+        : parsePartialVersion(hyphen[2]);
       if (!low || !high) return null;
       const lowerOkay = compareSemver(version, low.lower) >= 0;
       const upperOkay = high.upper

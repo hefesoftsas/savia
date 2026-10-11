@@ -332,6 +332,10 @@ describe("parseEditorVsix", () => {
     ["<=1.2", "1.3.0", false],
     ["=1.2", "1.2.9", true],
     ["=1.2", "1.3.0", false],
+    [">=1.138.0-insider", "1.138.0", true],
+    ["<1.138.0-insider", "1.138.0", false],
+    ["=1.138.0-insider", "1.138.0", false],
+    ["=1.138.0+marketplace", "1.138.0+runtime", true],
   ])(
     "evaluates semver engine range %s against %s",
     async (range, runtime, supported) => {
@@ -342,6 +346,17 @@ describe("parseEditorVsix", () => {
       expect(parsed.metadata.compatibility.supported).toBe(supported);
     },
   );
+
+  it("rejects malformed prerelease identifiers", async () => {
+    const parsed = await parseEditorVsix(
+      archive(manifest({ engines: { vscode: ">=1.138.0-01" } })),
+      "1.138.0",
+    );
+    expect(parsed.metadata.compatibility).toEqual({
+      supported: false,
+      reason: "invalid-engine-range",
+    });
+  });
 
   it.each([
     [

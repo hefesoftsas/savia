@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import { z } from "zod";
+import { dialectFor } from "@savia/db/dialect";
 import {
   pluginProjectIdSchema,
   pluginProjectSaveSchema,
@@ -168,7 +169,10 @@ export function registerPluginProjects(
         );
     }
     const referencesJson = JSON.stringify(references);
-    const validReferences = `(SELECT count(*) FROM json_each(?) refs JOIN plugin_editor_extension_installations installed ON installed.id=json_extract(refs.value,'$.installationId') AND installed.sha256=json_extract(refs.value,'$.sha256') WHERE installed.tenant_id=? AND installed.principal_id=?) = ?`;
+    const dialect = dialectFor(c.env.DB);
+    // Bind the JSON once: PostgreSQL's lateral JSON iterator repeats its input
+    // expression while normalizing objects, arrays, and scalars.
+    const validReferences = `(SELECT count(*) FROM (SELECT ? AS references_json) input, ${dialect.jsonEach("input.references_json", "$", "refs")} JOIN plugin_editor_extension_installations installed ON installed.id=${dialect.jsonText("refs.value", "$.installationId")} AND installed.sha256=${dialect.jsonText("refs.value", "$.sha256")} WHERE installed.tenant_id=? AND installed.principal_id=?) = ?`;
     const now = new Date().toISOString();
     const filesJson = JSON.stringify(parsed.data.files);
     const label = projectLabel(filesJson);

@@ -1,4 +1,5 @@
 import type { Env } from "./context";
+import { dialectFor } from "@savia/db/dialect";
 import { EDITOR_EXTENSION_MAX_COMPRESSED_BYTES } from "./plugin-editor-marketplace";
 
 export const EDITOR_EXTENSION_TENANT_QUOTA_BYTES = 128 * 1024 * 1024;
@@ -41,6 +42,12 @@ type InspectionRow = {
   source: "open-vsx" | "vsix";
   expires_at: string;
   reservation_bytes: number;
+};
+type ExpiredInspectionRow = {
+  id: string;
+  object_key: string;
+  tenant_id: string;
+  principal_id: string;
 };
 type InstallationRow = {
   id: string;
@@ -222,30 +229,41 @@ export async function expireEditorExtensionInspections(
   scope: Scope,
   limit = 50,
 ): Promise<void> {
+  const now = new Date().toISOString();
   const rows = await db
     .prepare(
-      `SELECT id,object_key FROM plugin_editor_extension_inspections
-     WHERE tenant_id=? AND principal_id=? AND expires_at<=? ORDER BY expires_at LIMIT ?`,
+      `SELECT id,object_key,tenant_id,principal_id FROM plugin_editor_extension_inspections
+     WHERE tenant_id=? AND expires_at<=? ORDER BY expires_at LIMIT ?`,
     )
     .bind(
       scope.tenantId,
-      scope.principalId,
-      new Date().toISOString(),
+      now,
       Math.max(1, Math.min(limit, 100)),
     )
-    .all<{ id: string; object_key: string }>();
+    .all<ExpiredInspectionRow>();
   for (const row of rows.results) {
     try {
       await files.delete(row.object_key);
+    } catch {
+      // The persisted row supplies cleanup ownership; request principal is not used.
       await db
         .prepare(
-          "DELETE FROM plugin_editor_extension_inspections WHERE id=? AND tenant_id=? AND principal_id=?",
+          "INSERT OR IGNORE INTO plugin_editor_extension_cleanup (object_key,tenant_id,principal_id,created_at) VALUES(?,?,?,?)",
         )
-        .bind(row.id, scope.tenantId, scope.principalId)
+        .bind(
+          row.object_key,
+          row.tenant_id,
+          row.principal_id,
+          new Date().toISOString(),
+        )
         .run();
-    } catch {
-      // Keep the inspection row as a durable cleanup record; the next operation retries.
     }
+    await db
+      .prepare(
+        "DELETE FROM plugin_editor_extension_inspections WHERE id=? AND tenant_id=? AND principal_id=? AND expires_at<=?",
+      )
+      .bind(row.id, row.tenant_id, row.principal_id, now)
+      .run();
   }
 }
 
@@ -716,9 +734,9 @@ export async function uninstallOwnedEditorExtension(
         `DELETE FROM plugin_editor_extension_installations AS installation
          WHERE installation.id=? AND installation.tenant_id=? AND installation.principal_id=?
            AND NOT EXISTS (
-             SELECT 1 FROM plugin_authoring_projects p, json_each(p.installed_editor_extensions) r
+             SELECT 1 FROM plugin_authoring_projects p,${dialectFor(db).jsonEach("p.installed_editor_extensions", "$", "editor_extension_ref")}
              WHERE p.tenant_id=installation.tenant_id AND p.principal_id=installation.principal_id
-               AND json_extract(r.value,'$.installationId')=installation.id
+               AND ${dialectFor(db).jsonText("editor_extension_ref.value", "$.installationId")} = installation.id
            )`,
       )
       .bind(row.id, input.tenantId, input.principalId),
@@ -775,8 +793,8 @@ export async function uninstallOwnedEditorExtension(
   if (results[0]?.meta.changes !== 1) {
     const refs = await db
       .prepare(
-        `SELECT DISTINCT p.id FROM plugin_authoring_projects p, json_each(p.installed_editor_extensions) r
-         WHERE p.tenant_id=? AND p.principal_id=? AND json_extract(r.value,'$.installationId')=? ORDER BY p.id`,
+        `SELECT DISTINCT p.id FROM plugin_authoring_projects p,${dialectFor(db).jsonEach("p.installed_editor_extensions", "$", "editor_extension_ref")}
+         WHERE p.tenant_id=? AND p.principal_id=? AND ${dialectFor(db).jsonText("editor_extension_ref.value", "$.installationId")} = ? ORDER BY p.id`,
       )
       .bind(input.tenantId, input.principalId, input.installationId)
       .all<{ id: string }>();
@@ -798,24 +816,24 @@ export async function cleanupEditorExtensionObjects(
 ) {
   const rows = await db
     .prepare(
-      "SELECT object_key FROM plugin_editor_extension_cleanup WHERE tenant_id=? AND principal_id=? ORDER BY created_at LIMIT ?",
+      "SELECT object_key,tenant_id,principal_id FROM plugin_editor_extension_cleanup WHERE tenant_id=? ORDER BY created_at LIMIT ?",
     )
-    .bind(scope.tenantId, scope.principalId, Math.max(1, Math.min(limit, 100)))
-    .all<{ object_key: string }>();
+    .bind(scope.tenantId, Math.max(1, Math.min(limit, 100)))
+    .all<{ object_key: string; tenant_id: string; principal_id: string }>();
   for (const row of rows.results) {
     try {
       const retained = await db
         .prepare(
           "SELECT reference_count FROM plugin_editor_extension_artifacts WHERE tenant_id=? AND principal_id=? AND object_key=?",
         )
-        .bind(scope.tenantId, scope.principalId, row.object_key)
+        .bind(row.tenant_id, row.principal_id, row.object_key)
         .first<{ reference_count: number }>();
       if (retained && retained.reference_count > 0) {
         await db
           .prepare(
             "DELETE FROM plugin_editor_extension_cleanup WHERE object_key=? AND tenant_id=? AND principal_id=?",
           )
-          .bind(row.object_key, scope.tenantId, scope.principalId)
+          .bind(row.object_key, row.tenant_id, row.principal_id)
           .run();
         continue;
       }
@@ -825,13 +843,13 @@ export async function cleanupEditorExtensionObjects(
           .prepare(
             "DELETE FROM plugin_editor_extension_artifacts WHERE tenant_id=? AND principal_id=? AND object_key=? AND reference_count=0",
           )
-          .bind(scope.tenantId, scope.principalId, row.object_key)
+          .bind(row.tenant_id, row.principal_id, row.object_key)
           .run();
       await db
         .prepare(
           "DELETE FROM plugin_editor_extension_cleanup WHERE object_key=? AND tenant_id=? AND principal_id=?",
         )
-        .bind(row.object_key, scope.tenantId, scope.principalId)
+        .bind(row.object_key, row.tenant_id, row.principal_id)
         .run();
     } catch {
       /* retry on the next operation */
