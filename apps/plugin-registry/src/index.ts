@@ -146,7 +146,8 @@ async function authenticate(
   );
   if (!credential)
     return jsonError(401, "UNAUTHORIZED", "A valid bearer token is required.");
-  const permission: Permission = c.req.method === "PUT" ? "publish" : "read";
+  const permission: Permission =
+    c.req.method === "PUT" || c.req.method === "DELETE" ? "publish" : "read";
   if (!credential.permissions.includes(permission))
     return jsonError(
       403,
@@ -479,6 +480,63 @@ app.get("/v1/plugins/:id/:version", async (c) => {
         "x-content-type-options": "nosniff",
       },
     });
+  } catch {
+    return jsonError(
+      503,
+      "REGISTRY_UNAVAILABLE",
+      "The registry is temporarily unavailable.",
+    );
+  }
+});
+
+app.delete("/v1/plugins/:id/:version", async (c) => {
+  const id = c.req.param("id");
+  const version = c.req.param("version");
+  if (
+    !idPattern.test(id) ||
+    id.length > 100 ||
+    !versionPattern.test(version) ||
+    version.length > 30
+  )
+    return jsonError(
+      400,
+      "INVALID_RELEASE",
+      "The plugin ID or version is invalid.",
+    );
+
+  const key = `${c.get("namespace")}/${id}/${version}.zip`;
+  try {
+    const object = await c.env.PLUGIN_REGISTRY.head(key);
+    if (!object)
+      return jsonError(
+        404,
+        "RELEASE_NOT_FOUND",
+        "The plugin release was not found.",
+      );
+    const release = releaseFromMetadata(object);
+    if (!release || release.id !== id || release.version !== version)
+      return jsonError(
+        503,
+        "REGISTRY_UNAVAILABLE",
+        "The registry release metadata is invalid.",
+      );
+    const owner = object.customMetadata?.publisherTokenSha256;
+    if (!owner || !secureEqual(owner, c.get("publisherTokenSha256")))
+      return jsonError(
+        403,
+        "FORBIDDEN",
+        "Only the publisher can delete this release.",
+      );
+    await c.env.PLUGIN_REGISTRY.delete(key);
+    return Response.json(
+      { data: { id, version, deleted: true } },
+      {
+        headers: {
+          "cache-control": noStore,
+          "x-content-type-options": "nosniff",
+        },
+      },
+    );
   } catch {
     return jsonError(
       503,

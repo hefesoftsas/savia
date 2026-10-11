@@ -3,6 +3,7 @@ import { getPlatformProxy } from "wrangler";
 import { readdirSync, readFileSync } from "node:fs";
 import { migrationStatements } from "./migration-statements";
 import { createStudioApp } from "../src/index";
+import { deletePluginRegistryRelease } from "../src/plugin-registry";
 
 let platform: Awaited<ReturnType<typeof getPlatformProxy<{ DB: D1Database }>>>;
 
@@ -124,6 +125,142 @@ afterAll(async () => {
 });
 
 describe("plugin registry publishing", () => {
+  it("deletes an exact remote release with the publisher credential and treats missing releases as already deleted", async () => {
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe(
+          "https://registry.example/v1/plugins/custom.demo/1.2.3",
+        );
+        expect(init?.method).toBe("DELETE");
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          `Bearer ${"p".repeat(32)}`,
+        );
+        expect(init?.redirect).toBe("error");
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        return Response.json(
+          { error: { code: "RELEASE_NOT_FOUND" } },
+          { status: 404 },
+        );
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(
+        deletePluginRegistryRelease(
+          {
+            url: "https://registry.example",
+            token: "reader-secret",
+            publishToken: "p".repeat(32),
+          },
+          "custom.demo",
+          "1.2.3",
+        ),
+      ).resolves.toBeUndefined();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects unsafe coordinates and failed registry deletion responses", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(
+        deletePluginRegistryRelease(
+          {
+            url: "https://registry.example",
+            token: "reader-secret",
+            publishToken: "p".repeat(32),
+          },
+          "../other",
+          "1.2.3",
+        ),
+      ).rejects.toThrow();
+      expect(fetchMock).not.toHaveBeenCalled();
+      await expect(
+        deletePluginRegistryRelease(
+          {
+            url: "https://registry.example",
+            token: "reader-secret",
+            publishToken: "p".repeat(32),
+          },
+          "custom.demo",
+          "1.2.3",
+        ),
+      ).rejects.toThrow();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("requires a bounded success receipt matching the deleted release", async () => {
+    const config = {
+      url: "https://registry.example",
+      token: "reader-secret",
+      publishToken: "p".repeat(32),
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          data: { id: "custom.demo", version: "1.2.3", deleted: true },
+        }),
+      ),
+    );
+    try {
+      await expect(
+        deletePluginRegistryRelease(config, "custom.demo", "1.2.3"),
+      ).resolves.toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    for (const receipt of [
+      {},
+      { data: { id: "custom.demo", version: "1.2.3" } },
+      { data: { id: "other.demo", version: "1.2.3", deleted: true } },
+      { data: { id: "custom.demo", version: "9.9.9", deleted: true } },
+    ]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Response.json(receipt)),
+      );
+      try {
+        await expect(
+          deletePluginRegistryRelease(config, "custom.demo", "1.2.3"),
+        ).rejects.toThrow("invalid receipt");
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  });
+
+  it("does not treat an unrelated registry 404 as an already-deleted release", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 }),
+      ),
+    );
+    try {
+      await expect(
+        deletePluginRegistryRelease(
+          {
+            url: "https://registry.example",
+            token: "reader-secret",
+            publishToken: "p".repeat(32),
+          },
+          "custom.demo",
+          "1.2.3",
+        ),
+      ).rejects.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("shows publishing only when an explicit publisher credential exists", async () => {
     vi.stubGlobal(
       "fetch",

@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 
 const writeToken = "registry-test-publisher";
@@ -390,5 +390,155 @@ describe("private plugin registry", () => {
       (await request("/v1/plugins/custom.sample/1.0.0", otherNamespaceToken))
         .status,
     ).toBe(404);
+  });
+
+  it("requires publish permission to delete a release", async () => {
+    await request("/v1/plugins/custom.sample/1.0.0", writeToken, {
+      method: "PUT",
+      headers: { "content-type": "application/zip" },
+      body: body(await archive()),
+    });
+    const response = await request(
+      "/v1/plugins/custom.sample/1.0.0",
+      readOnlyToken,
+      { method: "DELETE" },
+    );
+    expect(response.status).toBe(403);
+    expect((await request("/v1/plugins/custom.sample/1.0.0")).status).toBe(200);
+  });
+
+  it("lets the publishing credential delete its release", async () => {
+    await request("/v1/plugins/custom.sample/1.0.0", writeToken, {
+      method: "PUT",
+      headers: { "content-type": "application/zip" },
+      body: body(await archive()),
+    });
+    const deleted = await request(
+      "/v1/plugins/custom.sample/1.0.0",
+      writeToken,
+      {
+        method: "DELETE",
+      },
+    );
+    expect(deleted.status).toBe(200);
+    expect(deleted.headers.get("cache-control")).toContain("no-store");
+    expect(await deleted.json()).toEqual({
+      data: { id: "custom.sample", version: "1.0.0", deleted: true },
+    });
+    expect((await request("/v1/plugins/custom.sample/1.0.0")).status).toBe(404);
+    expect(
+      (await request("/v1/plugins").then((response) => response.json<any>()))
+        .data,
+    ).toEqual([]);
+  });
+
+  it("does not let a different publisher delete the release", async () => {
+    const original = await archive();
+    const otherPublisherHash = await hashToken(otherNamespaceToken);
+    await registryEnv.PLUGIN_REGISTRY.put(
+      "team-one/custom.sample/1.0.0.zip",
+      body(original),
+      {
+        customMetadata: {
+          id: "custom.sample",
+          version: "1.0.0",
+          label: "Sample plugin",
+          sha256: await sha256(original),
+          semanticSha256: "b".repeat(64),
+          sizeBytes: String(original.byteLength),
+          createdAt: new Date().toISOString(),
+          publisherTokenSha256: otherPublisherHash,
+        },
+      },
+    );
+    const response = await request(
+      "/v1/plugins/custom.sample/1.0.0",
+      writeToken,
+      {
+        method: "DELETE",
+      },
+    );
+    expect(response.status).toBe(403);
+    expect((await request("/v1/plugins/custom.sample/1.0.0")).status).toBe(200);
+  });
+
+  it("refuses to delete legacy releases without publisher ownership", async () => {
+    const original = await archive();
+    await registryEnv.PLUGIN_REGISTRY.put(
+      "team-one/custom.sample/1.0.0.zip",
+      body(original),
+      {
+        customMetadata: {
+          id: "custom.sample",
+          version: "1.0.0",
+          label: "Sample plugin",
+          sha256: await sha256(original),
+          semanticSha256: "b".repeat(64),
+          sizeBytes: String(original.byteLength),
+          createdAt: new Date().toISOString(),
+        },
+      },
+    );
+    const response = await request(
+      "/v1/plugins/custom.sample/1.0.0",
+      writeToken,
+      {
+        method: "DELETE",
+      },
+    );
+    expect(response.status).toBe(403);
+    expect((await request("/v1/plugins/custom.sample/1.0.0")).status).toBe(200);
+  });
+
+  it("validates release paths and returns not found for missing objects", async () => {
+    expect(
+      (
+        await request("/v1/plugins/Custom.sample/1.0.0", writeToken, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request("/v1/plugins/custom.sample/1.02.0", writeToken, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request("/v1/plugins/custom.sample/1.0.0", writeToken, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await request("/v1/plugins/custom.sample/1.0.0", otherNamespaceToken, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it("does not expose R2 delete errors", async () => {
+    await request("/v1/plugins/custom.sample/1.0.0", writeToken, {
+      method: "PUT",
+      headers: { "content-type": "application/zip" },
+      body: body(await archive()),
+    });
+    const deleteSpy = vi
+      .spyOn(registryEnv.PLUGIN_REGISTRY, "delete")
+      .mockRejectedValueOnce(new Error("sensitive R2 backend detail"));
+    const response = await request(
+      "/v1/plugins/custom.sample/1.0.0",
+      writeToken,
+      {
+        method: "DELETE",
+      },
+    );
+    deleteSpy.mockRestore();
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain("sensitive R2 backend detail");
   });
 });
