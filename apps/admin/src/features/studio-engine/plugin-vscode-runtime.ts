@@ -552,9 +552,10 @@ async function start() {
       data?.type === "savia-editor-completion-result" &&
       typeof data.requestId === "string"
     ) {
-      completions.get(data.requestId)?.(
-        typeof data.value === "string" ? data.value : null,
-      );
+      const resolveCompletion = completions.get(data.requestId);
+      if (typeof resolveCompletion === "function") {
+        resolveCompletion(typeof data.value === "string" ? data.value : null);
+      }
       return;
     }
     if (data?.type === "savia-editor-format") {
