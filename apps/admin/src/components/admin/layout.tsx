@@ -1,3 +1,5 @@
+import { useLogoutPending } from "@/auth/logout-progress";
+import { LogoutTransition } from "./logout-transition";
 import { TenantScopeBoundary } from "@/features/tenants/tenant-scope-boundary";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 import { BrandingRealtimeSync } from "@/realtime/branding-realtime";
@@ -146,73 +148,77 @@ function LayoutSidebarTrigger() {
 }
 
 export const Layout = (props: CoreLayoutProps) => {
+  const closingSession = useLogoutPending();
   const tenant = useCurrentTenant();
   const [errorInfo, setErrorInfo] = useState<ErrorInfo | undefined>(undefined);
   const handleError = (_: unknown, info: ErrorInfo) => {
     setErrorInfo(info);
   };
   return (
-    <SidebarProvider>
-      <BrandingRealtimeSync />
-      <SaviaRequestProvider>
-        <AppSidebar />
-        <main
-          className={cn(
-            "ml-auto min-w-0 w-full max-w-full overflow-x-hidden",
-            "md:peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon)-1rem)]",
-            "md:peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))]",
-            "sm:transition-[width] sm:duration-200 sm:ease-linear",
-            "group-data-[resizing]/sidebar-wrapper:transition-none",
-            "flex h-svh flex-col",
-            "group-data-[scroll-locked=1]/body:h-full",
-            "has-[main.fixed-main]:group-data-[scroll-locked=1]/body:h-svh",
-          )}
-        >
-          <header className="relative flex h-16 md:h-12 shrink-0 items-center gap-2 px-3 sm:px-4">
-            <LayoutSidebarTrigger />
-            <GlobalHistoryNav />
-            <div
-              className="min-w-0 flex flex-1 items-center overflow-hidden pr-2"
-              id="breadcrumb"
-            />
-            <div
-              id="header-actions"
-              className="flex min-w-0 shrink-0 items-center gap-1"
-            >
-              <NotificationBell />
-              {/* Keep the assistant immediately available without covering mobile form actions. */}
-              <Suspense fallback={null}>
-                <AssistantBar />
-              </Suspense>
-            </div>
-          </header>
-          <DeploymentUpdateNotice />
-          <ErrorBoundary
-            onError={handleError}
-            fallbackRender={({ error, resetErrorBoundary }) => (
-              <Error
-                error={error}
-                errorInfo={errorInfo}
-                resetErrorBoundary={resetErrorBoundary}
-              />
+    <>
+      <SidebarProvider inert={closingSession} aria-busy={closingSession}>
+        <BrandingRealtimeSync />
+        <SaviaRequestProvider>
+          <AppSidebar />
+          <main
+            className={cn(
+              "ml-auto min-w-0 w-full max-w-full overflow-x-hidden",
+              "md:peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon)-1rem)]",
+              "md:peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))]",
+              "sm:transition-[width] sm:duration-200 sm:ease-linear",
+              "group-data-[resizing]/sidebar-wrapper:transition-none",
+              "flex h-svh flex-col",
+              "group-data-[scroll-locked=1]/body:h-full",
+              "has-[main.fixed-main]:group-data-[scroll-locked=1]/body:h-svh",
             )}
           >
-            <Suspense fallback={<Loading />}>
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pb-6 sm:px-4">
-                <TenantScopeBoundary
-                  status={tenant.scopeStatus}
-                  retry={tenant.retry}
-                >
-                  {props.children}
-                </TenantScopeBoundary>
+            <header className="relative flex h-16 md:h-12 shrink-0 items-center gap-2 px-3 sm:px-4">
+              <LayoutSidebarTrigger />
+              <GlobalHistoryNav />
+              <div
+                className="min-w-0 flex flex-1 items-center overflow-hidden pr-2"
+                id="breadcrumb"
+              />
+              <div
+                id="header-actions"
+                className="flex min-w-0 shrink-0 items-center gap-1"
+              >
+                <NotificationBell />
+                {/* Keep the assistant immediately available without covering mobile form actions. */}
+                <Suspense fallback={null}>
+                  <AssistantBar />
+                </Suspense>
               </div>
-            </Suspense>
-          </ErrorBoundary>
-        </main>
-      </SaviaRequestProvider>
-      <Notification />
-      <PwaInstallBanner />
-      <CookieConsentBanner />
-    </SidebarProvider>
+            </header>
+            <DeploymentUpdateNotice />
+            <ErrorBoundary
+              onError={handleError}
+              fallbackRender={({ error, resetErrorBoundary }) => (
+                <Error
+                  error={error}
+                  errorInfo={errorInfo}
+                  resetErrorBoundary={resetErrorBoundary}
+                />
+              )}
+            >
+              <Suspense fallback={<Loading />}>
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pb-6 sm:px-4">
+                  <TenantScopeBoundary
+                    status={tenant.scopeStatus}
+                    retry={tenant.retry}
+                  >
+                    {props.children}
+                  </TenantScopeBoundary>
+                </div>
+              </Suspense>
+            </ErrorBoundary>
+          </main>
+        </SaviaRequestProvider>
+        <Notification />
+        <PwaInstallBanner />
+        <CookieConsentBanner />
+      </SidebarProvider>
+      {closingSession && <LogoutTransition />}
+    </>
   );
 };

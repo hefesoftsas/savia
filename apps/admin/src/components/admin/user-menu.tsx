@@ -1,3 +1,4 @@
+import { getLogoutPending, useLogoutPending } from "@/auth/logout-progress";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages } from "@/i18n/core";
@@ -55,6 +56,7 @@ export function UserMenu({ children }: UserMenuProps) {
     },
   });
   const logout = useLogout();
+  const closingSession = useLogoutPending();
   const translate = useTranslate();
   const { isMobile } = useSidebar();
   const currentTenant = useCurrentTenant();
@@ -95,6 +97,7 @@ export function UserMenu({ children }: UserMenuProps) {
         <DropdownMenuTrigger asChild>
           <SidebarMenuButton
             aria-label={openMenuLabel}
+            disabled={closingSession}
             size="lg"
             tooltip={openMenuLabel}
             className="h-auto gap-3 p-3 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
@@ -125,6 +128,9 @@ export function UserMenu({ children }: UserMenuProps) {
           </SidebarMenuButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent
+          onCloseAutoFocus={(event) => {
+            if (getLogoutPending()) event.preventDefault();
+          }}
           className="w-64 rounded-xl border border-border/70 bg-popover/95 p-1.5 shadow-xl shadow-black/8 backdrop-blur-md"
           side={isMobile ? "top" : "right"}
           align="end"
@@ -214,6 +220,7 @@ export function UserMenu({ children }: UserMenuProps) {
           ) : null}
           <DropdownMenuItem
             variant="destructive"
+            disabled={closingSession}
             onClick={() => logout({ logoutFromProvider: true })}
             className="cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors"
           >

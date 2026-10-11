@@ -71,3 +71,9 @@ discards previous-owner state. Dedicated tenant lookup has a separate boundary:
 its initial failure offers retry and prevents protected default-scope reads while
 keeping sign-in available. See [stable background refresh](background-refresh.md)
 for read retention and authorization-denial rules.
+
+Explicit sign-out immediately shows a branded “Signing out…” transition and
+makes the workspace inert while server sign-out and cleanup finish. The workspace
+stays mounted so pending auth work can complete. The transition adds no artificial
+delay, respects reduced motion, and releases its busy state if sign-out fails.
+Automatic access failures do not display this explicit sign-out transition.
