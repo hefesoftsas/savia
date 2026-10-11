@@ -151,3 +151,12 @@ describe("plugin project editor extensions", () => {
     ).toThrow(/unique/i);
   });
 });
+
+ describe("installed extension project references", () => {
+ it("round trips pinned references and rejects duplicates", () => {
+ const reference = { installationId: "e86e4e8d-7047-47b6-a7ac-c87082444fba", sha256: "a".repeat(64) };
+ const input = { files: files("entry"), history: [], version: 0, installedEditorExtensions: [reference] };
+ expect(pluginProjectSaveSchema.parse(input).installedEditorExtensions).toEqual([reference]);
+ expect(() => pluginProjectSaveSchema.parse({...input, installedEditorExtensions: [reference,reference]})).toThrow();
+ });
+ });

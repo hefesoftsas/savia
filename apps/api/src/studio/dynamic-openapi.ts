@@ -1,3 +1,4 @@
+import { pluginEditorOpenApiPaths } from "./plugin-editor-openapi";
 import { hubspotObjects } from "../external-crm/hubspot-workspace-catalog";
 import { recordPerformanceUpdateSchema } from "@savia/studio-server/schema";
 import {
@@ -1427,6 +1428,7 @@ export async function dynamicOpenApi(
       },
     },
   };
+  Object.assign(paths, pluginEditorOpenApiPaths());
   return {
     openapi: "3.1.0" as const,
     info: {

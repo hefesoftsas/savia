@@ -5,6 +5,8 @@ import {
   pluginProjectSaveSchema,
   type PluginProjectFiles,
 } from "@savia/studio-shared/plugin-projects";
+import { findOwnedEditorExtension } from "./plugin-editor-extension-artifacts";
+import type { ProjectEditorExtensionReference } from "@savia/studio-shared/plugin-editor-extensions";
 import type { Env } from "./context";
 import { fail } from "./context";
 import type { PluginStoreOptions } from "./plugin-store";
@@ -22,6 +24,7 @@ type ProjectRow = {
   files: string;
   history: string;
   editor_extensions?: string;
+  installed_editor_extensions?: string;
   version: number;
   updated_at: string;
 };
@@ -50,6 +53,9 @@ async function toProject(row: ProjectRow) {
       content: string;
     }>,
     editorExtensions: JSON.parse(row.editor_extensions ?? "[]") as string[],
+    installedEditorExtensions: JSON.parse(
+      row.installed_editor_extensions ?? "[]",
+    ) as ProjectEditorExtensionReference[],
     version: row.version,
     updatedAt: row.updated_at,
   };
@@ -96,7 +102,7 @@ export function registerPluginProjects(
       "plugin-projects",
     );
     const result = await c.env.DB.prepare(
-      `SELECT id,label,version,updated_at FROM plugin_authoring_projects
+      `SELECT id,label,installed_editor_extensions,version,updated_at FROM plugin_authoring_projects
        WHERE tenant_id=? AND principal_id=? ORDER BY updated_at DESC,id`,
     )
       .bind(tenant, principalId)
@@ -105,6 +111,9 @@ export function registerPluginProjects(
       data: result.results.map((row) => ({
         id: row.id,
         label: row.label,
+        installedEditorExtensions: JSON.parse(
+          row.installed_editor_extensions ?? "[]",
+        ) as ProjectEditorExtensionReference[],
         version: row.version,
         updatedAt: row.updated_at,
       })),
@@ -120,7 +129,7 @@ export function registerPluginProjects(
       id.data,
     );
     const row = await c.env.DB.prepare(
-      `SELECT id,files,history,editor_extensions,version,updated_at FROM plugin_authoring_projects
+      `SELECT id,files,history,editor_extensions,installed_editor_extensions,version,updated_at FROM plugin_authoring_projects
        WHERE tenant_id=? AND principal_id=? AND id=?`,
     )
       .bind(tenant, principalId, id.data)
@@ -145,6 +154,21 @@ export function registerPluginProjects(
     }
     const parsed = pluginProjectSaveSchema.safeParse(input);
     if (!parsed.success) return fail("Invalid plugin project.", 422);
+    const references = parsed.data.installedEditorExtensions;
+    for (const reference of references) {
+      const installation = await findOwnedEditorExtension(c.env.DB, {
+        tenantId: tenant,
+        principalId,
+        ...reference,
+      });
+      if (!installation?.compatibility.supported)
+        return fail(
+          "Installed editor extension reference is unavailable or incompatible.",
+          422,
+        );
+    }
+    const referencesJson = JSON.stringify(references);
+    const validReferences = `(SELECT count(*) FROM json_each(?) refs JOIN plugin_editor_extension_installations installed ON installed.id=json_extract(refs.value,'$.installationId') AND installed.sha256=json_extract(refs.value,'$.sha256') WHERE installed.tenant_id=? AND installed.principal_id=?) = ?`;
     const now = new Date().toISOString();
     const filesJson = JSON.stringify(parsed.data.files);
     const label = projectLabel(filesJson);
@@ -153,9 +177,9 @@ export function registerPluginProjects(
       let inserted: { meta: { changes: number } };
       try {
         inserted = await c.env.DB.prepare(
-          `INSERT INTO plugin_authoring_projects(tenant_id,principal_id,id,label,files,history,editor_extensions,version,updated_at)
-           SELECT ?,?,?,?,?,?,?,1,? WHERE
-             (SELECT count(*) FROM plugin_authoring_projects WHERE tenant_id=? AND principal_id=?) < ?`,
+          `INSERT INTO plugin_authoring_projects(tenant_id,principal_id,id,label,files,history,editor_extensions,installed_editor_extensions,version,updated_at)
+           SELECT ?,?,?,?,?,?,?,?,1,? WHERE
+             (SELECT count(*) FROM plugin_authoring_projects WHERE tenant_id=? AND principal_id=?) < ? AND ${validReferences}`,
         )
           .bind(
             tenant,
@@ -165,10 +189,15 @@ export function registerPluginProjects(
             storedFiles,
             JSON.stringify(parsed.data.history),
             JSON.stringify(parsed.data.editorExtensions),
+            referencesJson,
             now,
             tenant,
             principalId,
             MAX_PROJECTS_PER_SCOPE,
+            referencesJson,
+            tenant,
+            principalId,
+            references.length,
           )
           .run();
       } catch {
@@ -181,19 +210,24 @@ export function registerPluginProjects(
         );
     } else {
       const updated = await c.env.DB.prepare(
-        `UPDATE plugin_authoring_projects SET label=?,files=?,history=?,editor_extensions=?,version=version+1,
-             updated_at=? WHERE tenant_id=? AND principal_id=? AND id=? AND version=?`,
+        `UPDATE plugin_authoring_projects SET label=?,files=?,history=?,editor_extensions=?,installed_editor_extensions=?,version=version+1,
+             updated_at=? WHERE tenant_id=? AND principal_id=? AND id=? AND version=? AND ${validReferences}`,
       )
         .bind(
           label,
           storedFiles,
           JSON.stringify(parsed.data.history),
           JSON.stringify(parsed.data.editorExtensions),
+          referencesJson,
           now,
           tenant,
           principalId,
           id.data,
           parsed.data.version,
+          referencesJson,
+          tenant,
+          principalId,
+          references.length,
         )
         .run();
       if (updated.meta.changes !== 1)
@@ -205,6 +239,7 @@ export function registerPluginProjects(
         files: parsed.data.files,
         history: parsed.data.history,
         editorExtensions: parsed.data.editorExtensions,
+        installedEditorExtensions: references,
         version: parsed.data.version + 1,
         updatedAt: now,
       },
