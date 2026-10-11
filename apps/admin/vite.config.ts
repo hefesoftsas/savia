@@ -132,12 +132,14 @@ export default defineConfig({
           /^\/s\/p(?:\/|\?|$)/,
           /^\/register(?:\/|\?|$)/,
           /^\/office(?:\/|$)/,
+          /^\/plugin-editor\.html$/,
         ],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         // Precache only the boot shell: dist ships ~9k chunks (43 MB),
         // precaching all of it would tax first visits. Remaining
         // same-origin assets cache on first use below.
+        globIgnores: ["assets/plugin-editor-vendor-*.js"],
         globPatterns: [
           "index.html",
           "assets/*.js",
@@ -222,6 +224,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        pluginEditor: fileURLToPath(
+          new URL("./plugin-editor.html", import.meta.url),
+        ),
         office: fileURLToPath(new URL("./office/index.html", import.meta.url)),
       },
       output: {
@@ -232,7 +237,20 @@ export default defineConfig({
         // (lucide dist/esm/icons, @thesvg dist) DEBEN quedar divididos:
         // fusionarlos crea un único chunk eager de ~32 MB.
         manualChunks(id) {
+          // Keep Vite's shared dynamic-import helper out of the optional host.
+          if (id.includes("vite/preload-helper"))
+            return "modulepreload-polyfill";
           if (!id.includes("node_modules")) return undefined;
+          // The extension host lives in a separate document. Do not pull its
+          // services into the shared app vendor chunk or offline shell.
+          if (
+            id.includes("@codingame") ||
+            id.includes("@vscode") ||
+            id.includes("prettier") ||
+            id.includes("vscode-oniguruma") ||
+            id.includes("vscode-textmate")
+          )
+            return "plugin-editor-vendor";
           const sep = String.raw`[/\\]`;
           if (
             new RegExp(`lucide-react${sep}dist${sep}esm${sep}icons${sep}`).test(

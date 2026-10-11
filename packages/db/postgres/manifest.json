@@ -229,6 +229,10 @@
     {
       "filename": "0053_public_quote_links.sql",
       "sha256": "eb5fea0d519eb1d01393dd71afb41fcdde638bf6c764d5de61dea4be6bae509e"
+    },
+    {
+      "filename": "0054_plugin_project_editor_extensions.sql",
+      "sha256": "5c9bec4fba3e84215f4e833bb9cc265f1358a32ad9d75ba8182209d61aa3f99f"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -15488,6 +15492,14 @@
           "notnull": 1,
           "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
           "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "editor_extensions",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'[]'",
+          "pk": 0
         }
       ],
       "foreignKeys": [],
@@ -15498,7 +15510,7 @@
           "origin": "pk"
         }
       ],
-      "checkCount": 1
+      "checkCount": 2
     },
     {
       "name": "plugin_store_sources",

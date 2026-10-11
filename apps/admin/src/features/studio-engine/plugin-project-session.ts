@@ -1,6 +1,7 @@
 import type { IdeFiles } from "./plugin-ide-project";
 export type ProjectDraft = {
   files: IdeFiles;
+  editorExtensions?: string[];
   history: { role: "user" | "assistant"; content: string }[];
 };
 export type RecoveryDraft = ProjectDraft & { version: number };

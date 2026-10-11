@@ -146,6 +146,13 @@ describe("durable plugin projects and release source", () => {
     expect(first.status).toBe(200);
     expect(first.body.data.version).toBe(1);
     expect(first.body.data.files).toEqual(files);
+    expect(first.body.data.editorExtensions).toEqual([]);
+    const legacyPayloadProject = await request(
+      "projects-a",
+      "principal-a",
+      `/api/plugin-projects/${projectId}`,
+    );
+    expect(legacyPayloadProject.body.data.editorExtensions).toEqual([]);
 
     const next = await request(
       "projects-a",
@@ -155,11 +162,52 @@ describe("durable plugin projects and release source", () => {
       {
         files: { ...files, "entry.tsx": "// saved again" },
         history: [],
+        editorExtensions: ["savia.formatter", "savia.react-snippets"],
         version: 1,
       },
     );
     expect(next.status).toBe(200);
     expect(next.body.data.version).toBe(2);
+    expect(next.body.data.editorExtensions).toEqual([
+      "savia.formatter",
+      "savia.react-snippets",
+    ]);
+    const loaded = await request(
+      "projects-a",
+      "principal-a",
+      `/api/plugin-projects/${projectId}`,
+    );
+    expect(loaded.body.data.editorExtensions).toEqual([
+      "savia.formatter",
+      "savia.react-snippets",
+    ]);
+
+    const unknownExtension = await request(
+      "projects-a",
+      "principal-a",
+      `/api/plugin-projects/${projectId}`,
+      "PUT",
+      {
+        files,
+        history: [],
+        editorExtensions: ["unknown.extension"],
+        version: 2,
+      },
+    );
+    expect(unknownExtension.status).toBe(422);
+    const duplicateExtension = await request(
+      "projects-a",
+      "principal-a",
+      `/api/plugin-projects/${projectId}`,
+      "PUT",
+      {
+        files,
+        history: [],
+        editorExtensions: ["savia.formatter", "savia.formatter"],
+        version: 2,
+      },
+    );
+    expect(duplicateExtension.status).toBe(422);
 
     const stale = await request(
       "projects-a",
