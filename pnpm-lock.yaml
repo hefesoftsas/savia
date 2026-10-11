@@ -101,6 +101,9 @@ importers:
       '@codingame/monaco-vscode-model-service-override':
         specifier: 37.3.11
         version: 37.3.11
+      '@codingame/monaco-vscode-snippets-service-override':
+        specifier: 37.3.11
+        version: 37.3.11
       '@codingame/monaco-vscode-textmate-service-override':
         specifier: 37.3.11
         version: 37.3.11
@@ -2931,6 +2934,9 @@ packages:
 
   '@codingame/monaco-vscode-quickaccess-service-override@37.3.11':
     resolution: {integrity: sha512-hs61r4CQ5/AHBlY9a1fixORLyCj+NJGMkWZ7f4rm1sQB6GNGNO84B8k3v8+h3Z28HaHbAqrnCFb5UtXDQv7Rdw==}
+
+  '@codingame/monaco-vscode-snippets-service-override@37.3.11':
+    resolution: {integrity: sha512-h+i12/wpgs1IPYujl2sPr10v0fdeS0zY65Dzi6tPZyGxNEL0AmHqaKJuIRhSfKxBmDdehtLdRe+P2nYzWTVTPg==}
 
   '@codingame/monaco-vscode-textmate-service-override@37.3.11':
     resolution: {integrity: sha512-pm+BNwe4okGkHP7r2zO99PIqZ2fNuiWCcSQLVYw0STGZEEjSEMK8+fBcVUCFlLK64IXu1A99AUbvkfzM4ews2g==}
@@ -12173,6 +12179,11 @@ snapshots:
   '@codingame/monaco-vscode-quickaccess-service-override@37.3.11':
     dependencies:
       '@codingame/monaco-vscode-api': 37.3.11
+
+  '@codingame/monaco-vscode-snippets-service-override@37.3.11':
+    dependencies:
+      '@codingame/monaco-vscode-api': 37.3.11
+      '@codingame/monaco-vscode-files-service-override': 37.3.11
 
   '@codingame/monaco-vscode-textmate-service-override@37.3.11':
     dependencies:

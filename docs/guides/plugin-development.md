@@ -353,6 +353,11 @@ installation and shows its publisher, version, license, compatibility, and
 declared dependencies. Installing and updating are explicit actions; registry
 metadata or a successful inspection never installs or enables code by itself.
 
+Packages are limited to 20 MiB compressed, 64 MiB expanded, 10,000 files, and
+8 MiB per file. Installed package storage is limited to 128 MiB per tenant;
+each project can reference up to 32 installations. Enabling a theme selects
+its matching light or dark theme. Snippet contributions become editor completions.
+
 Only browser-compatible VS Code web extensions can run. An extension that
 requires Node.js, a terminal, native modules, or unsupported VS Code APIs stays
 unavailable in this editor. Dependencies must be installed explicitly. Installed
