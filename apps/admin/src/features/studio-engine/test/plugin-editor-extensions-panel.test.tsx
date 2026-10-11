@@ -175,6 +175,56 @@ it("searches, inspects, installs explicitly, and persists enable and disable cha
   await waitFor(() => expect(onInstalledChange).toHaveBeenLastCalledWith([]));
 });
 
+it("shows activation pending until the reference synchronization finishes", async () => {
+  let finishChange!: () => void;
+  const onInstalledChange = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finishChange = resolve;
+      }),
+  );
+  const client = {
+    list: vi.fn().mockResolvedValue([installedExample]),
+  } as unknown as PluginEditorExtensionClient;
+  const { rerender } = render(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+      installedReferences={[]}
+      onInstalledChange={onInstalledChange}
+      runtimeAvailable
+    />,
+    { locale: "en" },
+  );
+  fireEvent.click(screen.getByRole("tab", { name: "Installed" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Enable" }));
+  await waitFor(() => expect(onInstalledChange).toHaveBeenCalledTimes(1));
+
+  rerender(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+      installedReferences={[
+        {
+          installationId: installedExample.installationId,
+          sha256: installedExample.sha256,
+        },
+      ]}
+      onInstalledChange={onInstalledChange}
+      runtimeAvailable
+    />,
+    { locale: "en" },
+  );
+  expect(screen.getByText("Activation pending")).toBeInTheDocument();
+  expect(screen.queryByText("Enabled")).not.toBeInTheDocument();
+
+  finishChange();
+  await waitFor(() => expect(screen.getByText("Enabled")).toBeInTheDocument());
+  expect(screen.queryByText("Activation pending")).not.toBeInTheDocument();
+});
+
 it("shows incompatibility reasons, blocks installation without the isolated runtime, and validates uploads", async () => {
   const client = {
     search: vi.fn(),

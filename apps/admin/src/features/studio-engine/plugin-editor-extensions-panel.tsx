@@ -599,8 +599,10 @@ export function PluginEditorExtensionsPanel({
                   );
                   const activationError =
                     activationErrors[installation.installationId];
+                  const referencePending =
+                    busy === `reference:${installation.installationId}`;
                   const operationBusy =
-                    busy === `reference:${installation.installationId}` ||
+                    referencePending ||
                     busy === `remove:${installation.installationId}`;
                   return (
                     <article
@@ -619,7 +621,9 @@ export function PluginEditorExtensionsPanel({
                         <p role="status">
                           {activationError
                             ? `${t("activationFailed")} ${activationError}`
-                            : t("enabled")}
+                            : referencePending
+                              ? t("pending")
+                              : t("enabled")}
                         </p>
                       )}
                       {activationError && <p role="alert">{activationError}</p>}
