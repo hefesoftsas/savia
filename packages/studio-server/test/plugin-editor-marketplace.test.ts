@@ -24,6 +24,9 @@ describe("Open VSX marketplace client", () => {
       expect(url.origin).toBe("https://open-vsx.org");
       expect(url.pathname).toBe("/api/-/search");
       expect(url.searchParams.get("size")).toBe("20");
+      expect(url.searchParams.get("query")).toBe("editor tools");
+      expect(url.searchParams.has("sortBy")).toBe(false);
+      expect(url.searchParams.has("sortOrder")).toBe(false);
       return json({
         totalSize: 25,
         extensions: Array.from({ length: 22 }, (_, i) => ({
@@ -44,11 +47,33 @@ describe("Open VSX marketplace client", () => {
     expect(result.nextOffset).toBe(20);
   });
 
+  it("browses popular extensions without a query and preserves the requested offset", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.origin).toBe("https://open-vsx.org");
+      expect(url.pathname).toBe("/api/-/search");
+      expect(url.searchParams.has("query")).toBe(false);
+      expect(url.searchParams.get("sortBy")).toBe("downloadCount");
+      expect(url.searchParams.get("sortOrder")).toBe("desc");
+      expect(url.searchParams.get("offset")).toBe("20");
+      expect(url.searchParams.get("size")).toBe("20");
+      return json({ totalSize: 40, extensions: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchOpenVsx("  ", 20)).resolves.toMatchObject({
+      results: [],
+      offset: 20,
+      totalSize: 40,
+      nextOffset: null,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects malformed or oversized search queries before network access", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    await expect(searchOpenVsx(" ")).rejects.toThrow("1–200");
-    await expect(searchOpenVsx("q".repeat(201))).rejects.toThrow("1–200");
+    await expect(searchOpenVsx("q".repeat(201))).rejects.toThrow("200");
     await expect(searchOpenVsx("extension", -1)).rejects.toThrow("offset");
     expect(fetchMock).not.toHaveBeenCalled();
   });

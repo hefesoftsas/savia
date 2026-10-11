@@ -786,8 +786,315 @@ p.plugin-ide-usage {
   display: block;
 }
 .plugin-editor-extensions-panel {
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  container-type: inline-size;
+  color: var(--foreground);
+  background: var(--background);
+}
+.plugin-editor-extensions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--ide-line);
+}
+.plugin-editor-extensions-header h2 {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plugin-editor-extensions-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.plugin-editor-extensions-file-input:focus-visible
+  + .plugin-editor-extensions-upload {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.plugin-editor-extensions-upload {
+  flex: none;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+.plugin-editor-extensions-upload svg {
+  width: 14px;
+  height: 14px;
+}
+.plugin-editor-extensions-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.plugin-editor-extensions-search input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--ide-line);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+}
+.plugin-editor-extensions-search input:focus-visible,
+.plugin-editor-extensions-search button:focus-visible,
+.plugin-editor-extensions-tabs button:focus-visible,
+.plugin-editor-extensions-content:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -1px;
+}
+.plugin-editor-extensions-search button {
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+.plugin-editor-extensions-search button svg {
+  width: 15px;
+  height: 15px;
+}
+.plugin-editor-extensions-tabs {
+  display: flex;
+  flex: none;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--ide-line);
+}
+.plugin-editor-extensions-tabs button {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ide-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.plugin-editor-extensions-tabs button[aria-selected="true"] {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.plugin-editor-extensions-tabs button[aria-selected="true"]::after {
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 2px;
+  background: var(--primary);
+  content: "";
+}
+.plugin-editor-extensions-tabs button:hover:not([aria-selected="true"]) {
+  color: var(--foreground);
+  background: var(--ide-soft);
+}
+.plugin-editor-extensions-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.plugin-editor-extensions-content[hidden] {
+  display: none;
+}
+.plugin-editor-extensions-results {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--ide-line) transparent;
+}
+.plugin-editor-extensions-group > h3 {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--ide-line);
+  background: var(--background);
+  color: var(--ide-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.plugin-editor-extension-row {
+  min-width: 0;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--ide-line);
+}
+.plugin-editor-extension-row-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 2px 6px;
+  min-width: 0;
+  color: var(--ide-secondary);
+  font-size: 11px;
+}
+.plugin-editor-extension-row-heading strong {
+  flex: 1 1 100%;
+  min-width: 0;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.plugin-editor-extension-row-heading > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.plugin-editor-extension-state {
+  flex: none;
+  margin-left: auto;
+  color: var(--ide-secondary);
+  font-size: 10px;
+}
+.plugin-editor-extension-description {
+  display: -webkit-box;
+  margin: 4px 0 7px;
+  overflow: hidden;
+  color: var(--ide-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.plugin-editor-extension-meta {
+  margin: 3px 0 6px;
+  color: var(--ide-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.plugin-editor-extension-row button {
+  max-width: 100%;
+  min-height: 32px;
+  height: auto;
+  padding-block: 6px;
+  white-space: normal;
+}
+.plugin-editor-extension-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.plugin-editor-extension-row button {
+  max-width: 100%;
+  height: auto;
+  min-height: 32px;
+  padding-block: 6px;
+  white-space: normal;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.plugin-editor-extensions-inspection {
+  flex: none;
+  margin: 8px 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--ide-line);
+  border-radius: 4px;
+  background: var(--ide-soft);
+  font-size: 11px;
+}
+.plugin-editor-extensions-inspection > strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.plugin-editor-extensions-inspection > p {
+  margin: 4px 0;
+  color: var(--ide-secondary);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.plugin-editor-extensions-access-notice {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--ide-line);
+}
+.plugin-editor-extensions-alert,
+.plugin-editor-extensions-empty {
+  flex: none;
+  margin: 7px 10px;
+  color: var(--ide-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.plugin-editor-extensions-alert[role="alert"] {
+  color: var(--destructive, var(--foreground));
+}
+.plugin-editor-extensions-more {
+  display: flex;
+  justify-content: center;
+  padding: 9px;
+}
+@container (max-width: 260px) {
+  .plugin-editor-extensions-header {
+    padding-inline: 8px;
+  }
+  .plugin-editor-extensions-upload {
+    width: 30px;
+    padding: 0;
+  }
+  .plugin-editor-extensions-upload span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+  }
+  .plugin-editor-extensions-search {
+    padding-inline: 8px;
+  }
+  .plugin-editor-extension-row {
+    padding-inline: 9px;
+  }
+}
+@container (max-width: 180px) {
+  .plugin-editor-extensions-tabs {
+    padding-inline: 4px;
+  }
+  .plugin-editor-extensions-tabs button {
+    padding-inline: 2px;
+    font-size: 10px;
+  }
+}
+@media (pointer: coarse) {
+  .plugin-editor-extensions-upload,
+  .plugin-editor-extensions-search button,
+  .plugin-editor-extensions-tabs button,
+  .plugin-editor-extension-row button {
+    min-height: 44px;
+  }
+  .plugin-editor-extensions-search button {
+    width: 44px;
+  }
 }
 @media (max-width: 480px) {
   .plugin-ide-toolbar button {

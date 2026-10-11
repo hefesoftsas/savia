@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { Hono } from "hono";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync, readdirSync } from "node:fs";
@@ -132,8 +140,48 @@ beforeAll(async () => {
 afterAll(async () => {
   await platform?.dispose();
 });
+afterEach(() => vi.unstubAllGlobals());
 
 describe("scoped editor extension installation API", () => {
+  it("supports authenticated popular browsing without q and keeps search validation", async () => {
+    const requests: URL[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      requests.push(new URL(String(input)));
+      return new Response(JSON.stringify({ totalSize: 2, extensions: [] }), {
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const path = "/api/plugin-editor-extensions/marketplace";
+
+    const missingQuery = await req("browse-user", path);
+    expect(missingQuery.response.status).toBe(200);
+    const blankQuery = await req("browse-user", `${path}?q=%20%20&offset=20`);
+    expect(blankQuery.response.status).toBe(200);
+    const search = await req("browse-user", `${path}?q=prettier&offset=0`);
+    expect(search.response.status).toBe(200);
+
+    expect(requests).toHaveLength(3);
+    for (const url of requests.slice(0, 2)) {
+      expect(url.searchParams.has("query")).toBe(false);
+      expect(url.searchParams.get("sortBy")).toBe("downloadCount");
+      expect(url.searchParams.get("sortOrder")).toBe("desc");
+    }
+    expect(requests[0].searchParams.get("offset")).toBe("0");
+    expect(requests[1].searchParams.get("offset")).toBe("20");
+    expect(requests[2].searchParams.get("query")).toBe("prettier");
+    expect(requests[2].searchParams.has("sortBy")).toBe(false);
+    expect(requests[2].searchParams.has("sortOrder")).toBe(false);
+
+    const denied = await req("browse-denied", path, {}, false);
+    expect(denied.response.status).toBe(403);
+    const overlong = await req("browse-user", `${path}?q=${"q".repeat(201)}`);
+    expect(overlong.response.status).toBe(400);
+    const invalidOffset = await req("browse-user", `${path}?offset=-1`);
+    expect(invalidOffset.response.status).toBe(400);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("requires management permission and scopes installations, package reads, and deletion by principal", async () => {
     const denied = await req(
       "user-a",

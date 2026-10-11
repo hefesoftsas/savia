@@ -399,3 +399,11 @@ uploads; it does not use Microsoft's Marketplace. A package that fails the
 browser compatibility checks cannot be activated even if it can be inspected.
 The same-origin bundled-extension fallback remains available when the isolated
 runtime is unavailable, but marketplace and VSIX extensions stay disabled.
+
+The Extensions panel opens on popular Open VSX packages. Its single search field
+queries the marketplace automatically as you type; typing from Installed returns
+to Marketplace. Clear the field to browse popular packages again. Select Installed
+to filter installed and bundled extensions with the current query. The fixed
+header includes Upload VSIX, and package inspection appears above the scrolling
+results before an explicit install or update. Marketplace listings can include
+desktop-only packages; inspection checks compatibility before installation.

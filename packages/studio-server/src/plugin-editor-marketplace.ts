@@ -167,12 +167,17 @@ export async function searchOpenVsx(
   nextOffset: number | null;
 }> {
   const q = query.trim();
-  if (!q || q.length > 200)
-    throw new Error("Marketplace query must be 1–200 characters.");
+  if (q.length > 200)
+    throw new Error("Marketplace query must be at most 200 characters.");
   if (!Number.isSafeInteger(offset) || offset < 0)
     throw new Error("Invalid marketplace offset.");
   const url = new URL("/api/-/search", OPEN_VSX_ORIGIN);
-  url.searchParams.set("query", q);
+  if (q) {
+    url.searchParams.set("query", q);
+  } else {
+    url.searchParams.set("sortBy", "downloadCount");
+    url.searchParams.set("sortOrder", "desc");
+  }
   url.searchParams.set("offset", String(offset));
   url.searchParams.set("size", "20");
   const payload = parseJson(await fetchOpenVsx(url));

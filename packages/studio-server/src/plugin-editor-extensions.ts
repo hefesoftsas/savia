@@ -119,14 +119,9 @@ export function registerPluginEditorExtensions(
     const query = c.req.query("q") ?? "";
     const offsetText = c.req.query("offset") ?? "0";
     const offset = /^\d{1,9}$/.test(offsetText) ? Number(offsetText) : -1;
-    if (
-      query.trim().length < 1 ||
-      query.length > 200 ||
-      !Number.isSafeInteger(offset) ||
-      offset < 0
-    )
+    if (query.length > 200 || !Number.isSafeInteger(offset) || offset < 0)
       return fail(
-        "Marketplace query must be 1–200 characters and offset must be non-negative.",
+        "Marketplace query must be at most 200 characters and offset must be non-negative.",
         400,
       );
     try {
