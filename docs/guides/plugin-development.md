@@ -191,8 +191,10 @@ status bar.
 
 **Run** validates and opens preview; **Publish** releases the validated revision.
 The project options menu contains import/export and the optional publication
-destination. This is a bounded Savia plugin workspace with the four files below,
-not a general-purpose npm workspace, terminal or VS Code extension host.
+destination. This bounded Savia plugin workspace starts with the four files
+below and supports the reviewed web extension catalog described at the end of
+this guide. General-purpose npm workspaces and terminal extensions are outside
+its scope.
 
 The resizable layout uses [Allotment](https://github.com/johnwalley/allotment),
 a React component derived from VS Code's split-view implementation, alongside
@@ -346,7 +348,10 @@ completion suggestions. Disable an extension to unregister its providers.
 
 Enabling an extension starts an isolated VS Code API editor with retained file
 models, undo history, project search navigation, and the existing draft/preview
-publication flow. Project extension settings are saved in the backend and
+publication flow. The isolated editor retains the plugin's React, JSX and
+`createRoot` declarations. A dedicated TypeScript worker provides completion
+from the current project files, including unsaved edits, without executing them.
+Project extension settings are saved in the backend and
 restored when reopening the project; they are not part of the plugin ZIP or
 browser recovery storage. Versions opened for inspection remain read-only.
 

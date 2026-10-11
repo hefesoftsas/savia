@@ -31,6 +31,8 @@ import {
   projectFileUri,
   type EditorState,
 } from "./plugin-vscode-protocol";
+import { PluginEditorTypescriptClient } from "./plugin-editor-typescript-client";
+import { pluginIdeDeclarations } from "./plugin-ide-declarations";
 import { formatPluginDocument } from "./plugin-editor-format";
 
 const send = (data: unknown) =>
@@ -51,6 +53,14 @@ let chain = Promise.resolve();
 const completions = new Map<string, (value: string | null) => void>();
 let sequence = 0;
 const localEdits = new Map<string, number>();
+
+function completionFiles() {
+  const files = { ...state?.files };
+  for (const [path, model] of models) {
+    if (Object.hasOwn(files, path)) files[path] = model.getValue();
+  }
+  return files;
+}
 
 function language(path: string) {
   const ext = path.split(".").pop();
@@ -129,8 +139,12 @@ async function extensions(ids: string[]) {
             },
           })
         : api.languages.registerCompletionItemProvider(selectors.slice(0, 4), {
-            provideCompletionItems() {
+            provideCompletionItems(document, position) {
               if (state?.readOnly) return [];
+              const prefix = document
+                .lineAt(position.line)
+                .text.slice(0, position.character);
+              if (/\.[$\w]*$/.test(prefix)) return [];
               const component = new api.CompletionItem(
                 "sfc",
                 api.CompletionItemKind.Snippet,
@@ -268,6 +282,93 @@ async function start() {
     ...getTheme(),
     ...getExtensions(),
   });
+  // The plugin bundle supplies these globals. Keep them in the isolated
+  // language workspace, outside the files saved or published by the parent.
+  const ambientUri = monaco.Uri.parse("file:///workspace/savia-globals.d.ts");
+  const fileService = await getService(IFileService);
+  await fileService.createFolder(ambientUri.with({ path: "/workspace" }));
+  await fileService.writeFile(
+    ambientUri,
+    VSBuffer.fromString(pluginIdeDeclarations),
+  );
+  const ambient = await createModelReference(ambientUri);
+  monaco.editor.setModelLanguage(
+    ambient.object.textEditorModel! as unknown as monaco.editor.ITextModel,
+    "typescript",
+  );
+  window.addEventListener("pagehide", () => ambient.dispose(), { once: true });
+  const typescript = new PluginEditorTypescriptClient();
+  const contextExtension = registerExtension(
+    {
+      name: "plugin-types",
+      publisher: "savia",
+      version: "1.0.0",
+      engines: { vscode: "*" },
+      extensionKind: ["ui"],
+    },
+    ExtensionHostKind.LocalProcess,
+  );
+  const contextApi = await contextExtension.getApi();
+  const contextProvider = contextApi.languages.registerCompletionItemProvider(
+    ["typescript", "typescriptreact", "javascript", "javascriptreact"].map(
+      (language) => ({ language, scheme: "file" }),
+    ),
+    {
+      async provideCompletionItems(document, position, token) {
+        if (!state || state.readOnly || token.isCancellationRequested)
+          return [];
+        const version = document.version;
+        const path = document.uri.path.replace(/^\/workspace\//, "");
+        if (!Object.hasOwn(state.files, path)) return [];
+        const files = completionFiles();
+        files[path] = document.getText();
+        const entries = await typescript.complete(
+          files,
+          path,
+          document.offsetAt(position),
+        );
+        const currentFiles = completionFiles();
+        if (
+          token.isCancellationRequested ||
+          state?.readOnly ||
+          document.version !== version ||
+          Object.keys(files).length !== Object.keys(currentFiles).length ||
+          Object.entries(files).some(
+            ([path, text]) => currentFiles[path] !== text,
+          )
+        )
+          return [];
+        const kinds: Record<string, number> = {
+          method: contextApi.CompletionItemKind.Method,
+          function: contextApi.CompletionItemKind.Function,
+          property: contextApi.CompletionItemKind.Property,
+          class: contextApi.CompletionItemKind.Class,
+          interface: contextApi.CompletionItemKind.Interface,
+          keyword: contextApi.CompletionItemKind.Keyword,
+        };
+        return entries.map((entry) => {
+          const item = new contextApi.CompletionItem(
+            entry.name,
+            kinds[entry.kind] ?? contextApi.CompletionItemKind.Variable,
+          );
+          item.insertText = entry.insertText ?? entry.name;
+          item.sortText = entry.sortText;
+          item.range = document.getWordRangeAtPosition(position);
+          return item;
+        });
+      },
+    },
+    ".",
+  );
+  window.addEventListener(
+    "pagehide",
+    () => {
+      contextProvider.dispose();
+      typescript.dispose();
+      void contextExtension.dispose();
+    },
+    { once: true },
+  );
   editor = monaco.editor.create(document.getElementById("editor")!, {
     automaticLayout: true,
     editContext: false,
