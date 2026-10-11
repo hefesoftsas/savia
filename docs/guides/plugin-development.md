@@ -353,6 +353,11 @@ installation and shows its publisher, version, license, compatibility, and
 declared dependencies. Installing and updating are explicit actions; registry
 metadata or a successful inspection never installs or enables code by itself.
 
+Registry API requests stay on `https://open-vsx.org`. VSIX downloads can follow
+bounded redirects from that registry to its official content host,
+`https://openvsx.eclipsecontent.org`; arbitrary hosts, HTTP URLs, and credentials
+in URLs are rejected. Download deadlines and size limits apply across redirects.
+
 Packages are limited to 20 MiB compressed, 64 MiB expanded, 10,000 files, and
 8 MiB per file. Installed package storage is limited to 128 MiB per tenant;
 each project can reference up to 32 installations. Enabling a theme selects
