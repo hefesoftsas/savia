@@ -11,6 +11,8 @@ COPY apps/legacy-exporter/package.json apps/legacy-exporter/
 COPY apps/mcp/package.json apps/mcp/
 COPY apps/savia-request/package.json apps/savia-request/
 COPY apps/self-hosted/package.json apps/self-hosted/
+COPY apps/vscode/package.json apps/vscode/
+COPY packages/plugin-authoring/package.json packages/plugin-authoring/
 COPY packages/studio-server/package.json packages/studio-server/
 COPY packages/studio-shared/package.json packages/studio-shared/
 COPY packages/db/package.json packages/db/
@@ -45,7 +47,7 @@ COPY packages/release-catalog/package.json packages/release-catalog/
 COPY packages/tenant-host/package.json packages/tenant-host/
 RUN --mount=type=cache,id=savia-pnpm,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm --filter @savia/admin exec vite build
+RUN pnpm --filter @savia/admin run build:assets
 RUN node scripts/prepare-office-runtime.mjs
 RUN mkdir -p apps/admin/dist/office/runtime && cp -R .cache/office-runtime/. apps/admin/dist/office/runtime/
 RUN --mount=type=cache,id=savia-pnpm,target=/root/.local/share/pnpm/store CI=true pnpm install --prod --offline --frozen-lockfile

@@ -57,6 +57,7 @@ infra/pulumi/backups/
 # Isolated code editor build output
 apps/admin/dist-plugin-editor/
 apps/plugin-editor-runtime/.wrangler/
+apps/admin/public/downloads/
 
 # Native VS Code extension distribution and isolated host tests
 apps/vscode/.staging/

@@ -1,5 +1,21 @@
 # Savia plugin authoring in VS Code
 
+In Savia, open **Plugins → Work from VS Code** above the plugin catalog.
+The guide includes the VSIX download, installation steps, personal key scopes,
+and the current server origin and workspace ID. Expand **Installation and usage,
+step by step** for editing, publication and recovery instructions. The browser
+plugin editor also links to this guide from its project options menu; it opens
+in another tab to preserve the current draft.
+
+Admin deployments serve the packaged extension at
+`/downloads/savia-plugin-authoring-<version>.vsix` with a matching `.sha256` file;
+the download button follows the version in the extension manifest.
+The common admin `build` and `build:assets` commands build the extension and
+verify its checksum before copying the package into the admin static assets.
+This includes Cloudflare deployments, setup scripts and the self-hosted Docker
+image. For local Vite development, run `pnpm --filter @savia/admin build:downloads`
+once to prepare the download without building the entire interface.
+
 Install the downloadable **Savia Plugin Authoring** VSIX in desktop VS Code
 1.96.2 or newer: open Extensions, choose **Install from VSIX…**, and select
 `savia-plugin-authoring-0.1.0.vsix`. The terminal equivalent is:
