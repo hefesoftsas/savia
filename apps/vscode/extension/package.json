@@ -1,0 +1,29 @@
+{
+  "name": "savia-plugin-authoring",
+  "publisher": "savia",
+  "version": "0.1.0",
+  "displayName": "Savia Plugin Authoring",
+  "description": "Check out, edit, build and publish versioned Savia plugins.",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "vscode": "^1.96.2"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.cjs",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Building and publishing require a trusted workspace."
+    },
+    "virtualWorkspaces": false
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hefesoftsas/savia"
+  }
+}
