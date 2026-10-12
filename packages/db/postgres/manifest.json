@@ -229,6 +229,14 @@
     {
       "filename": "0053_public_quote_links.sql",
       "sha256": "eb5fea0d519eb1d01393dd71afb41fcdde638bf6c764d5de61dea4be6bae509e"
+    },
+    {
+      "filename": "0054_plugin_project_editor_extensions.sql",
+      "sha256": "5c9bec4fba3e84215f4e833bb9cc265f1358a32ad9d75ba8182209d61aa3f99f"
+    },
+    {
+      "filename": "0055_plugin_editor_installations.sql",
+      "sha256": "83b4a3472e6341673650594cce908f3fee94b8fb698d3325b3dbecc1fcccb6d2"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1908,6 +1916,36 @@
       "type": "index",
       "name": "public_quote_links_expiry",
       "table": "public_quote_links"
+    },
+    {
+      "type": "index",
+      "name": "plugin_editor_extension_inspections_scope_expiry",
+      "table": "plugin_editor_extension_inspections"
+    },
+    {
+      "type": "index",
+      "name": "plugin_editor_extension_installations_scope",
+      "table": "plugin_editor_extension_installations"
+    },
+    {
+      "type": "table",
+      "name": "plugin_editor_extension_artifacts",
+      "table": "plugin_editor_extension_artifacts"
+    },
+    {
+      "type": "table",
+      "name": "plugin_editor_extension_cleanup",
+      "table": "plugin_editor_extension_cleanup"
+    },
+    {
+      "type": "table",
+      "name": "plugin_editor_extension_inspections",
+      "table": "plugin_editor_extension_inspections"
+    },
+    {
+      "type": "table",
+      "name": "plugin_editor_extension_installations",
+      "table": "plugin_editor_extension_installations"
     }
   ],
   "tables": [
@@ -15488,6 +15526,22 @@
           "notnull": 1,
           "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
           "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "editor_extensions",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'[]'",
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "installed_editor_extensions",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'[]'",
+          "pk": 0
         }
       ],
       "foreignKeys": [],
@@ -15498,7 +15552,353 @@
           "origin": "pk"
         }
       ],
-      "checkCount": 1
+      "checkCount": 3
+    },
+    {
+      "name": "plugin_editor_extension_artifacts",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "sha256",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "object_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "compressed_bytes",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "expanded_bytes",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "reference_count",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        { "columns": ["tenant_id", "principal_id", "sha256"], "origin": "pk" },
+        { "columns": ["object_key"], "origin": "u" }
+      ],
+      "checkCount": 3
+    },
+    {
+      "name": "plugin_editor_extension_cleanup",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "object_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [{ "columns": ["object_key"], "origin": "pk" }],
+      "checkCount": 0
+    },
+    {
+      "name": "plugin_editor_extension_inspections",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "source",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "manifest_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "object_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "expires_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "reservation_bytes",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [{ "columns": ["id"], "origin": "pk" }],
+      "checkCount": 4
+    },
+    {
+      "name": "plugin_editor_extension_installations",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "publisher",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "sha256",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "source",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "object_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "plugin_editor_extension_artifacts",
+          "from": "tenant_id",
+          "to": "tenant_id",
+          "on_update": "NO ACTION",
+          "on_delete": "RESTRICT",
+          "match": "NONE"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "table": "plugin_editor_extension_artifacts",
+          "from": "principal_id",
+          "to": "principal_id",
+          "on_update": "NO ACTION",
+          "on_delete": "RESTRICT",
+          "match": "NONE"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "table": "plugin_editor_extension_artifacts",
+          "from": "sha256",
+          "to": "sha256",
+          "on_update": "NO ACTION",
+          "on_delete": "RESTRICT",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        { "columns": ["id"], "origin": "pk" },
+        {
+          "columns": [
+            "tenant_id",
+            "principal_id",
+            "publisher",
+            "name",
+            "version"
+          ],
+          "origin": "u"
+        }
+      ],
+      "checkCount": 3
     },
     {
       "name": "plugin_store_sources",

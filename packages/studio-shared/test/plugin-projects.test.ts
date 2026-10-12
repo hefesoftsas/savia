@@ -118,3 +118,45 @@ describe("plugin project file limits", () => {
     expect(() => pluginProjectSaveSchema.parse(request)).toThrow();
   });
 });
+
+describe("plugin project editor extensions", () => {
+  const request = {
+    files: files("entry"),
+    history: [],
+    version: 0,
+  };
+
+  it("defaults older project payloads to no enabled editor extensions", () => {
+    expect(pluginProjectSaveSchema.parse(request).editorExtensions).toEqual([]);
+  });
+
+  it("accepts curated unique editor extension IDs only", () => {
+    expect(
+      pluginProjectSaveSchema.parse({
+        ...request,
+        editorExtensions: ["savia.formatter", "savia.react-snippets"],
+      }).editorExtensions,
+    ).toEqual(["savia.formatter", "savia.react-snippets"]);
+    expect(() =>
+      pluginProjectSaveSchema.parse({
+        ...request,
+        editorExtensions: ["unknown.publisher-extension"],
+      }),
+    ).toThrow();
+    expect(() =>
+      pluginProjectSaveSchema.parse({
+        ...request,
+        editorExtensions: ["savia.formatter", "savia.formatter"],
+      }),
+    ).toThrow(/unique/i);
+  });
+});
+
+ describe("installed extension project references", () => {
+ it("round trips pinned references and rejects duplicates", () => {
+ const reference = { installationId: "e86e4e8d-7047-47b6-a7ac-c87082444fba", sha256: "a".repeat(64) };
+ const input = { files: files("entry"), history: [], version: 0, installedEditorExtensions: [reference] };
+ expect(pluginProjectSaveSchema.parse(input).installedEditorExtensions).toEqual([reference]);
+ expect(() => pluginProjectSaveSchema.parse({...input, installedEditorExtensions: [reference,reference]})).toThrow();
+ });
+ });

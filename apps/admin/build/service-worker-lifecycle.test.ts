@@ -22,6 +22,7 @@ it("activates the generated replacement worker without waiting for old tabs to c
 
     const skipWaiting = vi.fn();
     const clientsClaim = vi.fn();
+    const navigationDenylist: RegExp[] = [];
     // Execute the emitted worker, rather than checking the requested plugin
     // options: autoUpdate alone is ignored when injectRegister is false.
     runInNewContext(await readFile(join(output, "sw.js"), "utf8"), {
@@ -36,7 +37,11 @@ it("activates the generated replacement worker without waiting for old tabs to c
           cleanupOutdatedCaches: vi.fn(),
           registerRoute: vi.fn(),
           createHandlerBoundToURL: vi.fn(),
-          NavigationRoute: class {},
+          NavigationRoute: class {
+            constructor(_handler: unknown, options: { denylist?: RegExp[] }) {
+              navigationDenylist.push(...(options.denylist ?? []));
+            }
+          },
           CacheFirst: class {},
           ExpirationPlugin: class {},
           CacheableResponsePlugin: class {},
@@ -45,6 +50,22 @@ it("activates the generated replacement worker without waiting for old tabs to c
     expect(skipWaiting).toHaveBeenCalledOnce();
     expect(clientsClaim).toHaveBeenCalledOnce();
     expect(pwa!.api.registerSWData()).toBeUndefined();
+    // Cloudflare canonicalizes standalone HTML to an extensionless URL.
+    // Both forms must reach that document instead of the admin shell.
+    for (const path of [
+      "/plugin-editor.html",
+      "/plugin-editor",
+      "/plugin-editor?version=2",
+      "/plugin-editor.html?version=2",
+    ]) {
+      expect(
+        navigationDenylist.some((pattern) => pattern.test(path)),
+        path,
+      ).toBe(true);
+    }
+    expect(
+      navigationDenylist.some((pattern) => pattern.test("/plugin-studio")),
+    ).toBe(false);
   } finally {
     await rm(output, { recursive: true, force: true });
   }

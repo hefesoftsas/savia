@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { projectEditorExtensionReferencesSchema } from "./plugin-editor-extensions";
 import { PLUGIN_STORE_MAX_ENTRY_BYTES } from "./plugin-store";
 
 const metadataFile = z
@@ -21,6 +22,12 @@ const entryFile = z
 export const PLUGIN_PROJECT_MAX_BYTES = 5 * 1024 * 1024;
 export const PLUGIN_ORIGINAL_SOURCE_MAX_BYTES = 2 * 1024 * 1024;
 export const PLUGIN_ORIGINAL_SOURCE_MAX_FILES = 256;
+
+/** Curated VS Code web extensions supported by the plugin IDE. */
+export const PLUGIN_IDE_EDITOR_EXTENSION_IDS = [
+  "savia.formatter",
+  "savia.react-snippets",
+] as const;
 
 const originalSourcePathSchema = z.string().refine((path) => {
   if (
@@ -135,6 +142,18 @@ export const pluginProjectSaveSchema = z
   .object({
     files: pluginProjectFilesSchema,
     history: pluginProjectHistorySchema,
+    editorExtensions: z
+      .array(z.enum(PLUGIN_IDE_EDITOR_EXTENSION_IDS))
+      .max(PLUGIN_IDE_EDITOR_EXTENSION_IDS.length)
+      .default([])
+      .superRefine((ids, context) => {
+        if (new Set(ids).size !== ids.length)
+          context.addIssue({
+            code: "custom",
+            message: "Editor extension IDs must be unique",
+          });
+      }),
+    installedEditorExtensions: projectEditorExtensionReferencesSchema.default([]),
     version: z.number().int().nonnegative(),
   })
   .strict()

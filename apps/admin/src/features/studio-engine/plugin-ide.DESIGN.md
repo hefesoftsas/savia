@@ -57,3 +57,15 @@ accessible labels and tooltips. Matching paths expand while filtering. Source
 files and configuration files share closable tabs and preserve mounted Monaco
 models when switching. Monaco bundles tokenizers and standalone contributions
 for syntax colors, Find/Replace, folding, bracket guides and suggestions.
+
+Retained archive source editors show syntax diagnostics; full semantic diagnostics require a
+dependency/type environment that retained archives do not ship. Preview resolves
+the actual import graph and reports compiler errors before publication. Standalone
+entry files retain full semantic diagnostics.
+
+The Search view complements the filename filter and Monaco's in-file Find. It
+searches project source/configuration text with Ctrl/Cmd+Shift+F, groups matches by
+path and shows line snippets. Selecting a result opens the file and selects the
+match in its existing Monaco model. Keep search state across views; exclude binary
+assets and compiled recovery bundles when original sources exist. Cap results at
+500 and invite a narrower query.

@@ -82,9 +82,18 @@ function streamPayload(callIndex = 0) {
 }
 vi.mock("../api", () => ({ pluginApi: mocks.publish }));
 vi.mock("../monaco-code-editor", () => ({
-  MonacoCodeEditor: ({ value, onChange, ariaLabel, readOnly }: any) => (
+  MonacoCodeEditor: ({
+    value,
+    onChange,
+    ariaLabel,
+    readOnly,
+    semanticValidation,
+    selection,
+  }: any) => (
     <textarea
       aria-label={ariaLabel}
+      data-semantic-validation={semanticValidation !== false}
+      data-selection={selection ? JSON.stringify(selection) : undefined}
       value={value}
       readOnly={readOnly}
       onChange={(e) => onChange(e.target.value)}
@@ -117,6 +126,13 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+it("keeps semantic diagnostics for standalone entry files", () => {
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  expect(
+    screen.getByRole("textbox", { name: "entry.tsx", exact: true }),
+  ).toHaveAttribute("data-semantic-validation", "true");
+});
+
 it("keeps source files in separate closable tabs and filters the explorer", async () => {
   const entry = "store-ports/demo/entry.tsx";
   const module = "packages/demo/src/screen.tsx";
@@ -139,6 +155,9 @@ it("keeps source files in separate closable tabs and filters the explorer", asyn
       }}
     />,
   );
+  expect(
+    screen.getByRole("textbox", { name: entry, exact: true }),
+  ).toHaveAttribute("data-semantic-validation", "false");
   for (const folder of [
     "src/packages",
     "src/packages/demo",
@@ -1166,4 +1185,76 @@ it("edits original modules and saves the source archive used by preview", async 
       JSON.parse(mocks.compile.mock.lastCall![0]["original-source.json"])[name],
     ).toContain("after"),
   );
+});
+
+it("searches project content and opens an archived match at its line", async () => {
+  const path = "packages/demo/src/screen.tsx";
+  render(
+    <PluginIde
+      tenantId={2}
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+      initialFiles={{
+        "entry.tsx": "// Compiled needle must be excluded",
+        "savia-extension.json": '{"id":"demo","version":"1.0.0"}',
+        "store.json": "{}",
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          "store-ports/demo/entry.tsx": "// Entry",
+          [path]: "// Screen\nconst needle = 1;\n",
+        }),
+      }}
+    />,
+  );
+  fireEvent.keyDown(screen.getByRole("region", { name: "Editor de plugins" }), {
+    key: "f",
+    ctrlKey: true,
+    shiftKey: true,
+  });
+  const query = screen.getByRole("searchbox", { name: "Buscar en el código" });
+  fireEvent.change(query, { target: { value: "needle" } });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: `src/${path}:2:7 const needle = 1;`,
+      exact: true,
+    }),
+  );
+  const editor = screen.getByRole("textbox", { name: path, exact: true });
+  expect(editor).toHaveAttribute(
+    "data-selection",
+    expect.stringContaining('"lineNumber":2'),
+  );
+  expect(editor).toHaveAttribute(
+    "data-selection",
+    expect.stringContaining('"column":7'),
+  );
+  expect(
+    screen.getByRole("tab", { name: `src/${path}`, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+});
+
+it("offers a visible content search for standalone projects and updates matches after editing", () => {
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Buscar", exact: true }));
+  fireEvent.change(
+    screen.getByRole("searchbox", { name: "Buscar en el código" }),
+    { target: { value: "render" } },
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "entry.tsx:1:17 export function render() {}",
+      exact: true,
+    }),
+  );
+  const entry = screen.getByRole("textbox", { name: "entry.tsx", exact: true });
+  expect(entry).toHaveAttribute(
+    "data-selection",
+    expect.stringContaining('"column":17'),
+  );
+  fireEvent.change(entry, { target: { value: "// Replaced entry" } });
+  fireEvent.click(screen.getByRole("button", { name: "Buscar", exact: true }));
+  expect(
+    screen.getByRole("searchbox", { name: "Buscar en el código" }),
+  ).toHaveValue("render");
+  expect(screen.getByText("Sin coincidencias")).toBeInTheDocument();
 });

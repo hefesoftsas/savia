@@ -14,6 +14,8 @@ import {
 import {
   ArrowLeft,
   Files,
+  Blocks,
+  Search,
   Check,
   Bot,
   ArrowUp,
@@ -43,6 +45,8 @@ import {
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { AssistantMarkdown } from "@/features/assistant/assistant-response-ui";
+import { PluginProjectSearchPanel } from "./plugin-project-search-panel";
+import type { PluginProjectSearchMatch } from "./plugin-project-search";
 import { PluginFileTree } from "./plugin-file-tree";
 import { PluginDiffEditor } from "./plugin-diff-editor";
 import { Textarea } from "@/components/ui/textarea";
@@ -87,22 +91,38 @@ type Preview = {
   state: "loading" | "ready" | "error";
 };
 
+import { PluginEditorExtensionsPanel } from "./plugin-editor-extensions-panel";
+import { createEmbeddedTransport } from "@/api/embedded-transport";
+import { getStudioRuntime } from "./runtime";
+import { PluginEditorExtensionClient } from "./plugin-editor-extension-client";
+import type { ProjectEditorExtensionReference } from "@savia/studio-shared/plugin-editor-extensions";
+import { resolvePluginEditorRuntimeUrl } from "./plugin-editor-session";
+import { PluginVscodeEditor } from "./plugin-vscode-editor";
+
 export default function PluginIde({
   tenantId,
+  projectId = "draft",
+  initialInstalledEditorExtensions = [],
+  onInstalledExtensionsChange,
   onClose,
   onPublished,
   initialFiles,
   initialHistory,
+  initialEditorExtensions = [],
   onDraftChange,
   canPublishShared = false,
   saveStatus,
   backLabel,
 }: {
   tenantId: number;
+  projectId?: string;
+  initialInstalledEditorExtensions?: ProjectEditorExtensionReference[];
+  onInstalledExtensionsChange?: (draft: ProjectDraft) => Promise<void>;
   saveStatus?: ReactNode;
   backLabel?: string;
   initialFiles?: IdeFiles;
   initialHistory?: ChatMessage[];
+  initialEditorExtensions?: string[];
   onDraftChange?: (draft: ProjectDraft) => void;
   canPublishShared?: boolean;
   onClose: () => void;
@@ -111,12 +131,46 @@ export default function PluginIde({
   const t = useMessages(pluginIdeMessages);
   const panelId = useId();
   const [wide, setWide] = useState(false);
-  const [pane, setPane] = useState<"files" | "chat" | "code" | "preview">(
-    "code",
-  );
+  const [pane, setPane] = useState<
+    "files" | "search" | "extensions" | "chat" | "code" | "preview"
+  >("code");
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [fileFilter, setFileFilter] = useState("");
+  const [sidebarView, setSidebarView] = useState<
+    "files" | "search" | "extensions"
+  >("files");
+  const [editorExtensions, setEditorExtensions] = useState(
+    initialEditorExtensions,
+  );
+  const [extensionsStarted, setExtensionsStarted] = useState(
+    initialEditorExtensions.length > 0 ||
+      initialInstalledEditorExtensions.length > 0,
+  );
+  const [installedEditorExtensions, setInstalledEditorExtensions] = useState(
+    initialInstalledEditorExtensions,
+  );
+  const [activationErrors, setActivationErrors] = useState<
+    Record<string, string>
+  >({});
+  const extensionRollback = useRef<{
+    previous: ProjectEditorExtensionReference[];
+    pending: Set<string>;
+    next: ProjectEditorExtensionReference[];
+    applied: boolean;
+    resolve(): void;
+    reject(error: Error): void;
+  } | null>(null);
+  const runtimeAvailable = !!resolvePluginEditorRuntimeUrl(
+    import.meta.env.VITE_PLUGIN_EDITOR_RUNTIME_URL,
+    location.origin,
+  );
+  const [formatRequest, setFormatRequest] = useState(0);
+  const [editorError, setEditorError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const [searchSelection, setSearchSelection] =
+    useState<PluginProjectSearchMatch | null>(null);
   const [reviewFile, setReviewFile] = useState<keyof IdeFiles | null>(null);
   const [visitedFiles, setVisitedFiles] = useState<(keyof IdeFiles)[]>([
     "entry.tsx",
@@ -126,6 +180,17 @@ export default function PluginIde({
   const conversation = useRef<HTMLDivElement>(null);
   const locale = useAppLocale();
   const { apiClient } = useAppServices();
+  const extensionClient = useMemo(
+    () =>
+      new PluginEditorExtensionClient(
+        getStudioRuntime().pluginTransport ??
+          createEmbeddedTransport(
+            apiClient,
+            getStudioRuntime().apiBasePath ?? `/v1/studio/${tenantId}`,
+          ),
+      ),
+    [apiClient, tenantId],
+  );
   const [files, setFiles] = useState<IdeFiles>(
     () => initialFiles ?? createPluginProject(),
   );
@@ -140,6 +205,24 @@ export default function PluginIde({
         ? pluginOriginalSourceFilesSchema.parse(JSON.parse(originalArchive))
         : {},
     [originalArchive],
+  );
+  const searchableFiles = useMemo(
+    () => ({
+      ...Object.fromEntries(
+        Object.entries(files).filter(
+          ([name]) =>
+            name !== "original-source.json" &&
+            !(originalArchive && name === "entry.tsx"),
+        ),
+      ),
+      ...Object.fromEntries(
+        Object.entries(originalFiles).map(([name, text]) => [
+          `src/${name}`,
+          text,
+        ]),
+      ),
+    }),
+    [files, originalArchive, originalFiles],
   );
   const [selectedOriginal, setSelectedOriginal] = useState<string | null>(
     () =>
@@ -207,12 +290,105 @@ export default function PluginIde({
   useEffect(() => {
     draftCallback.current?.({
       files,
+      editorExtensions,
+      installedEditorExtensions,
       history: history.slice(-10).map((item) => ({
         role: item.role,
         content: item.content.slice(0, 4000),
       })),
     });
-  }, [files, history]);
+  }, [files, history, editorExtensions, installedEditorExtensions]);
+  const extensionSessionActive = useRef(true);
+  const latestExtensionDraft = useRef<ProjectDraft>({
+    files,
+    editorExtensions,
+    history,
+  });
+  latestExtensionDraft.current = {
+    files,
+    editorExtensions,
+    history: history.slice(-10).map((item) => ({
+      role: item.role,
+      content: item.content.slice(0, 4000),
+    })),
+  };
+  useEffect(() => {
+    extensionSessionActive.current = true;
+    return () => {
+      extensionSessionActive.current = false;
+      extensionRollback.current?.reject(new Error("Editor session ended."));
+    };
+  }, []);
+  async function changeInstalledExtensions(
+    next: ProjectEditorExtensionReference[],
+  ) {
+    if (extensionRollback.current)
+      throw new Error("An extension change is already in progress.");
+    if (!onInstalledExtensionsChange)
+      throw new Error("Project persistence is unavailable.");
+    const previous = installedEditorExtensions;
+    const draft: ProjectDraft = {
+      files,
+      editorExtensions,
+      installedEditorExtensions: next,
+      history: history.slice(-10).map((item) => ({
+        role: item.role,
+        content: item.content.slice(0, 4000),
+      })),
+    };
+    // Set the transition before persistence so concurrent actions cannot replace it.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const applied = new Promise<void>((resolve, reject) => {
+      extensionRollback.current = {
+        previous,
+        next,
+        applied: false,
+        pending: new Set(
+          next
+            .filter(
+              (ref) =>
+                !previous.some(
+                  (old) => old.installationId === ref.installationId,
+                ),
+            )
+            .map((ref) => ref.installationId),
+        ),
+        resolve,
+        reject,
+      };
+      timer = setTimeout(
+        () => reject(new Error("Extension synchronization timed out.")),
+        120000,
+      );
+    });
+    // Avoid an unhandled rejection while the backend save is pending.
+    void applied.catch(() => {});
+    try {
+      await onInstalledExtensionsChange(draft);
+      if (!extensionSessionActive.current)
+        throw new Error("Editor session ended.");
+      setInstalledEditorExtensions(next);
+      setExtensionsStarted(true);
+      await applied;
+    } catch (error) {
+      if (extensionSessionActive.current) {
+        await onInstalledExtensionsChange({
+          ...latestExtensionDraft.current,
+          installedEditorExtensions: previous,
+        });
+        setInstalledEditorExtensions(previous);
+      }
+      throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
+      extensionRollback.current = null;
+    }
+  }
+  function finishExtensionTransition() {
+    const transition = extensionRollback.current;
+    if (transition?.applied && !transition.pending.size) transition.resolve();
+  }
+
   const snapshot = JSON.stringify(files);
   const savedSnapshot = useRef(snapshot);
   const currentSnapshot = useRef(snapshot);
@@ -233,6 +409,7 @@ export default function PluginIde({
     if (element) element.scrollTop = element.scrollHeight;
   }, [history, generating, proposal, chatError, streamingMessage, queue]);
   function openFile(name: string) {
+    setSearchSelection(null);
     const sourcePath = name.startsWith("src/") ? name.slice(4) : null;
     const original =
       sourcePath !== null && Object.hasOwn(originalFiles, sourcePath);
@@ -254,6 +431,16 @@ export default function PluginIde({
     }
     setReviewFile(null);
     setPane("code");
+  }
+  function openSearch() {
+    requestAnimationFrame(() => searchInput.current?.focus());
+    setSidebarView("search");
+    setExplorerOpen(true);
+    if (!wide) setPane("search");
+  }
+  function openSearchMatch(match: PluginProjectSearchMatch) {
+    openFile(match.path);
+    setSearchSelection({ ...match });
   }
   function closeFile(name: string) {
     const next = openFiles.filter((file) => file !== name);
@@ -795,7 +982,22 @@ export default function PluginIde({
     preview.snapshot === snapshot &&
     (published?.snapshot !== snapshot || published.destination !== destination);
   return (
-    <section ref={surface} className="plugin-ide" aria-label={t("title")}>
+    <section
+      ref={surface}
+      className="plugin-ide"
+      aria-label={t("title")}
+      onKeyDownCapture={(event) => {
+        if (
+          (event.ctrlKey || event.metaKey) &&
+          event.shiftKey &&
+          event.key.toLowerCase() === "f"
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          openSearch();
+        }
+      }}
+    >
       <header className="plugin-ide-header">
         <div className="plugin-ide-heading">
           <Button
@@ -929,13 +1131,44 @@ export default function PluginIde({
       <nav className="plugin-ide-navigation" aria-label={t("workspaceViews")}>
         <button
           type="button"
-          aria-pressed={wide ? explorerOpen : pane === "files"}
-          onClick={() =>
-            wide ? setExplorerOpen(!explorerOpen) : setPane("files")
+          aria-pressed={
+            wide ? explorerOpen && sidebarView === "files" : pane === "files"
           }
+          onClick={() => {
+            setSidebarView("files");
+            if (wide) setExplorerOpen(sidebarView !== "files" || !explorerOpen);
+            else setPane("files");
+          }}
         >
           <Files />
           {t("files")}
+        </button>
+        <button
+          type="button"
+          title={t("searchShortcut")}
+          aria-pressed={
+            wide ? explorerOpen && sidebarView === "search" : pane === "search"
+          }
+          onClick={openSearch}
+        >
+          <Search />
+          {t("search")}
+        </button>
+        <button
+          type="button"
+          aria-pressed={
+            wide
+              ? explorerOpen && sidebarView === "extensions"
+              : pane === "extensions"
+          }
+          onClick={() => {
+            setSidebarView("extensions");
+            setExplorerOpen(true);
+            if (!wide) setPane("extensions");
+          }}
+        >
+          <Blocks />
+          {t("editorExtensions")}
         </button>
         <button
           type="button"
@@ -1002,35 +1235,86 @@ export default function PluginIde({
             preferredSize={220}
             minSize={wide ? 160 : 0}
             maxSize={wide ? 360 : Infinity}
-            visible={wide ? explorerOpen : pane === "files"}
+            visible={
+              wide
+                ? explorerOpen
+                : pane === "files" || pane === "search" || pane === "extensions"
+            }
           >
-            <aside className="plugin-ide-explorer" aria-label={t("files")}>
-              <h3 className="plugin-ide-panel-title">{t("explorer")}</h3>
-              <input
-                type="search"
-                className="plugin-ide-file-filter"
-                aria-label={t("filterFiles")}
-                placeholder={t("filterFiles")}
-                value={fileFilter}
-                onChange={(event) => setFileFilter(event.target.value)}
-              />
-              <PluginFileTree
-                names={[
-                  ...Object.keys(files).filter(
-                    (name) =>
-                      name !== "original-source.json" &&
-                      !(originalArchive && name === "entry.tsx"),
-                  ),
-                  ...Object.keys(originalFiles).map((name) => `src/${name}`),
-                ].filter((name) =>
-                  name.toLowerCase().includes(fileFilter.trim().toLowerCase()),
-                )}
-                selected={activeFile}
-                projectName={projectName}
-                label={t("files")}
-                onSelect={openFile}
-                filterActive={!!fileFilter.trim()}
-              />
+            <aside
+              className="plugin-ide-explorer"
+              aria-label={t(
+                sidebarView === "extensions"
+                  ? "editorExtensions"
+                  : sidebarView === "search"
+                    ? "search"
+                    : "files",
+              )}
+            >
+              {sidebarView === "extensions" ? (
+                <PluginEditorExtensionsPanel
+                  client={extensionClient}
+                  runtimeAvailable={runtimeAvailable}
+                  installedReferences={installedEditorExtensions}
+                  onInstalledChange={(next) => changeInstalledExtensions(next)}
+                  activationErrors={activationErrors}
+                  enabled={editorExtensions}
+                  disabled={locked}
+                  error={editorError}
+                  onChange={(next) => {
+                    setEditorExtensions(next);
+                    if (next.length) setExtensionsStarted(true);
+                  }}
+                />
+              ) : sidebarView === "search" ? (
+                <PluginProjectSearchPanel
+                  inputRef={searchInput}
+                  files={searchableFiles}
+                  query={searchQuery}
+                  onQueryChange={setSearchQuery}
+                  onSelect={openSearchMatch}
+                  labels={{
+                    search: t("searchCode"),
+                    placeholder: t("searchPlaceholder"),
+                    noResults: t("searchNoResults"),
+                    resultCount: (count) => t("searchResultCount", { count }),
+                    truncated: t("searchTruncated"),
+                  }}
+                />
+              ) : (
+                <>
+                  <h3 className="plugin-ide-panel-title">{t("explorer")}</h3>
+                  <input
+                    type="search"
+                    className="plugin-ide-file-filter"
+                    aria-label={t("filterFiles")}
+                    placeholder={t("filterFiles")}
+                    value={fileFilter}
+                    onChange={(event) => setFileFilter(event.target.value)}
+                  />
+                  <PluginFileTree
+                    names={[
+                      ...Object.keys(files).filter(
+                        (name) =>
+                          name !== "original-source.json" &&
+                          !(originalArchive && name === "entry.tsx"),
+                      ),
+                      ...Object.keys(originalFiles).map(
+                        (name) => `src/${name}`,
+                      ),
+                    ].filter((name) =>
+                      name
+                        .toLowerCase()
+                        .includes(fileFilter.trim().toLowerCase()),
+                    )}
+                    selected={activeFile}
+                    projectName={projectName}
+                    label={t("files")}
+                    onSelect={openFile}
+                    filterActive={!!fileFilter.trim()}
+                  />
+                </>
+              )}
             </aside>
           </Allotment.Pane>
           <Allotment.Pane
@@ -1153,104 +1437,243 @@ export default function PluginIde({
                   <span title={selectedOriginal ?? reviewFile ?? selected}>
                     {selectedOriginal ?? reviewFile ?? selected}
                   </span>
+                  {(editorExtensions.includes("savia.formatter") ||
+                    installedEditorExtensions.length > 0) && (
+                    <button
+                      type="button"
+                      disabled={locked}
+                      onClick={() => setFormatRequest((value) => value + 1)}
+                    >
+                      {t("formatDocument")}
+                    </button>
+                  )}
                   {selectedOriginal && <span>{t("originalSource")}</span>}
                   {reviewFile && <span>{t("proposed")}</span>}
                 </div>
                 <div className="plugin-ide-editors">
-                  {visitedFiles
-                    .filter((name) => !originalArchive || name !== "entry.tsx")
-                    .map((name) => (
-                      <div
-                        className="plugin-ide-editor-document"
-                        key={name}
-                        hidden={
-                          selected !== name ||
-                          !!reviewFile ||
-                          !!selectedOriginal
+                  {extensionsStarted && (
+                    <PluginVscodeEditor
+                      projectId={projectId}
+                      installedExtensions={installedEditorExtensions}
+                      loadInstalledExtension={async (reference) => {
+                        const installations = await extensionClient.list();
+                        const installation = installations.find(
+                          (item) =>
+                            item.installationId === reference.installationId &&
+                            item.sha256 === reference.sha256,
+                        );
+                        if (!installation)
+                          throw new Error(
+                            "Installed extension is unavailable.",
+                          );
+                        const bytes = await extensionClient.downloadPackage(
+                          reference.installationId,
+                        );
+                        return { installation, bytes };
+                      }}
+                      onExtensionStatus={(id, error) => {
+                        setActivationErrors((current) => {
+                          const next = { ...current };
+                          if (error) next[id] = error;
+                          else delete next[id];
+                          return next;
+                        });
+                        const transition = extensionRollback.current;
+                        if (transition?.pending.has(id)) {
+                          transition.pending.delete(id);
+                          if (error) transition.reject(new Error(error));
+                          else finishExtensionTransition();
                         }
-                      >
-                        <MonacoCodeEditor
-                          value={files[name] ?? ""}
-                          onChange={(value) => {
-                            setUndo(null);
-                            replaceFiles({ ...files, [name]: value });
-                          }}
-                          language={
-                            name === "entry.tsx" ? "typescript" : "json"
-                          }
-                          ariaLabel={name}
-                          inlineCompletion={
-                            name === "entry.tsx"
-                              ? {
-                                  filename: "entry.tsx",
-                                  fetchCompletion: async (prefix, suffix) => {
-                                    try {
-                                      const result = await apiClient.post<{
-                                        completion: string;
-                                      }>("/api/assistant/plugin-completion", {
-                                        tenantId,
-                                        filename: "entry.tsx",
+                      }}
+                      onExtensionsApplied={(references, error) => {
+                        const transition = extensionRollback.current;
+                        if (
+                          !transition ||
+                          JSON.stringify(references) !==
+                            JSON.stringify(transition.next)
+                        )
+                          return;
+                        if (error) transition.reject(new Error(error));
+                        else {
+                          transition.applied = true;
+                          finishExtensionTransition();
+                        }
+                      }}
+                      files={Object.fromEntries(
+                        Object.entries(searchableFiles).filter(
+                          ([name]) =>
+                            !/\.(?:png|webp|jpg|jpeg|gif|b64|base64)$/i.test(
+                              name,
+                            ),
+                        ),
+                      )}
+                      activeFile={activeFile}
+                      formatRequest={formatRequest}
+                      extensions={editorExtensions}
+                      hidden={!!reviewFile}
+                      readOnly={
+                        locked ||
+                        !!reviewFile ||
+                        (!!originalArchive && activeFile === "entry.tsx") ||
+                        /\.(?:png|webp)$/.test(activeFile)
+                      }
+                      selection={
+                        searchSelection?.path === activeFile
+                          ? searchSelection
+                          : undefined
+                      }
+                      onSearch={openSearch}
+                      onError={setEditorError}
+                      fetchCompletion={async (prefix, suffix) => {
+                        try {
+                          const result = await apiClient.post<{
+                            completion: string;
+                          }>("/api/assistant/plugin-completion", {
+                            tenantId,
+                            filename: "entry.tsx",
+                            prefix,
+                            suffix,
+                          });
+                          return result.completion?.trim()
+                            ? result.completion
+                            : null;
+                        } catch {
+                          return null;
+                        }
+                      }}
+                      onChange={(path, value) => {
+                        setUndo(null);
+                        if (path.startsWith("src/") && originalArchive) {
+                          replaceFiles({
+                            ...files,
+                            "original-source.json": JSON.stringify({
+                              ...originalFiles,
+                              [path.slice(4)]: value,
+                            }),
+                          });
+                        } else if (Object.hasOwn(files, path)) {
+                          replaceFiles({ ...files, [path]: value });
+                        }
+                      }}
+                    />
+                  )}
+                  {!extensionsStarted && (
+                    <>
+                      {visitedFiles
+                        .filter(
+                          (name) => !originalArchive || name !== "entry.tsx",
+                        )
+                        .map((name) => (
+                          <div
+                            className="plugin-ide-editor-document"
+                            key={name}
+                            hidden={
+                              selected !== name ||
+                              !!reviewFile ||
+                              !!selectedOriginal
+                            }
+                          >
+                            <MonacoCodeEditor
+                              value={files[name] ?? ""}
+                              onChange={(value) => {
+                                setUndo(null);
+                                replaceFiles({ ...files, [name]: value });
+                              }}
+                              language={
+                                name === "entry.tsx" ? "typescript" : "json"
+                              }
+                              ariaLabel={name}
+                              selection={
+                                searchSelection?.path === name
+                                  ? searchSelection
+                                  : undefined
+                              }
+                              inlineCompletion={
+                                name === "entry.tsx"
+                                  ? {
+                                      filename: "entry.tsx",
+                                      fetchCompletion: async (
                                         prefix,
                                         suffix,
-                                      });
-                                      return result.completion?.trim()
-                                        ? result.completion
-                                        : null;
-                                    } catch {
-                                      // Inline completions are best-effort.
-                                      return null;
+                                      ) => {
+                                        try {
+                                          const result = await apiClient.post<{
+                                            completion: string;
+                                          }>(
+                                            "/api/assistant/plugin-completion",
+                                            {
+                                              tenantId,
+                                              filename: "entry.tsx",
+                                              prefix,
+                                              suffix,
+                                            },
+                                          );
+                                          return result.completion?.trim()
+                                            ? result.completion
+                                            : null;
+                                        } catch {
+                                          // Inline completions are best-effort.
+                                          return null;
+                                        }
+                                      },
                                     }
-                                  },
-                                }
-                              : undefined
-                          }
-                          readOnly={
-                            locked ||
-                            (!!originalArchive && name === "entry.tsx")
-                          }
-                          contextDeclarations={pluginIdeDeclarations}
-                          height={520}
-                        />
-                      </div>
-                    ))}
-                  {visitedOriginal
-                    .filter((name) => Object.hasOwn(originalFiles, name))
-                    .map((name) => (
-                      <div
-                        key={name}
-                        className="plugin-ide-editor-document"
-                        hidden={name !== selectedOriginal || !!reviewFile}
-                      >
-                        <MonacoCodeEditor
-                          value={originalFiles[name] ?? ""}
-                          onChange={(value) => {
-                            setUndo(null);
-                            replaceFiles({
-                              ...files,
-                              "original-source.json": JSON.stringify({
-                                ...originalFiles,
-                                [name]: value,
-                              }),
-                            });
-                          }}
-                          language={
-                            name.endsWith(".css")
-                              ? "css"
-                              : name.endsWith(".json")
-                                ? "json"
-                                : name.endsWith(".svg")
-                                  ? "html"
-                                  : /\.(?:js|jsx)$/.test(name)
-                                    ? "javascript"
-                                    : "typescript"
-                          }
-                          ariaLabel={name}
-                          readOnly={locked || /\.(?:png|webp)$/.test(name)}
-                          contextDeclarations={pluginIdeDeclarations}
-                          height={520}
-                        />
-                      </div>
-                    ))}
+                                  : undefined
+                              }
+                              readOnly={
+                                locked ||
+                                (!!originalArchive && name === "entry.tsx")
+                              }
+                              contextDeclarations={pluginIdeDeclarations}
+                              height={520}
+                            />
+                          </div>
+                        ))}
+                      {visitedOriginal
+                        .filter((name) => Object.hasOwn(originalFiles, name))
+                        .map((name) => (
+                          <div
+                            key={name}
+                            className="plugin-ide-editor-document"
+                            hidden={name !== selectedOriginal || !!reviewFile}
+                          >
+                            <MonacoCodeEditor
+                              value={originalFiles[name] ?? ""}
+                              onChange={(value) => {
+                                setUndo(null);
+                                replaceFiles({
+                                  ...files,
+                                  "original-source.json": JSON.stringify({
+                                    ...originalFiles,
+                                    [name]: value,
+                                  }),
+                                });
+                              }}
+                              language={
+                                name.endsWith(".css")
+                                  ? "css"
+                                  : name.endsWith(".json")
+                                    ? "json"
+                                    : name.endsWith(".svg")
+                                      ? "html"
+                                      : /\.(?:js|jsx)$/.test(name)
+                                        ? "javascript"
+                                        : "typescript"
+                              }
+                              ariaLabel={name}
+                              selection={
+                                searchSelection?.path === `src/${name}`
+                                  ? searchSelection
+                                  : undefined
+                              }
+                              readOnly={locked || /\.(?:png|webp)$/.test(name)}
+                              contextDeclarations={pluginIdeDeclarations}
+                              semanticValidation={false}
+                              height={520}
+                            />
+                          </div>
+                        ))}
+                    </>
+                  )}
                   {reviewFile && proposal && (
                     <PluginDiffEditor
                       key={reviewFile}

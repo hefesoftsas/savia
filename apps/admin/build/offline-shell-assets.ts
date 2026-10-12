@@ -32,7 +32,9 @@ export function collectOfflineShellAssets(bundle: Record<string, BundleItem>) {
   for (const item of Object.values(bundle)) {
     if (
       item.type === "chunk" &&
-      ((item.isEntry && !item.facadeModuleId?.includes("/office/")) ||
+      ((item.isEntry &&
+        !item.facadeModuleId?.includes("/office/") &&
+        !item.facadeModuleId?.endsWith("/plugin-editor.html")) ||
         operationalRoutes.some((route) => item.facadeModuleId?.endsWith(route)))
     )
       visit(item.fileName);

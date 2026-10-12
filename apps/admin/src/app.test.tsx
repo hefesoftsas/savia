@@ -214,11 +214,20 @@ describe("App", () => {
       await screen.findByRole("menuitem", { name: /Cerrar sesión/i }),
     );
     await cleanupStarted;
+    expect(
+      screen.getByRole("status", { name: "Cerrando sesión…" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Abrir menú de cuenta" }),
+    ).toBeDisabled();
     // Only the existing availability reader reacts to the two invalidation events.
     // Remounting would add another initial read and abandon the active logout hook.
     expect(officeReads()).toBe(readsBeforeLogout + 2);
     await act(async () => finishCleanup());
     await waitFor(() => expect(window.location.hash).toBe("#/login"));
+    expect(
+      screen.queryByRole("status", { name: "Cerrando sesión…" }),
+    ).not.toBeInTheDocument();
     await waitFor(() =>
       expect(services.authSession.login).toHaveBeenCalledTimes(1),
     );

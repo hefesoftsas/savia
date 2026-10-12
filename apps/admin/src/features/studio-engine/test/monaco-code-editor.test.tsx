@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   options: vi.fn(),
   model: vi.fn(),
   applyTheme: vi.fn(),
+  selection: vi.fn(),
+  reveal: vi.fn(),
+  focus: vi.fn(),
 }));
 const copilotMocks = vi.hoisted(() => ({
   register: vi.fn(),
@@ -42,7 +45,11 @@ function monaco() {
       typescript: {
         typescriptDefaults: {
           setCompilerOptions: vi.fn(),
+          setDiagnosticsOptions: vi.fn(),
           addExtraLib: vi.fn(),
+        },
+        javascriptDefaults: {
+          setDiagnosticsOptions: vi.fn(),
         },
       },
     },
@@ -68,6 +75,9 @@ function monaco() {
             changed = callback;
           },
           layout: () => {},
+          setSelection: mocks.selection,
+          revealRangeInCenter: mocks.reveal,
+          focus: mocks.focus,
         };
       }),
     },
@@ -122,6 +132,61 @@ it("uses readable IDE defaults with horizontal scrolling", async () => {
     guides: { bracketPairs: true, indentation: true },
   });
 });
+
+it.each(["typescript", "javascript"] as const)(
+  "keeps semantic diagnostics enabled by default for %s",
+  async (language) => {
+    const instance = monaco();
+    mocks.load.mockResolvedValue(instance);
+    render(
+      <MonacoCodeEditor
+        value="const answer = 42;"
+        language={language}
+        ariaLabel="code"
+        onChange={vi.fn()}
+      />,
+    );
+
+    const defaults =
+      language === "typescript"
+        ? instance.languages.typescript.typescriptDefaults
+        : instance.languages.typescript.javascriptDefaults;
+    await waitFor(() =>
+      expect(defaults.setDiagnosticsOptions).toHaveBeenCalledWith({
+        noSemanticValidation: false,
+        noSyntaxValidation: false,
+      }),
+    );
+  },
+);
+
+it.each(["typescript", "javascript"] as const)(
+  "can disable semantic diagnostics for %s while preserving syntax diagnostics",
+  async (language) => {
+    const instance = monaco();
+    mocks.load.mockResolvedValue(instance);
+    render(
+      <MonacoCodeEditor
+        value="const answer = 42;"
+        language={language}
+        ariaLabel="code"
+        onChange={vi.fn()}
+        semanticValidation={false}
+      />,
+    );
+
+    const defaults =
+      language === "typescript"
+        ? instance.languages.typescript.typescriptDefaults
+        : instance.languages.typescript.javascriptDefaults;
+    await waitFor(() =>
+      expect(defaults.setDiagnosticsOptions).toHaveBeenCalledWith({
+        noSemanticValidation: true,
+        noSyntaxValidation: false,
+      }),
+    );
+  },
+);
 
 it("delegates inline completions to the provided fetcher and stays silent on failure", async () => {
   copilotMocks.register.mockReturnValue({
@@ -331,4 +396,51 @@ it("keeps multiple Monaco instances on the same root palette and observes its th
       .every((call) => call[1].primary === "#123456"),
   ).toBe(true);
   view.unmount();
+});
+
+it("reveals and selects search matches after loading without recreating the model", async () => {
+  mocks.load.mockResolvedValue(monaco());
+  const first = { lineNumber: 3, column: 5, endColumn: 11 };
+  const { rerender } = render(
+    <MonacoCodeEditor
+      value="// code"
+      language="typescript"
+      ariaLabel="code"
+      onChange={vi.fn()}
+      selection={first}
+    />,
+  );
+  await waitFor(() =>
+    expect(mocks.selection).toHaveBeenCalledWith({
+      startLineNumber: 3,
+      startColumn: 5,
+      endLineNumber: 3,
+      endColumn: 11,
+    }),
+  );
+  expect(mocks.reveal).toHaveBeenCalledWith({
+    startLineNumber: 3,
+    startColumn: 5,
+    endLineNumber: 3,
+    endColumn: 11,
+  });
+  expect(mocks.focus).toHaveBeenCalled();
+  rerender(
+    <MonacoCodeEditor
+      value="// code"
+      language="typescript"
+      ariaLabel="code"
+      onChange={vi.fn()}
+      selection={{ lineNumber: 8, column: 2, endColumn: 7 }}
+    />,
+  );
+  await waitFor(() =>
+    expect(mocks.selection).toHaveBeenLastCalledWith({
+      startLineNumber: 8,
+      startColumn: 2,
+      endLineNumber: 8,
+      endColumn: 7,
+    }),
+  );
+  expect(mocks.model).toHaveBeenCalledTimes(1);
 });
