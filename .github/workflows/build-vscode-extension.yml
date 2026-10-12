@@ -1,0 +1,62 @@
+name: Native VS Code extension
+
+on:
+  pull_request:
+    paths:
+      - "apps/vscode/**"
+      - "packages/plugin-authoring/**"
+      - "packages/studio-shared/**"
+      - "packages/studio-server/**"
+      - "apps/admin/build/plugin-ide-runtime.ts"
+      - "apps/admin/src/features/studio-engine/plugin-ide-react-runtime.ts"
+      - "apps/admin/src/features/studio-engine/plugin-ide-declarations.ts"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/build-vscode-extension.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/vscode/**"
+      - "packages/plugin-authoring/**"
+      - "packages/studio-shared/**"
+      - "packages/studio-server/**"
+      - "apps/admin/build/plugin-ide-runtime.ts"
+      - "apps/admin/src/features/studio-engine/plugin-ide-react-runtime.ts"
+      - "apps/admin/src/features/studio-engine/plugin-ide-declarations.ts"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/build-vscode-extension.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vscode-extension-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vscode-extension:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Unit, filesystem and package checks
+        run: pnpm --filter @savia/vscode test && pnpm --filter @savia/vscode typecheck
+      - name: Isolated minimum VS Code Extension Host
+        run: xvfb-run -a pnpm --filter @savia/vscode test:host
+      - name: Build distributable VSIX
+        run: pnpm --filter @savia/vscode build && pnpm --filter @savia/vscode package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: savia-plugin-authoring-vsix
+          path: |
+            apps/vscode/artifacts/*.vsix
+            apps/vscode/artifacts/*.sha256
+          if-no-files-found: error

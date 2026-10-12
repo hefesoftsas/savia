@@ -34,6 +34,31 @@ export function authorizePersonalApiKeyRequest(
     if (method === "DELETE" && !recording[2]) scope = "recordings:delete";
     if (method === "POST" && recording[2]) scope = "recordings:process";
   }
+  const plugin =
+    /^\/v1\/studio\/([1-9][0-9]*)\/api\/plugin-development\/(.*)$/.exec(path);
+  if (plugin) {
+    const routeTenant = Number(plugin[1]);
+    if (!Number.isSafeInteger(routeTenant) || routeTenant !== tenantId)
+      throw new AuthenticationError(
+        "INSUFFICIENT_SCOPE",
+        "This key is bound to another tenant",
+      );
+    if (
+      method === "GET" &&
+      plugin[2] === "capabilities" &&
+      scopes.some((s) => s === "plugins:read" || s === "plugins:publish")
+    )
+      return;
+    if (method === "GET" && plugin[2] === "catalog") scope = "plugins:read";
+    const operation =
+      /^([a-z][a-z0-9]*(?:[._-][a-z0-9]+)*)\/(checkout|publish)$/.exec(
+        plugin[2],
+      );
+    if (operation?.[2] === "checkout" && method === "GET")
+      scope = "plugins:read";
+    if (operation?.[2] === "publish" && method === "POST")
+      scope = "plugins:publish";
+  }
   // Match only native record operations; adjacent Studio APIs stay unavailable.
   const studio =
     /^(?:\/v1\/(?:studio|dynamic-crm)\/([1-9][0-9]*)|\/v1\/tenants\/([1-9][0-9]*)\/crm)\/api\/(.*)$/.exec(

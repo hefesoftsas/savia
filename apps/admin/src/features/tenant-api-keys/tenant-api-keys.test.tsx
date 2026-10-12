@@ -417,14 +417,130 @@ it("deletes a revoked tenant key after confirmation", async () => {
     </StoreContextProvider>,
   );
   await screen.findByText("Revocada");
+  await user.click(screen.getByRole("button", { name: "Eliminar Companion" }));
+  expect(confirm).toHaveBeenCalled();
+  expect(deletions).toBe(0);
+  await user.click(screen.getByRole("button", { name: "Eliminar Companion" }));
+  await waitFor(() => expect(deletions).toBe(1));
+  await waitFor(() => expect(screen.queryByText("Companion")).toBeNull());
+});
+
+it("opts into plugin authoring scopes for a member key", async () => {
+  const user = userEvent.setup();
+  let rows: any[] = [];
+  let posted: any;
+  let deletions = 0;
+  const api = new ApiClient({
+    baseUrl: "https://preview.test",
+    tokenSource: {
+      async getAccessToken() {
+        return "jwt";
+      },
+    },
+    fetcher: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith("/members"))
+        return Response.json({
+          members: [
+            {
+              id: "member-1",
+              displayName: "Alex Rivera",
+              email: "alex@example.test",
+            },
+          ],
+        });
+      if (init?.method === "POST") {
+        posted = JSON.parse(String(init.body));
+        rows = [
+          {
+            id: "key-1",
+            name: posted.name,
+            prefix: "savia_pat_abc",
+            tenantId: 12,
+            scopes: posted.scopes,
+            createdAt: "2026-10-03T00:00:00Z",
+            expiresAt: "2026-11-02T00:00:00Z",
+            revokedAt: null,
+            lastUsedAt: null,
+          },
+        ];
+        return Response.json(
+          { key: rows[0], secret: "savia_pat_once" },
+          { status: 201 },
+        );
+      }
+      if (init?.method === "DELETE") {
+        deletions += 1;
+        rows[0].revokedAt = "2026-10-03T00:00:00Z";
+        return new Response(null, { status: 204 });
+      }
+      return Response.json({ keys: rows });
+    },
+  });
+  const confirm = vi
+    .spyOn(window, "confirm")
+    .mockReturnValueOnce(false)
+    .mockReturnValueOnce(true);
+
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "es" })}>
+      <TenantApiKeysPanel api={api} tenantId={12} />
+    </StoreContextProvider>,
+  );
+
+  expect(screen.queryByLabelText("Nombre de la clave")).toBeNull();
+  await user.click(await screen.findByRole("button", { name: "Nueva clave" }));
+  await screen.findByRole("option", {
+    name: "Alex Rivera (alex@example.test)",
+  });
+  await user.type(
+    screen.getByLabelText("Nombre de la clave"),
+    "Discard this draft",
+  );
+  await user.click(screen.getByRole("button", { name: "Cancelar" }));
+  expect(screen.queryByLabelText("Nombre de la clave")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Nueva clave" }));
+  expect(screen.getByLabelText("Nombre de la clave")).toHaveValue("");
+  await user.type(
+    screen.getByLabelText("Nombre de la clave"),
+    "Companion de Alex",
+  );
+  expect(
+    screen
+      .getByText("Leer fuentes de plugins")
+      .closest("label")!
+      .querySelector("input"),
+  ).not.toBeChecked();
   await user.click(
-    screen.getByRole("button", { name: "Eliminar Companion" }),
+    screen.getByText("Leer fuentes de plugins").closest("label")!,
+  );
+  await user.click(
+    screen.getByText("Publicar versiones de plugins").closest("label")!,
+  );
+  await user.click(screen.getByRole("button", { name: "Crear clave" }));
+  await screen.findByDisplayValue("savia_pat_once");
+  expect(posted).toEqual({
+    principalId: "member-1",
+    name: "Companion de Alex",
+    lifetimeDays: 30,
+    scopes: [
+      "recordings:read",
+      "recordings:upload",
+      "plugins:read",
+      "plugins:publish",
+    ],
+  });
+
+  await user.click(screen.getByRole("button", { name: "Ya guardé la clave" }));
+  expect(screen.queryByDisplayValue("savia_pat_once")).toBeNull();
+  await user.click(
+    screen.getByRole("button", { name: "Revocar Companion de Alex" }),
   );
   expect(confirm).toHaveBeenCalled();
   expect(deletions).toBe(0);
   await user.click(
-    screen.getByRole("button", { name: "Eliminar Companion" }),
+    screen.getByRole("button", { name: "Revocar Companion de Alex" }),
   );
-  await waitFor(() => expect(deletions).toBe(1));
-  await waitFor(() => expect(screen.queryByText("Companion")).toBeNull());
+  await waitFor(() => expect(screen.getByText("Revocada")).toBeTruthy());
+  expect(deletions).toBe(1);
 });

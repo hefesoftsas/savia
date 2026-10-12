@@ -45,6 +45,7 @@ services:
       - apps_hook_executor_modules:/workspace/apps/hook-executor/node_modules
       - apps_savia_request_modules:/workspace/apps/savia-request/node_modules
       - apps_self_hosted_modules:/workspace/apps/self-hosted/node_modules
+      - apps_vscode_modules:/workspace/apps/vscode/node_modules
       - packages_db_modules:/workspace/packages/db/node_modules
       - packages_insurance_accounting_modules:/workspace/packages/insurance-accounting/node_modules
       - packages_insurance_activities_modules:/workspace/packages/insurance-activities/node_modules
@@ -72,6 +73,7 @@ services:
       - packages_insurance_service_modules:/workspace/packages/insurance-service/node_modules
       - packages_insurance_settlements_modules:/workspace/packages/insurance-settlements/node_modules
       - packages_insurance_workbench_modules:/workspace/packages/insurance-workbench/node_modules
+      - packages_plugin_authoring_modules:/workspace/packages/plugin-authoring/node_modules
       - packages_plugin_example_tasks_modules:/workspace/packages/plugin-example-tasks/node_modules
       - packages_plugin_sdk_modules:/workspace/packages/plugin-sdk/node_modules
       - packages_plugin_ui_modules:/workspace/packages/plugin-ui/node_modules
@@ -143,6 +145,7 @@ volumes:
   apps_hook_executor_modules:
   apps_savia_request_modules:
   apps_self_hosted_modules:
+  apps_vscode_modules:
   packages_db_modules:
   packages_insurance_accounting_modules:
   packages_insurance_activities_modules:
@@ -170,6 +173,7 @@ volumes:
   packages_insurance_service_modules:
   packages_insurance_settlements_modules:
   packages_insurance_workbench_modules:
+  packages_plugin_authoring_modules:
   packages_plugin_example_tasks_modules:
   packages_plugin_sdk_modules:
   packages_plugin_ui_modules:
