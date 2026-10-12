@@ -323,63 +323,12 @@ export function registerPluginRegistry(
       return fail("El ZIP no contiene un paquete válido.", 422);
     }
     try {
-      if (
-        !config.url ||
-        !config.publishToken ||
-        /[\r\n]/.test(config.publishToken)
-      )
-        return c.json(
-          { error: "El registro de plugins no está disponible." },
-          503,
-        );
-      const url = registryBaseUrl(config.url);
-      url.pathname = `/v1/plugins/${encodeURIComponent(parsed.manifest.id)}/${encodeURIComponent(parsed.manifest.version)}`;
-      const response = await fetch(url, {
-        method: "PUT",
-        headers: {
-          authorization: `Bearer ${config.publishToken}`,
-          "content-type": "application/zip",
-        },
-        body: bytes as unknown as BodyInit,
-        redirect: "error",
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (response.status === 409)
-        return c.json(
-          { error: "Esta versión ya existe con contenido diferente." },
-          409,
-        );
-      if (response.status === 403)
-        return c.json(
-          { error: "El registro no autoriza la publicación." },
-          403,
-        );
-      if (response.status !== 200 && response.status !== 201)
-        return c.json(
-          { error: "No se pudo publicar la versión en el registro." },
-          502,
-        );
-      const replyBytes = await readBoundedBody(response, 32 * 1024);
-      let replyBody: unknown;
-      try {
-        replyBody = JSON.parse(new TextDecoder().decode(replyBytes));
-      } catch {
-        return fail("El registro devolvió una respuesta no válida.", 502);
-      }
-      const reply = publishSchema.safeParse(replyBody);
-      if (
-        !reply.success ||
-        reply.data.data.id !== parsed.manifest.id ||
-        reply.data.data.version !== parsed.manifest.version
-      )
-        return fail("El registro devolvió una respuesta no válida.", 502);
-      return c.json({ data: reply.data.data }, response.status);
+      const reply = await publishPluginRegistryRelease(config, parsed, bytes);
+      return c.json({ data: reply.data }, reply.status);
     } catch (error) {
-      if (error instanceof HTTPException) throw error;
-      return c.json(
-        { error: "El registro de plugins no está disponible." },
-        503,
-      );
+      if (error instanceof PluginRegistryPublishError)
+        return c.json({ error: error.message }, error.status);
+      throw error;
     }
   });
 
@@ -455,12 +404,17 @@ export function registerPluginRegistry(
 }
 
 /** Bounded catalog reads never expose the backend reader credential. */
-export async function getPluginRegistryHead(
+export async function getPluginRegistryState(
   config: NonNullable<PluginStoreOptions["pluginRegistry"]>,
   pluginId: string,
-): Promise<PluginHead | null> {
+  version?: string,
+): Promise<{
+  head: PluginHead | null;
+  release: z.infer<typeof releaseSchema> | null;
+}> {
   let cursor: string | null = null;
   let head: PluginHead | null = null;
+  let selected: z.infer<typeof releaseSchema> | null = null;
   const visited = new Set<string>();
   try {
     for (let page = 0; page < 10; page++) {
@@ -476,6 +430,7 @@ export async function getPluginRegistryHead(
       );
       for (const release of listing.data)
         if (release.id === pluginId) {
+          if (release.version === version) selected = release;
           const candidate = pluginHeadSchema.parse({
             version: release.version,
             sha256: release.sha256,
@@ -486,7 +441,7 @@ export async function getPluginRegistryHead(
           )
             head = candidate;
         }
-      if (!listing.cursor) return head;
+      if (!listing.cursor) return { head, release: selected };
       if (visited.has(listing.cursor)) throw new Error();
       visited.add(listing.cursor);
       cursor = listing.cursor;
@@ -494,5 +449,92 @@ export async function getPluginRegistryHead(
     throw new Error();
   } catch {
     return fail("The shared plugin registry is unavailable.", 502);
+  }
+}
+
+export async function getPluginRegistryHead(
+  config: NonNullable<PluginStoreOptions["pluginRegistry"]>,
+  pluginId: string,
+): Promise<PluginHead | null> {
+  return (await getPluginRegistryState(config, pluginId)).head;
+}
+export class PluginRegistryPublishError extends Error {
+  constructor(
+    public readonly status: 403 | 409 | 502 | 503,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+/** Upload exact bytes with only the server-side publisher credential. */
+export async function publishPluginRegistryRelease(
+  config: NonNullable<PluginStoreOptions["pluginRegistry"]>,
+  parsed: ParsedStoreZip,
+  bytes: Uint8Array,
+): Promise<z.infer<typeof publishSchema> & { status: 200 | 201 }> {
+  try {
+    if (!config.publishToken || /[\r\n]/.test(config.publishToken))
+      throw new PluginRegistryPublishError(
+        503,
+        "REGISTRY_UNAVAILABLE",
+        "The shared publisher is unavailable.",
+      );
+    const url = registryBaseUrl(config.url);
+    url.pathname = `/v1/plugins/${encodeURIComponent(parsed.manifest.id)}/${encodeURIComponent(parsed.manifest.version)}`;
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${config.publishToken}`,
+        "content-type": "application/zip",
+      },
+      body: bytes as unknown as BodyInit,
+      redirect: "error",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (response.status === 409)
+      throw new PluginRegistryPublishError(
+        409,
+        "REGISTRY_CONFLICT",
+        "The shared coordinate contains a different release.",
+      );
+    if (response.status === 403)
+      throw new PluginRegistryPublishError(
+        403,
+        "REGISTRY_FORBIDDEN",
+        "The registry does not authorize publication.",
+      );
+    if (response.status !== 200 && response.status !== 201)
+      throw new PluginRegistryPublishError(
+        502,
+        "REGISTRY_UNAVAILABLE",
+        "The shared registry is unavailable.",
+      );
+    try {
+      const receipt = publishSchema.parse(
+        JSON.parse(
+          new TextDecoder().decode(await readBoundedBody(response, 32 * 1024)),
+        ),
+      );
+      if (
+        receipt.data.id !== parsed.manifest.id ||
+        receipt.data.version !== parsed.manifest.version
+      )
+        throw new Error();
+      return { ...receipt, status: response.status };
+    } catch {
+      throw new PluginRegistryPublishError(
+        502,
+        "INVALID_REGISTRY_RECEIPT",
+        "The registry returned an invalid publication receipt.",
+      );
+    }
+  } catch (error) {
+    if (error instanceof PluginRegistryPublishError) throw error;
+    throw new PluginRegistryPublishError(
+      503,
+      "REGISTRY_UNAVAILABLE",
+      "The shared registry is unavailable.",
+    );
   }
 }

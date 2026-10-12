@@ -46,7 +46,7 @@ import type { ExtensionConnectorDefinition } from "@savia/studio-shared/extensio
 import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
 import { z } from "zod";
 import { type Env, fail } from "./context";
-import { audit } from "./services";
+import { audit, transaction } from "./services";
 import {
   encodePluginFilesJson,
   decodePluginFilesJson,
@@ -345,6 +345,7 @@ export async function persistParsedStoreArtifact(
   tenant: string,
   principalId: string | null,
   parsed: ParsedStoreZip,
+  guardedWrite?: { start: D1PreparedStatement[]; end: D1PreparedStatement[] },
 ): Promise<StoreUploadResult> {
   const storedSourceFiles = parsed.sourceFiles
     ? await encodePluginFilesJson(canonicalJson(parsed.sourceFiles))
@@ -360,6 +361,7 @@ export async function persistParsedStoreArtifact(
       store_json?: string | null;
     }>();
   if (existing) {
+    if (guardedWrite) fail("Plugin head changed before publication.", 409);
     if (
       canonicalJson(JSON.parse(existing.manifest)) !==
         canonicalJson(parsed.manifest) ||
@@ -525,8 +527,17 @@ export async function persistParsedStoreArtifact(
           storedSourceFiles,
         ),
     );
-  const results = await db.batch(statements);
+  const results = guardedWrite
+    ? (
+        await transaction(db, [
+          ...guardedWrite.start,
+          ...statements,
+          ...guardedWrite.end,
+        ])
+      ).slice(guardedWrite.start.length)
+    : await db.batch(statements);
   if (results[0]?.meta?.changes !== 1) {
+    if (guardedWrite) fail("Plugin head changed during publication.", 409);
     const sameVersion = await db
       .prepare(
         "SELECT * FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",

@@ -119,13 +119,19 @@ export function createStudioApp(
     NotificationRouteOptions,
 ) {
   const app = new Hono<Env>();
-  app.use(
-    "/api/*",
-    bodyLimit({
-      maxSize: 6 * 1024 * 1024,
-      onError: (c) => c.json({ error: "Máximo 6 MB por solicitud." }, 413),
-    }),
-  );
+  app.use("/api/*", async (c, next) => {
+    const nativePublication =
+      c.req.method === "POST" &&
+      /^\/api\/plugin-development\/[^/]+\/publish$/.test(c.req.path);
+    return bodyLimit({
+      maxSize: 6 * 1024 * 1024 + (nativePublication ? 64 * 1024 : 0),
+      onError: (context) =>
+        context.json(
+          { error: "Request exceeds the plugin package limit." },
+          413,
+        ),
+    })(c, next);
+  });
   app.use("/api/*", async (c, next) => {
     c.set(
       "principalId",

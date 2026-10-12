@@ -1,3 +1,6 @@
+import { publishPluginDevelopment } from "./plugin-development-publication";
+import { PLUGIN_STORE_MAX_ZIP_BYTES } from "@savia/studio-shared/plugin-store";
+import { pluginPublicationRequestSchema } from "@savia/studio-shared/plugin-development";
 import { loadPluginCheckout } from "./plugin-development-snapshot";
 import type { Hono, Context } from "hono";
 import {
@@ -154,6 +157,39 @@ export function registerPluginDevelopment(
   });
   app.post("/api/plugin-development/:id/publish", async (c) => {
     await authorizePluginDevelopment(c, options, "publish", c.req.param("id"));
-    return fail("Plugin publication service is unavailable.", 502);
+    const form = await c.req.formData().catch(() => null);
+    if (
+      !form ||
+      [...form.keys()].length !== 2 ||
+      form.getAll("metadata").length !== 1 ||
+      form.getAll("file").length !== 1
+    )
+      fail("Provide exactly one metadata field and one ZIP file.", 422);
+    const metadata = form.get("metadata");
+    const file = form.get("file");
+    if (
+      typeof metadata !== "string" ||
+      new TextEncoder().encode(metadata).length > 16 * 1024 ||
+      !(file instanceof File)
+    )
+      fail("Invalid publication metadata or ZIP file.", 422);
+    if (file.size === 0 || file.size > PLUGIN_STORE_MAX_ZIP_BYTES)
+      fail("Plugin ZIP exceeds the 6 MB limit.", 413);
+    const input = pluginPublicationRequestSchema.parse(JSON.parse(metadata));
+    if (input.pluginId !== c.req.param("id"))
+      fail("Publication coordinate does not match the route.", 422);
+    return c.json(
+      await publishPluginDevelopment(
+        c.env.DB,
+        {
+          tenantId: c.get("tenant"),
+          principalId: c.get("principalId"),
+          canManageExtension: options.canManageExtension,
+        },
+        input,
+        new Uint8Array(await file.arrayBuffer()),
+        options,
+      ),
+    );
   });
 }
