@@ -1,0 +1,92 @@
+import type { Units } from "@savia/flows-geo";
+import { concave } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+import { isUnits, UNITS_LIST } from "./geo-input";
+
+export class ConcaveNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "concave",
+    name: "Concave",
+    type: "concave",
+    description:
+      "Takes a set of points and returns a concave hull polygon. Internally, this uses turf-tin to generate geometries.",
+    tags: ["Geo", "GeoJSON", "Transform", "Concave"],
+    icon: "square",
+    documentation:
+      "This node creates a concave hull (alpha shape) from a set of points.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "points",
+        type: "geojson",
+        description: "Input points in a FeatureCollection",
+        required: true,
+      },
+      {
+        name: "maxEdge",
+        type: "number",
+        description:
+          "The length (in 'units') of an edge necessary for part of the hull to become concave (default: Infinity)",
+        required: false,
+      },
+      {
+        name: "units",
+        type: "string",
+        description:
+          "Units of the result e.g. 'kilometers', 'miles', 'meters' (default: kilometers)",
+        required: false,
+      },
+    ],
+    outputs: [
+      {
+        name: "concave",
+        type: "geojson",
+        description: "A concave hull polygon",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { points, maxEdge, units } = context.inputs;
+
+      if (!points) {
+        return this.createErrorResult("Missing points input");
+      }
+
+      // Prepare options for concave
+      const options: { maxEdge?: number; units?: Units } = {};
+
+      if (maxEdge !== undefined && maxEdge !== null) {
+        if (typeof maxEdge !== "number") {
+          return this.createErrorResult("MaxEdge must be a number");
+        }
+        if (maxEdge <= 0) {
+          return this.createErrorResult("MaxEdge must be a positive number");
+        }
+        options.maxEdge = maxEdge;
+      }
+
+      if (units !== undefined && units !== null) {
+        if (!isUnits(units)) {
+          return this.createErrorResult(`Units must be one of: ${UNITS_LIST}`);
+        }
+        options.units = units;
+      }
+
+      // Delegate to Turf.js concave function
+      const concaveHull = concave(points, options);
+
+      return this.createSuccessResult({
+        concave: concaveHull,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error creating concave hull: ${error.message}`
+      );
+    }
+  }
+}

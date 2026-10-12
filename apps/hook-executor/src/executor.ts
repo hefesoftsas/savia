@@ -11,11 +11,9 @@ import {
   MAX_CODE_BYTES,
   MAX_INPUT_BYTES,
   MAX_OUTPUT_BYTES,
-  GUEST_MEMORY_BYTES,
-  GUEST_STACK_BYTES,
-  MAX_INTERRUPTS,
   MAX_PENDING_JOBS,
 } from "./limits";
+import { createGuest } from "./guest";
 
 const encoder = new TextEncoder();
 
@@ -32,14 +30,7 @@ export function createQuickJSExecutor(
       throw new Error("Hook input limit");
     const engine = await loadEngine();
     // Only the immutable engine is cached. Each invocation has a fresh guest heap.
-    const runtime = engine.newRuntime();
-    runtime.setMemoryLimit(GUEST_MEMORY_BYTES);
-    runtime.setMaxStackSize(GUEST_STACK_BYTES);
-    let interrupts = 0;
-    runtime.setInterruptHandler(
-      () => ++interrupts > (options.maxInterrupts ?? MAX_INTERRUPTS),
-    );
-    const context = runtime.newContext();
+    const { runtime, context } = createGuest(engine, options);
     try {
       // Pass serialized data as a guest string, never host objects/functions.
       // Avoid embedding JSON into source, which doubles escaping and memory.

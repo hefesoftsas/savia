@@ -1,12 +1,18 @@
 packages:
   - apps/*
   - packages/*
+  - apps/flows/api
+  - apps/flows/app
+  - apps/flows/packages/*
 allowBuilds:
   esbuild: true
   protobufjs: false
   "@scarf/scarf": false
   workerd: true
   vue-demi: false
+  "@google/genai": false
+  core-js-pure: false
+  exifreader: false
 minimumReleaseAgeExclude:
   - "@cloudflare/workers-types@5.20260901.1"
   - lucide-react@1.39.0
@@ -24,3 +30,5 @@ minimumReleaseAgeExclude:
   - "@tauri-apps/cli-win32-ia32-msvc@2.12.1"
   - "@tauri-apps/cli-win32-x64-msvc@2.12.1"
   - "@tauri-apps/cli@2.12.1"
+patchedDependencies:
+  "@cloudflare/vitest-pool-workers@0.19.1": patches/@cloudflare__vitest-pool-workers@0.19.1.patch

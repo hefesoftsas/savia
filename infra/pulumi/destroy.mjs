@@ -55,14 +55,47 @@ export function assertStackMatches(outputs, plan) {
       `Stack ${plan.stack} resolves to environment ${outputs?.resolvedEnvironment}, refusing to destroy`,
     );
   }
+  if (outputs?.flowsEnabled === true && !outputs.flowsResources) {
+    throw new Error("Enabled Flows stack outputs are missing Flows resources");
+  }
+  if (outputs?.flowsEnabled === false && outputs.flowsResources !== null) {
+    throw new Error("Disabled Flows stack outputs contain Flows resources");
+  }
+  const bucketNames = r2BucketsForDestroy(outputs);
   if (
     outputs?.stateBackendBucketName &&
-    outputs.stateBackendBucketName === outputs.documentsBucketName
+    bucketNames.includes(outputs.stateBackendBucketName)
   ) {
     throw new Error(
-      "The Pulumi state backend cannot be the documents bucket; refusing destroy",
+      "The Pulumi state backend cannot be a data bucket; refusing destroy",
     );
   }
+}
+
+export function r2BucketsForDestroy(outputs) {
+  const buckets = [outputs?.documentsBucketName];
+  if (outputs?.flowsEnabled === true) {
+    for (const key of ["resources", "datasets", "inboxes"]) {
+      const bucket = outputs.flowsResources?.buckets?.[key];
+      if (typeof bucket !== "string" || bucket.trim() === "") {
+        throw new Error(
+          `Enabled Flows stack outputs are missing the ${key} bucket`,
+        );
+      }
+      buckets.push(bucket);
+    }
+  }
+  if (
+    buckets.some((bucket) => typeof bucket !== "string" || bucket.trim() === "")
+  ) {
+    throw new Error("Stack outputs are missing the documents bucket");
+  }
+  if (new Set(buckets).size !== buckets.length) {
+    throw new Error(
+      "Pulumi data bucket names must be unique; refusing destroy",
+    );
+  }
+  return buckets;
 }
 
 export function buildPulumiDestroyArgs(stack, hasStateBackend) {
@@ -134,7 +167,7 @@ async function main() {
   const pulumiCwd = fileURLToPath(new URL(".", import.meta.url));
   if (plan.dryRun) {
     console.log(
-      `Would empty the R2 bucket and run: pulumi destroy --stack ${plan.stack} --yes`,
+      `Would empty the documents and enabled Flows R2 buckets and run: pulumi destroy --stack ${plan.stack} --yes`,
     );
     console.log(
       "Worker code, D1 data, and R2 objects are deleted by this operation. Restore from a backup first if needed.",
@@ -144,7 +177,7 @@ async function main() {
   const outputs = await stackOutputs(pulumiCwd, plan.stack);
   assertStackMatches(outputs, plan);
   if (!plan.skipEmptyBucket) {
-    const bucket = outputs.documentsBucketName;
+    const buckets = r2BucketsForDestroy(outputs);
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     const token = process.env.CLOUDFLARE_API_TOKEN;
     if (!accountId || !token) {
@@ -152,8 +185,10 @@ async function main() {
         "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are required to safely empty the R2 bucket",
       );
     }
-    const removed = await emptyBucketForDestroy({ bucket, accountId, token });
-    console.log(`Emptied ${removed} object(s) from ${bucket}`);
+    for (const bucket of buckets) {
+      const removed = await emptyBucketForDestroy({ bucket, accountId, token });
+      console.log(`Emptied ${removed} object(s) from ${bucket}`);
+    }
   }
   await execFileAsync(
     "pulumi",

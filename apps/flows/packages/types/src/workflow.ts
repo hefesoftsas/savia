@@ -1,0 +1,623 @@
+/**
+ * Represents an object reference with ID and MIME type
+ */
+export interface ObjectReference {
+  id: string;
+  mimeType: string;
+  filename?: string;
+}
+
+/**
+ * Workflow trigger types
+ */
+export type WorkflowTrigger =
+  | "manual"
+  | "http_webhook"
+  | "http_request"
+  | "form_webhook"
+  | "form_request"
+  | "email_message"
+  | "queue_message"
+  | "scheduled"
+  | "discord_event"
+  | "telegram_event"
+  | "whatsapp_event"
+  | "slack_event"
+  | "savia_collection_event";
+
+/**
+ * Workflow runtime modes
+ * - worker: Fast, synchronous execution (max 30s)
+ * - workflow: Durable execution with retries and checkpoints
+ */
+export type WorkflowRuntime = "worker" | "workflow";
+
+/**
+ * Primitive value types
+ */
+export type PrimitiveValue = string | number | boolean | null | undefined;
+
+/**
+ * JSON value types
+ */
+export type JsonValue = PrimitiveValue | JsonObject | JsonArray;
+
+/**
+ * JSON object type
+ */
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+/**
+ * JSON array type
+ */
+export type JsonArray = Array<JsonValue>;
+
+// GeoJSON Types
+export type Coordinate = [number, number] | [number, number, number];
+// [longitude, latitude] or [longitude, latitude, elevation]
+
+// Base Geometry Interface
+export interface Geometry {
+  type: string;
+  coordinates: Coordinate | Coordinate[] | Coordinate[][] | Coordinate[][][];
+}
+
+export interface Point extends Geometry {
+  type: "Point";
+  coordinates: Coordinate;
+}
+
+export interface MultiPoint extends Geometry {
+  type: "MultiPoint";
+  coordinates: Coordinate[];
+}
+
+export interface LineString extends Geometry {
+  type: "LineString";
+  coordinates: Coordinate[];
+}
+
+export interface MultiLineString extends Geometry {
+  type: "MultiLineString";
+  coordinates: Coordinate[][];
+}
+
+export interface Polygon extends Geometry {
+  type: "Polygon";
+  coordinates: Coordinate[][];
+  // First ring = outer boundary, others = holes
+}
+
+export interface MultiPolygon extends Geometry {
+  type: "MultiPolygon";
+  coordinates: Coordinate[][][];
+}
+
+export interface GeometryCollection {
+  type: "GeometryCollection";
+  geometries: Geometry[];
+}
+
+export interface Feature<
+  G extends Geometry | GeometryCollection = Geometry,
+  P = Record<string, unknown>,
+> {
+  type: "Feature";
+  geometry: G;
+  properties: P | null;
+  id?: string | number;
+}
+
+export interface FeatureCollection<
+  G extends Geometry | GeometryCollection = Geometry,
+  P = Record<string, unknown>,
+> {
+  type: "FeatureCollection";
+  features: Array<Feature<G, P>>;
+}
+
+export type GeoJSON =
+  Geometry | Feature<Geometry> | FeatureCollection<Geometry>;
+
+/**
+ * Parameter type definitions for workflow nodes
+ */
+export type ParameterType =
+  | {
+      type: "string";
+      value?: string;
+    }
+  | {
+      type: "date";
+      value?: string; // ISO 8601 timestamp
+    }
+  | {
+      type: "number";
+      value?: number;
+    }
+  | {
+      type: "boolean";
+      value?: boolean;
+    }
+  | {
+      type: "blob";
+      value?: ObjectReference;
+    }
+  | {
+      type: "image";
+      value?: ObjectReference;
+    }
+  | {
+      type: "json";
+      // Any JSON value, not just an object — nodes default this to arrays too.
+      value?: JsonValue;
+    }
+  | {
+      type: "document";
+      value?: ObjectReference;
+    }
+  | {
+      type: "audio";
+      value?: ObjectReference;
+    }
+  | {
+      type: "gltf";
+      value?: ObjectReference;
+    }
+  | {
+      type: "video";
+      value?: ObjectReference;
+    }
+  | {
+      type: "geojson";
+      value?: GeoJSON;
+    }
+  | {
+      type: "secret";
+      value?: string; // Secret name reference, not the actual secret value
+    }
+  | {
+      type: "schema";
+      value?: string | Record<string, unknown>; // Schema ID (from UI) or inline Schema object (from node output)
+      // Restricts which schemas this input accepts. "structured-output" excludes
+      // schemas containing blob fields (an LLM cannot emit a file). Omitted /
+      // "data" accepts any schema. The picker filters on this; consuming nodes
+      // also enforce it at runtime.
+      scope?: "data" | "structured-output";
+    }
+  | {
+      type: "database";
+      value?: string; // Database ID reference
+    }
+  | {
+      type: "dataset";
+      value?: string; // Dataset ID reference
+    }
+  | {
+      type: "queue";
+      value?: string; // Queue ID reference
+    }
+  | {
+      type: "email";
+      value?: string; // Email reference
+    }
+  | {
+      type: "discord";
+      value?: string; // Discord bot ID reference
+    }
+  | {
+      type: "telegram";
+      value?: string; // Telegram bot ID reference
+    }
+  | {
+      type: "whatsapp";
+      value?: string; // WhatsApp account ID reference
+    }
+  | {
+      type: "slack";
+      value?: string; // Slack bot ID reference
+    }
+  | {
+      type: "integration";
+      provider: string; // Integration provider name (e.g. "google-mail", "discord")
+      value?: string; // Integration ID reference
+    }
+  | {
+      type: "buffergeometry";
+      value?: ObjectReference;
+    }
+  | {
+      type: "any";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      value?: any;
+    };
+
+/**
+ * Parameter value type
+ */
+export type ParameterValue = ParameterType["value"];
+
+/**
+ * Represents a parameter with metadata and type information
+ */
+export type Parameter = {
+  name: string;
+  description?: string;
+  hidden?: boolean;
+  required?: boolean;
+  repeated?: boolean; // Flag for parameters that can accept multiple connections
+  // JSON Schema metadata
+  minimum?: number;
+  maximum?: number;
+  enum?: string[];
+  format?: string;
+  default?: string | number | boolean;
+} & ParameterType;
+
+/**
+ * Configuration for nodes with user-adjustable numbered inputs.
+ * The widget lets users add/remove inputs (e.g. input_1, input_2, …)
+ * so ordering is explicit rather than depending on connection sequence.
+ */
+export interface DynamicInputsConfig {
+  prefix: string; // Naming prefix (inputs are named prefix_1, prefix_2, …)
+  type: ParameterType["type"]; // Parameter type for each input
+  defaultCount: number; // Starting number of inputs
+  minCount: number; // Minimum allowed
+}
+
+/**
+ * Represents a node type definition
+ */
+export interface NodeType {
+  id: string;
+  name: string;
+  type: string;
+  tags: string[];
+  icon: string;
+  description?: string; // Short description
+  documentation?: string; // Human readable documentation
+  specification?: string; // Machine readable specification
+  referenceUrl?: string; // URL to external reference or documentation
+  usage?: number; // The default usage cost for running this node
+  inlinable?: boolean; // Flag to indicate if this node can be inlined with others
+  functionCalling?: boolean;
+  asTool?: boolean;
+  inputs: Parameter[];
+  outputs: Parameter[];
+  trigger?: boolean; // Node is a workflow trigger entry point (max one per workflow)
+  responder?: boolean; // Terminal companion of a synchronous request trigger; auto-added with the trigger, hidden from the palette, and styled like a trigger
+  dynamicInputs?: DynamicInputsConfig; // User-adjustable numbered inputs
+  /**
+   * Which side of this node's ports comes from the schema it is bound to.
+   *
+   * A handful of nodes declare one side empty and grow it from the selected
+   * schema's fields — the form triggers and `json-schema-extract` derive their
+   * outputs, `json-schema-compose` derives its inputs. Until now that was a
+   * convention held in three editor widgets and nowhere a server could read it,
+   * so anything building a graph without the editor produced nodes with no
+   * usable ports: every edge to or from one was fatal, and unfixable, because
+   * the only advice available was "its ports are: none".
+   *
+   * Declared rather than inferred so the rule cannot go stale. A list of node
+   * types kept beside the derivation would have to be updated by whoever adds
+   * the fifth such node, and would not fail to compile if they did not.
+   */
+  schemaPorts?: "inputs" | "outputs";
+  /**
+   * Editor- / runtime-internal flags that survive save/load alongside
+   * `inputs`/`outputs`. Use this for non-user-facing state that needs to
+   * round-trip through the wire format (e.g. picker locks, display
+   * metadata) — anything user-visible belongs in `inputs` instead.
+   */
+  metadata?: Record<string, string>;
+}
+
+/**
+ * Represents a position in the workflow canvas
+ */
+export interface Position {
+  x: number;
+  y: number;
+}
+
+/**
+ * Represents a node in a workflow
+ */
+export interface Node {
+  id: string;
+  name: string;
+  type: string;
+  description?: string;
+  icon?: string;
+  position: Position;
+  inputs: Parameter[];
+  outputs: Parameter[];
+  error?: string;
+  functionCalling?: boolean;
+  /** See `NodeType.metadata` — same purpose, propagated per instance. */
+  metadata?: Record<string, string>;
+}
+
+/**
+ * Represents an edge connecting two nodes in a workflow
+ */
+export interface Edge {
+  source: string;
+  target: string;
+  sourceOutput: string;
+  targetInput: string;
+}
+
+/**
+ * Represents a workflow as stored in the database
+ */
+export interface Workflow {
+  id: string;
+  name: string;
+  description?: string;
+  trigger: WorkflowTrigger;
+  runtime?: WorkflowRuntime;
+  nodes: Node[];
+  edges: Edge[];
+}
+
+/**
+ * Represents a workflow with additional metadata
+ */
+export interface WorkflowWithMetadata extends Workflow {
+  enabled?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Possible node execution statuses
+ */
+export type NodeExecutionStatus =
+  "idle" | "executing" | "completed" | "error" | "skipped" | "pending";
+
+/**
+ * Represents the execution state of a single node
+ */
+export interface NodeExecution {
+  nodeId: string;
+  status: NodeExecutionStatus;
+  error?: string;
+  inputs?: Record<string, ParameterValue> | null;
+  outputs?: Record<string, ParameterValue> | null;
+  usage: number;
+  /** Present when status is "pending" — describes the event the runtime should wait for */
+  pendingEvent?: { type: string; timeout?: string };
+}
+
+/**
+ * Possible workflow execution statuses
+ */
+export type WorkflowExecutionStatus =
+  | "idle"
+  | "submitted"
+  | "executing"
+  | "completed"
+  | "error"
+  | "cancelled"
+  | "paused"
+  | "exhausted";
+
+/**
+ * Represents a workflow execution
+ */
+export interface WorkflowExecution {
+  id: string;
+  workflowId: string;
+  workflowName?: string;
+  status: WorkflowExecutionStatus;
+  error?: string;
+  nodeExecutions: NodeExecution[];
+  /** Timestamp when execution actually started */
+  startedAt?: Date;
+  /** Timestamp when execution ended */
+  endedAt?: Date;
+  /** Total compute credits used by this execution */
+  usage?: number;
+  /** Full workflow definition snapshot at execution time */
+  workflowDefinition?: Workflow;
+  /** SHA-256 hash of canonicalized workflow definition */
+  definitionHash?: string;
+  /** Git commit SHA of the deployed runtime code */
+  runtimeVersion?: string;
+  /**
+   * True when this run was a rehearsal: outward writes were stubbed so
+   * nothing left the platform. Absent on real runs.
+   */
+  rehearsal?: true;
+}
+
+// Request and Response types
+
+/**
+ * Request to create a new workflow
+ */
+export interface CreateWorkflowRequest {
+  name: string;
+  description?: string;
+  trigger: WorkflowTrigger;
+  runtime?: WorkflowRuntime;
+  nodes: Node[];
+  edges: Edge[];
+}
+
+/**
+ * Response when creating a new workflow
+ */
+export type CreateWorkflowResponse = WorkflowWithMetadata;
+
+/**
+ * Response for listing workflows
+ */
+export interface ListWorkflowsResponse {
+  workflows: WorkflowWithMetadata[];
+}
+
+/**
+ * Response when getting a workflow by ID
+ */
+export type GetWorkflowResponse = WorkflowWithMetadata;
+
+/**
+ * Request to update a workflow
+ */
+export interface UpdateWorkflowRequest {
+  name: string;
+  description?: string;
+  trigger?: WorkflowTrigger;
+  runtime?: WorkflowRuntime;
+  nodes: Node[];
+  edges: Edge[];
+}
+
+/**
+ * Response when updating a workflow
+ */
+export type UpdateWorkflowResponse = WorkflowWithMetadata;
+
+/**
+ * Response when deleting a workflow
+ */
+export interface DeleteWorkflowResponse {
+  id: string;
+}
+
+/**
+ * Request to execute a workflow
+ */
+export interface ExecuteWorkflowRequest {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parameters?: Record<string, any>;
+}
+
+/**
+ * Response when executing a workflow
+ */
+export interface ExecuteWorkflowResponse {
+  id: string;
+  workflowId: string;
+  status: WorkflowExecutionStatus;
+  nodeExecutions: NodeExecution[];
+}
+
+/**
+ * Response when cancelling a workflow execution
+ */
+export interface CancelWorkflowExecutionResponse {
+  id: string;
+  status: "cancelled";
+  message: string;
+}
+
+/**
+ * WebSocket message types for websocket synchronization
+ */
+
+/**
+ * Workflow state
+ */
+export interface WorkflowState extends Workflow {
+  timestamp: number;
+}
+
+/**
+ * Message sent from server to client with initial state
+ */
+export interface WorkflowInitMessage {
+  type: "init";
+  state: WorkflowState;
+}
+
+/**
+ * Message sent from client to server to update state
+ */
+export interface WorkflowUpdateMessage {
+  type: "update";
+  state: WorkflowState;
+}
+
+/**
+ * Message sent from client to server to start workflow execution
+ * or register for execution updates
+ */
+export interface WorkflowExecuteMessage {
+  type: "execute";
+  /** If provided, register for updates on this execution. If not provided, start a new execution. */
+  executionId?: string;
+  /** Additional parameters for workflow execution */
+  parameters?: Record<string, unknown>;
+}
+
+/**
+ * Message sent from server to client with execution progress updates
+ */
+export interface WorkflowExecutionUpdateMessage {
+  type: "execution_update";
+  executionId: string;
+  status: WorkflowExecutionStatus;
+  nodeExecutions: NodeExecution[];
+  error?: string;
+}
+
+/**
+ * Messages sent from client to server
+ */
+export type ClientMessage = WorkflowUpdateMessage | WorkflowExecuteMessage;
+
+/**
+ * Messages sent from server to client
+ */
+export type ServerMessage =
+  WorkflowInitMessage | WorkflowUpdateMessage | WorkflowExecutionUpdateMessage;
+
+/**
+ * Represents a workflow template
+ */
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  trigger: WorkflowTrigger;
+  tags: string[];
+  nodes: Node[];
+  edges: Edge[];
+}
+
+/**
+ * Response for listing workflow templates
+ */
+export interface ListWorkflowTemplatesResponse {
+  templates: WorkflowTemplate[];
+}
+
+/**
+ * Reference to a tool with its type and identifier
+ */
+export interface ToolReference {
+  /**
+   * The type of tool (e.g., "node" for workflow nodes)
+   * Extensible for future tool types like "mcp", "http_api", etc.
+   */
+  type: string;
+
+  /**
+   * Unique identifier for the tool within its type
+   * For nodes: the node ID
+   * For future types: appropriate identifier
+   */
+  identifier: string;
+
+  /**
+   * Optional configuration specific to the tool type
+   */
+  config?: Record<string, unknown>;
+}

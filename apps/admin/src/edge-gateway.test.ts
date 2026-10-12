@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  flowsContentSecurityPolicy,
   gatewayFetch,
   isImmutableAsset,
+  isFlowsUiPath,
   isServicePath,
   serviceWorkerCacheControl,
   staticAssetCacheControl,
@@ -59,6 +61,126 @@ describe("edge gateway", () => {
     expect(api.fetch).not.toHaveBeenCalled();
   });
 
+  it("keeps Savia Flows deep links on the child HTML shell", async () => {
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    let assetRequest: Request | undefined;
+    const assets = {
+      fetch: vi.fn(async (request: Request) => {
+        assetRequest = request;
+        return new Response("flows child shell", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }),
+    };
+    const request = new Request(
+      "https://savia.example.workers.dev/flows-ui/org/tenant:101/workflows/wf_1?mode=edit",
+    );
+
+    const response = await gatewayFetch(request, { API: api, ASSETS: assets });
+
+    expect(assetRequest && new URL(assetRequest.url).pathname).toBe(
+      "/flows-ui/index.html",
+    );
+    expect(assetRequest && new URL(assetRequest.url).search).toBe("?mode=edit");
+    expect(await response.text()).toBe("flows child shell");
+    expect(response.headers.get("content-security-policy")).toContain(
+      "frame-src 'self' blob:",
+    );
+    expect(response.headers.get("content-security-policy")).toContain(
+      "img-src 'self' data: blob:",
+    );
+    expect(response.headers.get("content-security-policy")).toContain(
+      "media-src 'self' data: blob:",
+    );
+    expect(response.headers.get("content-security-policy")).toContain(
+      "connect-src 'self' wss://savia.example.workers.dev",
+    );
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(api.fetch).not.toHaveBeenCalled();
+  });
+
+  it("passes hashed Flows assets through with their MIME type and immutable caching", async () => {
+    const assets = {
+      fetch: vi.fn(async (request: Request) => {
+        expect(new URL(request.url).pathname).toBe(
+          "/flows-ui/assets/editor-Ab12cdEF.js",
+        );
+        return new Response("export {}", {
+          headers: { "content-type": "text/javascript; charset=utf-8" },
+        });
+      }),
+    };
+    const response = await gatewayFetch(
+      new Request(
+        "https://savia.example.workers.dev/flows-ui/assets/editor-Ab12cdEF.js",
+      ),
+      {
+        API: { fetch: async () => Response.json({}) },
+        ASSETS: assets,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/javascript");
+    expect(response.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+  });
+
+  it("does not let a missing Flows asset fall back to the Admin HTML shell", async () => {
+    const assets = {
+      fetch: vi.fn(
+        async () =>
+          new Response("admin shell", {
+            headers: { "content-type": "text/html; charset=utf-8" },
+          }),
+      ),
+    };
+    const response = await gatewayFetch(
+      new Request(
+        "https://savia.example.workers.dev/flows-ui/assets/missing-Ab12cdEF.js",
+      ),
+      {
+        API: { fetch: async () => Response.json({}) },
+        ASSETS: assets,
+      },
+    );
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("Savia Flows asset not found");
+  });
+
+  it("leaves the main Admin route on the Admin SPA shell", async () => {
+    let assetRequest: Request | undefined;
+    const assets = {
+      fetch: vi.fn(async (request: Request) => {
+        assetRequest = request;
+        return new Response("admin shell", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }),
+    };
+    const response = await gatewayFetch(
+      new Request("https://savia.example.workers.dev/savia-flows"),
+      {
+        API: { fetch: async () => Response.json({}) },
+        ASSETS: assets,
+      },
+    );
+    expect(new URL(assetRequest!.url).pathname).toBe("/savia-flows");
+    expect(response.headers.get("content-security-policy")).toBeNull();
+  });
+
+  it("allows a same-origin WebSocket but no wildcard external socket origin", () => {
+    expect(isFlowsUiPath("/flows-ui")).toBe(true);
+    expect(isFlowsUiPath("/flows-ui/org/tenant:101/workflows/wf_1")).toBe(true);
+    expect(isFlowsUiPath("/flows-ui-evil/assets/app.js")).toBe(false);
+    const policy = flowsContentSecurityPolicy(
+      new Request("https://savia.example.workers.dev/flows-ui/"),
+    );
+    expect(policy).toContain("wss://savia.example.workers.dev");
+    expect(policy).not.toContain("wss:*");
+  });
+
   it("serves the public Companion catalog before falling back to admin assets", async () => {
     const fetchUpstream = vi.fn(async () => Response.json([]));
     vi.stubGlobal("fetch", fetchUpstream);
@@ -97,6 +219,7 @@ describe("edge gateway", () => {
     expect(isImmutableAsset("/assets/react-SPdNq8mu.js")).toBe(true);
     expect(isImmutableAsset("/assets/app-DBD_8wTe.js")).toBe(true);
     expect(isImmutableAsset("/assets/icons-Ab12cd.js")).toBe(true);
+    expect(isImmutableAsset("/flows-ui/assets/editor-Ab12cdEF.js")).toBe(true);
     expect(isImmutableAsset("/")).toBe(false);
     expect(isImmutableAsset("/index.html")).toBe(false);
     expect(isImmutableAsset("/site.webmanifest")).toBe(false);

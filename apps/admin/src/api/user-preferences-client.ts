@@ -11,6 +11,7 @@ export const sidebarNavigationSectionIds = [
 export const sidebarNavigationItemIds = [
   "dashboard",
   "studio",
+  "savia-flows",
   "my-day",
   "bookings",
   "pages",

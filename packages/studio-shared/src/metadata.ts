@@ -17,7 +17,6 @@ import { validateJsonSchema } from "./json-schema";
 import { recordValidationMessage } from "./record-validation-messages";
 import {
   fieldLabelsSchema,
-  normalizeFieldLabels,
   resolveFieldLabel,
   type FieldLabelLocale,
 } from "./field-labels";

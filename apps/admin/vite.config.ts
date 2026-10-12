@@ -5,6 +5,7 @@ import { officePlugin } from "./build/office-plugin";
 import { collectOfflineShellAssets } from "./build/offline-shell-assets";
 import { reactSandboxPlugin } from "./build/react-sandbox-plugin";
 import { pluginIdeRuntimePlugin } from "./build/plugin-ide-runtime";
+import { flowsPlugin } from "./build/flows-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
@@ -76,8 +77,9 @@ function offlineShellPlugin(): Plugin {
 }
 
 const devApiTarget = process.env.SAVIA_DEV_API_URL || "http://127.0.0.1:8787";
-// Isolated previews preserve their public origin for authentication redirects.
-const devChangeOrigin = !process.env.SAVIA_DEV_API_URL;
+// Keep the browser's public origin for CSRF checks, authentication redirects,
+// and editor socket URLs, including the default local API on a different port.
+const devChangeOrigin = false;
 
 export default defineConfig({
   plugins: [
@@ -102,6 +104,7 @@ export default defineConfig({
       },
     },
     react(),
+    flowsPlugin(),
     pluginDevelopmentReload(),
     officePlugin(),
     tailwindcss(),
@@ -133,6 +136,7 @@ export default defineConfig({
           /^\/register(?:\/|\?|$)/,
           /^\/office(?:\/|$)/,
           /^\/plugin-editor(?:\.html)?(?:\/|\?|$)/,
+          /^\/flows-ui(?:\/|\?|$)/,
         ],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
@@ -159,6 +163,9 @@ export default defineConfig({
               ...entries.filter((entry) => {
                 if (entry.url === "index.html") return true;
                 if (shell.has(entry.url)) return true;
+                // The embedded Flows bundle is served as a separate child
+                // application and loads on demand through /flows-ui/*.
+                if (entry.url.startsWith("flows-ui/")) return false;
                 if (!entry.url.startsWith("assets/")) return true;
                 // Boot CSS is not part of the JS closure walk; it stays
                 // precached (few small files) so first paint is styled.

@@ -1,0 +1,54 @@
+import { kinks } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+export class KinksNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "kinks",
+    name: "Kinks",
+    type: "kinks",
+    description:
+      "Takes a LineString or Polygon and returns the points at all self-intersections",
+    tags: ["Geo", "GeoJSON", "Geometry", "Kinks"],
+    icon: "zap",
+    documentation:
+      "This node finds self-intersection points (kinks) in LineString or Polygon geometries.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "line",
+        type: "geojson",
+        description: "LineString or Polygon feature to find kinks in",
+        required: true,
+      },
+    ],
+    outputs: [
+      {
+        name: "kinks",
+        type: "geojson",
+        description: "FeatureCollection of Point features representing kinks",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { line } = context.inputs;
+
+      if (!line) {
+        return this.createErrorResult("Missing line input");
+      }
+
+      // Delegate everything to Turf.js kinks function
+      const kinkPoints = kinks(line);
+
+      return this.createSuccessResult({
+        kinks: kinkPoints,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(`Error finding kinks: ${error.message}`);
+    }
+  }
+}

@@ -8,13 +8,29 @@ import variant from "@jitl/quickjs-wasmfile-release-sync";
 import wasm from "../node_modules/@jitl/quickjs-wasmfile-release-sync/dist/emscripten-module.wasm";
 import { createQuickJSExecutor } from "./executor";
 import { createHandler } from "./handler";
+import { WorkerEntrypoint } from "cloudflare:workers";
+import { createFlowExecutor, type FlowToolDispatcher } from "./flow-executor";
 
 let engine: ReturnType<typeof newQuickJSWASMModuleFromVariant> | undefined;
-const execute = createQuickJSExecutor(() => {
+const loadEngine = () => {
   engine ??= newQuickJSWASMModuleFromVariant(
     newVariant(variant, { wasmModule: wasm }),
   );
   return engine;
-});
+};
+
+const execute = createQuickJSExecutor(loadEngine);
+const executeFlow = createFlowExecutor(loadEngine);
+
+/** Private named entrypoint; the default Request hook HTTP contract is unchanged. */
+export class FlowsExecutor extends WorkerEntrypoint {
+  execute(
+    code: string,
+    dispatcher: FlowToolDispatcher,
+    options?: { timeoutMs?: number },
+  ) {
+    return executeFlow(code, dispatcher, options);
+  }
+}
 
 export default createHandler(execute);

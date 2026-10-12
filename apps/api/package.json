@@ -23,6 +23,7 @@
     "@savia/release-catalog": "workspace:*",
     "@savia/studio-server": "workspace:*",
     "@savia/studio-shared": "workspace:*",
+    "@savia/flows-native": "workspace:*",
     "@savia/tenant-host": "workspace:*",
     "@scalar/hono-api-reference": "^0.12.0",
     "ai": "7.0.91",

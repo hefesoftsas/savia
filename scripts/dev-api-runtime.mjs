@@ -31,6 +31,8 @@ const permitted = (name) =>
     "PLUGIN_REGISTRY_TENANTS",
     "SQL_BRIDGE_URL",
     "SQL_BRIDGE_SECRET",
+    "SAVIA_FLOWS_BRIDGE_SECRET",
+    "SAVIA_FLOWS_LOCAL_ONLY",
   ].includes(name);
 
 export async function prepareApiRuntime(
@@ -112,6 +114,26 @@ export async function prepareApiRuntime(
       await chmod(keyFile, 0o600);
     }
     if (name === "core") {
+      if (environment.SAVIA_FLOWS_ENABLED === "1") {
+        const flows = JSON.parse(
+          await readFile(
+            resolve(root, "apps/flows/.wrangler/local-secrets.json"),
+            "utf8",
+          ),
+        );
+        if (
+          typeof flows.bridgeSecret !== "string" ||
+          flows.bridgeSecret.length < 32
+        )
+          throw new Error("Local Savia Flows bridge secret is invalid.");
+        vars.SAVIA_FLOWS_BRIDGE_SECRET = flows.bridgeSecret;
+        vars.SAVIA_FLOWS_LOCAL_ONLY = "true";
+        config.services ??= [];
+        config.services.push({
+          binding: "SAVIA_FLOWS",
+          service: "savia-flows",
+        });
+      }
       const devKeyFile = resolve(runtime, "plugin-development-key");
       try {
         await writeFile(devKeyFile, randomBytes(32).toString("hex"), {

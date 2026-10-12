@@ -8,3 +8,6 @@ config:
   cloudflare:apiToken:
     secure: v1:FXCqgb6BDUZFK6HH:MgN36DKpkT7KNZixgC5u4bF4mt/6wy7V3/izlWFAERXt3OYyeER/7YpWmIvGGNn20L+elCKMHo0OrXv+pRE9W77pDT1a
   savia-cloudflare:stateBucket: savia-pulumi-state-preview
+
+  savia-cloudflare:flowsEnabled: false
+  savia-cloudflare:flowsExecutionEnabled: false

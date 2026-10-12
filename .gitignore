@@ -45,6 +45,7 @@ postgres-data/
 volumes/
 
 # Logs and operating-system/editor files
+.impeccable/
 *.log
 .DS_Store
 .idea/

@@ -1,0 +1,197 @@
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+import { imageSizeError, readOptionalImage } from "../../utils/images";
+import {
+  DISCORD_MAX_IMAGE_BYTES,
+  discordMessageRequest,
+} from "./discord-message";
+
+/**
+ * Discord Send Message node implementation
+ * Sends messages to Discord channels using Discord API with OAuth integration
+ */
+export class SendMessageDiscordNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "send-message-discord",
+    name: "Send Message (Discord)",
+    type: "send-message-discord",
+    description: "Send a message to a Discord channel",
+    tags: ["Social", "Discord", "Message", "Send"],
+    icon: "message-circle",
+    documentation:
+      "This node sends messages to Discord channels using the Discord API. Requires a connected Discord integration from your organization's integrations.",
+    usage: 10,
+    asTool: true,
+    inlinable: false,
+    inputs: [
+      {
+        name: "integrationId",
+        type: "integration",
+        provider: "discord",
+        description: "Discord integration to use",
+        hidden: true,
+        required: true,
+      },
+      {
+        name: "channelId",
+        type: "string",
+        description: "Discord channel ID to send the message to",
+        required: true,
+      },
+      {
+        name: "content",
+        type: "string",
+        description: "Message content (up to 2000 characters)",
+        required: true,
+      },
+      {
+        name: "image",
+        type: "image",
+        description: "Optional image to attach to the message",
+        required: false,
+      },
+      {
+        name: "embeds",
+        type: "json",
+        description: "Optional embed objects (max 10)",
+        required: false,
+      },
+    ],
+    outputs: [
+      {
+        name: "id",
+        type: "string",
+        description: "Discord message ID",
+        hidden: true,
+      },
+      {
+        name: "channelId",
+        type: "string",
+        description: "Channel ID where the message was sent",
+        hidden: true,
+      },
+      {
+        name: "timestamp",
+        type: "string",
+        description: "Message timestamp",
+        hidden: true,
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { integrationId, channelId, content, embeds } = context.inputs;
+      const { organizationId } = context;
+
+      const { image, error: imageError } = readOptionalImage(
+        context.inputs.image
+      );
+      if (imageError) {
+        return this.createErrorResult(imageError);
+      }
+
+      // Validate required inputs
+      if (!integrationId || typeof integrationId !== "string") {
+        return this.createErrorResult(
+          "Integration ID is required. Please select a Discord integration."
+        );
+      }
+
+      if (!channelId || typeof channelId !== "string") {
+        return this.createErrorResult("Channel ID is required");
+      }
+
+      if (!content || typeof content !== "string") {
+        return this.createErrorResult("Message content is required");
+      }
+
+      if (content.length > 2000) {
+        return this.createErrorResult(
+          "Message content must be 2000 characters or less"
+        );
+      }
+
+      if (!organizationId || typeof organizationId !== "string") {
+        return this.createErrorResult("Organization ID is required");
+      }
+
+      if (image) {
+        const sizeError = imageSizeError(
+          image,
+          DISCORD_MAX_IMAGE_BYTES,
+          "Discord"
+        );
+        if (sizeError) {
+          return this.createErrorResult(sizeError);
+        }
+      }
+
+      // Get integration with auto-refreshed token
+      const integration = await context.getIntegration(integrationId);
+
+      const accessToken = integration.token;
+
+      // Prepare message payload
+      const payload: {
+        content: string;
+        embeds?: unknown[];
+      } = {
+        content,
+      };
+
+      // Add embeds if provided
+      if (embeds) {
+        if (Array.isArray(embeds)) {
+          if (embeds.length > 10) {
+            return this.createErrorResult(
+              "Maximum of 10 embeds allowed per message"
+            );
+          }
+          payload.embeds = embeds;
+        } else {
+          payload.embeds = [embeds];
+        }
+      }
+
+      // Send message via Discord API
+      const request = discordMessageRequest(payload, image);
+      const response = await fetch(
+        `https://discord.com/api/v10/channels/${channelId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...request.headers,
+          },
+          body: request.body,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        return this.createErrorResult(
+          `Failed to send message via Discord API: ${errorData}`
+        );
+      }
+
+      const data = (await response.json()) as {
+        id: string;
+        channel_id: string;
+        timestamp: string;
+      };
+
+      return this.createSuccessResult({
+        id: data.id,
+        channelId: data.channel_id,
+        timestamp: data.timestamp,
+      });
+    } catch (error) {
+      return this.createErrorResult(
+        error instanceof Error
+          ? error.message
+          : "Unknown error sending message via Discord"
+      );
+    }
+  }
+}

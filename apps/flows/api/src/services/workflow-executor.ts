@@ -1,0 +1,281 @@
+/**
+ * WorkflowExecutor Service
+ *
+ * Centralized service for executing workflows across different trigger sources.
+ * Handles parameter processing, execution creation, and persistence.
+ */
+
+import type { BlobParameter, InputOverrides } from "@savia/flows-runtime";
+import type { SaviaCollectionEvent } from "@savia/studio-shared/savia-flows";
+import type {
+  Node,
+  WorkflowExecution,
+  WorkflowRuntime,
+} from "@savia/flows-types";
+import type { Bindings } from "../context";
+import { createDatabase, stampOnboardingStage } from "../db";
+import { getWorkflowAgentByName } from "../durable-objects/agent-utils";
+import { CloudflareExecutionStore } from "../runtime/cloudflare-execution-store";
+import { createWorkerRuntime } from "../runtime/cloudflare-worker-runtime";
+import { createSimulatedEmailMessage } from "../utils/email";
+import { createSimulatedHttpRequest } from "../utils/http";
+
+export interface WorkflowExecutorOptions {
+  workflow: {
+    id: string;
+    name: string;
+    trigger: string;
+    runtime?: WorkflowRuntime;
+    nodes: Node[];
+    edges: any[];
+  };
+  userId: string;
+  organizationId: string;
+  computeCredits: number;
+  subscriptionStatus?: string;
+  /** Maximum additional usage allowed beyond included credits. null = unlimited */
+  overageLimit?: number | null;
+  /** When true, all credit checks are bypassed (e.g., internal/test accounts). */
+  unlimitedUsage?: boolean;
+  parameters?: WorkflowExecutorParameters;
+  /** Per-run node input values, keyed nodeId → inputName. */
+  inputOverrides?: InputOverrides;
+  /**
+   * Run as a rehearsal: outward writes are stubbed so nothing leaves the
+   * platform. Worker runtime only — the durable path never rehearses.
+   */
+  rehearsal?: boolean;
+  /** Authoritative, host-projected event for a collection-triggered run. */
+  saviaCollectionEvent?: SaviaCollectionEvent;
+  /** Stable identifier used to deduplicate redelivered event admissions. */
+  executionId?: string;
+  env: Bindings;
+}
+
+export interface EmailAttachment {
+  filename: string;
+  mimeType: string;
+  data: string; // base64 encoded
+}
+
+export interface WorkflowExecutorParameters {
+  // For email workflows
+  from?: string;
+  subject?: string;
+  emailBody?: string;
+  attachments?: EmailAttachment[];
+  // For HTTP workflows
+  url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  query?: Record<string, string>;
+  body?: BlobParameter;
+  // For form workflows: the validated submission record
+  formRecord?: Record<string, unknown>;
+}
+
+export interface WorkflowExecutorResult {
+  executionId: string;
+  execution: WorkflowExecution;
+}
+
+export class WorkflowExecutor {
+  /**
+   * Execute a workflow with the given options
+   */
+  static async execute(
+    options: WorkflowExecutorOptions,
+  ): Promise<WorkflowExecutorResult> {
+    const {
+      workflow,
+      userId,
+      organizationId,
+      computeCredits,
+      subscriptionStatus,
+      overageLimit,
+      unlimitedUsage,
+      parameters,
+      inputOverrides,
+      rehearsal,
+      saviaCollectionEvent,
+      executionId: requestedExecutionId,
+      env,
+    } = options;
+
+    // A rehearsal must return its execution inline (the caller shows the
+    // result) and must never run durably — reaching here with the durable
+    // runtime is a programming error, not a user condition.
+    if (rehearsal && workflow.runtime !== "worker") {
+      throw new Error("Rehearsal executions require the worker runtime");
+    }
+
+    // Worker runs execute synchronously and cannot ask Cloudflare Workflows to
+    // deduplicate a repeated instance id. Event admission retries do reuse a
+    // stable id, so return a previously persisted terminal snapshot rather than
+    // running its nodes a second time. Runs without a caller-supplied id remain
+    // ordinary, independently generated manual executions.
+    if (workflow.runtime === "worker" && requestedExecutionId) {
+      const existing = await new CloudflareExecutionStore(env).getWithData(
+        requestedExecutionId,
+        organizationId,
+      );
+      if (
+        existing?.data.workflowId === workflow.id &&
+        isTerminalStatus(existing.data.status)
+      ) {
+        return { executionId: existing.data.id, execution: existing.data };
+      }
+    }
+
+    // Best-effort onboarding stamp: capture "this user attempted an execution"
+    // regardless of whether it ultimately succeeds. The ok-stamp happens after
+    // execution finalizes (worker path below, or in WorkflowRuntimeEntrypoint).
+    try {
+      const db = createDatabase(env.DB);
+      await stampOnboardingStage(db, userId, "workflowExecuted");
+    } catch (error) {
+      console.error("Failed to stamp workflow_executed onboarding:", error);
+    }
+
+    // Build base execution parameters
+    const baseExecutionParams = {
+      workflow: {
+        id: workflow.id,
+        name: workflow.name,
+        trigger: workflow.trigger,
+        nodes: workflow.nodes,
+        edges: workflow.edges,
+      },
+      userId,
+      organizationId,
+      computeCredits,
+      ...(subscriptionStatus && { subscriptionStatus }),
+      ...(overageLimit !== undefined && { overageLimit }),
+      ...(unlimitedUsage !== undefined && { unlimitedUsage }),
+      // Per-run input values, carried beside the workflow rather than written
+      // into it so the definition hash stays stable across runs.
+      ...(inputOverrides && { inputOverrides }),
+      ...(rehearsal && { rehearsal: true }),
+      ...(saviaCollectionEvent && { saviaCollectionEvent }),
+    };
+
+    // Build type-specific execution parameters
+    let finalExecutionParams: any;
+
+    if (workflow.trigger === "email_message") {
+      finalExecutionParams = {
+        ...baseExecutionParams,
+        emailMessage: createSimulatedEmailMessage({
+          from: parameters?.from,
+          subject: parameters?.subject,
+          body: parameters?.emailBody,
+          attachments: parameters?.attachments,
+          workflowId: workflow.id,
+          emailDomain: env.EMAIL_DOMAIN,
+        }),
+      };
+    } else if (
+      workflow.trigger === "http_webhook" ||
+      workflow.trigger === "http_request"
+    ) {
+      finalExecutionParams = {
+        ...baseExecutionParams,
+        httpRequest: createSimulatedHttpRequest({
+          url: parameters?.url,
+          method: parameters?.method,
+          headers: parameters?.headers,
+          query: parameters?.query,
+          body: parameters?.body,
+        }),
+      };
+    } else if (
+      workflow.trigger === "form_request" ||
+      workflow.trigger === "form_webhook"
+    ) {
+      // The public form route validates the submission against the trigger
+      // node's schema and passes it as `formRecord`. Sync vs async is decided
+      // by the runtime the route forces (worker for request, workflow for webhook).
+      finalExecutionParams = {
+        ...baseExecutionParams,
+        formSubmission: {
+          record: parameters?.formRecord ?? {},
+          timestamp: Date.now(),
+        },
+      };
+    } else {
+      // For other workflow types, provide basic HTTP context without payload
+      finalExecutionParams = {
+        ...baseExecutionParams,
+        httpRequest: createSimulatedHttpRequest({
+          url: parameters?.url,
+          method: parameters?.method,
+          headers: parameters?.headers,
+          query: parameters?.query,
+        }),
+      };
+    }
+
+    // Use WorkerRuntime for "worker" runtime (synchronous execution)
+    // Use Cloudflare Workflows for "workflow" runtime (durable execution, default)
+    if (workflow.runtime === "worker") {
+      const workerRuntime = createWorkerRuntime(
+        env,
+        rehearsal ? { rehearsal: true } : undefined,
+      );
+      const execution = await workerRuntime.execute(
+        finalExecutionParams,
+        requestedExecutionId,
+      );
+      console.log(
+        `[Execution] ${execution.id} workflow=${workflow.id} runtime=worker trigger=${workflow.trigger}`,
+      );
+
+      // Worker runtime is synchronous — stamp ok here. Durable runtime stamps
+      // in WorkflowRuntimeEntrypoint.run() once the workflow completes.
+      if (execution.status === "completed") {
+        try {
+          const db = createDatabase(env.DB);
+          await stampOnboardingStage(db, userId, "workflowExecutedOk");
+        } catch (error) {
+          console.error(
+            "Failed to stamp workflow_executed_ok onboarding:",
+            error,
+          );
+        }
+      }
+
+      return { executionId: execution.id, execution };
+    }
+
+    // Start workflow execution via Agent RPC (durable)
+    const agent = await getWorkflowAgentByName(env, workflow.id);
+    const executionId = await agent.executeWorkflow(
+      finalExecutionParams,
+      requestedExecutionId,
+    );
+    console.log(
+      `[Execution] ${executionId} workflow=${workflow.id} runtime=workflow trigger=${workflow.trigger}`,
+    );
+
+    // Build initial nodeExecutions
+    const nodeExecutions = workflow.nodes.map((node) => ({
+      nodeId: node.id,
+      status: "executing" as const,
+      usage: 0,
+    }));
+
+    // Create initial execution record
+    const execution: WorkflowExecution = {
+      id: executionId,
+      workflowId: workflow.id,
+      status: "submitted",
+      nodeExecutions,
+    };
+
+    return { executionId, execution };
+  }
+}
+
+function isTerminalStatus(status: WorkflowExecution["status"]): boolean {
+  return ["completed", "error", "cancelled", "exhausted"].includes(status);
+}

@@ -368,4 +368,27 @@ describe("React Admin authentication provider", () => {
       provider.canAccess?.({ resource: "savia-request", action: "list" }),
     ).resolves.toBe(true);
   });
+
+  it("allows active tenant members into Savia Flows while the gateway scopes their actions", async () => {
+    const session = {
+      checkSession: vi.fn(),
+      clearSession: vi.fn(),
+      getAccessToken: vi.fn(),
+      getIdentity: vi.fn(),
+      getPermissions: vi.fn().mockResolvedValue({
+        canReadDocuments: true,
+        canExecuteCommands: false,
+        canManageIdentity: false,
+        memberships: [{ tenantId: 101, role: "operator" }],
+      }),
+      handleCallback: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+      getAuthorizeUrl: vi.fn(),
+    };
+    const provider = createReactAdminAuthProvider(session);
+    await expect(
+      provider.canAccess?.({ resource: "savia-flows", action: "list" }),
+    ).resolves.toBe(true);
+  });
 });

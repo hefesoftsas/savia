@@ -87,6 +87,12 @@ export function createReactAdminAuthProvider(
           isPlatformAdmin ||
           hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
         );
+      if (resource === "savia-flows")
+        return (
+          isPlatformAdmin ||
+          hasAnyRole(permissions, ["tenant_admin", "agency_admin", "owner"]) ||
+          Boolean(permissions.memberships?.length)
+        );
       if (resource === "users")
         return (
           isPlatformAdmin ||

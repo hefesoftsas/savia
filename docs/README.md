@@ -49,6 +49,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [my-day-widgets.md](my-day-widgets.md) — My Day collection widgets, layout persistence and plugin seam.
 
 - [workflows.md](workflows.md) — general-purpose workflow authoring, execution, permissions and recovery.
+- [Savia Flows](guides/savia-flows.md) — Dafthunk-based visual editor, local Miniflare runtime, tenant permissions and execution history.
 - [notifications.md](notifications.md) — durable personal inbox for collection activity, assigned work, administrator messages and authentication events.
 - [Direct Office editing](office-editing.md): WASM editor, revision storage, runtime setup and deployment.
 

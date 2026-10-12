@@ -1,0 +1,63 @@
+import { booleanDisjoint } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+export class BooleanDisjointNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "boolean-disjoint",
+    name: "Boolean Disjoint",
+    type: "boolean-disjoint",
+    description:
+      "Returns true if the intersection of the two geometries is an empty set",
+    tags: ["Geo", "GeoJSON", "Boolean", "Disjoint"],
+    icon: "slash",
+    documentation:
+      "This node checks if two geometries are completely separate (no intersection).",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "feature1",
+        type: "geojson",
+        description: "GeoJSON Feature or Geometry",
+        required: true,
+      },
+      {
+        name: "feature2",
+        type: "geojson",
+        description: "GeoJSON Feature or Geometry",
+        required: true,
+      },
+    ],
+    outputs: [
+      {
+        name: "disjoint",
+        type: "boolean",
+        description:
+          "True if the intersection is an empty set, false otherwise",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { feature1, feature2 } = context.inputs;
+
+      if (!feature1 || !feature2) {
+        return this.createErrorResult(
+          "Both feature1 and feature2 inputs are required"
+        );
+      }
+
+      const result = booleanDisjoint(feature1, feature2);
+      return this.createSuccessResult({
+        disjoint: result,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error testing disjoint relationship: ${error.message}`
+      );
+    }
+  }
+}

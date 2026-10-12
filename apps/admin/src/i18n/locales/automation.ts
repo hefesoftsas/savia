@@ -1,5 +1,41 @@
 // Built-in automation, integration, and workspace messages. Protocol and brand names retain their spelling.
 export const automationMessages = {
+  "Could not load tenants.": [
+    "No se pudieron cargar los tenants.",
+    "Could not load tenants.",
+    "Não foi possível carregar os tenants.",
+  ],
+  "Savia Flows is available to active tenant members.": [
+    "Savia Flows está disponible para miembros activos del tenant.",
+    "Savia Flows is available to active tenant members.",
+    "Savia Flows está disponível para membros ativos do tenant.",
+  ],
+  "Choose an active tenant to use Savia Flows.": [
+    "Elige un tenant activo para usar Savia Flows.",
+    "Choose an active tenant to use Savia Flows.",
+    "Escolha um tenant ativo para usar o Savia Flows.",
+  ],
+  "Loading Savia Flows…": [
+    "Cargando Savia Flows…",
+    "Loading Savia Flows…",
+    "Carregando Savia Flows…",
+  ],
+  Tenant: ["Tenant", "Tenant", "Tenant"],
+  "Select a tenant": [
+    "Selecciona un tenant",
+    "Select a tenant",
+    "Selecione um tenant",
+  ],
+  "Savia Flows editor": [
+    "Editor de Savia Flows",
+    "Savia Flows editor",
+    "Editor do Savia Flows",
+  ],
+  "Select a tenant to open its Savia Flows workspace.": [
+    "Selecciona un tenant para abrir su espacio de Savia Flows.",
+    "Select a tenant to open its Savia Flows workspace.",
+    "Selecione um tenant para abrir o espaço do Savia Flows.",
+  ],
   "Exportar CSV": ["Exportar CSV", "Export CSV", "Exportar CSV"],
   Acción: ["Acción", "Action", "Ação"],
   "Confirmar eliminación": [
@@ -102,7 +138,6 @@ export const automationMessages = {
     "Opções avançadas",
   ],
   Aplicaciones: ["Aplicaciones", "Applications", "Aplicativos"],
-  Tenant: ["Tenant", "Tenant", "Tenant"],
   "Selecciona un tenant": [
     "Selecciona un tenant",
     "Select a tenant",
@@ -3471,4 +3506,10 @@ export const automationMessages = {
     "This will delete %{value0} versions.",
     "Isso excluirá %{value0} versões.",
   ],
+  "Workflows are managed in Savia Flows.": [
+    "Los flujos de trabajo se administran en Savia Flows.",
+    "Workflows are managed in Savia Flows.",
+    "Os fluxos de trabalho são gerenciados no Savia Flows.",
+  ],
+  "Open Savia Flows": ["Abrir Savia Flows", "Open Savia Flows", "Abrir Savia Flows"],
 } as const;

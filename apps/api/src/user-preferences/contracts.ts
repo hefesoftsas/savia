@@ -9,6 +9,7 @@ export const sidebarNavigationSectionIds = [
 export const sidebarNavigationItemIds = [
   "dashboard",
   "studio",
+  "savia-flows",
   "my-day",
   "bookings",
   "pages",
@@ -46,7 +47,11 @@ export const legacySidebarNavigationItemIds = [
   "domain-api",
 ] as const;
 
-const consolidatedOperationsIds = new Set(["domain-workflows", "domain-reports", "domain-api"]);
+const consolidatedOperationsIds = new Set([
+  "domain-workflows",
+  "domain-reports",
+  "domain-api",
+]);
 
 export function migrateSidebarNavigationItemId(
   itemId: string,
@@ -216,6 +221,7 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
           "domain-operations",
           "plugin-studio",
           "provider-credentials",
+          "savia-flows",
           "virtual-employees",
           "integrations",
           "domain-packages",

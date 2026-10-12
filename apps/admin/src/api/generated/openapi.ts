@@ -21416,6 +21416,7 @@ export interface paths {
                         | (
                             | "dashboard"
                             | "studio"
+                            | "savia-flows"
                             | "my-day"
                             | "bookings"
                             | "pages"
@@ -21456,6 +21457,7 @@ export interface paths {
                         | (
                             | "dashboard"
                             | "studio"
+                            | "savia-flows"
                             | "my-day"
                             | "bookings"
                             | "pages"
@@ -21492,6 +21494,7 @@ export interface paths {
                   | (
                       | "dashboard"
                       | "studio"
+                      | "savia-flows"
                       | "my-day"
                       | "bookings"
                       | "pages"
@@ -21567,6 +21570,7 @@ export interface paths {
                         | (
                             | "dashboard"
                             | "studio"
+                            | "savia-flows"
                             | "my-day"
                             | "bookings"
                             | "pages"
@@ -21607,6 +21611,7 @@ export interface paths {
                         | (
                             | "dashboard"
                             | "studio"
+                            | "savia-flows"
                             | "my-day"
                             | "bookings"
                             | "pages"
@@ -21643,6 +21648,7 @@ export interface paths {
                   | (
                       | "dashboard"
                       | "studio"
+                      | "savia-flows"
                       | "my-day"
                       | "bookings"
                       | "pages"

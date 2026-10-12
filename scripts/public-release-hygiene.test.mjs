@@ -29,6 +29,37 @@ const approvedVendorHashes = new Map([
     "apps/admin/public/login/lottie-light.min.js",
     "9588432bec30c8ef8200bac4a67d8aaad881047bc2a6c9fa624d90ec96402410",
   ],
+  // These exact, unmodified Dafthunk files use graphics transformations and
+  // technical test terminology. Each digest also matches UPSTREAM.json.
+  // Any adaptation is scanned normally, including changes to these files.
+  [
+    "apps/flows/app/public/logo.svg",
+    "0cb8fed28ccfb7dce2128823d5c07751b05d36ec070d5323b8d3361ac7375168",
+  ],
+  [
+    "apps/flows/packages/runtime/src/nodes/3d/csg-rotate-node.ts",
+    "ee7fb6782044c05cadfcc67544d9311cab2594366ff87734eec0470af9367929",
+  ],
+  [
+    "apps/flows/packages/runtime/src/nodes/3d/csg-scale-node.ts",
+    "0e6b9e90c69a0a6c0a2b1f63f410c6736bba34a618c902d0435dca18571327d6",
+  ],
+  [
+    "apps/flows/packages/runtime/src/nodes/3d/csg-translate-node.ts",
+    "5e056763013b1904e6c791516a8ea937105a0eb1265a8c7311228ffc5e35fe9c",
+  ],
+  [
+    "apps/flows/packages/runtime/src/nodes/3d/csg-utils.ts",
+    "41ee0786562b7b957c1b3a7a0fcebf0a9ae53fb9f0c592043ed004ec5bd41292",
+  ],
+  [
+    "apps/flows/packages/runtime/src/nodes/geo/shortest-path-node.ts",
+    "33e59afe9167f0f4ec224c8a26b84b783a67270a35021fa340c1012e0c1095bf",
+  ],
+  [
+    "apps/flows/packages/runtime/src/validate-workflow.test.ts",
+    "fbef48d588ffeaad3e705e03b633be5974f6d7cfb591651fe8dd54d1185d84a7",
+  ],
 ]);
 
 // Character codes keep disallowed identifiers out of the public search index.
