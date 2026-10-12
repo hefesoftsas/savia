@@ -3,6 +3,12 @@ import {
   pluginVersionSchema,
 } from "@savia/studio-shared/plugin-development";
 import { pluginStoreManifestSchema } from "@savia/studio-shared/plugin-store";
+// VS Code canonicalizes these reserved characters even though encodeURIComponent leaves them raw.
+const encodeSegment = (value: string) =>
+  encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (character) => "%" + character.charCodeAt(0).toString(16).toUpperCase(),
+  );
 /** TextDocumentContentProvider documents are read-only in VS Code. */
 export class PublishedSourceProvider {
   private documents = new Map<string, string>();
@@ -18,7 +24,7 @@ export class PublishedSourceProvider {
       throw new Error("Invalid source profile identity.");
     return Object.entries(files).map(([path, text]) => {
       pluginDevelopmentPathSchema.parse(path);
-      const uri = `savia-source:/${encodeURIComponent(profileId)}/${encodeURIComponent(pluginId)}/${encodeURIComponent(version)}/${path.split("/").map(encodeURIComponent).join("/")}`;
+      const uri = `savia-source:/${encodeSegment(profileId)}/${encodeSegment(pluginId)}/${encodeSegment(version)}/${path.split("/").map(encodeSegment).join("/")}`;
       this.documents.set(uri, text);
       return { path, uri };
     });
