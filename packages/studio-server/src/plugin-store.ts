@@ -65,6 +65,11 @@ import { registerPluginEditorExtensions } from "./plugin-editor-extensions";
 import { registerPluginProjects } from "./plugin-projects";
 
 export type PluginStoreOptions = {
+  pluginDevelopmentAccess?: {
+    workspaceLabel: string;
+    read: boolean;
+    publish: boolean;
+  };
   apiBasePath?: string;
   entryGrantSecret?: string;
   pluginRegistry?: { url: string; token: string; publishToken?: string };

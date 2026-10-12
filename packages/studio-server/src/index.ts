@@ -1,3 +1,4 @@
+import { registerPluginDevelopment } from "./plugin-development";
 import {
   getMaintainedSummary,
   maintainedGroupCountStatement,
@@ -216,6 +217,8 @@ export function createStudioApp(
     };
     await next();
   });
+  // Native authoring has its own scoped ACL; keep collection grants narrowed.
+  registerPluginDevelopment(app, options);
   if (options?.accessPolicy)
     registerAccessMiddleware(app, options.accessPolicy);
   app.get("/api/access-context", (c) => c.json({ data: null }));
