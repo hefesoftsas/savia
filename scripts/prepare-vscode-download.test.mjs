@@ -6,6 +6,41 @@ import path from "node:path";
 import test from "node:test";
 import { prepareVscodeDownload } from "./lib/prepare-vscode-download.mjs";
 
+test("all admin distribution builds prepare the VSIX through the common asset build", async () => {
+  const admin = JSON.parse(
+    await fs.readFile(
+      new URL("../apps/admin/package.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  for (const command of [admin.scripts.build, admin.scripts["build:assets"]]) {
+    assert.ok(command.indexOf("build:downloads") >= 0);
+    assert.ok(
+      command.indexOf("build:downloads") < command.indexOf("vite build"),
+    );
+  }
+  assert.match(admin.scripts["build:downloads"], /@savia\/vscode build/);
+  assert.match(admin.scripts["build:downloads"], /@savia\/vscode package/);
+  assert.match(
+    admin.scripts["build:downloads"],
+    /prepare-vscode-download\.mjs/,
+  );
+  const docker = await fs.readFile(
+    new URL("../apps/self-hosted/Dockerfile", import.meta.url),
+    "utf8",
+  );
+  assert.match(docker, /COPY apps\/vscode\/package\.json apps\/vscode\//);
+  assert.match(
+    docker,
+    /COPY packages\/plugin-authoring\/package\.json packages\/plugin-authoring\//,
+  );
+  assert.match(docker, /RUN pnpm --filter @savia\/admin run build:assets/);
+  assert.doesNotMatch(
+    docker,
+    /RUN pnpm --filter @savia\/admin exec vite build/,
+  );
+});
+
 async function fixture(t, { validChecksum = true } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "savia-vsix-stage-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));

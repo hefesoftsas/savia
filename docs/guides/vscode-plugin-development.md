@@ -10,8 +10,11 @@ in another tab to preserve the current draft.
 Admin deployments serve the packaged extension at
 `/downloads/savia-plugin-authoring-<version>.vsix` with a matching `.sha256` file;
 the download button follows the version in the extension manifest.
-The deployment builds the extension and verifies its checksum before copying
-the package into the admin static assets.
+The common admin `build` and `build:assets` commands build the extension and
+verify its checksum before copying the package into the admin static assets.
+This includes Cloudflare deployments, setup scripts and the self-hosted Docker
+image. For local Vite development, run `pnpm --filter @savia/admin build:downloads`
+once to prepare the download without building the entire interface.
 
 Install the downloadable **Savia Plugin Authoring** VSIX in desktop VS Code
 1.96.2 or newer: open Extensions, choose **Install from VSIX…**, and select

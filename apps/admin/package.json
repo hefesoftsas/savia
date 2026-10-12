@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm run typecheck && vite build",
-    "build:assets": "vite build",
+    "build": "pnpm run typecheck && pnpm run build:downloads && vite build",
+    "build:assets": "pnpm run build:downloads && vite build",
+    "build:downloads": "pnpm --filter @savia/vscode build && pnpm --filter @savia/vscode package && node ../../scripts/prepare-vscode-download.mjs",
     "build:plugin-editor": "vite build --config vite.plugin-editor.config.ts",
     "build:worker": "pnpm run build",
     "generate:api": "tsx scripts/generate-openapi-types.ts && prettier --write src/api/generated/openapi.ts",
