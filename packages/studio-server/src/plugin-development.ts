@@ -1,3 +1,4 @@
+import { loadPluginCheckout } from "./plugin-development-snapshot";
 import type { Hono, Context } from "hono";
 import {
   pluginCatalogSchema,
@@ -137,7 +138,19 @@ export function registerPluginDevelopment(
   });
   app.get("/api/plugin-development/:id/checkout", async (c) => {
     await authorizePluginDevelopment(c, options, "read", c.req.param("id"));
-    return fail("Plugin checkout service is unavailable.", 502);
+    return c.json(
+      await loadPluginCheckout(
+        c.env.DB,
+        {
+          tenantId: c.get("tenant"),
+          principalId: c.get("principalId"),
+          canManageExtension: options.canManageExtension,
+        },
+        c.req.param("id"),
+        c.req.query("version") ?? "",
+        options.pluginRegistry,
+      ),
+    );
   });
   app.post("/api/plugin-development/:id/publish", async (c) => {
     await authorizePluginDevelopment(c, options, "publish", c.req.param("id"));

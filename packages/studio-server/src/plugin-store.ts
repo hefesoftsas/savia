@@ -1,3 +1,4 @@
+import { resolvePublishedPluginFiles } from "./plugin-development-snapshot";
 import { connectPluginPanelHost } from "@savia/studio-shared/plugin-panels";
 import {
   PLUGIN_STORE_CONFIG_PATH,
@@ -1824,47 +1825,7 @@ export function registerPluginStore(
     if (!artifact) {
       return fail("Plugin source is not available for this version.", 404);
     }
-    try {
-      validatePluginEntrySource(artifact.entry_js);
-    } catch {
-      return fail("Plugin source is unavailable.", 404);
-    }
-    let manifestText = artifact.manifest;
-    try {
-      manifestText = JSON.stringify(JSON.parse(artifact.manifest), null, 2);
-    } catch {
-      return fail("Plugin source is unavailable.", 404);
-    }
-    let storeText = JSON.stringify({
-      format: "savia.store",
-      formatVersion: 1,
-      actions: [],
-      connectors: [],
-      collections: [],
-      bundles: [],
-      widgets: [],
-      screens: [],
-    });
-    if (artifact.store_json) {
-      try {
-        storeText = JSON.stringify(JSON.parse(artifact.store_json), null, 2);
-      } catch {
-        return fail("Plugin source is unavailable.", 404);
-      }
-    }
-    const files: PluginStoreSourceFiles = {
-      "entry.tsx": artifact.entry_js,
-      "savia-extension.json": manifestText.endsWith("\n")
-        ? manifestText
-        : `${manifestText}\n`,
-      "store.json": storeText.endsWith("\n") ? storeText : `${storeText}\n`,
-      "preview.json": `{\n  "collections": {},\n  "settings": {}\n}\n`,
-    };
-    try {
-      pluginStoreSourceFilesSchema.parse(files);
-    } catch {
-      return fail("Plugin source is unavailable.", 404);
-    }
+    const { files } = await resolvePublishedPluginFiles(artifact);
     return c.json({
       data: { files, synthesized: true, sourceKind: "compiled" as const },
     });

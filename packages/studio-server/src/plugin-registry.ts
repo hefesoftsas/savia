@@ -1,3 +1,8 @@
+import { compareSolutionVersions } from "@savia/studio-shared/solution-package";
+import {
+  pluginHeadSchema,
+  type PluginHead,
+} from "@savia/studio-shared/plugin-development";
 import { z } from "zod";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -447,4 +452,47 @@ export function registerPluginRegistry(
       return fail("No se pudo importar la versión del registro.", 502);
     }
   });
+}
+
+/** Bounded catalog reads never expose the backend reader credential. */
+export async function getPluginRegistryHead(
+  config: NonNullable<PluginStoreOptions["pluginRegistry"]>,
+  pluginId: string,
+): Promise<PluginHead | null> {
+  let cursor: string | null = null;
+  let head: PluginHead | null = null;
+  const visited = new Set<string>();
+  try {
+    for (let page = 0; page < 10; page++) {
+      const url = registryBaseUrl(config.url);
+      url.pathname = "/v1/plugins";
+      if (cursor) url.searchParams.set("cursor", cursor);
+      const response = await fetchRegistry(url, config.token);
+      if (!response.ok) throw new Error();
+      const listing = listSchema.parse(
+        JSON.parse(
+          new TextDecoder().decode(await readBoundedBody(response, 128 * 1024)),
+        ),
+      );
+      for (const release of listing.data)
+        if (release.id === pluginId) {
+          const candidate = pluginHeadSchema.parse({
+            version: release.version,
+            sha256: release.sha256,
+          });
+          if (
+            !head ||
+            compareSolutionVersions(candidate.version, head.version) > 0
+          )
+            head = candidate;
+        }
+      if (!listing.cursor) return head;
+      if (visited.has(listing.cursor)) throw new Error();
+      visited.add(listing.cursor);
+      cursor = listing.cursor;
+    }
+    throw new Error();
+  } catch {
+    return fail("The shared plugin registry is unavailable.", 502);
+  }
 }
