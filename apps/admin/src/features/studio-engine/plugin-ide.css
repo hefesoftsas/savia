@@ -796,6 +796,24 @@ p.plugin-ide-usage {
   color: var(--foreground);
   background: var(--background);
 }
+.plugin-editor-extension-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 6px 0;
+  color: var(--ide-secondary);
+  font-size: 11px;
+}
+.plugin-editor-extension-stats > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.plugin-editor-extension-stats svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
 .plugin-editor-extensions-header {
   display: flex;
   align-items: center;

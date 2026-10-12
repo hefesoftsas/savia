@@ -13,6 +13,54 @@ import type { PluginEditorExtensionClient } from "../plugin-editor-extension-cli
 
 afterEach(cleanup);
 
+it("shows localized marketplace ratings and download counts without inventing missing metrics", async () => {
+  const item = {
+    publisher: "Acme",
+    name: "rated",
+    version: "1.2.3",
+    displayName: "Rated extension",
+    description: null,
+    license: null,
+  };
+  const client = {
+    search: vi.fn().mockResolvedValue({
+      results: [
+        { ...item, averageRating: 4.75, reviewCount: 12, downloadCount: 12345 },
+        {
+          ...item,
+          name: "unrated",
+          displayName: "Unrated extension",
+          averageRating: null,
+          reviewCount: 0,
+          downloadCount: 0,
+        },
+        { ...item, name: "unknown", displayName: "Unknown metrics" },
+      ],
+      nextOffset: null,
+      totalSize: 3,
+      offset: 0,
+    }),
+    list: vi.fn().mockResolvedValue([]),
+  } as unknown as PluginEditorExtensionClient;
+  render(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+      runtimeAvailable
+    />,
+    { locale: "es" },
+  );
+  expect(
+    await screen.findByLabelText("Valoración: 4,8 de 5 · 12 reseñas"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("12.345 descargas")).toBeInTheDocument();
+  expect(screen.getByText("Sin valoraciones")).toBeInTheDocument();
+  expect(screen.getByText("0 descargas")).toBeInTheDocument();
+  expect(screen.getByText("Valoración no disponible")).toBeInTheDocument();
+  expect(screen.getByText("Descargas no disponibles")).toBeInTheDocument();
+});
+
 it("filters the verified catalog and enables then disables an extension by ID", () => {
   const onChange = vi.fn();
   const { rerender } = render(

@@ -9,8 +9,8 @@ import {
   type KeyboardEvent,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { useMessages } from "@/i18n/core";
-import { Search, Upload } from "lucide-react";
+import { useAppLocale, useMessages } from "@/i18n/core";
+import { Download, Search, Star, Upload } from "lucide-react";
 import { EDITOR_EXTENSION_LIMITS } from "@savia/studio-shared/plugin-editor-extensions";
 import { pluginEditorExtensionsMessages as messages } from "./plugin-editor-extensions-messages";
 import {
@@ -52,6 +52,52 @@ export const pluginEditorExtensionsCatalog: PluginEditorExtension[] = [
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function MarketplacePopularity({ item }: { item: MarketplaceExtension }) {
+  const t = useMessages(messages);
+  const locale = useAppLocale();
+  const countFormat = new Intl.NumberFormat(locale);
+  const rating = item.reviewCount === 0 ? null : item.averageRating;
+  const ratingValue =
+    rating == null
+      ? null
+      : new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
+          rating,
+        );
+  const reviews =
+    item.reviewCount == null
+      ? null
+      : item.reviewCount === 1
+        ? t("review")
+        : t("reviews", { count: countFormat.format(item.reviewCount) });
+  const ratingLabel =
+    ratingValue == null
+      ? t(item.reviewCount === 0 ? "noRatings" : "ratingUnavailable")
+      : `${t("rating", { rating: ratingValue })}${reviews ? ` · ${reviews}` : ""}`;
+  return (
+    <div className="plugin-editor-extension-stats">
+      <span aria-label={ratingLabel} title={ratingLabel}>
+        <Star aria-hidden="true" />
+        {ratingValue == null ? (
+          ratingLabel
+        ) : (
+          <>
+            {ratingValue}
+            {reviews ? ` (${countFormat.format(item.reviewCount!)})` : ""}
+          </>
+        )}
+      </span>
+      <span>
+        <Download aria-hidden="true" />
+        {item.downloadCount == null
+          ? t("downloadsUnavailable")
+          : item.downloadCount === 1
+            ? t("download")
+            : t("downloads", { count: countFormat.format(item.downloadCount) })}
+      </span>
+    </div>
+  );
 }
 
 function sameExtension(
@@ -798,6 +844,7 @@ export function PluginEditorExtensionsPanel({
                       {item.publisher} · {t("version")} {item.version}
                     </span>
                   </p>
+                  <MarketplacePopularity item={item} />
                   {item.description && (
                     <p className="plugin-editor-extension-description">
                       {item.description}

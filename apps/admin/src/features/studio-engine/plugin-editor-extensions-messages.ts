@@ -1,5 +1,25 @@
 export const pluginEditorExtensionsMessages = {
   title: ["Extensiones", "Extensions", "Extensões"],
+  rating: [
+    "Valoración: %{rating} de 5",
+    "Rating: %{rating} out of 5",
+    "Avaliação: %{rating} de 5",
+  ],
+  review: ["1 reseña", "1 review", "1 avaliação"],
+  reviews: ["%{count} reseñas", "%{count} reviews", "%{count} avaliações"],
+  noRatings: ["Sin valoraciones", "No ratings", "Sem avaliações"],
+  ratingUnavailable: [
+    "Valoración no disponible",
+    "Rating unavailable",
+    "Avaliação indisponível",
+  ],
+  downloads: ["%{count} descargas", "%{count} downloads", "%{count} downloads"],
+  download: ["1 descarga", "1 download", "1 download"],
+  downloadsUnavailable: [
+    "Descargas no disponibles",
+    "Downloads unavailable",
+    "Downloads indisponíveis",
+  ],
   search: ["Buscar extensiones", "Search extensions", "Buscar extensões"],
   searchPlaceholder: [
     "Buscar por nombre o función",

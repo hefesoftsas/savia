@@ -402,6 +402,10 @@ runtime is unavailable, but marketplace and VSIX extensions stay disabled.
 
 The Extensions panel opens on popular Open VSX snippet candidates filtered for
 this web editor, rather than the registry's desktop-heavy overall download chart.
+Marketplace cards show Open VSX's
+average star rating, review count, and download count with localized number
+formatting. Download counts are registry downloads, not unique installations;
+missing statistics are shown as unavailable and are not replaced with zero.
 Each candidate's exact-version manifest is checked against the same
 engine, desktop-only, API proposal, and declarative contribution rules used by
 VSIX inspection. Candidates whose manifests cannot be verified are omitted.

@@ -12,6 +12,9 @@ export type MarketplaceExtension = {
   description: string | null;
   license: string | null;
   targetPlatform?: string | null;
+  averageRating?: number | null;
+  reviewCount?: number | null;
+  downloadCount?: number | null;
 };
 
 export type MarketplaceSearchResponse = {
