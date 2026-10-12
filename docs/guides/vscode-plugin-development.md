@@ -33,7 +33,8 @@ release that is not yet in the workspace, import it through Savia first.
 Choose **Check out latest version for editing** and select an empty folder.
 Checkout reconstructs real nested source files and PNG/WebP bytes. It opens the
 entry file and adds the folder to the workspace. Historical versions open in
-read-only `savia-source:` documents. **Use this version as a base** explicitly
+read-only `savia-source:` documents. Nested paths and filenames with spaces or
+parentheses are preserved. **Use this version as a base** explicitly
 creates a new working copy from an older release; publication still requires a
 version above the current head. Compiled-only legacy releases are inspectable but
 cannot be checked out as authored projects.
@@ -73,7 +74,8 @@ head; it changes only the publication reference.
 
 Before sending, the extension retains `.savia/artifacts/<sha256>.zip` and a
 non-secret attempt/receipt under `.savia/receipts/`. A lost response can be recovered
-with **Recover a pending publication**. Shared publication creates the immutable
+with **Recover a pending publication**. A permission change after local creation
+also retains an uncertain attempt; restore access and recover that same artifact. Shared publication creates the immutable
 workspace release first, then sends those exact bytes using the backend's publisher
 credential. A shared failure reports the retained local release separately. **Retry
 shared-store publication** reuses the original ZIP and metadata, even if newer local

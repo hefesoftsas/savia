@@ -601,3 +601,52 @@ it("rejects an eleventh native release before committing while retaining readabl
     (await loadPluginCheckout(f.db, scope, manifest.id, "1.0.0")).head.version,
   ).toBe("1.0.9");
 });
+
+it("retains local creation when permission is removed before shared publication and safely recovers after restoration", async () => {
+  let checks = 0,
+    puts = 0;
+  const bytes = zip();
+  const registry = {
+    url: "https://registry.test",
+    token: "reader",
+    publishToken: "publisher",
+  };
+  vi.stubGlobal(
+    "fetch",
+    async (_url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== "PUT")
+        return Response.json({ data: [], cursor: null });
+      puts++;
+      return Response.json({
+        data: {
+          id: manifest.id,
+          version: "1.1.0",
+          label: "Example",
+          sha256: "d".repeat(64),
+          sizeBytes: bytes.length,
+          createdAt: "2026-10-12",
+        },
+        deduped: true,
+      });
+    },
+  );
+  const request = { ...input, destination: "shared" as const };
+  await expect(
+    publishPluginDevelopment(
+      f.db,
+      { ...scope, canManageExtension: () => ++checks <= 2 },
+      request,
+      bytes,
+      { pluginRegistry: registry },
+    ),
+  ).rejects.toMatchObject({ status: 403 });
+  expect(await versions()).toEqual(["1.0.0", "1.1.0"]);
+  expect(puts).toBe(0);
+  const result = await publishPluginDevelopment(f.db, scope, request, bytes, {
+    pluginRegistry: registry,
+  });
+  expect(result.state).toBe("published");
+  expect(result.local.sha256).toBe(await sha256Hex(bytes));
+  expect(await versions()).toEqual(["1.0.0", "1.1.0"]);
+  expect(puts).toBe(1);
+});

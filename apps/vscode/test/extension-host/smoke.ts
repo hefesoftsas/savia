@@ -97,6 +97,18 @@ export async function run() {
     ReturnType<typeof activate>
   >;
   await vscode.commands.executeCommand("savia.connect");
+  const special = api.runtime.documents.add(
+    "proof",
+    "custom.host-proof",
+    "1.0.0",
+    {
+      "nested/Button (demo)!.tsx": "export const historical = true;",
+    },
+  )[0];
+  const specialDocument = await vscode.workspace.openTextDocument(
+    vscode.Uri.parse(special.uri),
+  );
+  assert.equal(specialDocument.getText(), "export const historical = true;");
   assert.ok(api.runtime.connections.current);
   const credentialId = api.runtime.connections.current.profile.id;
   assert.ok(

@@ -50,6 +50,7 @@ export async function authoringFixture() {
     reject: 0,
     lost: false,
     sharedPending: false,
+    permissionLostAfterCommit: false,
     onPublish: undefined as
       | undefined
       | ((
@@ -125,6 +126,8 @@ export async function authoringFixture() {
           head: state.head,
           files: parsed.sourceFiles!,
         });
+        if (state.permissionLostAfterCommit)
+          return new Response(null, { status: 403 });
         if (state.lost) {
           state.lost = false;
           throw new Error("Lost response");
