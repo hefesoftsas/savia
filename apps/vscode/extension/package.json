@@ -25,5 +25,138 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/hefesoftsas/savia"
+  },
+  "activationEvents": [
+    "onView:savia.plugins"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "savia.connect",
+        "title": "%command.connect%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.disconnect",
+        "title": "%command.disconnect%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.refresh",
+        "title": "%command.refresh%",
+        "category": "Savia",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "savia.checkout",
+        "title": "%command.checkout%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.useVersionAsBase",
+        "title": "%command.useVersionAsBase%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.inspectVersion",
+        "title": "%command.inspectVersion%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.comparePublished",
+        "title": "%command.comparePublished%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.build",
+        "title": "%command.build%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.publish",
+        "title": "%command.publish%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.retrySharedPublication",
+        "title": "%command.retrySharedPublication%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.recoverPublication",
+        "title": "%command.recoverPublication%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.updatePublicationBase",
+        "title": "%command.updatePublicationBase%",
+        "category": "Savia"
+      },
+      {
+        "command": "savia.openInSavia",
+        "title": "%command.openInSavia%",
+        "category": "Savia"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "savia",
+          "title": "Savia",
+          "icon": "media/savia.svg"
+        }
+      ]
+    },
+    "views": {
+      "savia": [
+        {
+          "id": "savia.plugins",
+          "name": "%view.plugins%"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "savia.plugins",
+        "contents": "%view.welcome%",
+        "when": "!savia.connected"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "savia.connect",
+          "when": "view == savia.plugins",
+          "group": "navigation"
+        },
+        {
+          "command": "savia.refresh",
+          "when": "view == savia.plugins && savia.connected",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "savia.checkout",
+          "when": "view == savia.plugins && (viewItem == savia.plugin || viewItem =~ /latest.authored/)",
+          "group": "authoring"
+        },
+        {
+          "command": "savia.useVersionAsBase",
+          "when": "view == savia.plugins && viewItem =~ /savia.version.*.authored/",
+          "group": "authoring"
+        },
+        {
+          "command": "savia.inspectVersion",
+          "when": "view == savia.plugins && viewItem =~ /savia.version/",
+          "group": "inspect"
+        },
+        {
+          "command": "savia.comparePublished",
+          "when": "view == savia.plugins && viewItem =~ /savia.version/",
+          "group": "inspect"
+        }
+      ]
+    }
   }
 }

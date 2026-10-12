@@ -30,7 +30,7 @@ const metadata = [
   "store.json",
   "preview.json",
 ] as const;
-export async function readLocalProject(
+export async function readProjectDescriptor(
   rootUri: ProjectRoot,
   profile: ConnectionProfile,
 ) {
@@ -43,6 +43,14 @@ export async function readLocalProject(
     descriptor.tenantId !== profile.tenantId
   )
     throw new Error("The project does not match the selected connection.");
+  return descriptor;
+}
+export async function readLocalProject(
+  rootUri: ProjectRoot,
+  profile: ConnectionProfile,
+) {
+  const { path: root } = await resolveProjectRoot(rootUri);
+  const descriptor = await readProjectDescriptor(rootUri, profile);
   const baseline = baselineSchema.parse(
     JSON.parse(
       decode(
