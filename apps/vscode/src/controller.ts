@@ -81,7 +81,12 @@ export interface AuthoringUi {
   chooseFolder(): PromiseLike<ProjectRoot | undefined>;
   openFile(root: ProjectRoot, path: string): PromiseLike<void>;
   openVirtual(uri: string): PromiseLike<void>;
-  showDiff(uri: string, localPath: string, title: string): PromiseLike<void>;
+  showDiff(
+    uri: string,
+    localPath: string,
+    title: string,
+    root?: ProjectRoot,
+  ): PromiseLike<void>;
   chooseAttempt(
     attempts: PublicationAttempt[],
   ): PromiseLike<string | undefined>;
@@ -548,6 +553,7 @@ export class AuthoringController {
         source.uri,
         join(root.fsPath, ...source.path.split("/")),
         `${remote.pluginId}@${remote.sourceVersion} ↔ ${source.path}`,
+        root,
       );
   }
   async rebase() {

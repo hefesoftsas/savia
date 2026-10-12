@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import { join } from "node:path";
 import * as vscode from "vscode";
 import { createAuthoringRuntime } from "../../src/extension";
+import { comparisonUri } from "../../src/native-ui";
 import type { AuthoringUi } from "../../src/controller";
 let active: ReturnType<typeof createAuthoringRuntime> | undefined;
 export async function activate(context: vscode.ExtensionContext) {
@@ -81,6 +82,13 @@ export function deactivate() {
   active?.dispose();
 }
 export async function run() {
+  const remote = vscode.Uri.parse(
+    "vscode-remote://ssh-remote+proof/workspace/plugin",
+  );
+  const target = comparisonUri(remote, "/workspace/plugin/src/entry.tsx");
+  assert.equal(target.scheme, "vscode-remote");
+  assert.equal(target.authority, remote.authority);
+  assert.equal(target.path, "/workspace/plugin/src/entry.tsx");
   const extension = vscode.extensions.getExtension(
     "savia.savia-plugin-authoring",
   );

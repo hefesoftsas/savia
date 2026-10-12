@@ -582,3 +582,22 @@ it("rolls back when selected source bytes change after preflight", async () => {
   expect(changed).toBe(true);
   expect(await versions()).toEqual(["1.0.0"]);
 });
+
+it("rejects an eleventh native release before committing while retaining readable history", async () => {
+  for (let n = 1; n < 10; n++)
+    await seedDevelopmentArtifact(f.db, scope.tenantId, `1.0.${n}`);
+  const checkout = await loadPluginCheckout(f.db, scope, manifest.id, "1.0.0");
+  await expect(
+    publishPluginDevelopment(
+      f.db,
+      scope,
+      { ...input, expectedHead: checkout.head },
+      zip(),
+      fullAccess,
+    ),
+  ).rejects.toMatchObject({ status: 409 });
+  expect(await versions()).toHaveLength(10);
+  expect(
+    (await loadPluginCheckout(f.db, scope, manifest.id, "1.0.0")).head.version,
+  ).toBe("1.0.9");
+});

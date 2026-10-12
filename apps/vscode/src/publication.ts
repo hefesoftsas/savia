@@ -202,7 +202,7 @@ export async function recoverPublication(
   const metadata = {
     ...attempt.input,
     mode:
-      attempt.input.destination === "shared"
+      attempt.input.destination === "shared" && attempt.receipt
         ? ("retry-shared" as const)
         : ("create" as const),
   };

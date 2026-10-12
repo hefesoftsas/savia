@@ -74,7 +74,19 @@ export class PluginDevelopmentClient {
     const cancel = () => controller.abort();
     signal?.addEventListener("abort", cancel, { once: true });
     if (signal?.aborted) controller.abort();
-    const timeout = setTimeout(cancel, 30_000);
+    let timedOut = false;
+    const cancellation = () =>
+      new PluginDevelopmentError(
+        0,
+        timedOut ? "REQUEST_TIMEOUT" : "CANCELLED",
+        timedOut
+          ? "The Savia request timed out. Its outcome is unconfirmed; recover the retained publication before retrying."
+          : "The request was cancelled.",
+      );
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      cancel();
+    }, 30_000);
     try {
       const token = await this.tokenProvider();
       this.assertActive();
@@ -101,21 +113,15 @@ export class PluginDevelopmentClient {
         });
       } catch {
         this.assertActive();
+        if (controller.signal.aborted) throw cancellation();
         throw new PluginDevelopmentError(
           0,
-          controller.signal.aborted ? "CANCELLED" : "NETWORK_ERROR",
-          controller.signal.aborted
-            ? "The request was cancelled."
-            : "The Savia request could not be confirmed. Retain your files and retry.",
+          "NETWORK_ERROR",
+          "The Savia request could not be confirmed. Retain your files and retry.",
         );
       }
       this.assertActive();
-      if (controller.signal.aborted)
-        throw new PluginDevelopmentError(
-          0,
-          "CANCELLED",
-          "The request was cancelled.",
-        );
+      if (controller.signal.aborted) throw cancellation();
       if (
         response.redirected ||
         (response.url &&
@@ -161,8 +167,7 @@ export class PluginDevelopmentClient {
         while (true) {
           const { done, value } = await reader.read();
           this.assertActive();
-          if (controller.signal.aborted)
-            throw new Error("The connection request was cancelled.");
+          if (controller.signal.aborted) throw cancellation();
           if (done) break;
           length += value.length;
           if (length > limit) {

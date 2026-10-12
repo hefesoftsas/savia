@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { PluginDevelopmentClient, PluginDevelopmentError } from "../src/client";
 const profile = {
   id: "profile",
@@ -215,4 +215,26 @@ it("preserves a valid partial receipt and refuses another publication's receipt"
   expect(await client.publish(input, bytes)).toEqual(receipt);
   reply = { ...receipt, local: { ...receipt.local, pluginId: "custom.other" } };
   await expect(client.publish(input, bytes)).rejects.toThrow("coordinate");
+});
+
+it("distinguishes request timeout from explicit cancellation for actionable recovery", async () => {
+  vi.useFakeTimers();
+  const client = new PluginDevelopmentClient(
+    profile,
+    async () => "secret",
+    async (_url, init) =>
+      new Promise((_resolve, reject) =>
+        init!.signal!.addEventListener("abort", () =>
+          reject(new Error("aborted")),
+        ),
+      ),
+  );
+  try {
+    const pending = client.capabilities().catch((error) => error);
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(await pending).toMatchObject({ code: "REQUEST_TIMEOUT", status: 0 });
+  } finally {
+    client.dispose();
+    vi.useRealTimers();
+  }
 });

@@ -12,6 +12,8 @@ import { localeFor, translator } from "./i18n";
 const t = translator(localeFor(vscode.env.language));
 export const uriForRoot = (root: ProjectRoot): vscode.Uri =>
   "with" in root ? (root as vscode.Uri) : vscode.Uri.file(root.fsPath);
+export const comparisonUri = (root: ProjectRoot, path: string): vscode.Uri =>
+  uriForRoot(root).with({ path: vscode.Uri.file(path).path });
 export type ConnectionSelection =
   | { kind: "saved"; profile: ConnectionProfile }
   | { kind: "new"; origin: string; tenantId: number; token: string };
@@ -239,11 +241,11 @@ export function createNativeUi(
         preview: false,
       });
     },
-    async showDiff(uri, path, title) {
+    async showDiff(uri, path, title, root) {
       await vscode.commands.executeCommand(
         "vscode.diff",
         vscode.Uri.parse(uri),
-        vscode.Uri.file(path),
+        root ? comparisonUri(root, path) : vscode.Uri.file(path),
         title,
       );
     },

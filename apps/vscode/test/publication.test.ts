@@ -217,3 +217,27 @@ it("keeps gateway and server errors recoverable from the exact retained artifact
   expect(result.receipt.state).toBe("published");
   expect(f!.state.posts[1].bytes).toEqual(publication!.zipBytes);
 });
+
+it("retries uncertain shared creation even when the first request never persisted locally", async () => {
+  const publication = await prepared("shared");
+  f!.state.onPublish = async () => {
+    throw new Error("Request never arrived");
+  };
+  await expect(
+    publishPrepared(publication!, f!.connection.client, {
+      isTrusted: () => true,
+      isCurrent: () => true,
+    }),
+  ).rejects.toThrow();
+  expect(f!.state.head.version).toBe("1.0.0");
+  f!.state.onPublish = undefined;
+  await recoverPublication(
+    f!.uri,
+    f!.connection.profile,
+    publication!.sha256,
+    f!.connection.client,
+    { isTrusted: () => true, isCurrent: () => true },
+  );
+  expect(f!.state.posts[1].metadata.mode).toBe("create");
+  expect(f!.state.posts[1].bytes).toEqual(publication!.zipBytes);
+});
