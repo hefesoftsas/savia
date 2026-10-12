@@ -41,6 +41,7 @@ import {
 } from "./store-connections";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
 import { isReadAccessDenied } from "@/queries/read-state";
+import { PluginVscodeGuide } from "./plugin-vscode-guide";
 
 const deletionMessages = {
   version: ["Eliminar versión", "Delete version", "Excluir versão"],
@@ -403,6 +404,7 @@ export default function PluginStoreManager({
   return (
     <section aria-label={t("Mis plugins")} className="space-y-5">
       <RemoteChangesNotice {...remoteChanges} />
+      <PluginVscodeGuide tenantId={getStudioRuntime().tenantId} />
       <PluginRegistry
         key={getStudioRuntime().tenantId}
         onImported={async () => {

@@ -225,6 +225,12 @@ jobs:
         env:
           PLUGIN_EDITOR_DEPLOYMENT_URL: ${{ steps.plugin_editor.outputs.deployment-url }}
 
+      - name: Build VS Code extension download
+        run: >-
+          pnpm --filter @savia/vscode build &&
+          pnpm --filter @savia/vscode package &&
+          node scripts/prepare-vscode-download.mjs
+
       - name: Build admin assets
         run: pnpm --filter @savia/admin run build:assets
         env:
