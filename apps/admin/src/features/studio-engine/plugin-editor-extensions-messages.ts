@@ -35,6 +35,11 @@ export const pluginEditorExtensionsMessages = {
     "Carregando extensões…",
   ],
   marketplace: ["Marketplace", "Marketplace", "Marketplace"],
+  marketplacePopular: [
+    "Fragmentos de código populares",
+    "Popular snippets",
+    "Trechos de código populares",
+  ],
   marketplaceScope: [
     "Extensiones filtradas para ser compatibles con este editor web. Inspecciona una versión para verificar el paquete completo antes de instalar.",
     "Extensions filtered for compatibility with this web editor. Inspect a version to verify the complete package before installing.",

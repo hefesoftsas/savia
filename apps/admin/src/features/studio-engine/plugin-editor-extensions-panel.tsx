@@ -731,6 +731,11 @@ export function PluginEditorExtensionsPanel({
             aria-labelledby={`${id}-marketplace-tab`}
             tabIndex={0}
           >
+            {!query.trim() && (
+              <h3 className="plugin-editor-extensions-empty font-semibold">
+                {t("marketplacePopular")}
+              </h3>
+            )}
             <p className="plugin-editor-extensions-empty">
               {t("marketplaceScope")}
             </p>

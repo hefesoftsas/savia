@@ -22,8 +22,9 @@ function extensionMetadata(publisher: string, name: string, version: string) {
     displayName: name,
     description: "Example extension",
     license: "MIT",
+    targetPlatform: "universal",
     files: {
-      download: `https://open-vsx.org/api/${publisher}/${name}/${version}/file/download`,
+      download: `https://open-vsx.org/api/${publisher}/${name}/universal/${version}/file/download`,
     },
   };
 }
@@ -67,11 +68,11 @@ describe("Open VSX marketplace client", () => {
         });
       }
       const manifestName = url.pathname.match(
-        /\/api\/Acme\/([^/]+)\/1\.2\.3\/file\/package\.json$/,
+        /\/api\/Acme\/([^/]+)\/universal\/1\.2\.3\/file\/package\.json$/,
       )?.[1];
       if (manifestName) return json(webManifest("Acme", manifestName, "1.2.3"));
       const versionName = url.pathname.match(
-        /\/api\/Acme\/([^/]+)\/1\.2\.3$/,
+        /\/api\/Acme\/([^/]+)\/universal\/1\.2\.3$/,
       )?.[1];
       if (versionName)
         return json(extensionMetadata("Acme", versionName, "1.2.3"));
@@ -85,12 +86,12 @@ describe("Open VSX marketplace client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(41);
   });
 
-  it("browses popular extensions without a query and preserves the requested offset", async () => {
+  it("browses popular snippets without a user query and preserves the requested offset", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       expect(url.origin).toBe("https://open-vsx.org");
       expect(url.pathname).toBe("/api/-/search");
-      expect(url.searchParams.has("query")).toBe(false);
+      expect(url.searchParams.get("query")).toBe("snippets");
       expect(url.searchParams.get("sortBy")).toBe("downloadCount");
       expect(url.searchParams.get("sortOrder")).toBe("desc");
       expect(url.searchParams.get("offset")).toBe("20");
@@ -103,6 +104,36 @@ describe("Open VSX marketplace client", () => {
       results: [],
       offset: 20,
       totalSize: 40,
+      nextOffset: null,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not expose a native build from the default snippets browse", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/-/search") {
+        expect(url.searchParams.get("query")).toBe("snippets");
+        return json({
+          totalSize: 1,
+          extensions: [
+            {
+              ...extensionMetadata("Acme", "native-snippets", "1.0.0"),
+              files: {
+                download:
+                  "https://open-vsx.org/api/Acme/native-snippets/alpine-arm64/1.0.0/file/native.vsix",
+              },
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchOpenVsx("", 0)).resolves.toMatchObject({
+      results: [],
+      totalSize: 1,
       nextOffset: null,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -129,7 +160,7 @@ describe("Open VSX marketplace client", () => {
         if (url.pathname === "/api/-/search")
           return json({ totalSize: 87, extensions: entries });
         const versionName = url.pathname.match(
-          /\/api\/Acme\/([^/]+)\/1\.2\.3$/,
+          /\/api\/Acme\/([^/]+)\/universal\/1\.2\.3$/,
         )?.[1];
         if (versionName)
           return json({
@@ -139,7 +170,7 @@ describe("Open VSX marketplace client", () => {
               : {}),
           });
         const manifestName = url.pathname.match(
-          /\/api\/Acme\/([^/]+)\/1\.2\.3\/file\/package\.json$/,
+          /\/api\/Acme\/([^/]+)\/universal\/1\.2\.3\/file\/package\.json$/,
         )?.[1];
         if (manifestName === "unknown")
           return new Response(null, { status: 404 });
@@ -213,6 +244,136 @@ describe("Open VSX marketplace client", () => {
       }),
     ).rejects.toThrow("untrusted origin");
     expect(redirectFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an explicitly selected web build through exact metadata and manifest lookup", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/Acme/editor/web/1.2.3")
+        return json({
+          namespace: "Acme",
+          name: "editor",
+          version: "1.2.3",
+          targetPlatform: "web",
+          files: {
+            download:
+              "https://open-vsx.org/api/Acme/editor/web/1.2.3/file/editor-web.vsix",
+          },
+        });
+      if (url.pathname === "/api/Acme/editor/web/1.2.3/file/package.json")
+        return json(webManifest("Acme", "editor", "1.2.3"));
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const metadata = await getOpenVsxVersion(
+      "Acme",
+      "editor",
+      "1.2.3",
+      openVsxRequestDeadline(),
+      "web",
+    );
+    await expect(
+      getOpenVsxManifest(metadata, "1.138.0", openVsxRequestDeadline()),
+    ).resolves.toMatchObject({ version: "1.2.3" });
+    expect(metadata.targetPlatform).toBe("web");
+    expect(
+      fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname),
+    ).toEqual([
+      "/api/Acme/editor/web/1.2.3",
+      "/api/Acme/editor/web/1.2.3/file/package.json",
+    ]);
+  });
+
+  it("qualifies universal metadata and manifest requests to preserve build identity", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/Acme/editor/universal/1.2.3")
+        return json({
+          namespace: "Acme",
+          name: "editor",
+          version: "1.2.3",
+          targetPlatform: "universal",
+          files: {
+            download:
+              "https://open-vsx.org/api/Acme/editor/universal/1.2.3/file/editor.vsix",
+          },
+        });
+      if (url.pathname === "/api/Acme/editor/universal/1.2.3/file/package.json")
+        return json(webManifest("Acme", "editor", "1.2.3"));
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const metadata = await getOpenVsxVersion(
+      "Acme",
+      "editor",
+      "1.2.3",
+      openVsxRequestDeadline(),
+      "universal",
+    );
+    await getOpenVsxManifest(metadata, "1.138.0", openVsxRequestDeadline());
+
+    expect(metadata.targetPlatform).toBe("universal");
+    expect(
+      fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname),
+    ).toEqual([
+      "/api/Acme/editor/universal/1.2.3",
+      "/api/Acme/editor/universal/1.2.3/file/package.json",
+    ]);
+  });
+
+  it("rejects a mismatched build returned for a platform-qualified lookup", async () => {
+    const fetchMock = vi.fn(async () =>
+      json({
+        namespace: "Acme",
+        name: "editor",
+        version: "1.2.3",
+        targetPlatform: "alpine-arm64",
+        files: {
+          download:
+            "https://open-vsx.org/api/Acme/editor/alpine-arm64/1.2.3/file/editor.vsix",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      getOpenVsxVersion(
+        "Acme",
+        "editor",
+        "1.2.3",
+        openVsxRequestDeadline(),
+        "web",
+      ),
+    ).rejects.toThrow(/returned the alpine-arm64 build/i);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/api/Acme/editor/web/1.2.3",
+    );
+  });
+
+  it("rejects a selected build whose download URL changes package coordinates", async () => {
+    const fetchMock = vi.fn(async () =>
+      json({
+        namespace: "Acme",
+        name: "editor",
+        version: "1.2.3",
+        targetPlatform: "web",
+        files: {
+          download:
+            "https://open-vsx.org/api/Other/editor/web/1.2.3/file/editor.vsix",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      getOpenVsxVersion(
+        "Acme",
+        "editor",
+        "1.2.3",
+        openVsxRequestDeadline(),
+        "web",
+      ),
+    ).rejects.toThrow(/coordinates/i);
   });
 
   it("loads bounded package manifests through the official CDN and rejects mismatched coordinates", async () => {

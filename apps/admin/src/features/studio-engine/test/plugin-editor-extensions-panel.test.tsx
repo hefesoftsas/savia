@@ -107,6 +107,7 @@ it("explains filtered Marketplace candidates and keeps paging across empty filte
     />,
     { locale: "en" },
   );
+  expect(screen.getByText("Popular snippets")).toBeInTheDocument();
 
   expect(
     await screen.findByText(/filtered for compatibility with this web editor/i),

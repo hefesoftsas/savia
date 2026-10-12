@@ -163,7 +163,7 @@ describe("scoped editor extension installation API", () => {
 
     expect(requests).toHaveLength(3);
     for (const url of requests.slice(0, 2)) {
-      expect(url.searchParams.has("query")).toBe(false);
+      expect(url.searchParams.get("query")).toBe("snippets");
       expect(url.searchParams.get("sortBy")).toBe("downloadCount");
       expect(url.searchParams.get("sortOrder")).toBe("desc");
     }
@@ -182,6 +182,104 @@ describe("scoped editor extension installation API", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("keeps a web build pinned through marketplace search, exact lookup, manifest, and inspection", async () => {
+    const requests: URL[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      if (url.pathname === "/api/-/search")
+        return new Response(
+          JSON.stringify({
+            totalSize: 1,
+            extensions: [
+              {
+                namespace: "Acme",
+                name: "example",
+                version: "1.0.0",
+                displayName: "Example",
+                files: {
+                  download:
+                    "https://open-vsx.org/api/Acme/example/web/1.0.0/file/example-web.vsix",
+                },
+              },
+            ],
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      if (url.pathname === "/api/Acme/example/web/1.0.0")
+        return new Response(
+          JSON.stringify({
+            namespace: "Acme",
+            name: "example",
+            version: "1.0.0",
+            targetPlatform: "web",
+            files: {
+              download:
+                "https://open-vsx.org/api/Acme/example/web/1.0.0/file/example-web.vsix",
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      if (url.pathname === "/api/Acme/example/web/1.0.0/file/package.json")
+        return new Response(
+          JSON.stringify({
+            publisher: "Acme",
+            name: "example",
+            version: "1.0.0",
+            engines: { vscode: "^1.138.0" },
+            browser: "browser.js",
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      if (url.pathname === "/api/Acme/example/web/1.0.0/file/example-web.vsix")
+        return new Response(vsix());
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const listed = await req(
+      "web-build-user",
+      "/api/plugin-editor-extensions/marketplace?q=example",
+    );
+    expect(listed.response.status).toBe(200);
+    expect(listed.body.results).toMatchObject([
+      { publisher: "Acme", name: "example", targetPlatform: "web" },
+    ]);
+
+    const details = await req(
+      "web-build-user",
+      "/api/plugin-editor-extensions/marketplace/Acme/example/1.0.0?targetPlatform=web",
+    );
+    expect(details.response.status).toBe(200);
+    expect(details.body.targetPlatform).toBe("web");
+
+    const inspected = await req(
+      "web-build-user",
+      "/api/plugin-editor-extensions/inspect",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          source: "open-vsx",
+          publisher: "Acme",
+          name: "example",
+          version: "1.0.0",
+          targetPlatform: "web",
+        }),
+      },
+    );
+    expect(inspected.response.status).toBe(201);
+    expect(inspected.body.metadata.id).toBe("acme.example");
+    expect(requests.map(({ pathname }) => pathname)).toContain(
+      "/api/Acme/example/web/1.0.0/file/example-web.vsix",
+    );
+    expect(
+      requests.filter(({ pathname }) =>
+        pathname.startsWith("/api/Acme/example/web/1.0.0"),
+      ).length,
+    ).toBeGreaterThanOrEqual(5);
+  });
+
   it("rejects native Open VSX targets and incompatible manifests before downloading a VSIX", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
@@ -192,7 +290,9 @@ describe("scoped editor extension installation API", () => {
               namespace: "Acme",
               name: "native",
               version: "1.2.3",
-              files: { download: "/api/Acme/native/1.2.3/file/download" },
+              files: {
+                download: "/api/Acme/native/alpine-arm64/1.2.3/file/download",
+              },
             },
             targetPlatform: "alpine-arm64",
           }),
@@ -240,6 +340,27 @@ describe("scoped editor extension installation API", () => {
     const native = await inspect("Acme", "native");
     expect(native.response.status).toBe(422);
     expect(new TextDecoder().decode(native.body)).toMatch(/platform|web/i);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const invalidPlatform = await req(
+      "preflight-user",
+      "/api/plugin-editor-extensions/inspect",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          source: "open-vsx",
+          publisher: "Acme",
+          name: "native",
+          version: "1.2.3",
+          targetPlatform: "alpine-arm64",
+        }),
+      },
+    );
+    expect(invalidPlatform.response.status).toBe(400);
+    expect(new TextDecoder().decode(invalidPlatform.body)).toMatch(
+      /web|universal/i,
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const incompatible = await inspect("Acme", "incompatible");

@@ -49,10 +49,35 @@ export type OpenVsxExtension = {
   targetPlatform?: string | null;
 };
 
-export type MarketplaceSearchResult = Omit<
-  OpenVsxExtension,
-  "downloadUrl" | "targetPlatform"
->;
+export type MarketplaceSearchResult = Omit<OpenVsxExtension, "downloadUrl">;
+export type OpenVsxTargetPlatform = "web" | "universal";
+
+function downloadTargetPlatform(
+  url: URL,
+  publisher: string,
+  name: string,
+  version: string,
+): string | null {
+  const parts = url.pathname.split("/").filter(Boolean);
+  const apiIndex = parts.indexOf("api");
+  if (
+    apiIndex < 0 ||
+    parts[apiIndex + 1]?.toLowerCase() !== publisher.toLowerCase() ||
+    parts[apiIndex + 2]?.toLowerCase() !== name.toLowerCase()
+  )
+    return "";
+  if (
+    parts[apiIndex + 3] === version &&
+    parts[apiIndex + 4] === "file"
+  )
+    return "universal";
+  if (
+    parts[apiIndex + 4] === version &&
+    parts[apiIndex + 5] === "file"
+  )
+    return parts[apiIndex + 3] ?? "";
+  return "";
+}
 
 function boundedString(value: unknown, max: number): string | null {
   return typeof value === "string" && value.trim().length > 0
@@ -171,7 +196,7 @@ function mapExtension(value: unknown): OpenVsxExtension | null {
   const publisher = boundedString(item.namespace ?? item.publisher, 100);
   const name = boundedString(item.name, 100);
   const version = boundedString(item.version, 100);
-  const targetPlatform =
+  const reportedTargetPlatform =
     item.targetPlatform === undefined || item.targetPlatform === null
       ? null
       : typeof item.targetPlatform === "string"
@@ -205,6 +230,21 @@ function mapExtension(value: unknown): OpenVsxExtension | null {
   }
   if (parsed.origin !== OPEN_VSX_ORIGIN || parsed.username || parsed.password)
     return null;
+  const urlTargetPlatform = downloadTargetPlatform(
+    parsed,
+    publisher,
+    name,
+    version,
+  );
+  if (urlTargetPlatform === "") return null;
+  if (
+    reportedTargetPlatform !== null &&
+    urlTargetPlatform !== null &&
+    reportedTargetPlatform.toLowerCase() !== urlTargetPlatform.toLowerCase()
+  )
+    return null;
+  const targetPlatform = reportedTargetPlatform ?? urlTargetPlatform;
+  if (targetPlatform === "") return null;
   return {
     publisher,
     name,
@@ -227,6 +267,17 @@ function assertWebTarget(metadata: OpenVsxExtension): void {
     throw new OpenVsxPreflightError(
       "This Open VSX build has an unknown target platform; only universal or web extensions are supported in the browser editor.",
     );
+}
+
+function validateRequestedTarget(
+  metadata: OpenVsxExtension,
+  requested?: OpenVsxTargetPlatform,
+): void {
+  if (requested && metadata.targetPlatform?.toLowerCase() !== requested)
+    throw new OpenVsxPreflightError(
+      `Open VSX returned the ${metadata.targetPlatform ?? "unknown"} build when the ${requested} build was requested.`,
+    );
+  assertWebTarget(metadata);
 }
 
 function preflightMessage(reason: string, runtimeVersion: string): string {
@@ -302,6 +353,7 @@ export async function searchOpenVsx(
   if (q) {
     url.searchParams.set("query", q);
   } else {
+    url.searchParams.set("query", "snippets");
     url.searchParams.set("sortBy", "downloadCount");
     url.searchParams.set("sortOrder", "desc");
   }
@@ -334,13 +386,13 @@ export async function searchOpenVsx(
           candidate.name,
           candidate.version,
           deadline,
+          candidate.targetPlatform === "web" ||
+            candidate.targetPlatform === "universal"
+            ? candidate.targetPlatform
+            : undefined,
         );
         await getOpenVsxManifest(metadata, runtimeVersion, deadline);
-        const {
-          downloadUrl: _downloadUrl,
-          targetPlatform: _targetPlatform,
-          ...result
-        } = metadata;
+        const { downloadUrl: _downloadUrl, ...result } = metadata;
         compatibleResults[index] = result;
       } catch {
         // Discovery is best effort per candidate; one registry failure should
@@ -374,11 +426,13 @@ export async function getOpenVsxVersion(
   name: string,
   version: string,
   deadline = openVsxRequestDeadline(),
+  targetPlatform?: OpenVsxTargetPlatform,
 ): Promise<OpenVsxExtension> {
   if (![publisher, name, version].every(safeCoordinate))
     throw new Error("Invalid Open VSX extension coordinates.");
+  const platformPath = targetPlatform ? `${targetPlatform}/` : "";
   const url = new URL(
-    `/api/${encodeURIComponent(publisher)}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+    `/api/${encodeURIComponent(publisher)}/${encodeURIComponent(name)}/${platformPath}${encodeURIComponent(version)}`,
     OPEN_VSX_ORIGIN,
   );
   const metadata = mapExtension(
@@ -395,7 +449,7 @@ export async function getOpenVsxVersion(
     throw new Error(
       "Open VSX version metadata did not match the requested coordinates.",
     );
-  assertWebTarget(metadata);
+  validateRequestedTarget(metadata, targetPlatform);
   return metadata;
 }
 

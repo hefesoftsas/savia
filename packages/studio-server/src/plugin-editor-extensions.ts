@@ -29,6 +29,7 @@ const openVsxInspectSchema = z
     publisher: z.string().min(1).max(100),
     name: z.string().min(1).max(100),
     version: z.string().min(1).max(100),
+    targetPlatform: z.enum(["web", "universal"]).optional(),
   })
   .strict();
 const installSchema = z.object({ inspectionId: z.string().uuid() }).strict();
@@ -138,16 +139,20 @@ export function registerPluginEditorExtensions(
     async (c) => {
       await requireManager(c, options);
       try {
+        const requestedPlatform = z
+          .enum(["web", "universal"])
+          .optional()
+          .safeParse(c.req.query("targetPlatform"));
+        if (!requestedPlatform.success)
+          return fail("targetPlatform must be web or universal.", 400);
         const item = await getOpenVsxVersion(
           c.req.param("publisher"),
           c.req.param("name"),
           c.req.param("version"),
+          openVsxRequestDeadline(),
+          requestedPlatform.data,
         );
-        const {
-          downloadUrl: _downloadUrl,
-          targetPlatform: _targetPlatform,
-          ...metadata
-        } = item;
+        const { downloadUrl: _downloadUrl, ...metadata } = item;
         return c.json(metadata);
       } catch (error) {
         return mapError(error);
@@ -199,9 +204,16 @@ export function registerPluginEditorExtensions(
         );
         return c.json(inspection, 201);
       }
-      const parsed = openVsxInspectSchema.safeParse(
-        await c.req.json().catch(() => null),
-      );
+      const inspectBody = await c.req.json().catch(() => null);
+      if (
+        inspectBody &&
+        typeof inspectBody === "object" &&
+        "targetPlatform" in inspectBody &&
+        inspectBody.targetPlatform !== "web" &&
+        inspectBody.targetPlatform !== "universal"
+      )
+        return fail("targetPlatform must be web or universal.", 400);
+      const parsed = openVsxInspectSchema.safeParse(inspectBody);
       if (!parsed.success)
         return fail(
           "Open VSX inspection requires publisher, name, and exact version.",
@@ -213,6 +225,7 @@ export function registerPluginEditorExtensions(
         parsed.data.name,
         parsed.data.version,
         deadline,
+        parsed.data.targetPlatform,
       );
       await getOpenVsxManifest(
         metadata,

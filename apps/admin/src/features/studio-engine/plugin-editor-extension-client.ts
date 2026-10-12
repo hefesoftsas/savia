@@ -11,6 +11,7 @@ export type MarketplaceExtension = {
   displayName: string | null;
   description: string | null;
   license: string | null;
+  targetPlatform?: string | null;
 };
 
 export type MarketplaceSearchResponse = {
@@ -111,7 +112,18 @@ export class PluginEditorExtensionClient {
     publisher: string;
     name: string;
     version: string;
+    targetPlatform?: string | null;
   }): Promise<EditorExtensionInspection> {
+    const targetPlatform = input.targetPlatform?.toLowerCase();
+    if (
+      targetPlatform &&
+      targetPlatform !== "web" &&
+      targetPlatform !== "universal"
+    )
+      throw new PluginEditorExtensionClientError(
+        "This Open VSX build targets a desktop platform; only web or universal extensions can be installed in the browser editor.",
+        422,
+      );
     return readJson(
       await this.fetcher(`${apiPath}/inspect`, {
         method: "POST",
@@ -121,6 +133,7 @@ export class PluginEditorExtensionClient {
           publisher: input.publisher,
           name: input.name,
           version: input.version,
+          ...(targetPlatform ? { targetPlatform } : {}),
         }),
       }),
     );
