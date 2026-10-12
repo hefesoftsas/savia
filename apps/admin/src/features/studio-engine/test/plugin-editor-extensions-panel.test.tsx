@@ -73,6 +73,117 @@ it("disables catalog actions and localizes the panel", () => {
   ).toBeDisabled();
 });
 
+it("explains filtered Marketplace candidates and keeps paging across empty filtered pages", async () => {
+  const search = vi
+    .fn()
+    .mockResolvedValueOnce({
+      results: [],
+      offset: 0,
+      totalSize: 60,
+      nextOffset: 20,
+    })
+    .mockResolvedValueOnce({
+      results: [],
+      offset: 20,
+      totalSize: 60,
+      nextOffset: 40,
+    })
+    .mockResolvedValueOnce({
+      results: [],
+      offset: 40,
+      totalSize: 60,
+      nextOffset: null,
+    });
+  const client = {
+    search,
+    list: vi.fn().mockResolvedValue([]),
+  } as unknown as PluginEditorExtensionClient;
+
+  render(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+    />,
+    { locale: "en" },
+  );
+  expect(screen.getByText("Popular snippets")).toBeInTheDocument();
+
+  expect(
+    await screen.findByText(/filtered for compatibility with this web editor/i),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      /inspect a version to verify the complete package before installing/i,
+    ),
+  ).toBeInTheDocument();
+  expect(
+    await screen.findByText(
+      "No candidates are available for this editor on this page.",
+    ),
+  ).toBeInTheDocument();
+  const loadMore = screen.getByRole("button", { name: "Load more" });
+  expect(loadMore).toBeEnabled();
+
+  fireEvent.click(loadMore);
+  await waitFor(() =>
+    expect(search).toHaveBeenLastCalledWith("", 20, expect.any(AbortSignal)),
+  );
+  expect(
+    await screen.findByText(
+      "No candidates are available for this editor on this page.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Load more" })).toBeEnabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await waitFor(() =>
+    expect(search).toHaveBeenLastCalledWith("", 40, expect.any(AbortSignal)),
+  );
+  expect(await screen.findByText("No extensions found.")).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Load more" }),
+  ).not.toBeInTheDocument();
+});
+
+it("does not label Marketplace search results as fully verified before inspection", async () => {
+  const client = {
+    search: vi.fn().mockResolvedValue({
+      results: [
+        {
+          publisher: "Acme",
+          name: "browser-tool",
+          version: "1.0.0",
+          displayName: "Browser tool",
+          description: "A web extension",
+          license: "MIT",
+        },
+      ],
+      offset: 0,
+      totalSize: 1,
+      nextOffset: null,
+    }),
+    list: vi.fn().mockResolvedValue([]),
+  } as unknown as PluginEditorExtensionClient;
+
+  render(
+    <PluginEditorExtensionsPanel
+      enabled={[]}
+      onChange={vi.fn()}
+      client={client}
+    />,
+    { locale: "en" },
+  );
+
+  expect(await screen.findByText("Browser tool")).toBeInTheDocument();
+  expect(
+    screen.queryByText("Compatible with this editor."),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByText(/verify the complete package before installing/i),
+  ).toBeInTheDocument();
+});
+
 const compatibleInspection = {
   inspectionId: "inspection-1",
   metadata: {

@@ -112,6 +112,8 @@ export function PluginEditorExtensionsPanel({
     MarketplaceExtension[]
   >([]);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [lastMarketplacePageEmpty, setLastMarketplacePageEmpty] =
+    useState(false);
   const [inspection, setInspection] =
     useState<EditorExtensionInspection | null>(null);
   const [installed, setInstalled] = useState<InstalledEditorExtension[]>([]);
@@ -184,6 +186,7 @@ export function PluginEditorExtensionsPanel({
     setInspection(null);
     setMarketplaceItems([]);
     setNextOffset(null);
+    setLastMarketplacePageEmpty(false);
     setSearchError("");
   }, [client]);
 
@@ -231,6 +234,7 @@ export function PluginEditorExtensionsPanel({
       if (offset === 0) {
         setMarketplaceItems([]);
         setNextOffset(null);
+        setLastMarketplacePageEmpty(false);
       }
       try {
         const result = await client.search(
@@ -247,6 +251,7 @@ export function PluginEditorExtensionsPanel({
           offset === 0 ? result.results : [...current, ...result.results],
         );
         setNextOffset(result.nextOffset);
+        setLastMarketplacePageEmpty(result.results.length === 0);
       } catch (reason) {
         if (
           !controller.signal.aborted &&
@@ -302,6 +307,7 @@ export function PluginEditorExtensionsPanel({
     setSearchError("");
     setMarketplaceItems([]);
     setNextOffset(null);
+    setLastMarketplacePageEmpty(false);
     setInspection(null);
     setQuery(value);
     if (client) setTab("marketplace");
@@ -725,6 +731,14 @@ export function PluginEditorExtensionsPanel({
             aria-labelledby={`${id}-marketplace-tab`}
             tabIndex={0}
           >
+            {!query.trim() && (
+              <h3 className="plugin-editor-extensions-empty font-semibold">
+                {t("marketplacePopular")}
+              </h3>
+            )}
+            <p className="plugin-editor-extensions-empty">
+              {t("marketplaceScope")}
+            </p>
             {!runtimeAvailable && (
               <p className="plugin-editor-extensions-alert" role="status">
                 {t("runtimeUnavailable")}
@@ -757,9 +771,20 @@ export function PluginEditorExtensionsPanel({
               )}
               {!searching && !searchError && marketplaceItems.length === 0 && (
                 <p className="plugin-editor-extensions-empty" role="status">
-                  {t("noMarketplaceResults")}
+                  {nextOffset !== null && lastMarketplacePageEmpty
+                    ? t("noCompatibleMarketplacePage")
+                    : t("noMarketplaceResults")}
                 </p>
               )}
+              {!searching &&
+                !searchError &&
+                marketplaceItems.length > 0 &&
+                lastMarketplacePageEmpty &&
+                nextOffset !== null && (
+                  <p className="plugin-editor-extensions-empty" role="status">
+                    {t("noCompatibleMarketplacePage")}
+                  </p>
+                )}
               {marketplaceItems.map((item) => (
                 <article
                   className="plugin-editor-extension-row"

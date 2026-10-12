@@ -5,6 +5,8 @@ import type { PluginStoreOptions } from "./plugin-store";
 import {
   EDITOR_EXTENSION_MAX_COMPRESSED_BYTES,
   getOpenVsxVersion,
+  getOpenVsxManifest,
+  openVsxRequestDeadline,
   searchOpenVsx,
   downloadOpenVsxVsix,
 } from "./plugin-editor-marketplace";
@@ -27,6 +29,7 @@ const openVsxInspectSchema = z
     publisher: z.string().min(1).max(100),
     name: z.string().min(1).max(100),
     version: z.string().min(1).max(100),
+    targetPlatform: z.enum(["web", "universal"]).optional(),
   })
   .strict();
 const installSchema = z.object({ inspectionId: z.string().uuid() }).strict();
@@ -136,10 +139,18 @@ export function registerPluginEditorExtensions(
     async (c) => {
       await requireManager(c, options);
       try {
+        const requestedPlatform = z
+          .enum(["web", "universal"])
+          .optional()
+          .safeParse(c.req.query("targetPlatform"));
+        if (!requestedPlatform.success)
+          return fail("targetPlatform must be web or universal.", 400);
         const item = await getOpenVsxVersion(
           c.req.param("publisher"),
           c.req.param("name"),
           c.req.param("version"),
+          openVsxRequestDeadline(),
+          requestedPlatform.data,
         );
         const { downloadUrl: _downloadUrl, ...metadata } = item;
         return c.json(metadata);
@@ -193,20 +204,35 @@ export function registerPluginEditorExtensions(
         );
         return c.json(inspection, 201);
       }
-      const parsed = openVsxInspectSchema.safeParse(
-        await c.req.json().catch(() => null),
-      );
+      const inspectBody = await c.req.json().catch(() => null);
+      if (
+        inspectBody &&
+        typeof inspectBody === "object" &&
+        "targetPlatform" in inspectBody &&
+        inspectBody.targetPlatform !== "web" &&
+        inspectBody.targetPlatform !== "universal"
+      )
+        return fail("targetPlatform must be web or universal.", 400);
+      const parsed = openVsxInspectSchema.safeParse(inspectBody);
       if (!parsed.success)
         return fail(
           "Open VSX inspection requires publisher, name, and exact version.",
           400,
         );
+      const deadline = openVsxRequestDeadline();
       const metadata = await getOpenVsxVersion(
         parsed.data.publisher,
         parsed.data.name,
         parsed.data.version,
+        deadline,
+        parsed.data.targetPlatform,
       );
-      const bytes = await downloadOpenVsxVsix(metadata);
+      await getOpenVsxManifest(
+        metadata,
+        PLUGIN_EDITOR_VSCODE_VERSION,
+        deadline,
+      );
+      const bytes = await downloadOpenVsxVsix(metadata, deadline);
       const inspection = await stageEditorExtensionInspection(
         c.env.DB,
         c.env.FILES,

@@ -11,6 +11,7 @@ export type MarketplaceExtension = {
   displayName: string | null;
   description: string | null;
   license: string | null;
+  targetPlatform?: string | null;
 };
 
 export type MarketplaceSearchResponse = {
@@ -52,12 +53,18 @@ async function readJson<T>(response: Response): Promise<T> {
     message?: unknown;
   } | null;
   if (!response.ok) {
+    const nestedError =
+      payload?.error && typeof payload.error === "object"
+        ? (payload.error as { message?: unknown })
+        : null;
     const message =
       typeof payload?.error === "string"
         ? payload.error
-        : typeof payload?.message === "string"
-          ? payload.message
-          : `Editor extension request failed (${response.status}).`;
+        : typeof nestedError?.message === "string"
+          ? nestedError.message
+          : typeof payload?.message === "string"
+            ? payload.message
+            : `Editor extension request failed (${response.status}).`;
     throw new PluginEditorExtensionClientError(
       message,
       response.status,
@@ -105,7 +112,18 @@ export class PluginEditorExtensionClient {
     publisher: string;
     name: string;
     version: string;
+    targetPlatform?: string | null;
   }): Promise<EditorExtensionInspection> {
+    const targetPlatform = input.targetPlatform?.toLowerCase();
+    if (
+      targetPlatform &&
+      targetPlatform !== "web" &&
+      targetPlatform !== "universal"
+    )
+      throw new PluginEditorExtensionClientError(
+        "This Open VSX build targets a desktop platform; only web or universal extensions can be installed in the browser editor.",
+        422,
+      );
     return readJson(
       await this.fetcher(`${apiPath}/inspect`, {
         method: "POST",
@@ -115,6 +133,7 @@ export class PluginEditorExtensionClient {
           publisher: input.publisher,
           name: input.name,
           version: input.version,
+          ...(targetPlatform ? { targetPlatform } : {}),
         }),
       }),
     );

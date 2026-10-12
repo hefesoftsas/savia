@@ -1043,10 +1043,10 @@ function resolveResourcePath(path: string): string {
   return stack.join("/");
 }
 
-function compatibilityFor(
+/** Manifest preflight only; archive resources and browser code need VSIX inspection. */
+export function editorManifestCompatibility(
   manifest: Record<string, unknown>,
   runtimeVersion: string,
-  files: Map<string, Uint8Array>,
 ): { supported: boolean; reason: string | null } {
   const engines = manifest.engines;
   const vscodeRange =
@@ -1088,6 +1088,17 @@ function compatibilityFor(
   if (!supportedDeclarativeContributions(manifest)) {
     return { supported: false, reason: "unsupported-contributions" };
   }
+
+  return { supported: true, reason: null };
+}
+
+function compatibilityFor(
+  manifest: Record<string, unknown>,
+  runtimeVersion: string,
+  files: Map<string, Uint8Array>,
+): { supported: boolean; reason: string | null } {
+  const preflight = editorManifestCompatibility(manifest, runtimeVersion);
+  if (!preflight.supported) return preflight;
 
   if (manifest.browser) {
     const path = resolveResourcePath(manifest.browser as string);

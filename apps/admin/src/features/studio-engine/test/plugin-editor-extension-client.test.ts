@@ -24,6 +24,35 @@ const installed = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("PluginEditorExtensionClient", () => {
+  it("preserves actionable gateway errors for incompatible marketplace packages", async () => {
+    const client = new PluginEditorExtensionClient(async () =>
+      Response.json(
+        {
+          error: {
+            code: "CRM_ERROR",
+            message:
+              "This extension requires a desktop host and cannot run in the web editor.",
+          },
+        },
+        { status: 422 },
+      ),
+    );
+    await expect(
+      client.inspectMarketplace({
+        publisher: "openai",
+        name: "chatgpt",
+        version: "26.5908.31748",
+        displayName: null,
+        description: null,
+        license: null,
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      message:
+        "This extension requires a desktop host and cannot run in the web editor.",
+    });
+  });
+
   it("sends marketplace queries with their abort signal and keeps response metadata typed", async () => {
     const fetcher = vi.fn(async (_path: string, _init?: RequestInit) =>
       Response.json({
@@ -47,6 +76,67 @@ describe("PluginEditorExtensionClient", () => {
       "/api/plugin-editor-extensions/marketplace?q=theme+tools&offset=20",
       { signal: controller.signal },
     );
+  });
+
+  it("preserves the selected web build identity from search through inspection", async () => {
+    const webResult: MarketplaceExtension = {
+      publisher: "Acme",
+      name: "example",
+      version: "1.0.0",
+      displayName: "Example Extension",
+      description: "A sample extension from Open VSX.",
+      license: "MIT",
+      targetPlatform: "web",
+    };
+    const fetcher = vi.fn(async (path: string) => {
+      if (path.startsWith("/api/plugin-editor-extensions/marketplace"))
+        return Response.json({
+          results: [webResult],
+          offset: 0,
+          totalSize: 1,
+          nextOffset: null,
+        });
+      return Response.json({ inspectionId: "web-inspection" });
+    });
+    const client = new PluginEditorExtensionClient(fetcher);
+
+    const page = await client.search("");
+    expect(page.results[0]?.targetPlatform).toBe("web");
+    await client.inspectMarketplace(page.results[0]!);
+
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      "/api/plugin-editor-extensions/inspect",
+      expect.objectContaining({
+        body: JSON.stringify({
+          source: "open-vsx",
+          publisher: "Acme",
+          name: "example",
+          version: "1.0.0",
+          targetPlatform: "web",
+        }),
+      }),
+    );
+  });
+
+  it("rejects native marketplace builds before inspection with an actionable error", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ inspectionId: "unused" }),
+    );
+    const client = new PluginEditorExtensionClient(fetcher);
+
+    await expect(
+      client.inspectMarketplace({
+        publisher: "Acme",
+        name: "example",
+        version: "1.0.0",
+        targetPlatform: "alpine-arm64",
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      message: expect.stringContaining("web or universal"),
+    });
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("uploads VSIX bytes directly and submits exact Open VSX coordinates for inspection", async () => {

@@ -400,13 +400,28 @@ browser compatibility checks cannot be activated even if it can be inspected.
 The same-origin bundled-extension fallback remains available when the isolated
 runtime is unavailable, but marketplace and VSIX extensions stay disabled.
 
-The Extensions panel opens on popular Open VSX packages. Its single search field
+The Extensions panel opens on popular Open VSX snippet candidates filtered for
+this web editor, rather than the registry's desktop-heavy overall download chart.
+Each candidate's exact-version manifest is checked against the same
+engine, desktop-only, API proposal, and declarative contribution rules used by
+VSIX inspection. Candidates whose manifests cannot be verified are omitted.
+This is a manifest preflight, not a guarantee that the complete package works:
+inspection still validates archive limits, resources, and browser code before
+installation. Desktop-only packages are rejected before downloading their VSIX;
+packages over the 20 MiB compressed limit receive a size error rather than a
+generic upstream service error. When a candidate has a specific web or universal
+build, that target platform is retained through listing, inspection, manifest
+lookup and package download so another platform variant cannot be substituted.
+
+Its single search field
 queries the marketplace automatically as you type; typing from Installed returns
-to Marketplace. Clear the field to browse popular packages again. Select Installed
+to Marketplace. Clear the field to browse popular snippets again. Select Installed
 to filter installed and bundled extensions with the current query. The fixed
 header includes Upload VSIX, and package inspection appears above the scrolling
-results before an explicit install or update. Marketplace listings can include
-desktop-only packages; inspection checks compatibility before installation.
+results before an explicit install or update. Filtering can leave an empty page
+while later registry pages still contain candidates; Load more remains available
+until the registry has no further pages. Installed and bundled extensions keep
+their existing local filter and are not hidden by marketplace preflight.
 
 ### Delete published versions
 
