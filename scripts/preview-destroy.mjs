@@ -9,14 +9,28 @@ import {
   previewNames,
   slugifyBranch,
 } from "./preview-environment.mjs";
+import { selectBranchInfrastructure } from "../infra/pulumi/branch-preview-resources.mjs";
+import { emptyBucketForDestroy } from "../infra/pulumi/destroy.mjs";
 
 const execFileAsync = promisify(execFile);
+const branchProjectRoot = fileURLToPath(
+  new URL("../infra/pulumi/branch-preview/", import.meta.url),
+);
+
+async function runBranchCommand(executable, args, options = {}) {
+  const { stdout, stderr } = await execFileAsync(executable, args, {
+    cwd: options.cwd,
+    env: options.env,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  return { stdout, stderr };
+}
 
 async function runWrangler(args) {
   const { stdout } = await execFileAsync(
     "pnpm",
     ["--filter", "@savia/api", "exec", "wrangler", ...args],
-    { maxBuffer: 32 * 1024 * 1024 },
+    { cwd: branchProjectRoot, env: process.env, maxBuffer: 32 * 1024 * 1024 },
   );
   return stdout;
 }
@@ -38,39 +52,6 @@ function isAlreadyGone(error) {
   );
 }
 
-async function emptyBucket(bucket) {
-  const listed = await runWrangler([
-    "r2",
-    "object",
-    "list",
-    bucket,
-    "--remote",
-    "--json",
-  ]);
-  let parsed;
-  try {
-    parsed = JSON.parse(listed);
-  } catch {
-    throw new Error(`Could not list objects in ${bucket}`);
-  }
-  const rows = Array.isArray(parsed) ? parsed : (parsed?.objects ?? []);
-  const keys = rows
-    .map((row) => row?.key)
-    .filter(Boolean)
-    .slice(0, 5000);
-  for (const key of keys) {
-    await runWrangler([
-      "r2",
-      "object",
-      "delete",
-      `${bucket}/${key}`,
-      "--remote",
-      "-y",
-    ]);
-  }
-  return keys.length;
-}
-
 async function main() {
   const argv = process.argv.slice(2);
   const slug = slugifyBranch(flagValue(argv, "--branch"));
@@ -90,10 +71,21 @@ async function main() {
 
   if (dryRun) {
     console.log(`Would delete workers: ${workers.join(", ")}`);
-    console.log(`Would delete D1 databases: ${databases.join(", ")}`);
-    console.log(`Would empty and delete R2 bucket: ${bucket}`);
+    console.log(
+      `Would empty and destroy Pulumi-managed branch stack: branch-${slug}`,
+    );
+    console.log(`  D1 databases: ${databases.join(", ")}`);
+    console.log(`  R2 bucket: ${bucket}`);
     return;
   }
+
+  const infrastructure = await selectBranchInfrastructure({
+    slug,
+    env: process.env,
+    run: runBranchCommand,
+  });
+  if (infrastructure.stack !== `branch-${slug}`)
+    throw new Error("Selected Pulumi stack does not match branch");
 
   const failures = [];
   for (const worker of workers) {
@@ -105,26 +97,41 @@ async function main() {
       else failures.push(`worker ${worker}: ${error.message.split("\n")[0]}`);
     }
   }
-  for (const database of databases) {
-    try {
-      await runWrangler(["d1", "delete", database, "-y"]);
-      console.log(`deleted D1 database ${database}`);
-    } catch (error) {
-      if (isAlreadyGone(error))
-        console.log(`database already gone ${database}`);
-      else
-        failures.push(`database ${database}: ${error.message.split("\n")[0]}`);
-    }
-  }
   try {
-    await emptyBucket(bucket);
-    await runWrangler(["r2", "bucket", "delete", bucket]);
-    console.log(`deleted R2 bucket ${bucket}`);
+    const removed = await emptyBucketForDestroy({
+      bucket: infrastructure.outputs.documentsBucketName,
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+      token: process.env.CLOUDFLARE_API_TOKEN,
+    });
+    console.log(`emptied ${removed} object(s) from ${bucket}`);
   } catch (error) {
-    console.log(
-      `WARNING: R2 bucket ${bucket} left behind (${error.message.split("\n")[0]}). ` +
-        `Empty it in the dashboard or with wrangler r2 commands.`,
-    );
+    failures.push(`R2 bucket ${bucket}: ${error.message.split("\n")[0]}`);
+  }
+
+  if (failures.length === 0) {
+    try {
+      await execFileAsync(
+        "pulumi",
+        [
+          "destroy",
+          "--stack",
+          infrastructure.stack,
+          "--yes",
+          "--non-interactive",
+        ],
+        { cwd: branchProjectRoot, env: process.env, stdio: "inherit" },
+      );
+      await execFileAsync(
+        "pulumi",
+        ["stack", "rm", infrastructure.stack, "--yes", "--non-interactive"],
+        { cwd: branchProjectRoot, env: process.env, stdio: "inherit" },
+      );
+      console.log(`destroyed Pulumi branch stack ${infrastructure.stack}`);
+    } catch (error) {
+      failures.push(
+        `Pulumi stack ${infrastructure.stack}: ${error.message.split("\n")[0]}`,
+      );
+    }
   }
 
   if (failures.length > 0) {

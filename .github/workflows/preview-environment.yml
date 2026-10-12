@@ -35,6 +35,7 @@ jobs:
       name: preview
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      PREVIEW_BRANCH: ${{ inputs.branch }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -55,22 +56,32 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - uses: ./.github/actions/install-pulumi
+
       - name: Refuse unconfirmed destroy
         if: ${{ inputs.action == 'destroy' && inputs.confirm != inputs.branch }}
         run: |
-          echo "Destroy requires confirm == branch name. Got confirm='${{ inputs.confirm }}'." >&2
+          echo "Destroy requires confirm to match the branch name." >&2
           exit 1
 
       - name: Deploy preview environment
         if: ${{ inputs.action == 'deploy' }}
-        run: node scripts/preview-deploy.mjs --branch "${{ inputs.branch }}"
+        run: node scripts/preview-deploy.mjs --branch "$PREVIEW_BRANCH"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
 
       - name: Destroy preview environment
         if: ${{ inputs.action == 'destroy' && inputs.confirm == inputs.branch }}
-        run: node scripts/preview-destroy.mjs --branch "${{ inputs.branch }}" --force
+        run: node scripts/preview-destroy.mjs --branch "$PREVIEW_BRANCH" --force
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}

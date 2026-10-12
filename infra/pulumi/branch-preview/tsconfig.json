@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "../../.."
+  },
+  "include": [
+    "index.ts",
+    "../branch-preview-resources.mjs",
+    "../naming.mjs",
+    "../../../scripts/preview-environment.mjs"
+  ]
+}

@@ -1,0 +1,10 @@
+encryptionsalt: v1:Q3AzzOKOoAY=:v1:5IJT0AvwBiixS2Qu:OpwOJpGcSwaOcsShqHLOe5pdG8cq0g==
+config:
+  savia-cloudflare:accountId: 08a0d36f8b0357684f83e4bfeb6628b6
+  savia-cloudflare:environment: preview
+  savia-cloudflare:publicOrigin: https://savia-preview.hefesoft.com
+  savia-cloudflare:documentsBucket: savia-documents-preview
+  savia-cloudflare:pagesSearchIndex: savia-pages-search-preview
+  cloudflare:apiToken:
+    secure: v1:FXCqgb6BDUZFK6HH:MgN36DKpkT7KNZixgC5u4bF4mt/6wy7V3/izlWFAERXt3OYyeER/7YpWmIvGGNn20L+elCKMHo0OrXv+pRE9W77pDT1a
+  savia-cloudflare:stateBucket: savia-pulumi-state-preview

@@ -161,7 +161,7 @@ test("release plugins deploy to all workspaces using existing environment creden
       source.indexOf("name: Verify deployed gateway"),
     );
     assert.match(step, /CLOUDFLARE_API_TOKEN/);
-    assert.match(step, /CLOUDFLARE_DATABASE_ID.*vars.SAVIA_DOMAIN_D1_ID/);
+    assert.match(step, /CLOUDFLARE_DATABASE_ID.*env.SAVIA_DOMAIN_D1_ID/);
     assert.doesNotMatch(
       step,
       /SAVIA_PLUGIN_TARGETS|SAVIA_DEPLOY_EMAIL|SAVIA_DEPLOY_PASSWORD/,

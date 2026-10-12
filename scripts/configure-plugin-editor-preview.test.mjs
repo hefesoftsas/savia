@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { pluginEditorWorkerConfig } from "../infra/pulumi/auxiliary-worker-config.mjs";
 import {
   configurePluginEditorPreview,
   validateDeploymentUrl,
@@ -225,17 +226,12 @@ test("preview workflow deploys the isolated runtime before enabling the admin bu
   assert.match(workflow, /deployment-url/);
   assert.match(
     workflow,
-    /workingDirectory: apps\/api[\s\S]*?command: deploy --config \.\.\/plugin-editor-runtime\/wrangler\.jsonc/,
+    /workingDirectory: apps\/api[\s\S]*?command: deploy --config \.\.\/plugin-editor-runtime\/wrangler\.preview\.jsonc/,
   );
 });
 
 test("preview runtime has only a static asset binding and no application secrets or API routes", () => {
-  const config = JSON.parse(
-    readFileSync(
-      new URL("../apps/plugin-editor-runtime/wrangler.jsonc", import.meta.url),
-      "utf8",
-    ).replace(/,\s*([}\]])/g, "$1"),
-  );
+  const config = pluginEditorWorkerConfig();
   assert.deepEqual(Object.keys(config).sort(), [
     "assets",
     "compatibility_date",

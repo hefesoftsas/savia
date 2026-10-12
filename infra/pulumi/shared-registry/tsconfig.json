@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".."
+  },
+  "include": [
+    "index.ts",
+    "../shared-registry-resources.mjs",
+    "../auxiliary-worker-config.mjs"
+  ]
+}
