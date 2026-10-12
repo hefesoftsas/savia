@@ -50,6 +50,14 @@ volumes/
 .idea/
 *.swp
 
+# Pulumi self-managed state and data backups (never commit)
+infra/pulumi/.pulumi-state/
+infra/pulumi/backups/
+
 # Isolated code editor build output
 apps/admin/dist-plugin-editor/
 apps/plugin-editor-runtime/.wrangler/
+
+# Pulumi migration metadata backups stay private
+infra/pulumi/**/Pulumi.*.yaml.bak.*
+infra/pulumi/branch-preview/Pulumi.branch-*.yaml

@@ -1,0 +1,3 @@
+name: savia-branch-preview
+description: Pulumi-managed D1 and R2 resources for an isolated Savia branch preview.
+runtime: nodejs

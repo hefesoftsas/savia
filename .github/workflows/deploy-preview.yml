@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment:
       name: preview
-      url: ${{ vars.SAVIA_PUBLIC_ORIGIN }}
+      url: ${{ steps.infrastructure.outputs.public-origin }}
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
     steps:
@@ -59,26 +59,55 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Load infrastructure stack outputs
+        id: infrastructure
+        uses: ./.github/actions/pulumi-infrastructure
+        with:
+          stack: preview
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+
       - name: Verify isolated preview resources before any mutation
         run: node scripts/verify-preview-resources.mjs
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          SAVIA_AUTH_D1_ID: ${{ vars.SAVIA_AUTH_D1_ID }}
-          SAVIA_DOMAIN_D1_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
-          SAVIA_DOCUMENTS_BUCKET: ${{ vars.SAVIA_DOCUMENTS_BUCKET }}
+          SAVIA_AUTH_D1_ID: ${{ env.SAVIA_AUTH_D1_ID }}
+          SAVIA_DOMAIN_D1_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
+          SAVIA_DOCUMENTS_BUCKET: ${{ env.SAVIA_DOCUMENTS_BUCKET }}
 
       # Vectorize is bootstrapped separately with Vectorize Write access.
       # Deployments bind the existing isolated index using the Worker token.
-      - name: Render Worker configuration
-        run: node scripts/render-cloudflare-production-config.mjs
+      - name: Apply infrastructure before Worker deployment
+        run: node infra/pulumi/deploy-stack.mjs --stack preview --apply
         env:
-          SAVIA_DEPLOY_ENVIRONMENT: preview
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Render applied infrastructure outputs
+        run: node infra/pulumi/render-from-outputs.mjs --stack preview
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
-          SAVIA_PUBLIC_ORIGIN: ${{ vars.SAVIA_PUBLIC_ORIGIN }}
-          SAVIA_DOCUMENTS_BUCKET: ${{ vars.SAVIA_DOCUMENTS_BUCKET }}
-          SAVIA_AUTH_D1_ID: ${{ vars.SAVIA_AUTH_D1_ID }}
-          SAVIA_DOMAIN_D1_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
           NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
           NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
           NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
@@ -137,7 +166,7 @@ jobs:
         run: node scripts/apply-d1-migrations.mjs
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_DATABASE_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
+          CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Deploy private QuickJS hook executor
@@ -187,7 +216,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config ../plugin-editor-runtime/wrangler.jsonc
+          command: deploy --config ../plugin-editor-runtime/wrangler.preview.jsonc
           workingDirectory: apps/api
           wranglerVersion: 4.127.1
 
@@ -211,7 +240,7 @@ jobs:
         run: node scripts/upload-office-runtime.mjs
         env:
           SAVIA_DEPLOY_ENVIRONMENT: preview
-          SAVIA_DOCUMENTS_BUCKET: ${{ vars.SAVIA_DOCUMENTS_BUCKET }}
+          SAVIA_DOCUMENTS_BUCKET: ${{ env.SAVIA_DOCUMENTS_BUCKET }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
@@ -230,7 +259,7 @@ jobs:
           SAVIA_DEPLOY_ENVIRONMENT: preview
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_DATABASE_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
+          CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
 
       - name: Verify deployed gateway
         uses: cloudflare/wrangler-action@v4

@@ -14,12 +14,18 @@ Do not put credentials in plugin manifests, lockfiles, Git, frontend environment
 
 ## Provision the independent registry
 
-From a trusted operator machine with Cloudflare credentials, first create the dedicated bucket:
+The independent `infra/pulumi/shared-registry` project owns the protected bucket.
+Adopt the existing bucket into its `shared` stack first, using the
+[infrastructure runbook](../runbooks/pulumi-infrastructure.md#other-deployment-profiles).
+A new account can explicitly set `adoptExisting: false` after reviewing the resource
+plan. Never bootstrap an empty replacement state against an existing bucket.
+
+From a trusted operator machine with the configured backend and Cloudflare credentials:
 
 ```sh
-pnpm --filter @savia/plugin-registry exec wrangler r2 bucket create savia-plugin-registry
-pnpm --filter @savia/plugin-registry exec wrangler deploy
-pnpm --filter @savia/plugin-registry exec wrangler secret put REGISTRY_CREDENTIALS
+node infra/pulumi/shared-registry/render.mjs
+pnpm --filter @savia/plugin-registry exec wrangler deploy --config wrangler.production.jsonc
+pnpm --filter @savia/plugin-registry exec wrangler secret put REGISTRY_CREDENTIALS --config wrangler.production.jsonc
 ```
 
 The last command reads the JSON secret interactively. Generate a separate random bearer token for each publisher/consumer and compute each token's lowercase SHA-256. Example secret structure (replace placeholders; the token itself is not the hash):
@@ -46,7 +52,7 @@ The last command reads the JSON secret interactively. Generate a separate random
 
 The Worker denies all access before valid credentials exist. Use its HTTPS origin or attach a dedicated domain. Keep bucket lifecycle rules from expiring release objects. Configure an appropriate R2 bucket retention lock and independent scheduled backups of **both objects and custom metadata**; API immutability alone does not prevent a Cloudflare account operator from deleting the bucket. Back up credential configuration securely and test restoration with a pinned release. Retention and backup policies require operator configuration; this implementation does not silently create a retention lock or backup schedule.
 
-`.github/workflows/deploy-plugin-registry.yml` provides a manual independent deployment. It accepts only dispatches from `main`, checks out the selected commit explicitly, and rejects a commit superseded on `main` after tests and immediately before the credential-bearing deployment step. It uses the protected `production` GitHub environment with its existing `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, plus `PLUGIN_REGISTRY_CREDENTIALS`. Credentials are available only in the deployment step; installation and tests run without them. The independent Worker and bucket remain outside preview teardown. Provision the bucket before running it. Preview reset and teardown workflows do not manage this bucket. Credential changes take effect independently of Savia releases.
+`.github/workflows/deploy-plugin-registry.yml` provides a manual independent deployment. It accepts only dispatches from `main`, checks out the selected commit explicitly, and rejects a commit superseded on `main` after tests and immediately before the credential-bearing deployment step. It uses the protected `production` GitHub environment with its existing `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, plus `PLUGIN_REGISTRY_CREDENTIALS`. Credentials are available only in the deployment step; installation and tests run without them. The independent Worker and bucket remain outside preview teardown. The existing `shared` stack and production backend secrets must be configured before running it; the workflow fails closed if either is missing. Preview reset and teardown workflows do not manage this bucket. Credential changes take effect independently of Savia releases.
 
 ## Configure consumers
 

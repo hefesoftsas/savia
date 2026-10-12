@@ -1,0 +1,28 @@
+{
+  "name": "@savia/cloudflare-infra",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Central Savia Cloudflare infrastructure and Worker deployment manifests",
+  "scripts": {
+    "preview": "pulumi preview",
+    "up": "pulumi up",
+    "render": "node render-from-outputs.mjs",
+    "backup": "node backup.mjs",
+    "restore": "node restore.mjs",
+    "destroy": "node destroy.mjs",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p branch-preview && tsc --noEmit -p shared-registry",
+    "test": "node --test *.test.mjs"
+  },
+  "dependencies": {
+    "@pulumi/cloudflare": "^6.21.0",
+    "@pulumi/pulumi": "^3.150.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

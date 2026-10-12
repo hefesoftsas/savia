@@ -1,0 +1,94 @@
+name: Pulumi infrastructure
+
+on:
+  pull_request:
+    paths:
+      - infra/pulumi/**
+      - .github/actions/**
+      - .github/workflows/pulumi.yml
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: Stack to preview (preview or production)
+        required: true
+        type: choice
+        options: [preview, production]
+        default: preview
+      operation:
+        description: Preview or apply the saved infrastructure plan
+        type: choice
+        options: [preview, apply]
+        default: preview
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Pulumi unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install locked infrastructure dependencies
+        run: npm ci --prefix infra/pulumi --ignore-scripts
+
+      - name: Validate all infrastructure programs
+        run: npm --prefix infra/pulumi run typecheck
+
+      - name: Run Pulumi helper tests
+        run: node --test infra/pulumi/*.test.mjs
+
+  preview:
+    name: Pulumi preview
+    needs: unit
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: savia-${{ inputs.stack }}
+      cancel-in-progress: false
+    environment: ${{ inputs.stack }}
+    env:
+      PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Required when PULUMI_BACKEND_URL points at an S3-compatible R2
+      # backend: Pulumi authenticates it through the AWS SDK.
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Pulumi CLI
+        run: |
+          curl -fsSL https://get.pulumi.com | sh -s -- --version 3.268.0
+          echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
+
+      - name: Install program dependencies
+        working-directory: infra/pulumi
+        run: npm ci --ignore-scripts
+
+      - name: Validate infrastructure program
+        working-directory: infra/pulumi
+        run: npm run typecheck
+
+      - name: Review or apply the infrastructure plan
+        env:
+          SAVIA_INFRA_STACK: ${{ inputs.stack }}
+          SAVIA_INFRA_OPERATION: ${{ inputs.operation }}
+        run: node infra/pulumi/deploy-stack.mjs --stack "$SAVIA_INFRA_STACK" "--$SAVIA_INFRA_OPERATION"

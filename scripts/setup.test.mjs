@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  findDatabaseUuid,
-  maskSecret,
-  validatePublicOrigin,
-} from "./setup.mjs";
+import * as setup from "./setup.mjs";
+const { findDatabaseUuid, maskSecret, validatePublicOrigin } = setup;
 import {
   DEMO_CUSTOMERS,
   DEMO_TENANT,
@@ -42,6 +39,35 @@ test("finds database uuids", () => {
   );
   assert.equal(findDatabaseUuid("[]", "missing"), null);
   assert.equal(findDatabaseUuid("not-json", "missing"), null);
+});
+
+test("bootstrap uses only the adopted production infrastructure matching its plan", () => {
+  assert.equal(typeof setup.validateSetupInfrastructure, "function");
+  const outputs = {
+    resolvedEnvironment: "production",
+    resolvedPublicOrigin: "https://demo.example.com",
+    documentsBucketName: "savia-documents",
+    authD1Id: "auth-id",
+    domainD1Id: "domain-id",
+  };
+  const plan = {
+    publicOrigin: "https://demo.example.com",
+    documentsBucket: "savia-documents",
+  };
+  assert.deepEqual(setup.validateSetupInfrastructure(outputs, plan), {
+    auth: "auth-id",
+    domain: "domain-id",
+  });
+  for (const bad of [
+    { ...outputs, resolvedEnvironment: "preview" },
+    { ...outputs, resolvedPublicOrigin: "https://other.example.com" },
+    { ...outputs, documentsBucketName: "savia-documents-preview" },
+    { ...outputs, authD1Id: "" },
+  ])
+    assert.throws(
+      () => setup.validateSetupInfrastructure(bad, plan),
+      /infrastructure|outputs/,
+    );
 });
 
 test("extracts session cookies from set-cookie headers", () => {

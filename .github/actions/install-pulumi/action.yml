@@ -1,0 +1,14 @@
+name: Install Savia infrastructure toolchain
+description: Install the pinned CLI and locked dependencies for all Savia infrastructure profiles
+runs:
+  using: composite
+  steps:
+    - name: Install pinned Pulumi CLI
+      shell: bash
+      run: |
+        curl -fsSL https://get.pulumi.com | sh -s -- --version 3.268.0
+        echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
+    - name: Install infrastructure dependencies
+      shell: bash
+      working-directory: infra/pulumi
+      run: npm ci --ignore-scripts
