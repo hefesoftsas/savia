@@ -404,6 +404,8 @@ export interface paths {
                   | "records:read"
                   | "records:create"
                   | "records:update"
+                  | "plugins:read"
+                  | "plugins:publish"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -437,6 +439,8 @@ export interface paths {
               | "records:read"
               | "records:create"
               | "records:update"
+              | "plugins:read"
+              | "plugins:publish"
             )[];
             /** @default 30 */
             lifetimeDays?: 7 | 30 | 90;
@@ -465,6 +469,8 @@ export interface paths {
                   | "records:read"
                   | "records:create"
                   | "records:update"
+                  | "plugins:read"
+                  | "plugins:publish"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -600,6 +606,8 @@ export interface paths {
                   | "records:read"
                   | "records:create"
                   | "records:update"
+                  | "plugins:read"
+                  | "plugins:publish"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -637,6 +645,8 @@ export interface paths {
               | "records:read"
               | "records:create"
               | "records:update"
+              | "plugins:read"
+              | "plugins:publish"
             )[];
             /** @default 30 */
             lifetimeDays?: 7 | 30 | 90;
@@ -666,6 +676,8 @@ export interface paths {
                   | "records:read"
                   | "records:create"
                   | "records:update"
+                  | "plugins:read"
+                  | "plugins:publish"
                 )[];
                 createdAt: string;
                 expiresAt: string;

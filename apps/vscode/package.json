@@ -22,6 +22,8 @@
     "@vscode/vsce": "3.7.1",
     "esbuild": "0.28.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "fflate": "0.8.2",
+    "wrangler": "^4.127.1"
   }
 }

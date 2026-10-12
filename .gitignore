@@ -53,3 +53,9 @@ volumes/
 # Isolated code editor build output
 apps/admin/dist-plugin-editor/
 apps/plugin-editor-runtime/.wrangler/
+
+# Native VS Code extension distribution and isolated host tests
+apps/vscode/.staging/
+apps/vscode/.test-extension/
+apps/vscode/.vscode-test/
+apps/vscode/artifacts/

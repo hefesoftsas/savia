@@ -430,3 +430,7 @@ their existing local filter and are not hidden by marketplace preflight.
 ### Delete published versions
 
 Use **My plugins → Delete version** to remove a specific release, or expand **Older versions** to delete a historical release. Deleting an older release preserves the active installation; the active release must first be disabled. The confirmation can also remove its shared R2 ZIP when publisher credentials are configured. It is selected by default and warns that future imports elsewhere will no longer work. Local cleanup removes the release and source files while preserving editable drafts. See [registry deletion and ownership](plugin-registry.md#delete-a-release-from-the-ui) for failure and credential behavior.
+
+## Native VS Code authoring
+
+Use the [native VS Code extension](vscode-plugin-development.md) to check out published workspace sources, edit ordinary files, build with the shared browser compiler, and publish guarded immutable versions.
