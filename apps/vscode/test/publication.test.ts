@@ -241,3 +241,30 @@ it("retries uncertain shared creation even when the first request never persiste
   expect(f!.state.posts[1].metadata.mode).toBe("create");
   expect(f!.state.posts[1].bytes).toEqual(publication!.zipBytes);
 });
+
+it("recovers a committed shared attempt after permissions are removed before the shared write", async () => {
+  const publication = await prepared("shared");
+  f!.state.permissionLostAfterCommit = true;
+  await expect(
+    publishPrepared(publication!, f!.connection.client, {
+      isTrusted: () => true,
+      isCurrent: () => true,
+    }),
+  ).rejects.toThrow("permission");
+  expect(f!.state.head.version).toBe("1.1.0");
+  const attempt = (
+    await listPublicationAttempts(f!.uri, f!.connection.profile)
+  )[0];
+  expect(attempt.state).toBe("uncertain");
+  f!.state.permissionLostAfterCommit = false;
+  const recovered = await recoverPublication(
+    f!.uri,
+    f!.connection.profile,
+    publication!.sha256,
+    f!.connection.client,
+    { isTrusted: () => true, isCurrent: () => true },
+  );
+  expect(recovered.receipt.state).toBe("published");
+  expect(f!.state.posts[1].metadata.mode).toBe("create");
+  expect(f!.state.posts[1].bytes).toEqual(publication!.zipBytes);
+});

@@ -73,7 +73,8 @@ head; it changes only the publication reference.
 
 Before sending, the extension retains `.savia/artifacts/<sha256>.zip` and a
 non-secret attempt/receipt under `.savia/receipts/`. A lost response can be recovered
-with **Recover a pending publication**. Shared publication creates the immutable
+with **Recover a pending publication**. A permission change after local creation
+also retains an uncertain attempt; restore access and recover that same artifact. Shared publication creates the immutable
 workspace release first, then sends those exact bytes using the backend's publisher
 credential. A shared failure reports the retained local release separately. **Retry
 shared-store publication** reuses the original ZIP and metadata, even if newer local
