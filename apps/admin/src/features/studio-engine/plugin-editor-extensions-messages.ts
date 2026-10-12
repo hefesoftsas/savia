@@ -35,6 +35,11 @@ export const pluginEditorExtensionsMessages = {
     "Carregando extensões…",
   ],
   marketplace: ["Marketplace", "Marketplace", "Marketplace"],
+  marketplaceScope: [
+    "Extensiones filtradas para ser compatibles con este editor web. Inspecciona una versión para verificar el paquete completo antes de instalar.",
+    "Extensions filtered for compatibility with this web editor. Inspect a version to verify the complete package before installing.",
+    "Extensões filtradas para compatibilidade com este editor web. Inspecione uma versão para verificar o pacote completo antes de instalar.",
+  ],
   installedTab: ["Instaladas", "Installed", "Instaladas"],
   builtIn: ["Incluidas", "Built-in", "Incluídas"],
   installedGroup: ["Instaladas", "Installed", "Instaladas"],
@@ -70,6 +75,11 @@ export const pluginEditorExtensionsMessages = {
     "No se encontraron extensiones.",
     "No extensions found.",
     "Nenhuma extensão encontrada.",
+  ],
+  noCompatibleMarketplacePage: [
+    "No hay candidatos disponibles para este editor en esta página.",
+    "No candidates are available for this editor on this page.",
+    "Nenhum candidato está disponível para este editor nesta página.",
   ],
   compatibilitySupported: [
     "Compatible con este editor.",

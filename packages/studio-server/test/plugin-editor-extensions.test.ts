@@ -182,6 +182,124 @@ describe("scoped editor extension installation API", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("rejects native Open VSX targets and incompatible manifests before downloading a VSIX", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/Acme/native/1.2.3")
+        return new Response(
+          JSON.stringify({
+            ...{
+              namespace: "Acme",
+              name: "native",
+              version: "1.2.3",
+              files: { download: "/api/Acme/native/1.2.3/file/download" },
+            },
+            targetPlatform: "alpine-arm64",
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      if (url.pathname === "/api/Acme/incompatible/1.2.3")
+        return new Response(
+          JSON.stringify({
+            namespace: "Acme",
+            name: "incompatible",
+            version: "1.2.3",
+            files: {
+              download: "/api/Acme/incompatible/1.2.3/file/download",
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      if (url.pathname.endsWith("/file/package.json"))
+        return new Response(
+          JSON.stringify({
+            publisher: "Acme",
+            name: "incompatible",
+            version: "1.2.3",
+            engines: { vscode: "^2.0.0" },
+            browser: "browser.js",
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      return new Response(new Uint8Array([0x50, 0x4b, 3, 4]));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const inspect = (publisher: string, name: string) =>
+      req("preflight-user", "/api/plugin-editor-extensions/inspect", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          source: "open-vsx",
+          publisher,
+          name,
+          version: "1.2.3",
+        }),
+      });
+
+    const native = await inspect("Acme", "native");
+    expect(native.response.status).toBe(422);
+    expect(new TextDecoder().decode(native.body)).toMatch(/platform|web/i);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const incompatible = await inspect("Acme", "incompatible");
+    expect(incompatible.response.status).toBe(422);
+    expect(new TextDecoder().decode(incompatible.body)).toMatch(
+      /VS Code|unsupported/i,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns a clear 413 when an Open VSX VSIX exceeds the package limit", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/Acme/large/1.2.3")
+        return new Response(
+          JSON.stringify({
+            namespace: "Acme",
+            name: "large",
+            version: "1.2.3",
+            files: { download: "/api/Acme/large/1.2.3/file/download" },
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      if (url.pathname.endsWith("/file/package.json"))
+        return new Response(
+          JSON.stringify({
+            publisher: "Acme",
+            name: "large",
+            version: "1.2.3",
+            engines: { vscode: "^1.138.0" },
+            browser: "browser.js",
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      return new Response(null, {
+        headers: { "content-length": String(20 * 1024 * 1024 + 1) },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await req(
+      "large-user",
+      "/api/plugin-editor-extensions/inspect",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          source: "open-vsx",
+          publisher: "Acme",
+          name: "large",
+          version: "1.2.3",
+        }),
+      },
+    );
+    expect(response.response.status).toBe(413);
+    expect(new TextDecoder().decode(response.body)).toMatch(
+      /20 MiB size limit/i,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("requires management permission and scopes installations, package reads, and deletion by principal", async () => {
     const denied = await req(
       "user-a",

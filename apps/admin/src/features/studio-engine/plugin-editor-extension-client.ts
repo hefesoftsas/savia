@@ -52,12 +52,18 @@ async function readJson<T>(response: Response): Promise<T> {
     message?: unknown;
   } | null;
   if (!response.ok) {
+    const nestedError =
+      payload?.error && typeof payload.error === "object"
+        ? (payload.error as { message?: unknown })
+        : null;
     const message =
       typeof payload?.error === "string"
         ? payload.error
-        : typeof payload?.message === "string"
-          ? payload.message
-          : `Editor extension request failed (${response.status}).`;
+        : typeof nestedError?.message === "string"
+          ? nestedError.message
+          : typeof payload?.message === "string"
+            ? payload.message
+            : `Editor extension request failed (${response.status}).`;
     throw new PluginEditorExtensionClientError(
       message,
       response.status,

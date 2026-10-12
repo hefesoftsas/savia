@@ -5,6 +5,8 @@ import type { PluginStoreOptions } from "./plugin-store";
 import {
   EDITOR_EXTENSION_MAX_COMPRESSED_BYTES,
   getOpenVsxVersion,
+  getOpenVsxManifest,
+  openVsxRequestDeadline,
   searchOpenVsx,
   downloadOpenVsxVsix,
 } from "./plugin-editor-marketplace";
@@ -141,7 +143,11 @@ export function registerPluginEditorExtensions(
           c.req.param("name"),
           c.req.param("version"),
         );
-        const { downloadUrl: _downloadUrl, ...metadata } = item;
+        const {
+          downloadUrl: _downloadUrl,
+          targetPlatform: _targetPlatform,
+          ...metadata
+        } = item;
         return c.json(metadata);
       } catch (error) {
         return mapError(error);
@@ -201,12 +207,19 @@ export function registerPluginEditorExtensions(
           "Open VSX inspection requires publisher, name, and exact version.",
           400,
         );
+      const deadline = openVsxRequestDeadline();
       const metadata = await getOpenVsxVersion(
         parsed.data.publisher,
         parsed.data.name,
         parsed.data.version,
+        deadline,
       );
-      const bytes = await downloadOpenVsxVsix(metadata);
+      await getOpenVsxManifest(
+        metadata,
+        PLUGIN_EDITOR_VSCODE_VERSION,
+        deadline,
+      );
+      const bytes = await downloadOpenVsxVsix(metadata, deadline);
       const inspection = await stageEditorExtensionInspection(
         c.env.DB,
         c.env.FILES,

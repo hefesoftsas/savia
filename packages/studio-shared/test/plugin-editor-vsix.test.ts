@@ -1,7 +1,56 @@
 import { deflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { EDITOR_EXTENSION_LIMITS } from "../src/plugin-editor-extensions";
-import { parseEditorVsix } from "../src/plugin-editor-vsix";
+import {
+  editorManifestCompatibility,
+  parseEditorVsix,
+} from "../src/plugin-editor-vsix";
+
+describe("marketplace manifest preflight", () => {
+  const base = { engines: { vscode: "^1.130.0" } };
+
+  it.each([
+    [{ main: "./out/extension.js" }, "desktop-only"],
+    [{ enabledApiProposals: ["chatProvider"] }, "unsupported-api"],
+    [
+      { contributes: { commands: [{ command: "acme.run" }] } },
+      "unsupported-contributions",
+    ],
+    [
+      { contributes: { snippets: [{ language: "typescript" }] } },
+      "unsupported-contributions",
+    ],
+    [{ engines: { vscode: "^2.0.0" } }, "incompatible-engine"],
+    [{ engines: { vscode: "not-a-version" } }, "invalid-engine-range"],
+  ])("rejects a manifest before package download: %j", (extra, reason) => {
+    expect(
+      editorManifestCompatibility({ ...base, ...extra }, "1.138.0"),
+    ).toEqual({ supported: false, reason });
+  });
+
+  it("accepts supported declarative contributions without requiring archive resources", () => {
+    expect(
+      editorManifestCompatibility(
+        {
+          ...base,
+          contributes: {
+            snippets: [{ language: "typescript", path: "./snippets.json" }],
+          },
+        },
+        "1.138.0",
+      ),
+    ).toEqual({ supported: true, reason: null });
+  });
+
+  it("leaves browser resource and code checks to full VSIX inspection", () => {
+    expect(
+      editorManifestCompatibility(
+        { ...base, browser: "./dist/extension.js" },
+        "1.138.0",
+      ),
+    ).toEqual({ supported: true, reason: null });
+  });
+});
 
 const utf8 = new TextEncoder();
 const manifest = (overrides: Record<string, unknown> = {}) =>

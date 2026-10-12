@@ -24,6 +24,35 @@ const installed = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("PluginEditorExtensionClient", () => {
+  it("preserves actionable gateway errors for incompatible marketplace packages", async () => {
+    const client = new PluginEditorExtensionClient(async () =>
+      Response.json(
+        {
+          error: {
+            code: "CRM_ERROR",
+            message:
+              "This extension requires a desktop host and cannot run in the web editor.",
+          },
+        },
+        { status: 422 },
+      ),
+    );
+    await expect(
+      client.inspectMarketplace({
+        publisher: "openai",
+        name: "chatgpt",
+        version: "26.5908.31748",
+        displayName: null,
+        description: null,
+        license: null,
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      message:
+        "This extension requires a desktop host and cannot run in the web editor.",
+    });
+  });
+
   it("sends marketplace queries with their abort signal and keeps response metadata typed", async () => {
     const fetcher = vi.fn(async (_path: string, _init?: RequestInit) =>
       Response.json({
