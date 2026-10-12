@@ -66,15 +66,9 @@ function downloadTargetPlatform(
     parts[apiIndex + 2]?.toLowerCase() !== name.toLowerCase()
   )
     return "";
-  if (
-    parts[apiIndex + 3] === version &&
-    parts[apiIndex + 4] === "file"
-  )
+  if (parts[apiIndex + 3] === version && parts[apiIndex + 4] === "file")
     return "universal";
-  if (
-    parts[apiIndex + 4] === version &&
-    parts[apiIndex + 5] === "file"
-  )
+  if (parts[apiIndex + 4] === version && parts[apiIndex + 5] === "file")
     return parts[apiIndex + 3] ?? "";
   return "";
 }
