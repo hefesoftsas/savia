@@ -46,7 +46,7 @@ Flows activation.
 4. [x] Connect preview deployment to imported Pulumi state and generated outputs;
        preserve migrations/secrets/Worker publication ownership. Use a configured
        backend, never a fresh empty state against existing resources. Verify contracts.
-5. [ ] Review the combined diff, run IaC and deployment checks, refresh the live
+5. [x] Review the combined diff, run IaC and deployment checks, refresh the live
        preview, apply only a no-resource-change existing stack, and update PR #277.
        Report exact deployed scope and any concrete external blockers.
 
@@ -79,3 +79,7 @@ Flows activation.
   changes or Worker publication.
 - Final review fixed untrusted restore database names and account disagreement
   across Pulumi, Wrangler, standard/branch/shared profiles and restore.
+
+- PR #277 updated against main; initial CI passed all required tests and the
+  Pulumi lane. Verified and resolved prior review findings; the final D1
+  recovery fix now reads the recreated database UUID before migrations.

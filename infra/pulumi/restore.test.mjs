@@ -37,6 +37,36 @@ const MANIFEST = {
   r2: null,
 };
 
+const LIVE_OUTPUTS = {
+  ...MANIFEST.pulumiOutputs,
+  authD1Id: "recreated-auth-id",
+  domainD1Id: "recreated-domain-id",
+  workerNames: {
+    auth: "savia-auth-preview",
+    api: "savia-agencies-preview",
+    request: "savia-request-preview",
+    hookExecutor: "savia-hook-executor-preview",
+    connectors: "savia-connectors-preview",
+    mcp: "savia-mcp-preview",
+    gateway: "savia-preview",
+  },
+  deletionProtected: false,
+  flowsEnabled: false,
+  flowsResources: null,
+  plannedFlowsResourceNames: {
+    worker: "savia-flows-preview",
+    database: "savia-flows-preview",
+    kvNamespace: "savia-flows-preview",
+    buckets: {
+      resources: "savia-flows-resources-preview",
+      datasets: "savia-flows-datasets-preview",
+      inboxes: "savia-flows-inboxes-preview",
+    },
+    queue: "savia-flows-execute-preview",
+    workflow: "savia-flows-execute-preview",
+  },
+};
+
 describe("pulumi restore", () => {
   it("checks the selected Pulumi account before infrastructure restore", async () => {
     const calls = [];
@@ -52,6 +82,7 @@ describe("pulumi restore", () => {
       runPulumiUpForRestore({
         stack: "preview",
         accountId: MANIFEST.pulumiOutputs.cloudflareAccountId,
+        expectedOutputs: MANIFEST.pulumiOutputs,
         cwd: "/pulumi",
         execFileImpl,
       }),
@@ -69,17 +100,22 @@ describe("pulumi restore", () => {
     const calls = [];
     const execFileImpl = async (command, args) => {
       calls.push({ command, args });
-      return args[0] === "config"
-        ? { stdout: `${MANIFEST.pulumiOutputs.cloudflareAccountId}\n` }
+      if (args[0] === "config") {
+        return { stdout: `${MANIFEST.pulumiOutputs.cloudflareAccountId}\n` };
+      }
+      return args[0] === "stack"
+        ? { stdout: JSON.stringify(LIVE_OUTPUTS) }
         : { stdout: "" };
     };
 
-    await runPulumiUpForRestore({
+    const liveOutputs = await runPulumiUpForRestore({
       stack: "preview",
       accountId: MANIFEST.pulumiOutputs.cloudflareAccountId,
+      expectedOutputs: MANIFEST.pulumiOutputs,
       cwd: "/pulumi",
       execFileImpl,
     });
+    assert.equal(liveOutputs.domainD1Id, "recreated-domain-id");
     assert.deepEqual(calls, [
       {
         command: "pulumi",
@@ -89,7 +125,67 @@ describe("pulumi restore", () => {
         command: "pulumi",
         args: ["up", "--stack", "preview", "--yes"],
       },
+      {
+        command: "pulumi",
+        args: ["stack", "output", "--stack", "preview", "--json"],
+      },
     ]);
+  });
+
+  it("refuses live Pulumi output drift before restore data commands", async () => {
+    const variants = [
+      {
+        label: "database name",
+        outputs: {
+          ...LIVE_OUTPUTS,
+          databaseNames: {
+            ...LIVE_OUTPUTS.databaseNames,
+            domain: "savia-agencies-production",
+          },
+        },
+      },
+      {
+        label: "Cloudflare account",
+        outputs: {
+          ...LIVE_OUTPUTS,
+          cloudflareAccountId: "11111111111111111111111111111111",
+        },
+      },
+      {
+        label: "resolved environment",
+        outputs: { ...LIVE_OUTPUTS, resolvedEnvironment: "production" },
+      },
+    ];
+    for (const { label, outputs } of variants) {
+      const calls = [];
+      const execFileImpl = async (command, args) => {
+        calls.push({ command, args });
+        if (args[0] === "config") {
+          return { stdout: `${MANIFEST.pulumiOutputs.cloudflareAccountId}\n` };
+        }
+        if (args[0] === "stack") {
+          return { stdout: JSON.stringify(outputs) };
+        }
+        return { stdout: "" };
+      };
+
+      await assert.rejects(
+        runPulumiUpForRestore({
+          stack: "preview",
+          accountId: MANIFEST.pulumiOutputs.cloudflareAccountId,
+          expectedOutputs: MANIFEST.pulumiOutputs,
+          cwd: "/pulumi",
+          execFileImpl,
+        }),
+        /.+/,
+        label,
+      );
+      assert.deepEqual(
+        calls.map(({ args }) => args[0]),
+        ["config", "up", "stack"],
+        `${label} drift must reject before restore data commands`,
+      );
+    }
   });
 
   it("requires --apply and --confirm-restore to execute", () => {

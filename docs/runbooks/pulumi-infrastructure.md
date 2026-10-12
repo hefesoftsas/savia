@@ -183,7 +183,9 @@ D1-compatible dump after `--confirm-quiescent preview` and records skipped objec
 `_cf_KV`) in the manifest. Production fallback is refused because paginated REST queries
 are not a consistent snapshot under concurrent writes. On restore, replay migrations first (schema,
 triggers, FTS5 definition), then load the dump with deferred foreign keys and in-place seed-row upserts (without cascading deletes) — the
-FTS5 index rebuilds via triggers. Dumps contain no BEGIN/COMMIT statements. `d1-table-dump.mjs` holds the dump logic and its tests.
+FTS5 index rebuilds via triggers. After infrastructure recreation, restore
+validates the live outputs and uses the new domain D1 UUID for migrations;
+`--skip-infra` retains the manifest ID for the operator-managed existing database. Dumps contain no BEGIN/COMMIT statements. `d1-table-dump.mjs` holds the dump logic and its tests.
 
 Manifests land in `infra/pulumi/backups/<stack>/<timestamp>/` (gitignored).
 With S3-compatible R2 credentials + AWS CLI, R2 uses `aws s3 sync`;

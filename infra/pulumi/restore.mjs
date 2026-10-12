@@ -11,7 +11,7 @@ import { join, relative, sep, dirname, resolve, isAbsolute } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { buildR2ObjectPutCommand } from "./backup.mjs";
-import { assertDeploymentAccount } from "./outputs.mjs";
+import { assertDeploymentAccount, parseStackOutputs } from "./outputs.mjs";
 import {
   assertAccountId,
   assertSafeR2Key,
@@ -315,6 +315,7 @@ export function buildR2RestoreCommand({ bucket, sourceDir, accountId }) {
 export async function runPulumiUpForRestore({
   stack,
   accountId,
+  expectedOutputs,
   cwd,
   execFileImpl = execFileAsync,
 }) {
@@ -334,6 +335,25 @@ export async function runPulumiUpForRestore({
     cwd,
     stdio: "inherit",
   });
+  const { stdout: outputJson } = await execFileImpl(
+    "pulumi",
+    ["stack", "output", "--stack", stack, "--json"],
+    { cwd },
+  );
+  const liveOutputs = parseStackOutputs(outputJson);
+  assertDeploymentAccount(liveOutputs, expectedAccountId);
+  if (
+    liveOutputs.resolvedEnvironment !== expectedOutputs.resolvedEnvironment ||
+    liveOutputs.documentsBucketName !== expectedOutputs.documentsBucketName ||
+    liveOutputs.resolvedPublicOrigin !== expectedOutputs.resolvedPublicOrigin ||
+    liveOutputs.databaseNames?.auth !== expectedOutputs.databaseNames?.auth ||
+    liveOutputs.databaseNames?.domain !== expectedOutputs.databaseNames?.domain
+  ) {
+    throw new Error(
+      "Live Pulumi environment, bucket, or database names do not match the restore manifest",
+    );
+  }
+  return liveOutputs;
 }
 
 async function main() {
@@ -401,19 +421,22 @@ async function main() {
     });
   }
 
+  let restoreDomainD1Id = manifest.pulumiOutputs.domainD1Id;
   if (!plan.skipInfra) {
-    await runPulumiUpForRestore({
+    const liveOutputs = await runPulumiUpForRestore({
       stack: manifest.stack,
       accountId: manifest.pulumiOutputs.cloudflareAccountId,
+      expectedOutputs: manifest.pulumiOutputs,
       cwd: pulumiCwd,
     });
+    restoreDomainD1Id = liveOutputs.domainD1Id;
   }
   if (needsMigrations(manifest) && !plan.skipMigrations) {
     await execFileAsync("node", ["scripts/apply-d1-migrations.mjs"], {
       cwd: repoRoot,
       env: {
         ...process.env,
-        CLOUDFLARE_DATABASE_ID: manifest.pulumiOutputs.domainD1Id,
+        CLOUDFLARE_DATABASE_ID: restoreDomainD1Id,
       },
     });
     console.log("Applied D1 migrations before loading table dumps");
