@@ -48,6 +48,7 @@ export async function loadAuthoringBundles(
 export type RuntimeOptions = {
   ui?: AuthoringUi;
   bundles?: AuthoringBundles;
+  declarations?: Record<string, string>;
   selectConnection?: (
     profiles: ConnectionProfile[],
   ) => Promise<ConnectionSelection | undefined>;
@@ -74,6 +75,17 @@ export function createAuthoringRuntime(
       documents,
       options.bundles ?? (await loadAuthoringBundles(context.extensionPath)),
       ui,
+      options.declarations ??
+        z
+          .record(z.string(), z.string())
+          .parse(
+            JSON.parse(
+              await fs.readFile(
+                join(context.extensionPath, "assets/declarations.json"),
+                "utf8",
+              ),
+            ),
+          ),
     );
     return controller;
   })();

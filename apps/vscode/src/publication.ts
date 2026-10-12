@@ -111,7 +111,7 @@ export async function publishPrepared(
       typeof error === "object" &&
       error &&
       "status" in error &&
-      Number(error.status) > 0
+      [400, 401, 403, 404, 409, 413, 422].includes(Number(error.status))
         ? "rejected"
         : "uncertain";
     await saveAttempt(publication.root, attempt).catch(() => undefined);

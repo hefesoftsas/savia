@@ -45,7 +45,10 @@ publish, activate, or replace a browser editor draft. Build and publication requ
 a trusted workspace. No dependency installation or downloaded script execution is
 performed. The shared compiler uses the same pinned React, react-dom/client, Zod,
 and pdf-lib bundles as the browser editor and resolves retained workspace sources.
-Arbitrary npm resolution is unsupported. Build errors appear in Problems.
+Arbitrary npm resolution is unsupported. Checkout ships declarations for those supported
+imports and generated TypeScript aliases without installing dependencies. If a
+release supplies its own tsconfig, preserve it and merge the `.savia/types` aliases
+as needed. Build errors appear in Problems.
 
 Run **Savia: Build plugin** to save and validate the current files. Run **Savia:
 Publish a new version** to choose a workspace or shared-store destination and a
@@ -93,12 +96,19 @@ copy when using Git, but avoid committing large retained artifacts unnecessarily
 
 Source is UTF-8; binary archive values are materialized as actual images and encoded
 back on packaging. Existing limits remain: project 5 MiB, original archive 2 MiB and
-256 files, compiled entry 2 MiB and release ZIP 6 MiB. Checkout rejects traversal,
+256 files, compiled entry 2 MiB and release ZIP 6 MiB. The existing workspace
+store quota is ten versions per plugin and 64 MiB per tenant; remove unneeded
+versions through Savia before publishing when the quota is reached. Checkout rejects traversal,
 absolute/reserved paths, case/Unicode collisions, preexisting files and symlinks.
 Repository/editor execution configuration and dependency trees (`.git`, `.vscode`,
 `node_modules`, `.savia`) cannot be supplied by a published source archive. Choose
 physical folders for user-created symlink aliases. Multi-file projects expose their
 actual entry modules rather than an unused wrapper file.
+
+Filesystem guards reject symlinks from published archives and verify opened file
+identity before returning source bytes. They are not an operating-system sandbox
+against another process with the same user privileges replacing directories during
+filesystem operations. Work in directories controlled by the trusted operator.
 
 ## Development checks
 

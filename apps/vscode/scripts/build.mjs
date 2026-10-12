@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { build } from "esbuild";
+import { buildDeclarations } from "./declarations.mjs";
 import { buildPluginIdeBundles } from "../../admin/build/plugin-ide-runtime.ts";
 import { pluginIdeDeclarations } from "../../admin/src/features/studio-engine/plugin-ide-declarations.ts";
 const app = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -33,6 +34,15 @@ await fs.mkdir(join(stage, "assets"), { recursive: true });
 await fs.writeFile(
   join(stage, "assets/bundles.json"),
   JSON.stringify(await buildPluginIdeBundles()),
+);
+const declarations = await buildDeclarations(repo, pluginIdeDeclarations);
+await fs.writeFile(
+  join(stage, "assets/declarations.json"),
+  JSON.stringify(declarations.files),
+);
+await fs.writeFile(
+  join(stage, "assets/type-licenses.json"),
+  JSON.stringify(declarations.licenses),
 );
 await fs.mkdir(join(stage, "types"), { recursive: true });
 await fs.writeFile(join(stage, "types/plugin.d.ts"), pluginIdeDeclarations);

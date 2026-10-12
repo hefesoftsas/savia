@@ -105,12 +105,15 @@ export async function readProjectFile(
   maxBytes: number,
 ): Promise<Buffer> {
   const target = await assertNoSymlinks(root, path);
+  const expected = await fs.lstat(target);
   const handle = await fs.open(
     target,
     constants.O_RDONLY | constants.O_NOFOLLOW,
   );
   try {
     const stat = await handle.stat();
+    if (stat.ino !== expected.ino || stat.dev !== expected.dev)
+      throw new Error("Project file changed while opening it.");
     if (!stat.isFile() || stat.size > maxBytes)
       throw new Error("Project file exceeds its byte limit.");
     const chunks: Buffer[] = [];
@@ -126,6 +129,9 @@ export async function readProjectFile(
     }
     const bytes = Buffer.concat(chunks, length);
     await assertNoSymlinks(root, path);
+    const current = await fs.lstat(target);
+    if (current.ino !== stat.ino || current.dev !== stat.dev)
+      throw new Error("Project file changed while reading it.");
     return bytes;
   } finally {
     await handle.close();

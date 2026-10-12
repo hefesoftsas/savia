@@ -15,6 +15,7 @@ it("packages a standalone VSIX with required commands and compiler assets and no
     output = join(directory, "savia.vsix");
   execFileSync(process.execPath, ["scripts/build.mjs", "--stage", stage], {
     stdio: "pipe",
+    env: { ...process.env, NODE_PATH: "" },
   });
   execFileSync(
     process.execPath,
@@ -27,6 +28,7 @@ it("packages a standalone VSIX with required commands and compiler assets and no
   expect(names).toContain("extension/dist/extension.cjs");
   expect(names).toContain("extension/assets/bundles.json");
   expect(names).toContain("extension/types/plugin.d.ts");
+  expect(names).toContain("extension/assets/declarations.json");
   const manifest = JSON.parse(
     new TextDecoder().decode(entries["extension/package.json"]),
   );
@@ -57,6 +59,7 @@ it("refuses to package missing pinned runtime assets", async () => {
   const stage = join(directory, "broken");
   execFileSync(process.execPath, ["scripts/build.mjs", "--stage", stage], {
     stdio: "pipe",
+    env: { ...process.env, NODE_PATH: "" },
   });
   await fs.unlink(join(stage, "assets/bundles.json"));
   expect(() =>
@@ -73,3 +76,57 @@ it("refuses to package missing pinned runtime assets", async () => {
     ),
   ).toThrow();
 });
+
+it("resolves supported library types in an isolated authored checkout", async () => {
+  const stage = join(directory, "typed-stage"),
+    root = join(directory, "typed-project");
+  execFileSync(process.execPath, ["scripts/build.mjs", "--stage", stage], {
+    stdio: "pipe",
+    env: { ...process.env, NODE_PATH: "" },
+  });
+  const declarations = JSON.parse(
+    await fs.readFile(join(stage, "assets/declarations.json"), "utf8"),
+  );
+  const { checkoutProject } = await import("../src/checkout");
+  const { initial } = await import("./authoring-fixtures");
+  await fs.mkdir(root);
+  await checkoutProject(
+    { scheme: "file", fsPath: root },
+    initial,
+    {
+      id: "a".repeat(64),
+      origin: "https://example.com",
+      tenantId: 12,
+      principalId: "author",
+    },
+    declarations,
+  );
+  await fs.writeFile(
+    join(root, "entry.tsx"),
+    `import React from "react";
+import { createRoot } from "react-dom/client";
+import { z } from "zod";
+import { PDFDocument } from "pdf-lib";
+export function render(el: HTMLElement) {
+ const value: string=z.string().parse("Hello");
+ // @ts-expect-error Zod output is typed, not any
+ const invalid: number = z.string().parse("Hello");
+ const node: React.ReactNode=<span>{value}</span>;
+ createRoot(el).render(node);
+ void PDFDocument.create();
+}`,
+  );
+  const ts = await import("typescript");
+  const config = ts.readConfigFile(
+    join(root, "tsconfig.json"),
+    ts.sys.readFile,
+  );
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
+  const program = ts.createProgram(parsed.fileNames, parsed.options);
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  expect(
+    diagnostics.map((d) =>
+      ts.flattenDiagnosticMessageText(d.messageText, "\n"),
+    ),
+  ).toEqual([]);
+}, 60000);

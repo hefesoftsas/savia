@@ -22,6 +22,8 @@ if (
   throw new Error("Invalid standalone VSIX manifest.");
 for (const path of [
   "assets/bundles.json",
+  "assets/declarations.json",
+  "assets/type-licenses.json",
   "dist/extension.cjs",
   "types/plugin.d.ts",
   "README.md",

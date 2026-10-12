@@ -8,6 +8,8 @@ on:
       - "packages/studio-shared/**"
       - "packages/studio-server/**"
       - "apps/admin/build/plugin-ide-runtime.ts"
+      - "apps/admin/src/features/studio-engine/plugin-ide-react-runtime.ts"
+      - "apps/admin/src/features/studio-engine/plugin-ide-declarations.ts"
       - "pnpm-lock.yaml"
       - ".github/workflows/build-vscode-extension.yml"
   push:
@@ -18,6 +20,8 @@ on:
       - "packages/studio-shared/**"
       - "packages/studio-server/**"
       - "apps/admin/build/plugin-ide-runtime.ts"
+      - "apps/admin/src/features/studio-engine/plugin-ide-react-runtime.ts"
+      - "apps/admin/src/features/studio-engine/plugin-ide-declarations.ts"
       - "pnpm-lock.yaml"
       - ".github/workflows/build-vscode-extension.yml"
   workflow_dispatch:

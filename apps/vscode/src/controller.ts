@@ -43,6 +43,7 @@ import {
   type PublicationAttempt,
 } from "./publication";
 import { writeMetadata } from "./metadata";
+import { nativeDeclarationFiles } from "./declarations";
 export type FileChange = {
   path: string;
   kind: "added" | "modified" | "deleted";
@@ -137,6 +138,7 @@ export class AuthoringController {
     readonly documents: PublishedSourceProvider,
     private bundles: AuthoringBundles,
     readonly ui: AuthoringUi,
+    private declarations = nativeDeclarationFiles,
   ) {}
   private connected(): ActiveConnection {
     const connection = this.connections.current;
@@ -249,7 +251,12 @@ export class AuthoringController {
     const root = await this.ui.chooseFolder();
     this.current(connection);
     if (!root) return;
-    await checkoutProject(root, checkout, connection.profile);
+    await checkoutProject(
+      root,
+      checkout,
+      connection.profile,
+      this.declarations,
+    );
     this.current(connection);
     await this.ui.openFile(root, checkout.entryPath);
     await this.ui.notify("checkoutReady", { pluginId, version });

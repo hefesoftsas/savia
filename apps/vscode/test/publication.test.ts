@@ -192,3 +192,28 @@ it("reports server success separately when writing the local receipt fails", asy
     await fs.chmod(join(f!.root, ".savia/receipts"), 0o700);
   }
 });
+
+it("keeps gateway and server errors recoverable from the exact retained artifact", async () => {
+  const publication = await prepared();
+  f!.state.reject = 502;
+  await expect(
+    publishPrepared(publication!, f!.connection.client, {
+      isTrusted: () => true,
+      isCurrent: () => true,
+    }),
+  ).rejects.toThrow();
+  const attempt = (
+    await listPublicationAttempts(f!.uri, f!.connection.profile)
+  )[0];
+  expect(attempt.state).toBe("uncertain");
+  f!.state.reject = 0;
+  const result = await recoverPublication(
+    f!.uri,
+    f!.connection.profile,
+    attempt.sha256,
+    f!.connection.client,
+    { isTrusted: () => true, isCurrent: () => true },
+  );
+  expect(result.receipt.state).toBe("published");
+  expect(f!.state.posts[1].bytes).toEqual(publication!.zipBytes);
+});
