@@ -1,8 +1,10 @@
 {
-  "name": "savia-plugin-editor-preview",
+  // Local development only. Preview deployment uses wrangler.preview.jsonc
+  // rendered from the infrastructure project.
+  "name": "savia-plugin-editor-local",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-31",
-  "workers_dev": true,
+  "workers_dev": false,
   "assets": {
     "directory": "../admin/dist-plugin-editor",
     "binding": "ASSETS",

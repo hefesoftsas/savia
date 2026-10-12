@@ -1,6 +1,12 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
-import { resolveInfraNames, stackProtection } from "./naming.mjs";
+import {
+  resolveInfraNames,
+  stackProtection,
+  stateBackendName,
+  stateBackendUrl as buildStateBackendUrl,
+  assertAccountId,
+} from "./naming.mjs";
 
 // Hybrid model (recommended by Cloudflare for Pulumi + Wrangler):
 // - Pulumi owns stateful resources: D1 databases + R2 bucket.
@@ -13,11 +19,14 @@ import { resolveInfraNames, stackProtection } from "./naming.mjs";
 // only if you need it in state).
 
 const config = new pulumi.Config();
-const accountId = config.require("accountId");
+const accountId = assertAccountId(config.require("accountId"));
 const environment = config.require("environment");
 const publicOrigin = config.require("publicOrigin");
 const documentsBucket = config.require("documentsBucket");
 const pagesSearchIndex = config.get("pagesSearchIndex");
+const shouldProvisionFlows = config.getBoolean("flowsEnabled") ?? false;
+const configuredStateBucket = config.get("stateBucket");
+const stateBucketName = stateBackendName(environment, configuredStateBucket);
 
 const names = resolveInfraNames({
   environment,
@@ -71,6 +80,56 @@ const documents = new cloudflare.R2Bucket(
   stateOpts,
 );
 
+// The self-managed Pulumi backend is optional during bootstrap. When enabled,
+// protect its bucket even in preview because it contains the state itself.
+const stateBackendUrlValue = stateBucketName
+  ? buildStateBackendUrl(accountId, stateBucketName)
+  : null;
+const stateBackend = stateBucketName
+  ? new cloudflare.R2Bucket(
+      "state-backend",
+      { accountId, name: stateBucketName },
+      { protect: true },
+    )
+  : null;
+
+// Flows data resources are opt-in. Wrangler remains the sole publisher of
+// the Flows Worker and its attached bindings, migrations, workflows, and cron.
+const flows = shouldProvisionFlows
+  ? {
+      database: new cloudflare.D1Database(
+        "flows-db",
+        { accountId, name: names.flows.database },
+        d1Opts,
+      ),
+      kv: new cloudflare.WorkersKvNamespace(
+        "flows-kv",
+        { accountId, title: names.flows.kvNamespace },
+        stateOpts,
+      ),
+      resourcesBucket: new cloudflare.R2Bucket(
+        "flows-resources",
+        { accountId, name: names.flows.buckets.resources },
+        stateOpts,
+      ),
+      datasetsBucket: new cloudflare.R2Bucket(
+        "flows-datasets",
+        { accountId, name: names.flows.buckets.datasets },
+        stateOpts,
+      ),
+      inboxesBucket: new cloudflare.R2Bucket(
+        "flows-inboxes",
+        { accountId, name: names.flows.buckets.inboxes },
+        stateOpts,
+      ),
+      queue: new cloudflare.Queue(
+        "flows-queue",
+        { accountId, queueName: names.flows.queue },
+        stateOpts,
+      ),
+    }
+  : null;
+
 // Feed these outputs into the existing render + deploy flow:
 //   pulumi stack output --json > /tmp/savia-infra.json
 //   SAVIA_AUTH_D1_ID=$(jq -r .authD1Id) SAVIA_DOMAIN_D1_ID=... \
@@ -79,6 +138,7 @@ const documents = new cloudflare.R2Bucket(
 // Secrets stay out of state: keep using
 // scripts/upload-cloudflare-secrets.mjs with `pulumi config set --secret`.
 export const authD1Id = authDb.id;
+export const cloudflareAccountId = accountId;
 export const domainD1Id = domainDb.id;
 export const documentsBucketName = documents.name;
 export const resolvedPublicOrigin = names.publicOrigin;
@@ -87,3 +147,21 @@ export const workerNames = names.workers;
 export const databaseNames = names.databases;
 export const vectorizeIndex = names.vectorizeIndex ?? null;
 export const deletionProtected = protection.protect;
+export const flowsEnabled = shouldProvisionFlows;
+export const flowsResources = flows
+  ? {
+      databaseId: flows.database.id,
+      kvNamespaceId: flows.kv.id,
+      workerName: names.flows.worker,
+      workflowName: names.flows.workflow,
+      queueName: flows.queue.queueName,
+      buckets: {
+        resources: flows.resourcesBucket.name,
+        datasets: flows.datasetsBucket.name,
+        inboxes: flows.inboxesBucket.name,
+      },
+    }
+  : null;
+export const plannedFlowsResourceNames = names.flows;
+export const stateBackendBucketName = stateBackend?.name ?? null;
+export const stateBackendUrl = stateBackendUrlValue;

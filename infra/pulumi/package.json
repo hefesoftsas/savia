@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "Pulumi program for Savia Cloudflare stateful infrastructure (D1 + R2)",
+  "description": "Central Savia Cloudflare infrastructure and Worker deployment manifests",
   "scripts": {
     "preview": "pulumi preview",
     "up": "pulumi up",
@@ -11,8 +11,8 @@
     "backup": "node backup.mjs",
     "restore": "node restore.mjs",
     "destroy": "node destroy.mjs",
-    "typecheck": "tsc --noEmit",
-    "test": "node --test naming.test.mjs outputs.test.mjs render-from-outputs.test.mjs destroy.test.mjs backup.test.mjs restore.test.mjs"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p branch-preview && tsc --noEmit -p shared-registry",
+    "test": "node --test *.test.mjs"
   },
   "dependencies": {
     "@pulumi/cloudflare": "^6.21.0",

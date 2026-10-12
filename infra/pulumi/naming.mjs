@@ -7,6 +7,7 @@ export const DEFAULT_DOCUMENTS_BUCKET = "savia-documents";
 export const DEFAULT_PUBLIC_ORIGIN = "https://savia.app.hefesoft.com";
 export const PREVIEW_PUBLIC_ORIGIN = "https://savia-preview.hefesoft.com";
 export const PREVIEW_VECTORIZE_INDEX = "savia-pages-search-preview";
+export const BASE_STATE_BUCKET = "savia-pulumi-state";
 
 export const BASE_WORKERS = Object.freeze({
   auth: "savia-auth",
@@ -21,6 +22,19 @@ export const BASE_WORKERS = Object.freeze({
 export const BASE_DATABASES = Object.freeze({
   auth: "savia-auth",
   domain: "savia-agencies",
+});
+
+const BASE_FLOWS = Object.freeze({
+  worker: "savia-flows",
+  database: "savia-flows",
+  kvNamespace: "savia-flows",
+  buckets: Object.freeze({
+    resources: "savia-flows-resources",
+    datasets: "savia-flows-datasets",
+    inboxes: "savia-flows-inboxes",
+  }),
+  queue: "savia-flows-execute",
+  workflow: "savia-flows-execute",
 });
 
 export function normalizeEnvironment(environment) {
@@ -53,6 +67,32 @@ export function workerName(base, environment) {
 export function databaseName(base, environment) {
   normalizeEnvironment(environment);
   return environment === "preview" ? `${base}-preview` : base;
+}
+
+export function stateBackendName(environment, configuredName) {
+  const env = normalizeEnvironment(environment);
+  if (configuredName === undefined) return undefined;
+  if (typeof configuredName !== "string" || configuredName.trim() === "") {
+    throw new Error("stateBucket must be a non-empty bucket name");
+  }
+  const name = configuredName.trim();
+  if (name === DEFAULT_DOCUMENTS_BUCKET || name === "savia-documents-preview") {
+    throw new Error("stateBucket must be separate from the documents bucket");
+  }
+  const expected =
+    env === "preview" ? `${BASE_STATE_BUCKET}-preview` : BASE_STATE_BUCKET;
+  if (name !== expected) {
+    throw new Error(`stateBucket must be ${expected} for ${env}`);
+  }
+  return expected;
+}
+
+export function stateBackendUrl(accountId, bucketName) {
+  const account = assertAccountId(accountId);
+  if (typeof bucketName !== "string" || bucketName.trim() === "") {
+    throw new Error("state backend bucket name is required");
+  }
+  return `s3://${bucketName.trim()}?endpoint=${account}.r2.cloudflarestorage.com&region=auto&s3ForcePathStyle=true`;
 }
 
 // Resolves deterministic infra names + validates preview/production isolation.
@@ -105,6 +145,68 @@ export function resolveInfraNames({
       auth: databaseName(BASE_DATABASES.auth, env),
       domain: databaseName(BASE_DATABASES.domain, env),
     }),
+    flows: Object.freeze({
+      worker: workerName(BASE_FLOWS.worker, env),
+      database: databaseName(BASE_FLOWS.database, env),
+      kvNamespace: databaseName(BASE_FLOWS.kvNamespace, env),
+      buckets: Object.freeze(
+        Object.fromEntries(
+          Object.entries(BASE_FLOWS.buckets).map(([key, base]) => [
+            key,
+            databaseName(base, env),
+          ]),
+        ),
+      ),
+      queue: databaseName(BASE_FLOWS.queue, env),
+      workflow: databaseName(BASE_FLOWS.workflow, env),
+    }),
+  });
+}
+
+// Validate the optional Flows resource outputs before they are serialized
+// into the Worker deployment manifest. The Worker remains Wrangler-owned.
+export function validateFlowsResources(resources, environment) {
+  if (resources === null || resources === undefined) return null;
+  const env = normalizeEnvironment(environment);
+  const names = resolveInfraNames({
+    environment: env,
+    documentsBucket:
+      env === "preview" ? "savia-documents-preview" : DEFAULT_DOCUMENTS_BUCKET,
+    publicOrigin:
+      env === "preview" ? PREVIEW_PUBLIC_ORIGIN : DEFAULT_PUBLIC_ORIGIN,
+  }).flows;
+  const requiredId = (value, label) => {
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new Error(`Flows resource output ${label} is required`);
+    }
+    return value.trim();
+  };
+  for (const [key, expected] of [
+    ["workerName", names.worker],
+    ["workflowName", names.workflow],
+    ["queueName", names.queue],
+  ]) {
+    if (resources?.[key] !== expected) {
+      throw new Error(`Flows resource output ${key} does not match ${env}`);
+    }
+  }
+  if (!resources.buckets || typeof resources.buckets !== "object") {
+    throw new Error("Flows resource output buckets are required");
+  }
+  for (const [key, expected] of Object.entries(names.buckets)) {
+    if (resources.buckets[key] !== expected) {
+      throw new Error(
+        `Flows resource output buckets.${key} does not match ${env}`,
+      );
+    }
+  }
+  return Object.freeze({
+    databaseId: requiredId(resources.databaseId, "databaseId"),
+    kvNamespaceId: requiredId(resources.kvNamespaceId, "kvNamespaceId"),
+    workerName: names.worker,
+    workflowName: names.workflow,
+    queueName: names.queue,
+    buckets: names.buckets,
   });
 }
 

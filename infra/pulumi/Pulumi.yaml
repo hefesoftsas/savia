@@ -1,5 +1,5 @@
 name: savia-cloudflare
-description: Savia Cloudflare stateful infrastructure (D1 + R2). Worker code still deploys via Wrangler.
+description: Savia Cloudflare infrastructure resources and generated Worker deployment configuration. Wrangler remains the sole Worker publisher.
 runtime: nodejs
 template:
   config:
@@ -17,3 +17,6 @@ template:
       description: R2 documents bucket (must be isolated per environment)
     savia-cloudflare:pagesSearchIndex:
       description: Optional Vectorize index name (preview must use the preview index)
+    savia-cloudflare:flowsEnabled:
+      description: Provision isolated Savia Flows D1, KV, R2, and Queue resources
+      default: false

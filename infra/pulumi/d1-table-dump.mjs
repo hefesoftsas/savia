@@ -69,12 +69,24 @@ export function buildInsert(table, columns, row) {
     throw new Error("columns required");
   const names = columns.map(quoteIdent).join(",");
   const values = columns.map((c) => formatValue(row[c])).join(",");
-  return `INSERT INTO ${quoteIdent(table)} (${names}) VALUES (${values});`;
+  // Restore runs migrations first, so backed-up rows can overlap seeds and
+  // migration-ledger entries. UPSERT updates those rows in place: SQLite's
+  // REPLACE deletes the conflicting row first, which can cascade-delete
+  // restored child rows before deferred foreign keys are checked.
+  const updates = columns
+    .map((column) => `${quoteIdent(column)}=excluded.${quoteIdent(column)}`)
+    .join(",");
+  return `INSERT INTO ${quoteIdent(table)} (${names}) VALUES (${values}) ON CONFLICT DO UPDATE SET ${updates};`;
 }
 
-export function buildSelectPage(table, columns, limit, offset, orderByRowid = true) {
-  if (!Number.isInteger(limit) || limit <= 0)
-    throw new Error("limit required");
+export function buildSelectPage(
+  table,
+  columns,
+  limit,
+  offset,
+  orderByRowid = true,
+) {
+  if (!Number.isInteger(limit) || limit <= 0) throw new Error("limit required");
   if (!Number.isInteger(offset) || offset < 0)
     throw new Error("offset required");
   const names = columns.map(quoteIdent).join(",");
@@ -96,17 +108,15 @@ export async function appendInserts(outputFile, table, columns, rows) {
   await writeFile(outputFile, sql, { flag: "a" });
 }
 
-export async function writeTableHeader(outputFile, table, rowCount) {
+export async function writeDumpHeader(outputFile) {
   await mkdir(dirname(outputFile), { recursive: true });
   await writeFile(
     outputFile,
-    `-- table dump of ${table} (${rowCount} rows)\nBEGIN;\n`,
-    { flag: "w" },
+    "-- D1 table dump\nPRAGMA defer_foreign_keys = ON;\n",
+    {
+      flag: "w",
+    },
   );
-}
-
-export async function appendCommit(outputFile) {
-  await writeFile(outputFile, "COMMIT;\n", { flag: "a" });
 }
 
 function d1Query(accountId, uuid, token, sql) {
@@ -138,49 +148,60 @@ export async function dumpDatabase({
   uuid,
   token,
   outputFile,
+  stack,
   batchSize = 200,
+  quiescent = false,
 }) {
   if (!accountId || !uuid || !token || !outputFile)
     throw new Error("accountId, uuid, token and outputFile are required");
+  if (stack === "production") {
+    throw new Error("Production table-dump fallback is disabled");
+  }
+  if (stack !== "preview") {
+    throw new Error(
+      "stack must be preview; production table-dump fallback is disabled",
+    );
+  }
+  if (!quiescent)
+    throw new Error(
+      "Refusing the inconsistent table-dump fallback without explicit write-quiescence confirmation",
+    );
   const query = (sql) => d1Query(accountId, uuid, token, sql);
   const tables = query(
     "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
   ).then((r) => r.results.map((row) => row.name));
-  const fts = query("SELECT name FROM sqlite_master WHERE sql LIKE '%USING fts5%'")
+  const fts = query(
+    "SELECT name FROM sqlite_master WHERE sql LIKE '%USING fts5%'",
+  )
     .then((r) => r.results.map((row) => row.name))
     .catch(() => []);
   const [allTables, ftsNames] = await Promise.all([tables, fts]);
   const skipped = [];
-  for (const ftsName of ftsNames) skipped.push(ftsName, ...shadowTablesFor(ftsName));
+  for (const ftsName of ftsNames)
+    skipped.push(ftsName, ...shadowTablesFor(ftsName));
   const targets = allTables.filter((t) => !isSkippedTable(t, ftsNames));
-  let first = true;
   let totalRows = 0;
   const dumped = [];
+  await writeDumpHeader(outputFile);
   for (const table of targets) {
     try {
       const columns = (
         await query(`PRAGMA table_info(${quoteIdent(table)})`)
       ).results.map((row) => row.name);
       if (columns.length === 0) continue;
-      const createSql = (
-        await query(
-          `SELECT sql FROM sqlite_master WHERE name = ${formatValue(table)}`,
-        )
-      ).results[0]?.sql ?? "";
+      const createSql =
+        (
+          await query(
+            `SELECT sql FROM sqlite_master WHERE name = ${formatValue(table)}`,
+          )
+        ).results[0]?.sql ?? "";
       const orderByRowid = !/WITHOUT ROWID/i.test(createSql);
       const count = (
         await query(`SELECT COUNT(*) AS c FROM ${quoteIdent(table)}`)
       ).results[0].c;
-      if (first) {
-        await mkdir(dirname(outputFile), { recursive: true });
-        await writeFile(outputFile, `-- D1 table dump\n`, { flag: "w" });
-        first = false;
-      }
-      await writeFile(
-        outputFile,
-        `-- table ${table} (${count} rows)\nBEGIN;\n`,
-        { flag: "a" },
-      );
+      await writeFile(outputFile, `-- table ${table} (${count} rows)\n`, {
+        flag: "a",
+      });
       let offset = 0;
       while (true) {
         const page = await query(
@@ -193,7 +214,6 @@ export async function dumpDatabase({
         totalRows += rows.length;
         if (rows.length < batchSize) break;
       }
-      await appendCommit(outputFile);
       dumped.push(table);
     } catch (error) {
       // Platform tables such as _cf_KV reject direct reads (SQLITE_AUTH);

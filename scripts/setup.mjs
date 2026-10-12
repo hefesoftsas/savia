@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { renderProductionConfigs } from "./render-cloudflare-production-config.mjs";
+import { readDeploymentOutputs } from "../infra/pulumi/render-from-outputs.mjs";
 
 const execFileAsync = promisify(execFile);
 const workspaceRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -55,16 +56,22 @@ async function run(command, args, options = {}) {
 const wrangler = (args, options) =>
   run("pnpm", ["--filter", "@savia/api", "exec", "wrangler", ...args], options);
 
-async function ensureDatabase(name) {
-  const existing = findDatabaseUuid(
-    await wrangler(["d1", "list", "--json"]),
-    name,
-  );
-  if (existing) return { uuid: existing, created: false };
-  const created = await wrangler(["d1", "create", name, "--json"]);
-  const uuid = findDatabaseUuid(created, name);
-  if (!uuid) throw new Error(`Could not parse database id for ${name}`);
-  return { uuid, created: true };
+export function validateSetupInfrastructure(
+  outputs,
+  { publicOrigin, documentsBucket },
+) {
+  if (
+    outputs.resolvedEnvironment !== "production" ||
+    outputs.resolvedPublicOrigin !== publicOrigin ||
+    outputs.documentsBucketName !== documentsBucket
+  ) {
+    throw new Error(
+      "Setup plan must match the adopted production infrastructure; configure infra/pulumi first",
+    );
+  }
+  if (!outputs.authD1Id || !outputs.domainD1Id)
+    throw new Error("Infrastructure outputs are missing database IDs");
+  return { auth: outputs.authD1Id, domain: outputs.domainD1Id };
 }
 
 async function putSecret(app, key, value) {
@@ -81,7 +88,7 @@ async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--help")) {
     console.log(
-      "Usage: node scripts/setup.mjs [--dry-run]\n\nInteractive first install on your Cloudflare account.\nAnswers can also come from SAVIA_SETUP_ORIGIN/BUCKET/EMAIL/NANGO_KEY/OPENROUTER_KEY/SEED.",
+      "Usage: node scripts/setup.mjs [--dry-run]\n\nBootstrap the application after provisioning/adopting the production stack in infra/pulumi. Remote Pulumi backend credentials are required.\nAnswers can also come from SAVIA_SETUP_ORIGIN/BUCKET/EMAIL/NANGO_KEY/OPENROUTER_KEY/SEED.",
     );
     return;
   }
@@ -185,26 +192,22 @@ async function main() {
       return;
     }
 
-    console.log("\n[1/8] Creating D1 databases…");
-    const authDb = await ensureDatabase("savia-auth");
-    const domainDb = await ensureDatabase("savia-agencies");
-    console.log(
-      `      auth: ${authDb.uuid}${authDb.created ? " (created)" : " (exists)"}`,
+    console.log("\n[1/8] Reading adopted production infrastructure…");
+    let outputs = await readDeploymentOutputs("production", { env: cloudEnv });
+    validateSetupInfrastructure(outputs, { publicOrigin, documentsBucket });
+    console.log("[2/8] Applying the reviewed infrastructure plan…");
+    await execFileAsync(
+      "node",
+      ["infra/pulumi/deploy-stack.mjs", "--stack", "production", "--apply"],
+      { cwd: workspaceRoot, env: cloudEnv, maxBuffer: 32 * 1024 * 1024 },
     );
-    console.log(
-      `      domain: ${domainDb.uuid}${domainDb.created ? " (created)" : " (exists)"}`,
-    );
-
-    console.log("[2/8] Creating R2 bucket…");
-    try {
-      await wrangler(["r2", "bucket", "create", documentsBucket], {
-        env: cloudEnv,
-      });
-    } catch (error) {
-      if (!/already exists/i.test(String(error.stderr ?? error.message)))
-        throw error;
-      console.log("      bucket already exists");
-    }
+    outputs = await readDeploymentOutputs("production", { env: cloudEnv });
+    const ids = validateSetupInfrastructure(outputs, {
+      publicOrigin,
+      documentsBucket,
+    });
+    const authDb = { uuid: ids.auth };
+    const domainDb = { uuid: ids.domain };
 
     console.log("[3/8] Rendering worker configs…");
     await renderProductionConfigs({
@@ -213,6 +216,8 @@ async function main() {
       documentsBucket,
       outputRoot: workspaceRoot,
       publicOrigin,
+      pagesSearchIndex: outputs.vectorizeIndex ?? undefined,
+      flowsResources: outputs.flowsEnabled ? outputs.flowsResources : null,
     });
 
     console.log("[4/8] Storing secrets…");

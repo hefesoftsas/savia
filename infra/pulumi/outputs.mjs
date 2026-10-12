@@ -2,15 +2,89 @@
 // Both render-from-outputs.mjs (deploy) and destroy.mjs (bucket emptying)
 // read the live stack instead of duplicating bucket names, so a renamed
 // bucket never desynchronizes the scripts.
-import { exportsForRender } from "./naming.mjs";
+import {
+  exportsForRender,
+  resolveInfraNames,
+  validateFlowsResources,
+  assertAccountId,
+} from "./naming.mjs";
 
 const REQUIRED_OUTPUTS = [
+  "cloudflareAccountId",
   "authD1Id",
   "domainD1Id",
   "documentsBucketName",
   "resolvedEnvironment",
   "resolvedPublicOrigin",
 ];
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function requireNonEmptyString(value, label) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`Stack outputs are missing ${label}`);
+  }
+  return value.trim();
+}
+
+function assertNamedValues(actual, expected, label) {
+  if (!isRecord(actual)) throw new Error(`Stack outputs are missing ${label}`);
+  for (const [key, expectedValue] of Object.entries(expected)) {
+    const actualValue = actual[key];
+    const matches = isRecord(expectedValue)
+      ? isRecord(actualValue) &&
+        Object.entries(expectedValue).every(
+          ([childKey, childValue]) => actualValue[childKey] === childValue,
+        )
+      : actualValue === expectedValue;
+    if (!matches) {
+      throw new Error(
+        `Stack output ${label}.${key} does not match the resolved environment`,
+      );
+    }
+  }
+}
+
+function validateStackOutputs(parsed) {
+  for (const key of REQUIRED_OUTPUTS) {
+    requireNonEmptyString(parsed?.[key], key);
+  }
+  assertAccountId(parsed.cloudflareAccountId);
+  const resolvedEnvironment = parsed.resolvedEnvironment;
+  const names = resolveInfraNames({
+    environment: resolvedEnvironment,
+    documentsBucket: parsed.documentsBucketName,
+    publicOrigin: parsed.resolvedPublicOrigin,
+    pagesSearchIndex: parsed.vectorizeIndex,
+  });
+  requireNonEmptyString(parsed.authD1Id, "authD1Id");
+  requireNonEmptyString(parsed.domainD1Id, "domainD1Id");
+  assertNamedValues(parsed.workerNames, names.workers, "workerNames");
+  assertNamedValues(parsed.databaseNames, names.databases, "databaseNames");
+  assertNamedValues(
+    parsed.plannedFlowsResourceNames,
+    names.flows,
+    "plannedFlowsResourceNames",
+  );
+
+  if (typeof parsed.flowsEnabled !== "boolean") {
+    throw new Error("Stack outputs are missing flowsEnabled");
+  }
+  if (!parsed.flowsEnabled) {
+    if (parsed.flowsResources !== null) {
+      throw new Error("Disabled Flows must not have provisioned resources");
+    }
+    return Object.freeze({ ...parsed });
+  }
+
+  if (parsed.flowsResources === null || parsed.flowsResources === undefined) {
+    throw new Error("Enabled Flows stack outputs are missing flowsResources");
+  }
+  validateFlowsResources(parsed.flowsResources, resolvedEnvironment);
+  return Object.freeze({ ...parsed });
+}
 
 export function parseStackOutputs(jsonText) {
   let parsed;
@@ -19,41 +93,42 @@ export function parseStackOutputs(jsonText) {
   } catch {
     throw new Error("Stack outputs are not valid JSON");
   }
-  for (const key of REQUIRED_OUTPUTS) {
-    if (typeof parsed?.[key] !== "string" || parsed[key].trim() === "") {
-      throw new Error(`Stack outputs are missing ${key}`);
-    }
-  }
-  if (
-    !parsed?.databaseNames ||
-    typeof parsed.databaseNames !== "object" ||
-    typeof parsed.databaseNames.auth !== "string" ||
-    typeof parsed.databaseNames.domain !== "string"
-  ) {
-    throw new Error("Stack outputs are missing databaseNames");
-  }
-  return Object.freeze({ ...parsed });
+  return validateStackOutputs(parsed);
+}
+
+export function assertDeploymentAccount(outputs, runtimeAccountId) {
+  const account = assertAccountId(runtimeAccountId);
+  if (outputs.cloudflareAccountId !== account)
+    throw new Error(
+      "Pulumi account must match the Cloudflare Worker publisher account",
+    );
 }
 
 // Builds the env consumed by scripts/render-cloudflare-production-config.mjs.
 export function renderEnvFromOutputs(outputs, outputRoot) {
+  const validated = validateStackOutputs(outputs);
   const names = {
-    bucket: outputs.documentsBucketName,
-    publicOrigin: outputs.resolvedPublicOrigin,
-    environment: outputs.resolvedEnvironment,
+    bucket: validated.documentsBucketName,
+    publicOrigin: validated.resolvedPublicOrigin,
+    environment: validated.resolvedEnvironment,
   };
   const searchIndex =
-    typeof outputs.vectorizeIndex === "string" &&
-    outputs.vectorizeIndex.trim() !== ""
-      ? outputs.vectorizeIndex.trim()
+    typeof validated.vectorizeIndex === "string" &&
+    validated.vectorizeIndex.trim() !== ""
+      ? validated.vectorizeIndex.trim()
       : null;
   return Object.freeze({
+    SAVIA_CLOUDFLARE_ACCOUNT_ID: validated.cloudflareAccountId,
     ...exportsForRender({
-      authD1Id: outputs.authD1Id,
-      domainD1Id: outputs.domainD1Id,
+      authD1Id: validated.authD1Id,
+      domainD1Id: validated.domainD1Id,
       names,
     }),
-    ...(searchIndex ? { SAVIA_PAGES_SEARCH_INDEX: searchIndex } : {}),
+    // Empty values override inherited variables so disabled services cannot activate.
+    SAVIA_PAGES_SEARCH_INDEX: searchIndex ?? "",
+    SAVIA_FLOWS_RESOURCES: validated.flowsEnabled
+      ? JSON.stringify(validated.flowsResources)
+      : "",
     SAVIA_DEPLOY_CONFIG_ROOT: outputRoot,
   });
 }

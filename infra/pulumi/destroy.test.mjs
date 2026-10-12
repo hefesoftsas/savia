@@ -1,6 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseDestroyArgs, assertStackMatches } from "./destroy.mjs";
+import {
+  parseDestroyArgs,
+  assertStackMatches,
+  emptyBucketForDestroy,
+  buildPulumiDestroyArgs,
+} from "./destroy.mjs";
 
 describe("pulumi destroy guards", () => {
   it("plans preview destroy with --dry-run", () => {
@@ -16,9 +21,7 @@ describe("pulumi destroy guards", () => {
   });
 
   it("refuses production without explicit acknowledgement", () => {
-    assert.throws(() =>
-      parseDestroyArgs(["--stack", "production", "--apply"]),
-    );
+    assert.throws(() => parseDestroyArgs(["--stack", "production", "--apply"]));
     const plan = parseDestroyArgs([
       "--stack",
       "production",
@@ -43,6 +46,87 @@ describe("pulumi destroy guards", () => {
         { resolvedEnvironment: "production" },
         { stack: "preview", environment: "preview" },
       ),
+    );
+  });
+
+  it("excludes the protected state backend resource from Pulumi destroy", () => {
+    const args = buildPulumiDestroyArgs("preview", true);
+    assert.deepEqual(args, [
+      "destroy",
+      "--stack",
+      "preview",
+      "--yes",
+      "--exclude",
+      "urn:pulumi:preview::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::state-backend",
+    ]);
+    assert.deepEqual(buildPulumiDestroyArgs("preview", false), [
+      "destroy",
+      "--stack",
+      "preview",
+      "--yes",
+    ]);
+    assert.throws(
+      () =>
+        assertStackMatches(
+          {
+            resolvedEnvironment: "preview",
+            stateBackendBucketName: "savia-documents-preview",
+            documentsBucketName: "savia-documents-preview",
+          },
+          { stack: "preview", environment: "preview" },
+        ),
+      /state backend cannot be the documents bucket/,
+    );
+  });
+
+  it("uses the paginated Cloudflare API to empty every R2 object and fails closed", async () => {
+    const calls = [];
+    let deleted = false;
+    const fetchImpl = async (url, options) => {
+      calls.push({ url, options });
+      if (options.method === "DELETE") {
+        deleted = true;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, result: { key: "a.txt" } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          result: deleted ? [] : [{ key: "a.txt" }],
+          result_info: { is_truncated: false },
+        }),
+      };
+    };
+    assert.equal(
+      await emptyBucketForDestroy({
+        bucket: "bucket",
+        accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+        token: "redacted",
+        fetchImpl,
+      }),
+      1,
+    );
+    assert.equal(calls.length, 3);
+    assert.equal(calls[1].options.method, "DELETE");
+    assert.match(calls[0].url, /\/objects\?/);
+
+    await assert.rejects(
+      emptyBucketForDestroy({
+        bucket: "bucket",
+        accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+        token: "redacted",
+        fetchImpl: async () => ({
+          ok: false,
+          status: 403,
+          json: async () => ({ success: false }),
+        }),
+      }),
+      /R2 list failed/,
     );
   });
 });

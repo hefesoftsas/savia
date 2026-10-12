@@ -9,6 +9,8 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { normalizeEnvironment, stackProtection } from "./naming.mjs";
 import { parseStackOutputs } from "./outputs.mjs";
+import { listR2Objects } from "./backup.mjs";
+import { assertAccountId, assertSafeR2Key } from "./naming.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -43,12 +45,6 @@ function flagValue(argv, flag) {
   return value;
 }
 
-function isAlreadyGone(error) {
-  return /not found|does not exist|no such|404/i.test(
-    String(error.stderr ?? error.stdout ?? error.message),
-  );
-}
-
 // The confirmation guards use the CLI stack name, but the bucket comes
 // from the stack's own config. If a stack named `preview` were ever
 // configured with environment=production, emptying "its" bucket would hit
@@ -59,42 +55,69 @@ export function assertStackMatches(outputs, plan) {
       `Stack ${plan.stack} resolves to environment ${outputs?.resolvedEnvironment}, refusing to destroy`,
     );
   }
+  if (
+    outputs?.stateBackendBucketName &&
+    outputs.stateBackendBucketName === outputs.documentsBucketName
+  ) {
+    throw new Error(
+      "The Pulumi state backend cannot be the documents bucket; refusing destroy",
+    );
+  }
 }
 
-async function runWrangler(args, cwd) {
-  const { stdout } = await execFileAsync(
-    "pnpm",
-    ["--filter", "@savia/api", "exec", "wrangler", ...args],
-    { cwd, maxBuffer: 32 * 1024 * 1024 },
-  );
-  return stdout;
+export function buildPulumiDestroyArgs(stack, hasStateBackend) {
+  const args = ["destroy", "--stack", stack, "--yes"];
+  if (hasStateBackend) {
+    args.push(
+      "--exclude",
+      `urn:pulumi:${stack}::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::state-backend`,
+    );
+  }
+  return args;
 }
 
 // R2 buckets cannot be deleted while they hold objects. Pulumi's destroy
-// would fail on a non-empty bucket, so empty it first like preview-destroy.
-export async function emptyBucketForDestroy(bucket, repoRoot) {
-  const listed = await runWrangler(
-    ["r2", "object", "list", bucket, "--remote", "--json"],
-    repoRoot,
+export async function emptyBucketForDestroy({
+  bucket,
+  accountId,
+  token,
+  fetchImpl = fetch,
+}) {
+  if (!bucket || !token)
+    throw new Error("bucket and token are required to empty R2");
+  assertAccountId(accountId);
+  let removed = 0;
+  for (let round = 0; round < 10; round++) {
+    const objects = await listR2Objects({
+      bucket,
+      accountId,
+      token,
+      fetchImpl,
+    });
+    if (objects.length === 0) return removed;
+    for (const object of objects) {
+      assertSafeR2Key(object.key);
+      const encodedKey = object.key
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/");
+      const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${encodeURIComponent(bucket)}/objects/${encodedKey}`;
+      const response = await fetchImpl(url, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json();
+      if (response.ok === false || payload.success === false) {
+        throw new Error(
+          `R2 delete failed (${response.status}): ${JSON.stringify(payload.errors ?? payload).slice(0, 200)}`,
+        );
+      }
+      removed++;
+    }
+  }
+  throw new Error(
+    `R2 bucket ${bucket} did not become empty after 10 list/delete rounds`,
   );
-  let parsed;
-  try {
-    parsed = listed.trim() === "" ? [] : JSON.parse(listed);
-  } catch {
-    throw new Error(`Could not list objects in ${bucket}`);
-  }
-  const rows = Array.isArray(parsed) ? parsed : (parsed?.objects ?? []);
-  const keys = rows
-    .map((row) => row?.key)
-    .filter(Boolean)
-    .slice(0, 5000);
-  for (const key of keys) {
-    await runWrangler(
-      ["r2", "object", "delete", `${bucket}/${key}`, "--remote", "-y"],
-      repoRoot,
-    );
-  }
-  return keys.length;
 }
 
 async function stackOutputs(pulumiCwd, stack) {
@@ -108,7 +131,6 @@ async function stackOutputs(pulumiCwd, stack) {
 
 async function main() {
   const plan = parseDestroyArgs(process.argv.slice(2));
-  const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
   const pulumiCwd = fileURLToPath(new URL(".", import.meta.url));
   if (plan.dryRun) {
     console.log(
@@ -123,24 +145,23 @@ async function main() {
   assertStackMatches(outputs, plan);
   if (!plan.skipEmptyBucket) {
     const bucket = outputs.documentsBucketName;
-    try {
-      const removed = await emptyBucketForDestroy(bucket, repoRoot);
-      console.log(`Emptied ${removed} object(s) from ${bucket}`);
-    } catch (error) {
-      if (isAlreadyGone(error)) {
-        console.log(`Bucket already gone: ${bucket}`);
-      } else {
-        console.log(
-          `WARNING: could not empty ${bucket} (${error.message.split("\n")[0]}). ` +
-            "Destroy may fail; empty it in the dashboard or with wrangler r2 commands.",
-        );
-      }
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const token = process.env.CLOUDFLARE_API_TOKEN;
+    if (!accountId || !token) {
+      throw new Error(
+        "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are required to safely empty the R2 bucket",
+      );
     }
+    const removed = await emptyBucketForDestroy({ bucket, accountId, token });
+    console.log(`Emptied ${removed} object(s) from ${bucket}`);
   }
   await execFileAsync(
     "pulumi",
-    ["destroy", "--stack", plan.stack, "--yes"],
-    { cwd: pulumiCwd, stdio: "inherit" },
+    buildPulumiDestroyArgs(plan.stack, Boolean(outputs.stateBackendBucketName)),
+    {
+      cwd: pulumiCwd,
+      stdio: "inherit",
+    },
   );
 }
 
