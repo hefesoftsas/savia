@@ -16,6 +16,8 @@ export const apiKeyScopeSchema = z.enum([
   "records:read",
   "records:create",
   "records:update",
+  "plugins:read",
+  "plugins:publish",
 ]);
 export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;
 export function isRecordingScope(scope: ApiKeyScope): scope is RecordingScope {
@@ -28,7 +30,7 @@ export const createPersonalApiKeySchema = z
     scopes: z
       .array(apiKeyScopeSchema)
       .min(1)
-      .max(7)
+      .max(apiKeyScopeSchema.options.length)
       .refine((s) => new Set(s).size === s.length),
     lifetimeDays: z
       .union([z.literal(7), z.literal(30), z.literal(90)])

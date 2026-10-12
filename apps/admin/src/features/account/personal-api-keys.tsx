@@ -58,7 +58,10 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
   useEffect(() => {
     if (tenant === "0")
       setScopes((current) =>
-        current.filter((scope) => !scope.startsWith("records:")),
+        current.filter(
+          (scope) =>
+            !scope.startsWith("records:") && !scope.startsWith("plugins:"),
+        ),
       );
   }, [tenant]);
   const run = async (action: () => Promise<void>) => {
@@ -92,9 +95,18 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
     "records:create": t("Create records description"),
     "records:update": t("Update records description"),
   };
+  const pluginLabels = {
+    "plugins:read": t("Read plugin sources"),
+    "plugins:publish": t("Publish plugin versions"),
+  };
+  const pluginDescriptions = {
+    "plugins:read": t("Read plugin sources description"),
+    "plugins:publish": t("Publish plugin versions description"),
+  };
   const scopeLabels: Record<ApiKeyScope, string> = {
     ...recordingLabels,
     ...recordLabels,
+    ...pluginLabels,
   };
   const toggleScope = (scope: ApiKeyScope, checked: boolean) =>
     setScopes((current) =>
@@ -305,6 +317,48 @@ export function PersonalApiKeysPanel({ api }: { api: ApiClient }) {
                               {
                                 recordDescriptions[
                                   scope as keyof typeof recordDescriptions
+                                ]
+                              }
+                            </span>
+                          </span>
+                        </label>
+                      ),
+                    )}
+                  </fieldset>
+                  <fieldset
+                    className="grid gap-2 border-t pt-3"
+                    disabled={tenant === "0"}
+                  >
+                    <legend className="mb-1 text-sm font-medium">
+                      {t("Plugin authoring")}
+                    </legend>
+                    <p className="text-sm text-muted-foreground">
+                      {tenant === "0"
+                        ? t("Plugin authoring unavailable for platform")
+                        : t("Plugin authoring description")}
+                    </p>
+                    {(Object.keys(pluginLabels) as ApiKeyScope[]).map(
+                      (scope) => (
+                        <label
+                          key={scope}
+                          className="flex min-h-14 cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 size-4 shrink-0 accent-primary"
+                            checked={scopes.includes(scope)}
+                            onChange={(e) =>
+                              toggleScope(scope, e.target.checked)
+                            }
+                          />
+                          <span className="grid gap-1">
+                            <span className="font-medium">
+                              {pluginLabels[scope as keyof typeof pluginLabels]}
+                            </span>
+                            <span className="text-xs leading-relaxed text-muted-foreground">
+                              {
+                                pluginDescriptions[
+                                  scope as keyof typeof pluginDescriptions
                                 ]
                               }
                             </span>

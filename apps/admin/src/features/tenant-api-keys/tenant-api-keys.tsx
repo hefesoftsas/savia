@@ -137,9 +137,18 @@ export function TenantApiKeysPanel({
     "records:create": t("Create records description"),
     "records:update": t("Update records description"),
   };
+  const pluginLabels = {
+    "plugins:read": t("Read plugin sources"),
+    "plugins:publish": t("Publish plugin versions"),
+  };
+  const pluginDescriptions = {
+    "plugins:read": t("Read plugin sources description"),
+    "plugins:publish": t("Publish plugin versions description"),
+  };
   const scopeLabels: Record<ApiKeyScope, string> = {
     ...recordingLabels,
     ...recordLabels,
+    ...pluginLabels,
   };
   const toggleScope = (scope: ApiKeyScope, checked: boolean) =>
     setScopes((current) =>
@@ -368,6 +377,41 @@ export function TenantApiKeysPanel({
                     </label>
                   ))}
                 </fieldset>
+                <fieldset className="grid gap-2 border-t pt-3">
+                  <legend className="mb-1 text-sm font-medium">
+                    {t("Plugin authoring")}
+                  </legend>
+                  <p className="text-sm text-muted-foreground">
+                    {t("Plugin authoring description")}
+                  </p>
+                  {(
+                    Object.keys(pluginLabels) as Array<
+                      keyof typeof pluginLabels
+                    >
+                  ).map((scope) => (
+                    <label
+                      key={scope}
+                      className="flex min-h-14 cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 size-4 shrink-0 accent-primary"
+                        checked={scopes.includes(scope)}
+                        onChange={(event) =>
+                          toggleScope(scope, event.target.checked)
+                        }
+                      />
+                      <span className="grid gap-1">
+                        <span className="font-medium">
+                          {pluginLabels[scope]}
+                        </span>
+                        <span className="text-xs leading-relaxed text-muted-foreground">
+                          {pluginDescriptions[scope]}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
                 <p className="text-sm text-muted-foreground">
                   {t("Key owner access explanation")}
                 </p>
@@ -581,9 +625,7 @@ export function TenantApiKeysPanel({
                             await client.delete(tenantId, key.id);
                             if (contextRef.current !== context) return;
                             setKeys((current) =>
-                              current.filter(
-                                (value) => value.id !== key.id,
-                              ),
+                              current.filter((value) => value.id !== key.id),
                             );
                           });
                         }}
