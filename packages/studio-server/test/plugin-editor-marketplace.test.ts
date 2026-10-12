@@ -51,6 +51,65 @@ afterEach(() => {
 });
 
 describe("Open VSX marketplace client", () => {
+  it("retains ratings, reviews and downloads on filtered marketplace results", async () => {
+    const item = {
+      ...extensionMetadata("Acme", "rated", "1.2.3"),
+      averageRating: 4.75,
+      reviewCount: 12,
+      downloadCount: 12345,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const path = new URL(String(input)).pathname;
+        if (path === "/api/-/search")
+          return json({ totalSize: 1, extensions: [item] });
+        if (path.endsWith("/file/package.json"))
+          return json(webManifest("Acme", "rated", "1.2.3"));
+        return json(item);
+      }),
+    );
+    const result = await searchOpenVsx("rated");
+    expect(result.results[0]).toMatchObject({
+      averageRating: 4.75,
+      reviewCount: 12,
+      downloadCount: 12345,
+    });
+  });
+
+  it.each([
+    [{}, { averageRating: null, reviewCount: null, downloadCount: null }],
+    [
+      { averageRating: 0, reviewCount: 0, downloadCount: 0 },
+      { averageRating: 0, reviewCount: 0, downloadCount: 0 },
+    ],
+    [
+      { averageRating: 6, reviewCount: -1, downloadCount: 1.5 },
+      { averageRating: null, reviewCount: null, downloadCount: null },
+    ],
+    [
+      {
+        averageRating: "4",
+        reviewCount: "10",
+        downloadCount: Number.MAX_SAFE_INTEGER + 1,
+      },
+      { averageRating: null, reviewCount: null, downloadCount: null },
+    ],
+  ])(
+    "keeps missing or invalid popularity metrics distinct from zero: %j",
+    async (fields, expected) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          json({ ...extensionMetadata("Acme", "rated", "1.2.3"), ...fields }),
+        ),
+      );
+      expect(await getOpenVsxVersion("Acme", "rated", "1.2.3")).toMatchObject(
+        expected,
+      );
+    },
+  );
+
   it("uses the official search endpoint with a bounded page and returns registry text only", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));

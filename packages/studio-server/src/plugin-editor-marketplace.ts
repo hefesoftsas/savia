@@ -45,6 +45,9 @@ export type OpenVsxExtension = {
   displayName: string | null;
   description: string | null;
   license: string | null;
+  averageRating?: number | null;
+  reviewCount?: number | null;
+  downloadCount?: number | null;
   downloadUrl: string;
   targetPlatform?: string | null;
 };
@@ -246,9 +249,24 @@ function mapExtension(value: unknown): OpenVsxExtension | null {
     displayName: boundedString(item.displayName, 200),
     description: boundedString(item.description, 2000),
     license: boundedString(item.license, 200),
+    averageRating:
+      typeof item.averageRating === "number" &&
+      Number.isFinite(item.averageRating) &&
+      item.averageRating >= 0 &&
+      item.averageRating <= 5
+        ? item.averageRating
+        : null,
+    reviewCount: marketplaceCount(item.reviewCount),
+    downloadCount: marketplaceCount(item.downloadCount),
     downloadUrl: parsed.href,
     targetPlatform,
   };
+}
+
+function marketplaceCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
 }
 
 function assertWebTarget(metadata: OpenVsxExtension): void {
