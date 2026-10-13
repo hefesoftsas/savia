@@ -76,7 +76,10 @@ root. The local stack builds Flows, checks its migrations, starts it on port
 The root commands are `flows:build`, `flows:dev`, `flows:test`,
 `flows:typecheck` and `flows:verify`. The API build is a Wrangler dry run, with
 metrics disabled. It bundles files locally and does not deploy. Admin's normal
-build includes the child application's assets under `flows-ui/`.
+build includes the child application's assets under `flows-ui/`. Unused upstream
+marketing screenshots and sample media are excluded; templates and viewers remain
+available. See [SPA build performance](spa-build-performance.md) for size budgets
+and startup payload measurements.
 
 When starting the module separately, build it first. Start the core API with
 `SAVIA_FLOWS_ENABLED=1` and the same `WRANGLER_REGISTRY_PATH` used by the

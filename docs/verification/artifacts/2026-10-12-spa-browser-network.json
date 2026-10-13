@@ -1,0 +1,17 @@
+{
+  "method": "Cold localhost browser resource timing at eight seconds, gzip level6, distinct fresh origins, zero cached resources. Includes JS/CSS/images, excludes audit script, document, API and service-worker background traffic. No authenticated local backend; authenticated My Day payload is measured separately from the dependency graph.",
+  "before": {
+    "requests": 62,
+    "encodedBodyBytes": 3667076,
+    "transferBytes": 3685676,
+    "decodedBodyBytes": 12875859,
+    "cachedResources": 0
+  },
+  "after": {
+    "requests": 61,
+    "encodedBodyBytes": 1511534,
+    "transferBytes": 1529834,
+    "decodedBodyBytes": 5192325,
+    "cachedResources": 0
+  }
+}

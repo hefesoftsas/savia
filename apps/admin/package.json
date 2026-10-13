@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm run typecheck && pnpm run build:downloads && vite build",
-    "build:assets": "pnpm run build:downloads && vite build",
+    "build": "pnpm run typecheck && pnpm run build:downloads && vite build && pnpm run verify:build",
+    "build:assets": "pnpm run build:downloads && vite build && pnpm run verify:build",
     "build:downloads": "pnpm --filter @savia/vscode build && pnpm --filter @savia/vscode package && node ../../scripts/prepare-vscode-download.mjs",
     "build:plugin-editor": "vite build --config vite.plugin-editor.config.ts",
     "build:worker": "pnpm run build",
@@ -14,7 +14,9 @@
     "generate:studio-api": "orval --config src/features/studio-engine/orval.config.ts && prettier --write src/features/studio-engine/generated/studio.ts",
     "typecheck": "pnpm run generate:api && tsc --noEmit",
     "test": "vitest run --maxWorkers=1 $VITEST_SHARD_ARGS",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify:build": "node ../../scripts/check-spa-build.mjs dist",
+    "measure:build": "node ../../scripts/measure-spa-build.mjs dist"
   },
   "dependencies": {
     "@assistant-ui/ai-sdk": "0.0.3",
