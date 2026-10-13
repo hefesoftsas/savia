@@ -27,16 +27,29 @@ function fakeRequest({
   headers = {},
   chunks = [],
   delayMs = 0,
+  chunkDelayMs = 0,
 }) {
   const seen = {};
   const requestImpl = (options, onResponse) => {
     seen.options = options;
     const request = new EventEmitter();
+    let response;
     request.end = () => {
       if (delayMs < 0) return;
       setTimeout(() => {
         if (request.destroyed) return;
-        const response = Readable.from(chunks);
+        response = Readable.from(
+          chunkDelayMs
+            ? (async function* () {
+                for (const chunk of chunks) {
+                  await new Promise((resolve) =>
+                    setTimeout(resolve, chunkDelayMs),
+                  );
+                  yield chunk;
+                }
+              })()
+            : chunks,
+        );
         response.statusCode = statusCode;
         response.headers = headers;
         onResponse(response);
@@ -44,6 +57,7 @@ function fakeRequest({
     };
     request.destroy = (error) => {
       request.destroyed = true;
+      response?.destroy(error);
       if (error) queueMicrotask(() => request.emit("error", error));
       return request;
     };
@@ -138,7 +152,7 @@ test("rejects non-200 responses without creating the destination", async () => {
   });
 });
 
-test("enforces an overall request timeout and removes partial output", async () => {
+test("times out when no response arrives before the inactivity deadline", async () => {
   await withTempDir(async (dir) => {
     const destFile = join(dir, "timeout");
     const { requestImpl } = fakeRequest({ delayMs: -1 });
@@ -156,6 +170,27 @@ test("enforces an overall request timeout and removes partial output", async () 
       /timed out/i,
     );
     await assert.rejects(readFile(destFile), { code: "ENOENT" });
+  });
+});
+
+test("allows a download that makes steady progress beyond one idle interval", async () => {
+  await withTempDir(async (dir) => {
+    const destFile = join(dir, "slow-progress");
+    const chunks = ["a", "b", "c", "d"].map((value) => Buffer.from(value));
+    const { requestImpl } = fakeRequest({ chunks, chunkDelayMs: 150 });
+    const result = await downloadR2Object({
+      accountId: ACCOUNT_ID,
+      bucket: BUCKET,
+      key: "slow-progress",
+      token: TOKEN,
+      destFile,
+      expectedSize: 4,
+      requestImpl,
+      timeoutMs: 500,
+    });
+
+    assert.equal(result.bytesWritten, 4);
+    assert.equal(await readFile(destFile, "utf8"), "abcd");
   });
 });
 

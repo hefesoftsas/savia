@@ -208,3 +208,7 @@ Preview selects the raw API fallback with `SAVIA_BACKUP_R2_FORCE_API=true`;
 the former `SAVIA_BACKUP_R2_FORCE_WRANGLER` selector remains a compatibility
 alias for bypassing S3 credentials. No additional bucket credentials or
 service activation is required.
+
+Each raw download has a five-minute inactivity timeout that resets as bytes
+arrive. The preview deployment job retains its 40-minute overall deadline;
+slow but progressing objects are not aborted by a per-object wall-clock timer.

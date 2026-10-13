@@ -12,6 +12,8 @@ const MAX_TIMEOUT_MS = 10 * 60 * 1000;
  * Download an R2 object through Cloudflare's authenticated API without HTTP
  * content decoding. `https.request` exposes the response's stored bytes, so
  * Content-Encoding metadata such as br or gzip is preserved in the file.
+ * `timeoutMs` bounds inactivity before headers and between response chunks;
+ * any arriving chunk restarts the timer so large progressing downloads finish.
  */
 export async function downloadR2Object({
   accountId,
@@ -81,9 +83,16 @@ export async function downloadR2Object({
   let settled = false;
   let fileCreated = false;
   let bytesWritten = 0;
-  const timeout = setTimeout(() => {
-    request?.destroy(new Error("R2 object request timed out"));
-  }, timeoutMs);
+  let timeout;
+  const resetInactivityTimeout = () => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      request?.destroy(
+        new Error("R2 object request timed out after inactivity"),
+      );
+    }, timeoutMs);
+  };
+  resetInactivityTimeout();
 
   try {
     await new Promise((resolvePromise, rejectPromise) => {
@@ -103,6 +112,7 @@ export async function downloadR2Object({
             response.destroy();
             return;
           }
+          resetInactivityTimeout();
           if (response.statusCode !== 200) {
             response.destroy();
             reject(
@@ -115,6 +125,7 @@ export async function downloadR2Object({
 
           const counter = new Transform({
             transform(chunk, _encoding, callback) {
+              resetInactivityTimeout();
               bytesWritten += chunk.byteLength;
               if (bytesWritten > expectedSize) {
                 callback(
