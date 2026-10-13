@@ -346,7 +346,10 @@ task resolution, expanded step output and the mobile inspector.
 ## Preview release controls
 
 The centralized `infra/pulumi` project owns preview resources and generates all
-Worker manifests. `flowsEnabled` provisions the optional module;
+Worker manifests. A legacy disabled stack may omit the planned dead-letter
+queue name; bootstrap derives that one name from its validated environment
+before applying the plan. Explicit mismatches and active stacks still fail
+validation. `flowsEnabled` provisions the optional module;
 `flowsExecutionEnabled` independently permits execution. Preview explicitly enables both flags with the restricted catalog and pilot
 quotas below; production remains disabled. Keep provisioning enabled when pausing an existing deployment so that
 D1, R2, KV, Queue and Durable Object state are retained. The preview API pauses
