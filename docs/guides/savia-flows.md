@@ -361,7 +361,11 @@ execution modes: 100 runs per UTC day, 1,000 per UTC month, two concurrent runs,
 count toward the step limit. Repeated stable IDs do not spend another admission;
 inline duplicate execution is rejected. Native waiting segments release their
 concurrency slot. Reservations renew on work and expire after 20 minutes after
-a hard abort. Organization credit bypasses cannot bypass these limits.
+a hard abort. Savia-managed tenants in the restricted, quota-enabled edition use these
+shared admission limits rather than Dafthunk compute credits. The bridge keeps
+upstream credit bypass enabled only while both restricted catalog and quotas
+are configured; removing either restores the legacy credit gate. This bypass
+cannot bypass the shared execution limits.
 Cloud execution requires explicit, valid settings and all five quota bounds.
 The restricted catalog's `LOCAL_ONLY` flag does not relax cloud quotas.
 The shared pause control is persisted in D1 and checked atomically before work.

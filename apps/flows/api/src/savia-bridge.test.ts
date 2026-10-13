@@ -118,6 +118,33 @@ describe("Savia host identity bridge", () => {
     expect(refreshed?.role).toBe("member");
   });
 
+  it("uses shared quotas instead of upstream credits only in the quota-bound restricted edition", async () => {
+    const token = await bridgeToken();
+    const request = (bindings: ApiContext["Bindings"]) =>
+      appFor().request(
+        "/tenant:101/workflows",
+        { headers: { "x-savia-flows-context": token } },
+        bindings,
+      );
+    expect(
+      (await request({ ...env, SAVIA_FLOWS_QUOTAS_ENABLED: "true" })).status,
+    ).toBe(200);
+    const billing = () =>
+      testEnv.DB.prepare(
+        "SELECT compute_credits,unlimited_usage,credits_exhausted FROM organizations WHERE id='tenant:101'",
+      ).first();
+    expect(await billing()).toMatchObject({
+      compute_credits: 0,
+      unlimited_usage: 1,
+      credits_exhausted: 0,
+    });
+    expect((await request(env)).status).toBe(200);
+    expect(await billing()).toMatchObject({
+      unlimited_usage: 0,
+      credits_exhausted: 1,
+    });
+  });
+
   it("rejects absent, forged, and expired host contexts", async () => {
     const app = appFor();
     const absent = await app.request("/tenant:101/workflows", {}, env);

@@ -174,6 +174,11 @@ export const saviaBridgeMiddleware: MiddlewareHandler<ApiContext> = async (
             )
           ? ("admin" as const)
           : ("member" as const);
+    // Savia owns admission/billing for the restricted edition. Upstream
+    // credits must not reject its tenants before the shared quota policy runs.
+    const quotaBoundEdition =
+      c.env.SAVIA_FLOWS_LOCAL_ONLY === "true" &&
+      c.env.SAVIA_FLOWS_QUOTAS_ENABLED === "true";
     const now = new Date();
     await db.batch([
       db
@@ -182,13 +187,19 @@ export const saviaBridgeMiddleware: MiddlewareHandler<ApiContext> = async (
           id: claims.organization.id,
           name: claims.organization.name,
           computeCredits: 0,
-          creditsExhausted: true,
+          creditsExhausted: !quotaBoundEdition,
+          unlimitedUsage: quotaBoundEdition,
           createdAt: now,
           updatedAt: now,
         })
         .onConflictDoUpdate({
           target: organizations.id,
-          set: { name: claims.organization.name, updatedAt: now },
+          set: {
+            name: claims.organization.name,
+            updatedAt: now,
+            unlimitedUsage: quotaBoundEdition,
+            creditsExhausted: !quotaBoundEdition,
+          },
         }),
       db
         .insert(users)
