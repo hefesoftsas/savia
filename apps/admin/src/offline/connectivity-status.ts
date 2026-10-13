@@ -5,7 +5,9 @@ const TIMEOUT_MS = 8_000;
 const listeners = new Set<() => void>();
 let online = true;
 let generation = 0;
+let explicitVerifications = 0;
 let request: AbortController | undefined;
+let completion: Promise<void> | undefined;
 let retry: ReturnType<typeof setTimeout> | undefined;
 let deadline: ReturnType<typeof setTimeout> | undefined;
 
@@ -31,18 +33,35 @@ function cancel() {
   deadline = undefined;
   request?.abort();
   request = undefined;
+  completion = undefined;
 }
 
-async function probe() {
-  if (!listeners.size || !visible() || request) return;
+function probe(explicit = false): Promise<void> {
+  if (!listeners.size || (!explicit && !visible())) return Promise.resolve();
+  if (completion) return completion;
   if (browserOnline()) {
     publish(true);
-    return;
+    return Promise.resolve();
   }
+  clearTimeout(retry);
+  retry = undefined;
   const controller = new AbortController();
   request = controller;
   const currentGeneration = ++generation;
   deadline = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const pending = performProbe(controller, currentGeneration);
+  completion = pending;
+  const settled = () => {
+    if (completion === pending) completion = undefined;
+  };
+  void pending.then(settled, settled);
+  return pending;
+}
+
+async function performProbe(
+  controller: AbortController,
+  currentGeneration: number,
+) {
   try {
     const origin = import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin;
     const response = await fetch(new URL("/api/health", origin).toString(), {
@@ -72,13 +91,30 @@ async function probe() {
   }
 }
 
+/** Recovery can run after ApplicationRoot and its subscribers were unmounted. */
+export async function verifyOnlineStatus(): Promise<boolean> {
+  if (getOnlineStatus()) return true;
+  explicitVerifications += 1;
+  const unsubscribe = subscribeOnlineStatus(() => {});
+  try {
+    await probe(true);
+    return online;
+  } finally {
+    explicitVerifications -= 1;
+    unsubscribe();
+  }
+}
+
 function browserChanged() {
+  if (explicitVerifications && !browserOnline()) return;
   cancel();
   publish(browserOnline());
   if (!browserOnline()) void probe();
 }
 
 function visibilityChanged() {
+  // A user-requested recovery owns its bounded check across focus changes.
+  if (explicitVerifications) return;
   cancel();
   if (visible()) void probe();
 }

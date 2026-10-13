@@ -1,3 +1,5 @@
+import { verifyOnlineStatus } from "../offline/connectivity-status";
+
 /** Match asset-loader failures, not ordinary API/network failures. */
 export function isModuleLoadError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : "";
@@ -77,7 +79,7 @@ function waitForActivation(
 
 /** Called only after user confirmation. Never clears caches, replicas, queues or credentials. */
 export async function prepareAppReload(): Promise<void> {
-  if (navigator.onLine === false)
+  if (!(await verifyOnlineStatus()))
     throw new Error(
       "Necesitas conexión para buscar la nueva versión. Tus datos locales se conservan.",
     );
