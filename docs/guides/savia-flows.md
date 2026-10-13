@@ -347,8 +347,8 @@ task resolution, expanded step output and the mobile inspector.
 
 The centralized `infra/pulumi` project owns preview resources and generates all
 Worker manifests. `flowsEnabled` provisions the optional module;
-`flowsExecutionEnabled` independently permits execution. Both are committed as
-`false`. Keep provisioning enabled when pausing an existing deployment so that
+`flowsExecutionEnabled` independently permits execution. Preview explicitly enables both flags with the restricted catalog and pilot
+quotas below; production remains disabled. Keep provisioning enabled when pausing an existing deployment so that
 D1, R2, KV, Queue and Durable Object state are retained. The preview API pauses
 native workflows as well when Flows execution is disabled.
 
@@ -383,7 +383,8 @@ Only AES-256-GCM encrypted archives are retained as seven-day GitHub artifacts;
 keep `SAVIA_FLOWS_BACKUP_KEY` in a separate secure store. The shared QuickJS
 executor is published before the final Flows Worker and API binding. A failed
 backup leaves maintenance in place, so an operator must deliberately recover or
-resume the deployment. No setup command in this change activates preview.
+resume the deployment. Preview activation is managed through the committed
+Pulumi configuration and the release pipeline.
 
 See [Flows backup and restore](../runbooks/flows-backup-restore.md). Recovery
 checks the account, isolated resource names, metadata and every file hash.

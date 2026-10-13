@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { flowsWorkerConfig } from "../infra/pulumi/flows-worker-config.mjs";
-test("preview preparation is disabled by default and has bounded compute settings", async () => {
+test("preview activation is explicit and has bounded compute settings", async () => {
   const yaml = await readFile(
     new URL("../infra/pulumi/Pulumi.preview.yaml", import.meta.url),
     "utf8",
   );
-  assert.match(yaml, /savia-cloudflare:flowsEnabled: false/);
-  assert.match(yaml, /savia-cloudflare:flowsExecutionEnabled: false/);
+  assert.match(yaml, /savia-cloudflare:flowsEnabled: true/);
+  assert.match(yaml, /savia-cloudflare:flowsExecutionEnabled: true/);
   const flow = flowsWorkerConfig(
     { buckets: {} },
     "https://savia-preview.hefesoft.com",
@@ -19,7 +19,7 @@ test("preview preparation is disabled by default and has bounded compute setting
   assert.equal(flow.vars.SAVIA_FLOWS_MAINTENANCE, "false");
   assert.equal(flow.limits.cpu_ms, 30000);
   assert.equal(flow.queues.consumers[0].max_concurrency, 1);
-  assert.equal(flow.queues.consumers[0].max_retries, 100);
+  assert.equal(flow.queues.consumers[0].max_retries, 5);
 });
 test("release stops on a failed backup and publishes the executor before Flows", async () => {
   const pipeline = await readFile(
