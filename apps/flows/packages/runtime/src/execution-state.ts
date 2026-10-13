@@ -6,6 +6,10 @@
 
 import type { NodeType, WorkflowExecutionStatus } from "@savia/flows-types";
 
+import {
+  estimateRuntimeJsonBytes,
+  MAX_EXECUTION_STATE_BYTES,
+} from "./resource-limits";
 import type { ExecutionGraph } from "./execution-graph";
 import type {
   ExecutableNodeConstructor,
@@ -21,8 +25,33 @@ import type {
  */
 export function applyNodeResult(
   state: ExecutionState,
-  result: NodeExecutionResult
-): void {
+  result: NodeExecutionResult,
+): NodeExecutionResult {
+  if (result.status !== "skipped") {
+    const nodeInputs = result.inputs
+      ? { ...state.nodeInputs, [result.nodeId]: result.inputs }
+      : state.nodeInputs;
+    const nodeOutputs =
+      result.status === "completed"
+        ? { ...state.nodeOutputs, [result.nodeId]: result.outputs }
+        : state.nodeOutputs;
+    if (
+      estimateRuntimeJsonBytes(
+        { nodeInputs, nodeOutputs },
+        MAX_EXECUTION_STATE_BYTES,
+      ) > MAX_EXECUTION_STATE_BYTES
+    ) {
+      result = {
+        nodeId: result.nodeId,
+        status: "error",
+        error:
+          "Execution data exceeds the 4 MiB limit; reduce outputs or use file references.",
+        usage: "usage" in result ? result.usage : undefined,
+      };
+    } else if (result.status === "error") {
+      result = { ...result, error: result.error.slice(0, 4096) };
+    }
+  }
   if (result.status !== "skipped" && result.inputs) {
     state.nodeInputs[result.nodeId] = result.inputs;
   }
@@ -48,6 +77,7 @@ export function applyNodeResult(
       // applies the final result.
       break;
   }
+  return result;
 }
 
 /**
@@ -64,7 +94,7 @@ export function applyNodeResult(
  */
 export function getExecutionStatus(
   graph: ExecutionGraph,
-  state: ExecutionState
+  state: ExecutionState,
 ): WorkflowExecutionStatus {
   const { skippedNodes, nodeErrors } = state;
 
@@ -72,7 +102,7 @@ export function getExecutionStatus(
   // scanning them per lookup — this runs on every progress update.
   const visited = new Set([...state.executedNodes, ...skippedNodes]);
   const allNodesVisited = graph.nodeIds.every(
-    (nodeId) => visited.has(nodeId) || nodeId in nodeErrors
+    (nodeId) => visited.has(nodeId) || nodeId in nodeErrors,
   );
 
   if (!allNodesVisited) {
@@ -113,7 +143,7 @@ export function getExecutionStatus(
 export function analyzeUpstream(
   graph: ExecutionGraph,
   state: ExecutionState,
-  nodeId: string
+  nodeId: string,
 ): UpstreamAnalysis {
   const inboundEdges = graph.inboundEdges(nodeId);
 
@@ -178,7 +208,7 @@ export function analyzeUpstream(
 export function inferSkipReason(
   graph: ExecutionGraph,
   state: ExecutionState,
-  nodeId: string
+  nodeId: string,
 ): SkipReasonResult {
   const { reason, blockedBy } = analyzeUpstream(graph, state, nodeId);
   return { reason, blockedBy };
@@ -189,7 +219,7 @@ export function inferSkipReason(
  * Ensures type-safe handling of runtime values throughout execution.
  */
 export function isRuntimeValue(
-  value: unknown
+  value: unknown,
 ): value is import("./execution-types").RuntimeValue {
   if (value === null || value === undefined) {
     return false;
@@ -236,7 +266,6 @@ export function getNodeType(executable: unknown): NodeType | null {
   }
 
   const constr = executable.constructor as
-    | ExecutableNodeConstructor
-    | undefined;
+    ExecutableNodeConstructor | undefined;
   return constr?.nodeType ?? null;
 }

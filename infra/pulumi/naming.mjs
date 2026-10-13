@@ -34,6 +34,7 @@ const BASE_FLOWS = Object.freeze({
     inboxes: "savia-flows-inboxes",
   }),
   queue: "savia-flows-execute",
+  deadLetterQueue: "savia-flows-execute-dlq",
   workflow: "savia-flows-execute",
 });
 
@@ -158,6 +159,7 @@ export function resolveInfraNames({
         ),
       ),
       queue: databaseName(BASE_FLOWS.queue, env),
+      deadLetterQueue: databaseName(BASE_FLOWS.deadLetterQueue, env),
       workflow: databaseName(BASE_FLOWS.workflow, env),
     }),
   });
@@ -190,6 +192,14 @@ export function validateFlowsResources(resources, environment) {
       throw new Error(`Flows resource output ${key} does not match ${env}`);
     }
   }
+  if (
+    resources.deadLetterQueueName !== undefined &&
+    resources.deadLetterQueueName !== names.deadLetterQueue
+  ) {
+    throw new Error(
+      `Flows resource output deadLetterQueueName does not match ${env}`,
+    );
+  }
   if (!resources.buckets || typeof resources.buckets !== "object") {
     throw new Error("Flows resource output buckets are required");
   }
@@ -206,6 +216,9 @@ export function validateFlowsResources(resources, environment) {
     workerName: names.worker,
     workflowName: names.workflow,
     queueName: names.queue,
+    ...(resources.deadLetterQueueName !== undefined
+      ? { deadLetterQueueName: names.deadLetterQueue }
+      : {}),
     buckets: names.buckets,
   });
 }

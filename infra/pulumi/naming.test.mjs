@@ -36,6 +36,7 @@ describe("pulumi naming", () => {
         inboxes: "savia-flows-inboxes-preview",
       },
       queue: "savia-flows-execute-preview",
+      deadLetterQueue: "savia-flows-execute-dlq-preview",
       workflow: "savia-flows-execute-preview",
     });
   });
@@ -58,6 +59,7 @@ describe("pulumi naming", () => {
         inboxes: "savia-flows-inboxes",
       },
       queue: "savia-flows-execute",
+      deadLetterQueue: "savia-flows-execute-dlq",
       workflow: "savia-flows-execute",
     });
   });
@@ -162,6 +164,7 @@ describe("pulumi naming", () => {
       workerName: "savia-flows-preview",
       workflowName: "savia-flows-execute-preview",
       queueName: "savia-flows-execute-preview",
+      deadLetterQueueName: "savia-flows-execute-dlq-preview",
       buckets: {
         resources: "savia-flows-resources-preview",
         datasets: "savia-flows-datasets-preview",
@@ -169,6 +172,12 @@ describe("pulumi naming", () => {
       },
     };
     assert.deepEqual(validateFlowsResources(resources, "preview"), resources);
+    assert.throws(() =>
+      validateFlowsResources(
+        { ...resources, deadLetterQueueName: "savia-flows-execute-dlq" },
+        "preview",
+      ),
+    );
     assert.throws(() =>
       validateFlowsResources({ ...resources, databaseId: " " }, "preview"),
     );

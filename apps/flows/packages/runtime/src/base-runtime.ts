@@ -21,6 +21,11 @@ import { nodeOutputsToApi } from "./parameter-mapper";
 import type { RuntimeDependencies } from "./runtime-dependencies";
 import { extractTrigger, type TriggerContext } from "./trigger";
 import { validateWorkflow } from "./validate-workflow";
+import {
+  assertRuntimeValueWithinLimit,
+  MAX_RUNTIME_INPUT_BYTES,
+  MAX_RUNTIME_OUTPUT_BYTES,
+} from "./resource-limits";
 
 export type { RuntimeDependencies } from "./runtime-dependencies";
 
@@ -138,7 +143,7 @@ export abstract class Runtime<Env = unknown> {
   protected abstract waitForNodeEvent<T>(
     name: string,
     eventType: string,
-    timeout: string
+    timeout: string,
   ): Promise<T>;
 
   /**
@@ -150,7 +155,7 @@ export abstract class Runtime<Env = unknown> {
    */
   protected abstract executeSleep(
     name: string,
-    durationMs: number
+    durationMs: number,
   ): Promise<void>;
 
   /**
@@ -186,8 +191,23 @@ export abstract class Runtime<Env = unknown> {
   ): Promise<WorkflowExecution> {
     const { workflow, organizationId } = params;
 
+    if (workflow.nodes.length > 500)
+      throw new NonRetryableError(
+        "Workflow exceeds the runtime safety limit of 500 nodes",
+      );
+    // Check before hashing, graph construction, or durable-step serialization.
+    assertRuntimeValueWithinLimit(
+      {
+        workflow,
+        inputOverrides: params.inputOverrides,
+        trigger: extractTrigger(params),
+      },
+      MAX_RUNTIME_INPUT_BYTES,
+      "Workflow execution input",
+    );
+
     console.log(
-      `[Runtime] run workflow=${workflow.id} trigger=${workflow.trigger} nodes=${workflow.nodes.length}`
+      `[Runtime] run workflow=${workflow.id} trigger=${workflow.trigger} nodes=${workflow.nodes.length}`,
     );
 
     let record: WorkflowExecution = {
@@ -232,9 +252,8 @@ export abstract class Runtime<Env = unknown> {
       prepared = await this.prepare(params, instanceId);
 
       if (await this.hasCredits(params)) {
-        await this.executeStep(
-          "preload organization resources",
-          async () => this.deps.credentialProvider.initialize(organizationId),
+        await this.executeStep("preload organization resources", async () =>
+          this.deps.credentialProvider.initialize(organizationId),
         );
 
         record = {
@@ -259,7 +278,7 @@ export abstract class Runtime<Env = unknown> {
       caughtError = true;
       console.error(
         `[Runtime] Execution error: workflow=${workflow.id}`,
-        error instanceof Error ? error.message : String(error)
+        error instanceof Error ? error.message : String(error),
       );
       record = {
         ...record,
@@ -312,7 +331,7 @@ export abstract class Runtime<Env = unknown> {
    */
   private async prepare(
     params: RuntimeParams,
-    instanceId: string
+    instanceId: string,
   ): Promise<PreparedRun> {
     const { workflow, organizationId, inputOverrides } = params;
 
@@ -324,7 +343,7 @@ export abstract class Runtime<Env = unknown> {
           throw new NonRetryableError(
             `Workflow validation failed: ${validationErrors
               .map((e) => e.message)
-              .join(", ")}`
+              .join(", ")}`,
           );
         }
 
@@ -371,7 +390,7 @@ export abstract class Runtime<Env = unknown> {
     } catch (error) {
       console.error(
         `[Runtime] Failed to publish progress for execution=${record.id}`,
-        error instanceof Error ? error.message : String(error)
+        error instanceof Error ? error.message : String(error),
       );
     }
   }
@@ -389,7 +408,15 @@ export abstract class Runtime<Env = unknown> {
   /** Called by platform step primitives immediately before new work runs. */
   protected async consumePolicyStep(executionId?: string): Promise<void> {
     if (!executionId) return;
-    await this.deps.executionPolicy?.consumeStep(executionId);
+    try {
+      await this.deps.executionPolicy?.consumeStep(executionId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/limit reached|quota exceeded/i.test(message)) {
+        throw new NonRetryableError(message);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -398,7 +425,7 @@ export abstract class Runtime<Env = unknown> {
    */
   private async executeGraph(
     prepared: PreparedRun,
-    startingRecord: WorkflowExecution
+    startingRecord: WorkflowExecution,
   ): Promise<WorkflowExecution> {
     const { context, graph, state } = prepared;
     const executor = this.createNodeExecutor(context.executionId);
@@ -407,7 +434,7 @@ export abstract class Runtime<Env = unknown> {
     const reportErrors = (result: NodeExecutionResult): NodeExecutionResult => {
       if (result.status === "error") {
         console.error(
-          `[Runtime] Node error: nodeId=${result.nodeId} type=${graph.node(result.nodeId)?.type} error=${result.error}`
+          `[Runtime] Node error: nodeId=${result.nodeId} type=${graph.node(result.nodeId)?.type} error=${result.error}`,
         );
       }
       return result;
@@ -426,7 +453,11 @@ export abstract class Runtime<Env = unknown> {
                 async () => true,
                 context.executionId,
               ).then(execute)
-            : this.executeStep(`run node ${nodeId}`, execute, context.executionId);
+            : this.executeStep(
+                `run node ${nodeId}`,
+                execute,
+                context.executionId,
+              );
         return started.then(reportErrors);
       },
 
@@ -443,7 +474,7 @@ export abstract class Runtime<Env = unknown> {
             undefined,
             pendingNodes.size > 0
               ? new Map<string, PendingEvent>(pendingNodes)
-              : undefined
+              : undefined,
           ),
         };
         await this.notify(record);
@@ -461,7 +492,7 @@ export abstract class Runtime<Env = unknown> {
         sleep: (name, durationMs) => this.executeSleep(name, durationMs),
         doStep: (name, fn) => this.executeSubStep(name, fn, executionId),
       },
-      this.supportsAsync
+      this.supportsAsync,
     );
   }
 
@@ -473,7 +504,7 @@ export abstract class Runtime<Env = unknown> {
   private async resolveAsyncNode(
     context: WorkflowExecutionContext,
     graph: ExecutionGraph,
-    pendingResult: Extract<NodeExecutionResult, { status: "pending" }>
+    pendingResult: Extract<NodeExecutionResult, { status: "pending" }>,
   ): Promise<NodeExecutionResult> {
     const { nodeId, inputs } = pendingResult;
 
@@ -503,17 +534,24 @@ export abstract class Runtime<Env = unknown> {
         };
       }
 
+      const outputs = await nodeOutputsToApi(
+        node,
+        event.outputs ?? {},
+        this.deps.objectStore,
+        context.organizationId,
+        context.executionId,
+      );
+      assertRuntimeValueWithinLimit(
+        outputs,
+        MAX_RUNTIME_OUTPUT_BYTES,
+        `Outputs for node ${nodeId}`,
+      );
+
       return {
         nodeId,
         status: "completed",
         inputs,
-        outputs: await nodeOutputsToApi(
-          node,
-          event.outputs ?? {},
-          this.deps.objectStore,
-          context.organizationId,
-          context.executionId
-        ),
+        outputs,
         usage,
       };
     } catch (error) {
@@ -552,27 +590,25 @@ export abstract class Runtime<Env = unknown> {
     // arithmetic NaN here would silently drop billing for the whole run.
     const totalUsage = Object.values(state.nodeUsage).reduce(
       (sum, usage) => (Number.isFinite(usage) ? sum + usage : sum),
-      0
+      0,
     );
 
     if (!isExhausted && totalUsage > 0) {
       try {
-        await this.executeStep(
-          "record compute usage",
-          async () => this.deps.creditService.recordUsage(organizationId, totalUsage),
+        await this.executeStep("record compute usage", async () =>
+          this.deps.creditService.recordUsage(organizationId, totalUsage),
         );
       } catch (error) {
         console.error(
           `[Runtime] Failed to record compute usage for workflow=${workflow.id}`,
-          error instanceof Error ? error.message : String(error)
+          error instanceof Error ? error.message : String(error),
         );
       }
     }
 
     try {
-      await this.executeStep(
-        "settle credit availability",
-        async () => this.deps.creditService.settleAvailability({
+      await this.executeStep("settle credit availability", async () =>
+        this.deps.creditService.settleAvailability({
           organizationId,
           computeCredits,
           subscriptionStatus,
@@ -583,7 +619,7 @@ export abstract class Runtime<Env = unknown> {
     } catch (error) {
       console.error(
         `[Runtime] Failed to settle credit availability for workflow=${workflow.id}`,
-        error instanceof Error ? error.message : String(error)
+        error instanceof Error ? error.message : String(error),
       );
     }
   }
@@ -597,7 +633,7 @@ export abstract class Runtime<Env = unknown> {
       instanceId: string;
       definitionHash: string;
       finalStatus: WorkflowExecutionStatus;
-    }
+    },
   ): Promise<WorkflowExecution> {
     const { context, graph, state } = prepared;
     const { params, instanceId, definitionHash, finalStatus } = meta;

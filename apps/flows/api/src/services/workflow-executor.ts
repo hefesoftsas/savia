@@ -47,6 +47,8 @@ export interface WorkflowExecutorOptions {
   rehearsal?: boolean;
   /** Authoritative, host-projected event for a collection-triggered run. */
   saviaCollectionEvent?: SaviaCollectionEvent;
+  /** Authorized source events when a collection subscription opts into batches. */
+  saviaCollectionEvents?: SaviaCollectionEvent[];
   /** Stable identifier used to deduplicate redelivered event admissions. */
   executionId?: string;
   env: Bindings;
@@ -98,6 +100,7 @@ export class WorkflowExecutor {
       inputOverrides,
       rehearsal,
       saviaCollectionEvent,
+      saviaCollectionEvents,
       executionId: requestedExecutionId,
       env,
     } = options;
@@ -157,6 +160,7 @@ export class WorkflowExecutor {
       ...(inputOverrides && { inputOverrides }),
       ...(rehearsal && { rehearsal: true }),
       ...(saviaCollectionEvent && { saviaCollectionEvent }),
+      ...(saviaCollectionEvents && { saviaCollectionEvents }),
     };
 
     // Build type-specific execution parameters

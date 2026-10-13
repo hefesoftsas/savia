@@ -71,7 +71,11 @@ export class SaviaCollectionEventNode extends SaviaCollectionNode {
     trigger: true,
     inlinable: true,
     inputs: [],
-    outputs: [jsonOutput("event", "Permission-projected collection event")],
+    outputs: [
+      jsonOutput("event", "Permission-projected collection event"),
+      jsonOutput("events", "Permission-projected collection events"),
+      { name: "eventCount", type: "number", description: "Number of events" },
+    ],
   };
 
   async execute(context: NodeContext): Promise<NodeExecution> {
@@ -79,7 +83,12 @@ export class SaviaCollectionEventNode extends SaviaCollectionNode {
       SaviaCollectionEvent | undefined;
     if (!event)
       return this.createErrorResult("No Savia collection event was supplied.");
-    return this.createSuccessResult({ event });
+    const events = context.saviaCollectionEvents ?? [event];
+    return this.createSuccessResult({
+      event,
+      events,
+      eventCount: events.length,
+    });
   }
 }
 

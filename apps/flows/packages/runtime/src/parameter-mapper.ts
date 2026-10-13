@@ -1,3 +1,4 @@
+import { NonRetryableError } from "cloudflare:workflows";
 import type {
   ParameterValue as ApiParameterValue,
   Node,
@@ -495,6 +496,118 @@ const converters: Record<string, Converter> = {
 
 type ParameterType = keyof typeof converters;
 
+const MAX_BINARY_VALUES_PER_NODE = 32;
+const MAX_BINARY_BYTES_PER_NODE = 8 * 1024 * 1024;
+const MAX_REPEATED_PARAMETER_ELEMENTS = 256;
+const BINARY_PARAMETER_TYPES = new Set([
+  "blob",
+  "image",
+  "document",
+  "audio",
+  "gltf",
+  "video",
+  "any",
+]);
+
+function assertRepeatedParameterSize(
+  name: string,
+  value: unknown,
+  repeated: boolean,
+): void {
+  if (
+    repeated &&
+    Array.isArray(value) &&
+    value.length > MAX_REPEATED_PARAMETER_ELEMENTS
+  ) {
+    throw new NonRetryableError(
+      `Repeated parameter ${name} exceeds the ${MAX_REPEATED_PARAMETER_ELEMENTS}-element limit`,
+    );
+  }
+}
+
+function assertBinaryValueCount(count: number): void {
+  if (count > MAX_BINARY_VALUES_PER_NODE) {
+    throw new NonRetryableError(
+      `Node exceeds the ${MAX_BINARY_VALUES_PER_NODE}-binary-value limit`,
+    );
+  }
+}
+
+function assertAggregateBinaryBytes(bytes: number): void {
+  if (bytes > MAX_BINARY_BYTES_PER_NODE) {
+    throw new NonRetryableError(
+      `Node aggregate binary data exceeds the ${MAX_BINARY_BYTES_PER_NODE}-byte limit`,
+    );
+  }
+}
+
+function isBinaryInputReference(type: string, value: unknown): boolean {
+  return BINARY_PARAMETER_TYPES.has(type) && isObjectReference(value);
+}
+
+/** Preflight all native blob outputs so a limit failure cannot leave partial R2 writes. */
+function preflightBinaryOutputs(
+  node: Node,
+  outputs: Record<string, unknown>,
+): void {
+  let count = 0;
+  let bytes = 0;
+  for (const name in outputs) {
+    if (!Object.hasOwn(outputs, name)) continue;
+    const output = node.outputs.find((item) => item.name === name);
+    const type = output?.type ?? "string";
+    const value = outputs[name];
+    assertRepeatedParameterSize(name, value, output?.repeated ?? false);
+    if (!BINARY_PARAMETER_TYPES.has(type)) continue;
+
+    const values = output?.repeated && Array.isArray(value) ? value : [value];
+    for (const item of values) {
+      if (!isNativeBlobParameter(item)) continue;
+      count++;
+      bytes += item.data.byteLength;
+      assertBinaryValueCount(count);
+      assertAggregateBinaryBytes(bytes);
+    }
+  }
+}
+
+function preflightBinaryInputs(
+  node: Node,
+  inputs: Record<string, RuntimeValue | RuntimeValue[]>,
+): void {
+  let count = 0;
+  for (const name in inputs) {
+    if (!Object.hasOwn(inputs, name)) continue;
+    const input = node.inputs.find((item) => item.name === name);
+    const value = inputs[name];
+    assertRepeatedParameterSize(name, value, input?.repeated ?? false);
+    const type = input?.type ?? "string";
+    if (!BINARY_PARAMETER_TYPES.has(type)) continue;
+    const values = Array.isArray(value) ? value : [value];
+    for (const item of values) {
+      if (!isBinaryInputReference(type, item)) continue;
+      count++;
+      assertBinaryValueCount(count);
+    }
+  }
+}
+
+function resolvedBinaryByteLength(
+  type: string | undefined,
+  value: unknown,
+): number {
+  if (
+    !BINARY_PARAMETER_TYPES.has(type ?? "string") ||
+    !value ||
+    typeof value !== "object" ||
+    !("data" in value)
+  ) {
+    return 0;
+  }
+  const data = (value as { data?: unknown }).data;
+  return data instanceof Uint8Array ? data.byteLength : 0;
+}
+
 export async function nodeToApiParameter(
   type: ParameterType,
   value: NodeParameterValue,
@@ -534,9 +647,12 @@ export async function nodeOutputsToApi(
   organizationId?: string,
   executionId?: string,
 ): Promise<Record<string, RuntimeValue | RuntimeValue[]>> {
+  preflightBinaryOutputs(node, outputs);
   const mapped: Record<string, RuntimeValue | RuntimeValue[]> = {};
 
-  for (const [name, value] of Object.entries(outputs)) {
+  for (const name in outputs) {
+    if (!Object.hasOwn(outputs, name)) continue;
+    const value = outputs[name];
     const output = node.outputs.find((o) => o.name === name);
     const convert = (item: unknown) =>
       nodeToApiParameter(
@@ -547,10 +663,13 @@ export async function nodeOutputsToApi(
         executionId,
       ) as Promise<RuntimeValue>;
 
-    mapped[name] =
-      output?.repeated && Array.isArray(value)
-        ? await Promise.all(value.map(convert))
-        : await convert(value);
+    if (output?.repeated && Array.isArray(value)) {
+      const converted: RuntimeValue[] = [];
+      for (const item of value) converted.push(await convert(item));
+      mapped[name] = converted;
+    } else {
+      mapped[name] = await convert(value);
+    }
   }
 
   return mapped;
@@ -569,9 +688,13 @@ export async function apiInputsToNode(
   objectStore?: ObjectStore,
   context?: ParameterMapperContext,
 ): Promise<Record<string, unknown>> {
+  preflightBinaryInputs(node, inputs);
   const resolved: Record<string, unknown> = {};
 
-  for (const [name, value] of Object.entries(inputs)) {
+  let binaryBytes = 0;
+  for (const name in inputs) {
+    if (!Object.hasOwn(inputs, name)) continue;
+    const value = inputs[name];
     const declaredType = node.inputs.find((i) => i.name === name)?.type;
     const convert = (item: RuntimeValue) =>
       apiToNodeParameter(
@@ -583,9 +706,21 @@ export async function apiInputsToNode(
 
     // A repeated parameter arrives as RuntimeValue[]; a `json` parameter can
     // also be an array, but its elements are converted the same way.
-    resolved[name] = Array.isArray(value)
-      ? await Promise.all((value as RuntimeValue[]).map(convert))
-      : await convert(value);
+    if (Array.isArray(value)) {
+      const converted: unknown[] = [];
+      for (const item of value as RuntimeValue[]) {
+        const result = await convert(item);
+        binaryBytes += resolvedBinaryByteLength(declaredType, result);
+        assertAggregateBinaryBytes(binaryBytes);
+        converted.push(result);
+      }
+      resolved[name] = converted;
+    } else {
+      const result = await convert(value);
+      binaryBytes += resolvedBinaryByteLength(declaredType, result);
+      assertAggregateBinaryBytes(binaryBytes);
+      resolved[name] = result;
+    }
   }
 
   return resolved;

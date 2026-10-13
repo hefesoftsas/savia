@@ -1,5 +1,6 @@
 import "./outbound-policy-install";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 
 import auth from "./auth";
 import { saviaMaintenanceRoutes } from "./routes/savia-maintenance";
@@ -14,6 +15,7 @@ import { handleIncomingEmail } from "./email";
 import { corsMiddleware } from "./middleware/cors";
 import { createRateLimitMiddleware } from "./middleware/rate-limit";
 import { handleQueueMessages } from "./queue";
+import { queueRetryDelaySeconds } from "./queue-backoff";
 import adminRoutes from "./routes/admin";
 import apiKeyRoutes from "./routes/api-keys";
 import billingRoutes from "./routes/billing";
@@ -71,6 +73,8 @@ export { WorkflowRuntimeEntrypoint as Runtime } from "./runtime/workflow-runtime
 
 // Initialize Hono app with types
 const app = new Hono<ApiContext>();
+// Bound ingress before JSON parsing; multipart retains one MiB of envelope space.
+app.use("*", bodyLimit({ maxSize: 9 * 1024 * 1024 }));
 
 // Only current Worker entrypoints synchronize the deployment's pause setting.
 // Durable instances read this shared control without clearing it themselves.
@@ -209,14 +213,16 @@ export default {
   async queue(batch: MessageBatch, env: Bindings, ctx: ExecutionContext) {
     await syncExecutionPolicyPause(env);
     if (!(await policyStatus(env)).executionsEnabled) {
-      batch.retryAll({ delaySeconds: 60 });
+      for (const message of batch.messages)
+        message.retry({
+          delaySeconds: queueRetryDelaySeconds(message.attempts),
+        });
       return;
     }
     return handleQueueMessages(batch, env, ctx);
   },
   async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
     await syncExecutionPolicyPause(env);
-    if (!(await policyStatus(env)).executionsEnabled) return;
     return handleScheduledEvent(event, env, ctx);
   },
   fetch: app.fetch,

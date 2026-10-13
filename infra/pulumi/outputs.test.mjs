@@ -36,6 +36,7 @@ const OUTPUTS = {
       inboxes: "savia-flows-inboxes-preview",
     },
     queue: "savia-flows-execute-preview",
+    deadLetterQueue: "savia-flows-execute-dlq-preview",
     workflow: "savia-flows-execute-preview",
   },
 };
@@ -122,6 +123,7 @@ describe("pulumi stack outputs", () => {
         workerName: "savia-flows-preview",
         workflowName: "savia-flows-execute-preview",
         queueName: "savia-flows-execute-preview",
+        deadLetterQueueName: "savia-flows-execute-dlq-preview",
         buckets: {
           resources: "savia-flows-resources-preview",
           datasets: "savia-flows-datasets-preview",
@@ -153,6 +155,7 @@ describe("pulumi stack outputs", () => {
       workerName: "savia-flows-preview",
       workflowName: "savia-flows-execute-preview",
       queueName: "savia-flows-execute-preview",
+      deadLetterQueueName: "savia-flows-execute-dlq-preview",
       buckets: {
         resources: "savia-flows-resources-preview",
         datasets: "savia-flows-datasets-preview",

@@ -6,6 +6,8 @@ export function flowsWorkerConfig(
   environment,
   executionEnabled = false,
 ) {
+  if (executionEnabled && !resources.deadLetterQueueName)
+    throw new Error("Flows execution requires a provisioned dead-letter queue");
   const sqliteClasses = [
     "DatabaseDO",
     "WorkflowAgent",
@@ -99,7 +101,11 @@ export function flowsWorkerConfig(
           max_batch_size: 1,
           max_batch_timeout: 1,
           max_concurrency: 1,
-          max_retries: 100,
+          max_retries: 5,
+          retry_delay: 60,
+          ...(resources.deadLetterQueueName
+            ? { dead_letter_queue: resources.deadLetterQueueName }
+            : {}),
         },
       ],
     },
