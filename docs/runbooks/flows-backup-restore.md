@@ -194,3 +194,9 @@ retains its short-lived signed maintenance JWT, and creates no published
 Worker or public route. The session and temporary files are removed after
 success or failure. Dry runs remain offline; production is not reachable
 through this preview helper.
+
+The Wrangler R2 fallback URL-encodes each object-key segment for downloads
+and restores while keeping the original key in the manifest and filesystem.
+This preserves literal percent escapes, spaces, Unicode, and URL delimiters
+(e.g. a key containing `tenant%3A12` is sent as `tenant%253A12`). The S3
+transport receives the original key because its SDK handles URL encoding.
