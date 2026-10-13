@@ -55,9 +55,12 @@ media origins, credentials in URLs, and redirect rejection. The Discord cases
 failed on the original URL interpolation and passed after encoding.
 All eight container Node checks passed locally. Offline ffmpeg and ffprobe
 checks accepted a generated WAV and rejected HLS through the format whitelist
-before its remote segment URL could be opened. These two binary checks report
-an explicit skip when the corresponding binary is unavailable.
+before its remote segment URL could be opened. Binary-dependent checks report
+an explicit skip when the corresponding binary is unavailable. Array-based
+probing of multiple downloaded files is also verified against the local binary;
+the regression reproduced a callback-argument mismatch before its fix.
 
-The local focused checks passed. The full relevant checks and the new GitHub CI
-run must pass before merging. Preview deployment is followed through the
+The local full Flows suite, all seven Flows typechecks, core typechecks, and
+contract checks passed, alongside the focused security regressions. The final
+GitHub CI run must pass before merging. Preview deployment is followed through the
 centralized pipeline; no Flows activation is part of this change.

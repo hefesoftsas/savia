@@ -623,9 +623,9 @@ function runFFmpegFrameAtTime(inputPath, outputPath, time) {
 /**
  * Probe a video file for stream information (resolution, audio presence).
  */
-export function probeVideo(filePath, run = execFile) {
+export function probeVideo(filePath) {
   return new Promise((resolve, reject) => {
-    run(
+    execFile(
       "ffprobe",
       [
         "-v",

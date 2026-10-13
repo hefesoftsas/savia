@@ -177,26 +177,20 @@ describe("FFmpeg trusted media fetch", () => {
     assert.deepEqual(args.slice(-2), ["-i", "/tmp/ffmpeg-jobs/job/input"]);
   });
 
-  it("uses the local-only policy for ffprobe before parsing downloaded media", async () => {
-    let invoked;
-    const streams = [{ codec_type: "video", width: 1920, height: 1080 }];
-    const result = await probeVideo(
-      "/tmp/ffmpeg-jobs/job/input",
-      (command, args, callback) => {
-        invoked = { command, args };
-        callback(null, JSON.stringify({ streams }), "");
-      },
-    );
-
-    assert.equal(invoked.command, "ffprobe");
-    assert.equal(invoked.args.includes("-protocol_whitelist"), true);
-    assert.equal(invoked.args.includes("-format_whitelist"), true);
-    assert.deepEqual(invoked.args.slice(-2), [
-      "-i",
-      "/tmp/ffmpeg-jobs/job/input",
-    ]);
-    assert.deepEqual(result.streams, streams);
-  });
+  it(
+    "probes every downloaded file when used as the concat array callback",
+    { skip: !isAvailable("ffprobe") && "ffprobe is unavailable" },
+    async () =>
+      withMediaFixtures(async ({ wavPath }) => {
+        const results = await Promise.all([wavPath, wavPath].map(probeVideo));
+        assert.equal(results.length, 2);
+        for (const result of results) {
+          assert.ok(
+            result.streams.some((stream) => stream.codec_type === "audio"),
+          );
+        }
+      }),
+  );
 
   it(
     "accepts a local WAV and rejects HLS before opening its remote segment with ffprobe",
