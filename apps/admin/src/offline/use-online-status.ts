@@ -1,26 +1,15 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+import {
+  getOnlineStatus,
+  getServerOnlineStatus,
+  subscribeOnlineStatus,
+} from "./connectivity-status";
 
-/**
- * Browser connectivity from `navigator.onLine` plus online/offline events.
- * This reports "no network at all"; an API outage with the network up still
- * reads `true` (those failures surface per-query with cached data behind).
- */
+/** Browser hints verified against Savia when the browser reports offline. */
 export function useOnlineStatus(): boolean {
-  const [online, setOnline] = useState<boolean>(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
+  return useSyncExternalStore(
+    subscribeOnlineStatus,
+    getOnlineStatus,
+    getServerOnlineStatus,
   );
-
-  useEffect(() => {
-    const goOnline = () => setOnline(true);
-    const goOffline = () => setOnline(false);
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
-    setOnline(navigator.onLine);
-    return () => {
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
-    };
-  }, []);
-
-  return online;
 }
