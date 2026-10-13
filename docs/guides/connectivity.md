@@ -1,7 +1,8 @@
 # Browser connectivity
 
 The shared `useOnlineStatus` hook drives the offline banner, local sync controls
-and realtime subscriptions. A browser's `navigator.onLine` signal is a hint:
+and realtime subscriptions. Explicit app update/reload guards also use this
+verified state. A browser's `navigator.onLine` signal is a hint:
 embedded browsers and VPN configurations can report offline while Savia remains
 reachable.
 

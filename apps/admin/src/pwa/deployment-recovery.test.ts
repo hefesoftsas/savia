@@ -1,10 +1,29 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { subscribeOnlineStatus } from "../offline/connectivity-status";
 import {
   isModuleLoadError,
   prepareAppReload,
   PUBLIC_VISITOR_ROUTE_DENYLIST,
 } from "./deployment-recovery";
 afterEach(() => vi.restoreAllMocks());
+it("allows updates when Savia responds despite the browser offline hint", async () => {
+  const worker = new Worker();
+  worker.state = "activated";
+  const update = vi.fn().mockResolvedValue(undefined);
+  environment({ update, waiting: worker });
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
+  const unsubscribe = subscribeOnlineStatus(() => {});
+  try {
+    await Promise.resolve();
+    await expect(prepareAppReload()).resolves.toBeUndefined();
+    expect(update).toHaveBeenCalledOnce();
+  } finally {
+    unsubscribe();
+    vi.unstubAllGlobals();
+  }
+});
 class Worker extends EventTarget {
   state: ServiceWorkerState = "installing";
   postMessage = vi.fn();
