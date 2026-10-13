@@ -5,6 +5,7 @@
  * unrelated node, so these tests pin the conversion table down type by type.
  */
 
+import { NonRetryableError } from "cloudflare:workflows";
 import type { Node } from "@savia/flows-types";
 import { describe, expect, it } from "vitest";
 
@@ -585,7 +586,7 @@ describe("apiInputsToNode", () => {
         store,
         { organizationId: ORG },
       ),
-    ).rejects.toThrow(/aggregate binary.*limit/i);
+    ).rejects.toBeInstanceOf(NonRetryableError);
     expect(maxActiveReads).toBe(1);
     expect(reads).toBe(2);
   });
@@ -606,7 +607,7 @@ describe("apiInputsToNode", () => {
 
     await expect(
       apiInputsToNode(node, { images }, store, { organizationId: ORG }),
-    ).rejects.toThrow(/32.*binary/i);
+    ).rejects.toBeInstanceOf(NonRetryableError);
     expect(reads).toBe(0);
   });
 
@@ -626,7 +627,7 @@ describe("apiInputsToNode", () => {
 
     await expect(
       apiInputsToNode(node, { images }, store, { organizationId: ORG }),
-    ).rejects.toThrow(/256.*element/i);
+    ).rejects.toBeInstanceOf(NonRetryableError);
     expect(reads).toBe(0);
   });
 

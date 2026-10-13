@@ -452,7 +452,7 @@ GB-seconds, storage or dollar charges. No external notification service is used.
 Use watched fields and before/after conditions to avoid unrelated runs. The
 trigger inspector's **Delivery mode** defaults to one run per matching change.
 **Group changes for one minute** opts into durable batches of at most 50 events;
-use the trigger node's `events` array and `count` output to process every record.
+use the trigger node's `events` array and `eventCount` output to process every record.
 The existing `event` output remains the first event. A batch may split further
 when projected trigger data reaches 1 MiB. Grouping is not a suppression mode:
 each permitted matching event is included in a run, rather than silently being

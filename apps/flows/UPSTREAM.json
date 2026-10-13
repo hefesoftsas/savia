@@ -10823,7 +10823,7 @@
       "importedSha256": "e5642ccafce4f6e683c2a86b63a259c9c2829bea7c44a704688ec21c9933fcc9",
       "adaptations": [
         {
-          "sha256": "df645320ad29906070654b1a822dd0764635568c5a92ff3bafa85890a94e6c39",
+          "sha256": "f9beb6b2632e8b9701c4f8c1d944a93b4ec5eb7518756650c388ce8c6c4d4e12",
           "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
         }
       ]
@@ -10835,7 +10835,7 @@
       "importedSha256": "9ebcfffea4f888fa74ed63388d7d205e5a7fcde7d5b296ebed808b3a53f4b76f",
       "adaptations": [
         {
-          "sha256": "b616edc530f2640459b7c2c6a2d1b5d429ba650efb5cd912da5b5bc0f8402bcd",
+          "sha256": "17bac97b78feda0294c16321311a35b1ea0dab893b026cae538903709aceff98",
           "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
         }
       ]

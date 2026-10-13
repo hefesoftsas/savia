@@ -1,3 +1,4 @@
+import { NonRetryableError } from "cloudflare:workflows";
 import type {
   ParameterValue as ApiParameterValue,
   Node,
@@ -518,7 +519,7 @@ function assertRepeatedParameterSize(
     Array.isArray(value) &&
     value.length > MAX_REPEATED_PARAMETER_ELEMENTS
   ) {
-    throw new Error(
+    throw new NonRetryableError(
       `Repeated parameter ${name} exceeds the ${MAX_REPEATED_PARAMETER_ELEMENTS}-element limit`,
     );
   }
@@ -526,7 +527,7 @@ function assertRepeatedParameterSize(
 
 function assertBinaryValueCount(count: number): void {
   if (count > MAX_BINARY_VALUES_PER_NODE) {
-    throw new Error(
+    throw new NonRetryableError(
       `Node exceeds the ${MAX_BINARY_VALUES_PER_NODE}-binary-value limit`,
     );
   }
@@ -534,7 +535,7 @@ function assertBinaryValueCount(count: number): void {
 
 function assertAggregateBinaryBytes(bytes: number): void {
   if (bytes > MAX_BINARY_BYTES_PER_NODE) {
-    throw new Error(
+    throw new NonRetryableError(
       `Node aggregate binary data exceeds the ${MAX_BINARY_BYTES_PER_NODE}-byte limit`,
     );
   }
