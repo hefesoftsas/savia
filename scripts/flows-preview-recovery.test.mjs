@@ -162,12 +162,24 @@ function cloudflareFetcher({
         result: { deployments: [{ versions: DEPLOYMENTS[name] }] },
       });
     }
+    if (path.includes("/workers/services/")) {
+      const name = path.split("/").at(-1);
+      return response({
+        success: true,
+        result: {
+          default_environment: {
+            script: {
+              migration_tag: name.includes("flows") ? "savia-flows-v1" : "v2",
+            },
+          },
+        },
+      });
+    }
     if (path.endsWith("/settings")) {
       const name = path.split("/").at(-2);
       return response({
         success: true,
         result: {
-          migration_tag: name.includes("flows") ? "savia-flows-v1" : "v2",
           ...(name.includes("flows") ? { bindings: flowsBindings() } : {}),
         },
       });
@@ -209,7 +221,7 @@ test("capture stores exact active versions and configs in a private metadata fil
   );
   assert.equal((await stat(files.metadataPath)).mode & 0o777, 0o600);
   assert.doesNotMatch(await readFile(files.metadataPath, "utf8"), /test-token/);
-  assert.equal(calls.length, 5);
+  assert.equal(calls.length, 7);
   assert.ok(calls.every((call) => call.method === "GET"));
 });
 
@@ -249,10 +261,12 @@ test("capture rejects a Durable Object migration change before preview pauses", 
       fetcher: async (...args) => {
         calls += 1;
         const result = await fetcher(...args);
-        if (String(args[0]).includes("savia-flows-preview/settings")) {
+        if (String(args[0]).includes("/workers/services/savia-flows-preview")) {
           return response({
             success: true,
-            result: { migration_tag: "older-tag" },
+            result: {
+              default_environment: { script: { migration_tag: "older-tag" } },
+            },
           });
         }
         return result;
