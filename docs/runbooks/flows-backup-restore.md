@@ -184,3 +184,13 @@ metadata (`default_environment.script.migration_tag`), as Wrangler does.
 The script settings endpoint supplies bindings and policy settings but does
 not supply this lifecycle tag. Missing or mismatched service tags stop release
 before any pause or mutation.
+
+Preview maintenance uses a short-lived authenticated Wrangler remote session
+with a private binding to `savia-agencies-preview`, so public-domain bot
+challenges do not prevent backup requests from CI. It requires the existing
+`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in addition to the bridge
+secret. The helper forwards only the fixed preview maintenance endpoint,
+retains its short-lived signed maintenance JWT, and creates no published
+Worker or public route. The session and temporary files are removed after
+success or failure. Dry runs remain offline; production is not reachable
+through this preview helper.

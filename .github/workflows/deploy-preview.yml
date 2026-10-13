@@ -143,6 +143,8 @@ jobs:
         if: env.SAVIA_FLOWS_PROVISIONED == 'true'
         run: node scripts/flows-maintenance.mjs --action backup --snapshot-file "$RUNNER_TEMP/flows-snapshot.json" --apply
         env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
 
       - name: Back up all existing persistence before migrations

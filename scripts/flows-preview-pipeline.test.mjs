@@ -107,3 +107,19 @@ test("failed or cancelled preview releases restore only workers whose pause was 
     /name: Restore preview Workers after an unsuccessful release[\s\S]*?continue-on-error:/,
   );
 });
+
+test("preview snapshots have credentials for the private authenticated transport", async () => {
+  const pipeline = await readFile(
+    new URL("../.github/workflows/deploy-preview.yml", import.meta.url),
+    "utf8",
+  );
+  const snapshot = pipeline
+    .split("- name: Snapshot Flows Durable Object databases")[1]
+    .split("- name:")[0];
+  for (const key of [
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_API_TOKEN",
+    "SAVIA_FLOWS_BRIDGE_SECRET",
+  ])
+    assert.ok(snapshot.includes(key + ": ${{ secrets." + key + " }}"), key);
+});

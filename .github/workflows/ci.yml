@@ -471,7 +471,7 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=2048"
         run: pnpm run flows:typecheck && pnpm --filter @savia/hook-executor typecheck
       - name: Verify infrastructure and recovery helpers offline
-        run: node --test --test-concurrency=1 infra/pulumi/*.test.mjs scripts/flows-*.test.mjs scripts/encrypt-flows-backup.test.mjs scripts/verify-flows-preview.test.mjs
+        run: node --test --test-concurrency=1 infra/pulumi/*.test.mjs scripts/flows-*.test.mjs scripts/flows-maintenance/*.test.mjs scripts/encrypt-flows-backup.test.mjs scripts/verify-flows-preview.test.mjs
 
   publication-safety:
     name: Public source safety
