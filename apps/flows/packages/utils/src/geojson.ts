@@ -13,17 +13,48 @@ function sanitizeColor(color: string, defaultColor: string): string {
   // Hex colors: #RGB, #RRGGBB, #RRGGBBAA
   if (/^#[0-9a-f]{3,8}$/i.test(trimmed)) return trimmed;
 
-  // RGB/RGBA: rgb(r, g, b) or rgba(r, g, b, a)
-  if (/^rgba?\(\s*[\d.%,\s/]+\s*\)$/i.test(trimmed)) return trimmed;
-
-  // HSL/HSLA: hsl(h, s%, l%) or hsla(h, s%, l%, a)
-  if (/^hsla?\(\s*[\d.%,\s/]+\s*\)$/i.test(trimmed)) return trimmed;
+  // RGB/RGBA and HSL/HSLA values are scanned once to avoid nested
+  // whitespace quantifiers on user-provided values.
+  if (isSafeColorFunction(trimmed)) return trimmed;
 
   // Named colors (letters only, no special chars)
   if (/^[a-z]+$/i.test(trimmed)) return trimmed;
 
   // Reject anything else (potential injection)
   return defaultColor;
+}
+
+function isSafeColorFunction(color: string): boolean {
+  const normalized = color.toLowerCase();
+  const opening = normalized.indexOf("(");
+  if (opening < 0 || normalized[normalized.length - 1] !== ")") return false;
+  if (opening + 1 === normalized.length - 1) return false;
+
+  const functionName = normalized.slice(0, opening);
+  if (!["rgb", "rgba", "hsl", "hsla"].includes(functionName)) return false;
+
+  for (let index = opening + 1; index < normalized.length - 1; index += 1) {
+    const character = normalized[index];
+    if (!/[\d.%,/]/.test(character) && !/\s/.test(character)) return false;
+  }
+  return true;
+}
+
+function escapeXmlAttribute(value: string | number): string {
+  return String(value).replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      default:
+        return "&#39;";
+    }
+  });
 }
 
 // Basic GeoJSON type definitions
@@ -82,7 +113,7 @@ export function extractCoordinates(geojson: GeoJSON): number[][] {
 
     const processCoords = (
       coordinates: number[] | number[][] | number[][][] | number[][][][],
-      depth: number
+      depth: number,
     ) => {
       if (depth === 0) {
         if (
@@ -144,7 +175,7 @@ export function extractCoordinates(geojson: GeoJSON): number[][] {
  */
 export function setupProjection(
   geojson: GeoJSON,
-  options: GeoJSONSvgOptions
+  options: GeoJSONSvgOptions,
 ): ReturnType<typeof geoIdentity> {
   const { width = 400, height = 300, minX, minY, maxX, maxY } = options;
   const proj = geoIdentity();
@@ -178,7 +209,7 @@ export function setupProjection(
         [0, 0],
         [width, height],
       ],
-      bboxFeature as unknown as Parameters<typeof proj.fitExtent>[1]
+      bboxFeature as unknown as Parameters<typeof proj.fitExtent>[1],
     );
     return proj;
   }
@@ -209,7 +240,7 @@ export function setupProjection(
         [0, 0],
         [width, height],
       ],
-      worldFeature as unknown as Parameters<typeof proj.fitExtent>[1]
+      worldFeature as unknown as Parameters<typeof proj.fitExtent>[1],
     );
     return proj;
   }
@@ -264,7 +295,7 @@ export function setupProjection(
       [0, 0],
       [width, height],
     ],
-    bboxFeature as unknown as Parameters<typeof proj.fitExtent>[1]
+    bboxFeature as unknown as Parameters<typeof proj.fitExtent>[1],
   );
   return proj;
 }
@@ -274,7 +305,7 @@ export function setupProjection(
  */
 export function generatePaths(
   geojson: GeoJSON,
-  path: GeoPath
+  path: GeoPath,
 ): { pathData: string; isPolygon: boolean }[] {
   const paths: { pathData: string; isPolygon: boolean }[] = [];
 
@@ -311,7 +342,7 @@ export function generatePaths(
  */
 export function geojsonToSvg(
   geojson: GeoJSON,
-  options: GeoJSONSvgOptions = {}
+  options: GeoJSONSvgOptions = {},
 ): GeoJSONSvgResult {
   const {
     width = 400,
@@ -355,12 +386,12 @@ export function geojsonToSvg(
 
     // Generate SVG content
     const pathElements = paths.map(({ pathData, isPolygon }) => {
-      return `<path d="${pathData}" fill="${isPolygon ? fillColor : "none"}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>`;
+      return `<path d="${escapeXmlAttribute(pathData)}" fill="${isPolygon ? escapeXmlAttribute(fillColor) : "none"}" stroke="${escapeXmlAttribute(strokeColor)}" stroke-width="${escapeXmlAttribute(strokeWidth)}"/>`;
     });
 
     const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${width}" height="${height}" fill="${backgroundColor}"/>
+<svg width="${escapeXmlAttribute(width)}" height="${escapeXmlAttribute(height)}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${escapeXmlAttribute(width)}" height="${escapeXmlAttribute(height)}" fill="${escapeXmlAttribute(backgroundColor)}"/>
   ${pathElements.join("\n  ")}
 </svg>`;
 

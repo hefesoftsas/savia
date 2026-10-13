@@ -17,6 +17,7 @@ import { getApiBaseUrl } from "@/config/api";
 import { createDiscordBot } from "@/services/bot-service";
 
 import { CopyableValue } from "./copyable-value";
+import { discordApplicationLinks } from "./discord-links";
 
 type Step =
   "name" | "application" | "bot-token" | "webhook" | "command" | "invite";
@@ -121,21 +122,12 @@ export function DiscordBotCreateDialog({
     setStep("invite");
   };
 
-  const generalInfoUrl = applicationId
-    ? `https://discord.com/developers/applications/${applicationId}/information`
-    : "https://discord.com/developers/applications";
-
-  const botSettingsUrl = applicationId
-    ? `https://discord.com/developers/applications/${applicationId}/bot`
-    : "https://discord.com/developers/applications";
+  const { generalInfoUrl, botSettingsUrl, inviteUrl } =
+    discordApplicationLinks(applicationId);
 
   const webhookUrl = createdBotId
-    ? `${getApiBaseUrl().replace(/\/$/, "")}/discord/webhook/${createdBotId}`
+    ? `${getApiBaseUrl().replace(/\/$/, "")}/discord/webhook/${encodeURIComponent(createdBotId)}`
     : "";
-
-  const inviteUrl = applicationId
-    ? `https://discord.com/oauth2/authorize?client_id=${applicationId}&scope=bot+applications.commands&permissions=2048`
-    : null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>

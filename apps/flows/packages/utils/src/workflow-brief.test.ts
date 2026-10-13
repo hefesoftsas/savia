@@ -63,13 +63,13 @@ describe("renderBriefSentence", () => {
     // The unanswered state is the one the user sees first, so it has to be
     // grammatical on its own — not a form with holes in it.
     expect(renderBriefSentence(brief())).toBe(
-      "Sort my support email by urgency and email it to you."
+      "Sort my support email by urgency and email it to you.",
     );
   });
 
   it("takes the answer over the assumption", () => {
     expect(renderBriefSentence(brief(), { dest: "display" })).toBe(
-      "Sort my support email by urgency and show it to you here."
+      "Sort my support email by urgency and show it to you here.",
     );
   });
 
@@ -84,14 +84,22 @@ describe("renderBriefSentence", () => {
       ],
     });
     expect(renderBriefSentence(spaced, { dest: "display" })).toBe(
-      "A show it to you here."
+      "A show it to you here.",
     );
+  });
+
+  it("normalizes long runs of whitespace around punctuation", () => {
+    const spaced = brief({
+      segments: [{ kind: "text", text: `A${"\t".repeat(100_000)},` }],
+    });
+
+    expect(renderBriefSentence(spaced)).toBe("A,");
   });
 
   it("keeps the sentence readable when a slot has no blank", () => {
     const orphaned = brief({ blanks: [] });
     expect(renderBriefSentence(orphaned)).toBe(
-      "Sort my support email by urgency and …."
+      "Sort my support email by urgency and ….",
     );
   });
 
@@ -110,7 +118,7 @@ describe("renderBriefSentence", () => {
       ],
     });
     expect(renderBriefSentence(open, { dest: "   " })).toContain(
-      "refunds and outages"
+      "refunds and outages",
     );
   });
 });
@@ -119,7 +127,7 @@ describe("resolveBlank", () => {
   it("ignores an option id that is not on offer", () => {
     const blank = brief().blanks[0];
     expect(resolveBlank(blank, { dest: "carrier-pigeon" })).toBe(
-      "email it to you"
+      "email it to you",
     );
   });
 });
@@ -331,7 +339,7 @@ describe("buildSynthesisPrompt resources", () => {
   it("uses the resolved trigger, not the stored one", () => {
     const withTrigger = brief({ blanks: [...brief().blanks, TRIGGER_BLANK] });
     expect(buildSynthesisPrompt(withTrigger, { when: "morning" })).toContain(
-      "Trigger: scheduled"
+      "Trigger: scheduled",
     );
   });
 });

@@ -27,7 +27,7 @@ describe("JsonMergeNode", () => {
       const result = await node.execute(
         createContext({
           objects: null,
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -38,7 +38,7 @@ describe("JsonMergeNode", () => {
       const result = await node.execute(
         createContext({
           objects: "not an array",
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -49,7 +49,7 @@ describe("JsonMergeNode", () => {
       const result = await node.execute(
         createContext({
           objects: [],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -63,7 +63,7 @@ describe("JsonMergeNode", () => {
             { name: "John", age: 30 },
             { city: "New York", country: "USA" },
           ],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -84,7 +84,7 @@ describe("JsonMergeNode", () => {
             { city: "New York" },
             { country: "USA" },
           ],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -103,7 +103,7 @@ describe("JsonMergeNode", () => {
             { name: "John", age: 30 },
             { name: "Jane", city: "New York" },
           ],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -124,7 +124,7 @@ describe("JsonMergeNode", () => {
             null,
             undefined,
           ],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -142,7 +142,7 @@ describe("JsonMergeNode", () => {
             { user: { name: "John", age: 30 } },
             { user: { age: 31, city: "New York" } },
           ],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -163,7 +163,7 @@ describe("JsonMergeNode", () => {
             { user: { age: 31, city: "New York" } },
           ],
           deep: true,
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -184,7 +184,7 @@ describe("JsonMergeNode", () => {
             { user: { age: 31, city: "New York" } },
           ],
           deep: false,
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -194,6 +194,43 @@ describe("JsonMergeNode", () => {
           city: "New York",
         },
       });
+    });
+
+    it("should preserve __proto__ as data without changing the result prototype", async () => {
+      const input = JSON.parse('{"__proto__":{"polluted":"yes"},"safe":true}');
+
+      const deepResult = await node.execute(
+        createContext({ objects: [input] }),
+      );
+      const shallowResult = await node.execute(
+        createContext({ objects: [input], deep: false }),
+      );
+
+      for (const result of [deepResult, shallowResult]) {
+        const output = result.outputs?.result as Record<string, unknown>;
+        expect(Object.getPrototypeOf(output)).toBe(Object.prototype);
+        expect(Object.hasOwn(output, "__proto__")).toBe(true);
+        expect(output.safe).toBe(true);
+        expect(({} as { polluted?: string }).polluted).toBeUndefined();
+      }
+    });
+
+    it("should not merge __proto__ into Object.prototype after an empty object", async () => {
+      const marker = "jsonMergePollutionRegressionMarker";
+      const input = JSON.parse(`{"__proto__":{"${marker}":"polluted"}}`);
+
+      try {
+        const result = await node.execute(
+          createContext({ objects: [{}, input], deep: true }),
+        );
+        const output = result.outputs?.result as Record<string, unknown>;
+
+        expect(Object.hasOwn(output, "__proto__")).toBe(true);
+        expect(Object.getPrototypeOf(output)).toBe(Object.prototype);
+        expect(({} as Record<string, unknown>)[marker]).toBeUndefined();
+      } finally {
+        Reflect.deleteProperty(Object.prototype, marker);
+      }
     });
 
     it("should handle complex nested structures with deep merge", async () => {
@@ -214,7 +251,7 @@ describe("JsonMergeNode", () => {
             },
           ],
           deep: true,
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -241,7 +278,7 @@ describe("JsonMergeNode", () => {
             { items: ["cherry"], tags: ["red"] },
           ],
           deep: true,
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -259,7 +296,7 @@ describe("JsonMergeNode", () => {
             { user: { name: null, city: "New York" } },
           ],
           deep: true,
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -280,7 +317,7 @@ describe("JsonMergeNode", () => {
             { boolean: true, null: null },
             { array: [1, 2, 3], object: { nested: "value" } },
           ],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -301,7 +338,7 @@ describe("JsonMergeNode", () => {
       const result = await node.execute(
         createContext({
           objects: [{ handler1 }, { handler2 }],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -318,7 +355,7 @@ describe("JsonMergeNode", () => {
       const result = await node.execute(
         createContext({
           objects: [{ created }, { updated }],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -335,7 +372,7 @@ describe("JsonMergeNode", () => {
             { "1": "one", "2": "two" },
             { "3": "three", "4": "four" },
           ],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");
@@ -360,7 +397,7 @@ describe("JsonMergeNode", () => {
             null,
             undefined,
           ],
-        })
+        }),
       );
 
       expect(result.status).toBe("completed");

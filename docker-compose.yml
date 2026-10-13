@@ -39,6 +39,14 @@ services:
       - apps_companion_modules:/workspace/apps/companion/node_modules
       - apps_connector_gateway_modules:/workspace/apps/connector-gateway/node_modules
       - apps_db_bridge_modules:/workspace/apps/db-bridge/node_modules
+      - apps_flows_modules:/workspace/apps/flows/node_modules
+      - apps_flows_api_modules:/workspace/apps/flows/api/node_modules
+      - apps_flows_app_modules:/workspace/apps/flows/app/node_modules
+      - apps_flows_packages_geo_modules:/workspace/apps/flows/packages/geo/node_modules
+      - apps_flows_packages_native_modules:/workspace/apps/flows/packages/native/node_modules
+      - apps_flows_packages_runtime_modules:/workspace/apps/flows/packages/runtime/node_modules
+      - apps_flows_packages_types_modules:/workspace/apps/flows/packages/types/node_modules
+      - apps_flows_packages_utils_modules:/workspace/apps/flows/packages/utils/node_modules
       - apps_legacy_exporter_modules:/workspace/apps/legacy-exporter/node_modules
       - apps_mcp_modules:/workspace/apps/mcp/node_modules
       - apps_plugin_registry_modules:/workspace/apps/plugin-registry/node_modules
@@ -139,6 +147,14 @@ volumes:
   apps_companion_modules:
   apps_connector_gateway_modules:
   apps_db_bridge_modules:
+  apps_flows_modules:
+  apps_flows_api_modules:
+  apps_flows_app_modules:
+  apps_flows_packages_geo_modules:
+  apps_flows_packages_native_modules:
+  apps_flows_packages_runtime_modules:
+  apps_flows_packages_types_modules:
+  apps_flows_packages_utils_modules:
   apps_legacy_exporter_modules:
   apps_mcp_modules:
   apps_plugin_registry_modules:

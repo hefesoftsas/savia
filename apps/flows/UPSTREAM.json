@@ -6194,7 +6194,13 @@
       "source": "packages/runtime/src/nodes/database/parquet-query-node.ts",
       "path": "packages/runtime/src/nodes/database/parquet-query-node.ts",
       "upstreamSha256": "8a7f6d0612d0f17ab9d5f65adcc780462939998701208026dcfd19006bb0e14b",
-      "importedSha256": "bf099440e548f6702941873ef63d60264213be62f6f16108bbd6da9662a90329"
+      "importedSha256": "bf099440e548f6702941873ef63d60264213be62f6f16108bbd6da9662a90329",
+      "adaptations": [
+        {
+          "sha256": "e56dbf2403159ca3339eb19b57a477b2d532638a0f87dcc31fc4d1b87d97ba8d",
+          "reason": "Quote the complete DuckDB SQL argument with POSIX single-quote escaping so shell substitutions and backslashes remain literal."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/nodes/dataset/dataset-ai-search-node.ts",
@@ -9026,7 +9032,13 @@
       "source": "packages/runtime/src/nodes/json/json-merge-node.ts",
       "path": "packages/runtime/src/nodes/json/json-merge-node.ts",
       "upstreamSha256": "f05a006ad0d6737383425913281c4638a0adfbb925d10cc887f112d81f6de0af",
-      "importedSha256": "ad12d6cabd5846e86e7682d7f5c3365ac3e9d691e2299defff71ae60d5137bcd"
+      "importedSha256": "ad12d6cabd5846e86e7682d7f5c3365ac3e9d691e2299defff71ae60d5137bcd",
+      "adaptations": [
+        {
+          "sha256": "3dcf90142c1e6da747c7d9f8f1de9d45ebc5cb4ab1fb250cb69b9414177e50dc",
+          "reason": "Write only own JSON properties and avoid inherited branches to prevent prototype pollution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/nodes/json/json-object-agg-node.test.ts",
@@ -10478,7 +10490,13 @@
       "source": "packages/runtime/src/nodes/wikipedia/search-mediawiki-node.ts",
       "path": "packages/runtime/src/nodes/wikipedia/search-mediawiki-node.ts",
       "upstreamSha256": "30497de65dd1f8e6e20056f2a76ce2409159ec8f0f254a58ca3be791116222d5",
-      "importedSha256": "dab276d8f651141a5627a78f5ba1caa830e1b9dac5cc34ef9b390206d9ee42ea"
+      "importedSha256": "dab276d8f651141a5627a78f5ba1caa830e1b9dac5cc34ef9b390206d9ee42ea",
+      "adaptations": [
+        {
+          "sha256": "2e2cee28c83d751c4b7a67943bf30ca184f8e59cd65e358c0d78a1c0e85c3fd7",
+          "reason": "Remove remaining angle delimiters after snippet tag stripping to prevent malformed markup escaping sanitization."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/nodes/wikipedia/search-wikipedia-node.test.ts",
@@ -10490,7 +10508,13 @@
       "source": "packages/runtime/src/nodes/wikipedia/search-wikipedia-node.ts",
       "path": "packages/runtime/src/nodes/wikipedia/search-wikipedia-node.ts",
       "upstreamSha256": "10e412e90c277cc619a8705c4f5a808295737d570979a133e3d6f095e144f9e3",
-      "importedSha256": "35b54028775a322c137e8c20053f14e58b38ea6fa6afec9b698cf1c4c95f978b"
+      "importedSha256": "35b54028775a322c137e8c20053f14e58b38ea6fa6afec9b698cf1c4c95f978b",
+      "adaptations": [
+        {
+          "sha256": "6695ad65d1a5176b2f4330badf1638180bda9a6e411fa1de1fcbd33c338a27f5",
+          "reason": "Remove remaining angle delimiters after snippet tag stripping to prevent malformed markup escaping sanitization."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/nodes/wordpress/create-post-wordpress-node.test.ts",

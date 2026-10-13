@@ -18,3 +18,12 @@ it("rejects unsupported Unicode before persistence without rejecting literal esc
   ])
     expect(() => assertPostgresText(value)).not.toThrow();
 });
+
+it("checks long escaped JSON string tokens without losing duplicate keys", () => {
+  const longEscapedText = JSON.stringify({
+    text: '"'.repeat(30_000),
+    literalEscape: "\\u0000",
+  });
+
+  expect(() => assertPostgresText(longEscapedText)).not.toThrow();
+});

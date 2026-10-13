@@ -18,6 +18,7 @@ test("makes the legacy PostgreSQL source opt-in", () => {
 
 test("isolates dependencies for every workspace package in writable volumes", async () => {
   const dockerfile = await readFile(".devcontainer/Dockerfile", "utf8");
+  const workspaceConfig = await readFile("pnpm-workspace.yaml", "utf8");
   const mounted = new Set(
     [
       ...compose.matchAll(/^      - \w+:\/workspace\/(.+)\/node_modules$/gm),
@@ -28,17 +29,48 @@ test("isolates dependencies for every workspace package in writable volumes", as
       ([, directory]) => directory,
     ),
   );
-  const workspaces = new Set();
-  for (const root of ["apps", "packages"]) {
-    for (const entry of await readdir(root, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const directory = `${root}/${entry.name}`;
+  const packagePatterns = workspaceConfig
+    .match(/^packages:\n((?:[ \t]+-\s+[^\n]*\n)+)/m)?.[1]
+    .matchAll(/^\s+-\s+([^\s#]+)/gm);
+  assert.ok(
+    packagePatterns,
+    "pnpm-workspace.yaml must declare package patterns",
+  );
+
+  async function expandPackagePattern(pattern) {
+    let paths = [""];
+    for (const segment of pattern.split("/")) {
+      const nextPaths = [];
+      for (const base of paths) {
+        if (segment === "*") {
+          const entries = await readdir(base || ".", { withFileTypes: true });
+          nextPaths.push(
+            ...entries
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => (base ? `${base}/${entry.name}` : entry.name)),
+          );
+        } else {
+          nextPaths.push(base ? `${base}/${segment}` : segment);
+        }
+      }
+      paths = nextPaths;
+    }
+    const workspaces = [];
+    for (const directory of paths) {
       try {
         await readFile(`${directory}/package.json`);
-        workspaces.add(directory);
+        workspaces.push(directory);
       } catch (error) {
         if (error.code !== "ENOENT") throw error;
       }
+    }
+    return workspaces;
+  }
+
+  const workspaces = new Set();
+  for (const [, pattern] of packagePatterns) {
+    for (const directory of await expandPackagePattern(pattern)) {
+      workspaces.add(directory);
     }
   }
   assert.deepEqual([...mounted].sort(), [...workspaces].sort());

@@ -53,10 +53,30 @@ export function schemaShapeKey(fields: Field[]): string {
  * same bargain `toIdentifier` strikes for database names.
  */
 export function toSchemaName(name: string): string {
-  const cleaned = name
-    .trim()
-    .replace(/[^a-zA-Z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+  const characters: string[] = [];
+  let separatorPending = false;
+  for (const character of name.trim()) {
+    const code = character.charCodeAt(0);
+    if (
+      code === 95 ||
+      (code >= 48 && code <= 57) ||
+      (code >= 65 && code <= 90) ||
+      (code >= 97 && code <= 122)
+    ) {
+      characters.push(character);
+      separatorPending = false;
+    } else if (!separatorPending) {
+      characters.push("_");
+      separatorPending = true;
+    }
+  }
+
+  let cleaned = characters.join("");
+  let start = 0;
+  let end = cleaned.length;
+  while (start < end && cleaned[start] === "_") start += 1;
+  while (end > start && cleaned[end - 1] === "_") end -= 1;
+  cleaned = cleaned.slice(start, end);
   const identifier = cleaned || "schema";
   return IDENTIFIER_PATTERN.test(identifier) ? identifier : `_${identifier}`;
 }

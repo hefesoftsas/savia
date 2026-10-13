@@ -83,7 +83,7 @@ export class SearchWikipediaNode extends ExecutableNode {
 
       if (!/^[a-z]{2,3}(-[a-z]+)?$/i.test(lang)) {
         return this.createErrorResult(
-          "Invalid language code. Use a valid Wikipedia language code (e.g., en, fr, de)."
+          "Invalid language code. Use a valid Wikipedia language code (e.g., en, fr, de).",
         );
       }
 
@@ -94,14 +94,14 @@ export class SearchWikipediaNode extends ExecutableNode {
       url.searchParams.set("format", "json");
       url.searchParams.set(
         "srprop",
-        "snippet|titlesnippet|timestamp|size|wordcount"
+        "snippet|titlesnippet|timestamp|size|wordcount",
       );
       url.searchParams.set("srinfo", "totalhits|suggestion");
 
       if (limit && typeof limit === "number") {
         url.searchParams.set(
           "srlimit",
-          Math.min(50, Math.max(1, limit)).toString()
+          Math.min(50, Math.max(1, limit)).toString(),
         );
       } else {
         url.searchParams.set("srlimit", "10");
@@ -121,7 +121,7 @@ export class SearchWikipediaNode extends ExecutableNode {
 
       if (!response.ok) {
         return this.createErrorResult(
-          `Wikipedia API request failed with status ${response.status}`
+          `Wikipedia API request failed with status ${response.status}`,
         );
       }
 
@@ -146,7 +146,7 @@ export class SearchWikipediaNode extends ExecutableNode {
       const results = data.query.search.map((item) => ({
         title: item.title,
         pageId: item.pageid,
-        snippet: item.snippet.replace(/<[^>]*>/g, ""),
+        snippet: item.snippet.replace(/[<>]/g, ""),
         url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`,
         size: item.size,
         wordCount: item.wordcount,
@@ -162,7 +162,7 @@ export class SearchWikipediaNode extends ExecutableNode {
       return this.createErrorResult(
         error instanceof Error
           ? error.message
-          : "Unknown error searching Wikipedia"
+          : "Unknown error searching Wikipedia",
       );
     }
   }

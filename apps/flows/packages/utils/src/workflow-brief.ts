@@ -38,7 +38,7 @@ export function isAskedBlank(blank: BriefBlank): boolean {
 /** The option a choice blank currently resolves to: answer over assumption. */
 function effectiveOption(
   blank: BriefBlank,
-  answers: BriefAnswers
+  answers: BriefAnswers,
 ): BriefChoiceOption | undefined {
   if (blank.type !== "choice") return undefined;
   const chosen = answers[blank.id] ?? blank.assumed;
@@ -54,7 +54,7 @@ function effectiveOption(
  */
 export function resolveTrigger(
   brief: Brief,
-  answers: BriefAnswers = {}
+  answers: BriefAnswers = {},
 ): WorkflowTrigger {
   const blank = brief.blanks.find((entry) => entry.role === "trigger");
   if (!blank) return brief.trigger;
@@ -76,7 +76,7 @@ export interface ResolvedResourceBinding {
  */
 export function resolveResourceBindings(
   brief: Brief,
-  answers: BriefAnswers = {}
+  answers: BriefAnswers = {},
 ): ResolvedResourceBinding[] {
   const bindings: ResolvedResourceBinding[] = [];
 
@@ -134,7 +134,7 @@ export function resolveBlank(blank: BriefBlank, answers: BriefAnswers): string {
  */
 export function renderBriefSentence(
   brief: Brief,
-  answers: BriefAnswers = {}
+  answers: BriefAnswers = {},
 ): string {
   const byId = new Map(brief.blanks.map((blank) => [blank.id, blank]));
 
@@ -149,16 +149,25 @@ export function renderBriefSentence(
     })
     .join("");
 
-  return joined
-    .replace(/\s+/g, " ")
-    .replace(/\s+([.,;:!?])/g, "$1")
-    .trim();
+  const sentence: string[] = [];
+  let pendingSpace = false;
+  for (const character of joined) {
+    if (/\s/.test(character)) {
+      pendingSpace = sentence.length > 0;
+      continue;
+    }
+
+    if (pendingSpace && !/[.,;:!?]/.test(character)) sentence.push(" ");
+    sentence.push(character);
+    pendingSpace = false;
+  }
+  return sentence.join("");
 }
 
 /** The destination in force: a destination blank's answer wins over the assumption. */
 export function resolveDestination(
   brief: Brief,
-  answers: BriefAnswers = {}
+  answers: BriefAnswers = {},
 ): BriefDestination {
   const blank = brief.blanks.find((entry) => entry.role === "destination");
   const chosen = blank
@@ -168,7 +177,7 @@ export function resolveDestination(
   return (
     brief.destinationOptions.find((option) => option.id === chosen) ??
     brief.destinationOptions.find(
-      (option) => option.id === brief.destinationId
+      (option) => option.id === brief.destinationId,
     ) ??
     brief.destinationOptions[brief.destinationOptions.length - 1]
   );
@@ -183,7 +192,7 @@ export function resolveDestination(
  */
 export function unansweredAssumptions(
   brief: Brief,
-  answers: BriefAnswers = {}
+  answers: BriefAnswers = {},
 ): Array<{ blankId: string; question: string; assumed: string }> {
   return brief.blanks
     .filter((blank) => !answers[blank.id]?.trim())
@@ -214,7 +223,7 @@ export function buildSynthesisPrompt(
    * names). Falls back to what the brief itself resolves to. Names only — the
    * model is never shown a resource id.
    */
-  resourceBindings?: ResolvedResourceBinding[]
+  resourceBindings?: ResolvedResourceBinding[],
 ): string {
   const destination = resolveDestination(brief, answers);
   const assumptions = unansweredAssumptions(brief, answers);
@@ -236,7 +245,7 @@ export function buildSynthesisPrompt(
         return entry.binding.kind === "existing"
           ? `- Use the ${noun} named "${entry.binding.name}".`
           : `- A new ${noun} should be created for this; the workspace does not have a suitable one yet.`;
-      })
+      }),
     );
   }
 
@@ -244,7 +253,7 @@ export function buildSynthesisPrompt(
     parts.push(
       "",
       "Assumed, because the request did not say:",
-      ...assumptions.map((entry) => `- ${entry.question} → ${entry.assumed}`)
+      ...assumptions.map((entry) => `- ${entry.question} → ${entry.assumed}`),
     );
   }
 

@@ -81,7 +81,7 @@ export class JsonMergeNode extends ExecutableNode {
           obj !== null &&
           obj !== undefined &&
           typeof obj === "object" &&
-          !Array.isArray(obj)
+          !Array.isArray(obj),
       );
 
       if (validObjects.length === 0) {
@@ -105,7 +105,7 @@ export class JsonMergeNode extends ExecutableNode {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       return this.createErrorResult(
-        `Error merging JSON objects: ${error.message}`
+        `Error merging JSON objects: ${error.message}`,
       );
     }
   }
@@ -115,7 +115,9 @@ export class JsonMergeNode extends ExecutableNode {
 
     for (const obj of objects) {
       if (typeof obj === "object" && obj !== null && !Array.isArray(obj)) {
-        Object.assign(result, obj);
+        for (const key of Object.keys(obj)) {
+          this.setOwn(result, key, obj[key]);
+        }
       }
     }
 
@@ -138,7 +140,9 @@ export class JsonMergeNode extends ExecutableNode {
     for (const key in source) {
       if (Object.hasOwn(source, key)) {
         const sourceValue = source[key];
-        const targetValue = target[key];
+        const targetValue = Object.hasOwn(target, key)
+          ? target[key]
+          : undefined;
 
         if (sourceValue === undefined) {
           // Skip undefined values; allow null to overwrite
@@ -147,7 +151,7 @@ export class JsonMergeNode extends ExecutableNode {
 
         if (Array.isArray(sourceValue)) {
           // For arrays, replace the target array
-          target[key] = JSON.parse(JSON.stringify(sourceValue));
+          this.setOwn(target, key, JSON.parse(JSON.stringify(sourceValue)));
         } else if (
           typeof sourceValue === "object" &&
           sourceValue !== null &&
@@ -157,15 +161,24 @@ export class JsonMergeNode extends ExecutableNode {
           !Array.isArray(sourceValue)
         ) {
           // For objects, recursively merge
-          const nested = target[key];
+          const nested = targetValue;
           const branch: JsonObject = isJsonObject(nested) ? nested : {};
-          target[key] = branch;
+          this.setOwn(target, key, branch);
           this.mergeObject(branch, sourceValue);
         } else {
           // For primitives, replace the target value
-          target[key] = sourceValue;
+          this.setOwn(target, key, sourceValue);
         }
       }
     }
+  }
+
+  private setOwn(target: JsonObject, key: string, value: JsonValue): void {
+    Object.defineProperty(target, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    });
   }
 }

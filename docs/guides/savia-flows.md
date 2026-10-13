@@ -396,3 +396,17 @@ for the completed local checks and compiler memory budgets.
 
 `flows:test` builds its own child UI assets and runs Miniflare tests serially.
 `flows:typecheck` also runs one workspace package at a time.
+
+## Imported-code safeguards
+
+JSON merging writes own properties without changing object prototypes. Search
+snippets cannot retain HTML delimiters, generated SVG attributes are escaped,
+and Discord application IDs are encoded as path/query values. Text, field-name,
+color, and reply-prefix normalization scan input linearly. Parquet queries are
+quoted as a complete shell argument rather than interpolated into double quotes.
+
+If a later authorized rollout enables the FFmpeg container, configure its
+`TRUSTED_MEDIA_ORIGINS` with a comma-separated list of exact HTTP(S) origins,
+including any nondefault port. Entries cannot include credentials, paths, query,
+or fragments. Downloads fail closed when it is unset and reject redirects.
+Containers and external services remain disabled in this preview release.

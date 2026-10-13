@@ -7,7 +7,75 @@ import { join } from "node:path";
 const WORK_DIR = "/tmp/ffmpeg-jobs";
 const jobs = new Map();
 
-await mkdir(WORK_DIR, { recursive: true });
+export function parseTrustedMediaOrigins(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("TRUSTED_MEDIA_ORIGINS must be explicitly configured");
+  }
+
+  const entries = value.split(",").map((entry) => entry.trim());
+  if (entries.some((entry) => !entry)) {
+    throw new Error("TRUSTED_MEDIA_ORIGINS contains an empty origin");
+  }
+
+  const origins = new Set();
+  for (const entry of entries) {
+    let url;
+    try {
+      url = new URL(entry);
+    } catch {
+      throw new Error("TRUSTED_MEDIA_ORIGINS contains an invalid URL");
+    }
+
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.pathname !== "/" ||
+      url.search ||
+      url.hash ||
+      (entry !== url.origin && entry !== `${url.origin}/`)
+    ) {
+      throw new Error(
+        "TRUSTED_MEDIA_ORIGINS entries must be HTTP(S) origins without credentials or paths",
+      );
+    }
+    origins.add(url.origin);
+  }
+  return origins;
+}
+
+export function validateTrustedMediaUrl(value, origins) {
+  if (!(origins instanceof Set) || origins.size === 0) {
+    throw new Error("No trusted media origins are configured");
+  }
+
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("Media URL must be an absolute HTTP(S) URL");
+  }
+
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    !origins.has(url.origin)
+  ) {
+    throw new Error("Media URL origin is not trusted");
+  }
+  return url.href;
+}
+
+export async function fetchTrustedMedia(
+  value,
+  options = {},
+  configuredOrigins = process.env.TRUSTED_MEDIA_ORIGINS,
+) {
+  const origins = parseTrustedMediaOrigins(configuredOrigins);
+  const url = validateTrustedMediaUrl(value, origins);
+  return fetch(url, { ...options, redirect: "error" });
+}
 
 const server = createServer(async (req, res) => {
   try {
@@ -56,7 +124,7 @@ const server = createServer(async (req, res) => {
             JSON.stringify({
               error:
                 'Missing video or invalid position (use "first" or "last")',
-            })
+            }),
           );
           return;
         }
@@ -71,7 +139,7 @@ const server = createServer(async (req, res) => {
             JSON.stringify({
               error:
                 "Missing video or invalid time (must be a non-negative number in seconds)",
-            })
+            }),
           );
           return;
         }
@@ -90,7 +158,7 @@ const server = createServer(async (req, res) => {
           res.end(
             JSON.stringify({
               error: "Missing video/image or invalid x/y (numbers required)",
-            })
+            }),
           );
           return;
         }
@@ -176,7 +244,7 @@ async function processConcat(id, jobDir, videoUrls) {
   const inputFiles = [];
 
   for (let i = 0; i < videoUrls.length; i++) {
-    const response = await fetch(videoUrls[i]);
+    const response = await fetchTrustedMedia(videoUrls[i]);
     if (!response.ok) {
       throw new Error(`Failed to download video ${i}: HTTP ${response.status}`);
     }
@@ -198,7 +266,7 @@ async function processConcat(id, jobDir, videoUrls) {
   // Check if ALL videos have audio
   const allProbes = await Promise.all(inputFiles.map(probeVideo));
   const allHaveAudio = allProbes.every((p) =>
-    p.streams.some((s) => s.codec_type === "audio")
+    p.streams.some((s) => s.codec_type === "audio"),
   );
 
   const outputPath = join(jobDir, "output.mp4");
@@ -213,7 +281,7 @@ async function processConcat(id, jobDir, videoUrls) {
  * Download a video and clip it to [start, end] seconds.
  */
 async function processClip(id, jobDir, videoUrl, start, end) {
-  const response = await fetch(videoUrl);
+  const response = await fetchTrustedMedia(videoUrl);
   if (!response.ok) {
     throw new Error(`Failed to download video: HTTP ${response.status}`);
   }
@@ -236,7 +304,7 @@ async function processClip(id, jobDir, videoUrl, start, end) {
  * Download a video and extract its first or last frame as JPEG.
  */
 async function processFrame(id, jobDir, videoUrl, position) {
-  const response = await fetch(videoUrl);
+  const response = await fetchTrustedMedia(videoUrl);
   if (!response.ok) {
     throw new Error(`Failed to download video: HTTP ${response.status}`);
   }
@@ -256,7 +324,7 @@ async function processFrame(id, jobDir, videoUrl, position) {
  * Download a video and extract a frame at a specific timestamp as JPEG.
  */
 async function processFrameAtTime(id, jobDir, videoUrl, time) {
-  const response = await fetch(videoUrl);
+  const response = await fetchTrustedMedia(videoUrl);
   if (!response.ok) {
     throw new Error(`Failed to download video: HTTP ${response.status}`);
   }
@@ -279,8 +347,8 @@ async function processFrameAtTime(id, jobDir, videoUrl, time) {
  */
 async function processOverlay(id, jobDir, videoUrl, imageUrl, x, y) {
   const [videoRes, imageRes] = await Promise.all([
-    fetch(videoUrl),
-    fetch(imageUrl),
+    fetchTrustedMedia(videoUrl),
+    fetchTrustedMedia(imageUrl),
   ]);
   if (!videoRes.ok) {
     throw new Error(`Failed to download video: HTTP ${videoRes.status}`);
@@ -318,12 +386,12 @@ function runFFmpegConcat(inputFiles, outputPath, width, height, includeAudio) {
     .map(
       (_, i) =>
         `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
-        `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v${i}]`
+        `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v${i}]`,
     )
     .join(";");
 
   const concatStreams = Array.from({ length: n }, (_, i) =>
-    includeAudio ? `[v${i}][${i}:a:0]` : `[v${i}]`
+    includeAudio ? `[v${i}][${i}:a:0]` : `[v${i}]`,
   ).join("");
 
   const filter = `${scaleFilters};${concatStreams}concat=n=${n}:v=1:a=${includeAudio ? 1 : 0}[outv]${includeAudio ? "[outa]" : ""}`;
@@ -364,7 +432,7 @@ function runFFmpegOverlay(
   outputPath,
   x,
   y,
-  includeAudio
+  includeAudio,
 ) {
   const args = [
     "-i",
@@ -495,7 +563,7 @@ function probeVideo(filePath) {
       (err, stdout) => {
         if (err) reject(new Error(`ffprobe failed: ${err.message}`));
         else resolve(JSON.parse(stdout));
-      }
+      },
     );
   });
 }
@@ -521,6 +589,9 @@ function readBody(req) {
   });
 }
 
-server.listen(8080, () => {
-  console.log("FFmpeg container server listening on port 8080");
-});
+if (import.meta.main) {
+  await mkdir(WORK_DIR, { recursive: true });
+  server.listen(8080, () => {
+    console.log("FFmpeg container server listening on port 8080");
+  });
+}

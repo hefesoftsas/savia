@@ -1,12 +1,13 @@
 import type { Node } from "@savia/flows-types";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import type { NodeContext } from "../../node-types";
-import { ParquetQueryNode } from "./parquet-query-node";
+import { ParquetQueryNode, quoteShellArgument } from "./parquet-query-node";
 
 describe("ParquetQueryNode", () => {
   const createContext = (
     inputs: Record<string, unknown>,
-    envOverrides?: Record<string, unknown>
+    envOverrides?: Record<string, unknown>,
   ): NodeContext =>
     ({
       nodeId: "parquet-query",
@@ -18,6 +19,18 @@ describe("ParquetQueryNode", () => {
       },
       env: { ...envOverrides },
     }) as unknown as NodeContext;
+
+  it("quotes shell arguments without interpreting backslashes or substitutions", () => {
+    const value = `value\\'; printf injected >&2; $(printf injected); \"quoted\"`;
+    const result = spawnSync("sh", [
+      "-c",
+      `printf %s ${quoteShellArgument(value)}`,
+    ]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.toString()).toBe(value);
+    expect(result.stderr.toString()).toBe("");
+  });
 
   it("should return error for missing sql input", async () => {
     const node = new ParquetQueryNode({
@@ -44,7 +57,7 @@ describe("ParquetQueryNode", () => {
       nodeId: "parquet-query",
     } as unknown as Node);
     const result = await node.execute(
-      createContext({ sql: "INSERT INTO foo VALUES (1)" })
+      createContext({ sql: "INSERT INTO foo VALUES (1)" }),
     );
 
     expect(result.status).toBe("error");
@@ -59,7 +72,7 @@ describe("ParquetQueryNode", () => {
     const result = await node.execute(
       createContext({
         sql: "WITH cte AS (SELECT 1) SELECT * FROM cte",
-      })
+      }),
     );
 
     expect(result.status).toBe("error");
@@ -73,7 +86,7 @@ describe("ParquetQueryNode", () => {
     const result = await node.execute(
       createContext({
         sql: "SELECT * FROM read_parquet('https://example.com/data.parquet')",
-      })
+      }),
     );
 
     expect(result.status).toBe("error");

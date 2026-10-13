@@ -35,6 +35,10 @@ function inferSchema(results: Record<string, unknown>[]): Schema {
   return { name: "result", fields };
 }
 
+export function quoteShellArgument(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 export class ParquetQueryNode extends ExecutableNode {
   public static readonly nodeType: NodeType = {
     id: "parquet-query",
@@ -90,14 +94,14 @@ export class ParquetQueryNode extends ExecutableNode {
     const trimmedSql = sql.trim().toUpperCase();
     if (!trimmedSql.startsWith("SELECT") && !trimmedSql.startsWith("WITH")) {
       return this.createErrorResult(
-        "Only SELECT or WITH (CTE) queries are allowed."
+        "Only SELECT or WITH (CTE) queries are allowed.",
       );
     }
 
     const sandboxBinding = context.env.DUCKDB_SANDBOX;
     if (!sandboxBinding) {
       return this.createErrorResult(
-        "DUCKDB_SANDBOX binding is not configured."
+        "DUCKDB_SANDBOX binding is not configured.",
       );
     }
 
@@ -106,14 +110,15 @@ export class ParquetQueryNode extends ExecutableNode {
 
       // DuckDB and httpfs are pre-installed in the container image.
       // Execute the query with JSON output and httpfs loaded.
-      const duckdbCommand = `duckdb -json -c "LOAD httpfs; SET allow_asterisks_in_http_paths = true; ${sql.replace(/"/g, '\\"')}"`;
+      const query = `LOAD httpfs; SET allow_asterisks_in_http_paths = true; ${sql}`;
+      const duckdbCommand = `duckdb -json -c ${quoteShellArgument(query)}`;
       const queryResult = await sandbox.exec(duckdbCommand, {
         timeout: 120_000,
       });
 
       if (!queryResult.success) {
         return this.createErrorResult(
-          `DuckDB query failed: ${queryResult.stderr}`
+          `DuckDB query failed: ${queryResult.stderr}`,
         );
       }
 
@@ -136,7 +141,7 @@ export class ParquetQueryNode extends ExecutableNode {
       });
     } catch (error) {
       return this.createErrorResult(
-        `Failed to execute parquet query: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to execute parquet query: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

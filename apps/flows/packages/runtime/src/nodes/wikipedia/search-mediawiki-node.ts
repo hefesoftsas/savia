@@ -85,7 +85,7 @@ export class SearchMediaWikiNode extends ExecutableNode {
 
       if (!baseUrl || typeof baseUrl !== "string") {
         return this.createErrorResult(
-          "Base URL is required (e.g., https://en.wikipedia.org)"
+          "Base URL is required (e.g., https://en.wikipedia.org)",
         );
       }
 
@@ -99,7 +99,7 @@ export class SearchMediaWikiNode extends ExecutableNode {
         apiUrl = new URL(`${base}/w/api.php`);
       } catch {
         return this.createErrorResult(
-          "Invalid base URL. Provide a valid URL (e.g., https://en.wikipedia.org)."
+          "Invalid base URL. Provide a valid URL (e.g., https://en.wikipedia.org).",
         );
       }
 
@@ -109,7 +109,7 @@ export class SearchMediaWikiNode extends ExecutableNode {
       apiUrl.searchParams.set("format", "json");
       apiUrl.searchParams.set(
         "srprop",
-        "snippet|titlesnippet|timestamp|size|wordcount"
+        "snippet|titlesnippet|timestamp|size|wordcount",
       );
       apiUrl.searchParams.set("srinfo", "totalhits|suggestion");
 
@@ -124,7 +124,7 @@ export class SearchMediaWikiNode extends ExecutableNode {
       if (limit && typeof limit === "number") {
         apiUrl.searchParams.set(
           "srlimit",
-          Math.min(50, Math.max(1, limit)).toString()
+          Math.min(50, Math.max(1, limit)).toString(),
         );
       } else {
         apiUrl.searchParams.set("srlimit", "10");
@@ -144,7 +144,7 @@ export class SearchMediaWikiNode extends ExecutableNode {
 
       if (!response.ok) {
         return this.createErrorResult(
-          `MediaWiki API request failed with status ${response.status}`
+          `MediaWiki API request failed with status ${response.status}`,
         );
       }
 
@@ -172,13 +172,13 @@ export class SearchMediaWikiNode extends ExecutableNode {
 
       if (data.error) {
         return this.createErrorResult(
-          `MediaWiki API error: ${data.error.info}`
+          `MediaWiki API error: ${data.error.info}`,
         );
       }
 
       if (!data.query) {
         return this.createErrorResult(
-          "Unexpected response from MediaWiki API: no query results"
+          "Unexpected response from MediaWiki API: no query results",
         );
       }
 
@@ -187,7 +187,7 @@ export class SearchMediaWikiNode extends ExecutableNode {
       const results = data.query.search.map((item) => ({
         title: item.title,
         pageId: item.pageid,
-        snippet: item.snippet.replace(/<[^>]*>/g, ""),
+        snippet: item.snippet.replace(/[<>]/g, ""),
         url: `${normalizedBase}/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`,
         size: item.size,
         wordCount: item.wordcount,
@@ -203,7 +203,7 @@ export class SearchMediaWikiNode extends ExecutableNode {
       return this.createErrorResult(
         error instanceof Error
           ? error.message
-          : "Unknown error searching MediaWiki"
+          : "Unknown error searching MediaWiki",
       );
     }
   }
