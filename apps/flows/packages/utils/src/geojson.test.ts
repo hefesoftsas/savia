@@ -5,7 +5,7 @@ import { geojsonToSvg } from "./geojson";
 const POINT = {
   type: "Point",
   coordinates: [0, 0],
-} as const;
+};
 
 describe("geojsonToSvg", () => {
   it("rejects long malformed RGB and HSL values", () => {
