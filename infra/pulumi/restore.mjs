@@ -6,17 +6,25 @@
 // Afterwards run scripts/apply-d1-migrations.mjs to catch up with any
 // migrations newer than the backup, then redeploy workers via CI.
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { readFile, readdir, lstat } from "node:fs/promises";
 import { join, relative, sep, dirname, resolve, isAbsolute } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { buildR2ObjectPutCommand } from "./backup.mjs";
+import { createMaintenanceClient } from "../../scripts/flows-maintenance.mjs";
+import {
+  validateFlowsSnapshotManifest,
+  verifyFlowsSnapshotPages,
+} from "./flows-snapshot.mjs";
 import { assertDeploymentAccount, parseStackOutputs } from "./outputs.mjs";
 import {
   assertAccountId,
   assertSafeR2Key,
   normalizeEnvironment,
   resolveInfraNames,
+  validateFlowsResources,
 } from "./naming.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -140,17 +148,31 @@ function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function resolveD1DatabaseName(key, databaseNames) {
+function assertVersion2RelativePath(path, label) {
+  if (
+    typeof path !== "string" ||
+    path === "" ||
+    isAbsolute(path) ||
+    path.includes("\\") ||
+    path.split("/").some((part) => part === "" || part === "." || part === "..")
+  ) {
+    throw new Error(`Backup manifest contains an unsafe ${label} path`);
+  }
+}
+
+function resolveD1DatabaseName(key, databaseNames, flowsDatabaseName = null) {
   if (key === "auth") return databaseNames.auth;
   if (key === "domain") return databaseNames.domain;
+  if (key === "flows" && flowsDatabaseName) return flowsDatabaseName;
   if (key === databaseNames.auth) return databaseNames.auth;
   if (key === databaseNames.domain) return databaseNames.domain;
+  if (flowsDatabaseName && key === flowsDatabaseName) return flowsDatabaseName;
   throw new Error(
-    `D1 manifest key ${key} is not a database name for ${databaseNames.auth} or ${databaseNames.domain}`,
+    `D1 manifest key ${key} is not a database name for the selected stack`,
   );
 }
 
-function validateD1Manifest(manifest) {
+function validateD1Manifest(manifest, flowsDatabaseName = null) {
   if (!isRecord(manifest.d1) || Object.keys(manifest.d1).length === 0) {
     throw new Error("Backup manifest is missing D1 files");
   }
@@ -160,7 +182,7 @@ function validateD1Manifest(manifest) {
     if (typeof path !== "string" || path.trim() === "") {
       throw new Error(`D1 backup path for ${key} is invalid`);
     }
-    const name = resolveD1DatabaseName(key, databaseNames);
+    const name = resolveD1DatabaseName(key, databaseNames, flowsDatabaseName);
     if (resolvedNames.has(name)) {
       throw new Error(`D1 manifest contains multiple entries for ${name}`);
     }
@@ -176,9 +198,18 @@ function validateD1Manifest(manifest) {
     if (!Object.hasOwn(manifest.d1, key)) {
       throw new Error(`D1 backup method has no matching file: ${key}`);
     }
-    resolveD1DatabaseName(key, databaseNames);
+    const databaseName = resolveD1DatabaseName(
+      key,
+      databaseNames,
+      flowsDatabaseName,
+    );
     if (method !== "export" && method !== "table-dump") {
       throw new Error(`Unsupported D1 method for ${key}: ${method}`);
+    }
+    if (method === "table-dump" && databaseName === databaseNames.auth) {
+      throw new Error(
+        "Auth D1 table-dump restore is unsupported because its schema migrations cannot be reconstructed safely",
+      );
     }
   }
 }
@@ -219,7 +250,7 @@ export async function buildR2ObjectRestorePlan({
 }
 
 export function validateManifest(manifest, confirm, runtimeAccountId) {
-  if (!manifest || manifest.version !== 1)
+  if (!manifest || ![1, 2].includes(manifest.version))
     throw new Error("Unsupported backup manifest version");
   if (typeof manifest.stack !== "string" || !manifest.stack)
     throw new Error("Backup manifest is missing its stack");
@@ -271,8 +302,233 @@ export function validateManifest(manifest, confirm, runtimeAccountId) {
       `Manifest is for stack ${manifest.stack}, not ${confirm}. Refusing.`,
     );
   }
-  validateD1Manifest(manifest);
+  if (manifest.r2 && manifest.r2.bucket !== outputs.documentsBucketName) {
+    throw new Error(
+      "Backup manifest documents R2 bucket does not match its Pulumi output",
+    );
+  }
+  let flowsDatabaseName = null;
+  if (manifest.version === 2) {
+    if (!isRecord(manifest.integrity)) {
+      throw new Error("Backup integrity hashes must be an object");
+    }
+    if (manifest.r2Buckets !== undefined && !isRecord(manifest.r2Buckets)) {
+      throw new Error("R2 bucket backups must be an object");
+    }
+    const paths = [
+      ...Object.values(manifest.d1 ?? {}),
+      ...(manifest.r2 ? [manifest.r2.path, manifest.r2.metadataFile] : []),
+      ...Object.values(manifest.r2Buckets ?? {}).flatMap((entry) => {
+        if (!isRecord(entry))
+          throw new Error("R2 bucket backup entry must be an object");
+        return [entry.path, entry.metadataFile];
+      }),
+      ...(manifest.flowsSnapshot ? [manifest.flowsSnapshot.path] : []),
+      ...Object.keys(manifest.integrity),
+    ];
+    for (const path of paths) assertVersion2RelativePath(path, "backup file");
+    if (typeof outputs.flowsEnabled !== "boolean") {
+      throw new Error("Backup manifest is missing flowsEnabled");
+    }
+    if (!outputs.flowsEnabled) {
+      if (outputs.flowsResources !== null) {
+        throw new Error(
+          "Disabled Flows manifest contains provisioned resources",
+        );
+      }
+      if (manifest.r2Buckets && Object.keys(manifest.r2Buckets).length > 0) {
+        throw new Error("Disabled Flows manifest contains Flow R2 backups");
+      }
+    } else {
+      const flows = validateFlowsResources(
+        outputs.flowsResources,
+        manifest.stack,
+      );
+      const expectedNames = resolveInfraNames({
+        environment: manifest.stack,
+        documentsBucket: outputs.documentsBucketName,
+        publicOrigin: outputs.resolvedPublicOrigin,
+      }).flows;
+      const planned = outputs.plannedFlowsResourceNames;
+      if (
+        !planned ||
+        planned.database !== expectedNames.database ||
+        planned.kvNamespace !== expectedNames.kvNamespace ||
+        planned.worker !== expectedNames.worker ||
+        planned.queue !== expectedNames.queue ||
+        planned.workflow !== expectedNames.workflow ||
+        JSON.stringify(planned.buckets) !==
+          JSON.stringify(expectedNames.buckets)
+      ) {
+        throw new Error(
+          "Backup manifest Flows resource names do not match its resolved environment",
+        );
+      }
+      if (flows.buckets.resources !== expectedNames.buckets.resources) {
+        throw new Error(
+          "Backup manifest Flow bucket names do not match its resolved environment",
+        );
+      }
+      flowsDatabaseName = expectedNames.database;
+      if (!manifest.r2) {
+        throw new Error(
+          "Enabled Flows manifest is missing the documents R2 backup",
+        );
+      }
+      if (!manifest.d1 || !Object.hasOwn(manifest.d1, expectedNames.database)) {
+        throw new Error("Enabled Flows manifest is missing its D1 backup");
+      }
+      if (manifest.r2) {
+        const buckets = manifest.r2Buckets;
+        const bucketKinds = Object.keys(buckets ?? {}).sort();
+        if (
+          JSON.stringify(bucketKinds) !==
+          JSON.stringify(["datasets", "inboxes", "resources"])
+        ) {
+          throw new Error(
+            "Enabled Flows manifest must contain exactly the resources, datasets, and inboxes R2 backups",
+          );
+        }
+        for (const kind of ["resources", "datasets", "inboxes"]) {
+          if (
+            !buckets?.[kind] ||
+            buckets[kind].bucket !== flows.buckets[kind]
+          ) {
+            throw new Error(
+              `Enabled Flows manifest is missing the ${kind} R2 backup`,
+            );
+          }
+        }
+      }
+    }
+    if (outputs.flowsEnabled && !manifest.flowsSnapshot) {
+      throw new Error(
+        "Enabled Flows manifest is missing its runtime snapshot evidence",
+      );
+    }
+    if (
+      manifest.flowsSnapshot &&
+      manifest.flowsSnapshot.method !== "flows-maintenance-export"
+    ) {
+      throw new Error("Unsupported Flows runtime snapshot method");
+    }
+  }
+  validateD1Manifest(manifest, flowsDatabaseName);
   return manifest;
+}
+
+export async function verifyManifestIntegrity(manifest, manifestFile) {
+  if (manifest.version === 1) return;
+  const hashes = manifest.integrity;
+  if (!isRecord(hashes))
+    throw new Error("Backup manifest is missing integrity hashes");
+  const referenced = [
+    ...Object.values(manifest.d1 ?? {}),
+    ...(manifest.r2 ? [manifest.r2.metadataFile] : []),
+    ...Object.values(manifest.r2Buckets ?? {}).map(
+      (bucket) => bucket.metadataFile,
+    ),
+    ...(manifest.flowsSnapshot ? [manifest.flowsSnapshot.path] : []),
+  ].filter(Boolean);
+  for (const path of referenced) {
+    if (!Object.hasOwn(hashes, path)) {
+      throw new Error(`Backup integrity hash is missing for ${path}`);
+    }
+  }
+  const backupRoot = dirname(resolve(manifestFile));
+  const manifestRelativePath = relative(backupRoot, resolve(manifestFile))
+    .split(sep)
+    .join("/");
+  const capturedFiles = (await listLocalFiles(backupRoot)).filter(
+    (path) => path !== manifestRelativePath,
+  );
+  const hashedFiles = new Set(Object.keys(hashes));
+  if (
+    hashedFiles.size !== capturedFiles.length ||
+    capturedFiles.some((path) => !hashedFiles.has(path))
+  ) {
+    throw new Error(
+      "Backup integrity hash inventory does not cover every backup file",
+    );
+  }
+  for (const [path, expected] of Object.entries(hashes)) {
+    if (!/^[a-f0-9]{64}$/.test(expected)) {
+      throw new Error(`Backup integrity hash for ${path} is invalid`);
+    }
+    const fullPath = resolveManifestPath(manifestFile, path);
+    const info = await lstat(fullPath);
+    if (!info.isFile())
+      throw new Error(`Backup integrity target is not a regular file: ${path}`);
+    const hash = createHash("sha256");
+    for await (const chunk of createReadStream(fullPath)) hash.update(chunk);
+    if (hash.digest("hex") !== expected) {
+      throw new Error(`Backup integrity check failed for ${path}`);
+    }
+  }
+}
+
+export async function assertFlowsRestoreMaintenance(
+  manifest,
+  { env = process.env, fetchImpl = fetch } = {},
+) {
+  const outputs = manifest?.pulumiOutputs;
+  if (outputs?.flowsEnabled !== true) return;
+  const secret = env?.SAVIA_FLOWS_BRIDGE_SECRET;
+  if (typeof secret !== "string" || Buffer.byteLength(secret, "utf8") < 32) {
+    throw new Error(
+      "SAVIA_FLOWS_BRIDGE_SECRET is required to verify Flows restore maintenance",
+    );
+  }
+  const stack = normalizeEnvironment(manifest.stack);
+  const expectedOrigin = resolveInfraNames({
+    environment: stack,
+    documentsBucket: outputs.documentsBucketName,
+    publicOrigin: outputs.resolvedPublicOrigin,
+  }).publicOrigin;
+  if (outputs.resolvedPublicOrigin !== expectedOrigin) {
+    throw new Error(
+      "Flows restore maintenance origin does not match the selected stack",
+    );
+  }
+  const request = createMaintenanceClient({
+    origin: expectedOrigin,
+    bridgeSecret: secret,
+    fetchImpl,
+  });
+  const status = await request({ action: "status" });
+  if (
+    status.executionEnabled !== false ||
+    status.maintenance !== true ||
+    !Number.isInteger(status.activeRuns) ||
+    status.activeRuns !== 0
+  ) {
+    throw new Error(
+      "Flows restore requires execution paused, maintenance enabled, and zero active runs",
+    );
+  }
+}
+
+export function buildFlowsD1MigrationsCommand(workerName, stack) {
+  normalizeEnvironment(stack);
+  if (typeof workerName !== "string" || workerName.trim() === "") {
+    throw new Error("Flows worker name is required to apply D1 migrations");
+  }
+  return [
+    "pnpm",
+    [
+      "--filter",
+      "@savia/flows-api",
+      "exec",
+      "wrangler",
+      "d1",
+      "migrations",
+      "apply",
+      workerName,
+      "--remote",
+      "--config",
+      `wrangler.${stack}.jsonc`,
+    ],
+  ];
 }
 
 // wrangler d1 execute <name> --remote --file <sql>
@@ -347,7 +603,21 @@ export async function runPulumiUpForRestore({
     liveOutputs.documentsBucketName !== expectedOutputs.documentsBucketName ||
     liveOutputs.resolvedPublicOrigin !== expectedOutputs.resolvedPublicOrigin ||
     liveOutputs.databaseNames?.auth !== expectedOutputs.databaseNames?.auth ||
-    liveOutputs.databaseNames?.domain !== expectedOutputs.databaseNames?.domain
+    liveOutputs.databaseNames?.domain !==
+      expectedOutputs.databaseNames?.domain ||
+    (typeof expectedOutputs.flowsEnabled === "boolean" &&
+      liveOutputs.flowsEnabled !== expectedOutputs.flowsEnabled) ||
+    (expectedOutputs.flowsEnabled === true &&
+      (liveOutputs.plannedFlowsResourceNames?.database !==
+        expectedOutputs.plannedFlowsResourceNames?.database ||
+        JSON.stringify(liveOutputs.flowsResources?.buckets) !==
+          JSON.stringify(expectedOutputs.flowsResources?.buckets) ||
+        liveOutputs.flowsResources?.workerName !==
+          expectedOutputs.flowsResources?.workerName ||
+        liveOutputs.flowsResources?.queueName !==
+          expectedOutputs.flowsResources?.queueName ||
+        liveOutputs.flowsResources?.workflowName !==
+          expectedOutputs.flowsResources?.workflowName))
   ) {
     throw new Error(
       "Live Pulumi environment, bucket, or database names do not match the restore manifest",
@@ -367,6 +637,10 @@ async function main() {
   const pulumiCwd = fileURLToPath(new URL(".", import.meta.url));
   const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
   const dbNames = manifest.pulumiOutputs.databaseNames;
+  const flowsDatabaseName =
+    manifest.version === 2 && manifest.pulumiOutputs.flowsEnabled
+      ? manifest.pulumiOutputs.plannedFlowsResourceNames.database
+      : null;
   const bucket = manifest.pulumiOutputs.documentsBucketName;
   const manifestFile = resolve(plan.manifest);
   const resolvedD1Files = Object.fromEntries(
@@ -375,16 +649,17 @@ async function main() {
       resolveManifestPath(manifestFile, path),
     ]),
   );
-  const r2Path = manifest.r2
-    ? resolveManifestPath(manifestFile, manifest.r2.path)
-    : null;
+  await verifyManifestIntegrity(manifest, resolve(plan.manifest));
 
   if (plan.dryRun) {
     console.log(`Would restore stack ${manifest.stack} from ${plan.manifest}`);
     if (!plan.skipInfra)
       console.log(`Would run: pulumi up --stack ${manifest.stack} --yes`);
     console.log(`Would load D1: ${Object.keys(resolvedD1Files).join(", ")}`);
-    if (manifest.r2) console.log(`Would sync R2 bucket back: ${bucket}`);
+    if (manifest.r2) console.log(`Would restore R2 bucket: ${bucket}`);
+    for (const backup of Object.values(manifest.r2Buckets ?? {})) {
+      console.log(`Would restore R2 bucket: ${backup.bucket}`);
+    }
     return;
   }
   if (!accountId) {
@@ -397,29 +672,81 @@ async function main() {
       throw new Error(`D1 backup for ${dbName} is not a regular file`);
     }
   }
-  let r2RestorePlan = null;
-  if (manifest.r2) {
-    if (!manifest.r2.metadataFile) {
+  const r2RestorePlans = [];
+  const r2Sidecars = new Map();
+  const r2Backups = [
+    ...(manifest.r2 ? [{ ...manifest.r2, slot: "documents" }] : []),
+    ...Object.entries(manifest.r2Buckets ?? {}).map(([slot, backup]) => ({
+      ...backup,
+      slot,
+    })),
+  ];
+  for (const backup of r2Backups) {
+    if (!backup.metadataFile) {
       throw new Error(
         "This R2 backup has no metadata sidecar; refusing a restore that would silently lose object metadata",
       );
     }
-    if (!["object-get", "s3-sync"].includes(manifest.r2.method)) {
-      throw new Error(`Unsupported R2 backup method: ${manifest.r2.method}`);
+    if (!["object-get", "s3-sync"].includes(backup.method)) {
+      throw new Error(`Unsupported R2 backup method: ${backup.method}`);
     }
-    const metadataFile = resolveManifestPath(
-      manifestFile,
-      manifest.r2.metadataFile,
-    );
+    const metadataFile = resolveManifestPath(manifestFile, backup.metadataFile);
     const sidecar = await readSidecar(metadataFile);
-    r2RestorePlan = await buildR2ObjectRestorePlan({
-      bucket,
-      sourceDir: r2Path,
-      sidecar,
-      accountId,
-      expectedObjects: manifest.r2.objects,
+    r2Sidecars.set(backup.slot, sidecar);
+    const sourceDir = resolveManifestPath(manifestFile, backup.path);
+    r2RestorePlans.push(
+      await buildR2ObjectRestorePlan({
+        bucket: backup.bucket,
+        sourceDir,
+        sidecar,
+        accountId,
+        expectedObjects: backup.objects,
+      }),
+    );
+  }
+
+  const d1Names = manifest.pulumiOutputs.databaseNames;
+  const tableDumpDatabases = Object.entries(manifest.d1Methods ?? {})
+    .filter(([, method]) => method === "table-dump")
+    .map(([key]) => resolveD1DatabaseName(key, d1Names, flowsDatabaseName));
+  const restoreDomainSchema = tableDumpDatabases.includes(d1Names.domain);
+  const restoreFlowsSchema =
+    flowsDatabaseName !== null &&
+    tableDumpDatabases.includes(flowsDatabaseName);
+
+  if (manifest.flowsSnapshot) {
+    const snapshotPath = resolveManifestPath(
+      manifestFile,
+      manifest.flowsSnapshot.path,
+    );
+    const snapshot = validateFlowsSnapshotManifest(
+      JSON.parse(await readFile(snapshotPath, "utf8")),
+    );
+    const expectedPages = snapshot.objects.reduce(
+      (sum, object) => sum + object.pages.length,
+      0,
+    );
+    if (
+      snapshot.id !== manifest.flowsSnapshot.id ||
+      expectedPages !== manifest.flowsSnapshot.pages
+    ) {
+      throw new Error(
+        "Flows runtime snapshot evidence does not match its backup manifest",
+      );
+    }
+    const resourcesBackup = manifest.r2Buckets?.resources;
+    if (!resourcesBackup)
+      throw new Error("Flows runtime snapshot has no resources bucket backup");
+    await verifyFlowsSnapshotPages(snapshot, {
+      bucket: resourcesBackup.bucket,
+      sidecar: r2Sidecars.get("resources"),
+      sourceDir: resolveManifestPath(manifestFile, resourcesBackup.path),
     });
   }
+
+  // Do not overwrite a live Flows installation: status must prove the remote
+  // worker is paused, in maintenance mode, and has drained all active runs.
+  await assertFlowsRestoreMaintenance(manifest);
 
   let restoreDomainD1Id = manifest.pulumiOutputs.domainD1Id;
   if (!plan.skipInfra) {
@@ -431,7 +758,7 @@ async function main() {
     });
     restoreDomainD1Id = liveOutputs.domainD1Id;
   }
-  if (needsMigrations(manifest) && !plan.skipMigrations) {
+  if (!plan.skipMigrations && restoreDomainSchema) {
     await execFileAsync("node", ["scripts/apply-d1-migrations.mjs"], {
       cwd: repoRoot,
       env: {
@@ -439,24 +766,40 @@ async function main() {
         CLOUDFLARE_DATABASE_ID: restoreDomainD1Id,
       },
     });
-    console.log("Applied D1 migrations before loading table dumps");
+    console.log("Applied domain D1 migrations before loading table dumps");
+  }
+  if (!plan.skipMigrations && restoreFlowsSchema) {
+    const [command, args] = buildFlowsD1MigrationsCommand(
+      manifest.pulumiOutputs.flowsResources.workerName,
+      manifest.stack,
+    );
+    await execFileAsync(command, args, { cwd: repoRoot });
+    console.log("Applied Flows D1 migrations before loading table dumps");
   }
   for (const [dbName, sqlFile] of Object.entries(resolvedD1Files)) {
     const [command, args] = buildD1ExecuteCommand(
-      resolveD1DatabaseName(dbName, dbNames),
+      resolveD1DatabaseName(dbName, dbNames, flowsDatabaseName),
       sqlFile,
     );
     await execFileAsync(command, args, { cwd: repoRoot });
     console.log(`Restored D1 ${dbName}`);
   }
-  if (manifest.r2) {
-    for (const { command, args } of r2RestorePlan) {
+  for (let index = 0; index < r2Backups.length; index++) {
+    const backup = r2Backups[index];
+    for (const { command, args } of r2RestorePlans[index]) {
       await execFileAsync(command, args, { cwd: repoRoot });
     }
-    console.log(`Restored R2 ${bucket} object by object`);
+    console.log(`Restored R2 ${backup.bucket} object by object`);
+  }
+  if (manifest.flowsSnapshot) {
+    console.log(
+      "D1 and R2 restore finished. Flows recovery remains incomplete until the Durable Object snapshot is imported through scripts/flows-maintenance.mjs --action restore; keep execution paused.",
+    );
+  } else {
+    console.log("D1 and R2 restore finished.");
   }
   console.log(
-    "Restore complete. Next: node scripts/apply-d1-migrations.mjs, then redeploy workers via CI.",
+    "Next: verify recovered persistence, apply any outstanding migrations, then redeploy the paused workers via CI.",
   );
 }
 

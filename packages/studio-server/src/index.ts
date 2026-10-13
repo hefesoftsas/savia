@@ -83,7 +83,7 @@ import { registerExtensions, type ExtensionOptions } from "./extensions";
 import { registerPluginStore, type PluginStoreOptions } from "./plugin-store";
 import { registerExtensionActions } from "./extension-actions";
 import { registerExtensionSummaries } from "./extension-summaries";
-import { registerWorkflows, type WorkflowOptions } from "./workflows/routes";
+import { registerWorkflows, type WorkflowOptions } from "@savia/flows-native/routes";
 import {
   registerNotifications,
   type NotificationRouteOptions,

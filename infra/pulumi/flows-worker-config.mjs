@@ -1,6 +1,11 @@
 // Worker-attached infrastructure has one publisher: Wrangler. Pulumi provisions
 // the independent resources and this manifest attaches their actual outputs.
-export function flowsWorkerConfig(resources, publicOrigin, environment) {
+export function flowsWorkerConfig(
+  resources,
+  publicOrigin,
+  environment,
+  executionEnabled = false,
+) {
   const sqliteClasses = [
     "DatabaseDO",
     "WorkflowAgent",
@@ -21,7 +26,19 @@ export function flowsWorkerConfig(resources, publicOrigin, environment) {
     vars: {
       // Retain the first edition's restricted catalog and D1 execution history.
       SAVIA_FLOWS_LOCAL_ONLY: "true",
-      CLOUDFLARE_ENV: "development",
+      CLOUDFLARE_ENV: environment,
+      SAVIA_FLOWS_EXECUTION_ENABLED: String(executionEnabled),
+      // Re-render before each deployment. A newer generation may resume;
+      // a pause wins within the same generation and stale Workers cannot clear it.
+      SAVIA_FLOWS_POLICY_GENERATION: String(Date.now()),
+      SAVIA_FLOWS_MAINTENANCE: "false",
+      SAVIA_FLOWS_EXTERNAL_SERVICES_ENABLED: "false",
+      SAVIA_FLOWS_QUOTAS_ENABLED: "true",
+      SAVIA_FLOWS_MAX_DAILY_RUNS: "100",
+      SAVIA_FLOWS_MAX_MONTHLY_RUNS: "1000",
+      SAVIA_FLOWS_MAX_CONCURRENT_RUNS: "2",
+      SAVIA_FLOWS_MAX_NODES_PER_RUN: "50",
+      SAVIA_FLOWS_MAX_STEPS_PER_RUN: "200",
       WEB_HOST: `${publicOrigin}/flows-ui`,
       WEBSITE_URL: publicOrigin,
       EMAIL_DOMAIN: "savia.local",
@@ -33,6 +50,14 @@ export function flowsWorkerConfig(resources, publicOrigin, environment) {
           environment === "preview"
             ? "savia-agencies-preview"
             : "savia-agencies",
+      },
+      {
+        binding: "CODE_EXECUTOR",
+        service:
+          environment === "preview"
+            ? "savia-hook-executor-preview"
+            : "savia-hook-executor",
+        entrypoint: "FlowsExecutor",
       },
     ],
     d1_databases: [
@@ -71,13 +96,14 @@ export function flowsWorkerConfig(resources, publicOrigin, environment) {
       consumers: [
         {
           queue: resources.queueName,
-          max_batch_size: 10,
+          max_batch_size: 1,
           max_batch_timeout: 1,
+          max_concurrency: 1,
+          max_retries: 100,
         },
       ],
     },
     triggers: { crons: ["* * * * *"] },
-    worker_loaders: [{ binding: "LOADER" }],
     ratelimits: [
       {
         name: "RATE_LIMIT_DEFAULT",

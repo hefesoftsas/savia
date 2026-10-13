@@ -105,13 +105,13 @@ describe("user sidebar navigation preferences", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...layout,
-          hiddenItems: ["plugin-studio"],
+          hiddenItems: ["plugin-studio", "savia-flows"],
         }),
       },
     );
     expect(saved.status).toBe(200);
     expect(await saved.json()).toEqual({
-      data: { ...layout, hiddenItems: ["plugin-studio"] },
+      data: { ...layout, hiddenItems: ["plugin-studio", "savia-flows"] },
     });
   });
 

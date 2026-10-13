@@ -1,5 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   parseBackupArgs,
   buildD1ExportCommand,
@@ -11,6 +14,9 @@ import {
   listR2Objects,
   assertSafeTableDumpFallback,
   backupRelativePath,
+  d1BackupTargets,
+  flowsBucketTargets,
+  hashBackupFiles,
 } from "./backup.mjs";
 
 describe("pulumi backup", () => {
@@ -35,6 +41,28 @@ describe("pulumi backup", () => {
         "preview",
       ]).confirmQuiescent,
       "preview",
+    );
+    assert.equal(
+      parseBackupArgs([
+        "--stack",
+        "preview",
+        "--apply",
+        "--flows-snapshot",
+        "/secure/flows-snapshot.json",
+      ]).flowsSnapshot,
+      "/secure/flows-snapshot.json",
+    );
+    assert.throws(
+      () =>
+        parseBackupArgs([
+          "--stack",
+          "preview",
+          "--apply",
+          "--flows-snapshot",
+          "--confirm-quiescent",
+          "preview",
+        ]),
+      /Missing required flag: --flows-snapshot/,
     );
   });
 
@@ -82,9 +110,59 @@ describe("pulumi backup", () => {
       files: { "savia-auth-preview": "d1/a.sql" },
       r2: null,
     });
-    assert.equal(manifest.version, 1);
+    assert.equal(manifest.version, 2);
     assert.equal(manifest.stack, "preview");
     assert.ok(manifest.createdAt);
+  });
+
+  it("includes the exact optional Flows D1 and three preview R2 targets", () => {
+    const disabled = {
+      databaseNames: {
+        auth: "savia-auth-preview",
+        domain: "savia-agencies-preview",
+      },
+      authD1Id: "auth-id",
+      domainD1Id: "domain-id",
+      flowsEnabled: false,
+      flowsResources: null,
+    };
+    assert.deepEqual(d1BackupTargets(disabled), {
+      "savia-auth-preview": "auth-id",
+      "savia-agencies-preview": "domain-id",
+    });
+    assert.deepEqual(flowsBucketTargets(disabled), {});
+
+    const enabled = {
+      ...disabled,
+      flowsEnabled: true,
+      plannedFlowsResourceNames: { database: "savia-flows-preview" },
+      flowsResources: {
+        databaseId: "flows-d1-id",
+        buckets: {
+          resources: "savia-flows-resources-preview",
+          datasets: "savia-flows-datasets-preview",
+          inboxes: "savia-flows-inboxes-preview",
+        },
+      },
+    };
+    assert.deepEqual(d1BackupTargets(enabled), {
+      "savia-auth-preview": "auth-id",
+      "savia-agencies-preview": "domain-id",
+      "savia-flows-preview": "flows-d1-id",
+    });
+    assert.deepEqual(
+      flowsBucketTargets(enabled),
+      enabled.flowsResources.buckets,
+    );
+  });
+
+  it("hashes every regular backup file using relative manifest paths", async () => {
+    const base = await mkdtemp(join(tmpdir(), "backup-hashes-"));
+    await mkdir(join(base, "d1"));
+    await writeFile(join(base, "d1", "flows.sql"), "select 1;\n");
+    const hashes = await hashBackupFiles(base);
+    assert.equal(Object.keys(hashes).length, 1);
+    assert.match(hashes["d1/flows.sql"], /^[a-f0-9]{64}$/);
   });
 
   it("requires explicit quiescence for fallback and disables it for production", () => {

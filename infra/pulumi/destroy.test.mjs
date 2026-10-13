@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   parseDestroyArgs,
   assertStackMatches,
+  r2BucketsForDestroy,
   emptyBucketForDestroy,
   buildPulumiDestroyArgs,
 } from "./destroy.mjs";
@@ -38,7 +39,7 @@ describe("pulumi destroy guards", () => {
 
   it("refuses stacks resolving to another environment", () => {
     assertStackMatches(
-      { resolvedEnvironment: "preview" },
+      { resolvedEnvironment: "preview", documentsBucketName: "docs" },
       { stack: "preview", environment: "preview" },
     );
     assert.throws(() =>
@@ -75,7 +76,44 @@ describe("pulumi destroy guards", () => {
           },
           { stack: "preview", environment: "preview" },
         ),
-      /state backend cannot be the documents bucket/,
+      /state backend cannot be a data bucket/,
+    );
+    assert.deepEqual(
+      r2BucketsForDestroy({
+        documentsBucketName: "savia-documents-preview",
+        flowsEnabled: false,
+        flowsResources: null,
+      }),
+      ["savia-documents-preview"],
+    );
+    const flowsOutputs = {
+      documentsBucketName: "savia-documents-preview",
+      flowsEnabled: true,
+      flowsResources: {
+        buckets: {
+          resources: "savia-flows-resources-preview",
+          datasets: "savia-flows-datasets-preview",
+          inboxes: "savia-flows-inboxes-preview",
+        },
+      },
+    };
+    assert.deepEqual(r2BucketsForDestroy(flowsOutputs), [
+      "savia-documents-preview",
+      "savia-flows-resources-preview",
+      "savia-flows-datasets-preview",
+      "savia-flows-inboxes-preview",
+    ]);
+    assert.throws(
+      () =>
+        assertStackMatches(
+          {
+            ...flowsOutputs,
+            stateBackendBucketName: "savia-flows-resources-preview",
+            resolvedEnvironment: "preview",
+          },
+          { stack: "preview", environment: "preview" },
+        ),
+      /state backend cannot be a data bucket/,
     );
   });
 

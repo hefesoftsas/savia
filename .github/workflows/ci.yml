@@ -447,6 +447,32 @@ jobs:
       - name: Type-check
         run: pnpm run typecheck:insurance
 
+  flows:
+    name: Flows runtime and preview readiness
+    timeout-minutes: 25
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      NODE_OPTIONS: "--max-old-space-size=1536"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify imported source and local policy
+        run: pnpm run flows:verify && pnpm run flows:test
+      - name: Type-check Flows and shared executor
+        env:
+          NODE_OPTIONS: "--max-old-space-size=2048"
+        run: pnpm run flows:typecheck && pnpm --filter @savia/hook-executor typecheck
+      - name: Verify infrastructure and recovery helpers offline
+        run: node --test --test-concurrency=1 infra/pulumi/*.test.mjs scripts/flows-*.test.mjs scripts/encrypt-flows-backup.test.mjs scripts/verify-flows-preview.test.mjs
+
   publication-safety:
     name: Public source safety
     runs-on: ubuntu-24.04

@@ -1,0 +1,1262 @@
+import { relations, sql } from "drizzle-orm";
+import {
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
+
+/**
+ * ENUMS & CONSTANTS
+ */
+
+// User permission roles
+export const UserRole = {
+  USER: "user",
+  ADMIN: "admin",
+} as const;
+
+export type UserRoleType = (typeof UserRole)[keyof typeof UserRole];
+
+// Organization member roles
+export const OrganizationRole = {
+  MEMBER: "member",
+  ADMIN: "admin",
+  OWNER: "owner",
+} as const;
+
+export type OrganizationRoleType =
+  (typeof OrganizationRole)[keyof typeof OrganizationRole];
+
+// Authentication providers
+export const Provider = {
+  GITHUB: "github",
+  GOOGLE: "google",
+} as const;
+
+export type ProviderType = (typeof Provider)[keyof typeof Provider];
+
+// Workflow trigger types
+export const WorkflowTriggerType = {
+  MANUAL: "manual",
+  HTTP_WEBHOOK: "http_webhook",
+  HTTP_REQUEST: "http_request",
+  FORM_WEBHOOK: "form_webhook",
+  FORM_REQUEST: "form_request",
+  EMAIL_MESSAGE: "email_message",
+  SCHEDULED: "scheduled",
+  QUEUE_MESSAGE: "queue_message",
+  DISCORD_EVENT: "discord_event",
+  TELEGRAM_EVENT: "telegram_event",
+  WHATSAPP_EVENT: "whatsapp_event",
+  SLACK_EVENT: "slack_event",
+  SAVIA_COLLECTION_EVENT: "savia_collection_event",
+} as const;
+
+export type WorkflowTriggerTypeType =
+  (typeof WorkflowTriggerType)[keyof typeof WorkflowTriggerType];
+
+// Workflow runtime types
+export const WorkflowRuntime = {
+  WORKER: "worker",
+  WORKFLOW: "workflow",
+} as const;
+
+export type WorkflowRuntimeType =
+  (typeof WorkflowRuntime)[keyof typeof WorkflowRuntime];
+
+// Bot provider types
+export const BotProvider = {
+  DISCORD: "discord",
+  TELEGRAM: "telegram",
+  WHATSAPP: "whatsapp",
+  SLACK: "slack",
+} as const;
+
+export type BotProviderType = (typeof BotProvider)[keyof typeof BotProvider];
+
+// Integration provider types
+export const IntegrationProvider = {
+  GOOGLE_MAIL: "google-mail",
+  GOOGLE_CALENDAR: "google-calendar",
+  DISCORD: "discord",
+  GITHUB: "github",
+  INSTAGRAM: "instagram",
+  REDDIT: "reddit",
+  LINKEDIN: "linkedin",
+  X: "x",
+  WORDPRESS: "wordpress",
+} as const;
+
+export type IntegrationProviderType =
+  (typeof IntegrationProvider)[keyof typeof IntegrationProvider];
+
+// Integration status types
+export const IntegrationStatus = {
+  ACTIVE: "active",
+  EXPIRED: "expired",
+  REVOKED: "revoked",
+} as const;
+
+export type IntegrationStatusType =
+  (typeof IntegrationStatus)[keyof typeof IntegrationStatus];
+
+// Invitation status types
+export const InvitationStatus = {
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+  DECLINED: "declined",
+  EXPIRED: "expired",
+} as const;
+
+export type InvitationStatusType =
+  (typeof InvitationStatus)[keyof typeof InvitationStatus];
+
+// Subscription status types (Stripe)
+export const SubscriptionStatus = {
+  ACTIVE: "active",
+  CANCELED: "canceled",
+  PAST_DUE: "past_due",
+  UNPAID: "unpaid",
+  TRIALING: "trialing",
+} as const;
+
+export type SubscriptionStatusType =
+  (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus];
+
+// Inbox message direction
+export const MessageDirection = {
+  INBOUND: "inbound",
+  OUTBOUND: "outbound",
+} as const;
+
+export type MessageDirectionType =
+  (typeof MessageDirection)[keyof typeof MessageDirection];
+
+/**
+ * REUSABLE COLUMNS
+ */
+
+const createCreatedAt = () =>
+  integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`);
+
+const createUpdatedAt = () =>
+  integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`);
+
+/**
+ * SCHEMA DEFINITION
+ */
+
+// Organizations - Collaborative workspaces for teams
+export const organizations = sqliteTable(
+  "organizations",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    computeCredits: integer("compute_credits").notNull().default(1000),
+    stripeCustomerId: text("stripe_customer_id"),
+    stripeSubscriptionId: text("stripe_subscription_id"),
+    subscriptionStatus: text(
+      "subscription_status",
+    ).$type<SubscriptionStatusType>(),
+    currentPeriodStart: integer("current_period_start", { mode: "timestamp" }),
+    currentPeriodEnd: integer("current_period_end", { mode: "timestamp" }),
+    overageLimit: integer("overage_limit"), // null = unlimited
+    unlimitedUsage: integer("unlimited_usage", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    creditsExhausted: integer("credits_exhausted", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("organizations_name_idx").on(table.name),
+    index("organizations_created_at_idx").on(table.createdAt),
+    index("organizations_stripe_customer_id_idx").on(table.stripeCustomerId),
+    index("organizations_stripe_subscription_id_idx").on(
+      table.stripeSubscriptionId,
+    ),
+    index("organizations_subscription_status_idx").on(table.subscriptionStatus),
+    index("organizations_credits_exhausted_idx").on(table.creditsExhausted),
+  ],
+);
+
+// Users - System users with authentication and subscription details
+export const users = sqliteTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").unique(),
+    githubId: text("github_id").unique(),
+    googleId: text("google_id").unique(),
+    avatarUrl: text("avatar_url"),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    role: text("role").$type<UserRoleType>().notNull().default(UserRole.USER),
+    developerMode: integer("developer_mode", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    // Onboarding stage timestamps. Null until the user first performs that
+    // milestone, then stamped with CURRENT_TIMESTAMP. Powers the admin
+    // onboarding funnel; tour_completed replaces the prior boolean column.
+    tourCompleted: integer("tour_completed", { mode: "timestamp" }),
+    workflowCreated: integer("workflow_created", { mode: "timestamp" }),
+    workflowExecuted: integer("workflow_executed", { mode: "timestamp" }),
+    workflowExecutedOk: integer("workflow_executed_ok", { mode: "timestamp" }),
+    // Later stages, added with the brief flow. `workflow_created` is stamped by
+    // the generator before the user has seen anything, so on its own it cannot
+    // distinguish a workflow someone wanted from one they abandoned mid-flow.
+    briefResolved: integer("brief_resolved", { mode: "timestamp" }),
+    outcomeSeen: integer("outcome_seen", { mode: "timestamp" }),
+    workflowKept: integer("workflow_kept", { mode: "timestamp" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("users_github_id_idx").on(table.githubId),
+    index("users_google_id_idx").on(table.googleId),
+    index("users_organization_id_idx").on(table.organizationId),
+    index("users_email_idx").on(table.email),
+    index("users_name_idx").on(table.name),
+    index("users_role_idx").on(table.role),
+    index("users_developer_mode_idx").on(table.developerMode),
+    index("users_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Memberships - Join table for users and organizations (many-to-many)
+export const memberships = sqliteTable(
+  "memberships",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    role: text("role")
+      .$type<OrganizationRoleType>()
+      .notNull()
+      .default(OrganizationRole.MEMBER),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.organizationId] }),
+    index("memberships_role_idx").on(table.role),
+    index("memberships_user_id_idx").on(table.userId),
+    index("memberships_organization_id_idx").on(table.organizationId),
+    index("memberships_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// API Keys - Authentication keys associated with organizations
+export const apiKeys = sqliteTable(
+  "api_keys",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    key: text("key").notNull().unique(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("api_keys_name_idx").on(table.name),
+    index("api_keys_organization_id_idx").on(table.organizationId),
+    index("api_keys_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Workflows - Workflow definitions created and edited by users
+// Note: Full workflow data is stored in R2, only metadata is in the database
+export const workflows = sqliteTable(
+  "workflows",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description"),
+    trigger: text("trigger")
+      .$type<WorkflowTriggerTypeType>()
+      .notNull()
+      .default(WorkflowTriggerType.MANUAL),
+    runtime: text("runtime")
+      .$type<WorkflowRuntimeType>()
+      .notNull()
+      .default(WorkflowRuntime.WORKFLOW),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("workflows_name_idx").on(table.name),
+    index("workflows_trigger_idx").on(table.trigger),
+    index("workflows_runtime_idx").on(table.runtime),
+    index("workflows_organization_id_idx").on(table.organizationId),
+    index("workflows_enabled_idx").on(table.enabled),
+    index("workflows_created_at_idx").on(table.createdAt),
+    index("workflows_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+// Explicit, user-configured Savia collection subscriptions. The configuring
+// principal is retained so delivery can reauthorize against current host state.
+export const saviaCollectionTriggers = sqliteTable(
+  "savia_collection_triggers",
+  {
+    workflowId: text("workflow_id")
+      .primaryKey()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id").notNull(),
+    principalId: text("principal_id").notNull(),
+    config: text("config").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("savia_collection_triggers_org_active_idx").on(
+      table.organizationId,
+      table.active,
+    ),
+  ],
+);
+
+// A stable id lets a redelivered event retry a pending durable admission.
+export const saviaCollectionAdmissions = sqliteTable(
+  "savia_collection_admissions",
+  {
+    eventId: text("event_id").notNull(),
+    workflowId: text("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    executionId: text("execution_id").notNull().unique(),
+    status: text("status").notNull().default("pending"),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.eventId, table.workflowId] }),
+    index("savia_collection_admissions_pending_idx").on(
+      table.status,
+      table.updatedAt,
+    ),
+  ],
+);
+
+// Explicit backend execution identity for HTTP workflows that may invoke
+// local Savia collection nodes. The identity is written only by a verified
+// manager enable operation and is reauthorized on every incoming request.
+export const saviaHttpExecutionAuthorities = sqliteTable(
+  "savia_http_execution_authorities",
+  {
+    workflowId: text("workflow_id")
+      .primaryKey()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id").notNull(),
+    principalId: text("principal_id").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("savia_http_execution_authorities_org_active_idx").on(
+      table.organizationId,
+      table.active,
+    ),
+  ],
+);
+
+// Scheduled Triggers - Scheduled triggers for workflows
+export const scheduledTriggers = sqliteTable(
+  "scheduled_triggers",
+  {
+    workflowId: text("workflow_id")
+      .primaryKey()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    scheduleExpression: text("schedule_expression").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("scheduled_triggers_workflow_id_idx").on(table.workflowId),
+    index("scheduled_triggers_active_idx").on(table.active),
+    index("scheduled_triggers_created_at_idx").on(table.createdAt),
+    index("scheduled_triggers_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+// Datasets - Data collections associated with organizations
+export const datasets = sqliteTable(
+  "datasets",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("datasets_name_idx").on(table.name),
+    index("datasets_organization_id_idx").on(table.organizationId),
+    index("datasets_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Execution feedback sentiment types
+export const FeedbackSentiment = {
+  POSITIVE: "positive",
+  NEGATIVE: "negative",
+} as const;
+
+export type FeedbackSentimentType =
+  (typeof FeedbackSentiment)[keyof typeof FeedbackSentiment];
+
+// Feedback Criteria - Evaluation questions per workflow
+export const feedbackCriteria = sqliteTable(
+  "feedback_criteria",
+  {
+    id: text("id").primaryKey(),
+    workflowId: text("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    description: text("description"),
+    displayOrder: integer("display_order").notNull().default(0),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("feedback_criteria_workflow_id_idx").on(table.workflowId),
+    index("feedback_criteria_organization_id_idx").on(table.organizationId),
+    index("feedback_criteria_display_order_idx").on(table.displayOrder),
+  ],
+);
+
+// Feedback - User feedback on workflow executions (per criterion)
+export const feedback = sqliteTable(
+  "feedback",
+  {
+    id: text("id").primaryKey(),
+    executionId: text("execution_id").notNull(),
+    criterionId: text("criterion_id")
+      .notNull()
+      .references(() => feedbackCriteria.id, { onDelete: "cascade" }),
+    workflowId: text("workflow_id").references(() => workflows.id, {
+      onDelete: "cascade",
+    }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    sentiment: text("sentiment").$type<FeedbackSentimentType>().notNull(),
+    comment: text("comment"),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("feedback_execution_id_idx").on(table.executionId),
+    index("feedback_criterion_id_idx").on(table.criterionId),
+    index("feedback_workflow_id_idx").on(table.workflowId),
+    index("feedback_organization_id_idx").on(table.organizationId),
+    index("feedback_user_id_idx").on(table.userId),
+    index("feedback_sentiment_idx").on(table.sentiment),
+    index("feedback_created_at_idx").on(table.createdAt),
+    // One feedback per execution per criterion
+    uniqueIndex("feedback_execution_id_criterion_id_unique").on(
+      table.executionId,
+      table.criterionId,
+    ),
+  ],
+);
+
+// Queues - Message queues associated with organizations
+export const queues = sqliteTable(
+  "queues",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("queues_name_idx").on(table.name),
+    index("queues_organization_id_idx").on(table.organizationId),
+    index("queues_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Databases - Durable Object databases associated with organizations
+export const databases = sqliteTable(
+  "databases",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("databases_name_idx").on(table.name),
+    index("databases_organization_id_idx").on(table.organizationId),
+    index("databases_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Schemas - User-defined record schemas for validation
+export const schemas = sqliteTable(
+  "schemas",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    fields: text("fields").notNull(), // JSON string of Field[]
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("schemas_name_idx").on(table.name),
+    index("schemas_organization_id_idx").on(table.organizationId),
+    index("schemas_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export type SchemaInsert = typeof schemas.$inferInsert;
+export type SchemaRow = typeof schemas.$inferSelect;
+
+// Queue Triggers - Message queue triggers for workflows
+export const queueTriggers = sqliteTable(
+  "queue_triggers",
+  {
+    workflowId: text("workflow_id")
+      .primaryKey()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    queueId: text("queue_id")
+      .notNull()
+      .references(() => queues.id, { onDelete: "cascade" }),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("queue_triggers_workflow_id_idx").on(table.workflowId),
+    index("queue_triggers_queue_id_idx").on(table.queueId),
+    index("queue_triggers_active_idx").on(table.active),
+    index("queue_triggers_created_at_idx").on(table.createdAt),
+    index("queue_triggers_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+// Emails - Emails associated with organizations
+export const emails = sqliteTable(
+  "emails",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    handle: text("handle").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("emails_name_idx").on(table.name),
+    uniqueIndex("emails_handle_unique_idx").on(table.handle),
+    index("emails_organization_id_idx").on(table.organizationId),
+    index("emails_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Email Triggers - Email triggers for workflows
+export const emailTriggers = sqliteTable(
+  "email_triggers",
+  {
+    workflowId: text("workflow_id")
+      .primaryKey()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    emailId: text("email_id")
+      .notNull()
+      .references(() => emails.id, { onDelete: "cascade" }),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("email_triggers_workflow_id_idx").on(table.workflowId),
+    index("email_triggers_email_id_idx").on(table.emailId),
+    index("email_triggers_active_idx").on(table.active),
+    index("email_triggers_created_at_idx").on(table.createdAt),
+    index("email_triggers_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+// Inboxes - Logical inboxes (e.g. "support"). The `id` is the opaque UUID used
+// as the top-level R2 key segment so the bucket layout doesn't depend on the
+// alias; renaming an inbox doesn't move any data. The handler that decides
+// which inbox an inbound message belongs to looks the row up by `alias`.
+export const inboxes = sqliteTable(
+  "inboxes",
+  {
+    id: text("id").primaryKey(),
+    alias: text("alias").notNull().unique(),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [index("inboxes_alias_idx").on(table.alias)],
+);
+
+// Threads - Conversations in the admin inbox (e.g. support email). One row per
+// distinct conversation, threaded by RFC 5322 In-Reply-To / References, with
+// subject + fromEmail as a fallback. Only minimal metadata lives here; raw
+// MIME, parsed bodies, and attachments live in R2 under `{inboxId}/...`.
+export const threads = sqliteTable(
+  "threads",
+  {
+    id: text("id").primaryKey(),
+    // `.notNull()` is TS-only; SQL column is nullable (migration 0059).
+    inboxId: text("inbox_id")
+      .notNull()
+      .references(() => inboxes.id, { onDelete: "restrict" }),
+    subject: text("subject").notNull(),
+    fromEmail: text("from_email").notNull(),
+    fromName: text("from_name"),
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    organizationId: text("organization_id").references(() => organizations.id, {
+      onDelete: "set null",
+    }),
+    archivedAt: integer("archived_at", { mode: "timestamp" }),
+    lastMessageAt: integer("last_message_at", { mode: "timestamp" }).notNull(),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("threads_inbox_id_idx").on(table.inboxId),
+    index("threads_archived_at_idx").on(table.archivedAt),
+    index("threads_last_message_at_idx").on(table.lastMessageAt),
+    index("threads_from_email_idx").on(table.fromEmail),
+    index("threads_user_id_idx").on(table.userId),
+    index("threads_organization_id_idx").on(table.organizationId),
+    index("threads_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Messages - Individual emails within a thread. `id` is our internal UUID and
+// also the R2 key prefix; `rfc822MessageId` is the RFC 5322 Message-ID used for
+// threading lookups against incoming In-Reply-To / References headers.
+export const messages = sqliteTable(
+  "messages",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    direction: text("direction").$type<MessageDirectionType>().notNull(),
+    rfc822MessageId: text("rfc822_message_id").notNull().unique(),
+    inReplyTo: text("in_reply_to"),
+    referencesChain: text("references_chain"),
+    fromEmail: text("from_email").notNull(),
+    toEmail: text("to_email").notNull(),
+    subject: text("subject").notNull(),
+    snippet: text("snippet").notNull().default(""),
+    hasHtml: integer("has_html", { mode: "boolean" }).notNull().default(false),
+    hasText: integer("has_text", { mode: "boolean" }).notNull().default(false),
+    attachmentCount: integer("attachment_count").notNull().default(0),
+    rawR2Key: text("raw_r2_key").notNull(),
+    authorAdminUserId: text("author_admin_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: createCreatedAt(),
+  },
+  (table) => [
+    index("messages_thread_id_idx").on(table.threadId),
+    index("messages_rfc822_message_id_idx").on(table.rfc822MessageId),
+    index("messages_direction_idx").on(table.direction),
+    index("messages_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Thread reads - Per-admin read state. One row per (thread, admin user)
+// pair, tracking the last time that admin opened the thread. Used to surface
+// an unread count and badge in the admin UI.
+export const threadReads = sqliteTable(
+  "thread_reads",
+  {
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lastReadAt: integer("last_read_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.threadId, table.userId] }),
+    index("thread_reads_user_id_idx").on(table.userId),
+    index("thread_reads_thread_id_idx").on(table.threadId),
+  ],
+);
+
+// Attachments - File parts of a message, stored in R2 with metadata indexed
+// here. `contentId` enables inline references in HTML bodies.
+export const attachments = sqliteTable(
+  "attachments",
+  {
+    id: text("id").primaryKey(),
+    messageId: text("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    r2Key: text("r2_key").notNull(),
+    contentId: text("content_id"),
+    createdAt: createCreatedAt(),
+  },
+  (table) => [
+    index("attachments_message_id_idx").on(table.messageId),
+    index("attachments_content_id_idx").on(table.contentId),
+  ],
+);
+
+// Discord Bots - User-provided Discord bots associated with organizations
+// Bots - Unified table for all bot types (Discord, Telegram, WhatsApp, Slack)
+export const bots = sqliteTable(
+  "bots",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    provider: text("provider").$type<BotProviderType>().notNull(),
+    encryptedToken: text("encrypted_token").notNull(),
+    tokenLastFour: text("token_last_four").notNull(),
+    metadata: text("metadata"), // JSON for provider-specific plain data
+    encryptedMetadata: text("encrypted_metadata"), // JSON for provider-specific encrypted fields
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("bots_name_idx").on(table.name),
+    index("bots_provider_idx").on(table.provider),
+    index("bots_organization_id_idx").on(table.organizationId),
+    index("bots_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Bot Triggers - Unified table for all bot-based workflow triggers
+export const botTriggers = sqliteTable(
+  "bot_triggers",
+  {
+    workflowId: text("workflow_id")
+      .primaryKey()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    botId: text("bot_id").references(() => bots.id, {
+      onDelete: "set null",
+    }),
+    provider: text("provider").$type<BotProviderType>().notNull(),
+    metadata: text("metadata"), // JSON for provider-specific trigger config
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("bot_triggers_organization_id_idx").on(table.organizationId),
+    index("bot_triggers_bot_id_idx").on(table.botId),
+    index("bot_triggers_provider_idx").on(table.provider),
+    index("bot_triggers_active_idx").on(table.active),
+    index("bot_triggers_created_at_idx").on(table.createdAt),
+    index("bot_triggers_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+// Secrets - Encrypted secrets associated with organizations
+export const secrets = sqliteTable(
+  "secrets",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    encryptedValue: text("encrypted_value").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("secrets_name_idx").on(table.name),
+    index("secrets_organization_id_idx").on(table.organizationId),
+    index("secrets_created_at_idx").on(table.createdAt),
+    // Ensure unique secret names per organization
+    uniqueIndex("secrets_organization_id_name_unique_idx").on(
+      table.organizationId,
+      table.name,
+    ),
+  ],
+);
+
+// Invitations - Pending invitations to join organizations
+export const invitations = sqliteTable(
+  "invitations",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    role: text("role")
+      .$type<OrganizationRoleType>()
+      .notNull()
+      .default(OrganizationRole.MEMBER),
+    status: text("status")
+      .$type<InvitationStatusType>()
+      .notNull()
+      .default(InvitationStatus.PENDING),
+    invitedBy: text("invited_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("invitations_email_idx").on(table.email),
+    index("invitations_organization_id_idx").on(table.organizationId),
+    index("invitations_status_idx").on(table.status),
+    index("invitations_invited_by_idx").on(table.invitedBy),
+    index("invitations_expires_at_idx").on(table.expiresAt),
+    index("invitations_created_at_idx").on(table.createdAt),
+    // Ensure unique pending invitation per email per organization
+    uniqueIndex("invitations_organization_id_email_status_unique_idx").on(
+      table.organizationId,
+      table.email,
+      table.status,
+    ),
+  ],
+);
+
+// Integrations - Third-party service connections with OAuth tokens
+export const integrations = sqliteTable(
+  "integrations",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    provider: text("provider").$type<IntegrationProviderType>().notNull(),
+    status: text("status")
+      .$type<IntegrationStatusType>()
+      .notNull()
+      .default(IntegrationStatus.ACTIVE),
+    encryptedToken: text("encrypted_token").notNull(),
+    encryptedRefreshToken: text("encrypted_refresh_token"),
+    tokenExpiresAt: integer("token_expires_at", { mode: "timestamp" }),
+    metadata: text("metadata"), // JSON for provider-specific data
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdAt: createCreatedAt(),
+    updatedAt: createUpdatedAt(),
+  },
+  (table) => [
+    index("integrations_name_idx").on(table.name),
+    index("integrations_provider_idx").on(table.provider),
+    index("integrations_status_idx").on(table.status),
+    index("integrations_organization_id_idx").on(table.organizationId),
+    index("integrations_created_at_idx").on(table.createdAt),
+    // Ensure unique integration names per organization per provider
+    // This allows the same name (e.g., email) across different providers
+    uniqueIndex("integrations_organization_id_name_provider_unique_idx").on(
+      table.organizationId,
+      table.name,
+      table.provider,
+    ),
+  ],
+);
+
+/**
+ * RELATION DEFINITIONS
+ */
+
+export const usersRelations = relations(users, ({ many, one }) => ({
+  memberships: many(memberships),
+  organization: one(organizations, {
+    fields: [users.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const organizationsRelations = relations(
+  organizations,
+  ({ many, one }) => ({
+    memberships: many(memberships),
+    workflows: many(workflows),
+    apiKeys: many(apiKeys),
+    datasets: many(datasets),
+    feedbackCriteria: many(feedbackCriteria),
+    feedback: many(feedback),
+    queues: many(queues),
+    databases: many(databases),
+    emails: many(emails),
+    secrets: many(secrets),
+    bots: many(bots),
+    integrations: many(integrations),
+    invitations: many(invitations),
+    users: one(users),
+  }),
+);
+
+export const membershipsRelations = relations(memberships, ({ one }) => ({
+  user: one(users, {
+    fields: [memberships.userId],
+    references: [users.id],
+  }),
+  organization: one(organizations, {
+    fields: [memberships.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [apiKeys.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const workflowsRelations = relations(workflows, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [workflows.organizationId],
+    references: [organizations.id],
+  }),
+  scheduledTrigger: one(scheduledTriggers, {
+    fields: [workflows.id],
+    references: [scheduledTriggers.workflowId],
+  }),
+  queueTrigger: one(queueTriggers, {
+    fields: [workflows.id],
+    references: [queueTriggers.workflowId],
+  }),
+  emailTrigger: one(emailTriggers, {
+    fields: [workflows.id],
+    references: [emailTriggers.workflowId],
+  }),
+  botTrigger: one(botTriggers, {
+    fields: [workflows.id],
+    references: [botTriggers.workflowId],
+  }),
+  feedbackCriteria: many(feedbackCriteria),
+}));
+
+export const scheduledTriggersRelations = relations(
+  scheduledTriggers,
+  ({ one }) => ({
+    workflow: one(workflows, {
+      fields: [scheduledTriggers.workflowId],
+      references: [workflows.id],
+    }),
+  }),
+);
+
+export const datasetsRelations = relations(datasets, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [datasets.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const feedbackCriteriaRelations = relations(
+  feedbackCriteria,
+  ({ one, many }) => ({
+    workflow: one(workflows, {
+      fields: [feedbackCriteria.workflowId],
+      references: [workflows.id],
+    }),
+    organization: one(organizations, {
+      fields: [feedbackCriteria.organizationId],
+      references: [organizations.id],
+    }),
+    feedbacks: many(feedback),
+  }),
+);
+
+export const feedbackRelations = relations(feedback, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [feedback.organizationId],
+    references: [organizations.id],
+  }),
+  workflow: one(workflows, {
+    fields: [feedback.workflowId],
+    references: [workflows.id],
+  }),
+  user: one(users, {
+    fields: [feedback.userId],
+    references: [users.id],
+  }),
+  criterion: one(feedbackCriteria, {
+    fields: [feedback.criterionId],
+    references: [feedbackCriteria.id],
+  }),
+}));
+
+export const queuesRelations = relations(queues, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [queues.organizationId],
+    references: [organizations.id],
+  }),
+  queueTriggers: many(queueTriggers),
+}));
+
+export const queueTriggersRelations = relations(queueTriggers, ({ one }) => ({
+  workflow: one(workflows, {
+    fields: [queueTriggers.workflowId],
+    references: [workflows.id],
+  }),
+  queue: one(queues, {
+    fields: [queueTriggers.queueId],
+    references: [queues.id],
+  }),
+}));
+
+export const databasesRelations = relations(databases, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [databases.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const emailsRelations = relations(emails, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [emails.organizationId],
+    references: [organizations.id],
+  }),
+  emailTriggers: many(emailTriggers),
+}));
+
+export const emailTriggersRelations = relations(emailTriggers, ({ one }) => ({
+  workflow: one(workflows, {
+    fields: [emailTriggers.workflowId],
+    references: [workflows.id],
+  }),
+  email: one(emails, {
+    fields: [emailTriggers.emailId],
+    references: [emails.id],
+  }),
+}));
+
+export const threadsRelations = relations(threads, ({ one, many }) => ({
+  user: one(users, {
+    fields: [threads.userId],
+    references: [users.id],
+  }),
+  organization: one(organizations, {
+    fields: [threads.organizationId],
+    references: [organizations.id],
+  }),
+  messages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one, many }) => ({
+  thread: one(threads, {
+    fields: [messages.threadId],
+    references: [threads.id],
+  }),
+  authorAdminUser: one(users, {
+    fields: [messages.authorAdminUserId],
+    references: [users.id],
+  }),
+  attachments: many(attachments),
+}));
+
+export const threadReadsRelations = relations(threadReads, ({ one }) => ({
+  thread: one(threads, {
+    fields: [threadReads.threadId],
+    references: [threads.id],
+  }),
+  user: one(users, {
+    fields: [threadReads.userId],
+    references: [users.id],
+  }),
+}));
+
+export const attachmentsRelations = relations(attachments, ({ one }) => ({
+  message: one(messages, {
+    fields: [attachments.messageId],
+    references: [messages.id],
+  }),
+}));
+
+export const botsRelations = relations(bots, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [bots.organizationId],
+    references: [organizations.id],
+  }),
+  botTriggers: many(botTriggers),
+}));
+
+export const botTriggersRelations = relations(botTriggers, ({ one }) => ({
+  workflow: one(workflows, {
+    fields: [botTriggers.workflowId],
+    references: [workflows.id],
+  }),
+  bot: one(bots, {
+    fields: [botTriggers.botId],
+    references: [bots.id],
+  }),
+}));
+
+export const secretsRelations = relations(secrets, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [secrets.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const integrationsRelations = relations(integrations, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [integrations.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [invitations.organizationId],
+    references: [organizations.id],
+  }),
+  inviter: one(users, {
+    fields: [invitations.invitedBy],
+    references: [users.id],
+  }),
+}));
+
+/**
+ * HELPER FUNCTIONS
+ */
+
+// Updates the updatedAt timestamp for record modifications
+export function withUpdatedTimestamp<T extends Record<string, any>>(
+  data: T,
+): T & { updatedAt: Date } {
+  return {
+    ...data,
+    updatedAt: new Date(),
+  };
+}
+
+/**
+ * TYPE EXPORTS
+ */
+
+export type OrganizationRow = typeof organizations.$inferSelect;
+export type OrganizationInsert = typeof organizations.$inferInsert;
+
+export type MembershipRow = typeof memberships.$inferSelect;
+export type MembershipInsert = typeof memberships.$inferInsert;
+
+export type UserRow = typeof users.$inferSelect;
+export type UserInsert = typeof users.$inferInsert;
+
+export type ApiKeyRow = typeof apiKeys.$inferSelect;
+export type ApiKeyInsert = typeof apiKeys.$inferInsert;
+
+export type WorkflowRow = typeof workflows.$inferSelect;
+export type WorkflowInsert = typeof workflows.$inferInsert;
+
+export type SaviaHttpExecutionAuthorityRow =
+  typeof saviaHttpExecutionAuthorities.$inferSelect;
+export type SaviaHttpExecutionAuthorityInsert =
+  typeof saviaHttpExecutionAuthorities.$inferInsert;
+
+export type ScheduledTriggerRow = typeof scheduledTriggers.$inferSelect;
+export type ScheduledTriggerInsert = typeof scheduledTriggers.$inferInsert;
+
+export type DatasetRow = typeof datasets.$inferSelect;
+export type DatasetInsert = typeof datasets.$inferInsert;
+
+export type FeedbackCriteriaRow = typeof feedbackCriteria.$inferSelect;
+export type FeedbackCriteriaInsert = typeof feedbackCriteria.$inferInsert;
+
+export type FeedbackRow = typeof feedback.$inferSelect;
+export type FeedbackInsert = typeof feedback.$inferInsert;
+
+export type QueueRow = typeof queues.$inferSelect;
+export type QueueInsert = typeof queues.$inferInsert;
+
+export type QueueTriggerRow = typeof queueTriggers.$inferSelect;
+export type QueueTriggerInsert = typeof queueTriggers.$inferInsert;
+
+export type DatabaseRow = typeof databases.$inferSelect;
+export type DatabaseInsert = typeof databases.$inferInsert;
+
+export type EmailRow = typeof emails.$inferSelect;
+export type EmailInsert = typeof emails.$inferInsert;
+
+export type EmailTriggerRow = typeof emailTriggers.$inferSelect;
+export type EmailTriggerInsert = typeof emailTriggers.$inferInsert;
+
+export type BotRow = typeof bots.$inferSelect;
+export type BotInsert = typeof bots.$inferInsert;
+
+export type BotTriggerRow = typeof botTriggers.$inferSelect;
+export type BotTriggerInsert = typeof botTriggers.$inferInsert;
+
+export type SecretRow = typeof secrets.$inferSelect;
+export type SecretInsert = typeof secrets.$inferInsert;
+
+export type IntegrationRow = typeof integrations.$inferSelect;
+export type IntegrationInsert = typeof integrations.$inferInsert;
+
+export type InvitationRow = typeof invitations.$inferSelect;
+export type InvitationInsert = typeof invitations.$inferInsert;
+
+export type ThreadRow = typeof threads.$inferSelect;
+export type ThreadInsert = typeof threads.$inferInsert;
+
+export type MessageRow = typeof messages.$inferSelect;
+export type MessageInsert = typeof messages.$inferInsert;
+
+export type AttachmentRow = typeof attachments.$inferSelect;
+export type AttachmentInsert = typeof attachments.$inferInsert;
+
+export type ThreadReadRow = typeof threadReads.$inferSelect;
+export type ThreadReadInsert = typeof threadReads.$inferInsert;

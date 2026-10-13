@@ -22,7 +22,7 @@ jobs:
         github.event.workflow_run.head_branch == 'main' &&
         github.event.workflow_run.head_repository.full_name == github.repository }}
     name: Deploy preview
-    timeout-minutes: 20
+    timeout-minutes: 40
     runs-on: ubuntu-24.04
     environment:
       name: preview
@@ -78,6 +78,19 @@ jobs:
           NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
 
+      - name: Validate planned Flows settings and stable keys before mutation
+        run: node infra/pulumi/flows-preflight.mjs
+        env:
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ secrets.SAVIA_FLOWS_JWT_SECRET }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ secrets.SAVIA_FLOWS_SECRET_MASTER_KEY }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+
       - name: Verify isolated preview resources before any mutation
         run: node scripts/verify-preview-resources.mjs
         env:
@@ -86,6 +99,83 @@ jobs:
           SAVIA_AUTH_D1_ID: ${{ env.SAVIA_AUTH_D1_ID }}
           SAVIA_DOMAIN_D1_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
           SAVIA_DOCUMENTS_BUCKET: ${{ env.SAVIA_DOCUMENTS_BUCKET }}
+
+      - name: Capture preview Worker recovery state
+        id: capture_recovery
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        run: node scripts/flows-preview-recovery.mjs --action capture --environment preview --metadata "$RUNNER_TEMP/flows-preview-recovery.json" --apply
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PROVISIONED }}
+          SAVIA_FLOWS_RESOURCES: ${{ env.SAVIA_FLOWS_RESOURCES }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      # Existing deployments are paused before copying data. First provisioning
+      # has no existing Flows state and skips these stages entirely.
+      - name: Pause Savia writes for persistence backup
+        id: pause_agencies
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.preview.jsonc --var SAVIA_MAINTENANCE:true
+          workingDirectory: apps/api
+          wranglerVersion: 4.127.1
+
+      - name: Pause existing Flows for a coherent backup
+        id: pause_flows
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.preview.jsonc --var SAVIA_FLOWS_EXECUTION_ENABLED:false --var SAVIA_FLOWS_MAINTENANCE:true
+          workingDirectory: apps/flows/api
+          wranglerVersion: 4.127.1
+
+      - name: Allow existing requests to drain
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        run: node --input-type=module -e 'await new Promise(resolve => setTimeout(resolve, 45000))'
+
+      - name: Snapshot Flows Durable Object databases
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        run: node scripts/flows-maintenance.mjs --action backup --snapshot-file "$RUNNER_TEMP/flows-snapshot.json" --apply
+        env:
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
+
+      - name: Back up all existing persistence before migrations
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        run: node infra/pulumi/backup.mjs --stack preview --apply --confirm-quiescent preview --flows-snapshot "$RUNNER_TEMP/flows-snapshot.json" --out-dir "$RUNNER_TEMP/flows-release-backup"
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          SAVIA_BACKUP_R2_FORCE_WRANGLER: "true"
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Encrypt recovery archive
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        shell: bash
+        run: |
+          umask 077
+          tar -czf "$RUNNER_TEMP/flows-release-backup.tar.gz" -C "$RUNNER_TEMP" flows-release-backup
+          node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/flows-release-backup.tar.gz" --output "$RUNNER_TEMP/flows-release-backup.enc"
+          rm "$RUNNER_TEMP/flows-release-backup.tar.gz"
+        env:
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+
+      - name: Retain encrypted recovery archive
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: flows-preview-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/flows-release-backup.enc
+          if-no-files-found: error
+          retention-days: 7
 
       # Vectorize is bootstrapped separately with Vectorize Write access.
       # Deployments bind the existing isolated index using the Worker token.
@@ -118,6 +208,10 @@ jobs:
         run: node scripts/upload-cloudflare-secrets.mjs
         env:
           SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ secrets.SAVIA_FLOWS_JWT_SECRET }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ secrets.SAVIA_FLOWS_SECRET_MASTER_KEY }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
@@ -176,6 +270,26 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.preview.jsonc
           workingDirectory: apps/hook-executor
+          wranglerVersion: 4.127.1
+
+      - name: Apply Flows D1 migrations
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply savia-flows-preview --remote --config wrangler.preview.jsonc
+          workingDirectory: apps/flows/api
+          wranglerVersion: 4.127.1
+
+      - name: Deploy private Savia Flows
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.preview.jsonc
+          workingDirectory: apps/flows/api
           wranglerVersion: 4.127.1
 
       - name: Deploy private Savia request
@@ -276,6 +390,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/verify-preview-health.mjs
 
+      - name: Verify Flows private bindings and preview policy
+        run: node scripts/verify-flows-preview.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       - name: Record the deployed and verified commit
         env:
           DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -294,3 +414,17 @@ jobs:
           name: preview-release
           path: ${{ runner.temp }}/preview-release.json
           retention-days: 30
+
+      - name: Restore preview Workers after an unsuccessful release
+        id: restore_recovery
+        if: ${{ always() && env.SAVIA_FLOWS_PROVISIONED == 'true' && steps.capture_recovery.outcome == 'success' && (failure() || cancelled()) }}
+        timeout-minutes: 3
+        run: node scripts/flows-preview-recovery.mjs --action restore --environment preview --metadata "$RUNNER_TEMP/flows-preview-recovery.json" --attempted-agencies "$SAVIA_AGENCIES_PAUSE_ATTEMPTED" --attempted-flows "$SAVIA_FLOWS_PAUSE_ATTEMPTED" --apply
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PROVISIONED }}
+          SAVIA_FLOWS_RESOURCES: ${{ env.SAVIA_FLOWS_RESOURCES }}
+          SAVIA_AGENCIES_PAUSE_ATTEMPTED: ${{ steps.pause_agencies.outcome == 'success' || steps.pause_agencies.outcome == 'failure' || steps.pause_agencies.outcome == 'cancelled' }}
+          SAVIA_FLOWS_PAUSE_ATTEMPTED: ${{ steps.pause_flows.outcome == 'success' || steps.pause_flows.outcome == 'failure' || steps.pause_flows.outcome == 'cancelled' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -81,6 +81,7 @@ function useSidebar() {
 
 function SidebarProvider({
   defaultOpen = true,
+  controlsEnabled = true,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
@@ -89,6 +90,8 @@ function SidebarProvider({
   ...props
 }: React.ComponentProps<"div"> & {
   defaultOpen?: boolean;
+  /** Disable standalone controls when a route uses its own navigation. */
+  controlsEnabled?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -143,11 +146,13 @@ function SidebarProvider({
 
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
+    if (!controlsEnabled) return;
     return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
-  }, [isMobile, setOpen, setOpenMobile]);
+  }, [controlsEnabled, isMobile, setOpen, setOpenMobile]);
 
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
+    if (!controlsEnabled) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
         event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
@@ -160,7 +165,7 @@ function SidebarProvider({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleSidebar]);
+  }, [controlsEnabled, toggleSidebar]);
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
@@ -214,7 +219,7 @@ function SidebarProvider({
           {...props}
         >
           {children}
-          <SidebarResizeHandle />
+          {controlsEnabled && <SidebarResizeHandle />}
         </div>
       </TooltipProvider>
     </SidebarContext.Provider>

@@ -1,8 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import {
   parseRestoreArgs,
   validateManifest,
@@ -15,7 +16,11 @@ import {
   metadataForObject,
   buildR2ObjectRestorePlan,
   runPulumiUpForRestore,
+  verifyManifestIntegrity,
+  assertFlowsRestoreMaintenance,
+  buildFlowsD1MigrationsCommand,
 } from "./restore.mjs";
+import { resolveInfraNames } from "./naming.mjs";
 
 const MANIFEST = {
   version: 1,
@@ -24,6 +29,8 @@ const MANIFEST = {
   pulumiOutputs: {
     resolvedEnvironment: "preview",
     resolvedPublicOrigin: "https://savia-preview.hefesoft.com",
+    flowsEnabled: false,
+    flowsResources: null,
     cloudflareAccountId: "08a0d36f8b0357684f83e4bfeb6628b6",
     authD1Id: "auth-id",
     domainD1Id: "domain-id",
@@ -68,6 +75,325 @@ const LIVE_OUTPUTS = {
 };
 
 describe("pulumi restore", () => {
+  it("validates v2 Flows D1, preview resource names, R2 buckets, and runtime evidence", () => {
+    const names = resolveInfraNames({
+      environment: "preview",
+      documentsBucket: MANIFEST.pulumiOutputs.documentsBucketName,
+      publicOrigin: MANIFEST.pulumiOutputs.resolvedPublicOrigin,
+    });
+    const flowsResources = {
+      databaseId: "flows-d1-id",
+      kvNamespaceId: "flows-kv-id",
+      workerName: names.flows.worker,
+      workflowName: names.flows.workflow,
+      queueName: names.flows.queue,
+      buckets: names.flows.buckets,
+    };
+    const snapshot = {
+      version: 1,
+      id: "snap-1",
+      createdAt: "2026-10-12T12:00:00Z",
+      executionEnabled: false,
+      complete: true,
+      objects: [],
+    };
+    const manifest = {
+      ...MANIFEST,
+      version: 2,
+      pulumiOutputs: {
+        ...MANIFEST.pulumiOutputs,
+        flowsEnabled: true,
+        flowsResources,
+        plannedFlowsResourceNames: names.flows,
+      },
+      d1: {
+        auth: "d1/auth.sql",
+        [names.flows.database]: "d1/flows.sql",
+      },
+      r2: {
+        bucket: MANIFEST.pulumiOutputs.documentsBucketName,
+        path: "r2/documents",
+        method: "object-get",
+        objects: 0,
+        metadataFile: "r2-metadata/documents.json",
+      },
+      r2Buckets: Object.fromEntries(
+        Object.entries(names.flows.buckets).map(([kind, bucket]) => [
+          kind,
+          {
+            bucket,
+            path: `r2/flows-${kind}`,
+            method: "object-get",
+            objects: 0,
+            metadataFile: `r2-metadata/flows-${kind}.json`,
+          },
+        ]),
+      ),
+      flowsSnapshot: {
+        path: "flows/runtime-snapshot.json",
+        method: "flows-maintenance-export",
+        id: snapshot.id,
+        objects: 0,
+        pages: 0,
+      },
+      integrity: {},
+    };
+    assert.equal(validateManifest(manifest, "preview").stack, "preview");
+    assert.throws(
+      () => validateManifest({ ...manifest, stack: "production" }, "preview"),
+      /resolved environment|not preview/i,
+    );
+    assert.throws(
+      () =>
+        validateManifest({ ...manifest, flowsSnapshot: undefined }, "preview"),
+      /runtime snapshot evidence/,
+    );
+    assert.throws(
+      () =>
+        validateManifest(
+          {
+            ...manifest,
+            r2Buckets: {
+              ...manifest.r2Buckets,
+              resources: {
+                ...manifest.r2Buckets.resources,
+                bucket: "savia-flows-resources-production",
+              },
+            },
+          },
+          "preview",
+        ),
+      /missing the resources R2 backup/,
+    );
+  });
+
+  it("detects corrupted v2 SQL and metadata files before restore", async () => {
+    const base = await mkdtemp(join(tmpdir(), "integrity-restore-"));
+    const sql = join(base, "auth.sql");
+    await writeFile(sql, "select 1;\n");
+    const digest = createHash("sha256").update("select 1;\n").digest("hex");
+    const manifest = {
+      version: 2,
+      d1: { auth: "auth.sql" },
+      integrity: { "auth.sql": digest },
+    };
+    const manifestFile = join(base, "manifest.json");
+    await writeFile(manifestFile, JSON.stringify(manifest));
+    await verifyManifestIntegrity(manifest, manifestFile);
+    await writeFile(sql, "select 2;\n");
+    await assert.rejects(
+      verifyManifestIntegrity(manifest, manifestFile),
+      /integrity check failed/,
+    );
+  });
+
+  it("requires hashes for every captured payload and rejects payload corruption", async () => {
+    const base = await mkdtemp(join(tmpdir(), "integrity-r2-restore-"));
+    const files = ["r2/resources/object.bin", "r2-metadata/resources.json"];
+    await mkdir(join(base, "r2", "resources"), { recursive: true });
+    await mkdir(join(base, "r2-metadata"), { recursive: true });
+    await writeFile(join(base, files[0]), "object bytes");
+    await writeFile(join(base, files[1]), "{}\n");
+    const integrity = Object.fromEntries(
+      await Promise.all(
+        files.map(async (path) => [
+          path,
+          createHash("sha256")
+            .update(await readFile(join(base, path)))
+            .digest("hex"),
+        ]),
+      ),
+    );
+    const manifest = { version: 2, integrity };
+    const manifestFile = join(base, "manifest.json");
+    await writeFile(manifestFile, JSON.stringify(manifest));
+    await verifyManifestIntegrity(manifest, manifestFile);
+
+    await writeFile(join(base, files[0]), "altered bytes");
+    await assert.rejects(
+      verifyManifestIntegrity(manifest, manifestFile),
+      /integrity check failed/i,
+    );
+
+    const missingHash = {
+      ...manifest,
+      integrity: { [files[1]]: integrity[files[1]] },
+    };
+    await assert.rejects(
+      verifyManifestIntegrity(missingHash, manifestFile),
+      /integrity hash inventory does not cover every backup file/i,
+    );
+  });
+
+  it("rejects extra Flows bucket targets", () => {
+    const names = resolveInfraNames({
+      environment: "preview",
+      documentsBucket: MANIFEST.pulumiOutputs.documentsBucketName,
+      publicOrigin: MANIFEST.pulumiOutputs.resolvedPublicOrigin,
+    });
+    const flowsResources = {
+      databaseId: "flows-d1-id",
+      kvNamespaceId: "flows-kv-id",
+      workerName: names.flows.worker,
+      workflowName: names.flows.workflow,
+      queueName: names.flows.queue,
+      buckets: names.flows.buckets,
+    };
+    const flowsBuckets = Object.fromEntries(
+      Object.entries(names.flows.buckets).map(([kind, bucket]) => [
+        kind,
+        {
+          bucket,
+          path: `r2/flows-${kind}`,
+          method: "object-get",
+          objects: 0,
+          metadataFile: `r2-metadata/flows-${kind}.json`,
+        },
+      ]),
+    );
+    const snapshot = {
+      version: 1,
+      id: "snap-1",
+      createdAt: "2026-10-12T12:00:00Z",
+      executionEnabled: false,
+      complete: true,
+      objects: [],
+    };
+    const manifest = {
+      ...MANIFEST,
+      version: 2,
+      pulumiOutputs: {
+        ...MANIFEST.pulumiOutputs,
+        flowsEnabled: true,
+        flowsResources,
+        plannedFlowsResourceNames: names.flows,
+      },
+      d1: { [names.flows.database]: "d1/flows.sql" },
+      r2: {
+        bucket: MANIFEST.pulumiOutputs.documentsBucketName,
+        path: "r2/documents",
+        method: "object-get",
+        objects: 0,
+        metadataFile: "r2-metadata/documents.json",
+      },
+      r2Buckets: {
+        ...flowsBuckets,
+        unexpected: {
+          bucket: "other-bucket",
+          path: "r2/unexpected",
+          method: "object-get",
+          objects: 0,
+          metadataFile: "r2-metadata/unexpected.json",
+        },
+      },
+      flowsSnapshot: {
+        path: "flows/runtime-snapshot.json",
+        method: "flows-maintenance-export",
+        id: snapshot.id,
+        objects: 0,
+        pages: 0,
+      },
+      integrity: {},
+    };
+    assert.throws(
+      () => validateManifest(manifest, "preview"),
+      /exactly the resources, datasets, and inboxes R2 backups/i,
+    );
+  });
+
+  it("requires Flows to be paused, in maintenance, and quiescent before restore", async () => {
+    const manifest = {
+      ...MANIFEST,
+      version: 2,
+      pulumiOutputs: { ...MANIFEST.pulumiOutputs, flowsEnabled: true },
+    };
+    const calls = [];
+    const fetchImpl = async (url, init) => {
+      calls.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          executionEnabled: false,
+          maintenance: true,
+          activeRuns: 0,
+        }),
+        { status: 200 },
+      );
+    };
+    await assertFlowsRestoreMaintenance(manifest, {
+      env: { SAVIA_FLOWS_BRIDGE_SECRET: "s".repeat(32) },
+      fetchImpl,
+    });
+    assert.equal(calls.length, 1);
+    assert.equal(
+      calls[0].url,
+      "https://savia-preview.hefesoft.com/api/public/savia-flows/maintenance",
+    );
+    assert.equal(JSON.parse(calls[0].init.body).action, "status");
+
+    for (const state of [
+      { executionEnabled: true, maintenance: true, activeRuns: 0 },
+      { executionEnabled: false, maintenance: false, activeRuns: 0 },
+      { executionEnabled: false, maintenance: true, activeRuns: 1 },
+      { executionEnabled: false, maintenance: true },
+    ]) {
+      await assert.rejects(
+        assertFlowsRestoreMaintenance(manifest, {
+          env: { SAVIA_FLOWS_BRIDGE_SECRET: "s".repeat(32) },
+          fetchImpl: async () =>
+            new Response(JSON.stringify(state), { status: 200 }),
+        }),
+        /execution paused, maintenance enabled, and zero active runs/i,
+      );
+    }
+    await assert.rejects(
+      assertFlowsRestoreMaintenance(manifest, { env: {}, fetchImpl }),
+      /SAVIA_FLOWS_BRIDGE_SECRET/i,
+    );
+    await assert.rejects(
+      assertFlowsRestoreMaintenance(manifest, {
+        env: { SAVIA_FLOWS_BRIDGE_SECRET: "s".repeat(32) },
+        fetchImpl: async () => new Response("{}", { status: 503 }),
+      }),
+      /maintenance API returned HTTP 503/i,
+    );
+  });
+
+  it("builds a stack-specific Flows migration command and rejects auth table dumps", () => {
+    assert.deepEqual(
+      buildFlowsD1MigrationsCommand("savia-flows-preview", "preview"),
+      [
+        "pnpm",
+        [
+          "--filter",
+          "@savia/flows-api",
+          "exec",
+          "wrangler",
+          "d1",
+          "migrations",
+          "apply",
+          "savia-flows-preview",
+          "--remote",
+          "--config",
+          "wrangler.preview.jsonc",
+        ],
+      ],
+    );
+    assert.throws(
+      () =>
+        validateManifest(
+          {
+            ...MANIFEST,
+            version: 2,
+            d1: { auth: "d1/auth.sql" },
+            d1Methods: { auth: "table-dump" },
+            integrity: {},
+          },
+          "preview",
+        ),
+      /auth D1 table-dump restore is unsupported/i,
+    );
+  });
+
   it("checks the selected Pulumi account before infrastructure restore", async () => {
     const calls = [];
     const execFileImpl = async (command, args) => {
@@ -296,6 +622,44 @@ describe("pulumi restore", () => {
           "11111111111111111111111111111111",
         ),
       /account/i,
+    );
+  });
+
+  it("rejects wrong bucket bindings and unsafe v2 paths", () => {
+    assert.throws(
+      () =>
+        validateManifest(
+          {
+            ...MANIFEST,
+            r2: {
+              bucket: "savia-documents-production",
+              path: "r2/documents",
+              method: "object-get",
+              objects: 0,
+              metadataFile: "r2-metadata/documents.json",
+            },
+          },
+          "preview",
+        ),
+      /documents R2 bucket does not match/,
+    );
+    assert.throws(
+      () =>
+        validateManifest(
+          {
+            ...MANIFEST,
+            version: 2,
+            d1: { auth: "../../outside.sql" },
+            integrity: {},
+            pulumiOutputs: {
+              ...MANIFEST.pulumiOutputs,
+              flowsEnabled: false,
+              flowsResources: null,
+            },
+          },
+          "preview",
+        ),
+      /unsafe backup file path/,
     );
   });
 

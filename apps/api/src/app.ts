@@ -39,12 +39,16 @@ import { registerSocialRegistrationRoutes } from "./tenant-social/registration";
 import { registerTenantHomeRoutes } from "./tenant-home/routes";
 import { createCollectionGateway } from "./studio/collection-gateway";
 import { registerWorkflowWebhookRoutes } from "./workflow-webhooks";
+import { registerSaviaCollectionHostRoutes } from "./savia-flows/collection-host";
+import { registerSaviaNativeHostRoutes } from "./savia-flows/native-host";
+import { installSaviaCollectionEventDelivery } from "./savia-flows/event-dispatch";
 import { registerTenantBrandingRoutes } from "./tenant-branding/routes";
 import {
   deleteTenantEmailSettings,
   registerTenantEmailRoutes,
 } from "./tenant-email/routes";
 import { canonicalHostForApi } from "./auth/tenant-host-guard";
+import { solutionOptions } from "./solutions/catalog";
 import { registerAccessControlRoutes } from "./routes/access-control";
 import {
   installRequestResultEnvelope,
@@ -79,6 +83,11 @@ import {
   registerSaviaRequestRoutes,
   type SaviaRequestService,
 } from "./routes/savia-request";
+import {
+  registerSaviaFlowsRoutes,
+  type SaviaFlowsOptions,
+} from "./routes/savia-flows";
+import { registerSaviaFlowsPublicRoutes } from "./routes/savia-flows-public";
 import { registerLookupRoutes } from "./routes/lookups";
 
 import { registerAccountAvatarRoutes } from "./routes/account-avatar";
@@ -154,6 +163,7 @@ export function createApp(
   pagesSearch?: PagesSearchBindings,
   whatsapp?: WhatsappRouteDependencies,
   whatsappWebhook?: WhatsappWebhookDependencies,
+  saviaFlows?: SaviaFlowsOptions,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -168,6 +178,7 @@ export function createApp(
     identityBridgeKey,
     publicForms,
   );
+  installSaviaCollectionEventDelivery(app, db, saviaFlows);
   registerCompanionRoutes(
     app,
     companion
@@ -256,6 +267,17 @@ export function createApp(
   );
   registerRealtimeRoutes(app, db, realtime);
   registerSaviaRequestRoutes(app, saviaRequestService);
+  registerSaviaFlowsRoutes(app, saviaFlows);
+  registerSaviaCollectionHostRoutes(app, db, saviaFlows);
+  registerSaviaNativeHostRoutes(app, {
+    db,
+    secret: saviaFlows?.bridgeSecret,
+    files: documents,
+    integrationKey: studioIntegrationKey,
+    workflowBundles: solutionOptions.workflowBundles,
+    extensionRegistry: solutionOptions.extensionRegistry,
+  });
+  registerSaviaFlowsPublicRoutes(app, saviaFlows);
   registerLookupRoutes(app, saviaRequestService);
   registerWorkflowWebhookRoutes(app, db, {
     rateLimiter: publicForms?.rateLimiter,

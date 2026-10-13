@@ -44,3 +44,31 @@ condition = "AND"
 paths = ['''^docs/superpowers/plans/2026-10-06-whatsapp-virtual-employee-channel\.md$''']
 regexTarget = "secret"
 regexes = ['''^navigation/default$''']
+
+[[allowlists]]
+description = "Literal API-key placeholder in imported Flows curl examples"
+condition = "AND"
+paths = ['''^apps/flows/app/src/components/workflow/api-snippets\.ts$''']
+regexTarget = "secret"
+regexes = ['''^(?:Bearer )?YOUR_API_KEY$''']
+
+[[allowlists]]
+description = "Literal webhook-secret placeholder in Flows examples and assertions"
+condition = "AND"
+paths = ['''^apps/flows/app/src/services/native-workflow-service(?:\.test)?\.ts$''']
+regexTarget = "secret"
+regexes = ['''^(?:Bearer )?YOUR_SECRET$''']
+
+[[allowlists]]
+description = "LinkedIn provider TypeScript annotation; not an OAuth client credential"
+condition = "AND"
+paths = ['''^apps/flows/app/src/integrations/providers/linkedin\.ts$''']
+regexTarget = "secret"
+regexes = ['''^ProviderConfig$''']
+
+[[allowlists]]
+description = "Synthetic form-token signing key in the imported runtime tests"
+condition = "AND"
+paths = ['''^apps/flows/packages/runtime/src/form-token\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^test-signing-key-0123456789$''']

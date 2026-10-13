@@ -13,6 +13,10 @@ are the executable spec: read them before the runbooks.
 - **savia-request**: `apps/savia-request/src/server/` (`index.ts` routes,
   `runner.ts` execution, `hooks.ts` sandbox, `catalog.json` operations,
   `store.ts` persistence); proxy at `apps/api/src/routes/savia-request.ts`.
+- **Savia Flows**: `apps/flows/{api,app,packages}`; host gateway at
+  `apps/api/src/routes/savia-flows.ts`, embedded UI at
+  `apps/admin/src/features/savia-flows/`; local operations in
+  [the Flows guide](../guides/savia-flows.md).
 - **Provider credentials**: admin UI (`provider-credentials`),
   `user_provider_credentials` table, savia-request worker's `ENCRYPTION_KEY`.
 - **Assistant and MCP**: `apps/api/src/assistant/` (service, configuration,

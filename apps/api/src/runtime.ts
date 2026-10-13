@@ -15,7 +15,11 @@ import { purgeStudioAudit } from "@savia/studio-server/audit-retention";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
 import { runScheduledNotifications } from "./notifications";
-import { runScheduledWorkflows } from "./workflows";
+import {
+  nativeExecutionPolicyFromEnvironment,
+  runScheduledWorkflows,
+} from "./workflows";
+import { dispatchSaviaCollectionEvents } from "./savia-flows/event-dispatch";
 import { AssistantConfigurationRepository } from "./assistant/configuration";
 import { PersonalActionPayloadCipher } from "./assistant/personal-action-payload";
 import { SaviaAssistantService } from "./assistant/service";
@@ -131,6 +135,14 @@ export type RuntimeEnvironment = {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };
   SAVIA_REQUEST?: import("./routes/savia-request").SaviaRequestService;
+  SAVIA_FLOWS?: import("./routes/savia-flows").SaviaFlowsService;
+  SAVIA_FLOWS_BRIDGE_SECRET?: string;
+  CLOUDFLARE_ENV?: string;
+  SAVIA_FLOWS_LOCAL_ONLY?: string;
+  SAVIA_FLOWS_EXECUTION_ENABLED?: string;
+  SAVIA_FLOWS_QUOTAS_ENABLED?: string;
+  SAVIA_MAINTENANCE?: string;
+  SAVIA_FLOWS_EXTERNAL_SERVICES_ENABLED?: string;
 } & AttachmentSecrets &
   AuthServiceBinding &
   AssistantSecrets &
@@ -214,6 +226,15 @@ function whatsappChannelOptions(
               context.tenant,
             ),
           }),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          service: environment.SAVIA_FLOWS,
+          bridgeSecret: environment.SAVIA_FLOWS_BRIDGE_SECRET,
+        },
       );
       return async (input, init) =>
         backend.fetch(
@@ -390,6 +411,7 @@ export async function processWhatsappEventBatch(
   environment: RuntimeEnvironment,
   scope: WhatsappQueueScope,
 ): Promise<boolean> {
+  if (environment.SAVIA_MAINTENANCE === "true") return false;
   const configuration = assistantConfigurationFromEnvironment(environment);
   const inbound = whatsappInboundFromEnvironment(
     environment,
@@ -410,6 +432,20 @@ const runtime = {
     overrides: RuntimeOverrides = {},
     context?: ExecutionContext,
   ): Promise<Response> {
+    if (environment.SAVIA_MAINTENANCE === "true") {
+      const path = new URL(request.url).pathname;
+      if (path === "/health") return Response.json({ status: "maintenance" });
+      if (path !== "/api/public/savia-flows/maintenance")
+        return Response.json(
+          {
+            error: {
+              code: "MAINTENANCE",
+              message: "Savia is paused for a persistence backup.",
+            },
+          },
+          { status: 503, headers: { "retry-after": "60" } },
+        );
+    }
     const mcp = await remoteMcpResponse(request, environment);
     if (mcp) return mcp;
     const assistant = assistantRuntimeFromEnvironment(environment);
@@ -524,6 +560,10 @@ const runtime = {
             }
           : {}),
       },
+      {
+        service: environment.SAVIA_FLOWS,
+        bridgeSecret: environment.SAVIA_FLOWS_BRIDGE_SECRET,
+      },
     ).fetch(request, environment, context);
     return response;
   },
@@ -532,6 +572,27 @@ const runtime = {
     environment: RuntimeEnvironment,
     overrides: RuntimeOverrides = {},
   ): Promise<void> {
+    if (environment.SAVIA_MAINTENANCE === "true") return;
+    const workflowFetch =
+      overrides.workflowFetch ??
+      (environment.SAVIA_FLOWS_LOCAL_ONLY === "true" ||
+      environment.SAVIA_FLOWS_EXTERNAL_SERVICES_ENABLED === "false"
+        ? ((async () =>
+            Response.json(
+              {
+                error: {
+                  code: "EXTERNAL_SERVICES_DISABLED",
+                  message:
+                    "Savia Flows runs locally. External delivery requires explicit authorization.",
+                },
+              },
+              { status: 503 },
+            )) as typeof fetch)
+        : undefined);
+    await dispatchSaviaCollectionEvents(environment.DB, {
+      service: environment.SAVIA_FLOWS,
+      bridgeSecret: environment.SAVIA_FLOWS_BRIDGE_SECRET,
+    });
     const realtime = createRealtimeHubClient(environment.REALTIME_HUB);
     const runWhatsapp = async () => {
       if (
@@ -714,8 +775,9 @@ const runtime = {
         runScheduledWorkflows(
           environment.DB,
           studioIntegrationKeyFromEnvironment(environment),
-          overrides.workflowFetch,
+          workflowFetch,
           realtime,
+          nativeExecutionPolicyFromEnvironment(environment),
         ),
         runScheduledNotifications(environment.DB, realtime),
         runScheduledAuditRetention(environment.DB),
@@ -743,8 +805,9 @@ const runtime = {
       runScheduledWorkflows(
         environment.DB,
         studioIntegrationKeyFromEnvironment(environment),
-        overrides.workflowFetch,
+        workflowFetch,
         realtime,
+        nativeExecutionPolicyFromEnvironment(environment),
       ),
       runScheduledNotifications(environment.DB, realtime),
       runScheduledAuditRetention(environment.DB),

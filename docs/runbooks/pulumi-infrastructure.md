@@ -8,7 +8,7 @@ the shared plugin registry. Each deployment profile has its own Pulumi project
 and state; shared resources are never owned by a disposable preview stack. Pulumi owns D1, R2, optional Flows KV/Queue,
 and the protected state bucket. `worker-config.mjs` and
 `flows-worker-config.mjs` and `auxiliary-worker-config.mjs` declare Worker names, bindings, routes, cron,
-Workflows, SQLite Durable Object migrations, limits, and WorkerLoader.
+Workflows, SQLite Durable Object migrations, limits, and private service bindings.
 Wrangler is the only publisher of Worker code and these attached constructs;
 do not add overlapping Pulumi WorkerScript, Workflow, consumer, or cron resources.
 The old `scripts/render-cloudflare-production-config.mjs` is a compatibility
@@ -142,12 +142,17 @@ At that setting Pulumi creates no Flows resources, the renderer adds no
 The optional resources are one D1, one KV namespace, three R2 buckets, and one
 Queue with isolated environment names. Their actual outputs feed the private
 Flows Worker manifest: resilient Workflows, five SQLite Durable Object classes,
-Queue producer/consumer, cron, WorkerLoader, and reciprocal host services.
+Queue producer/consumer, cron, reciprocal host services, and a private
+`CODE_EXECUTOR` service binding to the environment-matching
+`savia-hook-executor` service's `FlowsExecutor` entrypoint. It has no WorkerLoader
+binding. Publish or update the shared hook executor before publishing Flows so
+the named entrypoint is available.
 
 Activation is a later rollout: import any existing resources first, explicitly
 review `flowsEnabled: true`, apply the resource plan, migrate the Flows D1 schema,
-configure the required bridge/signing/encryption secrets, publish Flows against
-the existing API, then publish the API with its Flows binding. The current PR
+configure the required bridge/signing/encryption secrets, publish or update the
+shared hook executor, publish Flows against the existing API, then publish the
+API with its Flows binding. The current PR
 prepares the infrastructure declarations; it does not publish Flows code or
 activate AI, browser, containers, external email, or Analytics Engine.
 

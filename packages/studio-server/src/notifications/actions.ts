@@ -3,7 +3,7 @@ import type {
   NotificationPolicy,
 } from "@savia/studio-shared/notifications";
 import { fail } from "../context";
-import { WorkflowRepository } from "../workflows/repository";
+import { WorkflowRepository } from "@savia/flows-native/repository";
 
 export type NoticeResolution =
   | { kind: "none" }

@@ -1164,3 +1164,114 @@ export const whatsappChannelDispatches = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.actionId, table.productId] })],
 );
+
+export const saviaFlowsWsTickets = sqliteTable(
+  "savia_flows_ws_tickets",
+  {
+    jti: text("jti").primaryKey().notNull(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "cascade" }),
+    tenantId: bigint("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    expiresAt: bigint("expires_at").notNull(),
+    createdAt: bigint("created_at").notNull(),
+  },
+  (table) => [index("savia_flows_ws_tickets_expiry").on(table.expiresAt)],
+);
+
+export const saviaFlowsCollectionEventOutbox = sqliteTable(
+  "savia_flows_collection_event_outbox",
+  {
+    id: text("id").primaryKey().notNull(),
+    tenantId: text("tenant_id").notNull(),
+    collectionName: text("collection_name").notNull(),
+    operation: text("operation").notNull(),
+    recordId: text("record_id").notNull(),
+    recordVersion: integer("record_version").notNull(),
+    occurredAt: text("occurred_at").notNull(),
+    beforeSnapshot: text("before_snapshot"),
+    afterSnapshot: text("after_snapshot"),
+    changedFields: text("changed_fields").notNull(),
+    actorKind: text("actor_kind").notNull(),
+    actorId: text("actor_id").notNull(),
+    causeId: text("cause_id"),
+    status: text("status").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    availableAt: integer("available_at").notNull().default(0),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: integer("lease_expires_at"),
+    deliveredAt: integer("delivered_at"),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    check(
+      "savia_flows_collection_event_outbox_operation_check",
+      sql`${table.operation} IN ('created','updated','deleted','restored')`,
+    ),
+    check(
+      "savia_flows_collection_event_outbox_before_snapshot_check",
+      sql`${table.beforeSnapshot} IS NULL OR json_valid(${table.beforeSnapshot})`,
+    ),
+    check(
+      "savia_flows_collection_event_outbox_after_snapshot_check",
+      sql`${table.afterSnapshot} IS NULL OR json_valid(${table.afterSnapshot})`,
+    ),
+    check(
+      "savia_flows_collection_event_outbox_changed_fields_check",
+      sql`json_valid(${table.changedFields})`,
+    ),
+    check(
+      "savia_flows_collection_event_outbox_status_check",
+      sql`${table.status} IN ('pending','delivered','failed')`,
+    ),
+    uniqueIndex("savia_flows_collection_event_outbox_identity_unique").on(
+      table.tenantId,
+      table.collectionName,
+      table.recordId,
+      table.recordVersion,
+      table.operation,
+    ),
+    index("savia_flows_collection_events_ready").on(
+      table.status,
+      table.availableAt,
+      table.leaseExpiresAt,
+      table.createdAt,
+    ),
+    index("savia_flows_collection_events_delivered").on(
+      table.status,
+      table.deliveredAt,
+    ),
+  ],
+);
+
+export const saviaFlowsCollectionReceipts = sqliteTable(
+  "savia_flows_collection_receipts",
+  {
+    tenant: text("tenant").notNull(),
+    workflowId: text("workflow_id").notNull(),
+    executionId: text("execution_id").notNull(),
+    nodeId: text("node_id").notNull(),
+    principalId: text("principal_id").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    response: text("response").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [
+        table.tenant,
+        table.workflowId,
+        table.executionId,
+        table.nodeId,
+      ],
+    }),
+    check(
+      "savia_flows_collection_receipts_response_check",
+      sql`json_valid(${table.response})`,
+    ),
+  ],
+);

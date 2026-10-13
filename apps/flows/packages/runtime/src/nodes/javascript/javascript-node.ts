@@ -1,0 +1,133 @@
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+import {
+  buildScriptWithBinding,
+  EXECUTOR_UNAVAILABLE_MESSAGE,
+  LOG_PREFIX_ERROR,
+  LOG_PREFIX_WARN,
+} from "../../utils/code-mode";
+
+export class JavascriptNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "javascript",
+    name: "JavaScript",
+    type: "javascript",
+    description:
+      "Executes JavaScript in a fresh, bounded QuickJS guest. Inputs are JSON-encoded into the guest source as `args`; console output is captured to stdout/stderr.",
+    tags: ["Code", "JavaScript", "Execute"],
+    icon: "terminal",
+    documentation:
+      "Runs JavaScript in a fresh, bounded QuickJS guest (no network, timers, Web APIs or bindings). The `args` input is JSON-encoded into the guest source as a local array; the generated source limit is 256 KiB, including that binding. The last expression — or an explicit `return` — becomes the result. `console.log` is captured to `stdout`; `console.warn` / `console.error` to `stderr`.",
+    inlinable: true,
+    asTool: true,
+    usage: 10,
+    inputs: [
+      {
+        name: "script",
+        type: "string",
+        description: "The JavaScript script to execute",
+        required: true,
+      },
+      {
+        name: "args",
+        type: "json",
+        description:
+          "Command line arguments (array of strings) to pass to the script",
+        required: false,
+      },
+      {
+        name: "timeout",
+        type: "number",
+        description: "Execution timeout in milliseconds (default: 5000)",
+        required: false,
+      },
+    ],
+    outputs: [
+      {
+        name: "result",
+        type: "json",
+        description:
+          "The result of the script execution (return value or last expression)",
+      },
+      {
+        name: "stdout",
+        type: "string",
+        description: "Captured console.log output",
+      },
+      {
+        name: "stderr",
+        type: "string",
+        description: "Captured console.error output",
+      },
+      {
+        name: "error",
+        type: "string",
+        description: "Error message if script execution failed",
+        hidden: true,
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    const { script, args = [], timeout = 5000 } = context.inputs;
+
+    if (!script || typeof script !== "string" || script.trim() === "") {
+      return this.createErrorResult("Missing or empty script.");
+    }
+
+    if (!Array.isArray(args)) {
+      return this.createErrorResult("Arguments must be an array of strings.");
+    }
+
+    const executor = context.codeModeExecutor;
+    if (!executor) {
+      return this.createErrorResult(EXECUTOR_UNAVAILABLE_MESSAGE);
+    }
+
+    let result: unknown;
+    let error: string | undefined;
+    let logs: string[] | undefined;
+    try {
+      ({ result, error, logs } = await executor.execute(
+        buildScriptWithBinding("args", args, script),
+        {},
+        { timeoutMs: timeout }
+      ));
+    } catch (err) {
+      // The sandbox itself failed rather than the script — report it against
+      // this node so the error names the step that broke.
+      return this.createErrorResult(
+        `Script execution failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+
+    const { stdout, stderr } = splitLogs(logs ?? []);
+
+    if (error) {
+      return this.createErrorResult(`Script execution error: ${error}`);
+    }
+
+    return this.createSuccessResult({
+      result,
+      stdout,
+      stderr,
+      error: null,
+    });
+  }
+}
+
+function splitLogs(logs: string[]): { stdout: string; stderr: string } {
+  const out: string[] = [];
+  const err: string[] = [];
+  for (const line of logs) {
+    if (line.startsWith(LOG_PREFIX_WARN)) {
+      err.push(line.slice(LOG_PREFIX_WARN.length));
+    } else if (line.startsWith(LOG_PREFIX_ERROR)) {
+      err.push(line.slice(LOG_PREFIX_ERROR.length));
+    } else {
+      out.push(line);
+    }
+  }
+  return { stdout: out.join("\n"), stderr: err.join("\n") };
+}

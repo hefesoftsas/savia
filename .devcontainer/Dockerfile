@@ -17,6 +17,14 @@ RUN mkdir -p \
     /workspace/apps/companion/node_modules \
     /workspace/apps/connector-gateway/node_modules \
     /workspace/apps/db-bridge/node_modules \
+    /workspace/apps/flows/node_modules \
+    /workspace/apps/flows/api/node_modules \
+    /workspace/apps/flows/app/node_modules \
+    /workspace/apps/flows/packages/geo/node_modules \
+    /workspace/apps/flows/packages/native/node_modules \
+    /workspace/apps/flows/packages/runtime/node_modules \
+    /workspace/apps/flows/packages/types/node_modules \
+    /workspace/apps/flows/packages/utils/node_modules \
     /workspace/apps/legacy-exporter/node_modules \
     /workspace/apps/mcp/node_modules \
     /workspace/apps/plugin-registry/node_modules \

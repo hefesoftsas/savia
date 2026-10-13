@@ -12,7 +12,7 @@ import type { StudioObject } from "@savia/studio-shared/metadata";
 import { disabledSolutionObjects } from "@savia/studio-server/solution-state";
 import { parseObject } from "@savia/studio-server/services";
 import { workflowDraftSchema } from "@savia/studio-shared/workflows";
-import { workflowRequests } from "@savia/studio-server/workflows/routes";
+import { workflowRequests } from "@savia/flows-native/routes";
 
 type Schema = Record<string, unknown>;
 type Paths = Record<string, Record<string, unknown>>;

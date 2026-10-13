@@ -1,0 +1,121 @@
+import type { Units } from "@savia/flows-geo";
+import { circle } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+import type { GeoProperties } from "./geo-input";
+import { isUnits, UNITS_LIST } from "./geo-input";
+
+export class CircleNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "circle",
+    name: "Circle",
+    type: "circle",
+    description: "Creates a circular polygon given a center point and radius",
+    tags: ["Geo", "GeoJSON", "Geometry", "Circle"],
+    icon: "circle",
+    documentation:
+      "This node creates a circular polygon from a center point and radius with customizable precision.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "center",
+        type: "geojson",
+        description: "Center point (Point feature or coordinates)",
+        required: true,
+      },
+      {
+        name: "radius",
+        type: "number",
+        description: "Radius of the circle",
+        required: true,
+      },
+      {
+        name: "steps",
+        type: "number",
+        description: "Number of sides for the polygon (default: 64)",
+        required: false,
+      },
+      {
+        name: "units",
+        type: "string",
+        description: "Units for the radius measurement",
+        required: false,
+      },
+      {
+        name: "properties",
+        type: "json",
+        description: "Properties object for the circle feature",
+        required: false,
+      },
+    ],
+    outputs: [
+      {
+        name: "circle",
+        type: "geojson",
+        description: "Circle as a Polygon feature",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { center, radius, steps, units, properties } = context.inputs;
+
+      if (!center) {
+        return this.createErrorResult("Missing center point input");
+      }
+
+      if (radius === undefined || radius === null) {
+        return this.createErrorResult("Missing radius input");
+      }
+
+      if (
+        typeof radius !== "number" ||
+        !Number.isFinite(radius) ||
+        radius <= 0
+      ) {
+        return this.createErrorResult("Radius must be a positive number");
+      }
+
+      // Prepare options for circle creation
+      const options: {
+        steps?: number;
+        units?: Units;
+        properties?: GeoProperties;
+      } = {};
+
+      if (steps !== undefined && steps !== null) {
+        if (typeof steps !== "number" || !Number.isFinite(steps) || steps < 3) {
+          return this.createErrorResult("Steps must be a valid number >= 3");
+        }
+        options.steps = Math.floor(steps);
+      }
+
+      if (units !== undefined && units !== null) {
+        if (!isUnits(units)) {
+          return this.createErrorResult(`Units must be one of: ${UNITS_LIST}`);
+        }
+        options.units = units;
+      }
+
+      // Create the circle using Turf.js
+      const circlePolygon = circle(center, radius, options);
+
+      // Set properties if provided
+      if (properties !== undefined && properties !== null) {
+        if (typeof properties !== "object") {
+          return this.createErrorResult("Properties must be an object");
+        }
+        circlePolygon.properties = properties;
+      }
+
+      return this.createSuccessResult({
+        circle: circlePolygon,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(`Error creating circle: ${error.message}`);
+    }
+  }
+}

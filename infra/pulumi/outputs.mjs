@@ -72,6 +72,14 @@ function validateStackOutputs(parsed) {
   if (typeof parsed.flowsEnabled !== "boolean") {
     throw new Error("Stack outputs are missing flowsEnabled");
   }
+  const flowsExecutionEnabled = parsed.flowsExecutionEnabled ?? false;
+  if (
+    typeof flowsExecutionEnabled !== "boolean" ||
+    (flowsExecutionEnabled && !parsed.flowsEnabled)
+  ) {
+    throw new Error("Invalid flowsExecutionEnabled output");
+  }
+  parsed = { ...parsed, flowsExecutionEnabled };
   if (!parsed.flowsEnabled) {
     if (parsed.flowsResources !== null) {
       throw new Error("Disabled Flows must not have provisioned resources");
@@ -129,6 +137,8 @@ export function renderEnvFromOutputs(outputs, outputRoot) {
     SAVIA_FLOWS_RESOURCES: validated.flowsEnabled
       ? JSON.stringify(validated.flowsResources)
       : "",
+    SAVIA_FLOWS_PROVISIONED: String(validated.flowsEnabled),
+    SAVIA_FLOWS_EXECUTION_ENABLED: String(validated.flowsExecutionEnabled),
     SAVIA_DEPLOY_CONFIG_ROOT: outputRoot,
   });
 }

@@ -3,7 +3,6 @@ import type { StudioObject } from "./metadata";
 import { fieldLabelsSchema, resolveFieldLabel } from "./field-labels";
 import { materializeSchema } from "./json-schema";
 import {
-  filterLookupIcons,
   isLookupIconId,
   lookupIconLabel,
   RECOMMENDED_LOOKUP_ICONS,

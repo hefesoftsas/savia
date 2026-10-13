@@ -43,7 +43,7 @@ import { api } from "./api";
 import { fieldEntries, type StudioObject } from "@savia/studio-shared/metadata";
 import { parseCsv } from "@savia/studio-shared/csv";
 import "./operations.css";
-import Workflows from "./workflows";
+import { StudioFlowsEntry } from "@/features/savia-flows/studio-entry";
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -1522,7 +1522,7 @@ export default function Operations({
       {tab === "tasks" && <TaskPanel />}
       {tab === "import" && <ImportExport objects={objects} />}
       {tab === "automations" && <Automations objects={objects} />}
-      {tab === "workflows" && <Workflows objects={objects} />}
+      {tab === "workflows" && <StudioFlowsEntry />}
       {tab === "reports" && <Reports />}
     </main>
   );

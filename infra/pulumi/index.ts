@@ -25,6 +25,10 @@ const publicOrigin = config.require("publicOrigin");
 const documentsBucket = config.require("documentsBucket");
 const pagesSearchIndex = config.get("pagesSearchIndex");
 const shouldProvisionFlows = config.getBoolean("flowsEnabled") ?? false;
+const shouldExecuteFlows = config.getBoolean("flowsExecutionEnabled") ?? false;
+if (shouldExecuteFlows && !shouldProvisionFlows) {
+  throw new Error("flowsExecutionEnabled requires flowsEnabled");
+}
 const configuredStateBucket = config.get("stateBucket");
 const stateBucketName = stateBackendName(environment, configuredStateBucket);
 
@@ -148,6 +152,7 @@ export const databaseNames = names.databases;
 export const vectorizeIndex = names.vectorizeIndex ?? null;
 export const deletionProtected = protection.protect;
 export const flowsEnabled = shouldProvisionFlows;
+export const flowsExecutionEnabled = shouldExecuteFlows;
 export const flowsResources = flows
   ? {
       databaseId: flows.database.id,

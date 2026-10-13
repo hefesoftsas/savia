@@ -1,0 +1,58 @@
+import { booleanClockwise } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+export class BooleanClockwiseNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "boolean-clockwise",
+    name: "Boolean Clockwise",
+    type: "boolean-clockwise",
+    description:
+      "Takes a ring and returns true or false whether or not the ring is clockwise or counter-clockwise",
+    tags: ["Geo", "GeoJSON", "Boolean", "Clockwise"],
+    icon: "rotate-cw",
+    documentation:
+      "This node determines whether a LineString or polygon ring follows a clockwise or counter-clockwise direction.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "line",
+        type: "geojson",
+        description:
+          "LineString Feature, LineString geometry, or coordinate array to be evaluated",
+        required: true,
+      },
+    ],
+    outputs: [
+      {
+        name: "isClockwise",
+        type: "boolean",
+        description:
+          "True if the ring is clockwise, false if counter-clockwise",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { line } = context.inputs;
+
+      if (!line) {
+        return this.createErrorResult("Missing line input");
+      }
+
+      // Delegate everything to Turf.js booleanClockwise function
+      const isClockwise = booleanClockwise(line);
+
+      return this.createSuccessResult({
+        isClockwise,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error checking clockwise direction: ${error.message}`
+      );
+    }
+  }
+}

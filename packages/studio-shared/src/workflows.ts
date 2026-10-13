@@ -58,6 +58,18 @@ const values = z
   )
   .pipe(z.record(key, workflowValueSchema))
   .refine((v) => Object.keys(v).length <= 50, "At most 50 fields per step");
+const workflowPositionSchema = z
+  .object({
+    x: z.number().finite().min(-100_000).max(100_000),
+    y: z.number().finite().min(-100_000).max(100_000),
+  })
+  .strict();
+const workflowPositionsSchema = z
+  .record(key, workflowPositionSchema)
+  .refine(
+    (positions) => Object.keys(positions).length <= 50,
+    "At most 50 node positions",
+  );
 const base = {
   id: key,
   label: z.string().trim().max(100).optional(),
@@ -240,11 +252,19 @@ export const workflowDefinitionSchema = z
   .object({
     trigger,
     nodes: z.array(workflowNodeSchema).min(1).max(50),
+    positions: workflowPositionsSchema.optional(),
   })
   .strict()
   .superRefine((definition, ctx) => {
     if (!definition.nodes.length) return;
     const nodes = new Map(definition.nodes.map((node) => [node.id, node]));
+    for (const id of Object.keys(definition.positions ?? {}))
+      if (!nodes.has(id))
+        ctx.addIssue({
+          code: "custom",
+          path: ["positions", id],
+          message: "Position references an unknown node",
+        });
     const issue = (message: string) =>
       ctx.addIssue({ code: "custom", message });
     if (nodes.size !== definition.nodes.length)

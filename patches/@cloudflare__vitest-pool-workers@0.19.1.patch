@@ -1,0 +1,56 @@
+diff --git a/dist/pool/index.mjs b/dist/pool/index.mjs
+index e1fae4dc81fe773846ec5c6754a34c212ac0c978..d83c339fd4d870637f17fbce19d95d5d2d606d58 100644
+--- a/dist/pool/index.mjs
++++ b/dist/pool/index.mjs	
+@@ -46344,13 +46344,13 @@ function ensureRootedPath(filePath) {
+ 	return isWindows && filePath[0] !== "/" ? `/${filePath}` : filePath;
+ }
+ const ENCODED_PATH_PREFIX = "/__mf_vitest_encoded__";
+-const nonHeaderSafeRegExp = /[^\x20-\x7E]/u;
++const nonHeaderSafeRegExp = /[^\x21-\x7E]/u;
+ /**
+ * Percent-encodes a redirect target so it's safe to use as a `Location` header
+ * value, but *only* when it actually contains bytes outside the printable ASCII
+ * range. Pure-ASCII paths — the overwhelmingly common case, including paths
+-* containing a literal `%` or spaces — are returned unchanged and never gain the
+-* sentinel prefix, so this is a no-op for them.
++* containing a literal `%` — are returned unchanged and never gain the sentinel
++* prefix, so this is a no-op for them.
+ *
+ * When encoding is required, literal `%` is escaped first (to `%25`) so the
+ * transform is losslessly reversible by `decodeURIComponent()` even for real
+@@ -46362,7 +46362,7 @@ const nonHeaderSafeRegExp = /[^\x20-\x7E]/u;
+ */
+ function encodeRedirectLocation(filePath) {
+ 	if (!nonHeaderSafeRegExp.test(filePath)) return filePath;
+-	return `${ENCODED_PATH_PREFIX}${filePath.replace(/%/g, "%25").replace(/[^\x20-\x7E]/gu, (char) => encodeURIComponent(char))}`;
++	return `${ENCODED_PATH_PREFIX}${filePath.replace(/%/g, "%25").replace(/[^\x21-\x7E]/gu, (char) => encodeURIComponent(char))}`;
+ }
+ /**
+ * Inverts `encodeRedirectLocation()`. `workerd` echoes a redirect's `Location`
+@@ -46376,8 +46376,23 @@ function encodeRedirectLocation(filePath) {
+ * See https://github.com/cloudflare/workers-sdk/issues/14655
+ */
+ function decodeEncodedSpecifier(value) {
+-	if (!value.startsWith(ENCODED_PATH_PREFIX)) return value;
+-	return decodeURIComponent(value.slice(22));
++	if (value.startsWith(ENCODED_PATH_PREFIX)) return decodeURIComponent(value.slice(22));
++	// A module's referrer can be returned as a file path with URL-escaped spaces
++	// rather than through the redirect sentinel. Decode only when the original
++	// path does not exist and the decoded filesystem path does, preserving real
++	// filenames that contain literal percent sequences such as "%20".
++	const queryIndex = value.indexOf("?");
++	const filePath = queryIndex === -1 ? value : value.slice(0, queryIndex);
++	if (!filePath.includes("%")) return value;
++	try {
++		const decodedPath = decodeURIComponent(filePath);
++		const encodedDirectory = posixPath.dirname(filePath);
++		const decodedDirectory = posixPath.dirname(decodedPath);
++		if (decodedPath !== filePath && !fs.existsSync(encodedDirectory) && fs.existsSync(decodedDirectory)) {
++			return queryIndex === -1 ? decodedPath : `${decodedPath}${value.slice(queryIndex)}`;
++		}
++	} catch {}
++	return value;
+ }
+ function buildRedirectResponse(filePath) {
+ 	return new Response(null, {

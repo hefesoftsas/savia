@@ -1,0 +1,65 @@
+import { booleanContains } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+export class BooleanContainsNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "boolean-contains",
+    name: "Boolean Contains",
+    type: "boolean-contains",
+    description:
+      "Tests whether one geometry completely contains another geometry",
+    tags: ["Geo", "GeoJSON", "Boolean", "Contains"],
+    icon: "box",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "feature1",
+        type: "geojson",
+        description: "The containing geometry (Feature or geometry)",
+        required: true,
+      },
+      {
+        name: "feature2",
+        type: "geojson",
+        description: "The contained geometry (Feature or geometry)",
+        required: true,
+      },
+    ],
+    outputs: [
+      {
+        name: "contains",
+        type: "boolean",
+        description:
+          "True if feature1 completely contains feature2, false otherwise",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { feature1, feature2 } = context.inputs;
+
+      if (!feature1) {
+        return this.createErrorResult("Missing feature1 input");
+      }
+
+      if (!feature2) {
+        return this.createErrorResult("Missing feature2 input");
+      }
+
+      // Use Turf.js booleanContains function directly
+      const containsResult = booleanContains(feature1, feature2);
+
+      return this.createSuccessResult({
+        contains: containsResult,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error testing contains relationship: ${error.message}`
+      );
+    }
+  }
+}

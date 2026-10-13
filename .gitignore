@@ -45,6 +45,7 @@ postgres-data/
 volumes/
 
 # Logs and operating-system/editor files
+.impeccable/
 *.log
 .DS_Store
 .idea/
@@ -57,6 +58,7 @@ infra/pulumi/backups/
 # Isolated code editor build output
 apps/admin/dist-plugin-editor/
 apps/plugin-editor-runtime/.wrangler/
+
 apps/admin/public/downloads/
 
 # Native VS Code extension distribution and isolated host tests

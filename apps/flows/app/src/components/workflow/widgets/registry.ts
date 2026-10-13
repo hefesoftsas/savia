@@ -1,0 +1,72 @@
+import type { WorkflowParameter } from "../workflow-types";
+import type { WidgetDescriptor } from "./widget";
+
+/**
+ * Widget instance - everything needed to render a widget
+ */
+export interface Widget {
+  /** The React component to render */
+  Component: React.ComponentType<any>;
+
+  /** Configuration props for the component */
+  config: any;
+
+  /** Which input field this widget updates, if it is bound to one */
+  inputField?: string;
+
+  /** All input fields managed by this widget (hidden from default rendering) */
+  managedFields: Set<string>;
+}
+
+class WidgetRegistry {
+  private widgets = new Map<string, WidgetDescriptor>();
+
+  /**
+   * Register a widget for one or more node types
+   */
+  register(descriptor: WidgetDescriptor): void {
+    descriptor.nodeTypes.forEach((nodeType) => {
+      this.widgets.set(nodeType, descriptor);
+    });
+  }
+
+  /**
+   * Get widget for a node type
+   * Returns everything needed to render the widget
+   */
+  for(
+    nodeType: string,
+    nodeId: string,
+    inputs: WorkflowParameter[],
+    outputs?: WorkflowParameter[],
+    metadata?: Record<string, string>
+  ): Widget | null {
+    const descriptor = this.widgets.get(nodeType);
+    if (!descriptor) return null;
+
+    const config = descriptor.extractConfig(nodeId, inputs, outputs, metadata);
+    if (!config) return null;
+
+    const managedFields = new Set([
+      ...(descriptor.inputField ? [descriptor.inputField] : []),
+      ...(descriptor.managedFields ?? []),
+    ]);
+
+    return {
+      Component: descriptor.component,
+      config,
+      inputField: descriptor.inputField,
+      managedFields,
+    };
+  }
+
+  /**
+   * Check if a node type has a widget
+   */
+  has(nodeType: string): boolean {
+    return this.widgets.has(nodeType);
+  }
+}
+
+// Global registry instance
+export const registry = new WidgetRegistry();

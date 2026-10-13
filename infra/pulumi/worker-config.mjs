@@ -280,6 +280,7 @@ export async function renderProductionConfigs({
   openrouterModel,
   pagesSearchIndex,
   flowsResources,
+  flowsExecutionEnabled = false,
   authD1Id,
   domainD1Id,
   documentsBucket = defaultDocumentsBucket,
@@ -304,6 +305,12 @@ export async function renderProductionConfigs({
     );
   }
   const flows = validateFlowsResources(flowsResources, deploymentEnvironment);
+  if (
+    typeof flowsExecutionEnabled !== "boolean" ||
+    (flowsExecutionEnabled && !flows)
+  ) {
+    throw new Error("Invalid Flows execution setting");
+  }
   const rendered = {
     authD1Id: requiredValue(authD1Id, "SAVIA_AUTH_D1_ID"),
     documentsBucket: requiredValue(documentsBucket, "SAVIA_DOCUMENTS_BUCKET"),
@@ -389,7 +396,14 @@ export async function renderProductionConfigs({
       config.preview_urls = false;
     }
     configs.api.triggers = { crons: ["* * * * *"] };
+    configs.api.vars.CLOUDFLARE_ENV = "preview";
     configs.api.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE = "true";
+    configs.api.vars.SAVIA_MAINTENANCE = "false";
+    configs.api.vars.SAVIA_FLOWS_EXECUTION_ENABLED = String(
+      Boolean(flows) && flowsExecutionEnabled,
+    );
+    configs.api.vars.SAVIA_FLOWS_QUOTAS_ENABLED = String(Boolean(flows));
+    configs.api.vars.SAVIA_FLOWS_EXTERNAL_SERVICES_ENABLED = "false";
     configs.api.vars.COMPANION_ENABLED = "true";
     configs.api.vars.SAVIA_MCP_URL = "https://savia-mcp-preview.internal/mcp";
     configs.admin.vars = {
@@ -409,12 +423,22 @@ export async function renderProductionConfigs({
       flows,
       rendered.publicOrigin,
       deploymentEnvironment,
+      flowsExecutionEnabled,
     );
     configs.api.services.push({
       binding: "SAVIA_FLOWS",
       service: flows.workerName,
     });
     configs.api.secrets.required.push("SAVIA_FLOWS_BRIDGE_SECRET");
+    configs.api.vars.SAVIA_MAINTENANCE = "false";
+    configs.api.vars.SAVIA_FLOWS_EXECUTION_ENABLED = String(
+      flowsExecutionEnabled,
+    );
+    configs.api.vars.SAVIA_FLOWS_QUOTAS_ENABLED = "true";
+    configs.api.vars.SAVIA_FLOWS_EXTERNAL_SERVICES_ENABLED = "false";
+    for (const [name, value] of Object.entries(configs["flows/api"].vars)) {
+      if (name.startsWith("SAVIA_FLOWS_MAX_")) configs.api.vars[name] = value;
+    }
   } else {
     // A stale generated file must not accidentally activate a disabled module.
     await rm(
@@ -441,6 +465,7 @@ export async function renderCloudflareConfigFromEnv(env = process.env) {
     documentsBucket: env.SAVIA_DOCUMENTS_BUCKET,
     domainD1Id: env.SAVIA_DOMAIN_D1_ID,
     pagesSearchIndex: env.SAVIA_PAGES_SEARCH_INDEX,
+    flowsExecutionEnabled: env.SAVIA_FLOWS_EXECUTION_ENABLED === "true",
     flowsResources: env.SAVIA_FLOWS_RESOURCES
       ? JSON.parse(env.SAVIA_FLOWS_RESOURCES)
       : null,

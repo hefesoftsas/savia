@@ -65,8 +65,13 @@ export async function loadSaviaRequestPage() {
   const module = await import("@/features/savia-request/savia-request-page");
   return { default: module.SaviaRequestPage };
 }
+export async function loadSaviaFlowsPage() {
+  const module = await import("@/features/savia-flows/savia-flows-page");
+  return { default: module.SaviaFlowsPage };
+}
 const StudioPage = lazy(loadStudioPage);
 const PluginStudioPage = lazy(loadPluginStudioPage);
+const SaviaFlowsPage = lazy(loadSaviaFlowsPage);
 const PersonalIntegrationsPage = lazy(async () => {
   const module =
     await import("@/features/personal-integrations/personal-integrations-page");
@@ -479,6 +484,14 @@ function AppContent({
           <Route
             path="/savia-request"
             element={<SaviaRequestRoute services={appServices} />}
+          />
+          <Route
+            path="/savia-flows"
+            element={
+              <Suspense fallback={<RouteLoading />}>
+                <SaviaFlowsPage services={appServices} />
+              </Suspense>
+            }
           />
           <Route
             path="/savia-request/docs"

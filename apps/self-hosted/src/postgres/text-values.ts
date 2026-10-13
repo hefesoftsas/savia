@@ -16,8 +16,27 @@ export function assertPostgresText(value: string): void {
     return;
   }
   // Inspect every string token: JSON.parse discards overwritten duplicate keys.
-  for (const match of value.matchAll(/"(?:[^"\\]|\\[\s\S])*"/g)) {
-    if (unsupported(JSON.parse(match[0]) as string))
+  let index = 0;
+  while (index < value.length) {
+    if (value[index] !== '"') {
+      index += 1;
+      continue;
+    }
+
+    const start = index;
+    index += 1;
+    while (index < value.length) {
+      if (value[index] === "\\") {
+        index += 2;
+      } else if (value[index] === '"') {
+        index += 1;
+        break;
+      } else {
+        index += 1;
+      }
+    }
+
+    if (unsupported(JSON.parse(value.slice(start, index)) as string))
       throw new DatabaseInputError();
   }
 }

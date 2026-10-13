@@ -13,6 +13,8 @@ export class WhatsappDispatcher extends DurableObject<RuntimeEnvironment> {
   }
 
   async fetch(request: Request): Promise<Response> {
+    if (this.env.SAVIA_MAINTENANCE === "true")
+      return new Response("Savia is in maintenance", { status: 503 });
     if (request.method !== "POST" || new URL(request.url).pathname !== "/wake")
       return new Response("Not found", { status: 404 });
     let scope: WhatsappQueueScope;
@@ -50,6 +52,10 @@ export class WhatsappDispatcher extends DurableObject<RuntimeEnvironment> {
   }
 
   async alarm(): Promise<void> {
+    if (this.env.SAVIA_MAINTENANCE === "true") {
+      await this.ctx.storage.setAlarm(Date.now() + 60000);
+      return;
+    }
     // Rollback to scheduled mode must stop old alarms from consuming the queue.
     if (!usesWhatsappEvents(this.env)) {
       await this.ctx.storage.deleteAlarm();
