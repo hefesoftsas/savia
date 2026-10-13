@@ -6,6 +6,60 @@ import { join } from "node:path";
 
 const WORK_DIR = "/tmp/ffmpeg-jobs";
 const jobs = new Map();
+const LOCAL_MEDIA_FORMATS = [
+  "3g2",
+  "3gp",
+  "aac",
+  "ac3",
+  "asf",
+  "avi",
+  "bmp_pipe",
+  "caf",
+  "dts",
+  "dv",
+  "eac3",
+  "flac",
+  "flv",
+  "gif",
+  "h261",
+  "h263",
+  "h264",
+  "hevc",
+  "image2",
+  "image2pipe",
+  "ipod",
+  "ivf",
+  "jpeg_pipe",
+  "matroska",
+  "mjpeg",
+  "mov",
+  "mp3",
+  "mpeg",
+  "mpegts",
+  "mpegvideo",
+  "mxf",
+  "nut",
+  "ogg",
+  "opus",
+  "png_pipe",
+  "rawvideo",
+  "rm",
+  "tiff_pipe",
+  "wav",
+  "webp_pipe",
+].join(",");
+
+/** FFmpeg inputs are downloaded regular files, never URLs or playlists. */
+export function localMediaInputArgs(filePath) {
+  return [
+    "-protocol_whitelist",
+    "file",
+    "-format_whitelist",
+    LOCAL_MEDIA_FORMATS,
+    "-i",
+    filePath,
+  ];
+}
 
 export function parseTrustedMediaOrigins(value) {
   if (typeof value !== "string" || !value.trim()) {
@@ -59,12 +113,23 @@ export function validateTrustedMediaUrl(value, origins) {
   if (
     !["http:", "https:"].includes(url.protocol) ||
     url.username ||
-    url.password ||
-    !origins.has(url.origin)
+    url.password
   ) {
     throw new Error("Media URL origin is not trusted");
   }
-  return url.href;
+
+  // Keep the authority sourced from configuration; never pass the input
+  // hostname to fetch, even after validating its origin.
+  const trustedOrigin = [...origins].find((origin) => origin === url.origin);
+  if (!trustedOrigin) {
+    throw new Error("Media URL origin is not trusted");
+  }
+
+  const trustedUrl = new URL(trustedOrigin);
+  trustedUrl.pathname = url.pathname;
+  trustedUrl.search = url.search;
+  trustedUrl.hash = url.hash;
+  return trustedUrl;
 }
 
 export async function fetchTrustedMedia(
@@ -379,7 +444,7 @@ async function processOverlay(id, jobDir, videoUrl, imageUrl, x, y) {
  */
 function runFFmpegConcat(inputFiles, outputPath, width, height, includeAudio) {
   const n = inputFiles.length;
-  const inputs = inputFiles.flatMap((f) => ["-i", f]);
+  const inputs = inputFiles.flatMap(localMediaInputArgs);
 
   // Scale all videos to target resolution (letterbox if aspect ratio differs)
   const scaleFilters = inputFiles
@@ -435,10 +500,8 @@ function runFFmpegOverlay(
   includeAudio,
 ) {
   const args = [
-    "-i",
-    videoPath,
-    "-i",
-    imagePath,
+    ...localMediaInputArgs(videoPath),
+    ...localMediaInputArgs(imagePath),
     "-filter_complex",
     `[0:v][1:v]overlay=${x}:${y}[outv]`,
     "-map",
@@ -472,8 +535,7 @@ function runFFmpegClip(inputPath, outputPath, start, end, includeAudio) {
   const args = [
     "-ss",
     String(start),
-    "-i",
-    inputPath,
+    ...localMediaInputArgs(inputPath),
     "-t",
     String(duration),
     "-c:v",
@@ -505,8 +567,7 @@ function runFFmpegFrame(inputPath, outputPath, position) {
       ? [
           "-sseof",
           "-0.1",
-          "-i",
-          inputPath,
+          ...localMediaInputArgs(inputPath),
           "-vframes",
           "1",
           "-q:v",
@@ -514,7 +575,15 @@ function runFFmpegFrame(inputPath, outputPath, position) {
           "-y",
           outputPath,
         ]
-      : ["-i", inputPath, "-vframes", "1", "-q:v", "2", "-y", outputPath];
+      : [
+          ...localMediaInputArgs(inputPath),
+          "-vframes",
+          "1",
+          "-q:v",
+          "2",
+          "-y",
+          outputPath,
+        ];
 
   return new Promise((resolve, reject) => {
     execFile("ffmpeg", args, { timeout: 60_000 }, (err, _stdout, stderr) => {
@@ -532,8 +601,7 @@ function runFFmpegFrameAtTime(inputPath, outputPath, time) {
   const args = [
     "-ss",
     String(time),
-    "-i",
-    inputPath,
+    ...localMediaInputArgs(inputPath),
     "-vframes",
     "1",
     "-q:v",
@@ -555,11 +623,18 @@ function runFFmpegFrameAtTime(inputPath, outputPath, time) {
 /**
  * Probe a video file for stream information (resolution, audio presence).
  */
-function probeVideo(filePath) {
+export function probeVideo(filePath, run = execFile) {
   return new Promise((resolve, reject) => {
-    execFile(
+    run(
       "ffprobe",
-      ["-v", "quiet", "-print_format", "json", "-show_streams", filePath],
+      [
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
+        "-show_streams",
+        ...localMediaInputArgs(filePath),
+      ],
       (err, stdout) => {
         if (err) reject(new Error(`ffprobe failed: ${err.message}`));
         else resolve(JSON.parse(stdout));

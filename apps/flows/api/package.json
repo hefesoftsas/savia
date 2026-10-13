@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && node --test containers/ffmpeg/*.test.mjs",
     "db:generate": "drizzle-kit generate",
     "generate:master-key": "node scripts/generate-master-key.js",
     "dev": "node ../scripts/dev-local.mjs"

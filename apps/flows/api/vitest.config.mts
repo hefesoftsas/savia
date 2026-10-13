@@ -4,7 +4,7 @@ import {
   cloudflareTest,
   readD1Migrations,
 } from "@cloudflare/vitest-pool-workers";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import { buildQuickJsExecutorWorker } from "../scripts/build-executor.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -51,6 +51,8 @@ export default defineConfig({
     }),
   ],
   test: {
+    // Container Node suites run separately; workerd cannot host node:test.
+    exclude: [...configDefaults.exclude, "containers/**"],
     server: { deps: { inline: ["expect-type"] } },
     setupFiles: ["./test/setup.ts"],
     testTimeout: 30000,

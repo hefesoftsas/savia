@@ -396,6 +396,8 @@ for the completed local checks and compiler memory budgets.
 
 `flows:test` builds its own child UI assets and runs Miniflare tests serially.
 `flows:typecheck` also runs one workspace package at a time.
+Container Node suites run separately after the Worker suites in the API test
+command; they are not loaded inside Miniflare.
 
 ## Imported-code safeguards
 
@@ -409,4 +411,7 @@ If a later authorized rollout enables the FFmpeg container, configure its
 `TRUSTED_MEDIA_ORIGINS` with a comma-separated list of exact HTTP(S) origins,
 including any nondefault port. Entries cannot include credentials, paths, query,
 or fragments. Downloads fail closed when it is unset and reject redirects.
+FFmpeg and ffprobe accept local direct-media files through restricted protocol
+and demuxer lists. Playlist inputs such as HLS, DASH, and concat are rejected,
+so nested URLs cannot bypass the download origin policy.
 Containers and external services remain disabled in this preview release.
