@@ -61,6 +61,7 @@ import {
 } from "./plugin-authoring-request";
 import { MonacoCodeEditor } from "./monaco-code-editor";
 import { pluginIdeMessages } from "./plugin-ide-messages";
+import { pluginVscodeGuideMessages } from "./plugin-vscode-guide-messages";
 import { pluginIdeDeclarations } from "./plugin-ide-declarations";
 import {
   compilePluginProject,
@@ -129,6 +130,7 @@ export default function PluginIde({
   onPublished: () => void | Promise<unknown>;
 }) {
   const t = useMessages(pluginIdeMessages);
+  const vscodeT = useMessages(pluginVscodeGuideMessages);
   const panelId = useId();
   const [wide, setWide] = useState(false);
   const [pane, setPane] = useState<
@@ -1069,6 +1071,17 @@ export default function PluginIde({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <a
+                  href={`#/studio?tenantId=${tenantId}&view=admin&tab=extensions&help=vscode`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Code2 aria-hidden="true" />
+                  {vscodeT("title")}
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {destination === "tenant" && (
                 <DropdownMenuItem
                   disabled={!canPublish}

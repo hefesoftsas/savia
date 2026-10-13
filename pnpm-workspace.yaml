@@ -5,6 +5,8 @@ packages:
   - apps/flows/app
   - apps/flows/packages/*
 allowBuilds:
+  "@vscode/vsce-sign": false
+  keytar: false
   esbuild: true
   protobufjs: false
   "@scarf/scarf": false

@@ -110,6 +110,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 - [Tenant email registration](guides/tenant-registration.md): independent tenant opt-in, Turnstile/ALTCHA configuration, verified Viewer provisioning and quota handling.
 
+- [Native VS Code plugin authoring](guides/vscode-plugin-development.md): source checkout, immutable publication, conflict recovery, and VSIX installation.
 - [Plugin development kit](guides/plugin-development.md): scaffold, SDK, generic UI, local iframe development, and testing.
 
 - [Personal API keys](guides/personal-api-keys.md) — create and revoke scoped credentials for Companion.

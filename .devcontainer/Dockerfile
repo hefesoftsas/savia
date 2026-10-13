@@ -23,6 +23,7 @@ RUN mkdir -p \
     /workspace/apps/hook-executor/node_modules \
     /workspace/apps/savia-request/node_modules \
     /workspace/apps/self-hosted/node_modules \
+    /workspace/apps/vscode/node_modules \
     /workspace/packages/db/node_modules \
     /workspace/packages/insurance-accounting/node_modules \
     /workspace/packages/insurance-activities/node_modules \
@@ -50,6 +51,7 @@ RUN mkdir -p \
     /workspace/packages/insurance-service/node_modules \
     /workspace/packages/insurance-settlements/node_modules \
     /workspace/packages/insurance-workbench/node_modules \
+    /workspace/packages/plugin-authoring/node_modules \
     /workspace/packages/plugin-example-tasks/node_modules \
     /workspace/packages/plugin-sdk/node_modules \
     /workspace/packages/plugin-ui/node_modules \

@@ -28,13 +28,15 @@
 
 ## Tasks
 
-- [ ] Implement atomic admission, pause and runtime node/step bounds with targeted tests (quota worker).
-- [ ] Implement versioned multi-resource backups and validated restore with targeted tests (backup worker).
-- [ ] Add runtime egress enforcement and DO snapshot/recovery support with local tests (root).
-- [ ] Integrate Flows source onto current main with centralized infrastructure; preserve independent edits (root).
-- [ ] Add explicit execution settings, conditional secret validation, migrations, backup ordering and deploy verification to pipeline (root).
-- [ ] Review combined changes, run serial relevant suites/typechecks/builds and record evidence (root/reviewer).
-- [ ] Leave a concrete reviewable branch with both switches disabled; report checks and remaining operational constraints.
+- [x] Implement atomic admission, pause and runtime node/step bounds with targeted tests (quota worker).
+- [x] Implement versioned multi-resource backups and validated restore with targeted tests (backup worker).
+- [x] Add runtime egress enforcement and DO snapshot/recovery support with local tests (root).
+- [x] Integrate Flows source onto current main with centralized infrastructure; preserve independent edits (root).
+- [x] Add explicit execution settings, conditional secret validation, migrations, backup ordering and deploy verification to pipeline (root).
+- [x] Review combined changes, run serial relevant suites/typechecks/builds and record evidence (root/reviewer).
+- [x] Leave a concrete reviewable branch with both switches disabled; report checks and remaining operational constraints.
+
+Evidence: [preview readiness verification](../../verification/2026-10-12-flows-preview-readiness.md).
 
 ## Rulings
 

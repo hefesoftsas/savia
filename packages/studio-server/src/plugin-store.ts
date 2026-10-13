@@ -1,3 +1,4 @@
+import { resolvePublishedPluginFiles } from "./plugin-development-snapshot";
 import { connectPluginPanelHost } from "@savia/studio-shared/plugin-panels";
 import {
   PLUGIN_STORE_CONFIG_PATH,
@@ -45,7 +46,7 @@ import type { ExtensionConnectorDefinition } from "@savia/studio-shared/extensio
 import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
 import { z } from "zod";
 import { type Env, fail } from "./context";
-import { audit } from "./services";
+import { audit, transaction } from "./services";
 import {
   encodePluginFilesJson,
   decodePluginFilesJson,
@@ -65,6 +66,11 @@ import { registerPluginEditorExtensions } from "./plugin-editor-extensions";
 import { registerPluginProjects } from "./plugin-projects";
 
 export type PluginStoreOptions = {
+  pluginDevelopmentAccess?: {
+    workspaceLabel: string;
+    read: boolean;
+    publish: boolean;
+  };
   apiBasePath?: string;
   entryGrantSecret?: string;
   pluginRegistry?: { url: string; token: string; publishToken?: string };
@@ -339,6 +345,7 @@ export async function persistParsedStoreArtifact(
   tenant: string,
   principalId: string | null,
   parsed: ParsedStoreZip,
+  guardedWrite?: { start: D1PreparedStatement[]; end: D1PreparedStatement[] },
 ): Promise<StoreUploadResult> {
   const storedSourceFiles = parsed.sourceFiles
     ? await encodePluginFilesJson(canonicalJson(parsed.sourceFiles))
@@ -354,6 +361,7 @@ export async function persistParsedStoreArtifact(
       store_json?: string | null;
     }>();
   if (existing) {
+    if (guardedWrite) fail("Plugin head changed before publication.", 409);
     if (
       canonicalJson(JSON.parse(existing.manifest)) !==
         canonicalJson(parsed.manifest) ||
@@ -519,8 +527,17 @@ export async function persistParsedStoreArtifact(
           storedSourceFiles,
         ),
     );
-  const results = await db.batch(statements);
+  const results = guardedWrite
+    ? (
+        await transaction(db, [
+          ...guardedWrite.start,
+          ...statements,
+          ...guardedWrite.end,
+        ])
+      ).slice(guardedWrite.start.length)
+    : await db.batch(statements);
   if (results[0]?.meta?.changes !== 1) {
+    if (guardedWrite) fail("Plugin head changed during publication.", 409);
     const sameVersion = await db
       .prepare(
         "SELECT * FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
@@ -1819,47 +1836,7 @@ export function registerPluginStore(
     if (!artifact) {
       return fail("Plugin source is not available for this version.", 404);
     }
-    try {
-      validatePluginEntrySource(artifact.entry_js);
-    } catch {
-      return fail("Plugin source is unavailable.", 404);
-    }
-    let manifestText = artifact.manifest;
-    try {
-      manifestText = JSON.stringify(JSON.parse(artifact.manifest), null, 2);
-    } catch {
-      return fail("Plugin source is unavailable.", 404);
-    }
-    let storeText = JSON.stringify({
-      format: "savia.store",
-      formatVersion: 1,
-      actions: [],
-      connectors: [],
-      collections: [],
-      bundles: [],
-      widgets: [],
-      screens: [],
-    });
-    if (artifact.store_json) {
-      try {
-        storeText = JSON.stringify(JSON.parse(artifact.store_json), null, 2);
-      } catch {
-        return fail("Plugin source is unavailable.", 404);
-      }
-    }
-    const files: PluginStoreSourceFiles = {
-      "entry.tsx": artifact.entry_js,
-      "savia-extension.json": manifestText.endsWith("\n")
-        ? manifestText
-        : `${manifestText}\n`,
-      "store.json": storeText.endsWith("\n") ? storeText : `${storeText}\n`,
-      "preview.json": `{\n  "collections": {},\n  "settings": {}\n}\n`,
-    };
-    try {
-      pluginStoreSourceFilesSchema.parse(files);
-    } catch {
-      return fail("Plugin source is unavailable.", 404);
-    }
+    const { files } = await resolvePublishedPluginFiles(artifact);
     return c.json({
       data: { files, synthesized: true, sourceKind: "compiled" as const },
     });

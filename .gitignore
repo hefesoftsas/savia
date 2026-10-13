@@ -59,6 +59,13 @@ infra/pulumi/backups/
 apps/admin/dist-plugin-editor/
 apps/plugin-editor-runtime/.wrangler/
 
+apps/admin/public/downloads/
+
+# Native VS Code extension distribution and isolated host tests
+apps/vscode/.staging/
+apps/vscode/.test-extension/
+apps/vscode/.vscode-test/
+apps/vscode/artifacts/
 # Pulumi migration metadata backups stay private
 infra/pulumi/**/Pulumi.*.yaml.bak.*
 infra/pulumi/branch-preview/Pulumi.branch-*.yaml

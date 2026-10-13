@@ -5,7 +5,12 @@ export type RecordingScope =
   | "recordings:process"
   | "recordings:delete";
 export type ApiKeyScope =
-  RecordingScope | "records:read" | "records:create" | "records:update";
+  | RecordingScope
+  | "records:read"
+  | "records:create"
+  | "records:update"
+  | "plugins:read"
+  | "plugins:publish";
 export type PersonalKey = {
   id: string;
   name: string;

@@ -186,3 +186,17 @@ that setting, remote key management and authentication are unavailable; explicit
 loopback development origins remain supported. Changing the canonical origin
 requires issuing replacement keys. Request Host values never select a remote
 key deployment.
+
+## Plugin authoring permissions
+
+Commercial workspace keys can explicitly select `plugins:read` (published
+catalog and authored source checkout) and `plugins:publish` (new immutable plugin
+versions). Neither scope grants activation, deletion, collection data access, or
+other Studio operations. Existing keys retain their scopes; plugin permissions
+are never selected automatically. Platform keys remain recording-only.
+
+The narrow API is `/v1/studio/:tenantId/api/plugin-development`: capabilities
+accept either plugin scope, catalog and version checkout require `plugins:read`,
+and publication requires `plugins:publish`. The key remains bound to its tenant,
+deployment, expiry, active membership, and the owner's current plugin management
+permissions. A read-only administrator key cannot publish.

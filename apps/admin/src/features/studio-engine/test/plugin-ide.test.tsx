@@ -6,6 +6,24 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import PluginIde from "../plugin-ide";
 
+it("opens VS Code setup guidance without closing the current draft", async () => {
+  const onClose = vi.fn();
+  render(<PluginIde tenantId={12} onClose={onClose} onPublished={vi.fn()} />);
+  fireEvent.pointerDown(
+    screen.getByRole("button", { name: "Opciones del proyecto" }),
+    { button: 0, ctrlKey: false },
+  );
+  const guide = await screen.findByRole("menuitem", {
+    name: "Trabajar desde VS Code",
+  });
+  expect(guide).toHaveAttribute(
+    "href",
+    "#/studio?tenantId=12&view=admin&tab=extensions&help=vscode",
+  );
+  expect(guide).toHaveAttribute("target", "_blank");
+  expect(onClose).not.toHaveBeenCalled();
+});
+
 const mocks = vi.hoisted(() => ({
   post: vi.fn(),
   requestResponse: vi.fn(),

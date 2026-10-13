@@ -391,5 +391,8 @@ values is outside the archive format; running instances and queues remain in
 the existing environment during a maintenance release. Recovery stays paused
 and does not automatically replay side effects.
 
+See the [preview readiness verification](../verification/2026-10-12-flows-preview-readiness.md)
+for the completed local checks and compiler memory budgets.
+
 `flows:test` builds its own child UI assets and runs Miniflare tests serially.
 `flows:typecheck` also runs one workspace package at a time.
