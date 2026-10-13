@@ -63,6 +63,24 @@ function validateStackOutputs(parsed) {
   requireNonEmptyString(parsed.domainD1Id, "domainD1Id");
   assertNamedValues(parsed.workerNames, names.workers, "workerNames");
   assertNamedValues(parsed.databaseNames, names.databases, "databaseNames");
+  // Pre-DLQ stacks exported only planned names while Flows was disabled.
+  // Normalize that single absent name so bootstrap can read state before up;
+  // active stacks and any explicit mismatched name still fail closed.
+  if (
+    parsed.flowsEnabled === false &&
+    parsed.flowsResources === null &&
+    (parsed.flowsExecutionEnabled ?? false) === false &&
+    isRecord(parsed.plannedFlowsResourceNames) &&
+    !Object.hasOwn(parsed.plannedFlowsResourceNames, "deadLetterQueue")
+  ) {
+    parsed = {
+      ...parsed,
+      plannedFlowsResourceNames: {
+        ...parsed.plannedFlowsResourceNames,
+        deadLetterQueue: names.flows.deadLetterQueue,
+      },
+    };
+  }
   assertNamedValues(
     parsed.plannedFlowsResourceNames,
     names.flows,

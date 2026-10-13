@@ -65,6 +65,31 @@ describe("pulumi stack outputs", () => {
       /cloudflareAccountId/,
     );
   });
+  it("accepts the absent planned DLQ name from a legacy disabled stack", () => {
+    const names = { ...OUTPUTS.plannedFlowsResourceNames };
+    delete names.deadLetterQueue;
+    const parsed = parseStackOutputs(
+      JSON.stringify({
+        ...OUTPUTS,
+        plannedFlowsResourceNames: names,
+      }),
+    );
+    assert.equal(
+      parsed.plannedFlowsResourceNames.deadLetterQueue,
+      "savia-flows-execute-dlq-preview",
+    );
+    assert.throws(
+      () =>
+        parseStackOutputs(
+          JSON.stringify({
+            ...OUTPUTS,
+            plannedFlowsResourceNames: { ...names, deadLetterQueue: "wrong" },
+          }),
+        ),
+      /deadLetterQueue/,
+    );
+  });
+
   it("parses and validates required outputs", () => {
     const parsed = parseStackOutputs(JSON.stringify(OUTPUTS));
     assert.equal(parsed.documentsBucketName, "savia-documents-preview");
