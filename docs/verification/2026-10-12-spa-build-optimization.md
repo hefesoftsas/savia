@@ -79,3 +79,9 @@ not a populated authenticated My Day. Both builds reported no captured JS errors
 Machine-readable baseline, optimized payload and browser-network counters are
 under `artifacts/2026-10-12-spa-*.json`. The build-budget gate runs from both
 Admin production build commands and the existing preview asset pipeline.
+
+CI source verification initially rejected the deleted sample files because their
+entries remained in the active upstream list. Their pinned provenance records
+were moved to `UPSTREAM.json.retiredFiles` with a retirement reason; hashes and
+source paths are retained. The active node catalog and license checks remain
+unchanged.
