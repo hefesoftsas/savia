@@ -2663,36 +2663,6 @@
       "importedSha256": "cdfd7a008b33fd130417824c4b27dd2b33c51b13c00ad760b51cbfd50dcfefa9"
     },
     {
-      "source": "apps/app/public/dafthunk-dark.png",
-      "path": "app/public/dafthunk-dark.png",
-      "upstreamSha256": "644eca8feac0d5a4cfa7da579e690ae3a947d70b0fa5f9553b1693e9204a7ff6",
-      "importedSha256": "644eca8feac0d5a4cfa7da579e690ae3a947d70b0fa5f9553b1693e9204a7ff6"
-    },
-    {
-      "source": "apps/app/public/dafthunk-light.png",
-      "path": "app/public/dafthunk-light.png",
-      "upstreamSha256": "eb7c1218bec46bc33cdce84e4a6d601fafeefc29f66b88ec84d0187796cd3ede",
-      "importedSha256": "eb7c1218bec46bc33cdce84e4a6d601fafeefc29f66b88ec84d0187796cd3ede"
-    },
-    {
-      "source": "apps/app/public/demo/audio.mp3",
-      "path": "app/public/demo/audio.mp3",
-      "upstreamSha256": "134af12f6eb8bc353b7b08a0994f69f9f8a30fa038de8f48ce6d78e411a29e11",
-      "importedSha256": "134af12f6eb8bc353b7b08a0994f69f9f8a30fa038de8f48ce6d78e411a29e11"
-    },
-    {
-      "source": "apps/app/public/demo/image1.jpg",
-      "path": "app/public/demo/image1.jpg",
-      "upstreamSha256": "16ed84b1416fc51c0d10d566d9cdc9918bf3b058cac9161a4b66800299559074",
-      "importedSha256": "16ed84b1416fc51c0d10d566d9cdc9918bf3b058cac9161a4b66800299559074"
-    },
-    {
-      "source": "apps/app/public/demo/image2.png",
-      "path": "app/public/demo/image2.png",
-      "upstreamSha256": "97a04ba38b462108bb8031ccbc0d9b8b3c4b5bcafca286d03342da8f996236fe",
-      "importedSha256": "97a04ba38b462108bb8031ccbc0d9b8b3c4b5bcafca286d03342da8f996236fe"
-    },
-    {
       "source": "apps/app/public/icon.svg",
       "path": "app/public/icon.svg",
       "upstreamSha256": "4776958be74c0b7053535135205129b044a5f703b829e1351b1ef984b634ea13",
@@ -11469,6 +11439,43 @@
       "path": "packages/utils/vitest.config.ts",
       "upstreamSha256": "aa7858f05b2261348f1502fa076550b0930672e0df3f054a22e8a8d9b68fb32e",
       "importedSha256": "aa7858f05b2261348f1502fa076550b0930672e0df3f054a22e8a8d9b68fb32e"
+    }
+  ],
+  "retiredFiles": [
+    {
+      "source": "apps/app/public/dafthunk-dark.png",
+      "path": "app/public/dafthunk-dark.png",
+      "upstreamSha256": "644eca8feac0d5a4cfa7da579e690ae3a947d70b0fa5f9553b1693e9204a7ff6",
+      "importedSha256": "644eca8feac0d5a4cfa7da579e690ae3a947d70b0fa5f9553b1693e9204a7ff6",
+      "reason": "Unreferenced upstream marketing or sample media; removed from Savia to reduce published assets without changing templates or viewers."
+    },
+    {
+      "source": "apps/app/public/dafthunk-light.png",
+      "path": "app/public/dafthunk-light.png",
+      "upstreamSha256": "eb7c1218bec46bc33cdce84e4a6d601fafeefc29f66b88ec84d0187796cd3ede",
+      "importedSha256": "eb7c1218bec46bc33cdce84e4a6d601fafeefc29f66b88ec84d0187796cd3ede",
+      "reason": "Unreferenced upstream marketing or sample media; removed from Savia to reduce published assets without changing templates or viewers."
+    },
+    {
+      "source": "apps/app/public/demo/audio.mp3",
+      "path": "app/public/demo/audio.mp3",
+      "upstreamSha256": "134af12f6eb8bc353b7b08a0994f69f9f8a30fa038de8f48ce6d78e411a29e11",
+      "importedSha256": "134af12f6eb8bc353b7b08a0994f69f9f8a30fa038de8f48ce6d78e411a29e11",
+      "reason": "Unreferenced upstream marketing or sample media; removed from Savia to reduce published assets without changing templates or viewers."
+    },
+    {
+      "source": "apps/app/public/demo/image1.jpg",
+      "path": "app/public/demo/image1.jpg",
+      "upstreamSha256": "16ed84b1416fc51c0d10d566d9cdc9918bf3b058cac9161a4b66800299559074",
+      "importedSha256": "16ed84b1416fc51c0d10d566d9cdc9918bf3b058cac9161a4b66800299559074",
+      "reason": "Unreferenced upstream marketing or sample media; removed from Savia to reduce published assets without changing templates or viewers."
+    },
+    {
+      "source": "apps/app/public/demo/image2.png",
+      "path": "app/public/demo/image2.png",
+      "upstreamSha256": "97a04ba38b462108bb8031ccbc0d9b8b3c4b5bcafca286d03342da8f996236fe",
+      "importedSha256": "97a04ba38b462108bb8031ccbc0d9b8b3c4b5bcafca286d03342da8f996236fe",
+      "reason": "Unreferenced upstream marketing or sample media; removed from Savia to reduce published assets without changing templates or viewers."
     }
   ]
 }

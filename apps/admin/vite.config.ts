@@ -5,60 +5,15 @@ import { officePlugin } from "./build/office-plugin";
 import { collectOfflineShellAssets } from "./build/offline-shell-assets";
 import { reactSandboxPlugin } from "./build/react-sandbox-plugin";
 import { pluginIdeRuntimePlugin } from "./build/plugin-ide-runtime";
+import { compactBrandIcons } from "./build/compact-brand-icons";
+import { saviaManualChunk } from "./build/manual-chunks";
 import { flowsPlugin } from "./build/flows-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { brotliCompressSync, gzipSync, constants } from "node:zlib";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
-
-function precompressionPlugin(): Plugin {
-  return {
-    name: "savia-precompression",
-    apply: "build",
-    closeBundle() {
-      const distDir = fileURLToPath(new URL("./dist", import.meta.url));
-      function processDir(dir: string) {
-        try {
-          const entries = readdirSync(dir, { withFileTypes: true });
-          for (const entry of entries) {
-            const fullPath = join(dir, entry.name);
-            if (entry.isDirectory()) {
-              processDir(fullPath);
-            } else if (
-              entry.isFile() &&
-              (entry.name.endsWith(".js") ||
-                entry.name.endsWith(".css") ||
-                entry.name.endsWith(".html") ||
-                entry.name.endsWith(".svg")) &&
-              !entry.name.endsWith(".gz") &&
-              !entry.name.endsWith(".br")
-            ) {
-              const content = readFileSync(fullPath);
-              if (content.length >= 1024) {
-                const gz = gzipSync(content, { level: 9 });
-                writeFileSync(`${fullPath}.gz`, gz);
-                const br = brotliCompressSync(content, {
-                  params: {
-                    [constants.BROTLI_PARAM_QUALITY]: 5,
-                  },
-                });
-                writeFileSync(`${fullPath}.br`, br);
-              }
-            }
-          }
-        } catch {
-          // ignore directory access errors during closeBundle
-        }
-      }
-      processDir(distDir);
-    },
-  };
-}
 
 // Include the CRM route and its static dependencies without precaching the
 // thousands of optional icon/editor chunks shipped by the application.
@@ -83,6 +38,7 @@ const devChangeOrigin = false;
 
 export default defineConfig({
   plugins: [
+    compactBrandIcons(),
     {
       name: "companion-download-catalog",
       configureServer(server) {
@@ -110,7 +66,6 @@ export default defineConfig({
     tailwindcss(),
     reactSandboxPlugin(),
     pluginIdeRuntimePlugin(),
-    precompressionPlugin(),
     offlineShellPlugin(),
     // App shell precache for airplane-mode boot. Data stays in the Dexie
     // collection replica: no runtime caching of /v1/* here, so no API
@@ -243,53 +198,7 @@ export default defineConfig({
         // Excepción: los iconos de lookup por `import.meta.glob`
         // (lucide dist/esm/icons, @thesvg dist) DEBEN quedar divididos:
         // fusionarlos crea un único chunk eager de ~32 MB.
-        manualChunks(id) {
-          // Keep Vite's shared dynamic-import helper out of the optional host.
-          if (id.includes("vite/preload-helper"))
-            return "modulepreload-polyfill";
-          if (!id.includes("node_modules")) return undefined;
-          // The extension host lives in a separate document. Do not pull its
-          // services into the shared app vendor chunk or offline shell.
-          if (
-            id.includes("@codingame") ||
-            id.includes("@vscode") ||
-            id.includes("prettier") ||
-            id.includes("vscode-oniguruma") ||
-            id.includes("vscode-textmate")
-          )
-            return "plugin-editor-vendor";
-          const sep = String.raw`[/\\]`;
-          if (
-            new RegExp(`lucide-react${sep}dist${sep}esm${sep}icons${sep}`).test(
-              id,
-            )
-          )
-            return undefined;
-          if (new RegExp(`@thesvg${sep}react${sep}dist${sep}`).test(id))
-            return undefined;
-          if (
-            id.includes("lucide-react") ||
-            id.includes("@thesvg") ||
-            id.includes("lucide")
-          )
-            return "icons";
-          if (
-            id.includes("react-router") ||
-            id.includes("react-dom") ||
-            id.includes("/react/") ||
-            id.endsWith("/react")
-          )
-            return "react-vendor";
-          if (id.includes("@tanstack/react-query")) return "query-vendor";
-          if (id.includes("@dnd-kit")) return "dnd-vendor";
-          if (
-            id.includes("@radix-ui") ||
-            id.includes("sonner") ||
-            id.includes("tailwind")
-          )
-            return "ui-vendor";
-          return "vendor";
-        },
+        manualChunks: saviaManualChunk,
       },
     },
   },
