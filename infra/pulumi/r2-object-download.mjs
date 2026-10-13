@@ -7,12 +7,8 @@ import { assertAccountId, assertSafeR2Key } from "./naming.mjs";
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_TIMEOUT_MS = 10 * 60 * 1000;
-const ALLOWED_CONTENT_ENCODINGS = new Set([
-  "identity",
-  "br",
-  "gzip",
-  "deflate",
-]);
+const MAX_CONTENT_ENCODING_LENGTH = 1024;
+const CONTENT_CODING_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
 /**
  * Download an R2 object through Cloudflare's authenticated API without HTTP
@@ -28,7 +24,7 @@ export async function downloadR2Object({
   token,
   destFile,
   expectedSize,
-  contentEncoding = "identity",
+  contentEncoding,
   requestImpl = https.request,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
@@ -55,13 +51,26 @@ export async function downloadR2Object({
   if (!Number.isSafeInteger(expectedSize) || expectedSize < 0) {
     throw new Error("expectedSize must be a non-negative safe integer");
   }
-  if (
-    typeof contentEncoding !== "string" ||
-    !ALLOWED_CONTENT_ENCODINGS.has(contentEncoding)
-  ) {
+  if (contentEncoding !== undefined && typeof contentEncoding !== "string") {
+    throw new Error("contentEncoding must be a valid HTTP content-coding list");
+  }
+  let acceptEncoding = contentEncoding ?? "identity";
+  if (acceptEncoding.length > MAX_CONTENT_ENCODING_LENGTH) {
     throw new Error(
-      "contentEncoding must be one of identity, br, gzip, or deflate",
+      `contentEncoding must be at most ${MAX_CONTENT_ENCODING_LENGTH} characters`,
     );
+  }
+  acceptEncoding = acceptEncoding.replace(/^[ \t]+|[ \t]+$/g, "");
+  if (acceptEncoding === "") {
+    acceptEncoding = "identity";
+  } else if (
+    !acceptEncoding
+      .split(",")
+      .every((coding) =>
+        CONTENT_CODING_TOKEN.test(coding.replace(/^[ \t]+|[ \t]+$/g, "")),
+      )
+  ) {
+    throw new Error("contentEncoding must be a valid HTTP content-coding list");
   }
   if (
     typeof timeoutMs !== "number" ||
@@ -89,7 +98,7 @@ export async function downloadR2Object({
       accept: "application/octet-stream",
       // Match the object's stored metadata. Asking for multiple encodings can
       // make the edge transcode plaintext objects, invalidating byte checks.
-      "accept-encoding": contentEncoding,
+      "accept-encoding": acceptEncoding,
     },
   };
 

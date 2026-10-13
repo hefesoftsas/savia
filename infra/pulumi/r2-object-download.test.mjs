@@ -108,20 +108,51 @@ test("downloads compressed R2 bytes without HTTP content decoding", async () => 
 test("requests identity encoding for plaintext objects by default", async () => {
   await withTempDir(async (dir) => {
     const bytes = Buffer.from("plain checkpoint payload");
-    const destFile = join(dir, "plain");
-    const { requestImpl, seen } = fakeRequest({ chunks: [bytes] });
-    await downloadR2Object({
-      accountId: ACCOUNT_ID,
-      bucket: BUCKET,
-      key: "checkpoint.json",
-      token: TOKEN,
-      destFile,
-      expectedSize: bytes.byteLength,
-      requestImpl,
-    });
+    for (const [index, contentEncoding] of [undefined, "", " \t "].entries()) {
+      const destFile = join(dir, `plain-${index}`);
+      const { requestImpl, seen } = fakeRequest({ chunks: [bytes] });
+      await downloadR2Object({
+        accountId: ACCOUNT_ID,
+        bucket: BUCKET,
+        key: "checkpoint.json",
+        token: TOKEN,
+        destFile,
+        expectedSize: bytes.byteLength,
+        contentEncoding,
+        requestImpl,
+      });
 
-    assert.equal(seen.options.headers["accept-encoding"], "identity");
-    assert.deepEqual(await readFile(destFile), bytes);
+      assert.equal(seen.options.headers["accept-encoding"], "identity");
+      assert.deepEqual(await readFile(destFile), bytes);
+    }
+  });
+});
+
+test("preserves valid stored content-coding metadata exactly", async () => {
+  await withTempDir(async (dir) => {
+    for (const [index, contentEncoding] of [
+      "zstd",
+      "GZip",
+      "gzip, br",
+      "  gzip, br  ",
+    ].entries()) {
+      const destFile = join(dir, `encoded-${index}`);
+      const { requestImpl, seen } = fakeRequest({ chunks: [Buffer.from("x")] });
+      await downloadR2Object({
+        accountId: ACCOUNT_ID,
+        bucket: BUCKET,
+        key: `encoded-${index}`,
+        token: TOKEN,
+        destFile,
+        expectedSize: 1,
+        contentEncoding,
+        requestImpl,
+      });
+      assert.equal(
+        seen.options.headers["accept-encoding"],
+        contentEncoding.trim(),
+      );
+    }
   });
 });
 
@@ -300,7 +331,11 @@ test("validates credentials, key, destination, size, and timeout before I/O", as
     [{ expectedSize: Number.MAX_SAFE_INTEGER + 1 }, /expectedSize/],
     [{ timeoutMs: 0 }, /timeoutMs/],
     [{ contentEncoding: "gzip\r\nX-Injected: yes" }, /contentEncoding/],
-    [{ contentEncoding: "compress" }, /contentEncoding/],
+    [{ contentEncoding: "gzip,,br" }, /contentEncoding/],
+    [{ contentEncoding: "gzip; q=0.5" }, /contentEncoding/],
+    [{ contentEncoding: 42 }, /contentEncoding/],
+    [{ contentEncoding: null }, /contentEncoding/],
+    [{ contentEncoding: `gzip, ${"a".repeat(1020)}` }, /contentEncoding/],
   ]) {
     await assert.rejects(downloadR2Object({ ...valid, ...override }), pattern);
   }
