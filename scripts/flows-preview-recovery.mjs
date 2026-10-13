@@ -128,18 +128,20 @@ async function verifyFlowsDatabase(api, databaseId) {
 
 async function readWorkerState(api, name, plannedConfig) {
   const path = `/workers/scripts/${name}`;
-  const [deploymentResult, settings] = await Promise.all([
+  const [deploymentResult, settings, service] = await Promise.all([
     api(`${path}/deployments`),
     api(`${path}/settings`),
+    api(`/workers/services/${name}`),
   ]);
-  if (settings?.migration_tag !== plannedConfig.migrationTag) {
+  const migrationTag = service?.default_environment?.script?.migration_tag;
+  if (migrationTag !== plannedConfig.migrationTag) {
     throw new Error(
       `Durable Object migration tag mismatch for ${name}; refusing rollback across lifecycle changes`,
     );
   }
   const state = {
     name,
-    migrationTag: settings.migration_tag,
+    migrationTag,
     versions: parseVersions(deploymentResult?.deployments, name),
   };
   if (name === WORKERS.flows) {

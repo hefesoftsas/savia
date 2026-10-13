@@ -178,3 +178,9 @@ repeating an interrupted import idempotent for the same snapshot and page.
 A different page checksum is rejected. New targets must be empty. Virtual
 tables and single SQL rows larger than 512 KiB are rejected during snapshot
 export; resolve them before reporting a complete backup.
+
+Recovery captures the Durable Object migration tag from the Worker service
+metadata (`default_environment.script.migration_tag`), as Wrangler does.
+The script settings endpoint supplies bindings and policy settings but does
+not supply this lifecycle tag. Missing or mismatched service tags stop release
+before any pause or mutation.
