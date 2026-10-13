@@ -70,6 +70,7 @@ const LIVE_OUTPUTS = {
       inboxes: "savia-flows-inboxes-preview",
     },
     queue: "savia-flows-execute-preview",
+    deadLetterQueue: "savia-flows-execute-dlq-preview",
     workflow: "savia-flows-execute-preview",
   },
 };
@@ -237,6 +238,7 @@ describe("pulumi restore", () => {
       workerName: names.flows.worker,
       workflowName: names.flows.workflow,
       queueName: names.flows.queue,
+      deadLetterQueueName: names.flows.deadLetterQueue,
       buckets: names.flows.buckets,
     };
     const flowsBuckets = Object.fromEntries(

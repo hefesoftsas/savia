@@ -1,9 +1,14 @@
-import { and, eq } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { jwtMiddleware } from "../auth";
 import type { ApiContext } from "../context";
-import { createDatabase, saviaCollectionTriggers, workflows } from "../db";
+import {
+  createDatabase,
+  saviaCollectionEventBatchGroups,
+  saviaCollectionTriggers,
+  workflows,
+} from "../db";
 import { callSaviaCollections } from "../nodes/savia/collection-client";
 import { WorkflowStore } from "../stores/workflow-store";
 import { getAuthContext } from "../utils/auth-context";
@@ -22,6 +27,7 @@ const configSchema = z.object({
   watchedFields: z.array(z.string().min(1).max(128)).max(128).optional(),
   conditions: z.array(condition).max(32).optional(),
   ignoreOwnChanges: z.literal(true),
+  batchWindowSeconds: z.union([z.literal(0), z.literal(60)]).default(0),
 });
 
 export const saviaCollectionSubscriptionRoutes = new Hono<ApiContext>();
@@ -49,10 +55,35 @@ saviaCollectionSubscriptionRoutes.get(
       .from(saviaCollectionTriggers)
       .where(eq(saviaCollectionTriggers.workflowId, workflowId))
       .limit(1);
+    const config = subscription
+      ? (JSON.parse(subscription.config) as z.infer<typeof configSchema>)
+      : null;
+    const batchCounts = await db
+      .select({
+        status: saviaCollectionEventBatchGroups.status,
+        count: count(),
+      })
+      .from(saviaCollectionEventBatchGroups)
+      .where(
+        and(
+          eq(saviaCollectionEventBatchGroups.workflowId, workflowId),
+          eq(saviaCollectionEventBatchGroups.organizationId, organizationId),
+        ),
+      )
+      .groupBy(saviaCollectionEventBatchGroups.status);
     return c.json({
       enabled: Boolean(subscription?.active),
       configuredBy: subscription?.principalId === userId ? "you" : undefined,
-      config: subscription ? JSON.parse(subscription.config) : null,
+      config: config
+        ? { ...config, batchWindowSeconds: config.batchWindowSeconds ?? 0 }
+        : null,
+      batches: {
+        pending: batchCounts
+          .filter((item) => ["pending", "processing"].includes(item.status))
+          .reduce((total, item) => total + item.count, 0),
+        failed:
+          batchCounts.find((item) => item.status === "failed")?.count ?? 0,
+      },
     });
   },
 );
@@ -218,5 +249,125 @@ saviaCollectionSubscriptionRoutes.delete(
       .delete(saviaCollectionTriggers)
       .where(eq(saviaCollectionTriggers.workflowId, workflowId));
     return c.json({ enabled: false });
+  },
+);
+
+saviaCollectionSubscriptionRoutes.post(
+  "/:workflowId/savia-trigger/batches/retry",
+  jwtMiddleware,
+  async (c) => {
+    const payload = c.get("jwtPayload");
+    const role = payload?.organization?.role ?? payload?.role;
+    if (!payload || !["admin", "owner"].includes(role ?? "")) {
+      return c.json(
+        {
+          error: "Only organization managers can retry collection batches",
+        },
+        403,
+      );
+    }
+    const { organizationId, isApiKey } = getAuthContext(c);
+    if (isApiKey) return c.json({ error: "A user session is required" }, 403);
+    if (payload.organization?.id !== organizationId) {
+      return c.json(
+        { error: "Manager access is required for this organization" },
+        403,
+      );
+    }
+    const workflowId = c.req.param("workflowId") ?? "";
+    const db = createDatabase(c.env.DB);
+    const [workflow] = await db
+      .select({ id: workflows.id })
+      .from(workflows)
+      .where(
+        and(
+          eq(workflows.id, workflowId),
+          eq(workflows.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+    if (!workflow) return c.json({ error: "Workflow not found" }, 404);
+
+    const [subscription] = await db
+      .select({
+        active: saviaCollectionTriggers.active,
+        config: saviaCollectionTriggers.config,
+        createdAt: saviaCollectionTriggers.createdAt,
+      })
+      .from(saviaCollectionTriggers)
+      .where(
+        and(
+          eq(saviaCollectionTriggers.workflowId, workflowId),
+          eq(saviaCollectionTriggers.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+    if (!subscription?.active) {
+      return c.json({ error: "The collection trigger is not active" }, 409);
+    }
+    let currentConfig: z.infer<typeof configSchema>;
+    try {
+      currentConfig = configSchema.parse(JSON.parse(subscription.config));
+    } catch {
+      return c.json(
+        { error: "The collection trigger configuration is invalid" },
+        409,
+      );
+    }
+    if (currentConfig.batchWindowSeconds !== 60) {
+      return c.json(
+        { error: "Batch retry requires batching to remain enabled" },
+        409,
+      );
+    }
+
+    const now = new Date();
+    const failedGroups = await db
+      .select({ groupKey: saviaCollectionEventBatchGroups.groupKey })
+      .from(saviaCollectionEventBatchGroups)
+      .where(
+        and(
+          eq(saviaCollectionEventBatchGroups.workflowId, workflowId),
+          eq(saviaCollectionEventBatchGroups.organizationId, organizationId),
+          eq(saviaCollectionEventBatchGroups.status, "failed"),
+          eq(
+            saviaCollectionEventBatchGroups.configCreatedAt,
+            subscription.createdAt.getTime(),
+          ),
+        ),
+      )
+      .orderBy(saviaCollectionEventBatchGroups.finishedAt)
+      .limit(250);
+    if (failedGroups.length === 0) return c.json({ retried: 0 });
+    const retried = await db
+      .update(saviaCollectionEventBatchGroups)
+      .set({
+        status: "pending",
+        attempts: 0,
+        dueAt: now.getTime(),
+        nextAttemptAt: now.getTime(),
+        leaseToken: null,
+        leaseUntil: 0,
+        lastError: null,
+        finishedAt: null,
+        updatedAt: now.getTime(),
+      })
+      .where(
+        and(
+          eq(saviaCollectionEventBatchGroups.workflowId, workflowId),
+          eq(saviaCollectionEventBatchGroups.organizationId, organizationId),
+          eq(saviaCollectionEventBatchGroups.status, "failed"),
+          eq(
+            saviaCollectionEventBatchGroups.configCreatedAt,
+            subscription.createdAt.getTime(),
+          ),
+          inArray(
+            saviaCollectionEventBatchGroups.groupKey,
+            failedGroups.map((group) => group.groupKey),
+          ),
+        ),
+      )
+      .returning({ groupKey: saviaCollectionEventBatchGroups.groupKey });
+    return c.json({ retried: retried.length });
   },
 );

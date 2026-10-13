@@ -458,6 +458,47 @@ describe("nodeOutputsToApi", () => {
     expect(store.size).toBe(2);
   });
 
+  it("rejects aggregate repeated blob output before writing any object", async () => {
+    let writes = 0;
+    const store = {
+      writeObject: async () => {
+        writes++;
+        return { id: `obj-${writes}`, mimeType: "image/png" };
+      },
+    } as unknown as InMemoryObjectStore;
+    const node = nodeWith(
+      [],
+      [{ name: "images", type: "image", repeated: true }],
+    );
+
+    await expect(
+      nodeOutputsToApi(
+        node,
+        {
+          images: [
+            { data: new Uint8Array(5 * 1024 * 1024), mimeType: "image/png" },
+            { data: new Uint8Array(5 * 1024 * 1024), mimeType: "image/png" },
+          ],
+        },
+        store,
+        ORG,
+        EXEC,
+      ),
+    ).rejects.toThrow(/aggregate binary.*limit/i);
+    expect(writes).toBe(0);
+  });
+
+  it("rejects repeated output arrays over the element limit before conversion", async () => {
+    const node = nodeWith(
+      [],
+      [{ name: "items", type: "string", repeated: true }],
+    );
+
+    await expect(
+      nodeOutputsToApi(node, { items: Array(257).fill("x") }, undefined, ORG),
+    ).rejects.toThrow(/256.*element/i);
+  });
+
   it("returns an empty record for a node that emitted nothing", async () => {
     expect(
       await nodeOutputsToApi(nodeWith([], []), {}, undefined, ORG),
@@ -511,6 +552,82 @@ describe("apiInputsToNode", () => {
     expect(
       resolved.images.map((i) => new TextDecoder().decode(i.data)),
     ).toEqual(["first", "second"]);
+  });
+
+  it("reads repeated binary inputs sequentially and enforces aggregate bytes", async () => {
+    let activeReads = 0;
+    let maxActiveReads = 0;
+    let reads = 0;
+    const store = {
+      readObject: async () => {
+        activeReads++;
+        maxActiveReads = Math.max(maxActiveReads, activeReads);
+        reads++;
+        await Promise.resolve();
+        activeReads--;
+        return {
+          data: new Uint8Array(5 * 1024 * 1024),
+          metadata: { organizationId: ORG },
+        };
+      },
+    } as unknown as InMemoryObjectStore;
+    const node = nodeWith([{ name: "images", type: "image", repeated: true }]);
+
+    await expect(
+      apiInputsToNode(
+        node,
+        {
+          images: [
+            { id: "one", mimeType: "image/png" },
+            { id: "two", mimeType: "image/png" },
+          ],
+        },
+        store,
+        { organizationId: ORG },
+      ),
+    ).rejects.toThrow(/aggregate binary.*limit/i);
+    expect(maxActiveReads).toBe(1);
+    expect(reads).toBe(2);
+  });
+
+  it("rejects repeated binary input over 32 objects before reading", async () => {
+    let reads = 0;
+    const store = {
+      readObject: async () => {
+        reads++;
+        return { data: new Uint8Array(1), metadata: { organizationId: ORG } };
+      },
+    } as unknown as InMemoryObjectStore;
+    const node = nodeWith([{ name: "images", type: "image", repeated: true }]);
+    const images = Array.from({ length: 33 }, (_, index) => ({
+      id: `object-${index}`,
+      mimeType: "image/png",
+    }));
+
+    await expect(
+      apiInputsToNode(node, { images }, store, { organizationId: ORG }),
+    ).rejects.toThrow(/32.*binary/i);
+    expect(reads).toBe(0);
+  });
+
+  it("rejects repeated input arrays over the element limit before reading", async () => {
+    let reads = 0;
+    const store = {
+      readObject: async () => {
+        reads++;
+        return { data: new Uint8Array(1), metadata: { organizationId: ORG } };
+      },
+    } as unknown as InMemoryObjectStore;
+    const node = nodeWith([{ name: "images", type: "image", repeated: true }]);
+    const images = Array.from({ length: 257 }, (_, index) => ({
+      id: `object-${index}`,
+      mimeType: "image/png",
+    }));
+
+    await expect(
+      apiInputsToNode(node, { images }, store, { organizationId: ORG }),
+    ).rejects.toThrow(/256.*element/i);
+    expect(reads).toBe(0);
   });
 
   it("falls back to string for an input the node never declared", async () => {

@@ -27,6 +27,7 @@ interface CatalogResponse {
 }
 interface Subscription {
   enabled: boolean;
+  batches?: { pending: number; failed: number };
   config: null | {
     collection: string;
     operations: SaviaCollectionOperation[];
@@ -37,6 +38,7 @@ interface Subscription {
       equals: unknown;
     }>;
     ignoreOwnChanges: true;
+    batchWindowSeconds?: 0 | 60;
   };
 }
 
@@ -49,6 +51,7 @@ export function SaviaCollectionTriggerWidget({
   const [collections, setCollections] = useState<SaviaCollectionSchema[]>([]);
   const [config, setConfig] = useState<Subscription["config"]>(null);
   const [enabled, setEnabled] = useState(false);
+  const [batches, setBatches] = useState({ pending: 0, failed: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const isManager = ["owner", "admin"].includes(organization?.role ?? "");
@@ -80,6 +83,7 @@ export function SaviaCollectionTriggerWidget({
             },
           );
           setEnabled(subscription.enabled);
+          setBatches(subscription.batches ?? { pending: 0, failed: 0 });
         })
         .catch((cause) => {
           if (active)
@@ -124,6 +128,28 @@ export function SaviaCollectionTriggerWidget({
         cause instanceof Error
           ? cause.message
           : "Could not enable collection trigger",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const retryBatches = async () => {
+    if (!organization?.id || !workflowId) return;
+    setBusy(true);
+    setError("");
+    try {
+      await makeOrgRequest(
+        organization.id,
+        "/workflows",
+        `/${workflowId}/savia-trigger/batches/retry`,
+        { method: "POST" },
+      );
+      notifySaviaSubscriptionChange(workflowId);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not retry collection batches",
       );
     } finally {
       setBusy(false);
@@ -391,6 +417,57 @@ export function SaviaCollectionTriggerWidget({
           {error}
         </p>
       )}
+      <label className="block space-y-1 text-xs">
+        <span>Delivery mode</span>
+        <select
+          aria-label="Collection event delivery mode"
+          className="h-9 w-full rounded-md border border-input bg-background px-2"
+          value={config.batchWindowSeconds ?? 0}
+          disabled={disabled || busy || !isManager}
+          onChange={(event) =>
+            update({
+              ...config,
+              batchWindowSeconds: Number(event.target.value) as 0 | 60,
+            })
+          }
+        >
+          <option value="0">Run once per matching change</option>
+          <option value="60">Group changes for one minute</option>
+        </select>
+        <span className="block text-muted-foreground">
+          Grouping sends up to 50 matching changes to the trigger's events
+          output per run. Use that array to process every record; event contains
+          the first change.
+        </span>
+      </label>
+      {batches.pending > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {batches.pending} collection batches waiting to run.
+        </p>
+      ) : null}
+      {batches.failed > 0 ? (
+        <div
+          role="alert"
+          className="space-y-2 rounded-md border border-border p-3 text-xs"
+        >
+          <p>
+            {batches.failed} collection batches stopped after repeated failures.
+            Review the workflow before retrying.
+          </p>
+          {isManager ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                disabled || busy || !enabled || config.batchWindowSeconds !== 60
+              }
+              onClick={retryBatches}
+            >
+              Retry stopped batches
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {!isManager && (
         <p className="text-xs text-muted-foreground">
           An organization manager must enable this subscription.

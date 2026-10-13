@@ -616,6 +616,9 @@ export async function runPulumiUpForRestore({
           expectedOutputs.flowsResources?.workerName ||
         liveOutputs.flowsResources?.queueName !==
           expectedOutputs.flowsResources?.queueName ||
+        (expectedOutputs.flowsResources?.deadLetterQueueName !== undefined &&
+          liveOutputs.flowsResources?.deadLetterQueueName !==
+            expectedOutputs.flowsResources.deadLetterQueueName) ||
         liveOutputs.flowsResources?.workflowName !==
           expectedOutputs.flowsResources?.workflowName))
   ) {

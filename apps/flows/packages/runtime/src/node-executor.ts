@@ -21,6 +21,11 @@ import type { ExecutableNode, NodeContext, NodeEnv } from "./node-types";
 import { MultiStepNode } from "./node-types";
 import { apiInputsToNode, nodeOutputsToApi } from "./parameter-mapper";
 import type { RuntimeDependencies } from "./runtime-dependencies";
+import {
+  assertRuntimeValueWithinLimit,
+  MAX_RUNTIME_OUTPUT_BYTES,
+  MAX_RUNTIME_INPUT_BYTES,
+} from "./resource-limits";
 
 /**
  * Durable execution primitives the runtime lends to multi-step nodes.
@@ -30,7 +35,11 @@ import type { RuntimeDependencies } from "./runtime-dependencies";
  */
 export interface StepPrimitives {
   sleep(name: string, durationMs: number): Promise<void>;
-  doStep<T>(name: string, fn: () => Promise<T>, executionId?: string): Promise<T>;
+  doStep<T>(
+    name: string,
+    fn: () => Promise<T>,
+    executionId?: string,
+  ): Promise<T>;
 }
 
 /**
@@ -51,14 +60,14 @@ export class NodeExecutor<Env = unknown> {
     private readonly deps: RuntimeDependencies<Env>,
     private readonly steps: StepPrimitives,
     /** Whether the host runtime can park a node on an external event. */
-    private readonly asyncSupported: boolean
+    private readonly asyncSupported: boolean,
   ) {}
 
   async execute(
     context: WorkflowExecutionContext,
     graph: ExecutionGraph,
     state: ExecutionState,
-    nodeId: string
+    nodeId: string,
   ): Promise<NodeExecutionResult> {
     const skipResult = this.checkSkipCondition(graph, state, nodeId);
     if (skipResult) return skipResult;
@@ -79,7 +88,7 @@ export class NodeExecutor<Env = unknown> {
       executable,
       graph.inboundEdges(nodeId),
       context.organizationId,
-      context.inputOverrides?.[nodeId]
+      context.inputOverrides?.[nodeId],
     );
 
     const result = await this.invoke(
@@ -87,7 +96,7 @@ export class NodeExecutor<Env = unknown> {
       nodeType,
       node,
       context,
-      resolvedInputs
+      resolvedInputs,
     );
 
     // Inputs ride on the result so they survive durable-step replay, the same
@@ -102,7 +111,7 @@ export class NodeExecutor<Env = unknown> {
   private checkSkipCondition(
     graph: ExecutionGraph,
     state: ExecutionState,
-    nodeId: string
+    nodeId: string,
   ): NodeExecutionResult | null {
     const alreadySettled =
       state.skippedNodes.includes(nodeId) || nodeId in state.nodeErrors;
@@ -110,7 +119,7 @@ export class NodeExecutor<Env = unknown> {
     const { shouldSkip, reason, blockedBy } = analyzeUpstream(
       graph,
       state,
-      nodeId
+      nodeId,
     );
 
     if (alreadySettled || shouldSkip) {
@@ -138,7 +147,7 @@ export class NodeExecutor<Env = unknown> {
    * than it is to the people still deciding.
    */
   private resolveExecutable(
-    node: Node
+    node: Node,
   ): { executable: ExecutableNode; nodeType: NodeType } | NodeExecutionResult {
     let nodeType: NodeType;
     try {
@@ -176,7 +185,7 @@ export class NodeExecutor<Env = unknown> {
     executable: object,
     inboundEdges: readonly Edge[],
     organizationId: string,
-    overrides?: Readonly<Record<string, unknown>>
+    overrides?: Readonly<Record<string, unknown>>,
   ): Promise<{
     inputs: NodeRuntimeValues;
     resolvedInputs: Record<string, unknown>;
@@ -207,7 +216,7 @@ export class NodeExecutor<Env = unknown> {
     for (const [inputName, edges] of groupByTargetInput(inboundEdges)) {
       const acceptsMultiple =
         getNodeType(executable)?.inputs?.find(
-          (input) => input.name === inputName
+          (input) => input.name === inputName,
         )?.repeated ?? false;
 
       const values: RuntimeValue[] = [];
@@ -230,11 +239,16 @@ export class NodeExecutor<Env = unknown> {
       }
     }
 
+    assertRuntimeValueWithinLimit(
+      inputs,
+      MAX_RUNTIME_INPUT_BYTES,
+      `Inputs for node ${node.id}`,
+    );
     const resolvedInputs = await apiInputsToNode(
       node,
       inputs,
       this.deps.objectStore,
-      { schemaService: this.deps.schemaService, organizationId }
+      { schemaService: this.deps.schemaService, organizationId },
     );
 
     return { inputs, resolvedInputs };
@@ -246,11 +260,11 @@ export class NodeExecutor<Env = unknown> {
     nodeType: NodeType,
     node: Node,
     context: WorkflowExecutionContext,
-    resolvedInputs: Record<string, unknown>
+    resolvedInputs: Record<string, unknown>,
   ): Promise<NodeExecutionResult> {
     try {
       const result = await executable.execute(
-        this.buildNodeContext(executable, node, context, resolvedInputs)
+        this.buildNodeContext(executable, node, context, resolvedInputs),
       );
 
       // Node signalled async work — the scheduler will park on the event.
@@ -264,16 +278,22 @@ export class NodeExecutor<Env = unknown> {
       }
 
       if (result.status === "completed") {
+        const outputs = await nodeOutputsToApi(
+          node,
+          result.outputs ?? {},
+          this.deps.objectStore,
+          context.organizationId,
+          context.executionId,
+        );
+        assertRuntimeValueWithinLimit(
+          outputs,
+          MAX_RUNTIME_OUTPUT_BYTES,
+          `Outputs for node ${node.id}`,
+        );
         return {
           nodeId: node.id,
           status: "completed",
-          outputs: await nodeOutputsToApi(
-            node,
-            result.outputs ?? {},
-            this.deps.objectStore,
-            context.organizationId,
-            context.executionId
-          ),
+          outputs,
           usage: result.usage ?? nodeType.usage ?? 1,
         };
       }
@@ -298,7 +318,7 @@ export class NodeExecutor<Env = unknown> {
     executable: ExecutableNode,
     node: Node,
     context: WorkflowExecutionContext,
-    resolvedInputs: Record<string, unknown>
+    resolvedInputs: Record<string, unknown>,
   ): NodeContext {
     const nodeContext: NodeContext = {
       nodeId: node.id,
@@ -336,7 +356,11 @@ export class NodeExecutor<Env = unknown> {
       nodeContext.sleep = (durationMs: number) =>
         this.steps.sleep(`${node.id}-sleep-${sleepCounter++}`, durationMs);
       nodeContext.doStep = <T>(fn: () => Promise<T>): Promise<T> =>
-        this.steps.doStep(`${node.id}-step-${stepCounter++}`, fn, context.executionId);
+        this.steps.doStep(
+          `${node.id}-step-${stepCounter++}`,
+          fn,
+          context.executionId,
+        );
     }
 
     return nodeContext;
@@ -353,7 +377,10 @@ export class NodeExecutor<Env = unknown> {
     return new Proxy(registry, {
       get(target, property, receiver) {
         if (property === "executeTool") {
-          return (toolRef: Parameters<typeof target.executeTool>[0], parameters: unknown) => {
+          return (
+            toolRef: Parameters<typeof target.executeTool>[0],
+            parameters: unknown,
+          ) => {
             const sequence = toolCallCounter++;
             return steps.doStep(
               `tool-${context.executionId}-${sequence}`,
@@ -383,7 +410,7 @@ export class NodeExecutor<Env = unknown> {
 }
 
 function groupByTargetInput(
-  edges: readonly Edge[]
+  edges: readonly Edge[],
 ): ReadonlyMap<string, Edge[]> {
   const grouped = new Map<string, Edge[]>();
   for (const edge of edges) {

@@ -8,23 +8,52 @@ import {
 } from "./db";
 import { getWorkflowAgentByName } from "./durable-objects/agent-utils";
 import { createWorkerRuntime } from "./runtime/cloudflare-worker-runtime";
+import { flushSaviaCollectionEventBatch } from "./services/collection-event-batches";
+import { maintainFinishedCostReceipts } from "./services/cost-ledger-retention";
+import { policyStatus } from "./services/execution-policy";
+import { maintainLocalExecutionHistory } from "./services/execution-retention";
 import { WorkflowStore } from "./stores/workflow-store";
 import { creditChecksEnabled } from "./utils/credits";
 
 export async function handleScheduledEvent(
   _event: ScheduledEvent,
   env: Bindings,
-  _ctx: ExecutionContext
+  _ctx: ExecutionContext,
 ): Promise<void> {
-  if (env.SAVIA_FLOWS_EXECUTION_ENABLED === "false" || env.SAVIA_FLOWS_MAINTENANCE === "true") return;
+  if (env.SAVIA_FLOWS_MAINTENANCE === "true") return;
   console.log("Scheduled event triggered at:", new Date().toISOString());
+
+  try {
+    const retention = await maintainLocalExecutionHistory(env);
+    if (retention.skipped === false && retention.deleted > 0) {
+      console.log(
+        `[Execution retention] deleted=${retention.deleted} cutoff=${new Date(retention.cutoff).toISOString()}`,
+      );
+    }
+  } catch (error) {
+    // History maintenance must not prevent scheduled workflow triggers. A
+    // failed pass keeps its lease so the bounded cleanup can retry later.
+    console.error("Execution history retention failed:", error);
+  }
+
+  try {
+    await maintainFinishedCostReceipts(env);
+  } catch (error) {
+    console.error("Cost receipt retention failed", error);
+  }
+  if (!(await policyStatus(env)).executionsEnabled) return;
+  try {
+    await flushSaviaCollectionEventBatch(env);
+  } catch (error) {
+    console.error("Collection batch maintenance failed", error);
+  }
 
   const db = createDatabase(env.DB);
   const workflowStore = new WorkflowStore(env);
 
   const triggers = await getActiveScheduledTriggers(
     db,
-    creditChecksEnabled(env.CLOUDFLARE_ENV)
+    creditChecksEnabled(env.CLOUDFLARE_ENV),
   );
   console.log(`Found ${triggers.length} active scheduled triggers`);
 
@@ -52,13 +81,13 @@ export async function handleScheduledEvent(
       }
 
       console.log(
-        `Executing scheduled workflow ${workflow.id} (${scheduledTrigger.scheduleExpression})`
+        `Executing scheduled workflow ${workflow.id} (${scheduledTrigger.scheduleExpression})`,
       );
 
       // Load workflow data from working version
       const workflowWithData = await workflowStore.getWithData(
         workflow.id,
-        workflow.organizationId
+        workflow.organizationId,
       );
       if (!workflowWithData?.data) {
         console.error(`Failed to load workflow data for ${workflow.id}`);
@@ -94,19 +123,19 @@ export async function handleScheduledEvent(
         const workerRuntime = createWorkerRuntime(env);
         const execution = await workerRuntime.execute(executionParams);
         console.log(
-          `[Execution] ${execution.id} workflow=${workflow.id} runtime=worker trigger=scheduled`
+          `[Execution] ${execution.id} workflow=${workflow.id} runtime=worker trigger=scheduled`,
         );
       } else {
         const agent = await getWorkflowAgentByName(env, workflow.id);
         const executionId = await agent.executeWorkflow(executionParams);
         console.log(
-          `[Execution] ${executionId} workflow=${workflow.id} runtime=workflow trigger=scheduled`
+          `[Execution] ${executionId} workflow=${workflow.id} runtime=workflow trigger=scheduled`,
         );
       }
     } catch (error) {
       console.error(
         `Error executing scheduled workflow ${workflow.id}:`,
-        error
+        error,
       );
     }
   }

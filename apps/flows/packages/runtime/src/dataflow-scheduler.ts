@@ -32,7 +32,7 @@ export interface DataflowHooks {
 export async function executeDataflow(
   graph: ExecutionGraph,
   state: ExecutionState,
-  hooks: DataflowHooks
+  hooks: DataflowHooks,
 ): Promise<void> {
   const settled = new Set<string>(); // executed ∪ skipped ∪ errored
   const started = new Set<string>();
@@ -63,7 +63,8 @@ export async function executeDataflow(
         // Parked on an external event. Surface it, then resume when the event
         // arrives — without blocking any other branch. Applying the pending
         // result records the node's inputs; its outputs come later.
-        applyNodeResult(state, initial);
+        const parked = applyNodeResult(state, initial);
+        if (parked.status !== "pending") return { nodeId, result: parked };
         pendingNodes.set(nodeId, {
           type: initial.eventType,
           timeout: initial.timeout,
@@ -73,7 +74,7 @@ export async function executeDataflow(
         const resolved = await hooks.resolvePending(initial);
         pendingNodes.delete(nodeId);
         return { nodeId, result: resolved };
-      })()
+      })(),
     );
   };
 

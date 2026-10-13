@@ -16,6 +16,7 @@ import {
   SaviaCollectionHostError,
 } from "../nodes/savia/collection-client";
 import { WorkflowExecutor } from "../services/workflow-executor";
+import { enqueueSaviaCollectionEventBatch } from "../services/collection-event-batches";
 import { WorkflowStore } from "../stores/workflow-store";
 import {
   matchesSaviaCollectionSubscription,
@@ -64,6 +65,54 @@ saviaCollectionEventRoutes.post("/", async (c) => {
 
   let accepted = 0;
   for (const subscription of subscriptions) {
+    const config = JSON.parse(
+      subscription.config,
+    ) as SaviaCollectionSubscription;
+    if ((config.batchWindowSeconds ?? 0) === 60) {
+      // Cheap source and changed-field rejection avoids durable admission rows
+      // for events this configured subscription could never use. Authorization
+      // and all projected-field filters still run at flush time.
+      if (
+        !matchesSaviaCollectionSource(event, config) ||
+        Date.parse(event.timestamp) < subscription.createdAt.getTime() ||
+        (config.watchedFields?.length &&
+          !config.watchedFields.some((field) =>
+            event.changedFields.includes(field),
+          ))
+      ) {
+        accepted += 1;
+        continue;
+      }
+      const queued = await enqueueSaviaCollectionEventBatch(c.env, event, {
+        workflowId: subscription.workflowId,
+        organizationId: event.tenant,
+        principalId: subscription.principalId,
+        configCreatedAt: subscription.createdAt,
+      });
+      if (["queued", "accepted", "skipped"].includes(queued.status)) {
+        accepted += 1;
+        continue;
+      }
+      if (queued.status === "too-large") {
+        return c.json(
+          {
+            error:
+              "Savia collection event receipt metadata exceeds the 16 KiB batch limit",
+          },
+          413,
+        );
+      }
+      return c.json(
+        {
+          error:
+            queued.status === "backpressure"
+              ? "Savia collection event batch capacity is full; retry delivery later"
+              : "Savia event admission is already in progress",
+        },
+        503,
+      );
+    }
+
     const executionId = `savia-${await shortHash(`${event.id}:${subscription.workflowId}`)}`;
     const now = new Date();
     await db
@@ -89,6 +138,12 @@ saviaCollectionEventRoutes.post("/", async (c) => {
     if (!admission)
       return c.json({ error: "Could not persist Savia event admission" }, 503);
     if (admission.status === "accepted" || admission.status === "skipped") {
+      accepted += 1;
+      continue;
+    }
+    // A delivery may be redelivered after a manager changed the batching mode.
+    // The durable queued receipt owns it; never switch it into inline execution.
+    if (admission.status === "queued") {
       accepted += 1;
       continue;
     }
@@ -139,9 +194,6 @@ saviaCollectionEventRoutes.post("/", async (c) => {
       await skip();
       continue;
     }
-    const config = JSON.parse(
-      subscription.config,
-    ) as SaviaCollectionSubscription;
     if (!matchesSaviaCollectionSource(event, config)) {
       await skip();
       continue;

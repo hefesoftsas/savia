@@ -358,6 +358,80 @@ export const saviaCollectionAdmissions = sqliteTable(
   ],
 );
 
+export const saviaCollectionEventBatchGroups = sqliteTable(
+  "savia_collection_event_batch_groups",
+  {
+    groupKey: text("group_key").primaryKey(),
+    bucketKey: text("bucket_key").notNull(),
+    workflowId: text("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id").notNull(),
+    configCreatedAt: integer("config_created_at").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    status: text("status").notNull().default("pending"),
+    dueAt: integer("due_at").notNull(),
+    nextAttemptAt: integer("next_attempt_at").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    leaseToken: text("lease_token"),
+    leaseUntil: integer("lease_until").notNull().default(0),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    finishedAt: integer("finished_at"),
+  },
+  (table) => [
+    uniqueIndex("savia_collection_event_batch_bucket_chunk_idx").on(
+      table.bucketKey,
+      table.chunkIndex,
+    ),
+    index("savia_collection_event_batch_due_idx").on(
+      table.status,
+      table.nextAttemptAt,
+      table.dueAt,
+    ),
+    index("savia_collection_event_batch_org_status_idx").on(
+      table.organizationId,
+      table.status,
+      table.workflowId,
+    ),
+    index("savia_collection_event_batch_retention_idx").on(table.finishedAt),
+  ],
+);
+
+export const saviaCollectionEventBatchItems = sqliteTable(
+  "savia_collection_event_batch_items",
+  {
+    eventId: text("event_id").notNull(),
+    workflowId: text("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    executionId: text("execution_id"),
+    bucketKey: text("bucket_key").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    groupKey: text("group_key")
+      .notNull()
+      .references(() => saviaCollectionEventBatchGroups.groupKey, {
+        onDelete: "cascade",
+      }),
+    eventJson: text("event_json").notNull(),
+    status: text("status").notNull().default("pending"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    finishedAt: integer("finished_at"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.eventId, table.workflowId] }),
+    index("savia_collection_event_batch_items_group_status_idx").on(
+      table.groupKey,
+      table.status,
+    ),
+    index("savia_collection_event_batch_items_retention_idx").on(
+      table.finishedAt,
+    ),
+  ],
+);
+
 // Explicit backend execution identity for HTTP workflows that may invoke
 // local Savia collection nodes. The identity is written only by a verified
 // manager enable operation and is reauthorized on every incoming request.

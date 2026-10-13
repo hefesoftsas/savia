@@ -27,6 +27,28 @@ const graphOf = (edges: string[], extra: string[] = []) =>
   ExecutionGraph.build(workflowOf(edges, extra));
 
 describe("applyNodeResult", () => {
+  it("rejects cumulative payload growth while keeping coherent terminal state", () => {
+    const state = emptyState();
+    const value = "x".repeat(1024 * 1024);
+    for (const id of ["a", "b", "c"])
+      applyNodeResult(state, {
+        nodeId: id,
+        status: "completed",
+        outputs: { value },
+        usage: 1,
+      });
+    const result = applyNodeResult(state, {
+      nodeId: "d",
+      status: "pending",
+      inputs: { value },
+      eventType: "wait",
+      timeout: "1 hour",
+    });
+    expect(result.status).toBe("error");
+    expect(state.nodeInputs.d).toBeUndefined();
+    expect(state.nodeErrors.d).toContain("4 MiB limit");
+    expect(state.nodeOutputs.c).toEqual({ value });
+  });
   it("records a completed node's outputs, usage and inputs", () => {
     const state = emptyState();
     applyNodeResult(state, {
@@ -117,7 +139,7 @@ describe("analyzeUpstream", () => {
       nodeOutputs: { a: { out: 1 } },
     });
     expect(analyzeUpstream(graphOf(["a -> b"]), state, "b").shouldSkip).toBe(
-      false
+      false,
     );
   });
 
@@ -158,7 +180,7 @@ describe("analyzeUpstream", () => {
     const analysis = analyzeUpstream(
       graphOf(["a:out -> c:x", "b:out -> c:y"]),
       state,
-      "c"
+      "c",
     );
 
     expect(analysis.shouldSkip).toBe(false);
@@ -172,7 +194,7 @@ describe("analyzeUpstream", () => {
     const analysis = analyzeUpstream(
       graphOf(["a:out -> c:x", "b:out -> c:y"]),
       state,
-      "c"
+      "c",
     );
 
     expect(analysis.shouldSkip).toBe(true);

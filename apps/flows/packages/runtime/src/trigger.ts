@@ -61,6 +61,8 @@ export interface EmailMessage {
 export interface TriggerContext {
   /** Permission-projected local collection event for a Savia-triggered run. */
   saviaCollectionEvent?: SaviaCollectionEvent;
+  /** Authorized source events when collection delivery is explicitly batched. */
+  saviaCollectionEvents?: SaviaCollectionEvent[];
   /** Incoming HTTP request (for webhook-triggered workflows) */
   httpRequest?: HttpRequest;
   /** Submitted form record (for form_request/form_webhook workflows) */
@@ -96,6 +98,7 @@ export interface TriggerContext {
 export function extractTrigger(source: TriggerContext): TriggerContext {
   return {
     saviaCollectionEvent: source.saviaCollectionEvent,
+    saviaCollectionEvents: source.saviaCollectionEvents,
     httpRequest: source.httpRequest,
     formSubmission: source.formSubmission,
     emailMessage: source.emailMessage,

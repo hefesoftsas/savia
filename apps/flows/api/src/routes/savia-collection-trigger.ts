@@ -10,6 +10,7 @@ export interface SaviaCollectionSubscription {
     equals: unknown;
   }>;
   ignoreOwnChanges: boolean;
+  batchWindowSeconds?: 0 | 60;
 }
 
 export function matchesSaviaCollectionSubscription(

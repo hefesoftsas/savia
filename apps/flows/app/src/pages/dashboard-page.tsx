@@ -11,6 +11,7 @@ import Workflow from "lucide-react/icons/workflow";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useAuth } from "@/components/auth-context";
+import { FlowCostUsageCard } from "@/components/flow-cost-usage";
 import { InsetError } from "@/components/inset-error";
 import { InsetLoading } from "@/components/inset-loading";
 import { InsetLayout } from "@/components/layouts/inset-layout";
@@ -134,6 +135,8 @@ export function DashboardPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {canManage ? <FlowCostUsageCard /> : null}
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 mb-6">

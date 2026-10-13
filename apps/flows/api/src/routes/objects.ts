@@ -11,8 +11,59 @@ import { Hono } from "hono";
 import { apiKeyOrJwtMiddleware, jwtMiddleware } from "../auth";
 import type { ApiContext } from "../context";
 import { CloudflareObjectStore } from "../runtime/cloudflare-object-store";
+import {
+  assertObjectWithinLimit,
+  MAX_OBJECT_BYTES,
+} from "../services/resource-limits";
 
 const objectRoutes = new Hono<ApiContext>();
+const MAX_MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
+const MAX_UPLOAD_REQUEST_BYTES =
+  MAX_OBJECT_BYTES + MAX_MULTIPART_OVERHEAD_BYTES;
+
+class RequestBodyTooLargeError extends Error {}
+
+/** Buffer multipart input under an explicit ceiling before parsing File data. */
+async function readBoundedMultipartRequest(request: Request): Promise<Request> {
+  const contentLength = Number(request.headers.get("content-length"));
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_UPLOAD_REQUEST_BYTES
+  ) {
+    throw new RequestBodyTooLargeError();
+  }
+
+  if (!request.body) return request;
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_UPLOAD_REQUEST_BYTES) {
+        await reader.cancel();
+        throw new RequestBodyTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const boundedBody = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
+    },
+  });
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: boundedBody,
+  });
+}
 
 // organizationId is guaranteed by jwtMiddleware / apiKeyOrJwtMiddleware,
 // so route handlers use c.get("organizationId")! without null checks.
@@ -24,7 +75,7 @@ objectRoutes.get("/", apiKeyOrJwtMiddleware, async (c) => {
   if (!objectId || !mimeType) {
     return c.json(
       { error: "Missing required parameters: id and mimeType" },
-      400
+      400,
     );
   }
 
@@ -50,7 +101,7 @@ objectRoutes.get("/", apiKeyOrJwtMiddleware, async (c) => {
     if (metadata?.organizationId !== organizationId) {
       return c.json(
         { error: "Forbidden: You do not have access to this object" },
-        403
+        403,
       );
     }
 
@@ -80,7 +131,7 @@ objectRoutes.get("/", apiKeyOrJwtMiddleware, async (c) => {
     }
     return c.json(
       { error: "Object not found or error retrieving object" },
-      404
+      404,
     );
   }
 });
@@ -91,11 +142,29 @@ objectRoutes.post("/", jwtMiddleware, async (c) => {
     return c.json({ error: "Content type must be multipart/form-data" }, 400);
   }
 
-  const body = await c.req.parseBody();
-  const file = body.file;
+  let body: FormData;
+  try {
+    const boundedRequest = await readBoundedMultipartRequest(c.req.raw);
+    body = await boundedRequest.formData();
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return c.json({ error: "Uploaded file exceeds the size limit" }, 413);
+    }
+    throw error;
+  }
+  const file = body.get("file");
 
   if (!file || !(file instanceof File)) {
     return c.json({ error: "No file provided or invalid file" }, 400);
+  }
+
+  try {
+    assertObjectWithinLimit(file.size, "Uploaded file");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("byte limit")) {
+      return c.json({ error: "Uploaded file exceeds the size limit" }, 413);
+    }
+    throw error;
   }
 
   const organizationId = c.get("organizationId")!;
@@ -107,7 +176,7 @@ objectRoutes.post("/", jwtMiddleware, async (c) => {
     const reference = await objectStore.writeObject(
       data,
       file.type || "application/octet-stream",
-      organizationId
+      organizationId,
     );
 
     const response: UploadObjectResponse = { reference };
@@ -125,7 +194,7 @@ objectRoutes.delete("/:id", jwtMiddleware, async (c) => {
   if (!objectId || !mimeType) {
     return c.json(
       { error: "Missing required parameters: id and mimeType" },
-      400
+      400,
     );
   }
 
@@ -146,7 +215,7 @@ objectRoutes.delete("/:id", jwtMiddleware, async (c) => {
     if (metadata?.organizationId !== organizationId) {
       return c.json(
         { error: "Forbidden: You do not have access to delete this object" },
-        403
+        403,
       );
     }
 
@@ -167,7 +236,7 @@ objectRoutes.get("/metadata/:id", jwtMiddleware, async (c) => {
   if (!objectId || !mimeType) {
     return c.json(
       { error: "Missing required parameters: id and mimeType" },
-      400
+      400,
     );
   }
 
@@ -190,7 +259,7 @@ objectRoutes.get("/metadata/:id", jwtMiddleware, async (c) => {
         {
           error: "Forbidden: You do not have access to this object's metadata",
         },
-        403
+        403,
       );
     }
 

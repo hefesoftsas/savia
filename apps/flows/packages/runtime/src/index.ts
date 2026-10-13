@@ -38,6 +38,12 @@ export type {
   DatasetService,
 } from "./dataset-service";
 export { computeDefinitionHash } from "./definition-hash";
+export {
+  MAX_RUNTIME_INPUT_BYTES,
+  MAX_RUNTIME_OUTPUT_BYTES,
+  MAX_EXECUTION_STATE_BYTES,
+  estimateRuntimeJsonBytes,
+} from "./resource-limits";
 export type { DurableObjectRegistry } from "./durable-object-registry";
 export type {
   ExecutionPolicy,
@@ -48,10 +54,7 @@ export {
   nodeTypeNotImplementedMessage,
 } from "./execution-errors";
 export { ExecutionGraph } from "./execution-graph";
-export {
-  buildNodeExecutions,
-  type PendingEvent,
-} from "./execution-report";
+export { buildNodeExecutions, type PendingEvent } from "./execution-report";
 export {
   analyzeUpstream,
   applyNodeResult,

@@ -1094,7 +1094,13 @@
       "source": "apps/api/src/db/schema/index.ts",
       "path": "api/src/db/schema/index.ts",
       "upstreamSha256": "861e4c17bb06942f2cacb5a3f5cf578dae646e5b7d6af2b1c2e48d89fb35e0de",
-      "importedSha256": "861e4c17bb06942f2cacb5a3f5cf578dae646e5b7d6af2b1c2e48d89fb35e0de"
+      "importedSha256": "861e4c17bb06942f2cacb5a3f5cf578dae646e5b7d6af2b1c2e48d89fb35e0de",
+      "adaptations": [
+        {
+          "sha256": "60a7a864d53324cff56210a8788897d53332f588a2e5967be740508e4ec600c7",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/api/src/db/support-queries.ts",
@@ -1220,7 +1226,13 @@
       "source": "apps/api/src/index.ts",
       "path": "api/src/index.ts",
       "upstreamSha256": "1f340c2cfaa368403a525da6e2ff2501e9d44d1744567cc7259656c42152c56a",
-      "importedSha256": "1f340c2cfaa368403a525da6e2ff2501e9d44d1744567cc7259656c42152c56a"
+      "importedSha256": "1f340c2cfaa368403a525da6e2ff2501e9d44d1744567cc7259656c42152c56a",
+      "adaptations": [
+        {
+          "sha256": "e95c35a1c458704d4db72c65cc70e8137f982ccce2cdb4bb889e5ebda94cc27e",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/api/src/mailbox-pipeline.test.ts",
@@ -1400,7 +1412,13 @@
       "source": "apps/api/src/queue.ts",
       "path": "api/src/queue.ts",
       "upstreamSha256": "d30daf31eab95d2a40141989b0063069045e35a641a583932755078d92dafe6d",
-      "importedSha256": "50af25616b02e229ebd9e82d77f19d9c2a0e1b866e6e400c6029741e2dae3474"
+      "importedSha256": "50af25616b02e229ebd9e82d77f19d9c2a0e1b866e6e400c6029741e2dae3474",
+      "adaptations": [
+        {
+          "sha256": "4211ec817d49331207dc3702c4e0f8df2467ee572c0e7b56b0b3397233785796",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/api/src/routes/admin/databases.ts",
@@ -1676,7 +1694,13 @@
       "source": "apps/api/src/routes/objects.ts",
       "path": "api/src/routes/objects.ts",
       "upstreamSha256": "cb236170e50e649d124937779634fea7e2d12ebbaee43e6181faf85c6d64ba9c",
-      "importedSha256": "e8085a5afea9f68a4a314b137a282e6fb00b242d55dc55765b093e98f73bcd1b"
+      "importedSha256": "e8085a5afea9f68a4a314b137a282e6fb00b242d55dc55765b093e98f73bcd1b",
+      "adaptations": [
+        {
+          "sha256": "0e59a0bb206a76edbe9341ca4e6a3beada610cec0a98e60251967daeb574ec10",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/api/src/routes/organizations.ts",
@@ -1772,7 +1796,13 @@
       "source": "apps/api/src/routes/usage.ts",
       "path": "api/src/routes/usage.ts",
       "upstreamSha256": "e0ee0502e8cfbdbbf62814b77324260e92cabba15f51d094a3de84cac202c205",
-      "importedSha256": "98637c9c0da4b76521f649f20092b357f32b7586eb630909ef4ef4e1fca15d0c"
+      "importedSha256": "98637c9c0da4b76521f649f20092b357f32b7586eb630909ef4ef4e1fca15d0c",
+      "adaptations": [
+        {
+          "sha256": "e3c8ec399762f91bf9625c16a6625cb16c521f30aba3f3de107bccf45cd7f5f6",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/api/src/routes/whatsapp-webhook.ts",
@@ -1874,13 +1904,25 @@
       "source": "apps/api/src/runtime/cloudflare-object-store.test.ts",
       "path": "api/src/runtime/cloudflare-object-store.test.ts",
       "upstreamSha256": "52a54e2118ce3ac6809d3d74f91f936bc12c1fb4b4bbcc321e5cdfedc7242e77",
-      "importedSha256": "54ee4bd1652df4a52ad0785c30e3b8e7f054507298e2bd7fdf8e67654d0d237a"
+      "importedSha256": "54ee4bd1652df4a52ad0785c30e3b8e7f054507298e2bd7fdf8e67654d0d237a",
+      "adaptations": [
+        {
+          "sha256": "d7ebea0fdfe38d34a909ba6b2cb24bad5289f6ed8078720dafb5f781ddd696db",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/api/src/runtime/cloudflare-object-store.ts",
       "path": "api/src/runtime/cloudflare-object-store.ts",
       "upstreamSha256": "d68cd4d2f226bc74b4e1b88665717744359e52d176dae0329f7f02c0efd9e6aa",
-      "importedSha256": "96cb46cb5eeca5d1a658fbd2bf5e67f31b574a1d9f9a714140f6071234fa5bce"
+      "importedSha256": "96cb46cb5eeca5d1a658fbd2bf5e67f31b574a1d9f9a714140f6071234fa5bce",
+      "adaptations": [
+        {
+          "sha256": "248f5ec206ab7ecff6f1086f496405ddd66fb0c9f0da850e6c0313eac1f48c08",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/api/src/runtime/cloudflare-organization-service.ts",
@@ -1994,7 +2036,13 @@
       "source": "apps/api/src/scheduled.ts",
       "path": "api/src/scheduled.ts",
       "upstreamSha256": "31df57b780f8e8baac41922b4ce56e71e76724a1be328d937ca539cff4079d99",
-      "importedSha256": "31df57b780f8e8baac41922b4ce56e71e76724a1be328d937ca539cff4079d99"
+      "importedSha256": "31df57b780f8e8baac41922b4ce56e71e76724a1be328d937ca539cff4079d99",
+      "adaptations": [
+        {
+          "sha256": "cf02a5ee655a967bcf1582f40aa620994fee08940b0b67fdf866f23f998d297b",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/api/src/services/email-service.ts",
@@ -2048,7 +2096,13 @@
       "source": "apps/api/src/services/workflow-executor.ts",
       "path": "api/src/services/workflow-executor.ts",
       "upstreamSha256": "5a9a15e2327e119952c52e7c779fedb84b8b32b29b429958ab822dbbea4f6751",
-      "importedSha256": "610731e513503883622cb73fe7d96b6206269a8df2c964ded811b35f4be85e28"
+      "importedSha256": "610731e513503883622cb73fe7d96b6206269a8df2c964ded811b35f4be85e28",
+      "adaptations": [
+        {
+          "sha256": "372e4d42cd8f35f114b3f6cd1ce2db9e1ceaa305fbbb40575f931fcec4db3734",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/api/src/stores/example-store.test.ts",
@@ -4460,7 +4514,13 @@
       "source": "apps/app/src/pages/dashboard-page.tsx",
       "path": "app/src/pages/dashboard-page.tsx",
       "upstreamSha256": "96d2b2496157b5f3950c4988ad224f04a788af9802121a4c3b142eec823dea4e",
-      "importedSha256": "13eeac12eb93720343d8d49b66ab9ddac3de5d1b41e604527fe14218a1dc2258"
+      "importedSha256": "13eeac12eb93720343d8d49b66ab9ddac3de5d1b41e604527fe14218a1dc2258",
+      "adaptations": [
+        {
+          "sha256": "6a68cbd81ba2416f8ed8eebd73e6e5b050ed85038ab5656283175f8136c83342",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "apps/app/src/pages/database-console-page.tsx",
@@ -5156,7 +5216,13 @@
       "source": "packages/runtime/src/base-runtime.ts",
       "path": "packages/runtime/src/base-runtime.ts",
       "upstreamSha256": "08ff050aea9b9c2ec59ec0494a0caed87734e7bf0f5d3641a0865d6e9a2c25c1",
-      "importedSha256": "1564e9286caaf8c1e224778ab290ba12bad36a1c61b54002c9dc11799b83febe"
+      "importedSha256": "1564e9286caaf8c1e224778ab290ba12bad36a1c61b54002c9dc11799b83febe",
+      "adaptations": [
+        {
+          "sha256": "7716e66350ad9bb252d4fab6980bcd263ac7fed56141358a3a70df6f65a035e0",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/base-tool-registry.test.ts",
@@ -5204,7 +5270,13 @@
       "source": "packages/runtime/src/dataflow-scheduler.ts",
       "path": "packages/runtime/src/dataflow-scheduler.ts",
       "upstreamSha256": "695f912bc219a64245d03ea29984683dbd1e80bcb88cd4d7403af3e4b180b2fb",
-      "importedSha256": "695f912bc219a64245d03ea29984683dbd1e80bcb88cd4d7403af3e4b180b2fb"
+      "importedSha256": "695f912bc219a64245d03ea29984683dbd1e80bcb88cd4d7403af3e4b180b2fb",
+      "adaptations": [
+        {
+          "sha256": "f9982f742c382611c8f708cc234f99755dbcab417dc503fcf052c552a32cf850",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/dataset-service.ts",
@@ -5258,13 +5330,25 @@
       "source": "packages/runtime/src/execution-state.test.ts",
       "path": "packages/runtime/src/execution-state.test.ts",
       "upstreamSha256": "b5422032e2287ec22db85ea6bdf43d9faa847684b88d9a00a9bb9a2e0d675ca0",
-      "importedSha256": "b5422032e2287ec22db85ea6bdf43d9faa847684b88d9a00a9bb9a2e0d675ca0"
+      "importedSha256": "b5422032e2287ec22db85ea6bdf43d9faa847684b88d9a00a9bb9a2e0d675ca0",
+      "adaptations": [
+        {
+          "sha256": "11fe519cfa8649cd98807eab7a838e7e0095106af1018721b06bded9b6d372f8",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/execution-state.ts",
       "path": "packages/runtime/src/execution-state.ts",
       "upstreamSha256": "1d2635902302143c538e41c3af75f2cf4f2edff0a805b70bf4fc7f92c33dfbfc",
-      "importedSha256": "1cba81fdfe4de95ae518dc989bcab19a1998723222e54c66de2014f65f356cbf"
+      "importedSha256": "1cba81fdfe4de95ae518dc989bcab19a1998723222e54c66de2014f65f356cbf",
+      "adaptations": [
+        {
+          "sha256": "a1aee011668e4a27fe4af895ce0512120d5a7a72f2d9649bbbd5bfc8e9cb046e",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/execution-store.ts",
@@ -5300,7 +5384,13 @@
       "source": "packages/runtime/src/index.ts",
       "path": "packages/runtime/src/index.ts",
       "upstreamSha256": "a8553098f43ab95814b47985bf33657ca464af1019495fa81cb766f3a2cb9acd",
-      "importedSha256": "a8553098f43ab95814b47985bf33657ca464af1019495fa81cb766f3a2cb9acd"
+      "importedSha256": "a8553098f43ab95814b47985bf33657ca464af1019495fa81cb766f3a2cb9acd",
+      "adaptations": [
+        {
+          "sha256": "83161eb0615015b66c9da8f8529e97e886dfdbf7e53f3732f0de858a2e27c12e",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/input-overrides.test.ts",
@@ -5330,7 +5420,13 @@
       "source": "packages/runtime/src/node-executor.ts",
       "path": "packages/runtime/src/node-executor.ts",
       "upstreamSha256": "60eb52f22d911271f9d267cb2be6856090dbd25a85545eab09aaeeb468a62cd2",
-      "importedSha256": "1486866b3f7f827002c2b47c173fc4927e061a550dffe83503e1f0050c0b9256"
+      "importedSha256": "1486866b3f7f827002c2b47c173fc4927e061a550dffe83503e1f0050c0b9256",
+      "adaptations": [
+        {
+          "sha256": "13fcb6ca6c2a6a7a721bda21b3e1c05a099b8aeae4a70defbf175bdc60602d9d",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/node-tool-provider.test.ts",
@@ -10724,13 +10820,25 @@
       "source": "packages/runtime/src/parameter-mapper.test.ts",
       "path": "packages/runtime/src/parameter-mapper.test.ts",
       "upstreamSha256": "08246cf4d9bfaa0207263a121c7523aab2b98a847a2facbd1545dc1869e90ac2",
-      "importedSha256": "e5642ccafce4f6e683c2a86b63a259c9c2829bea7c44a704688ec21c9933fcc9"
+      "importedSha256": "e5642ccafce4f6e683c2a86b63a259c9c2829bea7c44a704688ec21c9933fcc9",
+      "adaptations": [
+        {
+          "sha256": "df645320ad29906070654b1a822dd0764635568c5a92ff3bafa85890a94e6c39",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/parameter-mapper.ts",
       "path": "packages/runtime/src/parameter-mapper.ts",
       "upstreamSha256": "c0bb17ea02c294e9509f9a49adc99128a67c00895b50536465242022a4267e24",
-      "importedSha256": "9ebcfffea4f888fa74ed63388d7d205e5a7fcde7d5b296ebed808b3a53f4b76f"
+      "importedSha256": "9ebcfffea4f888fa74ed63388d7d205e5a7fcde7d5b296ebed808b3a53f4b76f",
+      "adaptations": [
+        {
+          "sha256": "b616edc530f2640459b7c2c6a2d1b5d429ba650efb5cd912da5b5bc0f8402bcd",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/queue-service.ts",
@@ -10904,7 +11012,13 @@
       "source": "packages/runtime/src/trigger.ts",
       "path": "packages/runtime/src/trigger.ts",
       "upstreamSha256": "9387632f10a928c408cb838c16cee66762e2118126d46d45e5380730dc1a7ffe",
-      "importedSha256": "e582da8437d61ba37a4427cdee4507a027c91d16a0b37677bd95ae468b542a30"
+      "importedSha256": "e582da8437d61ba37a4427cdee4507a027c91d16a0b37677bd95ae468b542a30",
+      "adaptations": [
+        {
+          "sha256": "0effc0b557ce9d561ef2c69f0c95ada441e275c1b8f6096a2f7d73f1889c70ca",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/runtime/src/utils/agent-loop.test.ts",
@@ -11318,7 +11432,13 @@
       "source": "packages/types/src/usage.ts",
       "path": "packages/types/src/usage.ts",
       "upstreamSha256": "b74cda529defcd2b6f305807639fe279ee17dfee1fa1e6daed07524db2fb1027",
-      "importedSha256": "b74cda529defcd2b6f305807639fe279ee17dfee1fa1e6daed07524db2fb1027"
+      "importedSha256": "b74cda529defcd2b6f305807639fe279ee17dfee1fa1e6daed07524db2fb1027",
+      "adaptations": [
+        {
+          "sha256": "9b0059db58245c2c0c90e96aecabd4a3c9b371d08794d9b39c2c97643c700bb9",
+          "reason": "Bound Flows resource usage, preserve retry identity, and expose cost controls without enabling cloud execution."
+        }
+      ]
     },
     {
       "source": "packages/types/src/whatsapp.ts",

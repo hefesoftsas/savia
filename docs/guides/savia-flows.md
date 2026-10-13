@@ -115,6 +115,12 @@ waits for input. Results, files and database records survive restarting the
 local runtime with the same state directory. The local scheduler checks cron
 expressions in UTC once per minute while the process is running.
 
+Local D1 keeps terminal execution history for 30 days. Scheduled maintenance
+removes at most 500 old completed, failed, cancelled, or exhausted records per
+UTC day; idle, submitted, executing, and paused records are retained. This pass
+can run while executions are paused and is skipped during maintenance mode. It
+does not delete R2 execution objects.
+
 ## Native collections and triggers
 
 Choose **Savia Collection Event** as the workflow trigger and add its matching
@@ -391,8 +397,13 @@ recovery. SQL virtual tables and encoded pages larger than 512 KiB
 fail backup explicitly rather than produce incomplete snapshots. Restoring
 Cloudflare Workflow continuations, pending Queue messages or advisory KV cache
 values is outside the archive format; running instances and queues remain in
-the existing environment during a maintenance release. Recovery stays paused
-and does not automatically replay side effects.
+the existing environment during a maintenance release. Queue-trigger messages
+retry five times with progressive delay before Cloudflare moves them to the
+environment-specific Flows dead-letter queue. The dead-letter queue and its
+messages are retained for up to 14 days and are not part of the recovery
+archive; operators must inspect and deliberately replay or discard them before
+they expire. Recovery stays paused and does not automatically replay side
+effects.
 
 See the [preview readiness verification](../verification/2026-10-12-flows-preview-readiness.md)
 for the completed local checks and compiler memory budgets.
@@ -418,3 +429,94 @@ FFmpeg and ffprobe accept local direct-media files through restricted protocol
 and demuxer lists. Playlist inputs such as HLS, DASH, and concat are rejected,
 so nested URLs cannot bypass the download origin policy.
 Containers and external services remain disabled in this preview release.
+
+## Cost controls
+
+The first cloud edition retains the restricted service catalog and QuickJS
+executor. Enabling the module does not enable AI providers, Browser Rendering,
+containers, public network fetch, Dynamic Workers, or outbound email. Existing
+preview admission limits remain 100 daily runs, 1,000 monthly runs and two
+concurrent runs, shared across tenants and both execution modes. They are pilot
+quotas, not capacity sized for 100 active users or an exact invoice cap.
+
+Organization managers can inspect **Execution budget** on the Flows dashboard.
+It shows their organization's admitted runs and counted steps for those runs, shared
+remaining daily/monthly capacity, and active runs. The panel refreshes once per
+minute while visible and warns at 80% and 100% of shared quotas. These counters
+are operational measurements; they do not claim to measure Cloudflare CPU,
+GB-seconds, storage or dollar charges. No external notification service is used.
+
+### Collection triggers
+
+Use watched fields and before/after conditions to avoid unrelated runs. The
+trigger inspector's **Delivery mode** defaults to one run per matching change.
+**Group changes for one minute** opts into durable batches of at most 50 events;
+use the trigger node's `events` array and `count` output to process every record.
+The existing `event` output remains the first event. A batch may split further
+when projected trigger data reaches 1 MiB. Grouping is not a suppression mode:
+each permitted matching event is included in a run, rather than silently being
+replaced by the last record. Receipts are grouped by UTC minute. Dispatch starts after the first event has
+waited sixty seconds, on the next cron tick; a backlog can delay it further.
+
+Each cron tick dispatches at most one due group. Event receipts keep only bounded
+routing metadata (16 KiB maximum), not duplicate record snapshots. The host
+reprojects each event using the configuring user's current access, and Flows
+rechecks the current subscription and workflow before dispatch. Child execution
+IDs are frozen before submission so a crash or permission change cannot regroup
+already-submitted events under a new execution ID. Recursion depth and the union
+of causal workflow IDs are preserved across the batch.
+
+The retained pending/failed backlog is bounded to 5,000 events per organization.
+An admission at capacity returns backpressure to the host outbox. Transient
+failures use exponential backoff and stop after five attempts; the inspector
+shows stopped batches and lets managers retry them in pages of at most 250 groups.
+Expected execution pauses and daily/monthly/concurrency quota exhaustion do not
+spend transient retry attempts. Reconfiguring or disabling the subscription
+skips its old pending groups. Host event snapshots expire after their existing
+30-day retention; an event no longer available for authorization is skipped.
+
+### Memory and payload bounds
+
+Workflow definition, trigger and overrides together are limited to 2 MiB of JSON;
+node inputs and JSON outputs each have a 2 MiB limit. Retained input/output state
+is capped at 4 MiB across the execution, with overflow recorded as a node error.
+Even local execution with admission quotas disabled cannot exceed 500 nodes.
+Cloud preview retains the stricter 50-node definition quota.
+
+The API rejects request bodies above 9 MiB before parsing JSON.
+Stored objects are limited to 8 MiB each. Multipart requests are streamed under a
+9 MiB cap before parsing. Each node can read or write at most 8 MiB of aggregate
+binary data and 32 binary values; repeated parameters have at most 256 values.
+Known oversized binary outputs are rejected before any storage write, and binary
+conversions run sequentially to prevent parallel memory spikes. A sequential
+read may allocate one additional bounded object before detecting that the
+aggregate read limit is exceeded. Use file references or smaller batches instead
+of copying large payloads through many nodes. Direct presigned uploads are not a
+hard upstream upload-size cap; they are rejected on read through the object
+store. The restricted cloud deployment does not configure public presigned R2
+upload credentials.
+
+### Retry and retention policy
+
+Durable step retries remain three with exponential backoff; explicit runtime
+resource/step limits are not retried. Cloud queue deliveries use five retries
+with a 60-second exponential delay capped at one hour. A provisioned, isolated
+dead-letter queue preserves failed deliveries for operator investigation under
+Cloudflare's finite queue retention. Execution cannot be enabled from an old
+manifest without the dead-letter queue. Queue execution IDs are stable per
+message and workflow, so earlier successful work is deduplicated on redelivery.
+
+In the restricted edition, terminal D1 history is eligible after 30 days without
+updates, with a maximum of 500 deletions per UTC day. Active and waiting records
+are retained. Finished event receipts are kept for at least 90 days after settlement.
+Completed quota ledger rows are eligible 90 days after admission. Both are
+cleaned in bounded daily passes. Cleanup runs while execution is paused and stops
+during maintenance/backups. Durable Workflows retain the provider's existing
+instance retention, and definition objects, datasets and user files are not
+expired without an authoritative reference ledger. Encrypted recovery archives
+already use seven-day GitHub artifact retention; promotion evidence uses 30 days.
+
+Start with the pilot quotas, review a week of admitted runs, steps and the actual
+Cloudflare account metrics, then size quotas to the observed workload. Increasing
+quotas or activating execution remains an infrastructure change; this update
+does not enable Flows in preview.

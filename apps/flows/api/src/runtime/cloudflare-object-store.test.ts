@@ -2,6 +2,7 @@ import type { ObjectReference } from "@savia/flows-types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CloudflareObjectStore } from "./cloudflare-object-store";
+import { MAX_OBJECT_BYTES } from "../services/resource-limits";
 
 describe("ObjectStore", () => {
   let mockBucket: any;
@@ -25,7 +26,7 @@ describe("ObjectStore", () => {
           data,
           "image/png",
           "org-123",
-          "exec-456"
+          "exec-456",
         );
 
         expect(result).toHaveProperty("id");
@@ -37,7 +38,7 @@ describe("ObjectStore", () => {
             httpMetadata: expect.objectContaining({
               contentType: "image/png",
             }),
-          })
+          }),
         );
       });
     });
@@ -51,7 +52,7 @@ describe("ObjectStore", () => {
           "custom-id",
           data,
           "image/jpeg",
-          "org-123"
+          "org-123",
         );
 
         expect(result.id).toBe("custom-id");
@@ -64,8 +65,28 @@ describe("ObjectStore", () => {
               id: "custom-id",
               organizationId: "org-123",
             }),
-          })
+          }),
         );
+      });
+
+      it("rejects oversized objects before calling R2", async () => {
+        const store = new CloudflareObjectStore(mockBucket);
+        const data = new Proxy(new Uint8Array(0), {
+          get(target, property) {
+            if (property === "byteLength") return MAX_OBJECT_BYTES + 1;
+            return Reflect.get(target, property, target);
+          },
+        });
+
+        await expect(
+          store.writeObjectWithId(
+            "large-object",
+            data,
+            "application/octet-stream",
+            "org-123",
+          ),
+        ).rejects.toThrow(`${MAX_OBJECT_BYTES}-byte limit`);
+        expect(mockBucket.put).not.toHaveBeenCalled();
       });
 
       it("should include executionId when provided", async () => {
@@ -77,7 +98,7 @@ describe("ObjectStore", () => {
           data,
           "image/png",
           "org-123",
-          "exec-456"
+          "exec-456",
         );
 
         expect(mockBucket.put).toHaveBeenCalledWith(
@@ -87,7 +108,7 @@ describe("ObjectStore", () => {
             customMetadata: expect.objectContaining({
               executionId: "exec-456",
             }),
-          })
+          }),
         );
       });
     });
@@ -113,7 +134,7 @@ describe("ObjectStore", () => {
         expect(result?.data).toEqual(mockData);
         expect(result?.metadata).toEqual({ organizationId: "org-123" });
         expect(mockBucket.get).toHaveBeenCalledWith(
-          "objects/obj-123/object.data"
+          "objects/obj-123/object.data",
         );
       });
 
@@ -130,6 +151,20 @@ describe("ObjectStore", () => {
 
         expect(result).toBeNull();
       });
+
+      it("rejects oversized stored objects before reading their bytes", async () => {
+        const arrayBuffer = vi.fn();
+        mockBucket.get.mockResolvedValue({
+          size: MAX_OBJECT_BYTES + 1,
+          arrayBuffer,
+        });
+        const store = new CloudflareObjectStore(mockBucket);
+
+        await expect(
+          store.readObject({ id: "large-object", mimeType: "video/mp4" }),
+        ).rejects.toThrow(`${MAX_OBJECT_BYTES}-byte limit`);
+        expect(arrayBuffer).not.toHaveBeenCalled();
+      });
     });
 
     describe("deleteObject", () => {
@@ -143,7 +178,7 @@ describe("ObjectStore", () => {
         await store.deleteObject(reference);
 
         expect(mockBucket.delete).toHaveBeenCalledWith(
-          "objects/obj-123/object.data"
+          "objects/obj-123/object.data",
         );
       });
     });
@@ -214,7 +249,7 @@ describe("ObjectStore", () => {
         data,
         "image/jpeg",
         "org-123",
-        7200
+        7200,
       );
 
       // Verify it wrote with an extension-aware key
@@ -225,12 +260,12 @@ describe("ObjectStore", () => {
           httpMetadata: expect.objectContaining({
             contentType: "image/jpeg",
           }),
-        })
+        }),
       );
       // URL should contain the extension
       expect(url).toContain("object.jpg");
       expect(url).toContain(
-        "test-bucket.test-account.r2.cloudflarestorage.com"
+        "test-bucket.test-account.r2.cloudflarestorage.com",
       );
     });
 
@@ -248,7 +283,7 @@ describe("ObjectStore", () => {
       expect(mockBucket.put).toHaveBeenCalledWith(
         expect.stringMatching(/^objects\/.*\/object$/),
         data,
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -256,7 +291,11 @@ describe("ObjectStore", () => {
       const store = new CloudflareObjectStore(mockBucket);
 
       await expect(
-        store.writeAndPresign(new Uint8Array([1, 2, 3]), "image/png", "org-123")
+        store.writeAndPresign(
+          new Uint8Array([1, 2, 3]),
+          "image/png",
+          "org-123",
+        ),
       ).rejects.toThrow("Presigned URL configuration not set");
     });
   });
@@ -266,7 +305,7 @@ describe("ObjectStore", () => {
       const store = new CloudflareObjectStore(null as any);
 
       await expect(
-        store.writeObject(new Uint8Array([1, 2, 3]), "image/png", "org-123")
+        store.writeObject(new Uint8Array([1, 2, 3]), "image/png", "org-123"),
       ).rejects.toThrow("R2 bucket is not initialized");
     });
 
@@ -276,7 +315,7 @@ describe("ObjectStore", () => {
       const store = new CloudflareObjectStore(mockBucket);
 
       await expect(
-        store.writeObject(new Uint8Array([1, 2, 3]), "image/png", "org-123")
+        store.writeObject(new Uint8Array([1, 2, 3]), "image/png", "org-123"),
       ).rejects.toThrow("Storage error");
     });
 

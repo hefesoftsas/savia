@@ -128,7 +128,20 @@ const flows = shouldProvisionFlows
       ),
       queue: new cloudflare.Queue(
         "flows-queue",
-        { accountId, queueName: names.flows.queue },
+        {
+          accountId,
+          queueName: names.flows.queue,
+          settings: { messageRetentionPeriod: 1_209_600 },
+        },
+        stateOpts,
+      ),
+      deadLetterQueue: new cloudflare.Queue(
+        "flows-dead-letter-queue",
+        {
+          accountId,
+          queueName: names.flows.deadLetterQueue,
+          settings: { messageRetentionPeriod: 1_209_600 },
+        },
         stateOpts,
       ),
     }
@@ -160,6 +173,7 @@ export const flowsResources = flows
       workerName: names.flows.worker,
       workflowName: names.flows.workflow,
       queueName: flows.queue.queueName,
+      deadLetterQueueName: flows.deadLetterQueue.queueName,
       buckets: {
         resources: flows.resourcesBucket.name,
         datasets: flows.datasetsBucket.name,

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, access, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { flowsWorkerConfig } from "./flows-worker-config.mjs";
 import { renderProductionConfigs } from "./worker-config.mjs";
 
 const preview = {
@@ -25,6 +26,7 @@ const flows = {
   workerName: "savia-flows-preview",
   workflowName: "savia-flows-execute-preview",
   queueName: "savia-flows-execute-preview",
+  deadLetterQueueName: "savia-flows-execute-dlq-preview",
   buckets: {
     resources: "savia-flows-resources-preview",
     datasets: "savia-flows-datasets-preview",
@@ -37,6 +39,7 @@ const productionFlows = {
   workerName: "savia-flows",
   workflowName: "savia-flows-execute",
   queueName: "savia-flows-execute",
+  deadLetterQueueName: "savia-flows-execute-dlq",
   buckets: {
     resources: "savia-flows-resources",
     datasets: "savia-flows-datasets",
@@ -112,6 +115,12 @@ test("Flows manifest uses stack resource IDs and isolated reciprocal bindings", 
     assert.equal(flow.workflows[0].name, flows.workflowName);
     assert.equal(flow.queues.producers[0].queue, flows.queueName);
     assert.equal(flow.queues.consumers[0].queue, flows.queueName);
+    assert.equal(
+      flow.queues.consumers[0].dead_letter_queue,
+      flows.deadLetterQueueName,
+    );
+    assert.equal(flow.queues.consumers[0].retry_delay, 60);
+    assert.equal(flow.queues.consumers[0].max_retries, 5);
     assert.equal(flow.migrations[0].new_sqlite_classes.length, 5);
     assert.deepEqual(flow.triggers.crons, ["* * * * *"]);
     assert.equal("worker_loaders" in flow, false);
@@ -199,4 +208,15 @@ test("disabling Flows removes an earlier generated manifest", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("execution cannot be enabled from legacy outputs without a dead-letter queue", () => {
+  const { deadLetterQueueName, ...legacy } = flows;
+  assert.throws(
+    () => flowsWorkerConfig(legacy, preview.publicOrigin, "preview", true),
+    /dead-letter queue/,
+  );
+  assert.doesNotThrow(() =>
+    flowsWorkerConfig(legacy, preview.publicOrigin, "preview", false),
+  );
 });

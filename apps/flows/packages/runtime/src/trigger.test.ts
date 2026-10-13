@@ -21,4 +21,16 @@ describe("extractTrigger", () => {
       saviaCollectionEvent: event,
     });
   });
+
+  it("preserves authorized collection event batches for downstream nodes", () => {
+    expect(
+      extractTrigger({
+        saviaCollectionEvent: event,
+        saviaCollectionEvents: [event, { ...event, id: "evt-2" }],
+      }),
+    ).toEqual({
+      saviaCollectionEvent: event,
+      saviaCollectionEvents: [event, { ...event, id: "evt-2" }],
+    });
+  });
 });
