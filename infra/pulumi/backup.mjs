@@ -549,6 +549,7 @@ async function main() {
             accountId,
             token,
             expectedSize: object.size,
+            contentEncoding: object.httpMetadata?.contentEncoding,
           });
         }
         method = "object-get";

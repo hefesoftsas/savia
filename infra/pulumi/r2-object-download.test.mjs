@@ -85,6 +85,7 @@ test("downloads compressed R2 bytes without HTTP content decoding", async () => 
         token: TOKEN,
         destFile,
         expectedSize: bytes.byteLength,
+        contentEncoding: encoding,
         requestImpl,
       });
 
@@ -94,16 +95,33 @@ test("downloads compressed R2 bytes without HTTP content decoding", async () => 
       assert.equal(seen.options.protocol, "https:");
       assert.equal(seen.options.hostname, "api.cloudflare.com");
       assert.equal(seen.options.method, "GET");
-      assert.equal(
-        seen.options.headers["accept-encoding"],
-        "gzip, br, deflate",
-      );
+      assert.equal(seen.options.headers["accept-encoding"], encoding);
       assert.equal(
         seen.options.path,
         `/client/v4/accounts/${ACCOUNT_ID}/r2/buckets/${BUCKET}/objects/nested/a%20b%2B%25.bin`,
       );
       assert.equal(seen.options.headers.authorization, `Bearer ${TOKEN}`);
     }
+  });
+});
+
+test("requests identity encoding for plaintext objects by default", async () => {
+  await withTempDir(async (dir) => {
+    const bytes = Buffer.from("plain checkpoint payload");
+    const destFile = join(dir, "plain");
+    const { requestImpl, seen } = fakeRequest({ chunks: [bytes] });
+    await downloadR2Object({
+      accountId: ACCOUNT_ID,
+      bucket: BUCKET,
+      key: "checkpoint.json",
+      token: TOKEN,
+      destFile,
+      expectedSize: bytes.byteLength,
+      requestImpl,
+    });
+
+    assert.equal(seen.options.headers["accept-encoding"], "identity");
+    assert.deepEqual(await readFile(destFile), bytes);
   });
 });
 
@@ -281,6 +299,8 @@ test("validates credentials, key, destination, size, and timeout before I/O", as
     [{ expectedSize: -1 }, /expectedSize/],
     [{ expectedSize: Number.MAX_SAFE_INTEGER + 1 }, /expectedSize/],
     [{ timeoutMs: 0 }, /timeoutMs/],
+    [{ contentEncoding: "gzip\r\nX-Injected: yes" }, /contentEncoding/],
+    [{ contentEncoding: "compress" }, /contentEncoding/],
   ]) {
     await assert.rejects(downloadR2Object({ ...valid, ...override }), pattern);
   }

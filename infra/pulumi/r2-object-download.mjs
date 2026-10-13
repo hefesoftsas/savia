@@ -7,6 +7,12 @@ import { assertAccountId, assertSafeR2Key } from "./naming.mjs";
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_TIMEOUT_MS = 10 * 60 * 1000;
+const ALLOWED_CONTENT_ENCODINGS = new Set([
+  "identity",
+  "br",
+  "gzip",
+  "deflate",
+]);
 
 /**
  * Download an R2 object through Cloudflare's authenticated API without HTTP
@@ -22,6 +28,7 @@ export async function downloadR2Object({
   token,
   destFile,
   expectedSize,
+  contentEncoding = "identity",
   requestImpl = https.request,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
@@ -49,6 +56,14 @@ export async function downloadR2Object({
     throw new Error("expectedSize must be a non-negative safe integer");
   }
   if (
+    typeof contentEncoding !== "string" ||
+    !ALLOWED_CONTENT_ENCODINGS.has(contentEncoding)
+  ) {
+    throw new Error(
+      "contentEncoding must be one of identity, br, gzip, or deflate",
+    );
+  }
+  if (
     typeof timeoutMs !== "number" ||
     !Number.isSafeInteger(timeoutMs) ||
     timeoutMs < 1 ||
@@ -72,7 +87,9 @@ export async function downloadR2Object({
     headers: {
       authorization: `Bearer ${token}`,
       accept: "application/octet-stream",
-      "accept-encoding": "gzip, br, deflate",
+      // Match the object's stored metadata. Asking for multiple encodings can
+      // make the edge transcode plaintext objects, invalidating byte checks.
+      "accept-encoding": contentEncoding,
     },
   };
 

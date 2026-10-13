@@ -197,6 +197,8 @@ through this preview helper.
 
 The API-token R2 fallback downloads stored bytes through raw HTTPS streaming,
 without automatically decompressing `Content-Encoding: br` or `gzip`. It
+requests the object's stored encoding, or `identity` for unencoded objects,
+to prevent Cloudflare from applying a different compression during transfer. It
 checks every size and removes partial files on failure. Downloads and Wrangler
 restores URL-encode each object-key segment while keeping the original key in
 the manifest and filesystem.
