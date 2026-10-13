@@ -22,6 +22,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 ## Standing guides
 
 - [Stable background refresh](guides/background-refresh.md) — scoped queries, initial versus background loading, session changes, draft preservation and migration coverage.
+- [Browser connectivity](guides/connectivity.md) — verified offline hints, shared checks and reconnect behavior.
 
 - [Request caching](guides/request-caching.md) — declarative server cache policies for reference reads, scopes, invalidation and execution traces.
 
