@@ -195,8 +195,20 @@ Worker or public route. The session and temporary files are removed after
 success or failure. Dry runs remain offline; production is not reachable
 through this preview helper.
 
-The Wrangler R2 fallback URL-encodes each object-key segment for downloads
-and restores while keeping the original key in the manifest and filesystem.
+The API-token R2 fallback downloads stored bytes through raw HTTPS streaming,
+without automatically decompressing `Content-Encoding: br` or `gzip`. It
+checks every size and removes partial files on failure. Downloads and Wrangler
+restores URL-encode each object-key segment while keeping the original key in
+the manifest and filesystem.
 This preserves literal percent escapes, spaces, Unicode, and URL delimiters
 (e.g. a key containing `tenant%3A12` is sent as `tenant%253A12`). The S3
 transport receives the original key because its SDK handles URL encoding.
+
+Preview selects the raw API fallback with `SAVIA_BACKUP_R2_FORCE_API=true`;
+the former `SAVIA_BACKUP_R2_FORCE_WRANGLER` selector remains a compatibility
+alias for bypassing S3 credentials. No additional bucket credentials or
+service activation is required.
+
+Each raw download has a five-minute inactivity timeout that resets as bytes
+arrive. The preview deployment job retains its 40-minute overall deadline;
+slow but progressing objects are not aborted by a per-object wall-clock timer.
