@@ -1,7 +1,7 @@
 // Offline-first client for the paused Flows Durable Object maintenance API.
 // Every mutating or status request requires --apply and receives a fresh
 // short-lived JWT. This CLI never enables Flows execution.
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -315,11 +315,10 @@ async function runBackup({ plan, request, fsImpl, log, now, sleepImpl }) {
     sleepImpl,
     log,
   });
-  const startBody = { action: "start" };
-  if (plan.snapshotId) startBody.snapshotId = plan.snapshotId;
+  const snapshotId = plan.snapshotId ?? randomUUID();
   const started = validateStartedManifest(
-    await request(startBody),
-    plan.snapshotId,
+    await request({ action: "start", snapshotId }),
+    snapshotId,
   );
   let exportedPages = 0;
   for (let target = 0; target < started.objects.length; target++) {

@@ -29,6 +29,7 @@ test("release stops on a failed backup and publishes the executor before Flows",
   const stages = [
     "Validate planned Flows",
     "Verify isolated preview resources",
+    "Capture preview Worker recovery state",
     "Pause Savia writes",
     "Pause existing Flows",
     "Snapshot Flows Durable",
@@ -61,5 +62,48 @@ test("release stops on a failed backup and publishes the executor before Flows",
   assert.match(
     pipeline,
     /name: Snapshot Flows Durable Object databases\n\s+if: env.SAVIA_FLOWS_PROVISIONED == 'true'/,
+  );
+});
+
+test("failed or cancelled preview releases restore only workers whose pause was attempted", async () => {
+  const pipeline = await readFile(
+    new URL("../.github/workflows/deploy-preview.yml", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    pipeline,
+    /name: Capture preview Worker recovery state\n\s+id: capture_recovery\n\s+if: env\.SAVIA_FLOWS_PROVISIONED == 'true'/,
+  );
+  assert.match(
+    pipeline,
+    /--action capture --environment preview[\s\S]*?--apply(?:\s|$)/,
+  );
+  assert.match(
+    pipeline,
+    /id: pause_agencies[\s\S]*?command: deploy --config wrangler\.preview\.jsonc --var SAVIA_MAINTENANCE:true/,
+  );
+  assert.match(
+    pipeline,
+    /id: pause_flows[\s\S]*?command: deploy --config wrangler\.preview\.jsonc --var SAVIA_FLOWS_EXECUTION_ENABLED:false/,
+  );
+  assert.match(
+    pipeline,
+    /name: Restore preview Workers after an unsuccessful release\n\s+id: restore_recovery\n\s+if: \$\{\{ always\(\) &&[\s\S]*?failure\(\) \|\| cancelled\(\)/,
+  );
+  assert.match(
+    pipeline,
+    /SAVIA_AGENCIES_PAUSE_ATTEMPTED: \$\{\{ steps\.pause_agencies\.outcome == 'success' \|\| steps\.pause_agencies\.outcome == 'failure' \|\| steps\.pause_agencies\.outcome == 'cancelled' \}\}/,
+  );
+  assert.match(
+    pipeline,
+    /SAVIA_FLOWS_PAUSE_ATTEMPTED: \$\{\{ steps\.pause_flows\.outcome == 'success' \|\| steps\.pause_flows\.outcome == 'failure' \|\| steps\.pause_flows\.outcome == 'cancelled' \}\}/,
+  );
+  assert.match(
+    pipeline,
+    /--action restore --environment preview[\s\S]*?--apply(?:\s|$)/,
+  );
+  assert.doesNotMatch(
+    pipeline,
+    /name: Restore preview Workers after an unsuccessful release[\s\S]*?continue-on-error:/,
   );
 });

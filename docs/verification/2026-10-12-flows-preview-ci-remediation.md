@@ -64,3 +64,19 @@ The local full Flows suite, all seven Flows typechecks, core typechecks, and
 contract checks passed, alongside the focused security regressions. The final
 GitHub CI run must pass before merging. Preview deployment is followed through the
 centralized pipeline; no Flows activation is part of this change.
+
+## Maintenance review fixes
+
+Automatic backups always send a UUID and validate the server echo, including
+the stored snapshot manifest. Failure/cancellation cleanup captures the prior
+live Worker versions before pause and restores the affected configurations.
+Before rollback, Flows receives a verified persisted pause generation that
+older restored Workers cannot clear. Recovery checks the preview D1 name,
+preserves deployment traffic percentages, rejects lifecycle changes before
+maintenance, and reports rollback safety failures without a force bypass.
+
+The maintenance ID regression reproduced the missing-ID HTTP 400. The recovery
+suite executes the pause SQL against local SQLite, including a generation above
+the captured Worker generations and partial/malformed D1 response failures.
+These checks make no Cloudflare mutations. See the
+[failed-release procedure](../runbooks/flows-backup-restore.md#failed-preview-releases).

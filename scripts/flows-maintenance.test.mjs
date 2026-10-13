@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -263,6 +263,7 @@ describe("Flows maintenance CLI", () => {
     let timestamp = 0;
     let statusCount = 0;
     const emptySnapshot = { ...completeManifest, objects: [] };
+    let requestedSnapshotId;
     const fetchImpl = async (_url, options) => {
       const body = JSON.parse(options.body);
       calls.push(body.action);
@@ -275,9 +276,17 @@ describe("Flows maintenance CLI", () => {
         });
       }
       if (body.action === "start") {
-        return jsonResponse({ ...emptySnapshot, complete: false });
+        requestedSnapshotId = body.snapshotId;
+        return jsonResponse({
+          ...emptySnapshot,
+          id: requestedSnapshotId,
+          complete: false,
+        });
       }
-      if (body.action === "finish") return jsonResponse(emptySnapshot);
+      if (body.action === "finish") {
+        assert.equal(body.snapshotId, requestedSnapshotId);
+        return jsonResponse({ ...emptySnapshot, id: requestedSnapshotId });
+      }
       throw new Error(`Unexpected action ${body.action}`);
     };
     const result = await runMaintenance({
@@ -291,9 +300,70 @@ describe("Flows maintenance CLI", () => {
       },
       log: () => {},
     });
-    assert.equal(result.manifest.id, completeManifest.id);
+    assert.equal(result.manifest.id, requestedSnapshotId);
     assert.deepEqual(sleeps, [5000, 5000]);
     assert.deepEqual(calls, ["status", "status", "status", "start", "finish"]);
+  });
+
+  it("generates a snapshot ID for automatic backups and uses the server echo", async (t) => {
+    const directory = await mkdtemp(
+      join(tmpdir(), "flows-maintenance-auto-id-"),
+    );
+    const snapshotFile = join(directory, "snapshot.json");
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const startBodies = [];
+    const finishBodies = [];
+    const fetchImpl = async (_url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.action === "status") {
+        return jsonResponse({
+          executionEnabled: false,
+          maintenance: true,
+          activeRuns: 0,
+        });
+      }
+      if (body.action === "start") {
+        startBodies.push(body);
+        if (!body.snapshotId) {
+          return jsonResponse({ error: "snapshotId is required" }, 400);
+        }
+        assert.match(
+          body.snapshotId,
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+        );
+        return jsonResponse({
+          ...completeManifest,
+          id: body.snapshotId,
+          complete: false,
+          objects: [],
+        });
+      }
+      if (body.action === "finish") {
+        finishBodies.push(body);
+        return jsonResponse({
+          ...completeManifest,
+          id: startBodies[0]?.snapshotId,
+          objects: [],
+        });
+      }
+      throw new Error(`Unexpected action ${body.action}`);
+    };
+
+    const result = await runMaintenance({
+      argv: ["--action", "backup", "--snapshot-file", snapshotFile, "--apply"],
+      env: ENV,
+      fetchImpl,
+      log: () => {},
+    });
+
+    assert.equal(startBodies.length, 1);
+    assert.equal(finishBodies.length, 1);
+    assert.equal(finishBodies[0].snapshotId, startBodies[0].snapshotId);
+    assert.equal(result.manifest.id, startBodies[0].snapshotId);
+    assert.equal(
+      JSON.parse(await readFile(snapshotFile, "utf8")).id,
+      startBodies[0].snapshotId,
+    );
   });
 
   it("times out without starting a backup and reports that Flows remains paused", async () => {
@@ -357,7 +427,9 @@ describe("Flows maintenance CLI", () => {
           activeRuns: 0,
         });
       }
-      if (body.action === "start") return jsonResponse(started);
+      if (body.action === "start") {
+        return jsonResponse({ ...started, id: body.snapshotId });
+      }
       if (body.action === "finish") return jsonResponse(started);
       throw new Error(`Unexpected action ${body.action}`);
     };

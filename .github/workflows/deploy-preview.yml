@@ -100,9 +100,21 @@ jobs:
           SAVIA_DOMAIN_D1_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
           SAVIA_DOCUMENTS_BUCKET: ${{ env.SAVIA_DOCUMENTS_BUCKET }}
 
+      - name: Capture preview Worker recovery state
+        id: capture_recovery
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        run: node scripts/flows-preview-recovery.mjs --action capture --environment preview --metadata "$RUNNER_TEMP/flows-preview-recovery.json" --apply
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PROVISIONED }}
+          SAVIA_FLOWS_RESOURCES: ${{ env.SAVIA_FLOWS_RESOURCES }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       # Existing deployments are paused before copying data. First provisioning
       # has no existing Flows state and skips these stages entirely.
       - name: Pause Savia writes for persistence backup
+        id: pause_agencies
         if: env.SAVIA_FLOWS_PROVISIONED == 'true'
         uses: cloudflare/wrangler-action@v4
         with:
@@ -113,6 +125,7 @@ jobs:
           wranglerVersion: 4.127.1
 
       - name: Pause existing Flows for a coherent backup
+        id: pause_flows
         if: env.SAVIA_FLOWS_PROVISIONED == 'true'
         uses: cloudflare/wrangler-action@v4
         with:
@@ -401,3 +414,17 @@ jobs:
           name: preview-release
           path: ${{ runner.temp }}/preview-release.json
           retention-days: 30
+
+      - name: Restore preview Workers after an unsuccessful release
+        id: restore_recovery
+        if: ${{ always() && env.SAVIA_FLOWS_PROVISIONED == 'true' && steps.capture_recovery.outcome == 'success' && (failure() || cancelled()) }}
+        timeout-minutes: 3
+        run: node scripts/flows-preview-recovery.mjs --action restore --environment preview --metadata "$RUNNER_TEMP/flows-preview-recovery.json" --attempted-agencies "$SAVIA_AGENCIES_PAUSE_ATTEMPTED" --attempted-flows "$SAVIA_FLOWS_PAUSE_ATTEMPTED" --apply
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PROVISIONED }}
+          SAVIA_FLOWS_RESOURCES: ${{ env.SAVIA_FLOWS_RESOURCES }}
+          SAVIA_AGENCIES_PAUSE_ATTEMPTED: ${{ steps.pause_agencies.outcome == 'success' || steps.pause_agencies.outcome == 'failure' || steps.pause_agencies.outcome == 'cancelled' }}
+          SAVIA_FLOWS_PAUSE_ATTEMPTED: ${{ steps.pause_flows.outcome == 'success' || steps.pause_flows.outcome == 'failure' || steps.pause_flows.outcome == 'cancelled' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

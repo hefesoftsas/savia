@@ -21,7 +21,11 @@ selected stack and Cloudflare account are correct. Pause Flows writes and
 execution and enable maintenance mode. The maintenance CLI checks the paused
 state, exports each Durable Object page sequentially, asks the server to
 complete and store the snapshot, then writes its manifest with file permissions
-`0600`:
+`0600`.
+
+Backups generate a fresh UUID when `--snapshot-id` is omitted, and verify that
+the server echoes it. Pass an explicit UUID when the operation must use a known
+identifier.
 
 ```sh
 node scripts/flows-maintenance.mjs \
@@ -124,6 +128,27 @@ values are not captured by this backup format. Runtime Durable Object state is
 covered only when the complete maintenance snapshot includes its pages and the
 separate restore procedure successfully imports them. Do not report a restore
 as complete before that procedure and its checks succeed.
+
+## Failed preview releases
+
+For an existing Flows installation, the release pipeline records the active
+Worker versions before entering maintenance. A failure or cancellation after
+pausing invokes recovery through an `always()` cleanup step. Recovery attempts
+both affected Workers independently and reports any failures.
+
+Before restoring the previous Flows configuration, recovery writes a newer
+persisted pause generation. Restored Workers cannot clear that pause with older
+configuration flags. This recovers the previous HTTP service configuration
+without resuming workflow side effects. A later successful release with a newer
+generation can apply the intended execution setting.
+
+Worker rollback does not reverse D1, R2, or Durable Object data changes. Use the
+paused restore procedure above when persisted data also needs recovery. The
+pipeline refuses Durable Object lifecycle changes before pausing an existing
+installation, since those changes can make previous Worker versions unavailable
+for rollback. Cloudflare rollback safety failures are reported; recovery does
+not force a deployment past those checks. See
+[Cloudflare rollback limits](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/).
 
 ## Destroy behavior
 
