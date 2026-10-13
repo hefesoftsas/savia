@@ -3,6 +3,7 @@
 // data. Backups default under infra/pulumi/backups/ (gitignored) together
 // with a manifest.json consumed by restore.mjs.
 // R2 sync uses the S3-compatible API via AWS CLI; D1 uses wrangler export.
+import { downloadR2Object } from "./r2-object-download.mjs";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -148,6 +149,7 @@ export function buildR2SyncCommand({ bucket, destDir, accountId }) {
 export function hasS3Credentials(env = process.env) {
   return (
     env.SAVIA_BACKUP_R2_FORCE_WRANGLER !== "true" &&
+    env.SAVIA_BACKUP_R2_FORCE_API !== "true" &&
     Boolean(env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY)
   );
 }
@@ -540,12 +542,14 @@ async function main() {
           assertSafeR2Key(object.key);
           const destFile = join(destDir, object.key);
           await mkdir(dirname(destFile), { recursive: true });
-          const [command, args] = buildR2ObjectGetCommand({
+          await downloadR2Object({
             bucket,
             key: object.key,
             destFile,
+            accountId,
+            token,
+            expectedSize: object.size,
           });
-          await execFileAsync(command, args, { cwd: repoRoot });
         }
         method = "object-get";
       }

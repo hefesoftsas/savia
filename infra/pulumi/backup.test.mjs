@@ -426,5 +426,18 @@ describe("pulumi backup", () => {
     );
     assert.equal(hasS3Credentials({}), false);
     assert.equal(hasS3Credentials({ AWS_ACCESS_KEY_ID: "id" }), false);
+    for (const selector of [
+      "SAVIA_BACKUP_R2_FORCE_API",
+      "SAVIA_BACKUP_R2_FORCE_WRANGLER",
+    ]) {
+      assert.equal(
+        hasS3Credentials({
+          AWS_ACCESS_KEY_ID: "id",
+          AWS_SECRET_ACCESS_KEY: "s",
+          [selector]: "true",
+        }),
+        false,
+      );
+    }
   });
 });
