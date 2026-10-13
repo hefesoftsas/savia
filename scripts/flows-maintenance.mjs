@@ -11,6 +11,7 @@ import {
   normalizeEnvironment,
 } from "../infra/pulumi/naming.mjs";
 import { validateFlowsSnapshotManifest } from "../infra/pulumi/flows-snapshot.mjs";
+import { startPreviewMaintenanceTransport } from "./flows-maintenance-transport.mjs";
 
 const MAX_PAGES = 10_000;
 const DEFAULT_DRAIN_TIMEOUT_SECONDS = 1200;
@@ -472,8 +473,30 @@ export async function runMaintenance({
   return runRestore({ plan, request, fsImpl, log, now, sleepImpl });
 }
 
+async function runCli() {
+  const plan = parseMaintenanceArgs(process.argv.slice(2));
+  if (!plan.apply) return runMaintenance({ argv: process.argv.slice(2) });
+  let environment;
+  try {
+    environment = normalizeEnvironment(process.env.SAVIA_DEPLOY_ENVIRONMENT);
+  } catch {
+    throw new Error("SAVIA_DEPLOY_ENVIRONMENT is invalid");
+  }
+  if (environment !== "preview") return runMaintenance();
+
+  validateMaintenanceEnvironment(process.env);
+  const transport = await startPreviewMaintenanceTransport({
+    env: process.env,
+  });
+  try {
+    return await runMaintenance({ fetchImpl: transport.fetchImpl });
+  } finally {
+    await transport.close();
+  }
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  runMaintenance().catch((error) => {
+  runCli().catch((error) => {
     process.stderr.write(
       `${error instanceof Error ? error.message : String(error)}\n`,
     );
