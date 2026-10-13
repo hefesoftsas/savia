@@ -314,6 +314,24 @@ describe("pulumi backup", () => {
     );
   });
 
+  it("preserves literal percent escapes and URL delimiters in Wrangler object keys", () => {
+    const key = "plugin-editor/tenant%3A12/é #?.vsix";
+    const encoded = "b/plugin-editor/tenant%253A12/%C3%A9%20%23%3F.vsix";
+    const [, getArgs] = buildR2ObjectGetCommand({
+      bucket: "b",
+      key,
+      destFile: "/out/package",
+    });
+    const [, putArgs] = buildR2ObjectPutCommand({
+      bucket: "b",
+      key,
+      sourceFile: "/out/package",
+      s3Credentials: false,
+    });
+    assert.ok(getArgs.includes(encoded));
+    assert.ok(putArgs.includes(encoded));
+  });
+
   it("builds per-object R2 get/put commands", () => {
     const [get, getArgs] = buildR2ObjectGetCommand({
       bucket: "b",
