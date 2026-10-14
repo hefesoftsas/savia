@@ -630,7 +630,7 @@ it("includes MCP OAuth and record-monitor additions in the native core inventory
       expect(
         (
           await sqlite.prepare(`PRAGMA table_info(${table.name})`).all()
-        ).results.map((column: { name: string }) => column.name),
+        ).results.map((column) => column.name),
       ).toEqual(table.columns);
       expect(
         manifest.objects.some(
@@ -652,7 +652,7 @@ it("includes MCP OAuth and record-monitor additions in the native core inventory
         expect(
           (
             await sqlite.prepare(`PRAGMA index_list(${table.name})`).all()
-          ).results.some((entry: { name: string }) => entry.name === index),
+          ).results.some((entry) => entry.name === index),
         ).toBe(true);
       }
     }
