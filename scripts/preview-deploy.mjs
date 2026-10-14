@@ -391,7 +391,7 @@ async function main() {
       await execFileAsync(
         "pnpm",
         ["--filter", "@savia/admin", "run", "build"],
-        { cwd: workspaceRoot },
+        { cwd: workspaceRoot, maxBuffer: 16 * 1024 * 1024 },
       );
     }
     let gateway = await deploy("gateway");
