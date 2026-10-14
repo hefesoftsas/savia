@@ -132,7 +132,11 @@ as complete before that procedure and its checks succeed.
 ## Failed preview releases
 
 For an existing Flows installation, the release pipeline records the active
-Worker versions before entering maintenance. A failure or cancellation after
+Worker versions before entering maintenance. Capture validates the bindings of
+every version serving traffic in the active deployment and uses the highest
+active policy generation. It does not read the latest uploaded script settings:
+those can still describe the temporary maintenance version after rollback and
+must not block a subsequent release. A failure or cancellation after
 pausing invokes recovery through an `always()` cleanup step. Recovery attempts
 both affected Workers independently and reports any failures.
 

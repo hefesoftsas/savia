@@ -98,6 +98,9 @@ function cloudflareFetcher({
   failLatch = false,
   d1Response,
   database,
+  deployments = DEPLOYMENTS,
+  versionBindings = {},
+  latestSettingsMaintenance = "false",
 } = {}) {
   const calls = [];
   const fetcher = async (url, options = {}) => {
@@ -159,7 +162,19 @@ function cloudflareFetcher({
       const name = path.split("/").at(-2);
       return response({
         success: true,
-        result: { deployments: [{ versions: DEPLOYMENTS[name] }] },
+        result: { deployments: [{ versions: deployments[name] }] },
+      });
+    }
+    if (path.includes("/workers/scripts/savia-flows-preview/versions/")) {
+      const versionId = path.split("/").at(-1);
+      return response({
+        success: true,
+        result: {
+          id: versionId,
+          resources: {
+            bindings: versionBindings[versionId] ?? flowsBindings(),
+          },
+        },
       });
     }
     if (path.includes("/workers/services/")) {
@@ -180,7 +195,13 @@ function cloudflareFetcher({
       return response({
         success: true,
         result: {
-          ...(name.includes("flows") ? { bindings: flowsBindings() } : {}),
+          ...(name.includes("flows")
+            ? {
+                bindings: flowsBindings({
+                  maintenance: latestSettingsMaintenance,
+                }),
+              }
+            : {}),
         },
       });
     }
@@ -194,7 +215,9 @@ function cloudflareFetcher({
 test("capture stores exact active versions and configs in a private metadata file", async (t) => {
   const files = await fixture();
   t.after(() => rm(files.root, { recursive: true, force: true }));
-  const { calls, fetcher } = cloudflareFetcher();
+  const { calls, fetcher } = cloudflareFetcher({
+    latestSettingsMaintenance: "true",
+  });
   const result = await captureRecovery({
     env: env(),
     fetcher,
@@ -221,8 +244,16 @@ test("capture stores exact active versions and configs in a private metadata fil
   );
   assert.equal((await stat(files.metadataPath)).mode & 0o777, 0o600);
   assert.doesNotMatch(await readFile(files.metadataPath, "utf8"), /test-token/);
-  assert.equal(calls.length, 7);
+  assert.equal(calls.length, 6);
   assert.ok(calls.every((call) => call.method === "GET"));
+  assert.ok(
+    calls.some((call) =>
+      call.path.endsWith(
+        `/workers/scripts/savia-flows-preview/versions/${DEPLOYMENTS["savia-flows-preview"][0].version_id}`,
+      ),
+    ),
+  );
+  assert.ok(!calls.some((call) => call.path.endsWith("/settings")));
 });
 
 test("capture refuses foreign preview resources before contacting Cloudflare", async (t) => {
@@ -345,7 +376,7 @@ test("restore attempts both workers independently and never uses force", async (
   assert.ok(restore.calls.indexOf(latch) < restore.calls.indexOf(agencyPost));
 });
 
-test("capture refuses Flows settings that cannot fence stale workers or remain outside maintenance", async (t) => {
+test("capture refuses an active Flows version that is in maintenance mode", async (t) => {
   const files = await fixture();
   t.after(() => rm(files.root, { recursive: true, force: true }));
   const { fetcher } = cloudflareFetcher();
@@ -354,12 +385,13 @@ test("capture refuses Flows settings that cannot fence stale workers or remain o
       env: env(),
       fetcher: async (...args) => {
         const result = await fetcher(...args);
-        if (String(args[0]).includes("savia-flows-preview/settings")) {
+        if (String(args[0]).includes("savia-flows-preview/versions/")) {
           return response({
             success: true,
             result: {
-              migration_tag: "savia-flows-v1",
-              bindings: flowsBindings({ maintenance: "true" }),
+              resources: {
+                bindings: flowsBindings({ maintenance: "true" }),
+              },
             },
           });
         }
@@ -372,6 +404,56 @@ test("capture refuses Flows settings that cannot fence stale workers or remain o
     /maintenance/,
   );
   await assert.rejects(readFile(files.metadataPath));
+});
+
+test("capture uses the maximum generation and validates every split active Flows version", async (t) => {
+  const files = await fixture();
+  t.after(() => rm(files.root, { recursive: true, force: true }));
+  const firstVersion = "11111111-1111-4111-8111-111111111111";
+  const secondVersion = "22222222-2222-4222-8222-222222222222";
+  const flowsConfig = JSON.parse(
+    await readFile(files.configPaths.flows, "utf8"),
+  );
+  flowsConfig.vars.SAVIA_FLOWS_POLICY_GENERATION = "4000";
+  const { calls, fetcher } = cloudflareFetcher({
+    deployments: {
+      ...DEPLOYMENTS,
+      "savia-flows-preview": [
+        { version_id: firstVersion, percentage: 75 },
+        { version_id: secondVersion, percentage: 25 },
+      ],
+    },
+    latestSettingsMaintenance: "true",
+    versionBindings: {
+      [firstVersion]: flowsBindings({ generation: "2500" }),
+      [secondVersion]: flowsBindings({ generation: "3500" }),
+    },
+  });
+  await writeFile(files.configPaths.flows, JSON.stringify(flowsConfig));
+
+  await captureRecovery({
+    env: env(),
+    fetcher,
+    root: files.root,
+    configPaths: files.configPaths,
+    metadataPath: files.metadataPath,
+  });
+
+  const metadata = JSON.parse(await readFile(files.metadataPath, "utf8"));
+  assert.equal(metadata.workers.flows.policyGeneration, 3500);
+  assert.deepEqual(metadata.workers.flows.versions, [
+    { version_id: firstVersion, percentage: 75 },
+    { version_id: secondVersion, percentage: 25 },
+  ]);
+  for (const versionId of [firstVersion, secondVersion]) {
+    assert.ok(
+      calls.some((call) =>
+        call.path.endsWith(
+          `/workers/scripts/savia-flows-preview/versions/${versionId}`,
+        ),
+      ),
+    );
+  }
 });
 
 test("capture refuses a rendered Flows generation that cannot pause the current generation", async (t) => {

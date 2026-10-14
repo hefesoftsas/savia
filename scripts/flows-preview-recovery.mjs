@@ -128,9 +128,8 @@ async function verifyFlowsDatabase(api, databaseId) {
 
 async function readWorkerState(api, name, plannedConfig) {
   const path = `/workers/scripts/${name}`;
-  const [deploymentResult, settings, service] = await Promise.all([
+  const [deploymentResult, service] = await Promise.all([
     api(`${path}/deployments`),
-    api(`${path}/settings`),
     api(`/workers/services/${name}`),
   ]);
   const migrationTag = service?.default_environment?.script?.migration_tag;
@@ -145,26 +144,37 @@ async function readWorkerState(api, name, plannedConfig) {
     versions: parseVersions(deploymentResult?.deployments, name),
   };
   if (name === WORKERS.flows) {
-    const vars = Object.fromEntries(
-      (settings.bindings ?? [])
-        .filter((binding) => binding.type === "plain_text")
-        .map((binding) => [binding.name, binding.text]),
+    const activeVersions = await Promise.all(
+      state.versions.map(({ version_id }) =>
+        api(`${path}/versions/${version_id}`),
+      ),
     );
-    if (!["true", "false"].includes(vars.SAVIA_FLOWS_EXECUTION_ENABLED)) {
-      throw new Error("Flows execution settings are missing or invalid");
-    }
-    validateFlowsPreviewSettings(
-      settings,
-      vars.SAVIA_FLOWS_EXECUTION_ENABLED === "true",
-    );
-    if (vars.SAVIA_FLOWS_MAINTENANCE !== "false") {
-      throw new Error("Flows preview is already in maintenance mode");
-    }
-    const priorGeneration = Number(vars.SAVIA_FLOWS_POLICY_GENERATION);
-    if (!Number.isSafeInteger(priorGeneration) || priorGeneration <= 0) {
-      throw new Error("Flows preview policy generation is missing or invalid");
-    }
-    state.policyGeneration = priorGeneration;
+    const generations = activeVersions.map((version) => {
+      const settings = version?.resources;
+      const vars = Object.fromEntries(
+        (settings?.bindings ?? [])
+          .filter((binding) => binding.type === "plain_text")
+          .map((binding) => [binding.name, binding.text]),
+      );
+      if (!["true", "false"].includes(vars.SAVIA_FLOWS_EXECUTION_ENABLED)) {
+        throw new Error("Flows execution settings are missing or invalid");
+      }
+      validateFlowsPreviewSettings(
+        settings,
+        vars.SAVIA_FLOWS_EXECUTION_ENABLED === "true",
+      );
+      if (vars.SAVIA_FLOWS_MAINTENANCE !== "false") {
+        throw new Error("Flows preview is already in maintenance mode");
+      }
+      const generation = Number(vars.SAVIA_FLOWS_POLICY_GENERATION);
+      if (!Number.isSafeInteger(generation) || generation <= 0) {
+        throw new Error(
+          "Flows preview policy generation is missing or invalid",
+        );
+      }
+      return generation;
+    });
+    state.policyGeneration = Math.max(...generations);
   }
   return state;
 }
