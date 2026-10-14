@@ -1,0 +1,350 @@
+.secop-app {
+  --secop-bg: var(--background, #fff);
+  --secop-ink: var(--foreground, #172624);
+  --secop-muted: var(--muted-foreground, #53645e);
+  --secop-line: var(--border, #dce4df);
+  --secop-soft: var(--muted, #f3f6f4);
+  --secop-accent: var(--primary, #21604b);
+  --secop-on-accent: var(--primary-foreground, #fff);
+  --secop-danger: var(--destructive, #a62a30);
+  color: var(--secop-ink);
+  background: var(--secop-bg);
+  font: inherit;
+  line-height: 1.5;
+  max-width: 92rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+  min-width: 0;
+}
+.secop-app * {
+  box-sizing: border-box;
+}
+.secop-app :is(button, input, select, textarea) {
+  font: inherit;
+  color: inherit;
+}
+.secop-app button,
+.secop-app input,
+.secop-app select,
+.secop-app textarea {
+  min-height: 42px;
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+  background: var(--secop-bg);
+  padding: 0.55rem 0.7rem;
+}
+.secop-app button {
+  cursor: pointer;
+}
+.secop-app button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.secop-app :is(button, input, select, textarea, a):focus-visible {
+  outline: 2px solid var(--secop-accent);
+  outline-offset: 3px;
+}
+.secop-app a {
+  color: var(--secop-accent);
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+.secop-header {
+  padding: 0.2rem 0 1.25rem;
+}
+.secop-header h1 {
+  margin: 0.15rem 0 0.45rem;
+  font-size: clamp(1.55rem, 3vw, 2rem);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+.secop-header p {
+  margin: 0;
+  color: var(--secop-muted);
+  max-width: 68ch;
+}
+.secop-header .secop-eyebrow {
+  color: var(--secop-accent);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.secop-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--secop-line);
+  margin-bottom: 1.2rem;
+}
+.secop-tabs button {
+  border: 0;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.7rem 0.9rem;
+  color: var(--secop-muted);
+}
+.secop-tabs button[aria-pressed="true"] {
+  color: var(--secop-accent);
+  border-bottom-color: var(--secop-accent);
+  font-weight: 650;
+}
+.secop-app label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.secop-search {
+  padding: 1rem;
+  border: 1px solid var(--secop-line);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+.secop-query {
+  max-width: 52rem;
+}
+.secop-advanced {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+.secop-search-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.85rem;
+}
+.secop-app .secop-text-button {
+  border-color: transparent;
+  color: var(--secop-accent);
+  padding-inline: 0;
+}
+.secop-app .secop-primary {
+  color: var(--secop-on-accent);
+  background: var(--secop-accent);
+  border-color: var(--secop-accent);
+  font-weight: 650;
+}
+.secop-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  border-bottom: 1px solid var(--secop-line);
+  padding: 0 0 0.65rem;
+  margin: 0 0 0.4rem;
+}
+.secop-section-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: -0.015em;
+}
+.secop-section-head > span {
+  color: var(--secop-muted);
+  font-size: 0.8rem;
+}
+.secop-results,
+.secop-interests {
+  display: grid;
+}
+.secop-card,
+.secop-interest {
+  padding: 1.1rem 0.15rem;
+  border-bottom: 1px solid var(--secop-line);
+}
+.secop-card-title,
+.secop-interest > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.secop-app h3 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 650;
+}
+.secop-card-title p,
+.secop-interest > header p {
+  margin: 0.25rem 0 0;
+  color: var(--secop-muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+.secop-status {
+  border-radius: 4px;
+  background: var(--secop-soft);
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+}
+.secop-card dl {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 0.6rem 1rem;
+  margin: 0.9rem 0;
+}
+.secop-card dl > div {
+  min-width: 0;
+}
+.secop-card dt {
+  color: var(--secop-muted);
+  font-size: 0.72rem;
+}
+.secop-card dd {
+  margin: 0.12rem 0 0;
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+.secop-card footer,
+.secop-interest footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+.secop-card footer button,
+.secop-interest footer button {
+  min-width: 6.5rem;
+}
+.secop-muted {
+  color: var(--secop-muted);
+  font-size: 0.8rem;
+}
+.secop-state {
+  padding: 1.5rem 0.25rem;
+  color: var(--secop-muted);
+}
+.secop-error {
+  padding: 0.8rem;
+  color: var(--secop-danger);
+  background: color-mix(in srgb, var(--secop-danger) 7%, var(--secop-bg));
+  border-radius: 6px;
+}
+.secop-error button {
+  display: block;
+  margin-top: 0.5rem;
+}
+.secop-notice {
+  padding: 0.7rem 0.85rem;
+  margin: 0 0 1rem;
+  background: var(--secop-soft);
+  border-radius: 6px;
+}
+.secop-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  color: var(--secop-muted);
+  font-size: 0.8rem;
+}
+.secop-pagination > div {
+  display: flex;
+  gap: 0.5rem;
+}
+.secop-interest-search {
+  display: flex;
+  align-items: end;
+  gap: 0.7rem;
+  padding: 0.85rem 0;
+}
+.secop-interest-search label {
+  flex: 1;
+  max-width: 34rem;
+}
+.secop-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 0.9rem 0;
+}
+.secop-monitor-facts {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.85rem 0;
+  color: var(--secop-muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.secop-monitor-facts p {
+  margin: 0;
+}
+.secop-monitor-facts strong {
+  color: var(--secop-ink);
+  font-weight: 600;
+}
+.secop-monitor-error {
+  color: var(--secop-danger);
+}
+.secop-app .secop-monitor-toggle {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 0.55rem;
+}
+.secop-monitor-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  min-height: 1.1rem;
+  margin: 0;
+  accent-color: var(--secop-accent);
+}
+.secop-edit-grid .secop-wide {
+  grid-column: 1 / -1;
+}
+.secop-edit-grid textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+.secop-interest footer {
+  color: var(--secop-muted);
+  font-size: 0.78rem;
+}
+@media (max-width: 760px) {
+  .secop-app {
+    padding: 1rem 0.65rem;
+  }
+  .secop-advanced {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .secop-card dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .secop-card-title,
+  .secop-interest > header {
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+}
+@media (max-width: 480px) {
+  .secop-advanced,
+  .secop-edit-grid {
+    grid-template-columns: 1fr;
+  }
+  .secop-edit-grid .secop-wide {
+    grid-column: auto;
+  }
+  .secop-search-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .secop-search-actions button {
+    width: 100%;
+  }
+  .secop-interest-search {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .secop-interest footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .secop-interest footer button {
+    width: 100%;
+  }
+}

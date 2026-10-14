@@ -102,9 +102,17 @@ function assertStoreJson(store) {
       Array.isArray(action.flows) &&
       action.flows.length > 0 &&
       action.normalize === "insurance-quote";
-    if (!simulation && !delegation && !http && !saviaRequest) {
+    const mcp =
+      action &&
+      typeof action.id === "string" &&
+      action.kind === "mcp" &&
+      typeof action.sourceId === "string" &&
+      typeof action.tool === "string" &&
+      action.mapping &&
+      typeof action.mapping.idField === "string";
+    if (!simulation && !delegation && !http && !saviaRequest && !mcp) {
       fail(
-        "store.json solo soporta acciones simulation, delegate, http o savia-request declarativas.",
+        "store.json solo soporta acciones simulation, delegate, http, mcp o savia-request declarativas.",
       );
     }
     if (

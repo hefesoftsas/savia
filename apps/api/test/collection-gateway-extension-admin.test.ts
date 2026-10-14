@@ -128,6 +128,38 @@ describe("extension administration authorization", () => {
     );
   });
 
+  it("keeps custom-access MCP management requests on the policy-enforced local router", async () => {
+    const accessPolicy = {
+      principalId: "principal-a",
+      scope: "tenant:101" as const,
+      revision: 1,
+      grants: [],
+    };
+    const gateway = createCollectionGateway({
+      db: {} as D1Database,
+      files: {} as R2Bucket,
+      tenant: "tenant:101",
+      actor: actor({ globalRoles: [], memberships: [] }),
+      seedObjects: [],
+      accessPolicy,
+    });
+    await gateway.fetch(
+      new Request("https://crm.internal/api/sources/secop/oauth/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ redirectUri: "https://savia.dev/callback" }),
+      }),
+    );
+    expect(gatewayMocks.fetch).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.objectContaining({ DB: expect.anything() }),
+    );
+    expect(gatewayMocks.createStudioApp).toHaveBeenCalledWith(
+      "tenant:101",
+      expect.objectContaining({ accessPolicy }),
+    );
+  });
+
   it("forwards Savia Request to tenant ZIP actions in the Studio runtime", async () => {
     const saviaRequestService = { fetch: vi.fn() };
     const context = {

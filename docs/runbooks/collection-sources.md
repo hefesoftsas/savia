@@ -78,3 +78,7 @@ screen list. Installation and removal refresh navigation without waiting for a
 full HubSpot availability scan or unrelated queries. The catalog updates installed
 badges from the completed operation; **Refresh availability** checks remote access
 when needed.
+
+## MCP sources
+
+External read-only MCP tools are supported through the existing manager, with backend OAuth and explicit collection mapping. See [MCP collection sources](../mcp-collection-sources.md) for setup, security boundaries, SECOP configuration, deployment, and current limits.

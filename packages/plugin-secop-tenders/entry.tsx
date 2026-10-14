@@ -1,0 +1,1071 @@
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import type { PluginApi } from "@savia/plugin-sdk";
+import { defineReactPlugin } from "@savia/plugin-sdk/react";
+import "./styles.css";
+import {
+  COLLECTION,
+  PAGE_SIZE,
+  RequestSequence,
+  isTrackingConflict,
+  saveInterest,
+  searchSecop,
+  updateInterest,
+  type Interest,
+  type InterestStatus,
+  type SearchInput,
+  type SearchPage,
+  type SecopRow,
+} from "./logic";
+
+type Locale = "es" | "en" | "pt";
+const messages = {
+  es: {
+    title: "Licitaciones SECOP",
+    subtitle:
+      "Busca procesos públicos y organiza el seguimiento que tu equipo decide guardar.",
+    search: "Buscar procesos",
+    interests: "Mis intereses",
+    query: "Palabras clave",
+    status: "Estado SECOP",
+    entity: "Entidad",
+    modality: "Modalidad",
+    department: "Departamento",
+    run: "Buscar",
+    loading: "Consultando SECOP…",
+    searchFirst:
+      "Ingresa criterios y busca para consultar procesos disponibles.",
+    noResults: "No se encontraron procesos con estos criterios.",
+    searchError: "No se pudo consultar SECOP. Inténtalo de nuevo.",
+    resultCount: "procesos en esta página",
+    process: "Proceso",
+    entityLabel: "Entidad",
+    departmentLabel: "Departamento",
+    amount: "Valor base",
+    deadline: "Cierre",
+    source: "Ver en SECOP",
+    save: "Seguir",
+    saved: "Guardada",
+    saving: "Guardando…",
+    savedOk: "Oportunidad guardada en tus intereses.",
+    alreadySaved: "Esta oportunidad ya está en tus intereses.",
+    saveError: "No se pudo guardar la oportunidad.",
+    previous: "Anterior",
+    next: "Siguiente",
+    page: "Página",
+    emptyInterests: "Todavía no has guardado oportunidades.",
+    loadingInterests: "Cargando intereses…",
+    interestsError: "No se pudieron cargar tus intereses.",
+    statusTrack: "Seguimiento",
+    priority: "Prioridad",
+    notes: "Notas",
+    saveNotes: "Guardar seguimiento",
+    savedChanges: "Seguimiento actualizado.",
+    conflict:
+      "Otro usuario cambió este registro. Se recargó la versión actual; revisa antes de guardar de nuevo.",
+    updateError: "No se pudo actualizar el seguimiento.",
+    normal: "Normal",
+    low: "Baja",
+    high: "Alta",
+    interested: "Interesada",
+    evaluating: "En evaluación",
+    preparing: "Preparando oferta",
+    submitted: "Presentada",
+    awarded: "Adjudicada",
+    discarded: "Descartada",
+    owner: "Responsable",
+    followUp: "Próximo seguimiento",
+    noData: "Sin dato en SECOP",
+    processId: "Proceso SECOP",
+    sourceUnavailable: "Enlace SECOP no disponible",
+    searchAria: "Criterios de búsqueda SECOP",
+    results: "Resultados SECOP",
+    savedList: "Oportunidades guardadas",
+    sourceStatus: "Estado",
+    sourceStatusLabel: "Estado SECOP actual",
+    monitoringEnabled: "Monitoreo automático",
+    lastCheck: "Última revisión",
+    neverChecked: "Pendiente de primera revisión",
+    monitorError: "No se pudo actualizar SECOP",
+    monitorErrorAuthorization:
+      "Vuelve a conectar SECOP en Fuentes y colecciones para continuar el monitoreo.",
+    monitorErrorMissing:
+      "No se encontró el proceso guardado. Se volverá a intentar automáticamente.",
+    monitorErrorDeadline:
+      "SECOP no tiene una fecha de cierre válida; no se enviarán recordatorios de cierre.",
+    monitorErrorUnavailable:
+      "SECOP no está disponible. Se volverá a intentar automáticamente.",
+    monitorPauseByStatus:
+      "Los procesos adjudicados o descartados se pausan automáticamente.",
+    pageOf: "de",
+    hideAdvanced: "Ocultar filtros",
+    showAdvanced: "Filtros avanzados",
+  },
+  en: {
+    title: "SECOP tenders",
+    subtitle:
+      "Search public procurement and track the opportunities your team chooses to save.",
+    search: "Search tenders",
+    interests: "My interests",
+    query: "Keywords",
+    status: "SECOP status",
+    entity: "Entity",
+    modality: "Modality",
+    department: "Department",
+    run: "Search",
+    loading: "Searching SECOP…",
+    searchFirst: "Enter criteria and search to see available opportunities.",
+    noResults: "No tenders match these criteria.",
+    searchError: "SECOP search failed. Try again.",
+    resultCount: "tenders on this page",
+    process: "Tender",
+    entityLabel: "Entity",
+    departmentLabel: "Department",
+    amount: "Base value",
+    deadline: "Deadline",
+    source: "View on SECOP",
+    save: "Track",
+    saved: "Saved",
+    saving: "Saving…",
+    savedOk: "Opportunity saved to your interests.",
+    alreadySaved: "This opportunity is already in your interests.",
+    saveError: "Could not save this opportunity.",
+    previous: "Previous",
+    next: "Next",
+    page: "Page",
+    emptyInterests: "You have not saved any opportunities yet.",
+    loadingInterests: "Loading interests…",
+    interestsError: "Could not load your interests.",
+    statusTrack: "Tracking status",
+    priority: "Priority",
+    notes: "Notes",
+    saveNotes: "Save tracking",
+    savedChanges: "Tracking updated.",
+    conflict:
+      "Another user changed this record. The current version was reloaded; review it before saving again.",
+    updateError: "Could not update tracking.",
+    normal: "Normal",
+    low: "Low",
+    high: "High",
+    interested: "Interested",
+    evaluating: "Evaluating",
+    preparing: "Preparing bid",
+    submitted: "Submitted",
+    awarded: "Awarded",
+    discarded: "Discarded",
+    owner: "Owner",
+    followUp: "Next follow-up",
+    noData: "No SECOP data",
+    processId: "SECOP process",
+    sourceUnavailable: "SECOP link unavailable",
+    searchAria: "SECOP search criteria",
+    results: "SECOP results",
+    savedList: "Saved opportunities",
+    sourceStatus: "Status",
+    sourceStatusLabel: "Current SECOP status",
+    monitoringEnabled: "Automatic monitoring",
+    lastCheck: "Last check",
+    neverChecked: "Waiting for the first check",
+    monitorError: "SECOP could not be updated",
+    monitorErrorAuthorization:
+      "Reconnect SECOP in Sources and collections to resume monitoring.",
+    monitorErrorMissing:
+      "The saved process could not be found. It will be retried automatically.",
+    monitorErrorDeadline:
+      "SECOP has no usable closing date; no closing reminder will be sent.",
+    monitorErrorUnavailable:
+      "SECOP is unavailable. It will be retried automatically.",
+    monitorPauseByStatus: "Awarded or discarded processes pause automatically.",
+    pageOf: "of",
+    hideAdvanced: "Hide filters",
+    showAdvanced: "Advanced filters",
+  },
+  pt: {
+    title: "Licitações SECOP",
+    subtitle:
+      "Pesquise processos públicos e acompanhe as oportunidades que sua equipe decidir salvar.",
+    search: "Buscar licitações",
+    interests: "Meus interesses",
+    query: "Palavras-chave",
+    status: "Status SECOP",
+    entity: "Entidade",
+    modality: "Modalidade",
+    department: "Departamento",
+    run: "Buscar",
+    loading: "Consultando SECOP…",
+    searchFirst:
+      "Informe os critérios e busque para consultar oportunidades disponíveis.",
+    noResults: "Nenhuma licitação encontrada com estes critérios.",
+    searchError: "Não foi possível consultar o SECOP. Tente novamente.",
+    resultCount: "licitações nesta página",
+    process: "Processo",
+    entityLabel: "Entidade",
+    departmentLabel: "Departamento",
+    amount: "Valor base",
+    deadline: "Prazo",
+    source: "Ver no SECOP",
+    save: "Acompanhar",
+    saved: "Salva",
+    saving: "Salvando…",
+    savedOk: "Oportunidade salva nos seus interesses.",
+    alreadySaved: "Esta oportunidade já está nos seus interesses.",
+    saveError: "Não foi possível salvar a oportunidade.",
+    previous: "Anterior",
+    next: "Próxima",
+    page: "Página",
+    emptyInterests: "Você ainda não salvou oportunidades.",
+    loadingInterests: "Carregando interesses…",
+    interestsError: "Não foi possível carregar seus interesses.",
+    statusTrack: "Acompanhamento",
+    priority: "Prioridade",
+    notes: "Notas",
+    saveNotes: "Salvar acompanhamento",
+    savedChanges: "Acompanhamento atualizado.",
+    conflict:
+      "Outro usuário alterou este registro. A versão atual foi recarregada; revise antes de salvar novamente.",
+    updateError: "Não foi possível atualizar o acompanhamento.",
+    normal: "Normal",
+    low: "Baixa",
+    high: "Alta",
+    interested: "Interessada",
+    evaluating: "Em avaliação",
+    preparing: "Preparando proposta",
+    submitted: "Apresentada",
+    awarded: "Adjudicada",
+    discarded: "Descartada",
+    owner: "Responsável",
+    followUp: "Próximo acompanhamento",
+    noData: "Sem dados no SECOP",
+    processId: "Processo SECOP",
+    sourceStatus: "Status",
+    sourceStatusLabel: "Status atual no SECOP",
+    monitoringEnabled: "Monitoramento automático",
+    lastCheck: "Última verificação",
+    neverChecked: "Aguardando a primeira verificação",
+    monitorError: "Não foi possível atualizar o SECOP",
+    monitorErrorAuthorization:
+      "Reconecte o SECOP em Fontes e coleções para retomar o monitoramento.",
+    monitorErrorMissing:
+      "O processo salvo não foi encontrado. Uma nova tentativa será feita automaticamente.",
+    monitorErrorDeadline:
+      "O SECOP não tem uma data de encerramento válida; não haverá lembrete de encerramento.",
+    monitorErrorUnavailable:
+      "O SECOP está indisponível. Uma nova tentativa será feita automaticamente.",
+    monitorPauseByStatus:
+      "Processos adjudicados ou descartados são pausados automaticamente.",
+    sourceUnavailable: "Link SECOP indisponível",
+    searchAria: "Critérios de busca SECOP",
+    results: "Resultados SECOP",
+    savedList: "Oportunidades salvas",
+    hideAdvanced: "Ocultar filtros",
+    showAdvanced: "Filtros avançados",
+    pageOf: "de",
+  },
+} as const;
+
+const catalog = Object.fromEntries(
+  (Object.keys(messages.en) as Array<keyof typeof messages.en>).map((key) => [
+    key,
+    [messages.es[key], messages.en[key], messages.pt[key]],
+  ]),
+) as unknown as Record<
+  keyof typeof messages.en,
+  readonly [string, string, string]
+>;
+
+function isLocale(value: string | undefined): Locale {
+  const language = value?.toLowerCase().split("-")[0];
+  return language === "en" || language === "pt" ? language : "es";
+}
+function monitorErrorMessage(
+  value: unknown,
+  t: (typeof messages)[Locale],
+): string {
+  switch (value) {
+    case "authorization_required":
+      return t.monitorErrorAuthorization;
+    case "record_missing":
+      return t.monitorErrorMissing;
+    case "invalid_deadline":
+      return t.monitorErrorDeadline;
+    case "source_unavailable":
+      return t.monitorErrorUnavailable;
+    default:
+      return t.monitorError;
+  }
+}
+function formatMonitorCheck(
+  value: unknown,
+  locale: Locale,
+  fallback: string,
+): string {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  const at = new Date(value);
+  if (!Number.isFinite(at.getTime())) return fallback;
+  const dateLocale =
+    locale === "en" ? "en-US" : locale === "pt" ? "pt-BR" : "es-CO";
+  try {
+    return new Intl.DateTimeFormat(dateLocale, {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "America/Bogota",
+    }).format(at);
+  } catch {
+    return fallback;
+  }
+}
+function display(value: unknown, fallback: string) {
+  if (value === undefined || value === null || String(value).trim() === "")
+    return fallback;
+  return String(value);
+}
+function sourceLink(value: unknown): string | null {
+  try {
+    const url = new URL(String(value ?? ""));
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+function formatAmount(value: unknown, locale: Locale) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    !Number.isFinite(Number(value))
+  )
+    return "—";
+  return new Intl.NumberFormat(
+    locale === "es" ? "es-CO" : locale === "pt" ? "pt-BR" : "en-US",
+    { style: "currency", currency: "COP", maximumFractionDigits: 0 },
+  ).format(Number(value));
+}
+
+function Screen({ savia }: { savia: PluginApi }) {
+  const locale = isLocale(savia.i18n?.locale);
+  const t = new Proxy(messages[locale], {
+    get(target, property: string) {
+      if (property in catalog)
+        return (
+          savia.i18n?.translate(catalog, property as keyof typeof catalog) ??
+          target[property as keyof typeof target]
+        );
+      return target[property as keyof typeof target];
+    },
+  });
+  const [surface, setSurface] = useState<"search" | "interests">("search");
+  const [criteria, setCriteria] = useState<SearchInput>({});
+  const [draft, setDraft] = useState<SearchInput>({});
+  const [advanced, setAdvanced] = useState(false);
+  const [searchPage, setSearchPage] = useState<SearchPage | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [page, setPage] = useState(1);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const [interests, setInterests] = useState<Interest[]>([]);
+  const [interestPage, setInterestPage] = useState(1);
+  const [interestTotal, setInterestTotal] = useState(0);
+  const [interestQuery, setInterestQuery] = useState("");
+  const [interestQueryDraft, setInterestQueryDraft] = useState("");
+  const [interestLoading, setInterestLoading] = useState(false);
+  const [interestError, setInterestError] = useState(false);
+  const [edits, setEdits] = useState<
+    Record<
+      string,
+      {
+        notes: string;
+        status: InterestStatus;
+        priority: string;
+        owner: string;
+        next_follow_up: string;
+        monitoring_enabled: boolean;
+      }
+    >
+  >({});
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const searchRequests = useRef(new RequestSequence()).current;
+  const interestRequests = useRef(new RequestSequence()).current;
+  const mounted = useRef(true);
+
+  const collection = useMemo(
+    () => savia.collections.collection<Interest>(COLLECTION),
+    [savia],
+  );
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      searchRequests.invalidate();
+      interestRequests.invalidate();
+    };
+  }, []);
+  const loadSearch = async (nextPage: number, values = criteria) => {
+    const id = searchRequests.begin();
+    setSearchLoading(true);
+    setSearchError(false);
+    setNotice("");
+    try {
+      const result = await searchSecop(savia, {
+        ...values,
+        page: nextPage,
+        perPage: PAGE_SIZE,
+      });
+      if (!searchRequests.isCurrent(id)) return;
+      setCriteria(values);
+      setPage(nextPage);
+      setSearchPage(result);
+      setSearched(true);
+      setSavedIds((current) => new Set(current));
+    } catch {
+      if (searchRequests.isCurrent(id)) {
+        setSearchError(true);
+        setSearchPage(null);
+        setSearched(true);
+      }
+    } finally {
+      if (searchRequests.isCurrent(id)) setSearchLoading(false);
+    }
+  };
+  const loadInterests = async (nextPage: number, query = interestQuery) => {
+    const id = interestRequests.begin();
+    setInterestLoading(true);
+    setInterestError(false);
+    try {
+      const result = await collection.list({
+        page: nextPage,
+        perPage: PAGE_SIZE,
+        q: query,
+        searchFields: [
+          "name",
+          "source_id",
+          "process_id",
+          "entity",
+          "department",
+          "notes",
+        ],
+      });
+      if (!interestRequests.isCurrent(id)) return;
+      setInterests(result.data);
+      setInterestPage(result.page);
+      setInterestTotal(result.total);
+      setEdits((current) => {
+        const updated = { ...current };
+        for (const item of result.data)
+          updated[item.id] = {
+            notes: String(item.notes ?? ""),
+            status: item.status,
+            priority: String(item.priority ?? "normal"),
+            owner: String(item.owner ?? ""),
+            next_follow_up: String(item.next_follow_up ?? "").slice(0, 10),
+            monitoring_enabled: item.monitoring_enabled !== false,
+          };
+        return updated;
+      });
+    } catch {
+      if (interestRequests.isCurrent(id)) setInterestError(true);
+    } finally {
+      if (interestRequests.isCurrent(id)) setInterestLoading(false);
+    }
+  };
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    void loadSearch(1, draft);
+  };
+  const submitInterestSearch = (event: FormEvent) => {
+    event.preventDefault();
+    setInterestQuery(interestQueryDraft);
+    void loadInterests(1, interestQueryDraft);
+  };
+  const markInterest = async (row: SecopRow) => {
+    setSavingId(row.id);
+    setNotice("");
+    try {
+      const result = await saveInterest(savia, row);
+      if (!mounted.current) return;
+      setSavedIds((current) => new Set(current).add(row.id));
+      setNotice(result.created ? t.savedOk : t.alreadySaved);
+    } catch {
+      if (!mounted.current) return;
+      setNotice(t.saveError);
+    } finally {
+      if (mounted.current) setSavingId(null);
+    }
+  };
+  const saveTracking = async (record: Interest) => {
+    const values = edits[record.id];
+    if (!values) return;
+    setUpdatingId(record.id);
+    setNotice("");
+    try {
+      const updated = await updateInterest(savia, record, values);
+      if (!mounted.current) return;
+      setInterests((current) =>
+        current.map((item) => (item.id === record.id ? updated : item)),
+      );
+      setEdits((current) => ({
+        ...current,
+        [record.id]: {
+          notes: String(updated.notes ?? ""),
+          status: updated.status,
+          priority: String(updated.priority ?? "normal"),
+          owner: String(updated.owner ?? ""),
+          next_follow_up: String(updated.next_follow_up ?? "").slice(0, 10),
+          monitoring_enabled: updated.monitoring_enabled !== false,
+        },
+      }));
+      setNotice(t.savedChanges);
+    } catch (error) {
+      if (!mounted.current) return;
+      const localized = savia.i18n?.error(error);
+      if (isTrackingConflict(localized) || isTrackingConflict(error)) {
+        setNotice(t.conflict);
+        try {
+          const current = await collection.get(record.id);
+          if (!mounted.current) return;
+          setInterests((items) =>
+            items.map((item) => (item.id === current.id ? current : item)),
+          );
+          setEdits((items) => ({
+            ...items,
+            [record.id]: {
+              notes: String(current.notes ?? ""),
+              status: current.status,
+              priority: String(current.priority ?? "normal"),
+              owner: String(current.owner ?? ""),
+              next_follow_up: String(current.next_follow_up ?? "").slice(0, 10),
+              monitoring_enabled: current.monitoring_enabled !== false,
+            },
+          }));
+        } catch {
+          setNotice(t.conflict);
+        }
+      } else setNotice(t.updateError);
+    } finally {
+      if (mounted.current) setUpdatingId(null);
+    }
+  };
+  const statuses: InterestStatus[] = [
+    "interested",
+    "evaluating",
+    "preparing",
+    "submitted",
+    "awarded",
+    "discarded",
+  ];
+  const totalInterestPages = Math.max(1, Math.ceil(interestTotal / PAGE_SIZE));
+
+  return (
+    <main className="secop-app">
+      <header className="secop-header">
+        <div>
+          <p className="secop-eyebrow">SECOP · Colombia</p>
+          <h1>{t.title}</h1>
+          <p>{t.subtitle}</p>
+        </div>
+      </header>
+      <nav className="secop-tabs" aria-label={t.title}>
+        <button
+          type="button"
+          aria-pressed={surface === "search"}
+          onClick={() => setSurface("search")}
+        >
+          {t.search}
+        </button>
+        <button
+          type="button"
+          aria-pressed={surface === "interests"}
+          onClick={() => {
+            setSurface("interests");
+            void loadInterests(1);
+          }}
+        >
+          {t.interests}
+        </button>
+      </nav>
+      {notice && (
+        <p className="secop-notice" role="status">
+          {notice}
+        </p>
+      )}
+      {surface === "search" ? (
+        <>
+          <form
+            className="secop-search"
+            onSubmit={submitSearch}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                (event.target as HTMLElement).tagName === "INPUT"
+              )
+                submitSearch(event);
+            }}
+            aria-label={t.searchAria}
+          >
+            <label className="secop-query">
+              {t.query}
+              <input
+                value={draft.q ?? ""}
+                onChange={(event) =>
+                  setDraft({ ...draft, q: event.target.value })
+                }
+              />
+            </label>
+            {advanced && (
+              <div className="secop-advanced">
+                <label>
+                  {t.status}
+                  <input
+                    value={draft.estado ?? ""}
+                    onChange={(event) =>
+                      setDraft({ ...draft, estado: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  {t.entity}
+                  <input
+                    value={draft.entidad ?? ""}
+                    onChange={(event) =>
+                      setDraft({ ...draft, entidad: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  {t.modality}
+                  <input
+                    value={draft.modalidad ?? ""}
+                    onChange={(event) =>
+                      setDraft({ ...draft, modalidad: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  {t.department}
+                  <input
+                    value={draft.departamento ?? ""}
+                    onChange={(event) =>
+                      setDraft({ ...draft, departamento: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+            )}
+            <div className="secop-search-actions">
+              <button
+                type="button"
+                className="secop-text-button"
+                onClick={() => setAdvanced((value) => !value)}
+              >
+                {advanced ? t.hideAdvanced : t.showAdvanced}
+              </button>
+              <button
+                className="secop-primary"
+                type="button"
+                onClick={submitSearch}
+                disabled={searchLoading}
+              >
+                {searchLoading ? t.loading : t.run}
+              </button>
+            </div>
+          </form>
+          <section aria-labelledby="secop-results-title">
+            <div className="secop-section-head">
+              <h2 id="secop-results-title">{t.results}</h2>
+              {searchPage && (
+                <span>
+                  {searchPage.data.length} {t.resultCount}
+                </span>
+              )}
+            </div>
+            {searchLoading && (
+              <p className="secop-state" role="status">
+                {t.loading}
+              </p>
+            )}
+            {searchError && (
+              <p className="secop-error" role="alert">
+                {t.searchError}
+                <button type="button" onClick={() => void loadSearch(page)}>
+                  {t.run}
+                </button>
+              </p>
+            )}
+            {!searchLoading && !searchError && !searched && (
+              <p className="secop-state">{t.searchFirst}</p>
+            )}
+            {!searchLoading &&
+              !searchError &&
+              searched &&
+              searchPage?.data.length === 0 && (
+                <p className="secop-state">{t.noResults}</p>
+              )}
+            {!!searchPage?.data.length && (
+              <div className="secop-results">
+                {searchPage.data.map((row) => {
+                  const link = sourceLink(row.source_url);
+                  const isSaved = savedIds.has(row.id);
+                  return (
+                    <article className="secop-card" key={row.id}>
+                      <div className="secop-card-title">
+                        <div>
+                          <h3>{display(row.name, t.noData)}</h3>
+                          <p>
+                            {t.processId}: {display(row.process_id, row.id)}
+                          </p>
+                        </div>
+                        <span className="secop-status">
+                          {display(row.source_status, t.noData)}
+                        </span>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>{t.entityLabel}</dt>
+                          <dd>{display(row.entity, t.noData)}</dd>
+                        </div>
+                        <div>
+                          <dt>{t.departmentLabel}</dt>
+                          <dd>{display(row.department, t.noData)}</dd>
+                        </div>
+                        <div>
+                          <dt>{t.amount}</dt>
+                          <dd>{formatAmount(row.amount, locale)}</dd>
+                        </div>
+                        <div>
+                          <dt>{t.deadline}</dt>
+                          <dd>{display(row.deadline, t.noData)}</dd>
+                        </div>
+                      </dl>
+                      <footer>
+                        {link ? (
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {t.source}
+                          </a>
+                        ) : (
+                          <span className="secop-muted">
+                            {t.sourceUnavailable}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          disabled={isSaved || savingId === row.id}
+                          onClick={() => void markInterest(row)}
+                        >
+                          {savingId === row.id
+                            ? t.saving
+                            : isSaved
+                              ? t.saved
+                              : t.save}
+                        </button>
+                      </footer>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+            {!!searchPage?.data.length && (
+              <div className="secop-pagination">
+                <span>
+                  {t.page} {page}
+                </span>
+                <div>
+                  <button
+                    type="button"
+                    disabled={searchLoading || page <= 1}
+                    onClick={() => void loadSearch(page - 1)}
+                  >
+                    {t.previous}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={searchLoading || !searchPage.hasNext}
+                    onClick={() => void loadSearch(page + 1)}
+                  >
+                    {t.next}
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        <section aria-labelledby="secop-interests-title">
+          <div className="secop-section-head">
+            <h2 id="secop-interests-title">{t.savedList}</h2>
+            <span>
+              {interestTotal} {t.interests.toLowerCase()}
+            </span>
+          </div>
+          <form
+            className="secop-interest-search"
+            onSubmit={submitInterestSearch}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                (event.target as HTMLElement).tagName === "INPUT"
+              )
+                submitInterestSearch(event);
+            }}
+          >
+            <label>
+              {t.query}
+              <input
+                value={interestQueryDraft}
+                onChange={(event) => setInterestQueryDraft(event.target.value)}
+              />
+            </label>
+            <button
+              className="secop-primary"
+              type="button"
+              onClick={submitInterestSearch}
+            >
+              {t.run}
+            </button>
+          </form>
+          {interestLoading && (
+            <p className="secop-state" role="status">
+              {t.loadingInterests}
+            </p>
+          )}
+          {interestError && (
+            <p className="secop-error" role="alert">
+              {t.interestsError}
+              <button
+                type="button"
+                onClick={() => void loadInterests(interestPage)}
+              >
+                {t.run}
+              </button>
+            </p>
+          )}
+          {!interestLoading && !interestError && interests.length === 0 && (
+            <p className="secop-state">{t.emptyInterests}</p>
+          )}
+          <div className="secop-interests">
+            {interests.map((record) => {
+              const values = edits[record.id] ?? {
+                notes: String(record.notes ?? ""),
+                status: record.status,
+                priority: String(record.priority ?? "normal"),
+                owner: String(record.owner ?? ""),
+                next_follow_up: String(record.next_follow_up ?? "").slice(
+                  0,
+                  10,
+                ),
+                monitoring_enabled: record.monitoring_enabled !== false,
+              };
+              const link = sourceLink(record.source_url);
+              return (
+                <article className="secop-interest" key={record.id}>
+                  <header>
+                    <div>
+                      <h3>{record.name}</h3>
+                      <p>
+                        {t.processId}:{" "}
+                        {display(record.process_id, record.source_id)} ·{" "}
+                        {display(record.entity, t.noData)}
+                      </p>
+                    </div>
+                    {link && (
+                      <a href={link} target="_blank" rel="noopener noreferrer">
+                        {t.source}
+                      </a>
+                    )}
+                  </header>
+                  <div
+                    className="secop-monitor-facts"
+                    aria-label={t.sourceStatusLabel}
+                  >
+                    <p>
+                      <strong>{t.sourceStatusLabel}:</strong>{" "}
+                      {display(record.source_status, t.noData)}
+                    </p>
+                    <p>
+                      <strong>{t.deadline}:</strong>{" "}
+                      {display(record.deadline, t.noData)}
+                    </p>
+                    <p>
+                      <strong>{t.lastCheck}:</strong>{" "}
+                      {formatMonitorCheck(
+                        record.monitoring_checked_at,
+                        locale,
+                        t.neverChecked,
+                      )}
+                    </p>
+                    {record.monitoring_error && (
+                      <p className="secop-monitor-error" role="status">
+                        {monitorErrorMessage(record.monitoring_error, t)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="secop-edit-grid">
+                    <label className="secop-monitor-toggle">
+                      <input
+                        type="checkbox"
+                        checked={values.monitoring_enabled}
+                        onChange={(event) =>
+                          setEdits({
+                            ...edits,
+                            [record.id]: {
+                              ...values,
+                              monitoring_enabled: event.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        {t.monitoringEnabled}
+                        <small
+                          className="secop-muted"
+                          style={{ display: "block" }}
+                        >
+                          {t.monitorPauseByStatus}
+                        </small>
+                      </span>
+                    </label>
+                    <label>
+                      {t.statusTrack}
+                      <select
+                        value={values.status}
+                        onChange={(event) =>
+                          setEdits({
+                            ...edits,
+                            [record.id]: {
+                              ...values,
+                              status: event.target.value as InterestStatus,
+                            },
+                          })
+                        }
+                      >
+                        {statuses.map((status) => (
+                          <option key={status} value={status}>
+                            {t[status]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      {t.priority}
+                      <select
+                        value={values.priority}
+                        onChange={(event) =>
+                          setEdits({
+                            ...edits,
+                            [record.id]: {
+                              ...values,
+                              priority: event.target.value,
+                            },
+                          })
+                        }
+                      >
+                        <option value="low">{t.low}</option>
+                        <option value="normal">{t.normal}</option>
+                        <option value="high">{t.high}</option>
+                      </select>
+                    </label>
+                    <label>
+                      {t.owner}
+                      <input
+                        maxLength={120}
+                        value={values.owner}
+                        onChange={(event) =>
+                          setEdits({
+                            ...edits,
+                            [record.id]: {
+                              ...values,
+                              owner: event.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      {t.followUp}
+                      <input
+                        type="date"
+                        value={values.next_follow_up}
+                        onChange={(event) =>
+                          setEdits({
+                            ...edits,
+                            [record.id]: {
+                              ...values,
+                              next_follow_up: event.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="secop-wide">
+                      {t.notes}
+                      <textarea
+                        maxLength={4000}
+                        value={values.notes}
+                        onChange={(event) =>
+                          setEdits({
+                            ...edits,
+                            [record.id]: {
+                              ...values,
+                              notes: event.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <footer>
+                    <span>
+                      {t.processId}:{" "}
+                      {display(record.process_id, record.source_id)}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={updatingId === record.id}
+                      onClick={() => void saveTracking(record)}
+                    >
+                      {updatingId === record.id ? t.saving : t.saveNotes}
+                    </button>
+                  </footer>
+                </article>
+              );
+            })}
+          </div>
+          {interestTotal > PAGE_SIZE && (
+            <div className="secop-pagination">
+              <span>
+                {t.page} {interestPage} {t.pageOf} {totalInterestPages}
+              </span>
+              <div>
+                <button
+                  type="button"
+                  disabled={interestLoading || interestPage <= 1}
+                  onClick={() => void loadInterests(interestPage - 1)}
+                >
+                  {t.previous}
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    interestLoading || interestPage >= totalInterestPages
+                  }
+                  onClick={() => void loadInterests(interestPage + 1)}
+                >
+                  {t.next}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+    </main>
+  );
+}
+
+const plugin = defineReactPlugin(Screen);
+export const { render, renderPanel } = plugin;

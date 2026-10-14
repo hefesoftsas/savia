@@ -113,6 +113,7 @@ export function createPluginProject(): IdeFiles {
     format: "savia.store",
     formatVersion: 1,
     actions: [],
+    monitors: [],
     connectors: [],
     collections: [],
     bundles: [],

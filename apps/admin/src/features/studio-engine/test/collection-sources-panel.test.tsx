@@ -95,6 +95,7 @@ function openSourcesTab() {
 afterEach(() => {
   cleanup();
   setStudioRuntime({ embedded: false });
+  vi.restoreAllMocks();
 });
 it("loads catalog without writes and binds a domain collection to a screen", async () => {
   const transport = mockTransport();
@@ -553,6 +554,319 @@ it("labels CRM bindings with their provider", async () => {
   mount(<CollectionSourcesPanel onBound={vi.fn()} />);
   fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
   expect(await screen.findByText("Salesforce · contacts")).toBeVisible();
+});
+it("creates and authorizes an MCP source, then maps only a read-only tool", async () => {
+  const mcpSource = {
+    id: "secop_live",
+    label: "SECOP",
+    kind: "mcp",
+    endpoint: "https://secop-live-worker.jose-douglas-dev.workers.dev/mcp",
+    authMode: "oauth",
+    hasToken: false,
+  };
+  const linked = {
+    name: "secop_contracts",
+    label: "Contratos SECOP",
+    sourceId: "secop_live",
+    resource: "buscar_licitaciones",
+    kind: "mcp",
+  };
+  const readonlyTool = {
+    name: "buscar_licitaciones",
+    description: "List public contract records",
+    inputSchema: {
+      type: "object",
+      properties: { status: { type: "string" }, limit: { type: "integer" } },
+    },
+    outputSchema: {
+      type: "object",
+      properties: { contracts: { type: "array" } },
+    },
+    // The SECOP adapter approves this name from the source allowlist because
+    // the upstream tool has no annotations.
+  };
+  const transport = vi.fn(async (path: string, init?: RequestInit) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    if (path === "/api/sources/secop_live/oauth/start")
+      return Response.json({
+        data: {
+          authorizationUrl: "https://auth.example.test/authorize?state=test",
+        },
+      });
+    if (
+      path === "/api/sources/secop_live/inspect" &&
+      init?.method === "POST"
+    )
+      return Response.json({
+        data: body?.resource
+          ? {
+              fields: {
+                id: { type: "Textbox", label: "ID" },
+                title: { type: "Textbox", label: "Title" },
+              },
+            }
+          : {
+              tools: [
+                readonlyTool,
+                {
+                  name: "delete_contract",
+                  description: "Delete a contract",
+                  annotations: { readOnlyHint: false },
+                },
+              ],
+            },
+      });
+    return Response.json({
+      data:
+        init?.method === "POST"
+          ? path === "/api/sources"
+            ? mcpSource
+            : path === "/api/collection-bindings"
+              ? linked
+              : { ok: true }
+          : path === "/api/sources"
+            ? [mcpSource]
+            : path === "/api/collection-bindings"
+              ? [linked]
+              : [],
+    });
+  });
+  const popup = {
+    opener: window,
+    location: { assign: vi.fn() },
+    close: vi.fn(),
+  } as unknown as Window;
+  const openSpy = vi.spyOn(window, "open").mockReturnValue(popup);
+  const bound = vi.fn();
+  setStudioRuntime({
+    embedded: true,
+    apiBasePath: "/v1/studio/acme",
+    tenantId: 0,
+    transport,
+  });
+  mount(<CollectionSourcesPanel onBound={bound} />);
+
+  openSourcesTab();
+  fireEvent.click(screen.getByRole("button", { name: "Nueva fuente externa" }));
+  fireEvent.change(screen.getByLabelText("Tipo de fuente"), {
+    target: { value: "mcp" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Usar configuración de SECOP" }),
+  );
+  for (const [label, value] of [
+    ["ID de cliente OAuth (opcional)", "savia-client"],
+    ["Secreto de cliente OAuth (opcional)", "client-secret"],
+  ])
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  fireEvent.click(screen.getByRole("button", { name: "Guardar fuente" }));
+  await screen.findByText("Fuente guardada. Ya puedes vincular una colección.");
+  const createCall = transport.mock.calls.find(
+    ([path, init]) => path === "/api/sources" && init?.method === "POST",
+  );
+  expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
+    id: "secop_live",
+    kind: "mcp",
+    authMode: "oauth",
+    endpoint: "https://secop-live-worker.jose-douglas-dev.workers.dev/mcp",
+    readOnlyTools: [
+      "buscar_licitaciones",
+      "detalle_licitacion",
+      "buscar_documentos",
+    ],
+    oauth: {
+      clientId: "savia-client",
+      clientSecret: "client-secret",
+      scope: "mcp:read offline_access",
+    },
+  });
+  expect(screen.queryByText("client-secret")).not.toBeInTheDocument();
+
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Autorizar OAuth" }),
+  );
+  await screen.findByRole("link", { name: "Abrir página de autorización" });
+  expect(popup.opener).toBeNull();
+  expect(popup.location.assign).toHaveBeenCalledWith(
+    "https://auth.example.test/authorize?state=test",
+  );
+  expect(transport).toHaveBeenCalledWith(
+    "/api/sources/secop_live/oauth/start",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        redirectUri: `${window.location.origin}/v1/studio/acme/api/sources/secop_live/oauth/callback`,
+      }),
+    }),
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Vincular" }));
+  fireEvent.change(screen.getByLabelText("Origen"), {
+    target: { value: "mcp" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Datos" }));
+  await screen.findByRole("option", { name: "SECOP" });
+  fireEvent.change(screen.getByLabelText("Fuente"), {
+    target: { value: "secop_live" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Descubrir herramientas de solo lectura",
+    }),
+  );
+  await screen.findByRole("option", { name: "buscar_licitaciones" });
+  expect(
+    screen.queryByRole("option", { name: "delete_contract" }),
+  ).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Herramienta MCP"), {
+    target: { value: "buscar_licitaciones" },
+  });
+  expect(screen.getByLabelText("Ruta JSON de los elementos")).toHaveValue(
+    "/filas",
+  );
+  expect(screen.getByLabelText("Campo identificador")).toHaveValue(":id");
+  expect(screen.getByLabelText("Argumento para límite")).toHaveValue("limit");
+  expect(screen.getByLabelText("Argumento para desplazamiento")).toHaveValue(
+    "offset",
+  );
+  fireEvent.change(screen.getByLabelText("Argumentos estáticos MCP (JSON)"), {
+    target: { value: '{"status":"published"}' },
+  });
+  fireEvent.change(screen.getByLabelText("Argumento para desplazamiento"), {
+    target: { value: "" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Analizar herramienta MCP" }),
+  );
+  expect(
+    await screen.findByText(
+      "Completa ambos argumentos de paginación o deja los dos vacíos.",
+    ),
+  ).toBeVisible();
+  expect(
+    transport.mock.calls.filter(
+      ([path, init]) =>
+        path === "/api/sources/secop_live/inspect" && init?.method === "POST",
+    ),
+  ).toHaveLength(1);
+  fireEvent.change(screen.getByLabelText("Argumento para desplazamiento"), {
+    target: { value: "offset" },
+  });
+  fireEvent.change(screen.getByLabelText("Argumento para límite"), {
+    target: { value: "" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Analizar herramienta MCP" }),
+  );
+  expect(
+    await screen.findByText(
+      "Completa ambos argumentos de paginación o deja los dos vacíos.",
+    ),
+  ).toBeVisible();
+  expect(
+    transport.mock.calls.filter(
+      ([path, init]) =>
+        path === "/api/sources/secop_live/inspect" && init?.method === "POST",
+    ),
+  ).toHaveLength(1);
+  fireEvent.change(screen.getByLabelText("Argumento para límite"), {
+    target: { value: "limit" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Analizar herramienta MCP" }),
+  );
+  await screen.findByLabelText("Campos de la colección (JSON)");
+  await waitFor(() =>
+    expect(transport).toHaveBeenCalledWith(
+      "/api/sources/secop_live/inspect",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          resource: "buscar_licitaciones",
+          mcp: {
+            arguments: { status: "published" },
+            itemsPointer: "/filas",
+            idField: ":id",
+            pagination: { limitArgument: "limit", offsetArgument: "offset" },
+          },
+        }),
+      }),
+    ),
+  );
+
+  fireEvent.change(screen.getByLabelText("Ruta JSON de los elementos"), {
+    target: { value: "/results" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
+  fireEvent.change(screen.getByLabelText("Identificador de la pantalla"), {
+    target: { value: "secop_contracts" },
+  });
+  fireEvent.change(screen.getByLabelText("Nombre de la pantalla"), {
+    target: { value: "Contratos SECOP" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Vincular colección" }));
+  expect(
+    await screen.findByText(
+      "Analiza una herramienta MCP para obtener sus campos.",
+    ),
+  ).toBeVisible();
+  expect(
+    transport.mock.calls.some(
+      ([path, init]) =>
+        path === "/api/collection-bindings" && init?.method === "POST",
+    ),
+  ).toBe(false);
+
+  fireEvent.click(screen.getByRole("button", { name: "Datos" }));
+  fireEvent.change(screen.getByLabelText("Ruta JSON de los elementos"), {
+    target: { value: "/filas" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Analizar herramienta MCP" }),
+  );
+  await waitFor(() =>
+    expect(
+      transport.mock.calls.filter(
+        ([path, init]) =>
+          path === "/api/sources/secop_live/inspect" &&
+          init?.method === "POST",
+      ),
+    ).toHaveLength(3),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
+  fireEvent.change(screen.getByLabelText("Identificador de la pantalla"), {
+    target: { value: "secop_contracts" },
+  });
+  fireEvent.change(screen.getByLabelText("Nombre de la pantalla"), {
+    target: { value: "Contratos SECOP" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Vincular colección" }));
+  await waitFor(() => expect(bound).toHaveBeenCalledWith(linked));
+  const bindingCall = transport.mock.calls.find(
+    ([path, init]) =>
+      path === "/api/collection-bindings" && init?.method === "POST",
+  );
+  expect(JSON.parse(String(bindingCall?.[1]?.body))).toMatchObject({
+    sourceId: "secop_live",
+    resource: "buscar_licitaciones",
+    mcp: {
+      arguments: { status: "published" },
+      itemsPointer: "/filas",
+      idField: ":id",
+      pagination: { limitArgument: "limit", offsetArgument: "offset" },
+    },
+    fields: { id: { type: "Textbox", label: "ID" } },
+  });
+  expect(JSON.parse(String(bindingCall?.[1]?.body))).not.toHaveProperty(
+    "capabilities",
+  );
+  fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
+  await screen.findByText("secop_live · buscar_licitaciones");
+  expect(
+    screen.queryByRole("button", { name: "Operaciones", exact: true }),
+  ).not.toBeInTheDocument();
+  openSpy.mockRestore();
 });
 const pgSource = {
   id: "erp",

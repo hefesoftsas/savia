@@ -156,3 +156,22 @@ test("binds the private branch hook executor to Savia request", () => {
   assert.equal(request.workers_dev, false);
   assert.equal(request.preview_urls, false);
 });
+
+test("preview schedules are opt-in for background plugin monitoring", () => {
+  const names = previewNames("scheduled-monitors");
+  const defaultApi = workerConfig(
+    "api",
+    names,
+    {},
+    "https://preview.example.test",
+  );
+  const scheduledApi = workerConfig(
+    "api",
+    names,
+    {},
+    "https://preview.example.test",
+    { enableSchedules: true },
+  );
+  assert.equal(defaultApi.triggers, undefined);
+  assert.deepEqual(scheduledApi.triggers.crons, ["* * * * *"]);
+});

@@ -91,3 +91,57 @@ it("stores supported database source kinds with their owner and encrypted secret
     ).run(),
   ).rejects.toThrow();
 });
+
+it("preserves existing sources and their ownership when adding MCP support", async () => {
+  for (const kind of ["jsonapi", "postgres", "mysql", "mssql", "mongodb"]) {
+    await env.DB.prepare(
+      "INSERT INTO studio_collection_sources(tenant_id,owner_principal_id,id,label,kind,config,encrypted_secret,created_at) VALUES (?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        "mcp-migration",
+        "migration-owner",
+        `preserved_${kind}`,
+        kind,
+        kind,
+        JSON.stringify({ fixture: kind }),
+        "preserved-ciphertext",
+        "2026-10-14",
+      )
+      .run();
+  }
+  const before = await env.DB.prepare(
+    "SELECT * FROM studio_collection_sources ORDER BY tenant_id,owner_principal_id,id",
+  ).all();
+  const { default: sql } =
+    await import("../../../packages/db/migrations/0048_mcp_collection_sources.sql?raw");
+  for (const part of sql.split("--> statement-breakpoint")) {
+    const statement = part
+      .replace(/^--.*$/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (statement) await env.DB.exec(statement);
+  }
+  expect(
+    (
+      await env.DB.prepare(
+        "SELECT * FROM studio_collection_sources ORDER BY tenant_id,owner_principal_id,id",
+      ).all()
+    ).results,
+  ).toEqual(before.results);
+  for (const owner of ["owner-a", "owner-b"]) {
+    await env.DB.prepare(
+      "INSERT INTO studio_collection_sources(tenant_id,owner_principal_id,id,label,kind,config) VALUES (?,?,?,?,?,?)",
+    )
+      .bind("mcp-migration", owner, "same_id", "MCP", "mcp", "{}")
+      .run();
+  }
+  expect(
+    (
+      await env.DB.prepare(
+        "SELECT count(*) count FROM studio_collection_sources WHERE tenant_id=? AND id=?",
+      )
+        .bind("mcp-migration", "same_id")
+        .first<{ count: number }>()
+    )?.count,
+  ).toBe(2);
+});

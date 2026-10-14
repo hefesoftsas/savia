@@ -480,6 +480,55 @@ it("retries settings through the host after the prefetched request fails", async
   expect(transport).toHaveBeenCalledTimes(2);
 });
 
+it("forwards only safe API error status and code through the iframe bridge", async () => {
+  const transport = vi.fn(async () =>
+    Response.json(
+      {
+        error: { message: "Record version conflict", code: "VERSION_CONFLICT" },
+      },
+      { status: 409 },
+    ),
+  );
+  setStudioRuntime({ embedded: false, transport });
+  render(<CustomPluginFrame pluginId="custom.demo" title="Plugin" />);
+  const frame = screen.getByTitle("Plugin") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "update-record",
+        path: "/records/items/record-1",
+        method: "PATCH",
+        body: { name: "Updated" },
+      },
+    }),
+  );
+
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "response",
+        id: "update-record",
+        ok: false,
+        error: "Record version conflict",
+        errorStatus: 409,
+        errorCode: "VERSION_CONFLICT",
+      }),
+      "*",
+    ),
+  );
+  const response = send.mock.calls.find(
+    ([message]) => (message as { id?: string }).id === "update-record",
+  )?.[0] as Record<string, unknown>;
+  expect(response).not.toHaveProperty("detail");
+  expect(response).not.toHaveProperty("context");
+});
+
 it("does not prefetch again after the session is cleared", async () => {
   const transport = vi.fn(async () =>
     Response.json({ data: { value: { revision: 1 }, version: 1 } }),

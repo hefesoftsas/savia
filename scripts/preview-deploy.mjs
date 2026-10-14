@@ -15,8 +15,25 @@ import {
   slugifyBranch,
 } from "./preview-environment.mjs";
 import { ensureBranchInfrastructure } from "../infra/pulumi/branch-preview-resources.mjs";
-import { workerConfig } from "../infra/pulumi/branch-preview-worker-config.mjs";
-export { workerConfig };
+import { workerConfig as buildWorkerConfig } from "../infra/pulumi/branch-preview-worker-config.mjs";
+
+export function workerConfig(
+  kind,
+  names,
+  ids,
+  origin,
+  { enableSchedules = false, ...options } = {},
+) {
+  const config = buildWorkerConfig(kind, names, ids, origin, options);
+  if (kind === "api") {
+    config.compatibility_flags = [
+      ...(config.compatibility_flags ?? []),
+      "global_fetch_strictly_public",
+    ];
+    if (enableSchedules) config.triggers = { crons: ["* * * * *"] };
+  }
+  return config;
+}
 
 const execFileAsync = promisify(execFile);
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -150,6 +167,7 @@ async function main() {
   const slug = slugifyBranch(flagValue(argv, "--branch"));
   const dryRun = hasFlag(argv, "--dry-run");
   const skipAdmin = hasFlag(argv, "--skip-admin");
+  const enableSchedules = hasFlag(argv, "--enable-schedules");
   const names = previewNames(slug);
   if (!dryRun) {
     for (const variable of ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]) {
@@ -201,6 +219,7 @@ async function main() {
       assetsDir,
       bootstrap,
       identityReady,
+      enableSchedules,
     });
   for (const kind of kinds) {
     const file = join(configRoot, `${kind}.wrangler.preview.jsonc`);
@@ -252,7 +271,7 @@ async function main() {
       await execFileAsync(
         "pnpm",
         ["--filter", "@savia/admin", "run", "build"],
-        { cwd: workspaceRoot },
+        { cwd: workspaceRoot, maxBuffer: 16 * 1024 * 1024 },
       );
     }
     let gateway = await deploy("gateway");

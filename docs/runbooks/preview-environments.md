@@ -62,3 +62,13 @@ node scripts/preview-destroy.mjs --branch feat-x --force
 - Previews never read or write production databases, buckets, or secrets.
 - No TTL automation: whoever creates a preview destroys it. Stale previews
   are visible as `*-preview-*` workers/databases in the dashboard.
+
+### Opt-in scheduled background jobs
+
+Local branch previews keep cron disabled by default. For an isolated preview that
+must run scheduled workflows, plugin monitors and notifications while browsers
+are closed, pass `--enable-schedules` to `scripts/preview-deploy.mjs`. The API
+worker then receives a one-minute trigger; each monitor enforces its own due time
+(e.g. hourly). Only enable this on the intended isolated preview. Preserve its
+existing encryption secrets and OAuth grants when updating an already configured
+API Worker; rerunning a complete ephemeral bootstrap rotates its secrets.

@@ -1,3 +1,5 @@
+import { mcpSourceInputSchema } from "./mcp-source-service";
+import { mcpMappingSchema } from "@savia/studio-shared/mcp-sources";
 import { pluginDevelopmentOpenApiPaths } from "./plugin-development-openapi";
 import { pluginEditorOpenApiPaths } from "./plugin-editor-openapi";
 import { hubspotObjects } from "../external-crm/hubspot-workspace-catalog";
@@ -78,6 +80,7 @@ function operation(
     body?: Schema;
     status?: number;
     description?: string;
+    responseContentType?: string;
   } = {},
 ) {
   return {
@@ -93,7 +96,9 @@ function operation(
       ...failures,
       [options.status ?? 200]: {
         description: "Operación completada",
-        content: json(response),
+        content: options.responseContentType
+          ? { [options.responseContentType]: { schema: response } }
+          : json(response),
       },
     },
   };
@@ -381,6 +386,7 @@ export async function dynamicOpenApi(
               status: 201,
               body: {
                 anyOf: [
+                  z.toJSONSchema(mcpSourceInputSchema, { io: "input" }),
                   z.toJSONSchema(databaseSourceInputSchema, { io: "input" }),
                   {
                     type: "object",
@@ -399,11 +405,49 @@ export async function dynamicOpenApi(
             },
           ),
         },
+        "/sources/{id}/oauth/start": {
+          post: operation(
+            "mcp_source_oauth_start",
+            "Fuentes y colecciones",
+            "Authorize an MCP source",
+            envelope({
+              type: "object",
+              properties: {
+                authorizationUrl: { type: "string", format: "uri" },
+              },
+            }),
+            {
+              parameters: [parameter("id", "path", { type: "string" }, true)],
+              body: {
+                type: "object",
+                required: ["redirectUri"],
+                properties: { redirectUri: { type: "string", format: "uri" } },
+              },
+            },
+          ),
+        },
+        "/sources/{id}/oauth/callback": {
+          get: operation(
+            "mcp_source_oauth_callback",
+            "Fuentes y colecciones",
+            "Complete MCP OAuth authorization",
+            { type: "string" },
+            {
+              parameters: [
+                parameter("id", "path", { type: "string" }, true),
+                parameter("state", "query", { type: "string" }, true),
+                parameter("code", "query", { type: "string" }, true),
+                parameter("iss", "query", { type: "string" }),
+              ],
+              responseContentType: "text/html",
+            },
+          ),
+        },
         "/sources/{id}/test": {
           post: operation(
             "database_source_test",
             "Fuentes y colecciones",
-            "Probar conexión de base de datos",
+            "Test a database or MCP connection",
             envelope({ type: "object" }),
             {
               parameters: [parameter("id", "path", { type: "string" }, true)],
@@ -414,13 +458,16 @@ export async function dynamicOpenApi(
           post: operation(
             "database_source_inspect",
             "Fuentes y colecciones",
-            "Inspeccionar tablas o colecciones",
+            "Inspect database resources or read-only MCP tools",
             envelope({ type: "object" }),
             {
               parameters: [parameter("id", "path", { type: "string" }, true)],
               body: {
                 type: "object",
-                properties: { resource: { type: "string" } },
+                properties: {
+                  resource: { type: "string" },
+                  mcp: z.toJSONSchema(mcpMappingSchema, { io: "input" }),
+                },
               },
             },
           ),
@@ -552,11 +599,12 @@ export async function dynamicOpenApi(
                   sourceId: { type: "string" },
                   resource: { type: "string" },
                   fields: { type: "object" },
+                  mcp: z.toJSONSchema(mcpMappingSchema, { io: "input" }),
                   capabilities: { type: "object" },
                 },
               },
               description:
-                "Selecciona domain y collection para un dominio existente, o sourceId, resource y fields para JSON:API, PostgreSQL, MySQL, SQL Server o MongoDB. No copia los registros externos.",
+                "Selecciona domain y collection para un dominio existente, o sourceId, resource y fields para JSON:API, PostgreSQL, MySQL, SQL Server, MongoDB or MCP (with an explicit read-only tool mapping). No copia los registros externos.",
             },
           ),
         },

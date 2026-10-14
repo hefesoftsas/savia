@@ -14,6 +14,7 @@ import { maintainRecordHistory } from "@savia/studio-server/record-history-stora
 import { purgeStudioAudit } from "@savia/studio-server/audit-retention";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
+import { runPluginMonitors } from "./studio/plugin-monitors";
 import { runScheduledNotifications } from "./notifications";
 import {
   nativeExecutionPolicyFromEnvironment,
@@ -382,6 +383,7 @@ async function runScheduledAuditRetention(db: D1Database): Promise<void> {
 
 export type RuntimeOverrides = {
   workflowFetch?: typeof fetch;
+  monitorFetch?: typeof fetch;
   jiraPrivacyFetch?: typeof fetch;
   realtime?: import("./realtime/hub-client").RealtimeHubClient;
   publicForms?: import("./public-forms/routes").PublicFormsOptions;
@@ -779,6 +781,14 @@ const runtime = {
           realtime,
           nativeExecutionPolicyFromEnvironment(environment),
         ),
+        runPluginMonitors(environment.DB, {
+          integrationKey: studioIntegrationKeyFromEnvironment(environment),
+          fetcher: overrides.monitorFetch,
+        }).then((report) => {
+          console.info(
+            JSON.stringify({ event: "plugin_monitor_batch", ...report }),
+          );
+        }),
         runScheduledNotifications(environment.DB, realtime),
         runScheduledAuditRetention(environment.DB),
         runJiraPrivacyMaintenance(
@@ -809,6 +819,14 @@ const runtime = {
         realtime,
         nativeExecutionPolicyFromEnvironment(environment),
       ),
+      runPluginMonitors(environment.DB, {
+        integrationKey: studioIntegrationKeyFromEnvironment(environment),
+        fetcher: overrides.monitorFetch,
+      }).then((report) => {
+        console.info(
+          JSON.stringify({ event: "plugin_monitor_batch", ...report }),
+        );
+      }),
       runScheduledNotifications(environment.DB, realtime),
       runScheduledAuditRetention(environment.DB),
       runJiraPrivacyMaintenance(

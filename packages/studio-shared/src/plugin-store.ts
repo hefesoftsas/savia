@@ -1,3 +1,4 @@
+import { mcpMappingSchema } from "./mcp-sources";
 import { z } from "zod";
 import {
   extensionManifestSchema,
@@ -225,7 +226,7 @@ export function storeMcpActions(
   const actions: StoreMcpCatalogAction[] = [];
   for (const action of config.actions) {
     if (action.kind !== "simulation" && action.kind !== "http") continue;
-    if (!action.mcp) continue;
+    if (!("mcp" in action) || !action.mcp) continue;
     if (action.kind === "http" && action.request.method !== "GET") continue;
     const label = sanitizeAssistantCopy(
       `[${pluginId}/${action.id}] ${action.mcp.label}`,
@@ -299,9 +300,142 @@ export type StoreSaviaRequestAction = z.infer<
   typeof storeSaviaRequestActionSchema
 >;
 
+export const storeMcpActionSchema = z
+  .object({
+    id: solutionIdSchema,
+    kind: z.literal("mcp"),
+    sourceId: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/),
+    tool: z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/),
+    mapping: mcpMappingSchema,
+    inputArguments: z
+      .array(
+        z
+          .string()
+          .regex(/^[A-Za-z_][A-Za-z0-9_]{0,99}$/)
+          .refine(
+            (name) =>
+              ![
+                "__proto__",
+                "constructor",
+                "prototype",
+                "page",
+                "perPage",
+              ].includes(name),
+          ),
+      )
+      .max(20)
+      .default([]),
+  })
+  .strict();
+export type StoreMcpAction = z.infer<typeof storeMcpActionSchema>;
+
+const monitorField = identifier;
+const monitorTemplateTokens = new Set([
+  "name",
+  "previous",
+  "current",
+  "deadline",
+  "hours",
+]);
+
+function validateMonitorTemplate(
+  value: string,
+  ctx: z.RefinementCtx,
+  path: (string | number)[],
+) {
+  const tokens = value.match(/\{[^{}]*\}/g) ?? [];
+  for (const token of tokens) {
+    const name = token.slice(1, -1);
+    if (!monitorTemplateTokens.has(name))
+      ctx.addIssue({
+        code: "custom",
+        path,
+        message: `Token de plantilla no permitido: ${token}.`,
+      });
+  }
+  if (
+    value.replace(/\{[^{}]*\}/g, "").includes("{") ||
+    value.replace(/\{[^{}]*\}/g, "").includes("}")
+  )
+    ctx.addIssue({
+      code: "custom",
+      path,
+      message: "Las plantillas solo admiten tokens literales documentados.",
+    });
+}
+
+export const storeRecordMonitorSchema = z
+  .object({
+    id: z
+      .string()
+      .trim()
+      .min(1)
+      .max(64)
+      .regex(/^[a-z0-9_-]+$/),
+    collection: identifier,
+    actionId: solutionIdSchema,
+    lookup: z
+      .object({
+        field: monitorField,
+        argument: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,99}$/),
+      })
+      .strict(),
+    matchField: monitorField,
+    status: z
+      .object({
+        field: monitorField,
+        resultFields: z.array(z.string().trim().min(1).max(100)).min(1).max(20),
+      })
+      .strict(),
+    deadline: z
+      .object({
+        field: monitorField,
+        resultFields: z.array(z.string().trim().min(1).max(100)).min(1).max(20),
+      })
+      .strict(),
+    enabledField: monitorField,
+    checkedAtField: monitorField,
+    errorField: monitorField,
+    titleField: monitorField,
+    intervalMinutes: z.number().int().min(15).max(1440).default(60),
+    reminderHours: z
+      .array(z.number().int().positive().max(2160))
+      .max(20)
+      .default([168, 72, 24])
+      .refine((values) => new Set(values).size === values.length, {
+        message: "Las horas de recordatorio deben ser únicas.",
+      }),
+    timeZone: z.enum(["UTC", "America/Bogota"]).default("America/Bogota"),
+    pauseWhen: z
+      .object({
+        field: monitorField,
+        values: z.array(z.string().trim().min(1).max(100)).min(1).max(50),
+      })
+      .strict()
+      .optional(),
+    notifications: z
+      .object({
+        changedTitle: z.string().trim().min(1).max(500),
+        changedBody: z.string().max(4000),
+        closingTitle: z.string().trim().min(1).max(500),
+        closingBody: z.string().max(4000),
+        connectionTitle: z.string().trim().min(1).max(500),
+        connectionBody: z.string().max(4000),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((monitor, ctx) => {
+    for (const [key, value] of Object.entries(monitor.notifications))
+      validateMonitorTemplate(value, ctx, ["notifications", key]);
+  });
+
+export type StoreRecordMonitor = z.infer<typeof storeRecordMonitorSchema>;
+
 export const storeActionSchema = z.union([
   storeSimulationActionSchema,
   storeDelegatedActionSchema,
+  storeMcpActionSchema,
   z.lazy(() => storeHttpActionSchema),
   z.lazy(() => storeSaviaRequestActionSchema),
 ]);
@@ -514,6 +648,7 @@ export const storeJsonSchema = z
     actions: z.array(storeActionSchema).max(20).default([]),
     connectors: z.array(storeConnectorSchema).max(10).default([]),
     collections: z.array(storeCollectionSchema).max(20).default([]),
+    monitors: z.array(storeRecordMonitorSchema).max(10).default([]),
     bundles: z.array(storeWorkflowBundleSchema).max(20).default([]),
     widgets: z.array(storeWidgetSchema).max(20).default([]),
     screens: z.array(storeScreenSchema).max(20).default([]),
@@ -524,6 +659,116 @@ export const storeJsonSchema = z
   })
   .strict()
   .superRefine((config, ctx) => {
+    const monitorIds = new Set<string>();
+    for (const [index, monitor] of config.monitors.entries()) {
+      if (monitorIds.has(monitor.id))
+        ctx.addIssue({
+          code: "custom",
+          path: ["monitors", index, "id"],
+          message: `Monitor duplicado: ${monitor.id}.`,
+        });
+      monitorIds.add(monitor.id);
+
+      const action = config.actions.find(
+        (candidate) => candidate.id === monitor.actionId,
+      );
+      if (!action || action.kind !== "mcp")
+        ctx.addIssue({
+          code: "custom",
+          path: ["monitors", index, "actionId"],
+          message:
+            "El monitor debe usar una acción MCP declarada de solo lectura.",
+        });
+      else if (!action.inputArguments.includes(monitor.lookup.argument))
+        ctx.addIssue({
+          code: "custom",
+          path: ["monitors", index, "lookup", "argument"],
+          message:
+            "El argumento de búsqueda debe estar declarado por la acción MCP.",
+        });
+
+      const collection = config.collections.find((candidate) => {
+        try {
+          return (
+            sanitizeStoreCollection(candidate).object.name ===
+            monitor.collection
+          );
+        } catch {
+          return false;
+        }
+      });
+      if (!collection) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["monitors", index, "collection"],
+          message:
+            "La colección del monitor debe estar declarada y tener metadatos válidos.",
+        });
+        continue;
+      }
+      let fields: Set<string>;
+      try {
+        const sanitized = sanitizeStoreCollection(collection);
+        fields = new Set(Object.keys(sanitized.object.config.fields ?? {}));
+      } catch {
+        ctx.addIssue({
+          code: "custom",
+          path: ["monitors", index, "collection"],
+          message: "No se pudieron validar los campos de la colección.",
+        });
+        continue;
+      }
+
+      const referencedFields = [
+        ["lookup", monitor.lookup.field],
+        ["matchField", monitor.matchField],
+        ["status.field", monitor.status.field],
+        ["deadline.field", monitor.deadline.field],
+        ["enabledField", monitor.enabledField],
+        ["checkedAtField", monitor.checkedAtField],
+        ["errorField", monitor.errorField],
+        ["titleField", monitor.titleField],
+        ...(monitor.pauseWhen
+          ? [["pauseWhen.field", monitor.pauseWhen.field] as const]
+          : []),
+      ] as const;
+      for (const [name, field] of referencedFields)
+        if (!fields.has(field))
+          ctx.addIssue({
+            code: "custom",
+            path: ["monitors", index, ...name.split(".")],
+            message: `Campo no declarado en la colección: ${field}.`,
+          });
+
+      const writableFields = [
+        monitor.status.field,
+        monitor.deadline.field,
+        monitor.enabledField,
+        monitor.checkedAtField,
+        monitor.errorField,
+      ];
+      const protectedFields = [
+        monitor.lookup.field,
+        monitor.matchField,
+        monitor.titleField,
+        ...(monitor.pauseWhen ? [monitor.pauseWhen.field] : []),
+      ];
+      if (new Set(writableFields).size !== writableFields.length)
+        ctx.addIssue({
+          code: "custom",
+          path: ["monitors", index],
+          message:
+            "Los campos de estado, fecha límite y seguimiento deben ser distintos.",
+        });
+      for (const field of writableFields)
+        if (protectedFields.includes(field))
+          ctx.addIssue({
+            code: "custom",
+            path: ["monitors", index],
+            message: `El campo actualizado por el monitor colisiona con un campo de consulta o pausa: ${field}.`,
+          });
+    }
+
     const connectorIds = new Set(config.connectors.map((c) => c.id));
     const secretsByConnector = new Map(
       config.connectors.map((c) => [c.id, new Set(c.secretFields)]),
