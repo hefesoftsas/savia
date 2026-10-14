@@ -116,6 +116,7 @@ export function workerConfig(
     return {
       ...base,
       name: names.workers.api,
+      compatibility_flags: ["global_fetch_strictly_public"],
       main: resolve(workspaceRoot, "apps/api/src/index.ts"),
       services: [
         { binding: "AUTH", service: names.workers.auth },

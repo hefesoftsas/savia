@@ -61,6 +61,7 @@ function apiConfig({
     $schema: "../../node_modules/wrangler/config-schema.json",
     name: "savia-agencies",
     compatibility_date: "2026-08-31",
+    compatibility_flags: ["global_fetch_strictly_public"],
     main: "src/index.ts",
     workers_dev: false,
     keep_vars: true,

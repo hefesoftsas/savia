@@ -496,3 +496,28 @@ test("renders Zoom only when its integration ID is configured", async () => {
     await rm(outputRoot, { recursive: true, force: true });
   }
 });
+
+test("allows public MCP Workers on the API worker's own Cloudflare zone", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "savia-mcp-fetch-config-"));
+  try {
+    await renderProductionConfigs({
+      authD1Id: "auth",
+      domainD1Id: "domain",
+      outputRoot,
+    });
+    const production = await config(outputRoot, "api");
+    const preview = workerConfig(
+      "api",
+      previewNames("mcp-fetch"),
+      {},
+      "https://preview.example.test",
+    );
+    for (const worker of [production, preview]) {
+      assert.ok(
+        worker.compatibility_flags?.includes("global_fetch_strictly_public"),
+      );
+    }
+  } finally {
+    await rm(outputRoot, { recursive: true, force: true });
+  }
+});

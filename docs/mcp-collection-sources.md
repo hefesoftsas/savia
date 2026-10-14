@@ -44,3 +44,12 @@ SECOP's authorization page asks for an access key and checks it against the Work
 Apply migration `0048_mcp_collection_sources.sql` before deploying API and Admin. It preserves existing sources while extending the source kind and adds expiring OAuth flows. Existing installations must retain their integrations encryption key. Do not edit the generated API reference; the tenant's OpenAPI/Scalar surface derives the new endpoints and payloads from runtime schemas.
 
 Run the MCP adapter/source API tests, existing database-source regressions, the collection source panel tests, and API/Admin/shared TypeScript checks. Mocked protocol tests do not prove that SECOP's real consent page has been completed. Network calls require public HTTPS DNS targets, reject redirects, bound responses to 1 MB, and use a 15-second operation budget.
+
+## Cloudflare deployment
+
+The API Worker enables `global_fetch_strictly_public` so public MCP servers hosted
+on the same Cloudflare zone are fetched through their public routes. Without this
+flag, Cloudflare returns error 1042 before OAuth discovery reaches the server.
+The adapter still validates public HTTPS destinations, DNS, redirects and response
+limits. Service bindings continue to handle Savia internal traffic. See
+[Cloudflare Worker fetch](https://developers.cloudflare.com/workers/runtime-apis/fetch/).
