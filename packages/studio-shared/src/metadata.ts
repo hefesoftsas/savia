@@ -1,3 +1,4 @@
+import { mcpMappingSchema } from "./mcp-sources";
 import {
   recordHistorySettingsSchema,
   isHistoryField,
@@ -82,6 +83,7 @@ export const collectionBindingMetadataSchema = z.object({
   kind: z.enum([
     "domain",
     "jsonapi",
+    "mcp",
     "postgres",
     "mysql",
     "mssql",
@@ -91,7 +93,7 @@ export const collectionBindingMetadataSchema = z.object({
   domain: z.string().optional(),
   collection: z.string().optional(),
   capabilities: collectionCapabilitiesSchema,
-  /** Postgres v1: columna identificadora y PK real de la tabla. */
+  mcp: mcpMappingSchema.optional(),
   databaseMetadata: resourceMetadataSchema.optional(),
   sourceOwnerPrincipalId: z.string().optional(),
   writePermissions: z
@@ -520,7 +522,11 @@ export const configSchema = z
           ].includes(n) &&
           // Postgres externo: la PK suele llamarse `id` y coincide con el
           // identificador del sobre (solo lectura, sin escrituras locales).
-          !(isDatabaseKind(config.studio?.collection?.kind) && n === "id"),
+          !(
+            (isDatabaseKind(config.studio?.collection?.kind) ||
+              config.studio?.collection?.kind === "mcp") &&
+            n === "id"
+          ),
       )
     )
       issue("Nombre de campo reservado.");

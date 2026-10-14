@@ -1,0 +1,337 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "actions": [
+    {
+      "id": "search",
+      "kind": "mcp",
+      "sourceId": "secop_live",
+      "tool": "buscar_licitaciones",
+      "mapping": {
+        "arguments": {},
+        "itemsPointer": "/data",
+        "idField": ":id",
+        "pagination": {
+          "limitArgument": "limit",
+          "offsetArgument": "offset"
+        }
+      },
+      "inputArguments": ["q", "estado", "entidad", "modalidad", "departamento"]
+    }
+  ],
+  "collections": [
+    {
+      "object": {
+        "name": "procurement_opportunities",
+        "label": "SECOP opportunities",
+        "description": "Opportunities intentionally saved by workspace users for follow-up.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Opportunity",
+              "required": true,
+              "labels": {
+                "es": "Oportunidad",
+                "en": "Opportunity",
+                "pt": "Oportunidade"
+              }
+            },
+            "source_id": {
+              "type": "Textbox",
+              "label": "SECOP source ID",
+              "required": true,
+              "config": {
+                "unique": true
+              },
+              "labels": {
+                "es": "ID de origen SECOP",
+                "en": "SECOP source ID",
+                "pt": "ID de origem SECOP"
+              }
+            },
+            "process_id": {
+              "type": "Textbox",
+              "label": "Process ID",
+              "labels": {
+                "es": "ID del proceso",
+                "en": "Process ID",
+                "pt": "ID do processo"
+              }
+            },
+            "entity": {
+              "type": "Textbox",
+              "label": "Entity",
+              "labels": {
+                "es": "Entidad",
+                "en": "Entity",
+                "pt": "Entidade"
+              }
+            },
+            "department": {
+              "type": "Textbox",
+              "label": "Department",
+              "labels": {
+                "es": "Departamento",
+                "en": "Department",
+                "pt": "Departamento"
+              }
+            },
+            "modality": {
+              "type": "Textbox",
+              "label": "Procurement modality",
+              "labels": {
+                "es": "Modalidad de contratación",
+                "en": "Procurement modality",
+                "pt": "Modalidade de contratação"
+              }
+            },
+            "amount": {
+              "type": "Number",
+              "label": "Base value",
+              "labels": {
+                "es": "Valor base",
+                "en": "Base value",
+                "pt": "Valor base"
+              }
+            },
+            "publication_date": {
+              "type": "Textbox",
+              "label": "Publication date",
+              "labels": {
+                "es": "Fecha de publicación",
+                "en": "Publication date",
+                "pt": "Data de publicação"
+              }
+            },
+            "deadline": {
+              "type": "Textbox",
+              "label": "Submission deadline",
+              "labels": {
+                "es": "Fecha límite de presentación",
+                "en": "Submission deadline",
+                "pt": "Prazo para apresentação"
+              }
+            },
+            "source_status": {
+              "type": "Textbox",
+              "label": "SECOP status",
+              "labels": {
+                "es": "Estado en SECOP",
+                "en": "SECOP status",
+                "pt": "Status no SECOP"
+              }
+            },
+            "source_url": {
+              "type": "Url",
+              "label": "SECOP source URL",
+              "labels": {
+                "es": "Enlace de SECOP",
+                "en": "SECOP source URL",
+                "pt": "Link do SECOP"
+              }
+            },
+            "status": {
+              "type": "Dropdown",
+              "label": "Tracking status",
+              "required": true,
+              "options": [
+                {
+                  "value": "interested",
+                  "label": "Interested",
+                  "labels": {
+                    "es": "Interesada",
+                    "en": "Interested",
+                    "pt": "Interessada"
+                  }
+                },
+                {
+                  "value": "evaluating",
+                  "label": "Evaluating",
+                  "labels": {
+                    "es": "En evaluación",
+                    "en": "Evaluating",
+                    "pt": "Em avaliação"
+                  }
+                },
+                {
+                  "value": "preparing",
+                  "label": "Preparing bid",
+                  "labels": {
+                    "es": "Preparando oferta",
+                    "en": "Preparing bid",
+                    "pt": "Preparando proposta"
+                  }
+                },
+                {
+                  "value": "submitted",
+                  "label": "Submitted",
+                  "labels": {
+                    "es": "Presentada",
+                    "en": "Submitted",
+                    "pt": "Apresentada"
+                  }
+                },
+                {
+                  "value": "awarded",
+                  "label": "Awarded",
+                  "labels": {
+                    "es": "Adjudicada",
+                    "en": "Awarded",
+                    "pt": "Adjudicada"
+                  }
+                },
+                {
+                  "value": "discarded",
+                  "label": "Discarded",
+                  "labels": {
+                    "es": "Descartada",
+                    "en": "Discarded",
+                    "pt": "Descartada"
+                  }
+                }
+              ],
+              "labels": {
+                "es": "Estado de seguimiento",
+                "en": "Tracking status",
+                "pt": "Status de acompanhamento"
+              }
+            },
+            "priority": {
+              "type": "Dropdown",
+              "label": "Priority",
+              "required": true,
+              "options": [
+                {
+                  "value": "low",
+                  "label": "Low",
+                  "labels": {
+                    "es": "Baja",
+                    "en": "Low",
+                    "pt": "Baixa"
+                  }
+                },
+                {
+                  "value": "normal",
+                  "label": "Normal",
+                  "labels": {
+                    "es": "Normal",
+                    "en": "Normal",
+                    "pt": "Normal"
+                  }
+                },
+                {
+                  "value": "high",
+                  "label": "High",
+                  "labels": {
+                    "es": "Alta",
+                    "en": "High",
+                    "pt": "Alta"
+                  }
+                }
+              ],
+              "labels": {
+                "es": "Prioridad",
+                "en": "Priority",
+                "pt": "Prioridade"
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Owner",
+              "labels": {
+                "es": "Responsable",
+                "en": "Owner",
+                "pt": "Responsável"
+              }
+            },
+            "next_follow_up": {
+              "type": "DateControl",
+              "label": "Next follow-up",
+              "labels": {
+                "es": "Próximo seguimiento",
+                "en": "Next follow-up",
+                "pt": "Próximo acompanhamento"
+              }
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notes",
+              "labels": {
+                "es": "Notas",
+                "en": "Notes",
+                "pt": "Notas"
+              }
+            },
+            "snapshot": {
+              "type": "Textarea",
+              "label": "Source snapshot",
+              "labels": {
+                "es": "Datos de origen",
+                "en": "Source snapshot",
+                "pt": "Dados de origem"
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "source_id",
+            "process_id",
+            "entity",
+            "department",
+            "modality",
+            "amount",
+            "publication_date",
+            "deadline",
+            "source_status",
+            "source_url",
+            "status",
+            "priority",
+            "owner",
+            "next_follow_up",
+            "notes",
+            "snapshot"
+          ]
+        },
+        "labels": {
+          "es": "Oportunidades SECOP",
+          "en": "SECOP opportunities",
+          "pt": "Oportunidades SECOP"
+        },
+        "descriptions": {
+          "es": "Oportunidades que el equipo guarda para seguimiento.",
+          "en": "Opportunities intentionally saved by workspace users for follow-up.",
+          "pt": "Oportunidades que a equipe salva para acompanhamento."
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": ["Textbox"]
+        },
+        "source_id": {
+          "types": ["Textbox"]
+        },
+        "status": {
+          "types": ["Dropdown"]
+        },
+        "priority": {
+          "types": ["Dropdown"]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "procurement_opportunities",
+      "view": "records",
+      "lookupFields": [
+        "name",
+        "source_id",
+        "process_id",
+        "entity",
+        "department"
+      ]
+    }
+  ]
+}

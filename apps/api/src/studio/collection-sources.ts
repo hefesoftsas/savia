@@ -1,3 +1,15 @@
+import { mcpMappingSchema } from "@savia/studio-shared/mcp-sources";
+import {
+  createMcpConnection,
+  listMcpTools,
+  inspectMcpTool,
+  executeMcpList,
+  McpAdapterError,
+} from "./mcp-adapter";
+import {
+  createMcpSourceService,
+  mcpSourceInputSchema,
+} from "./mcp-source-service";
 import {
   isDatabaseKind,
   databaseSourceInputSchema,
@@ -121,11 +133,13 @@ const sourceSchema = z.union([
     })
     .strict(),
   databaseSourceInputSchema,
+  mcpSourceInputSchema,
 ]);
 const sourceInspectionSchema = z
   .object({
     resource: z.string().max(300).optional(),
     resourceType: z.string().max(100).optional(),
+    mcp: mcpMappingSchema.optional(),
   })
   .strict();
 const bindingSchema = z
@@ -148,6 +162,7 @@ const bindingSchema = z
       )
       .optional(),
     capabilities: capabilitiesSchema.optional(),
+    mcp: mcpMappingSchema.optional(),
     idColumn: z.string().optional(),
     idType: z.enum(["string", "objectId"]).optional(),
   })
@@ -155,7 +170,7 @@ const bindingSchema = z
 type SourceRow = {
   id: string;
   label: string;
-  kind: "jsonapi" | DatabaseKind;
+  kind: "jsonapi" | "mcp" | DatabaseKind;
   config: string;
   encrypted_secret: string | null;
 };
@@ -200,7 +215,12 @@ const expose = (row: SourceRow) => ({
   ...JSON.parse(row.config),
   ...(isDatabaseKind(row.kind)
     ? { hasPassword: Boolean(row.encrypted_secret) }
-    : { hasToken: Boolean(row.encrypted_secret) }),
+    : {
+        hasToken:
+          row.kind === "mcp" && JSON.parse(row.config).authMode === "oauth"
+            ? Boolean(JSON.parse(row.config).authorized)
+            : Boolean(row.encrypted_secret),
+      }),
 });
 /** Capacidades fijas Postgres v1: lectura live, sin escrituras ni DDL. */
 const postgresCapabilities: CollectionCapabilities = {
@@ -596,7 +616,15 @@ export function createCollectionSourceApp(
   provider: CollectionDomainProvider = emptyCollectionDomainProvider,
   sqlBridge?: SqlBridgeClient,
   databaseBridge: DatabaseBridgeClient | undefined = sqlBridge?.database,
+  publicLocation?: { origin: string; apiBasePath: string },
 ) {
+  const mcp = createMcpSourceService({
+    db,
+    tenant,
+    principalId,
+    integrationKey,
+    fetcher,
+  });
   const databases = createDatabaseSourceService({
     tenant,
     principalId,
@@ -690,6 +718,8 @@ export function createCollectionSourceApp(
       return c.json({ error: e.message }, e.status);
     if (e instanceof z.ZodError || e instanceof SyntaxError)
       return c.json({ error: e.message }, 422);
+    if (e instanceof McpAdapterError)
+      return c.json({ error: e.message }, e.status as 400);
     if (e instanceof JsonApiAdapterError)
       return c.json({ error: e.message }, e.status as 400);
     if (e instanceof SqlBridgeError)
@@ -713,6 +743,33 @@ export function createCollectionSourceApp(
   });
   app.post("/api/sources", async (c) => {
     const input = sourceSchema.parse(await c.req.json());
+    if (input.kind === "mcp") {
+      const stored = await mcp.initial(input);
+      await db
+        .prepare(
+          "INSERT INTO studio_collection_sources(tenant_id,id,label,kind,config,encrypted_secret,owner_principal_id) VALUES (?,?,?,'mcp',?,?,?)",
+        )
+        .bind(
+          tenant,
+          input.id,
+          input.label,
+          stored.config,
+          stored.encrypted_secret,
+          principalId,
+        )
+        .run();
+      return c.json(
+        {
+          data: expose({
+            id: input.id,
+            label: input.label,
+            kind: "mcp",
+            ...stored,
+          }),
+        },
+        201,
+      );
+    }
     if (input.kind !== "jsonapi") {
       const config = databaseSourceConfigFromInput(input);
       const encrypted = input.password
@@ -810,6 +867,23 @@ export function createCollectionSourceApp(
       .bind(tenant, c.req.param("id"), principalId)
       .first<SourceRow>();
     if (!row) fail("Fuente no encontrada.", 404);
+    if (row.kind === "mcp") {
+      if (input.password !== undefined || input.writeEnabled !== undefined)
+        fail(
+          "MCP sources are read-only and do not accept database credentials.",
+        );
+      if (input.token !== undefined) await mcp.updateToken(row, input.token);
+      if (input.label !== undefined)
+        await db
+          .prepare(
+            "UPDATE studio_collection_sources SET label=? WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+          )
+          .bind(input.label, tenant, row.id, principalId)
+          .run();
+      return c.json({
+        data: expose({ ...row, label: input.label ?? row.label }),
+      });
+    }
     if (isDatabaseKind(row.kind) && input.token !== undefined)
       fail("Esta fuente usa contraseña, no token.");
     if (row.kind === "jsonapi" && input.password !== undefined)
@@ -922,6 +996,18 @@ export function createCollectionSourceApp(
       .bind(tenant, c.req.param("id"), principalId)
       .first<SourceRow>();
     if (!row) fail("Source not found.", 404);
+    if (row.kind === "mcp") {
+      const client = await createMcpConnection(
+        await mcp.connection(row),
+        fetcher,
+      );
+      try {
+        await listMcpTools(client, JSON.parse(row.config).readOnlyTools);
+      } finally {
+        await client.close();
+      }
+      return c.json({ data: { ok: true } });
+    }
     if (!isDatabaseKind(row.kind))
       fail("Connection testing is only available for database sources.");
     await databases.test(row as DatabaseSourceRow);
@@ -936,6 +1022,34 @@ export function createCollectionSourceApp(
       .bind(tenant, c.req.param("id"), principalId)
       .first<SourceRow>();
     if (!row) fail("Fuente no encontrada.", 404);
+    if (row.kind === "mcp") {
+      const connection = await mcp.connection(row);
+      if (input.resource) {
+        if (!input.mcp)
+          fail("Configure the MCP result mapping before analysis.");
+        return c.json({
+          data: await inspectMcpTool(
+            connection,
+            input.resource,
+            input.mcp,
+            fetcher,
+          ),
+        });
+      }
+      const client = await createMcpConnection(connection, fetcher);
+      try {
+        return c.json({
+          data: {
+            tools: await listMcpTools(
+              client,
+              JSON.parse(row.config).readOnlyTools,
+            ),
+          },
+        });
+      } finally {
+        await client.close();
+      }
+    }
     if (isDatabaseKind(row.kind) && databaseBridge)
       return c.json({
         data: await databases.inspection(
@@ -984,6 +1098,53 @@ export function createCollectionSourceApp(
     );
     return c.json({ data: sourceInspection(result, input.resourceType) });
   });
+  const mcpSource = async (id: string) => {
+    const row = await db
+      .prepare(
+        "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+      )
+      .bind(tenant, id, principalId)
+      .first<SourceRow>();
+    if (!row || row.kind !== "mcp") fail("MCP source not found.", 404);
+    return row;
+  };
+  app.post("/api/sources/:id/oauth/start", async (c) => {
+    const row = await mcpSource(c.req.param("id"));
+    const input = z
+      .object({ redirectUri: z.string().max(2000) })
+      .strict()
+      .parse(await c.req.json());
+    const origin = publicLocation?.origin ?? new URL(c.req.url).origin;
+    const expected =
+      origin +
+      (publicLocation?.apiBasePath ?? "") +
+      "/api/sources/" +
+      encodeURIComponent(row.id) +
+      "/oauth/callback";
+    if (input.redirectUri !== expected)
+      fail("Use this source's Savia OAuth callback URL.");
+    return c.json({ data: await mcp.start(row, expected) });
+  });
+  app.get("/api/sources/:id/oauth/callback", async (c) => {
+    c.header("Cache-Control", "no-store");
+    c.header("Referrer-Policy", "no-referrer");
+    c.header(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'",
+    );
+    const row = await mcpSource(c.req.param("id"));
+    const { state, code, iss } = z
+      .object({
+        state: z.string().uuid(),
+        code: z.string().min(1).max(4096),
+        iss: z.string().url().optional(),
+      })
+      .parse(c.req.query());
+    await mcp.finish(row, state, code, iss);
+    return c.html(
+      "<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' content='width=device-width'><title>MCP connected</title><h1>Connection authorized</h1><p>Close this window and return to Savia. Refresh the source to discover its read-only tools.</p></html>",
+    );
+  });
   app.delete("/api/sources/:id", async (c) => {
     const id = c.req.param("id");
     const owned = await db
@@ -1000,6 +1161,11 @@ export function createCollectionSourceApp(
     );
     await transaction(db, [
       g.start,
+      db
+        .prepare(
+          "DELETE FROM studio_mcp_oauth_flows WHERE tenant_id=? AND source_id=? AND owner_principal_id=?",
+        )
+        .bind(tenant, id, principalId),
       db
         .prepare(
           "DELETE FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
@@ -1252,7 +1418,55 @@ export function createCollectionSourceApp(
         .bind(tenant, input.sourceId, principalId)
         .first<SourceRow>();
       if (!storedSource) fail("Fuente no encontrada.", 404);
-      if (isDatabaseKind(storedSource.kind) && databaseBridge) {
+      if (storedSource.kind === "mcp") {
+        if (
+          input.capabilities &&
+          (input.capabilities.create ||
+            input.capabilities.update ||
+            input.capabilities.delete ||
+            input.capabilities.schema ||
+            input.capabilities.customFields)
+        )
+          fail("MCP collections are read-only.");
+        if (input.relationships && Object.keys(input.relationships).length)
+          fail("MCP relationships are not supported.");
+        if (!input.mcp) fail("Configure the MCP result mapping.");
+        const inspected = await inspectMcpTool(
+          await mcp.connection(storedSource),
+          input.resource,
+          input.mcp,
+          fetcher,
+        );
+        fields = Object.fromEntries(
+          Object.entries(input.fields).map(([key, value]) => {
+            if (!inspected.fields[key]) fail(`Unknown MCP field: ${key}.`);
+            return [
+              key,
+              {
+                ...(value as object),
+                ...inspected.fields[key],
+                readOnly: true,
+              },
+            ];
+          }),
+        );
+        if (!input.fields.id)
+          fail("Include the normalized MCP record identifier field: id.");
+        config = {
+          kind: "mcp",
+          sourceId: storedSource.id,
+          sourceOwnerPrincipalId: principalId,
+          resource: input.resource,
+          mcp: input.mcp,
+          capabilities: {
+            ...readOnly,
+            read: false,
+            search: false,
+            filter: false,
+            sort: false,
+          },
+        };
+      } else if (isDatabaseKind(storedSource.kind) && databaseBridge) {
         if (input.relationships && Object.keys(input.relationships).length)
           fail("Database relationships are not supported.");
         const metadata = await databases.inspect(
@@ -1393,7 +1607,13 @@ export function createCollectionSourceApp(
     for (const key of Object.keys(fields))
       // En Postgres la PK suele llamarse `id` y coincide con el
       // identificador del sobre; el resto de reservadas sigue bloqueado.
-      if (reserved.has(key) && !(isDatabaseKind(config.kind) && key === "id"))
+      if (
+        reserved.has(key) &&
+        !(
+          (isDatabaseKind(config.kind) || config.kind === "mcp") &&
+          key === "id"
+        )
+      )
         fail(`Campo reservado: ${key}.`);
     const definition = objectSchema.parse({
       name: input.name,
@@ -1502,6 +1722,7 @@ export function createCollectionSourceApp(
       .first<SourceRow>();
     if (!source) fail("Source not available.", 404);
     const object = await getObject(db, tenant, name);
+
     if (object.version !== input.version)
       fail("Collection changed. Reload before synchronizing.", 409);
     const metadata = await databases.inspect(
@@ -1607,6 +1828,23 @@ export function createCollectionSourceApp(
     )
       fail("Colección no disponible.", 404);
     const object = await getObject(db, tenant, name);
+    if (config.kind === "mcp") {
+      if (config.sourceOwnerPrincipalId !== principalId)
+        fail("Source not available.", 404);
+      config.capabilities = {
+        ...readOnly,
+        read: false,
+        search: false,
+        filter: false,
+        sort: false,
+      };
+      object.config.studio = {
+        ...object.config.studio,
+        collection: { ...config },
+        capabilities: config.capabilities,
+      };
+    }
+
     if (isDatabaseKind(config.kind) && databaseBridge) {
       if (
         config.sourceOwnerPrincipalId &&
@@ -1922,7 +2160,40 @@ export function createCollectionSourceApp(
         result = { data: flatten(doc, config, provider) };
       }
     } else {
-      if (isDatabaseKind(config.kind) && databaseBridge) {
+      if (config.kind === "mcp") {
+        if (operation !== "list")
+          fail("MCP collections only support listing records.", 405);
+        if (
+          params.q ||
+          params.filters ||
+          (params.sort && params.sort !== "updated_at") ||
+          params.stage ||
+          params.emptyStage ||
+          params.trash === "true"
+        )
+          fail(
+            "This MCP collection does not support search, filters, sorting or trash.",
+          );
+        const source = await mcpSource(config.sourceId);
+        if (!config.mcp) fail("MCP mapping is missing.");
+        const listed = await executeMcpList(
+          await mcp.connection(source),
+          config.resource,
+          config.mcp,
+          { page, perPage },
+          fetcher,
+        );
+        result = {
+          ...listed,
+          data: listed.data.map((record) =>
+            Object.fromEntries(
+              Object.entries(record).filter(
+                ([key]) => key === "id" || Boolean(object.config.fields[key]),
+              ),
+            ),
+          ),
+        };
+      } else if (isDatabaseKind(config.kind) && databaseBridge) {
         const source = await db
           .prepare(
             "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",

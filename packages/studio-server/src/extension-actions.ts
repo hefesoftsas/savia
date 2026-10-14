@@ -226,6 +226,63 @@ export function registerExtensionActions(
         201,
       );
     }
+    if (stored?.kind === "mcp") {
+      if (!options.executeMcpAction)
+        return c.json(
+          { error: "The read-only MCP action host is unavailable." },
+          503,
+        );
+      const context = extensionActionContextSchema.parse({
+        tenantId,
+        principalId: c.get("principalId"),
+        extensionId,
+        actionId: stored.id,
+        connectionId: "mcp",
+        runId: crypto.randomUUID(),
+      });
+      // Keep remote search results out of the persisted action-run payload.
+      if (connections)
+        await connections.startRun(context, {
+          arguments: Object.keys(input.input),
+        });
+      try {
+        const output = await options.executeMcpAction({
+          tenantId,
+          principalId: c.get("principalId"),
+          extensionId,
+          action: stored,
+          input: input.input,
+        });
+        const summary =
+          output &&
+          typeof output === "object" &&
+          "data" in output &&
+          Array.isArray(output.data)
+            ? { records: output.data.length }
+            : { completed: true };
+        const run = connections
+          ? await connections.completeRun(context, summary)
+          : { runId: context.runId, status: "succeeded" };
+        return c.json({ data: { run, output } }, 201);
+      } catch (error) {
+        if (connections) await connections.failRun(context, "MCP_READ_FAILED");
+        const status =
+          error &&
+          typeof error === "object" &&
+          "status" in error &&
+          typeof error.status === "number" &&
+          [400, 401, 403, 404, 409, 422, 502, 503, 504].includes(error.status)
+            ? error.status
+            : 502;
+        return c.json(
+          {
+            error:
+              error instanceof Error ? error.message : "The MCP read failed.",
+          },
+          status as 400,
+        );
+      }
+    }
     // Acciones http del store: el host revela los secretos del tenant,
     // interpola la petición, la ejecuta con allowlist anti-SSRF y
     // devuelve la respuesta redactada.

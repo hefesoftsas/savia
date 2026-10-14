@@ -1,3 +1,4 @@
+import { createMcpPluginActionExecutor } from "./mcp-plugin-actions";
 import {
   createRemoteWorkspaceApp,
   handlesRemoteWorkspace,
@@ -48,6 +49,7 @@ export type CollectionGatewayContext = {
   files: R2Bucket;
   tenant: string;
   publicApiBasePath?: string;
+  publicOrigin?: string;
   pluginRegistry?: { url: string; token: string };
   documentDelivery?: DocumentDeliveryBridge;
   actor: AppActor;
@@ -123,6 +125,13 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
       connectionRepository,
       settingsRepository,
       actionExecutor: context.actionExecutor,
+      executeMcpAction: createMcpPluginActionExecutor({
+        db,
+        tenant,
+        principalId: actor.principal.id,
+        integrationKey,
+        fetcher: context.collectionFetch,
+      }),
       saviaRequestService: context.saviaRequestService,
       canManageExtension: ({ tenantId }) =>
         canManageTenantExtensions(actor, tenantId),
@@ -334,6 +343,13 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
           context.collectionFetch,
           undefined,
           context.sqlBridge,
+          context.sqlBridge?.database,
+          context.publicOrigin
+            ? {
+                origin: context.publicOrigin,
+                apiBasePath: context.publicApiBasePath ?? "",
+              }
+            : undefined,
         ).fetch(request);
       if (
         /^\/api\/objects(?:\/[^/]+(?:\/preview)?)?$/.test(path) &&

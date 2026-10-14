@@ -601,3 +601,42 @@ describe("renderSimulationOutput", () => {
     });
   });
 });
+
+describe("read-only MCP store actions", () => {
+  const action = {
+    id: "search",
+    kind: "mcp",
+    sourceId: "secop_live",
+    tool: "buscar_licitaciones",
+    mapping: {
+      idField: ":id",
+      itemsPointer: "/data",
+      arguments: {},
+      pagination: { limitArgument: "limit", offsetArgument: "offset" },
+    },
+    inputArguments: ["q", "estado"],
+  };
+  it("accepts a fixed MCP tool and explicit runtime arguments without publishing it to the assistant", () => {
+    const parsed = storeJsonSchema.parse({
+      format: "savia.store",
+      formatVersion: 1,
+      actions: [action],
+    });
+    expect(parsed.actions[0]).toMatchObject(action);
+    expect(storeMcpActions("procurement.secop", parsed)).toEqual([]);
+  });
+  it.each([
+    { endpoint: "https://other.dev/mcp" },
+    { token: "private" },
+    { operation: "delete" },
+    { inputArguments: ["__proto__"] },
+  ])("rejects unsafe MCP action declaration %j", (extra) => {
+    expect(
+      storeJsonSchema.safeParse({
+        format: "savia.store",
+        formatVersion: 1,
+        actions: [{ ...action, ...extra }],
+      }).success,
+    ).toBe(false);
+  });
+});

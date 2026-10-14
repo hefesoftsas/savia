@@ -128,6 +128,10 @@ export function createCollectionOperationsApp(
   }
   app.get("/:name/operations", async (c) => {
     const row = await read(c.req.param("name"));
+    if (row.config.kind === "mcp")
+      throw new HTTPException(405, {
+        message: "MCP operations are managed by the read-only adapter.",
+      });
     return c.json({
       data: {
         version: row.version,
@@ -148,7 +152,7 @@ export function createCollectionOperationsApp(
   });
   app.post("/:name/operations/infer", async (c) => {
     const row = await read(c.req.param("name"));
-    if (isDatabaseKind(row.config.kind))
+    if (isDatabaseKind(row.config.kind) || row.config.kind === "mcp")
       throw new HTTPException(405, {
         message: "Database operations are managed by the adapter.",
       });
@@ -181,7 +185,7 @@ export function createCollectionOperationsApp(
   app.put("/:name/operations", async (c) => {
     const name = c.req.param("name"),
       row = await read(name);
-    if (isDatabaseKind(row.config.kind))
+    if (isDatabaseKind(row.config.kind) || row.config.kind === "mcp")
       throw new HTTPException(405, {
         message: "Las operaciones de bases de datos pertenecen al adaptador.",
       });

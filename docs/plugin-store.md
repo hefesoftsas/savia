@@ -623,3 +623,37 @@ indicator within their content area. Failed frame startup retains its retry acti
 
 For scaffolding, shared SDK/UI packages, automated local rebuilds, and test doubles,
 see [Plugin development](guides/plugin-development.md).
+
+## Read-only MCP actions
+
+A plugin may declare an MCP action that reuses an OAuth-enabled source from
+**Sources and collections**, without receiving its tokens:
+
+```json
+{
+  "id": "search",
+  "kind": "mcp",
+  "sourceId": "secop_live",
+  "tool": "buscar_licitaciones",
+  "mapping": {
+    "arguments": {},
+    "itemsPointer": "/data",
+    "idField": ":id",
+    "pagination": { "limitArgument": "limit", "offsetArgument": "offset" }
+  },
+  "inputArguments": ["q", "estado", "entidad", "modalidad", "departamento"]
+}
+```
+
+The source and tool are fixed by the installed declaration. Runtime input accepts
+only the declared scalar arguments plus bounded `page` and `perPage`. The host
+resolves the source for the authenticated principal in the current tenant and
+uses the source's encrypted OAuth grant and read-tool policy. Another user's
+source cannot be borrowed, even within the same tenant. A missing or expired
+connection requires authorization through the source manager. An unavailable MCP
+host returns an explicit error instead of simulated results.
+
+MCP action runs retain argument names and a result count for operational history,
+not full search-result datasets. The API response still returns the requested
+records to the plugin. This action kind does not expose arbitrary MCP calls,
+remote mutations, endpoints, credentials, or automatic assistant tools.

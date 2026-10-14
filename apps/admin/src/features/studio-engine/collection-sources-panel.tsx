@@ -85,6 +85,16 @@ type Source =
   | {
       id: string;
       label: string;
+      kind: "mcp";
+      endpoint: string;
+      authMode: "oauth" | "bearer" | "none";
+      hasToken: boolean;
+      oauth?: { clientId?: string; scope?: string };
+      readOnlyTools?: string[];
+    }
+  | {
+      id: string;
+      label: string;
       kind: "jsonapi";
       baseUrl: string;
       hasToken: boolean;
@@ -127,7 +137,20 @@ type SourceInspection = {
   hasNext?: boolean | null;
   tables?: Array<{ schema: string; table: string; kind: string }>;
   primaryKey?: string[];
+  tools?: McpTool[];
 };
+type McpTool = {
+  name: string;
+  description?: string;
+  inputSchema?: unknown;
+  outputSchema?: unknown;
+  annotations?: { readOnlyHint?: boolean; [key: string]: unknown };
+};
+function isDatabaseSource(
+  source: Source,
+): source is Extract<Source, { kind: DatabaseKind }> {
+  return isDatabaseKind(source.kind);
+}
 const readOnly: CollectionCapabilities = {
   list: true,
   read: true,
@@ -246,11 +269,19 @@ export default function CollectionSourcesPanel({
   const [confirmRemoval, setConfirmRemoval] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [sourceLabel, setSourceLabel] = useState("");
-  const [sourceKind, setSourceKind] = useState<"jsonapi" | DatabaseKind>(
-    "jsonapi",
-  );
+  const [sourceKind, setSourceKind] = useState<
+    "jsonapi" | "mcp" | DatabaseKind
+  >("jsonapi");
   const [baseUrl, setBaseUrl] = useState("");
   const tokenInput = useRef<HTMLInputElement>(null);
+  const mcpClientSecretInput = useRef<HTMLInputElement>(null);
+  const [mcpEndpoint, setMcpEndpoint] = useState("");
+  const [mcpAuthMode, setMcpAuthMode] = useState<"oauth" | "bearer" | "none">(
+    "oauth",
+  );
+  const [mcpClientId, setMcpClientId] = useState("");
+  const [mcpScope, setMcpScope] = useState("");
+  const [mcpReadOnlyTools, setMcpReadOnlyTools] = useState("");
   const passwordInput = useRef<HTMLInputElement>(null);
   const [pgHost, setPgHost] = useState("");
   const [pgPort, setPgPort] = useState("5432");
@@ -269,13 +300,22 @@ export default function CollectionSourcesPanel({
   const [allowFilters, setAllowFilters] = useState(false);
   const [allowSort, setAllowSort] = useState(false);
   const [totalPointer, setTotalPointer] = useState("");
-  const [mode, setMode] = useState<"domain" | "jsonapi" | DatabaseKind>(
+  const [mode, setMode] = useState<"domain" | "jsonapi" | "mcp" | DatabaseKind>(
     "domain",
   );
   const [selected, setSelected] = useState("");
   const [remoteSource, setRemoteSource] = useState("");
   const [resource, setResource] = useState("");
   const [resourceType, setResourceType] = useState("");
+  const [mcpTools, setMcpTools] = useState<McpTool[]>([]);
+  const [mcpToolName, setMcpToolName] = useState("");
+  const [mcpFieldsInspected, setMcpFieldsInspected] = useState(false);
+  const [mcpArguments, setMcpArguments] = useState("{}");
+  const [mcpItemsPointer, setMcpItemsPointer] = useState("");
+  const [mcpIdField, setMcpIdField] = useState("id");
+  const [mcpLimitArgument, setMcpLimitArgument] = useState("");
+  const [mcpOffsetArgument, setMcpOffsetArgument] = useState("");
+  const [authorizationUrl, setAuthorizationUrl] = useState("");
   const [relationships, setRelationships] = useState("{}");
   const [name, setName] = useState("");
   const [nameIsManual, setNameIsManual] = useState(false);
@@ -292,6 +332,15 @@ export default function CollectionSourcesPanel({
   const inFlight = useRef(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useEffect(() => {
+    const refreshSources = () => {
+      void client.invalidateQueries({
+        queryKey: ["collection-sources", scope],
+      });
+    };
+    window.addEventListener("focus", refreshSources);
+    return () => window.removeEventListener("focus", refreshSources);
+  }, [client, scope]);
   const suggestName = (value: string) => {
     if (nameIsManual) return;
     setName(
@@ -307,6 +356,12 @@ export default function CollectionSourcesPanel({
     setSourceLabel("");
     setSourceKind("jsonapi");
     setBaseUrl("");
+    setMcpEndpoint("");
+    setMcpAuthMode("oauth");
+    setMcpClientId("");
+    setMcpScope("");
+    setMcpReadOnlyTools("");
+    setAuthorizationUrl("");
     setPgHost("");
     setPgPort("5432");
     setPgDatabase("");
@@ -338,20 +393,64 @@ export default function CollectionSourcesPanel({
           "PUT",
           {
             label: sourceLabel,
-            ...(editing?.kind !== "jsonapi" ? { writeEnabled } : {}),
-            ...(editing?.kind !== "jsonapi"
+            ...(editing?.kind === "mcp"
+              ? editing.authMode === "bearer"
+                ? removeToken
+                  ? { token: null }
+                  : token
+                    ? { token }
+                    : {}
+                : {}
+              : editing?.kind !== "jsonapi"
+                ? { writeEnabled }
+                : {}),
+            ...(editing?.kind !== "jsonapi" && editing?.kind !== "mcp"
               ? removePassword
                 ? { password: null }
                 : password
                   ? { password }
                   : {}
-              : removeToken
-                ? { token: null }
-                : token
-                  ? { token }
-                  : {}),
+              : editing?.kind === "mcp"
+                ? {}
+                : removeToken
+                  ? { token: null }
+                  : token
+                    ? { token }
+                    : {}),
           },
         );
+      } else if (sourceKind === "mcp") {
+        const clientSecret = mcpClientSecretInput.current?.value;
+        if (mcpClientSecretInput.current)
+          mcpClientSecretInput.current.value = "";
+        const readOnlyTools = [
+          ...new Set(
+            mcpReadOnlyTools
+              .split(",")
+              .map((tool) => tool.trim())
+              .filter(Boolean),
+          ),
+        ];
+        await request<Source>("/sources", "POST", {
+          id: sourceId,
+          label: sourceLabel,
+          kind: "mcp",
+          endpoint: mcpEndpoint,
+          authMode: mcpAuthMode,
+          ...(mcpAuthMode === "bearer" && token ? { token } : {}),
+          ...(mcpAuthMode === "oauth"
+            ? {
+                oauth: {
+                  ...(mcpClientId.trim()
+                    ? { clientId: mcpClientId.trim() }
+                    : {}),
+                  ...(clientSecret ? { clientSecret } : {}),
+                  ...(mcpScope.trim() ? { scope: mcpScope.trim() } : {}),
+                },
+              }
+            : {}),
+          ...(readOnlyTools.length ? { readOnlyTools } : {}),
+        });
       } else if (isDatabaseKind(sourceKind)) {
         const port = Number.parseInt(pgPort, 10);
         if (!Number.isSafeInteger(port) || port < 1 || port > 65535)
@@ -499,6 +598,142 @@ export default function CollectionSourcesPanel({
       setBusy(false);
     }
   }
+  function mcpMapping() {
+    const parsed: unknown = JSON.parse(mcpArguments);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      throw new Error(t("Los argumentos MCP deben ser un objeto JSON."));
+    if (!mcpIdField.trim())
+      throw new Error(t("Indica el campo identificador MCP."));
+    return {
+      arguments: parsed,
+      itemsPointer: mcpItemsPointer,
+      idField: mcpIdField.trim(),
+      ...(mcpLimitArgument.trim() || mcpOffsetArgument.trim()
+        ? {
+            pagination: {
+              ...(mcpLimitArgument.trim()
+                ? { limitArgument: mcpLimitArgument.trim() }
+                : {}),
+              ...(mcpOffsetArgument.trim()
+                ? { offsetArgument: mcpOffsetArgument.trim() }
+                : {}),
+            },
+          }
+        : {}),
+    };
+  }
+  async function discoverMcpTools() {
+    if (inFlight.current || !remoteSource) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await request<SourceInspection>(
+        `/sources/${encodeURIComponent(remoteSource)}/inspect`,
+        "POST",
+        {},
+      );
+      const tools = (result.tools ?? []).filter(
+        (tool) => tool.annotations?.readOnlyHint !== false,
+      );
+      setMcpTools(tools);
+      setMcpToolName("");
+      setMcpFieldsInspected(false);
+      setNotice(
+        tools.length
+          ? t("Herramientas de solo lectura disponibles: %{v1}.", {
+              v1: String(tools.length),
+            })
+          : t("No se encontraron herramientas MCP de solo lectura."),
+      );
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+  async function inspectMcpTool() {
+    if (inFlight.current || !remoteSource || !mcpToolName) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const mapping = mcpMapping();
+      const result = await request<SourceInspection>(
+        `/sources/${encodeURIComponent(remoteSource)}/inspect`,
+        "POST",
+        { resource: mcpToolName, mcp: mapping },
+      );
+      if (!result.fields || typeof result.fields !== "object")
+        throw new Error(t("La herramienta MCP no devolvió campos."));
+      setFields(JSON.stringify(result.fields, null, 2));
+      setResource(mcpToolName);
+      setMcpFieldsInspected(true);
+      suggestName(mcpToolName);
+      setNotice(t("Campos MCP listos para vincular en modo de solo lectura."));
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+  async function authorizeMcpSource(source: Extract<Source, { kind: "mcp" }>) {
+    const popup = window.open(
+      "about:blank",
+      "_blank",
+      "popup,width=640,height=760",
+    );
+    if (popup) popup.opener = null;
+    setAuthorizationUrl("");
+    setError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      const runtime = getStudioRuntime();
+      const redirectUri = `${window.location.origin}${runtime.apiBasePath ?? ""}/api/sources/${encodeURIComponent(source.id)}/oauth/callback`;
+      const result = await request<{ authorizationUrl: string }>(
+        `/sources/${encodeURIComponent(source.id)}/oauth/start`,
+        "POST",
+        { redirectUri },
+      );
+      setAuthorizationUrl(result.authorizationUrl);
+      if (popup) popup.location.assign(result.authorizationUrl);
+      else
+        setNotice(
+          t(
+            "La ventana de autorización fue bloqueada. Usa el enlace disponible.",
+          ),
+        );
+      if (popup)
+        setNotice(t("Completa la autorización y vuelve a esta ventana."));
+    } catch (cause) {
+      popup?.close();
+      setError(errorText(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function testMcpSource(source: Extract<Source, { kind: "mcp" }>) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await request(
+        `/sources/${encodeURIComponent(source.id)}/test`,
+        "POST",
+        {},
+      );
+      setNotice(t("Conexión verificada."));
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function bind(event: React.FormEvent) {
     event.preventDefault();
     if (inFlight.current) return;
@@ -539,6 +774,29 @@ export default function CollectionSourcesPanel({
           fields: parsed,
           ...(databaseIdColumn ? { idColumn: databaseIdColumn } : {}),
           ...(mode === "mongodb" ? { idType: mongoIdType } : {}),
+        };
+      } else if (mode === "mcp") {
+        if (!mcpFieldsInspected)
+          throw new Error(
+            t("Analiza una herramienta MCP para obtener sus campos."),
+          );
+        const parsed: unknown = JSON.parse(fields);
+        if (
+          !parsed ||
+          typeof parsed !== "object" ||
+          Array.isArray(parsed) ||
+          !Object.keys(parsed).length
+        )
+          throw new Error(
+            t("Analiza una herramienta MCP para obtener sus campos."),
+          );
+        payload = {
+          name,
+          label,
+          sourceId: remoteSource,
+          resource: mcpToolName,
+          fields: parsed,
+          mcp: mcpMapping(),
         };
       } else {
         const parsed: unknown = JSON.parse(fields);
@@ -714,7 +972,7 @@ export default function CollectionSourcesPanel({
                       label={`${t("Fuentes configuradas")} (${t("Ayuda")})`}
                     >
                       {t(
-                        "Conexiones a servicios web JSON:API y a bases de datos externas con permisos de lectura y escritura.",
+                        "Conexiones a servicios JSON:API, bases de datos y servidores MCP externos.",
                       )}
                     </FieldHelp>
                   </div>
@@ -736,6 +994,12 @@ export default function CollectionSourcesPanel({
                       setSourceLabel("");
                       setSourceKind("jsonapi");
                       setBaseUrl("");
+                      setMcpEndpoint("");
+                      setMcpAuthMode("oauth");
+                      setMcpClientId("");
+                      setMcpScope("");
+                      setMcpReadOnlyTools("");
+                      setAuthorizationUrl("");
                       setPgHost("");
                       setPgPort("5432");
                       setPgDatabase("");
@@ -766,7 +1030,9 @@ export default function CollectionSourcesPanel({
                         ? t("Actualizar acceso a fuente")
                         : isDatabaseKind(sourceKind)
                           ? t("Conexión de base de datos")
-                          : t("Conexión JSON:API")}
+                          : sourceKind === "mcp"
+                            ? t("Conexión MCP")
+                            : t("Conexión JSON:API")}
                     </h3>
                     <Badge variant="outline" className="text-xs">
                       {editingSource ? t("Edición") : t("Nueva")}
@@ -785,7 +1051,7 @@ export default function CollectionSourcesPanel({
                         value={sourceKind}
                         onChange={(e) => {
                           const kind = e.target.value as
-                            "jsonapi" | DatabaseKind;
+                            "jsonapi" | "mcp" | DatabaseKind;
                           setSourceKind(kind);
                           if (isDatabaseKind(kind)) {
                             setPgPort(String(databaseKinds[kind].port));
@@ -794,6 +1060,7 @@ export default function CollectionSourcesPanel({
                         }}
                       >
                         <option value="jsonapi">{t("Recurso JSON:API")}</option>
+                        <option value="mcp">{t("Servidor MCP")}</option>
                         {Object.entries(databaseKinds).map(([kind, info]) => (
                           <option key={kind} value={kind}>
                             {t("Base")} {info.label}
@@ -832,98 +1099,290 @@ export default function CollectionSourcesPanel({
                     </div>
                   </div>
 
-                  {!showPostgresFields && (
-                    <>
-                      <div className="grid gap-1.5 text-sm">
-                        <Label htmlFor="source-url-input">
-                          {t("URL base HTTPS")}
-                        </Label>
-                        <Input
-                          id="source-url-input"
-                          required
-                          type="url"
-                          pattern="https://.*"
-                          disabled={editingSource}
-                          value={baseUrl}
-                          onChange={(e) => setBaseUrl(e.target.value)}
-                          placeholder="https://api.example.com/v1"
-                        />
-                      </div>
-
-                      <div className="grid gap-1.5 text-sm">
-                        <div className="flex items-center gap-1">
-                          <Label htmlFor="source-token-input">
-                            {t("Token de acceso (opcional)")}
+                  {!showPostgresFields &&
+                    (editingSource
+                      ? editingKind === "jsonapi"
+                      : sourceKind === "jsonapi") && (
+                      <>
+                        <div className="grid gap-1.5 text-sm">
+                          <Label htmlFor="source-url-input">
+                            {t("URL base HTTPS")}
                           </Label>
-                          <FieldHelp
-                            label={`${t("Token de acceso (opcional)")} (${t("Ayuda")})`}
-                          >
-                            {t(
-                              "El token se guarda cifrado en el servidor y no se devuelve en el catálogo.",
-                            )}
-                          </FieldHelp>
+                          <Input
+                            id="source-url-input"
+                            required
+                            type="url"
+                            pattern="https://.*"
+                            disabled={editingSource}
+                            value={baseUrl}
+                            onChange={(e) => setBaseUrl(e.target.value)}
+                            placeholder="https://api.example.com/v1"
+                          />
                         </div>
-                        <Input
-                          id="source-token-input"
-                          ref={tokenInput}
-                          type="password"
-                          autoComplete="off"
-                          placeholder="••••••••••••"
-                        />
-                      </div>
 
-                      {editingSource && (
-                        <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="size-4 rounded border-input accent-primary"
-                            checked={removeToken}
-                            onChange={(event) =>
-                              setRemoveToken(event.target.checked)
-                            }
+                        <div className="grid gap-1.5 text-sm">
+                          <div className="flex items-center gap-1">
+                            <Label htmlFor="source-token-input">
+                              {t("Token de acceso (opcional)")}
+                            </Label>
+                            <FieldHelp
+                              label={`${t("Token de acceso (opcional)")} (${t("Ayuda")})`}
+                            >
+                              {t(
+                                "El token se guarda cifrado en el servidor y no se devuelve en el catálogo.",
+                              )}
+                            </FieldHelp>
+                          </div>
+                          <Input
+                            id="source-token-input"
+                            ref={tokenInput}
+                            type="password"
+                            autoComplete="off"
+                            placeholder="••••••••••••"
                           />
-                          <span>{t("Quitar token de acceso")}</span>
-                        </label>
+                        </div>
+
+                        {editingSource && (
+                          <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="size-4 rounded border-input accent-primary"
+                              checked={removeToken}
+                              onChange={(event) =>
+                                setRemoveToken(event.target.checked)
+                              }
+                            />
+                            <span>{t("Quitar token de acceso")}</span>
+                          </label>
+                        )}
+
+                        <div className="flex flex-wrap gap-4 text-xs font-medium pt-1">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="size-4 rounded border-input accent-primary"
+                              disabled={editingSource}
+                              checked={allowFilters}
+                              onChange={(e) =>
+                                setAllowFilters(e.target.checked)
+                              }
+                            />
+                            <span>
+                              {t("La fuente admite filtros de igualdad")}
+                            </span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="size-4 rounded border-input accent-primary"
+                              disabled={editingSource}
+                              checked={allowSort}
+                              onChange={(e) => setAllowSort(e.target.checked)}
+                            />
+                            <span>{t("La fuente admite ordenación")}</span>
+                          </label>
+                        </div>
+
+                        <div className="grid gap-1.5 text-sm">
+                          <Label htmlFor="source-pointer-input">
+                            {t("Ruta JSON del total (opcional)")}
+                          </Label>
+                          <Input
+                            id="source-pointer-input"
+                            disabled={editingSource}
+                            value={totalPointer}
+                            onChange={(e) => setTotalPointer(e.target.value)}
+                            placeholder="/meta/total"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                  {(editingSource
+                    ? editingKind === "mcp"
+                    : sourceKind === "mcp") && (
+                    <fieldset className="grid gap-4 rounded-xl border border-border/60 bg-background p-4">
+                      <legend className="px-1 text-sm font-semibold">
+                        {t("Servidor MCP")}
+                      </legend>
+                      {!editingSource && (
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            {t("SECOP preset")}
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (!sourceId.trim()) setSourceId("secop");
+                              if (!sourceLabel.trim()) setSourceLabel("SECOP");
+                              setMcpEndpoint(
+                                "https://secop-live-worker.jose-douglas-dev.workers.dev/mcp",
+                              );
+                              setMcpAuthMode("oauth");
+                              setMcpScope("mcp:read offline_access");
+                              setMcpReadOnlyTools(
+                                "buscar_licitaciones, detalle_licitacion, buscar_documentos",
+                              );
+                              setMcpItemsPointer("/data");
+                              setMcpIdField(":id");
+                              setMcpLimitArgument("limit");
+                              setMcpOffsetArgument("offset");
+                            }}
+                          >
+                            {t("Usar configuración de SECOP")}
+                          </Button>
+                        </div>
                       )}
-
-                      <div className="flex flex-wrap gap-4 text-xs font-medium pt-1">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="size-4 rounded border-input accent-primary"
-                            disabled={editingSource}
-                            checked={allowFilters}
-                            onChange={(e) => setAllowFilters(e.target.checked)}
+                      {editingSource ? (
+                        <p className="break-all font-mono text-xs text-muted-foreground">
+                          {mcpEndpoint}
+                        </p>
+                      ) : (
+                        <div className="grid gap-1.5 text-sm">
+                          <Label htmlFor="mcp-endpoint-input">
+                            {t("Endpoint MCP HTTPS")}
+                          </Label>
+                          <Input
+                            id="mcp-endpoint-input"
+                            type="url"
+                            pattern="https://.*"
+                            required
+                            value={mcpEndpoint}
+                            onChange={(event) =>
+                              setMcpEndpoint(event.target.value)
+                            }
+                            placeholder="https://mcp.example.com/mcp"
                           />
-                          <span>
-                            {t("La fuente admite filtros de igualdad")}
-                          </span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="size-4 rounded border-input accent-primary"
-                            disabled={editingSource}
-                            checked={allowSort}
-                            onChange={(e) => setAllowSort(e.target.checked)}
+                        </div>
+                      )}
+                      {!editingSource && (
+                        <div className="grid gap-1.5 text-sm">
+                          <Label htmlFor="mcp-auth-mode">
+                            {t("Autenticación MCP")}
+                          </Label>
+                          <select
+                            id="mcp-auth-mode"
+                            aria-label={t("Autenticación MCP")}
+                            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                            value={mcpAuthMode}
+                            onChange={(event) =>
+                              setMcpAuthMode(
+                                event.target.value as typeof mcpAuthMode,
+                              )
+                            }
+                          >
+                            <option value="oauth">OAuth</option>
+                            <option value="bearer">{t("Token Bearer")}</option>
+                            <option value="none">
+                              {t("Sin autenticación")}
+                            </option>
+                          </select>
+                        </div>
+                      )}
+                      {mcpAuthMode === "oauth" && (
+                        <>
+                          {!editingSource && (
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <div className="grid gap-1.5 text-sm">
+                                <Label htmlFor="mcp-client-id">
+                                  {t("ID de cliente OAuth (opcional)")}
+                                </Label>
+                                <Input
+                                  id="mcp-client-id"
+                                  value={mcpClientId}
+                                  onChange={(event) =>
+                                    setMcpClientId(event.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="grid gap-1.5 text-sm">
+                                <Label htmlFor="mcp-client-secret">
+                                  {t("Secreto de cliente OAuth (opcional)")}
+                                </Label>
+                                <Input
+                                  id="mcp-client-secret"
+                                  ref={mcpClientSecretInput}
+                                  type="password"
+                                  autoComplete="off"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {!editingSource && (
+                            <div className="grid gap-1.5 text-sm">
+                              <Label htmlFor="mcp-oauth-scope">
+                                {t("Alcance OAuth (opcional)")}
+                              </Label>
+                              <Input
+                                id="mcp-oauth-scope"
+                                value={mcpScope}
+                                onChange={(event) =>
+                                  setMcpScope(event.target.value)
+                                }
+                                placeholder="read"
+                              />
+                            </div>
+                          )}
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            {t(
+                              "Deja el ID y secreto vacíos si el servidor admite registro dinámico de clientes.",
+                            )}
+                          </p>
+                        </>
+                      )}
+                      {mcpAuthMode === "bearer" && (
+                        <>
+                          <div className="grid gap-1.5 text-sm">
+                            <Label htmlFor="source-token-input">
+                              {t("Token de acceso (opcional)")}
+                            </Label>
+                            <Input
+                              id="source-token-input"
+                              ref={tokenInput}
+                              type="password"
+                              autoComplete="off"
+                              placeholder="••••••••••••"
+                            />
+                          </div>
+                          {editingSource && (
+                            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
+                              <input
+                                type="checkbox"
+                                className="size-4 rounded border-input accent-primary"
+                                checked={removeToken}
+                                onChange={(event) =>
+                                  setRemoveToken(event.target.checked)
+                                }
+                              />
+                              <span>{t("Quitar token de acceso")}</span>
+                            </label>
+                          )}
+                        </>
+                      )}
+                      {!editingSource && (
+                        <div className="grid gap-1.5 text-sm">
+                          <Label htmlFor="mcp-readonly-tools">
+                            {t("Additional read-only tool names")}
+                          </Label>
+                          <Textarea
+                            id="mcp-readonly-tools"
+                            rows={3}
+                            value={mcpReadOnlyTools}
+                            onChange={(event) =>
+                              setMcpReadOnlyTools(event.target.value)
+                            }
+                            placeholder="buscar_licitaciones, detalle_licitacion"
                           />
-                          <span>{t("La fuente admite ordenación")}</span>
-                        </label>
-                      </div>
-
-                      <div className="grid gap-1.5 text-sm">
-                        <Label htmlFor="source-pointer-input">
-                          {t("Ruta JSON del total (opcional)")}
-                        </Label>
-                        <Input
-                          id="source-pointer-input"
-                          disabled={editingSource}
-                          value={totalPointer}
-                          onChange={(e) => setTotalPointer(e.target.value)}
-                          placeholder="/meta/total"
-                        />
-                      </div>
-                    </>
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            {t(
+                              "Only list administrator-reviewed read tools that lack annotations. Tools explicitly marked writable stay unavailable.",
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </fieldset>
                   )}
 
                   {showPostgresFields && isDatabaseKind(editingKind) && (
@@ -987,6 +1446,19 @@ export default function CollectionSourcesPanel({
               </div>
             )}
 
+            {authorizationUrl && (
+              <div className="border-b border-border/60 bg-muted/30 px-5 py-3 text-sm sm:px-6">
+                <a
+                  className="font-medium text-primary underline underline-offset-4"
+                  href={authorizationUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t("Abrir página de autorización")}
+                </a>
+              </div>
+            )}
+
             <CardContent className="p-5 sm:p-6">
               {sources.isPending ? (
                 <div
@@ -1018,8 +1490,10 @@ export default function CollectionSourcesPanel({
                     >
                       <div className="flex min-w-0 items-start gap-3">
                         <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                          {source.kind !== "jsonapi" ? (
+                          {isDatabaseSource(source) ? (
                             <Database className="size-4" aria-hidden="true" />
+                          ) : source.kind === "mcp" ? (
+                            <Plug className="size-4" aria-hidden="true" />
                           ) : (
                             <Globe className="size-4" aria-hidden="true" />
                           )}
@@ -1033,59 +1507,107 @@ export default function CollectionSourcesPanel({
                               variant="outline"
                               className="text-xs font-normal"
                             >
-                              {source.kind !== "jsonapi"
+                              {isDatabaseSource(source)
                                 ? databaseKinds[source.kind].label
-                                : "JSON:API"}
+                                : source.kind === "mcp"
+                                  ? "MCP"
+                                  : "JSON:API"}
                             </Badge>
                             <Badge
                               variant={
-                                source.kind !== "jsonapi"
-                                  ? source.hasPassword
+                                source.kind === "mcp"
+                                  ? source.hasToken
                                     ? "secondary"
                                     : "outline"
-                                  : source.hasToken
-                                    ? "secondary"
-                                    : "outline"
+                                  : source.kind === "jsonapi"
+                                    ? source.hasToken
+                                      ? "secondary"
+                                      : "outline"
+                                    : source.hasPassword
+                                      ? "secondary"
+                                      : "outline"
                               }
                               className="text-xs font-normal"
                             >
-                              {source.kind !== "jsonapi"
-                                ? source.hasPassword
-                                  ? t("Con contraseña")
-                                  : t("Sin contraseña")
-                                : source.hasToken
-                                  ? t("Con autenticación")
-                                  : t("Sin token")}
+                              {source.kind === "mcp"
+                                ? source.authMode === "oauth"
+                                  ? source.hasToken
+                                    ? t("OAuth conectado")
+                                    : t("OAuth sin conectar")
+                                  : source.authMode === "bearer"
+                                    ? source.hasToken
+                                      ? t("Con token Bearer")
+                                      : t("Sin token Bearer")
+                                    : t("Sin autenticación")
+                                : source.kind === "jsonapi"
+                                  ? source.hasToken
+                                    ? t("Con autenticación")
+                                    : t("Sin token")
+                                  : source.hasPassword
+                                    ? t("Con contraseña")
+                                    : t("Sin contraseña")}
                             </Badge>
                           </div>
                           <p className="break-all font-mono text-xs text-muted-foreground">
-                            {source.kind !== "jsonapi"
+                            {isDatabaseSource(source)
                               ? `${source.host}:${source.port}/${source.database}${source.schema ? ` · ${source.schema}` : ""}`
-                              : source.baseUrl}
+                              : source.kind === "mcp"
+                                ? source.endpoint
+                                : source.baseUrl}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {source.kind !== "jsonapi" && (
+                        {source.kind === "mcp" &&
+                          source.authMode === "oauth" && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => void authorizeMcpSource(source)}
+                            >
+                              {busy ? (
+                                <LoaderCircle
+                                  className="animate-spin"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <Link2
+                                  className="size-3.5"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              {source.hasToken
+                                ? t("Volver a autorizar")
+                                : t("Autorizar OAuth")}
+                            </Button>
+                          )}
+                        {(isDatabaseSource(source) ||
+                          source.kind === "mcp") && (
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             disabled={busy}
                             onClick={async () => {
-                              setBusy(true);
-                              setError("");
-                              try {
-                                await request(
-                                  `/sources/${encodeURIComponent(source.id)}/test`,
-                                  "POST",
-                                  {},
-                                );
-                                setNotice(t("Conexión verificada."));
-                              } catch (e) {
-                                setError(errorText(e));
-                              } finally {
-                                setBusy(false);
+                              if (source.kind === "mcp")
+                                void testMcpSource(source);
+                              else {
+                                setBusy(true);
+                                setError("");
+                                try {
+                                  await request(
+                                    `/sources/${encodeURIComponent(source.id)}/test`,
+                                    "POST",
+                                    {},
+                                  );
+                                  setNotice(t("Conexión verificada."));
+                                } catch (e) {
+                                  setError(errorText(e));
+                                } finally {
+                                  setBusy(false);
+                                }
                               }
                             }}
                           >
@@ -1118,7 +1640,7 @@ export default function CollectionSourcesPanel({
                             setSourceId(source.id);
                             setSourceLabel(source.label);
                             setSourceKind(source.kind);
-                            if (source.kind !== "jsonapi") {
+                            if (isDatabaseSource(source)) {
                               setPgHost(source.host);
                               setPgPort(String(source.port));
                               setPgDatabase(source.database);
@@ -1134,6 +1656,11 @@ export default function CollectionSourcesPanel({
                                   ? source.encrypt !== false
                                   : source.ssl !== false,
                               );
+                            } else if (source.kind === "mcp") {
+                              setMcpEndpoint(source.endpoint);
+                              setMcpAuthMode(source.authMode);
+                              setMcpClientId(source.oauth?.clientId ?? "");
+                              setMcpScope(source.oauth?.scope ?? "");
                             } else {
                               setBaseUrl(source.baseUrl);
                             }
@@ -1267,7 +1794,7 @@ export default function CollectionSourcesPanel({
                         onChange={(e) =>
                           setMode(
                             e.target.value as
-                              "domain" | "jsonapi" | DatabaseKind,
+                              "domain" | "jsonapi" | "mcp" | DatabaseKind,
                           )
                         }
                       >
@@ -1276,6 +1803,9 @@ export default function CollectionSourcesPanel({
                         </option>
                         <option value="jsonapi">
                           {t("Recurso JSON:API externo")}
+                        </option>
+                        <option value="mcp">
+                          {t("Herramienta MCP de solo lectura")}
                         </option>
                         {Object.entries(databaseKinds).map(([kind, info]) => (
                           <option key={kind} value={kind}>
@@ -1345,7 +1875,12 @@ export default function CollectionSourcesPanel({
                             aria-label={t("Fuente")}
                             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
                             value={remoteSource}
-                            onChange={(e) => setRemoteSource(e.target.value)}
+                            onChange={(e) => {
+                              setRemoteSource(e.target.value);
+                              setMcpTools([]);
+                              setMcpToolName("");
+                              setMcpFieldsInspected(false);
+                            }}
                           >
                             <option value="">
                               {t("Selecciona una fuente")}
@@ -1354,7 +1889,9 @@ export default function CollectionSourcesPanel({
                               ?.filter((source) =>
                                 isDatabaseKind(mode)
                                   ? source.kind === mode
-                                  : source.kind === "jsonapi",
+                                  : mode === "mcp"
+                                    ? source.kind === "mcp"
+                                    : source.kind === "jsonapi",
                               )
                               .map((source) => (
                                 <option key={source.id} value={source.id}>
@@ -1364,74 +1901,281 @@ export default function CollectionSourcesPanel({
                           </select>
                         </div>
 
-                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                          <div className="grid gap-1.5 text-sm">
-                            <Label htmlFor="remote-resource-input">
-                              {isDatabaseKind(mode)
-                                ? t("Tabla (vacío para listar)")
-                                : t("Recurso remoto")}
-                            </Label>
-                            <Input
-                              id="remote-resource-input"
-                              aria-label={
-                                isDatabaseKind(mode)
-                                  ? t("Tabla (vacío para listar)")
-                                  : t("Recurso remoto")
-                              }
-                              required={!isDatabaseKind(mode)}
-                              value={resource}
-                              onChange={(e) => {
-                                setResource(e.target.value);
-                                suggestName(e.target.value);
-                              }}
-                              placeholder={
-                                isDatabaseKind(mode) ? "orders" : "contacts"
-                              }
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={
-                              busy ||
-                              !remoteSource ||
-                              (!isDatabaseKind(mode) && !resource.trim())
-                            }
-                            onClick={() => void inspectSource()}
-                          >
-                            {busy ? (
-                              <LoaderCircle
-                                className="size-3.5 animate-spin"
-                                aria-hidden="true"
-                              />
-                            ) : (
-                              <Search className="size-3.5" aria-hidden="true" />
+                        {mode === "mcp" ? (
+                          <div className="grid gap-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={busy || !remoteSource}
+                                onClick={() => void discoverMcpTools()}
+                              >
+                                {busy ? (
+                                  <LoaderCircle
+                                    className="size-3.5 animate-spin"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <Search
+                                    className="size-3.5"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                {busy
+                                  ? t("Analizando…")
+                                  : t("Descubrir herramientas de solo lectura")}
+                              </Button>
+                              <span className="text-xs text-muted-foreground">
+                                {t(
+                                  "Solo se muestran herramientas de solo lectura aprobadas por el servidor.",
+                                )}
+                              </span>
+                            </div>
+                            {mcpTools.length > 0 && (
+                              <>
+                                <div className="grid gap-1.5 text-sm">
+                                  <Label htmlFor="mcp-tool-select">
+                                    {t("Herramienta MCP")}
+                                  </Label>
+                                  <select
+                                    id="mcp-tool-select"
+                                    aria-label={t("Herramienta MCP")}
+                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                                    value={mcpToolName}
+                                    onChange={(event) => {
+                                      setMcpToolName(event.target.value);
+                                      setMcpFieldsInspected(false);
+                                      setResource(event.target.value);
+                                      suggestName(event.target.value);
+                                    }}
+                                  >
+                                    <option value="">
+                                      {t("Selecciona una herramienta")}
+                                    </option>
+                                    {mcpTools.map((tool) => (
+                                      <option key={tool.name} value={tool.name}>
+                                        {tool.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                {mcpToolName &&
+                                  (() => {
+                                    const tool = mcpTools.find(
+                                      (item) => item.name === mcpToolName,
+                                    );
+                                    return tool ? (
+                                      <div className="grid gap-3 rounded-lg border border-border/60 bg-background p-3 text-xs">
+                                        <p className="text-muted-foreground">
+                                          {tool.description}
+                                        </p>
+                                        <div>
+                                          <h4 className="mb-1 font-semibold text-foreground">
+                                            {t("Esquema de entrada")}
+                                          </h4>
+                                          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 font-mono">
+                                            {JSON.stringify(
+                                              tool.inputSchema ?? {},
+                                              null,
+                                              2,
+                                            )}
+                                          </pre>
+                                        </div>
+                                        <div>
+                                          <h4 className="mb-1 font-semibold text-foreground">
+                                            {t("Esquema de salida")}
+                                          </h4>
+                                          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 font-mono">
+                                            {JSON.stringify(
+                                              tool.outputSchema ?? {},
+                                              null,
+                                              2,
+                                            )}
+                                          </pre>
+                                        </div>
+                                      </div>
+                                    ) : null;
+                                  })()}
+                                <div className="grid gap-1.5 text-sm">
+                                  <Label htmlFor="mcp-static-arguments">
+                                    {t("Argumentos estáticos MCP (JSON)")}
+                                  </Label>
+                                  <Textarea
+                                    id="mcp-static-arguments"
+                                    rows={4}
+                                    className="bg-background font-mono text-xs"
+                                    value={mcpArguments}
+                                    onChange={(event) => {
+                                      setMcpArguments(event.target.value);
+                                      setMcpFieldsInspected(false);
+                                    }}
+                                  />
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                  <div className="grid gap-1.5 text-sm">
+                                    <Label htmlFor="mcp-items-pointer">
+                                      {t("Ruta JSON de los elementos")}
+                                    </Label>
+                                    <Input
+                                      id="mcp-items-pointer"
+                                      value={mcpItemsPointer}
+                                      onChange={(event) => {
+                                        setMcpItemsPointer(event.target.value);
+                                        setMcpFieldsInspected(false);
+                                      }}
+                                      placeholder="/items"
+                                    />
+                                  </div>
+                                  <div className="grid gap-1.5 text-sm">
+                                    <Label htmlFor="mcp-id-field">
+                                      {t("Campo identificador")}
+                                    </Label>
+                                    <Input
+                                      id="mcp-id-field"
+                                      required
+                                      value={mcpIdField}
+                                      onChange={(event) => {
+                                        setMcpIdField(event.target.value);
+                                        setMcpFieldsInspected(false);
+                                      }}
+                                      placeholder="id"
+                                    />
+                                  </div>
+                                </div>
+                                <fieldset className="grid gap-3 rounded-lg border border-border/60 p-3 sm:grid-cols-2">
+                                  <legend className="px-1 text-xs font-medium">
+                                    {t("Paginación opcional")}
+                                  </legend>
+                                  <div className="grid gap-1.5 text-sm">
+                                    <Label htmlFor="mcp-limit-argument">
+                                      {t("Argumento para límite")}
+                                    </Label>
+                                    <Input
+                                      id="mcp-limit-argument"
+                                      value={mcpLimitArgument}
+                                      onChange={(event) => {
+                                        setMcpLimitArgument(event.target.value);
+                                        setMcpFieldsInspected(false);
+                                      }}
+                                      placeholder="limit"
+                                    />
+                                  </div>
+                                  <div className="grid gap-1.5 text-sm">
+                                    <Label htmlFor="mcp-offset-argument">
+                                      {t("Argumento para desplazamiento")}
+                                    </Label>
+                                    <Input
+                                      id="mcp-offset-argument"
+                                      value={mcpOffsetArgument}
+                                      onChange={(event) => {
+                                        setMcpOffsetArgument(
+                                          event.target.value,
+                                        );
+                                        setMcpFieldsInspected(false);
+                                      }}
+                                      placeholder="offset"
+                                    />
+                                  </div>
+                                </fieldset>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={busy || !mcpToolName}
+                                  onClick={() => void inspectMcpTool()}
+                                >
+                                  {busy ? (
+                                    <LoaderCircle
+                                      className="size-3.5 animate-spin"
+                                      aria-hidden="true"
+                                    />
+                                  ) : (
+                                    <Search
+                                      className="size-3.5"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                  {busy
+                                    ? t("Analizando…")
+                                    : t("Analizar herramienta MCP")}
+                                </Button>
+                              </>
                             )}
-                            {busy
-                              ? t("Analizando…")
-                              : isDatabaseKind(mode)
-                                ? t("Analizar tabla")
-                                : t("Analizar recurso")}
-                          </Button>
-                        </div>
-
-                        {mode === "jsonapi" && (
-                          <div className="grid gap-1.5 text-sm">
-                            <Label htmlFor="resource-type-input">
-                              {t("Tipo de recurso JSON:API (opcional)")}
-                            </Label>
-                            <Input
-                              id="resource-type-input"
-                              aria-label={t(
-                                "Tipo de recurso JSON:API (opcional)",
-                              )}
-                              value={resourceType}
-                              onChange={(event) =>
-                                setResourceType(event.target.value)
-                              }
-                              placeholder="contacts"
-                            />
                           </div>
+                        ) : (
+                          <>
+                            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                              <div className="grid gap-1.5 text-sm">
+                                <Label htmlFor="remote-resource-input">
+                                  {isDatabaseKind(mode)
+                                    ? t("Tabla (vacío para listar)")
+                                    : t("Recurso remoto")}
+                                </Label>
+                                <Input
+                                  id="remote-resource-input"
+                                  aria-label={
+                                    isDatabaseKind(mode)
+                                      ? t("Tabla (vacío para listar)")
+                                      : t("Recurso remoto")
+                                  }
+                                  required={!isDatabaseKind(mode)}
+                                  value={resource}
+                                  onChange={(e) => {
+                                    setResource(e.target.value);
+                                    suggestName(e.target.value);
+                                  }}
+                                  placeholder={
+                                    isDatabaseKind(mode) ? "orders" : "contacts"
+                                  }
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={
+                                  busy ||
+                                  !remoteSource ||
+                                  (!isDatabaseKind(mode) && !resource.trim())
+                                }
+                                onClick={() => void inspectSource()}
+                              >
+                                {busy ? (
+                                  <LoaderCircle
+                                    className="size-3.5 animate-spin"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <Search
+                                    className="size-3.5"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                {busy
+                                  ? t("Analizando…")
+                                  : isDatabaseKind(mode)
+                                    ? t("Analizar tabla")
+                                    : t("Analizar recurso")}
+                              </Button>
+                            </div>
+
+                            {mode === "jsonapi" && (
+                              <div className="grid gap-1.5 text-sm">
+                                <Label htmlFor="resource-type-input">
+                                  {t("Tipo de recurso JSON:API (opcional)")}
+                                </Label>
+                                <Input
+                                  id="resource-type-input"
+                                  aria-label={t(
+                                    "Tipo de recurso JSON:API (opcional)",
+                                  )}
+                                  value={resourceType}
+                                  onChange={(event) =>
+                                    setResourceType(event.target.value)
+                                  }
+                                  placeholder="contacts"
+                                />
+                              </div>
+                            )}
+                          </>
                         )}
 
                         <div className="grid gap-1.5 text-sm">
@@ -1793,6 +2537,7 @@ export default function CollectionSourcesPanel({
                           </Button>
                         )}
                         {binding.kind !== "crm" &&
+                          binding.kind !== "mcp" &&
                           !isDatabaseKind(binding.kind) && (
                             <Button
                               type="button"

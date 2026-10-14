@@ -292,6 +292,7 @@ export function registerStudioRoutes(
       files,
       tenant: tenantKey,
       publicApiBasePath: routePrefix,
+      publicOrigin: url.origin,
       documentDelivery: documentDeliveryBridge(
         db,
         actor.principal.id,

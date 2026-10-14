@@ -1,3 +1,4 @@
+import { mcpMappingSchema } from "./mcp-sources";
 import { z } from "zod";
 import {
   extensionManifestSchema,
@@ -225,7 +226,7 @@ export function storeMcpActions(
   const actions: StoreMcpCatalogAction[] = [];
   for (const action of config.actions) {
     if (action.kind !== "simulation" && action.kind !== "http") continue;
-    if (!action.mcp) continue;
+    if (!("mcp" in action) || !action.mcp) continue;
     if (action.kind === "http" && action.request.method !== "GET") continue;
     const label = sanitizeAssistantCopy(
       `[${pluginId}/${action.id}] ${action.mcp.label}`,
@@ -299,9 +300,39 @@ export type StoreSaviaRequestAction = z.infer<
   typeof storeSaviaRequestActionSchema
 >;
 
+export const storeMcpActionSchema = z
+  .object({
+    id: solutionIdSchema,
+    kind: z.literal("mcp"),
+    sourceId: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/),
+    tool: z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/),
+    mapping: mcpMappingSchema,
+    inputArguments: z
+      .array(
+        z
+          .string()
+          .regex(/^[A-Za-z_][A-Za-z0-9_]{0,99}$/)
+          .refine(
+            (name) =>
+              ![
+                "__proto__",
+                "constructor",
+                "prototype",
+                "page",
+                "perPage",
+              ].includes(name),
+          ),
+      )
+      .max(20)
+      .default([]),
+  })
+  .strict();
+export type StoreMcpAction = z.infer<typeof storeMcpActionSchema>;
+
 export const storeActionSchema = z.union([
   storeSimulationActionSchema,
   storeDelegatedActionSchema,
+  storeMcpActionSchema,
   z.lazy(() => storeHttpActionSchema),
   z.lazy(() => storeSaviaRequestActionSchema),
 ]);

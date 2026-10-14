@@ -577,6 +577,12 @@ export const studioMessages = {
     "Configured sources",
     "Fontes configuradas",
   ],
+  "Conexiones a servicios JSON:API, bases de datos y servidores MCP externos.":
+    [
+      "Conexiones a servicios JSON:API, bases de datos y servidores MCP externos.",
+      "Connections to JSON:API services, databases, and external MCP servers.",
+      "Conexões com serviços JSON:API, bancos de dados e servidores MCP externos.",
+    ],
   "Conexiones a servicios web JSON:API y a bases de datos externas con permisos de lectura y escritura.":
     [
       "Conexiones a servicios web JSON:API y a bases de datos externas con permisos de lectura y escritura.",
@@ -3017,6 +3023,204 @@ export const studioMessages = {
     "Pantalla provista por plugin / extensión",
     "Screen provided by a plugin / extension",
     "Tela fornecida por plugin / extensão",
+  ],
+  "Conexión MCP": ["Conexión MCP", "MCP connection", "Conexão MCP"],
+  "SECOP preset": [
+    "Configuración de SECOP",
+    "SECOP preset",
+    "Configuração do SECOP",
+  ],
+  "Usar configuración de SECOP": [
+    "Usar configuración de SECOP",
+    "Use SECOP settings",
+    "Usar configuração do SECOP",
+  ],
+  "Additional read-only tool names": [
+    "Herramientas adicionales de solo lectura",
+    "Additional read-only tool names",
+    "Ferramentas adicionais somente leitura",
+  ],
+  "Only list administrator-reviewed read tools that lack annotations. Tools explicitly marked writable stay unavailable.":
+    [
+      "Añade solo herramientas de lectura revisadas por un administrador que no tengan anotaciones. Las herramientas marcadas explícitamente como escritura siguen bloqueadas.",
+      "Only list administrator-reviewed read tools that lack annotations. Tools explicitly marked writable stay unavailable.",
+      "Liste somente ferramentas de leitura revisadas por um administrador que não tenham anotações. Ferramentas marcadas explicitamente como gravação continuam indisponíveis.",
+    ],
+  "Servidor MCP": ["Servidor MCP", "MCP server", "Servidor MCP"],
+  "Endpoint MCP HTTPS": [
+    "Endpoint MCP HTTPS",
+    "MCP HTTPS endpoint",
+    "Endpoint HTTPS do MCP",
+  ],
+  "Autenticación MCP": [
+    "Autenticación MCP",
+    "MCP authentication",
+    "Autenticação MCP",
+  ],
+  "Token Bearer": ["Token Bearer", "Bearer token", "Token Bearer"],
+  "Sin autenticación": [
+    "Sin autenticación",
+    "No authentication",
+    "Sem autenticação",
+  ],
+  "ID de cliente OAuth (opcional)": [
+    "ID de cliente OAuth (opcional)",
+    "OAuth client ID (optional)",
+    "ID do cliente OAuth (opcional)",
+  ],
+  "Secreto de cliente OAuth (opcional)": [
+    "Secreto de cliente OAuth (opcional)",
+    "OAuth client secret (optional)",
+    "Segredo do cliente OAuth (opcional)",
+  ],
+  "Alcance OAuth (opcional)": [
+    "Alcance OAuth (opcional)",
+    "OAuth scope (optional)",
+    "Escopo OAuth (opcional)",
+  ],
+  "Deja el ID y secreto vacíos si el servidor admite registro dinámico de clientes.":
+    [
+      "Deja el ID y secreto vacíos si el servidor admite registro dinámico de clientes.",
+      "Leave the ID and secret blank if the server supports dynamic client registration.",
+      "Deixe o ID e o segredo em branco se o servidor oferecer registro dinâmico de clientes.",
+    ],
+  "OAuth conectado": ["OAuth conectado", "OAuth connected", "OAuth conectado"],
+  "OAuth sin conectar": [
+    "OAuth sin conectar",
+    "OAuth not connected",
+    "OAuth desconectado",
+  ],
+  "Con token Bearer": [
+    "Con token Bearer",
+    "Bearer token set",
+    "Com token Bearer",
+  ],
+  "Sin token Bearer": [
+    "Sin token Bearer",
+    "No Bearer token",
+    "Sem token Bearer",
+  ],
+  "Autorizar OAuth": ["Autorizar OAuth", "Authorize OAuth", "Autorizar OAuth"],
+  "Volver a autorizar": [
+    "Volver a autorizar",
+    "Authorize again",
+    "Autorizar novamente",
+  ],
+  "Completa la autorización y vuelve a esta ventana.": [
+    "Completa la autorización y vuelve a esta ventana.",
+    "Complete authorization and return to this window.",
+    "Conclua a autorização e volte para esta janela.",
+  ],
+  "La ventana de autorización fue bloqueada. Usa el enlace disponible.": [
+    "La ventana de autorización fue bloqueada. Usa el enlace disponible.",
+    "The authorization window was blocked. Use the link provided.",
+    "A janela de autorização foi bloqueada. Use o link disponível.",
+  ],
+  "Abrir página de autorización": [
+    "Abrir página de autorización",
+    "Open authorization page",
+    "Abrir página de autorização",
+  ],
+  "Herramienta MCP de solo lectura": [
+    "Herramienta MCP de solo lectura",
+    "Read-only MCP tool",
+    "Ferramenta MCP somente leitura",
+  ],
+  "Descubrir herramientas de solo lectura": [
+    "Descubrir herramientas de solo lectura",
+    "Discover read-only tools",
+    "Descobrir ferramentas somente leitura",
+  ],
+  "Solo se muestran herramientas de solo lectura aprobadas por el servidor.": [
+    "Solo se muestran herramientas de solo lectura aprobadas por el servidor.",
+    "Only read-only tools approved by the server are shown.",
+    "Apenas ferramentas somente leitura aprovadas pelo servidor são exibidas.",
+  ],
+  "Herramienta MCP": ["Herramienta MCP", "MCP tool", "Ferramenta MCP"],
+  "Selecciona una herramienta": [
+    "Selecciona una herramienta",
+    "Select a tool",
+    "Selecione uma ferramenta",
+  ],
+  "Esquema de entrada": [
+    "Esquema de entrada",
+    "Input schema",
+    "Esquema de entrada",
+  ],
+  "Esquema de salida": [
+    "Esquema de salida",
+    "Output schema",
+    "Esquema de saída",
+  ],
+  "Argumentos estáticos MCP (JSON)": [
+    "Argumentos estáticos MCP (JSON)",
+    "Static MCP arguments (JSON)",
+    "Argumentos estáticos MCP (JSON)",
+  ],
+  "Ruta JSON de los elementos": [
+    "Ruta JSON de los elementos",
+    "Items JSON pointer",
+    "Caminho JSON dos itens",
+  ],
+  "Campo identificador": [
+    "Campo identificador",
+    "Identifier field",
+    "Campo identificador",
+  ],
+  "Paginación opcional": [
+    "Paginación opcional",
+    "Optional pagination",
+    "Paginação opcional",
+  ],
+  "Argumento para límite": [
+    "Argumento para límite",
+    "Limit argument",
+    "Argumento de limite",
+  ],
+  "Argumento para desplazamiento": [
+    "Argumento para desplazamiento",
+    "Offset argument",
+    "Argumento de deslocamento",
+  ],
+  "Analizar herramienta MCP": [
+    "Analizar herramienta MCP",
+    "Inspect MCP tool",
+    "Inspecionar ferramenta MCP",
+  ],
+  "Los argumentos MCP deben ser un objeto JSON.": [
+    "Los argumentos MCP deben ser un objeto JSON.",
+    "MCP arguments must be a JSON object.",
+    "Os argumentos MCP devem ser um objeto JSON.",
+  ],
+  "Indica el campo identificador MCP.": [
+    "Indica el campo identificador MCP.",
+    "Enter the MCP identifier field.",
+    "Informe o campo identificador do MCP.",
+  ],
+  "Herramientas de solo lectura disponibles: %{v1}.": [
+    "Herramientas de solo lectura disponibles: %{v1}.",
+    "Read-only tools available: %{v1}.",
+    "Ferramentas somente leitura disponíveis: %{v1}.",
+  ],
+  "No se encontraron herramientas MCP de solo lectura.": [
+    "No se encontraron herramientas MCP de solo lectura.",
+    "No read-only MCP tools were found.",
+    "Nenhuma ferramenta MCP somente leitura foi encontrada.",
+  ],
+  "Campos MCP listos para vincular en modo de solo lectura.": [
+    "Campos MCP listos para vincular en modo de solo lectura.",
+    "MCP fields are ready to link in read-only mode.",
+    "Os campos MCP estão prontos para vinculação em modo somente leitura.",
+  ],
+  "La herramienta MCP no devolvió campos.": [
+    "La herramienta MCP no devolvió campos.",
+    "The MCP tool returned no fields.",
+    "A ferramenta MCP não retornou campos.",
+  ],
+  "Analiza una herramienta MCP para obtener sus campos.": [
+    "Analiza una herramienta MCP para obtener sus campos.",
+    "Inspect an MCP tool to get its fields.",
+    "Inspecione uma ferramenta MCP para obter seus campos.",
   ],
   "requestFields mapea campos de Studio a parámetros del API. responseFields usa rutas JSON como /nombre. dataPointer localiza los registros, idPointer su identificador e idBodyField el parámetro de ID en comandos sin {id} en la ruta. pageParameter, sizeParameter y searchParameter nombran los parámetros de consulta.":
     [

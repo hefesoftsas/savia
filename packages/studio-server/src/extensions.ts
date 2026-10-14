@@ -1,3 +1,4 @@
+import type { StoreMcpAction } from "@savia/studio-shared/plugin-store";
 import { dialectFor } from "@savia/db/dialect";
 import { z } from "zod";
 import {
@@ -36,6 +37,13 @@ export type ExtensionOptions = {
   settingsRepository?: ExtensionSettingsRepository;
   actionExecutor?: ExtensionActionExecutor;
   saviaRequestService?: SaviaRequestService;
+  executeMcpAction?: (request: {
+    tenantId: string;
+    principalId: string;
+    extensionId: string;
+    action: StoreMcpAction;
+    input: Record<string, unknown>;
+  }) => Promise<unknown>;
   canManageExtension?: (input: {
     tenantId: string;
     principalId: string;

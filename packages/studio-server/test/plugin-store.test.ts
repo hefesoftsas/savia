@@ -2458,3 +2458,77 @@ describe("studio plugin registry consumer", () => {
     );
   });
 });
+
+describe("read-only MCP store execution", () => {
+  it("requires an available host executor and passes authenticated context rather than caller destinations", async () => {
+    const tenant = "mcp-plugin-actions";
+    const action = {
+      id: "search",
+      kind: "mcp",
+      sourceId: "secop_live",
+      tool: "buscar_licitaciones",
+      mapping: { idField: ":id", itemsPointer: "/data", arguments: {} },
+      inputArguments: ["q"],
+    };
+    const uploaded = await uploadZip(
+      tenant,
+      pluginZip({
+        store: { format: "savia.store", formatVersion: 1, actions: [action] },
+      }),
+    );
+    expect(uploaded.status, await uploaded.clone().text()).toBe(200);
+    expect(
+      (await api(tenant, "/extensions/custom.demo/install", "POST")).status,
+    ).toBe(200);
+    expect(
+      (
+        await api(tenant, "/extensions/custom.demo/actions/search", "POST", {
+          input: { q: "software" },
+        })
+      ).status,
+    ).toBe(503);
+    const executeMcpAction = vi.fn(async () => ({
+      data: [{ id: "123", name: "Public opportunity" }],
+      page: 1,
+      perPage: 20,
+      hasNext: false,
+    }));
+    const isActive = (tenantId: string, extensionId: string) =>
+      isExtensionAvailable(platform.env.DB, tenantId, extensionId);
+    const runtime = createStudioApp(tenant, {
+      principalId: "mcp-plugin-owner",
+      seedObjects: [],
+      executeMcpAction,
+      connectionRepository: new ExtensionConnectionRepository(platform.env.DB, {
+        encryptionKey,
+        isExtensionActive: isActive,
+      }),
+    });
+    const response = await runtime.request(
+      "http://localhost/api/extensions/custom.demo/actions/search",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: { q: "software" } }),
+      },
+      platform.env,
+    );
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(executeMcpAction).toHaveBeenCalledWith({
+      tenantId: tenant,
+      principalId: "mcp-plugin-owner",
+      extensionId: "custom.demo",
+      action: expect.objectContaining(action),
+      input: { q: "software" },
+    });
+    expect(await response.json()).toMatchObject({
+      data: { run: { status: "succeeded" }, output: { data: [{ id: "123" }] } },
+    });
+    const runs = await runtime.request(
+      "http://localhost/api/extensions/custom.demo/actions/runs",
+      {},
+      platform.env,
+    );
+    expect(await runs.text()).not.toContain("Public opportunity");
+  });
+});
