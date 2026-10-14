@@ -1,4 +1,4 @@
-import { encodeStoredZip } from "@savia/plugin-authoring/zip";
+import { encodeStoredZipBlob } from "@savia/plugin-authoring/zip";
 import { ApiClient } from "@/api/api-client";
 import type { RecordingNotes } from "./client";
 const FULL_AUDIO_REQUEST_TIMEOUT_MS = 60_000;
@@ -91,22 +91,26 @@ export class CompanionSessionsClient {
     session: RecordingSession,
     signal?: AbortSignal,
   ): Promise<Blob> {
-    const entries: { name: string; data: Uint8Array }[] = [];
+    const client = this;
     const chunks = [...session.chunks].sort(
       (a, b) => a.source.localeCompare(b.source) || a.sequence - b.sequence,
     );
-    // Fetch sequentially to bound concurrent audio requests for long sessions.
-    for (const chunk of chunks) {
+    // The archive consumes each chunk before fetching the next. Only ZIP Blob
+    // records are retained, avoiding multiple full-session binary buffers.
+    async function* entries() {
+      for (const chunk of chunks) {
+        signal?.throwIfAborted();
+        const blob = await client.audio(session.id, chunk, signal);
+        const data = new Uint8Array(await blob.arrayBuffer());
+        signal?.throwIfAborted();
+        yield {
+          name: `${chunk.source}/${String(chunk.sequence).padStart(6, "0")}.${chunk.format ?? "ogg"}`,
+          data,
+        };
+      }
       signal?.throwIfAborted();
-      const blob = await this.audio(session.id, chunk, signal);
-      entries.push({
-        name: `${chunk.source}/${String(chunk.sequence).padStart(6, "0")}.${chunk.format ?? "ogg"}`,
-        data: new Uint8Array(await blob.arrayBuffer()),
-      });
     }
-    signal?.throwIfAborted();
-    const bytes = encodeStoredZip(entries);
-    return new Blob([bytes.buffer as ArrayBuffer], { type: "application/zip" });
+    return encodeStoredZipBlob(entries());
   }
   /** Single concatenated Ogg file for one source, in timeline order. */
   async fullAudio(

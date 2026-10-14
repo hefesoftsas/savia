@@ -144,7 +144,8 @@ offers the original audio ZIP download for review.
 **Download original audio (ZIP)** downloads every uploaded segment without
 conversion, grouped into `microphone/` and `system/` folders with sequence-numbered
 `.ogg` or `.m4a` filenames. The download is available after upload is finalized;
-preparation disables the button and errors allow retry. Switching sessions or
+preparation fetches and archives one fragment at a time to avoid full-session
+binary copies, disables the button, and errors allow retry. Switching sessions or
 leaving the review cancels preparation. Separate “Full audio”, microphone and
 system playback controls are hidden.
 `GET /v1/companion/sessions/{id}/audio?source=` returns one source as a single
