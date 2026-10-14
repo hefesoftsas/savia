@@ -78,12 +78,27 @@ export const companionMessages = {
     "Start combined playback",
     "Iniciar reprodução da chamada completa",
   ],
-  "One or more audio tracks could not start. Try listening to the separate tracks.":
+  "One or more audio tracks could not start. Download the original audio to listen to it.":
     [
-      "No se pudo iniciar una de las pistas. Prueba escuchar los audios por separado.",
-      "One or more audio tracks could not start. Try listening to the separate tracks.",
-      "Não foi possível iniciar uma das faixas. Tente ouvir os áudios separadamente.",
+      "No se pudo iniciar una de las pistas. Descarga el audio original para escucharlo.",
+      "One or more audio tracks could not start. Download the original audio to listen to it.",
+      "Não foi possível iniciar uma das faixas. Baixe o áudio original para ouvi-lo.",
     ],
+  "Download original audio (ZIP)": [
+    "Descargar audio original (ZIP)",
+    "Download original audio (ZIP)",
+    "Baixar áudio original (ZIP)",
+  ],
+  "Preparing audio ZIP…": [
+    "Preparando ZIP de audio…",
+    "Preparing audio ZIP…",
+    "Preparando ZIP de áudio…",
+  ],
+  "Unable to download original audio. Try again.": [
+    "No se pudo descargar el audio original. Inténtalo de nuevo.",
+    "Unable to download original audio. Try again.",
+    "Não foi possível baixar o áudio original. Tente novamente.",
+  ],
   "Play combined call": [
     "Reproducir llamada completa",
     "Play combined call",
