@@ -362,13 +362,26 @@ export async function persistParsedStoreArtifact(
     }>();
   if (existing) {
     if (guardedWrite) fail("Plugin head changed before publication.", 409);
+    let existingStore: unknown = null;
+    if (existing.store_json) {
+      try {
+        const decoded = JSON.parse(existing.store_json);
+        try {
+          // Normalize defaults added to the store schema (for example the
+          // monitors array) before comparing immutable historical artifacts.
+          existingStore = storeJsonSchema.parse(decoded);
+        } catch {
+          existingStore = decoded;
+        }
+      } catch {
+        existingStore = existing.store_json;
+      }
+    }
     if (
       canonicalJson(JSON.parse(existing.manifest)) !==
         canonicalJson(parsed.manifest) ||
       existing.entry_js !== parsed.entryJs ||
-      canonicalJson(
-        existing.store_json ? JSON.parse(existing.store_json) : null,
-      ) !== canonicalJson(parsed.store ?? null)
+      canonicalJson(existingStore) !== canonicalJson(parsed.store ?? null)
     )
       fail(
         "Esta versión ya existe con otro contenido. Publica una versión nueva.",
