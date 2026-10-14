@@ -429,7 +429,7 @@ it("requires acknowledgement to switch transcript language", async () => {
   ]);
 });
 
-it("plays and downloads the full concatenated audio per source", async () => {
+it("downloads original chunks as a ZIP and hides separate audio controls", async () => {
   const withChunks: RecordingSession = {
     ...session("full"),
     chunks: [
@@ -493,16 +493,103 @@ it("plays and downloads the full concatenated audio per source", async () => {
       <RecordingSessions api={fetchingApi} />
     </StoreContextProvider>,
   );
+  const downloads: string[] = [];
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+    this: HTMLAnchorElement,
+  ) {
+    downloads.push(this.download);
+  });
   const user = userEvent.setup();
   await user.click(
-    await screen.findByRole("button", { name: "Play full audio" }),
+    await screen.findByRole("button", {
+      name: "Download original audio (ZIP)",
+    }),
+  );
+  await waitFor(() =>
+    expect(downloads).toEqual(["savia-full-original-audio.zip"]),
+  );
+  expect(requested).toContain(
+    "/v1/companion/sessions/full/chunks/microphone/0",
+  );
+  expect(requested).toContain(
+    "/v1/companion/sessions/full/chunks/microphone/1",
+  );
+  expect(requested.some((path) => path.includes("/audio?"))).toBe(false);
+  expect(screen.queryByText("Full audio")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Play full audio" }),
+  ).not.toBeInTheDocument();
+});
+
+it("shows download progress, prevents duplicate downloads and lets users retry failures", async () => {
+  const recorded: RecordingSession = {
+    ...session("retry"),
+    chunks: [
+      {
+        source: "microphone",
+        sequence: 0,
+        startSeconds: 0,
+        durationSeconds: 30,
+        bytes: 4,
+        format: "ogg",
+      },
+    ],
+  };
+  let resolveChunk!: (response: Response) => void;
+  let attempts = 0;
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/v1/companion/sessions")
+        return Response.json({ sessions: [recorded], cursor: null });
+      if (path.includes("/chunks/")) {
+        attempts++;
+        if (attempts === 1)
+          return new Promise<Response>((resolve) => {
+            resolveChunk = resolve;
+          });
+        return new Response("original");
+      }
+      return Response.json(recorded);
+    },
+  });
+  URL.createObjectURL = vi.fn(() => "blob:zip");
+  URL.revokeObjectURL = vi.fn();
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", {
+      name: "Download original audio (ZIP)",
+    }),
   );
   expect(
-    await screen.findByRole("link", { name: "Download full audio" }),
-  ).toHaveAttribute("download", "savia-full-microphone.ogg");
-  expect(requested).toContain(
-    "/v1/companion/sessions/full/audio?source=microphone",
+    screen.getByRole("button", { name: "Preparing audio ZIP…" }),
+  ).toBeDisabled();
+  expect(
+    screen.getByText("Preparing audio ZIP…", { selector: "p" }),
+  ).toHaveAttribute("role", "status");
+  resolveChunk(new Response("unavailable", { status: 500 }));
+  expect(
+    await screen.findByText("Unable to download original audio. Try again."),
+  ).toHaveAttribute("role", "alert");
+  expect(click).not.toHaveBeenCalled();
+  await user.click(
+    screen.getByRole("button", { name: "Download original audio (ZIP)" }),
   );
+  await waitFor(() => expect(click).toHaveBeenCalledOnce());
+  expect(attempts).toBe(2);
+  expect(
+    screen.queryByText("Unable to download original audio. Try again."),
+  ).not.toBeInTheDocument();
 });
 
 it("plays microphone and system audio together as one combined call", async () => {
@@ -692,7 +779,7 @@ it("masters the combined call from the longest source timeline", async () => {
   expect(play).toHaveBeenCalledTimes(3);
 });
 
-it("falls back to per-segment playback for mobile M4A sources", async () => {
+it("offers original ZIP download for mobile M4A without separate players", async () => {
   const mobile: RecordingSession = {
     ...session("mobile"),
     chunks: [
@@ -743,13 +830,18 @@ it("falls back to per-segment playback for mobile M4A sources", async () => {
       <RecordingSessions api={fetchingApi} />
     </StoreContextProvider>,
   );
-  expect(await screen.findByLabelText("Listen from")).toBeVisible();
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  await userEvent.setup().click(
+    await screen.findByRole("button", {
+      name: "Download original audio (ZIP)",
+    }),
+  );
+  await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+  expect(screen.queryByLabelText("Listen from")).not.toBeInTheDocument();
   expect(requested).toContain(
     "/v1/companion/sessions/mobile/chunks/microphone/0",
   );
-  await waitFor(() =>
-    expect(document.querySelectorAll("audio")).toHaveLength(1),
-  );
+  expect(document.querySelectorAll("audio")).toHaveLength(0);
   expect(
     screen.queryByRole("button", { name: "Play combined call" }),
   ).not.toBeInTheDocument();

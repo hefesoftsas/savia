@@ -1,4 +1,4 @@
-type ZipInput = { name: string; data: string };
+type ZipInput = { name: string; data: string | Uint8Array };
 
 const crcTable = (() => {
   const table = new Uint32Array(256);
@@ -22,7 +22,7 @@ function header(length: number): { bytes: Uint8Array; view: DataView } {
   return { bytes, view: new DataView(bytes.buffer) };
 }
 
-/** Writes a small UTF-8 ZIP using method 0, accepted by the Store parser. */
+/** Writes a ZIP with UTF-8 filenames using method 0, accepted by the Store parser. */
 export function encodeStoredZip(entries: readonly ZipInput[]): Uint8Array {
   const encoder = new TextEncoder();
   const locals: Uint8Array[] = [];
@@ -31,7 +31,8 @@ export function encodeStoredZip(entries: readonly ZipInput[]): Uint8Array {
 
   for (const entry of entries) {
     const name = encoder.encode(entry.name);
-    const data = encoder.encode(entry.data);
+    const data =
+      typeof entry.data === "string" ? encoder.encode(entry.data) : entry.data;
     const crc = crc32(data);
     const local = header(30 + name.length + data.length);
     local.view.setUint32(0, 0x04034b50, true);
