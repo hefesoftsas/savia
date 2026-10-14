@@ -22,13 +22,34 @@ Only selected opportunities are copied into the local collection, including a
 bounded source snapshot. All durable follow-up data uses the backend collections
 API. Reloading does not depend on browser storage. Removing or disabling the
 plugin keeps existing opportunity records. Search does not submit offers or
-change procurement data at SECOP. Follow-up dates are recorded dates; this
-version does not send scheduled reminders or automatically refresh source facts.
+change procurement data at SECOP.
+
+## Automatic monitoring
+
+Newly saved interests have **Automatic monitoring** enabled. The service checks
+SECOP about once an hour while the plugin is installed and enabled, using the immutable
+creator's own SECOP Live OAuth connection. Existing saved interests with a
+creator are enrolled automatically. Each interest shows its latest SECOP status,
+closing date, check time and a safe connection or check error. Change the checkbox
+and select **Save tracking** to pause or resume an individual interest. Interests
+whose local tracking status is **Awarded** or **Discarded** pause automatically.
+
+Status changes and closing reminders appear in Savia's in-app notifications.
+Reminders are sent at 168, 72 and 24 hours before the current deadline; only the
+nearest applicable reminder is sent if a check happens late. Changing a deadline
+starts a new reminder cycle. Offset-less SECOP timestamps use America/Bogota;
+date-only deadlines mean the end of that date. Missing, invalid or expired
+deadlines do not produce closing reminders. The local tracking status, assignee and notes remain
+separate from the facts refreshed from SECOP. No email or external message is
+sent. If the source connection needs authorization, the interest shows a
+connection error and its creator must reconnect it in **Sources and collections**.
 
 ## Install
 
 1. Deploy the host's read-only MCP sources and `mcp` plugin-action support, applying
-   migration `0048_mcp_collection_sources.sql` before the API.
+   migrations `0048_mcp_collection_sources.sql` and
+   `0049_plugin_record_monitors.sql` before the API. Configure the API scheduler
+   with a one-minute cron; the monitor itself checks each interest hourly.
 2. In the target workspace, create the **SECOP Live** MCP source with identifier
    `secop_live`, and complete OAuth for the user who will run searches. See
    [MCP collection sources](mcp-collection-sources.md). Source credentials remain
@@ -40,7 +61,7 @@ version does not send scheduled reminders or automatically refresh source facts.
    tracking fields, save, and reopen to verify backend persistence.
 
 The plugin provisions `procurement_opportunities` with a unique `source_id` and
-native record-version support. It declares one fixed read action and does not
+native record-version support. It declares two fixed read actions and does not
 contain a source URL, API key, OAuth token or secret. The action's source ID and
 mapping are metadata; user input cannot select a different endpoint or tool.
 

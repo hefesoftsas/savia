@@ -80,6 +80,21 @@ const messages = {
     results: "Resultados SECOP",
     savedList: "Oportunidades guardadas",
     sourceStatus: "Estado",
+    sourceStatusLabel: "Estado SECOP actual",
+    monitoringEnabled: "Monitoreo automático",
+    lastCheck: "Última revisión",
+    neverChecked: "Pendiente de primera revisión",
+    monitorError: "No se pudo actualizar SECOP",
+    monitorErrorAuthorization:
+      "Vuelve a conectar SECOP en Fuentes y colecciones para continuar el monitoreo.",
+    monitorErrorMissing:
+      "No se encontró el proceso guardado. Se volverá a intentar automáticamente.",
+    monitorErrorDeadline:
+      "SECOP no tiene una fecha de cierre válida; no se enviarán recordatorios de cierre.",
+    monitorErrorUnavailable:
+      "SECOP no está disponible. Se volverá a intentar automáticamente.",
+    monitorPauseByStatus:
+      "Los procesos adjudicados o descartados se pausan automáticamente.",
     pageOf: "de",
     hideAdvanced: "Ocultar filtros",
     showAdvanced: "Filtros avanzados",
@@ -145,6 +160,20 @@ const messages = {
     results: "SECOP results",
     savedList: "Saved opportunities",
     sourceStatus: "Status",
+    sourceStatusLabel: "Current SECOP status",
+    monitoringEnabled: "Automatic monitoring",
+    lastCheck: "Last check",
+    neverChecked: "Waiting for the first check",
+    monitorError: "SECOP could not be updated",
+    monitorErrorAuthorization:
+      "Reconnect SECOP in Sources and collections to resume monitoring.",
+    monitorErrorMissing:
+      "The saved process could not be found. It will be retried automatically.",
+    monitorErrorDeadline:
+      "SECOP has no usable closing date; no closing reminder will be sent.",
+    monitorErrorUnavailable:
+      "SECOP is unavailable. It will be retried automatically.",
+    monitorPauseByStatus: "Awarded or discarded processes pause automatically.",
     pageOf: "of",
     hideAdvanced: "Hide filters",
     showAdvanced: "Advanced filters",
@@ -207,6 +236,21 @@ const messages = {
     noData: "Sem dados no SECOP",
     processId: "Processo SECOP",
     sourceStatus: "Status",
+    sourceStatusLabel: "Status atual no SECOP",
+    monitoringEnabled: "Monitoramento automático",
+    lastCheck: "Última verificação",
+    neverChecked: "Aguardando a primeira verificação",
+    monitorError: "Não foi possível atualizar o SECOP",
+    monitorErrorAuthorization:
+      "Reconecte o SECOP em Fontes e coleções para retomar o monitoramento.",
+    monitorErrorMissing:
+      "O processo salvo não foi encontrado. Uma nova tentativa será feita automaticamente.",
+    monitorErrorDeadline:
+      "O SECOP não tem uma data de encerramento válida; não haverá lembrete de encerramento.",
+    monitorErrorUnavailable:
+      "O SECOP está indisponível. Uma nova tentativa será feita automaticamente.",
+    monitorPauseByStatus:
+      "Processos adjudicados ou descartados são pausados automaticamente.",
     sourceUnavailable: "Link SECOP indisponível",
     searchAria: "Critérios de busca SECOP",
     results: "Resultados SECOP",
@@ -230,6 +274,43 @@ const catalog = Object.fromEntries(
 function isLocale(value: string | undefined): Locale {
   const language = value?.toLowerCase().split("-")[0];
   return language === "en" || language === "pt" ? language : "es";
+}
+function monitorErrorMessage(
+  value: unknown,
+  t: (typeof messages)[Locale],
+): string {
+  switch (value) {
+    case "authorization_required":
+      return t.monitorErrorAuthorization;
+    case "record_missing":
+      return t.monitorErrorMissing;
+    case "invalid_deadline":
+      return t.monitorErrorDeadline;
+    case "source_unavailable":
+      return t.monitorErrorUnavailable;
+    default:
+      return t.monitorError;
+  }
+}
+function formatMonitorCheck(
+  value: unknown,
+  locale: Locale,
+  fallback: string,
+): string {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  const at = new Date(value);
+  if (!Number.isFinite(at.getTime())) return fallback;
+  const dateLocale =
+    locale === "en" ? "en-US" : locale === "pt" ? "pt-BR" : "es-CO";
+  try {
+    return new Intl.DateTimeFormat(dateLocale, {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "America/Bogota",
+    }).format(at);
+  } catch {
+    return fallback;
+  }
 }
 function display(value: unknown, fallback: string) {
   if (value === undefined || value === null || String(value).trim() === "")
@@ -300,6 +381,7 @@ function Screen({ savia }: { savia: PluginApi }) {
         priority: string;
         owner: string;
         next_follow_up: string;
+        monitoring_enabled: boolean;
       }
     >
   >({});
@@ -378,6 +460,7 @@ function Screen({ savia }: { savia: PluginApi }) {
             priority: String(item.priority ?? "normal"),
             owner: String(item.owner ?? ""),
             next_follow_up: String(item.next_follow_up ?? "").slice(0, 10),
+            monitoring_enabled: item.monitoring_enabled !== false,
           };
         return updated;
       });
@@ -430,6 +513,7 @@ function Screen({ savia }: { savia: PluginApi }) {
           priority: String(updated.priority ?? "normal"),
           owner: String(updated.owner ?? ""),
           next_follow_up: String(updated.next_follow_up ?? "").slice(0, 10),
+          monitoring_enabled: updated.monitoring_enabled !== false,
         },
       }));
       setNotice(t.savedChanges);
@@ -457,6 +541,7 @@ function Screen({ savia }: { savia: PluginApi }) {
               priority: String(current.priority ?? "normal"),
               owner: String(current.owner ?? ""),
               next_follow_up: String(current.next_follow_up ?? "").slice(0, 10),
+              monitoring_enabled: current.monitoring_enabled !== false,
             },
           }));
         } catch {
@@ -778,6 +863,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                   0,
                   10,
                 ),
+                monitoring_enabled: record.monitoring_enabled !== false,
               };
               const link = sourceLink(record.source_url);
               return (
@@ -797,7 +883,57 @@ function Screen({ savia }: { savia: PluginApi }) {
                       </a>
                     )}
                   </header>
+                  <div
+                    className="secop-monitor-facts"
+                    aria-label={t.sourceStatusLabel}
+                  >
+                    <p>
+                      <strong>{t.sourceStatusLabel}:</strong>{" "}
+                      {display(record.source_status, t.noData)}
+                    </p>
+                    <p>
+                      <strong>{t.deadline}:</strong>{" "}
+                      {display(record.deadline, t.noData)}
+                    </p>
+                    <p>
+                      <strong>{t.lastCheck}:</strong>{" "}
+                      {formatMonitorCheck(
+                        record.monitoring_checked_at,
+                        locale,
+                        t.neverChecked,
+                      )}
+                    </p>
+                    {record.monitoring_error && (
+                      <p className="secop-monitor-error" role="status">
+                        {monitorErrorMessage(record.monitoring_error, t)}
+                      </p>
+                    )}
+                  </div>
                   <div className="secop-edit-grid">
+                    <label className="secop-monitor-toggle">
+                      <input
+                        type="checkbox"
+                        checked={values.monitoring_enabled}
+                        onChange={(event) =>
+                          setEdits({
+                            ...edits,
+                            [record.id]: {
+                              ...values,
+                              monitoring_enabled: event.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        {t.monitoringEnabled}
+                        <small
+                          className="secop-muted"
+                          style={{ display: "block" }}
+                        >
+                          {t.monitorPauseByStatus}
+                        </small>
+                      </span>
+                    </label>
                     <label>
                       {t.statusTrack}
                       <select

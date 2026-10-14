@@ -15,6 +15,16 @@ import { runBookingJobs } from "../src/bookings/jobs";
 vi.mock("../src/workflows", () => ({
   runScheduledWorkflows: vi.fn(async () => undefined),
 }));
+vi.mock("../src/studio/plugin-monitors", () => ({
+  runPluginMonitors: vi.fn(async () => ({
+    claimed: 0,
+    checked: 0,
+    alerts: 0,
+    failed: 0,
+    skipped: 0,
+  })),
+}));
+import { runPluginMonitors } from "../src/studio/plugin-monitors";
 vi.mock("../src/notifications", () => ({
   runScheduledNotifications: vi.fn(async () => ({
     claimed: 0,
@@ -31,20 +41,32 @@ vi.mock("../src/personal-integrations/jira-privacy-runtime", () => ({
 import { runJiraPrivacyMaintenance } from "../src/personal-integrations/jira-privacy-runtime";
 import worker from "../src/index";
 import { runScheduledWorkflows } from "../src/workflows";
+const migrations = Object.entries(
+  import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
+    eager: true,
+    import: "default",
+    query: "?raw",
+  }),
+).sort(([a], [b]) => a.localeCompare(b));
 beforeAll(async () => {
-  await env.DB.prepare(
-    "CREATE TABLE IF NOT EXISTS studio_audit(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,action TEXT NOT NULL,object_name TEXT NOT NULL,record_id TEXT,detail TEXT NOT NULL,created_at TEXT NOT NULL)",
-  ).run();
-  await env.DB.prepare(
-    "CREATE TABLE IF NOT EXISTS studio_record_history(tenant_id TEXT NOT NULL,object_name TEXT NOT NULL,record_id TEXT NOT NULL,version INTEGER NOT NULL,expires_at TEXT NOT NULL,PRIMARY KEY(tenant_id,object_name,record_id,version))",
-  ).run();
+  // Scheduled jobs share the real current schema, including empty channel queues.
+  for (const [, sql] of migrations)
+    for (const part of sql.split("--> statement-breakpoint")) {
+      const statement = part
+        .replace(/^--.*$/gm, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (statement) await env.DB.exec(statement);
+    }
 });
+
 it("runs scheduled workflows without the legacy CRM synchronization worker", async () => {
   await expect(
     worker.scheduled({} as ScheduledController, env),
   ).resolves.toBeUndefined();
   expect(runBookingJobs).toHaveBeenCalledTimes(1);
   expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+  expect(runPluginMonitors).toHaveBeenCalledTimes(1);
   expect(vi.mocked(runScheduledWorkflows).mock.calls[0][0] === env.DB).toBe(
     true,
   );
@@ -59,6 +81,7 @@ it("ticks workflows in preview without activating external CRM synchronization",
   ).resolves.toBeUndefined();
   expect(runBookingJobs).toHaveBeenCalledTimes(1);
   expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+  expect(runPluginMonitors).toHaveBeenCalledTimes(1);
 });
 
 import { createApiRuntime } from "../src/runtime";
@@ -198,3 +221,27 @@ it("cleans private WhatsApp media even after webhook secrets are removed", async
   expect(documents.delete).toHaveBeenCalledWith([key]);
   expect(drainWhatsappInbox).not.toHaveBeenCalled();
 });
+
+it.each(["true", "false"])(
+  "passes the principal-owned monitor transport in scheduler mode %s",
+  async (mode) => {
+    vi.clearAllMocks();
+    const monitorFetch = vi.fn<typeof fetch>();
+    await createApiRuntime(
+      {
+        ...env,
+        SAVIA_WORKFLOW_ONLY_SCHEDULE: mode,
+        CRM_INTEGRATION_KEY: "monitor-test-key",
+      },
+      { monitorFetch },
+    ).scheduled();
+    expect(runPluginMonitors).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(runPluginMonitors).mock.calls[0];
+    expect(call[0]).toBe(env.DB);
+    expect(call[1]).toMatchObject({
+      integrationKey: "monitor-test-key",
+      fetcher: monitorFetch,
+    });
+    expect(monitorFetch).not.toHaveBeenCalled();
+  },
+);

@@ -6,6 +6,12 @@ import {
 } from "./mcp-source-service";
 import { executeMcpList, McpAdapterError } from "./mcp-adapter";
 
+export type McpActionSourceRevision = {
+  config: string;
+  encrypted_secret: string | null;
+  created_at: string;
+};
+
 /** Fixed declarative read tools use the caller's encrypted source, never plugin credentials. */
 export function createMcpPluginActionExecutor(options: {
   db: D1Database;
@@ -13,6 +19,8 @@ export function createMcpPluginActionExecutor(options: {
   principalId: string;
   integrationKey?: string;
   fetcher?: typeof fetch;
+  /** Internal commit fence; encrypted values must never leave the server. */
+  onSourceUsed?: (revision: McpActionSourceRevision) => void;
 }): NonNullable<ExtensionOptions["executeMcpAction"]> {
   const { db, tenant, principalId, integrationKey, fetcher } = options;
   const sources = createMcpSourceService(options);
@@ -43,10 +51,10 @@ export function createMcpPluginActionExecutor(options: {
     const { page, perPage, ...argumentsInput } = parsed.data;
     const source = await db
       .prepare(
-        "SELECT id,kind,config,encrypted_secret FROM studio_collection_sources WHERE tenant_id=? AND owner_principal_id=? AND id=?",
+        "SELECT id,kind,config,encrypted_secret,created_at FROM studio_collection_sources WHERE tenant_id=? AND owner_principal_id=? AND id=?",
       )
       .bind(tenant, principalId, request.action.sourceId)
-      .first<McpSourceRow>();
+      .first<McpSourceRow & McpActionSourceRevision>();
     if (!source || source.kind !== "mcp")
       throw new McpAdapterError(
         404,
@@ -57,7 +65,7 @@ export function createMcpPluginActionExecutor(options: {
         ([, value]) => value !== undefined && value !== "",
       ),
     );
-    return executeMcpList(
+    const output = await executeMcpList(
       await sources.connection(source),
       request.action.tool,
       {
@@ -67,5 +75,11 @@ export function createMcpPluginActionExecutor(options: {
       { page, perPage },
       fetcher,
     );
+    options.onSourceUsed?.({
+      config: source.config,
+      encrypted_secret: source.encrypted_secret,
+      created_at: source.created_at,
+    });
+    return output;
   };
 }

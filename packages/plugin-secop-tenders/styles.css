@@ -263,6 +263,37 @@
   gap: 0.8rem;
   margin: 0.9rem 0;
 }
+.secop-monitor-facts {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.85rem 0;
+  color: var(--secop-muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.secop-monitor-facts p {
+  margin: 0;
+}
+.secop-monitor-facts strong {
+  color: var(--secop-ink);
+  font-weight: 600;
+}
+.secop-monitor-error {
+  color: var(--secop-danger);
+}
+.secop-app .secop-monitor-toggle {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 0.55rem;
+}
+.secop-monitor-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  min-height: 1.1rem;
+  margin: 0;
+  accent-color: var(--secop-accent);
+}
 .secop-edit-grid .secop-wide {
   grid-column: 1 / -1;
 }

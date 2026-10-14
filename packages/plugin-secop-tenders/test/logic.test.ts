@@ -6,6 +6,7 @@ import {
   normalizeSearchOutput,
   normalizeSecopRow,
   RequestSequence,
+  getSecopDetail,
   saveInterest,
   searchSecop,
   updateInterest,
@@ -87,6 +88,34 @@ describe("SECOP normalization", () => {
     expect(values.amount).toBe(1_200_000);
     expect(values.source_url).toBe("");
     expect(JSON.parse(values.snapshot)).toMatchObject({ id: "co-123" });
+    expect(values.monitoring_enabled).toBe(true);
+  });
+
+  it("looks up a single tender through the fixed detail action", async () => {
+    let capturedId: unknown;
+    const api = {
+      actions: {
+        execute: async (
+          id: string,
+          request: { input: Record<string, unknown> },
+        ) => {
+          expect(id).toBe("detail");
+          capturedId = request.input.id_del_proceso;
+          return {
+            output: {
+              data: [
+                { ":id": "co-123", estado_del_procedimiento: "Publicado" },
+              ],
+            },
+          };
+        },
+      },
+    } as unknown as PluginApi;
+    await expect(getSecopDetail(api, "co-123")).resolves.toMatchObject({
+      id: "co-123",
+      source_status: "Publicado",
+    });
+    expect(capturedId).toBe("co-123");
   });
 
   it("passes only non-empty search filters and pagination to the declared action", async () => {

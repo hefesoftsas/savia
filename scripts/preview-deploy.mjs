@@ -33,7 +33,7 @@ export function workerConfig(
   names,
   ids,
   origin,
-  { assetsDir, bootstrap, identityReady = true } = {},
+  { assetsDir, bootstrap, identityReady = true, enableSchedules = false } = {},
 ) {
   const base = {
     compatibility_date: kind === "request" ? "2026-09-04" : "2026-08-31",
@@ -116,6 +116,7 @@ export function workerConfig(
     return {
       ...base,
       name: names.workers.api,
+      ...(enableSchedules ? { triggers: { crons: ["* * * * *"] } } : {}),
       compatibility_flags: ["global_fetch_strictly_public"],
       main: resolve(workspaceRoot, "apps/api/src/index.ts"),
       services: [
@@ -296,6 +297,7 @@ async function main() {
   const slug = slugifyBranch(flagValue(argv, "--branch"));
   const dryRun = hasFlag(argv, "--dry-run");
   const skipAdmin = hasFlag(argv, "--skip-admin");
+  const enableSchedules = hasFlag(argv, "--enable-schedules");
   const names = previewNames(slug);
   if (!dryRun) {
     for (const variable of ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]) {
@@ -341,6 +343,7 @@ async function main() {
       assetsDir,
       bootstrap,
       identityReady,
+      enableSchedules,
     });
   for (const kind of kinds) {
     const file = join(configRoot, `${kind}.wrangler.preview.jsonc`);

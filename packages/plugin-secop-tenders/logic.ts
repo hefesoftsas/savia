@@ -50,6 +50,9 @@ export type Interest = Record<string, unknown> & {
   source_id: string;
   name: string;
   status: InterestStatus;
+  monitoring_enabled?: boolean;
+  monitoring_checked_at?: string;
+  monitoring_error?: string;
 };
 
 const aliases = {
@@ -190,6 +193,20 @@ export async function searchSecop(
   return normalizeSearchOutput(result.output, { page, perPage });
 }
 
+/** Reads one record through the package's fixed, read-only MCP detail action. */
+export async function getSecopDetail(
+  api: PluginApi,
+  processId: string,
+): Promise<SecopRow | null> {
+  const result = await api.actions.execute<unknown>("detail", {
+    input: { id_del_proceso: boundedText(processId, 200) },
+  });
+  return (
+    normalizeSearchOutput(result.output, { page: 1, perPage: 1 }).data[0] ??
+    null
+  );
+}
+
 function safeSourceUrl(value: unknown): string {
   const candidate = boundedText(value, 2_000);
   try {
@@ -232,6 +249,7 @@ export function interestValues(row: SecopRow) {
     source_status: boundedText(row.source_status, 200),
     source_url: safeSourceUrl(row.source_url),
     status: "interested" as const,
+    monitoring_enabled: true,
     priority: "normal",
     owner: "",
     next_follow_up: "",

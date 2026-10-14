@@ -17,6 +17,56 @@
         }
       },
       "inputArguments": ["q", "estado", "entidad", "modalidad", "departamento"]
+    },
+    {
+      "id": "detail",
+      "kind": "mcp",
+      "sourceId": "secop_live",
+      "tool": "detalle_licitacion",
+      "mapping": {
+        "arguments": {},
+        "itemsPointer": "/filas",
+        "idField": ":id"
+      },
+      "inputArguments": ["id_del_proceso"]
+    }
+  ],
+  "monitors": [
+    {
+      "id": "tracking",
+      "collection": "procurement_opportunities",
+      "actionId": "detail",
+      "lookup": { "field": "process_id", "argument": "id_del_proceso" },
+      "matchField": "source_id",
+      "status": {
+        "field": "source_status",
+        "resultFields": [
+          "estado_del_procedimiento",
+          "estado_proceso",
+          "estado",
+          "source_status"
+        ]
+      },
+      "deadline": {
+        "field": "deadline",
+        "resultFields": ["fecha_de_recepcion_de", "fecha_limite", "deadline"]
+      },
+      "enabledField": "monitoring_enabled",
+      "checkedAtField": "monitoring_checked_at",
+      "errorField": "monitoring_error",
+      "titleField": "name",
+      "intervalMinutes": 60,
+      "reminderHours": [168, 72, 24],
+      "timeZone": "America/Bogota",
+      "pauseWhen": { "field": "status", "values": ["awarded", "discarded"] },
+      "notifications": {
+        "changedTitle": "Cambió el estado SECOP: {name}",
+        "changedBody": "Estado anterior: {previous}. Estado actual: {current}.",
+        "closingTitle": "Cierre próximo: {name}",
+        "closingBody": "Cierre de {name}: {deadline}. Aviso dentro de las {hours} horas previas.",
+        "connectionTitle": "No se pudo revisar: {name}",
+        "connectionBody": "Autoriza de nuevo tu conexión SECOP para continuar el monitoreo de {name}."
+      }
     }
   ],
   "collections": [
@@ -121,6 +171,34 @@
                 "es": "Estado en SECOP",
                 "en": "SECOP status",
                 "pt": "Status no SECOP"
+              }
+            },
+            "monitoring_enabled": {
+              "type": "Toggle",
+              "label": "Monitor SECOP",
+              "defaultValue": true,
+              "labels": {
+                "es": "Monitorear SECOP",
+                "en": "Monitor SECOP",
+                "pt": "Monitorar SECOP"
+              }
+            },
+            "monitoring_checked_at": {
+              "type": "Textbox",
+              "label": "Última revisión SECOP",
+              "labels": {
+                "es": "Última revisión SECOP",
+                "en": "Last SECOP check",
+                "pt": "Última verificação SECOP"
+              }
+            },
+            "monitoring_error": {
+              "type": "Textbox",
+              "label": "Estado del monitor",
+              "labels": {
+                "es": "Estado del monitor",
+                "en": "Monitor status",
+                "pt": "Estado do monitor"
               }
             },
             "source_url": {
@@ -285,6 +363,9 @@
             "publication_date",
             "deadline",
             "source_status",
+            "monitoring_enabled",
+            "monitoring_checked_at",
+            "monitoring_error",
             "source_url",
             "status",
             "priority",

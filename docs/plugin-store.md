@@ -657,3 +657,21 @@ MCP action runs retain argument names and a result count for operational history
 not full search-result datasets. The API response still returns the requested
 records to the plugin. This action kind does not expose arbitrary MCP calls,
 remote mutations, endpoints, credentials, or automatic assistant tools.
+
+## Declarative record monitors
+
+An installed plugin may declare at most ten `monitors` in `store.json`. Each
+monitor refers to a declared collection and a fixed read-only MCP action, plus
+the record fields used for lookup, source matching, updates, display and optional
+pausing. The host validates those references against sanitized collection
+metadata before accepting the package. Its bounded scheduler owns claims,
+retries, record updates and notifications; the plugin package contains no
+executable scheduled code.
+
+The interval defaults to 60 minutes and can be set from 15 to 1440 minutes.
+Reminder thresholds default to 168, 72 and 24 hours, and templates accept only
+the literal placeholders `{name}`, `{previous}`, `{current}`, `{deadline}` and
+`{hours}`. A monitor's MCP source is resolved for the immutable creator of the
+record, so a tenant member's OAuth grant cannot be reused for another creator.
+For a complete declaration and end-user behavior, see the
+[SECOP tenders plugin guide](secop-tenders-plugin.md).

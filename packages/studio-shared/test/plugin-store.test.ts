@@ -342,6 +342,279 @@ describe("store.json declarativo", () => {
       }),
     ).toThrow();
   });
+
+  it("accepts bounded record monitors and supplies safe defaults", () => {
+    const parsed = storeJsonSchema.parse({
+      format: "savia.store",
+      formatVersion: 1,
+      actions: [
+        {
+          id: "detail",
+          kind: "mcp",
+          sourceId: "secop_live",
+          tool: "detalle_licitacion",
+          mapping: { idField: ":id" },
+          inputArguments: ["id_del_proceso"],
+        },
+      ],
+      collections: [
+        {
+          object: {
+            name: "opportunities",
+            label: "Opportunities",
+            description: "",
+            config: {
+              version: 2,
+              fields: Object.fromEntries(
+                [
+                  "process_id",
+                  "source_id",
+                  "name",
+                  "source_status",
+                  "deadline",
+                  "monitoring_enabled",
+                  "monitoring_checked_at",
+                  "monitoring_error",
+                  "status",
+                ].map((field) => [field, { type: "Textbox", label: field }]),
+              ),
+              fieldOrder: [
+                "process_id",
+                "source_id",
+                "name",
+                "source_status",
+                "deadline",
+                "monitoring_enabled",
+                "monitoring_checked_at",
+                "monitoring_error",
+                "status",
+              ],
+            },
+          },
+          requiredFields: {},
+        },
+      ],
+      monitors: [
+        {
+          id: "tracking",
+          collection: "opportunities",
+          actionId: "detail",
+          lookup: { field: "process_id", argument: "id_del_proceso" },
+          matchField: "source_id",
+          status: { field: "source_status", resultFields: ["estado"] },
+          deadline: { field: "deadline", resultFields: ["fecha_limite"] },
+          enabledField: "monitoring_enabled",
+          checkedAtField: "monitoring_checked_at",
+          errorField: "monitoring_error",
+          titleField: "name",
+          intervalMinutes: 15,
+          notifications: {
+            changedTitle: "Status changed: {name}",
+            changedBody: "{previous} → {current}",
+            closingTitle: "Closing soon: {name}",
+            closingBody: "{hours} hours until {deadline}",
+            connectionTitle: "Connection issue: {name}",
+            connectionBody: "Check your connection for {name}",
+          },
+        },
+      ],
+    });
+    expect(parsed.monitors[0]).toMatchObject({
+      intervalMinutes: 15,
+      reminderHours: [168, 72, 24],
+      timeZone: "America/Bogota",
+    });
+  });
+
+  it("rejects monitors that reference undeclared actions, collections, or fields", () => {
+    const base = {
+      format: "savia.store",
+      formatVersion: 1,
+      actions: [
+        {
+          id: "detail",
+          kind: "mcp",
+          sourceId: "secop_live",
+          tool: "detalle",
+          mapping: { idField: ":id" },
+          inputArguments: ["id"],
+        },
+      ],
+      collections: [
+        {
+          object: {
+            name: "opportunities",
+            label: "Opportunities",
+            description: "",
+            config: {
+              version: 2,
+              fields: {
+                process_id: { type: "Textbox", label: "Process" },
+                source_id: { type: "Textbox", label: "Source" },
+                name: { type: "Textbox", label: "Name" },
+                source_status: { type: "Textbox", label: "Status" },
+                deadline: { type: "Textbox", label: "Deadline" },
+                monitoring_enabled: { type: "Toggle", label: "Enabled" },
+                monitoring_checked_at: { type: "Textbox", label: "Checked" },
+                monitoring_error: { type: "Textbox", label: "Error" },
+                status: { type: "Dropdown", label: "Workflow status" },
+              },
+              fieldOrder: [
+                "process_id",
+                "source_id",
+                "name",
+                "source_status",
+                "deadline",
+                "monitoring_enabled",
+                "monitoring_checked_at",
+                "monitoring_error",
+                "status",
+              ],
+            },
+          },
+          requiredFields: {},
+        },
+      ],
+      monitors: [
+        {
+          id: "tracking",
+          collection: "opportunities",
+          actionId: "detail",
+          lookup: { field: "process_id", argument: "id" },
+          matchField: "source_id",
+          status: { field: "source_status", resultFields: ["estado"] },
+          deadline: { field: "deadline", resultFields: ["fecha_limite"] },
+          enabledField: "monitoring_enabled",
+          checkedAtField: "monitoring_checked_at",
+          errorField: "monitoring_error",
+          titleField: "name",
+          notifications: {
+            changedTitle: "{name}",
+            changedBody: "{previous} {current}",
+            closingTitle: "{name}",
+            closingBody: "{hours} {deadline}",
+            connectionTitle: "{name}",
+            connectionBody: "{name}",
+          },
+        },
+      ],
+    };
+    expect(
+      storeJsonSchema.safeParse({
+        ...base,
+        monitors: [{ ...base.monitors[0], actionId: "missing" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      storeJsonSchema.safeParse({
+        ...base,
+        monitors: [{ ...base.monitors[0], collection: "missing" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      storeJsonSchema.safeParse({
+        ...base,
+        monitors: [{ ...base.monitors[0], titleField: "missing" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      storeJsonSchema.safeParse({
+        ...base,
+        actions: [{ id: "detail", kind: "simulation", output: {} }],
+      }).success,
+    ).toBe(false);
+    expect(
+      storeJsonSchema.safeParse({
+        ...base,
+        monitors: [
+          {
+            ...base.monitors[0],
+            notifications: {
+              ...base.monitors[0].notifications,
+              changedTitle: "{system}",
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects writable monitor fields that collide with lookup, matching, title, or pause fields", () => {
+    const parsed = storeJsonSchema.safeParse({
+      format: "savia.store",
+      formatVersion: 1,
+      actions: [
+        {
+          id: "detail",
+          kind: "mcp",
+          sourceId: "secop_live",
+          tool: "detalle",
+          mapping: { idField: ":id" },
+          inputArguments: ["id"],
+        },
+      ],
+      collections: [
+        {
+          object: {
+            name: "opportunities",
+            label: "Opportunities",
+            description: "",
+            config: {
+              version: 2,
+              fields: {
+                process_id: { type: "Textbox", label: "Process" },
+                source_id: { type: "Textbox", label: "Source" },
+                name: { type: "Textbox", label: "Name" },
+                source_status: { type: "Textbox", label: "Status" },
+                deadline: { type: "Textbox", label: "Deadline" },
+                monitoring_enabled: { type: "Toggle", label: "Enabled" },
+                monitoring_checked_at: { type: "Textbox", label: "Checked" },
+                monitoring_error: { type: "Textbox", label: "Error" },
+                status: { type: "Dropdown", label: "Workflow status" },
+              },
+              fieldOrder: [
+                "process_id",
+                "source_id",
+                "name",
+                "source_status",
+                "deadline",
+                "monitoring_enabled",
+                "monitoring_checked_at",
+                "monitoring_error",
+                "status",
+              ],
+            },
+          },
+          requiredFields: {},
+        },
+      ],
+      monitors: [
+        {
+          id: "tracking",
+          collection: "opportunities",
+          actionId: "detail",
+          lookup: { field: "process_id", argument: "id" },
+          matchField: "source_id",
+          status: { field: "status", resultFields: ["estado"] },
+          deadline: { field: "deadline", resultFields: ["fecha_limite"] },
+          enabledField: "monitoring_enabled",
+          checkedAtField: "monitoring_checked_at",
+          errorField: "monitoring_error",
+          titleField: "name",
+          pauseWhen: { field: "status", values: ["discarded"] },
+          notifications: {
+            changedTitle: "{name}",
+            changedBody: "{previous} {current}",
+            closingTitle: "{name}",
+            closingBody: "{hours} {deadline}",
+            connectionTitle: "{name}",
+            connectionBody: "{name}",
+          },
+        },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
 });
 
 describe("acciones savia-request", () => {

@@ -108,6 +108,7 @@ export function createPluginProject(): IdeFiles {
     actions: [],
     connectors: [],
     collections: [],
+    monitors: [],
     bundles: [],
     widgets: [],
     screens: [],
