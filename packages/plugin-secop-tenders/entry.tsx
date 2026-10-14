@@ -515,6 +515,13 @@ function Screen({ savia }: { savia: PluginApi }) {
           <form
             className="secop-search"
             onSubmit={submitSearch}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                (event.target as HTMLElement).tagName === "INPUT"
+              )
+                submitSearch(event);
+            }}
             aria-label={t.searchAria}
           >
             <label className="secop-query">
@@ -576,7 +583,8 @@ function Screen({ savia }: { savia: PluginApi }) {
               </button>
               <button
                 className="secop-primary"
-                type="submit"
+                type="button"
+                onClick={submitSearch}
                 disabled={searchLoading}
               >
                 {searchLoading ? t.loading : t.run}
@@ -717,6 +725,13 @@ function Screen({ savia }: { savia: PluginApi }) {
           <form
             className="secop-interest-search"
             onSubmit={submitInterestSearch}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                (event.target as HTMLElement).tagName === "INPUT"
+              )
+                submitInterestSearch(event);
+            }}
           >
             <label>
               {t.query}
@@ -725,7 +740,11 @@ function Screen({ savia }: { savia: PluginApi }) {
                 onChange={(event) => setInterestQueryDraft(event.target.value)}
               />
             </label>
-            <button className="secop-primary" type="submit">
+            <button
+              className="secop-primary"
+              type="button"
+              onClick={submitInterestSearch}
+            >
               {t.run}
             </button>
           </form>

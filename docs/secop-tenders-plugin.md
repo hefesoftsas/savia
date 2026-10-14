@@ -7,7 +7,9 @@ published as a tenant ZIP; procurement behavior does not become platform core.
 
 Open **SECOP tenders** in the installed workspace. Search submits your criteria to
 `buscar_licitaciones` through the configured MCP connection. Optional filters are
-entity, department, SECOP status and procurement method. Pages come from the
+entity, department, SECOP status and procurement method. Search buttons and Enter
+in search inputs dispatch through React handlers, so searches work inside the
+plugin sandbox without allowing native form submissions. Pages come from the
 remote limit/offset inputs. Values absent from SECOP are shown as unavailable.
 
 Choose **Track** on a result to save that selected row. **My interests** lists
