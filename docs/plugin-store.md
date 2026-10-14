@@ -485,7 +485,12 @@ or public deployment endpoint is required. The session accepts a random one-run
 secret and can only upload/install against workspaces discovered in that database.
 
 Version numbers remain immutable: bump the manifest version when changing code
-or `store.json`. Repeated deployment of identical content is safe. Upload rejects
+or `store.json`. Repeated deployment of identical content is safe. When comparing
+stored configuration, upload applies the current schema defaults to both versions:
+an older artifact without a newly introduced optional field (for example
+`monitors: []`) remains identical to the same configuration with that default.
+Explicit non-default configuration and JavaScript changes still require a new
+version. Upload rejects
 changed JavaScript or configuration under an existing version, even if its
 manifest is unchanged. Release upload errors identify the plugin id, version,
 and tenant; publish changed content as a new version. ZIP metadata/timestamps do

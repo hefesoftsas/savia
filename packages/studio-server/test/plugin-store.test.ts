@@ -1188,6 +1188,105 @@ describe("plugin store por tenant", () => {
     expect(different.status).toBe(409);
   });
 
+  it("dedupes legacy store JSON before the monitors default without weakening immutability", async () => {
+    const tenant = "store-dedupe-legacy-monitors";
+    const fields = [
+      "process_id",
+      "source_id",
+      "status",
+      "deadline",
+      "enabled",
+      "checked",
+      "error",
+      "name",
+    ];
+    const legacyStore = {
+      format: "savia.store",
+      formatVersion: 1,
+      actions: [
+        {
+          id: "detail",
+          kind: "mcp",
+          sourceId: "secop_live",
+          tool: "detalle_licitacion",
+          mapping: { idField: ":id" },
+          inputArguments: ["id"],
+        },
+      ],
+      collections: [
+        {
+          object: {
+            name: "opportunities",
+            label: "Opportunities",
+            description: "",
+            config: {
+              version: 2,
+              fields: Object.fromEntries(
+                fields.map((field) => [
+                  field,
+                  { type: "Textbox", label: field },
+                ]),
+              ),
+              fieldOrder: fields,
+            },
+          },
+          requiredFields: {},
+        },
+      ],
+    };
+    const manifest = { id: "insurance.accounting", version: "1.1.6" };
+    const zip = pluginZip({ manifest, store: legacyStore });
+    expect((await uploadZip(tenant, zip)).status).toBe(200);
+
+    // A deployed artifact predating `monitors` has no monitors key in its JSON.
+    await platform.env.DB.prepare(
+      "UPDATE plugin_store_artifacts SET store_json=? WHERE tenant_id=? AND id=? AND version=?",
+    )
+      .bind(
+        JSON.stringify(legacyStore),
+        tenant,
+        "insurance.accounting",
+        "1.1.6",
+      )
+      .run();
+
+    const same = await uploadZip(tenant, zip);
+    expect(same.status, await same.clone().text()).toBe(200);
+    expect(((await same.json()) as any).data.deduped).toBe(true);
+
+    const changedStore = {
+      ...legacyStore,
+      monitors: [
+        {
+          id: "tracking",
+          collection: "opportunities",
+          actionId: "detail",
+          lookup: { field: "process_id", argument: "id" },
+          matchField: "source_id",
+          status: { field: "status", resultFields: ["estado"] },
+          deadline: { field: "deadline", resultFields: ["fecha_limite"] },
+          enabledField: "enabled",
+          checkedAtField: "checked",
+          errorField: "error",
+          titleField: "name",
+          notifications: {
+            changedTitle: "Status changed",
+            changedBody: "A status change was found",
+            closingTitle: "Closing soon",
+            closingBody: "A deadline is approaching",
+            connectionTitle: "Connection issue",
+            connectionBody: "Check the connection",
+          },
+        },
+      ],
+    };
+    const changed = await uploadZip(
+      tenant,
+      pluginZip({ manifest, store: changedStore }),
+    );
+    expect(changed.status, await changed.text()).toBe(409);
+  });
+
   it("rejects changed JavaScript or settings under an immutable version", async () => {
     const tenant = "store-immutable-code";
     expect((await uploadZip(tenant, pluginZip())).status).toBe(200);
