@@ -96,7 +96,7 @@ describe("useMyDayBookings", () => {
         .mockResolvedValueOnce([entry("2")]),
     };
     const { result } = renderHook(() => useMyDayBookings(client, range));
-    act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+    act(() => window.dispatchEvent(new Event("savia:principal-changed")));
     await waitFor(() => expect(result.current.entries).toEqual([entry("2")]));
     await act(async () => resolvePrevious([entry("1")]));
     expect(result.current.entries).toEqual([entry("2")]);
@@ -121,7 +121,7 @@ describe("useMyDayBookings", () => {
     expect(result.current.error).toBe(false);
   });
 
-  it("clears private rows after identity changes and authorization failures", async () => {
+  it("clears private rows after principal replacement and authorization failures", async () => {
     const forbidden = Object.assign(new Error("Forbidden"), { status: 403 });
     const client = {
       listBookingAgenda: vi
@@ -132,7 +132,7 @@ describe("useMyDayBookings", () => {
     const { result } = renderHook(() => useMyDayBookings(client, range));
     await waitFor(() => expect(result.current.entries).toHaveLength(1));
     await act(async () => {
-      window.dispatchEvent(new Event("savia:identity-changed"));
+      window.dispatchEvent(new Event("savia:principal-changed"));
     });
     await waitFor(() => expect(result.current.error).toBe(true));
     expect(result.current.entries).toEqual([]);

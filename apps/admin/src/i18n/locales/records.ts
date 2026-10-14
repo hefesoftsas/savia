@@ -218,6 +218,7 @@ export const recordsMessages = {
     "Close settings",
     "Fechar configurações",
   ],
+  Cerrar: ["Cerrar", "Close", "Fechar"],
   "Cerrar edición": ["Cerrar edición", "Close editor", "Fechar edição"],
   "Clear rating": ["Borrar calificación", "Clear rating", "Limpar avaliação"],
   "Columnas de la tabla": [

@@ -87,16 +87,62 @@ async function seedSecretFlow() {
     .run();
 }
 
+async function seedCacheFlow(
+  id: string,
+  options: {
+    method?: string;
+    cache?: unknown;
+    header?: string;
+    kind?: string;
+  } = {},
+) {
+  const method = options.method ?? "GET";
+  await platform.env.DB.prepare("INSERT INTO flows(id,definition) VALUES(?,?)")
+    .bind(
+      id,
+      JSON.stringify({
+        id,
+        name: "Cache flow",
+        description: "",
+        ...(options.kind ? { kind: options.kind } : {}),
+        steps: [
+          {
+            id: "read",
+            name: "read",
+            url: "https://provider.test/cacheable",
+            method,
+            headers: options.header ? { "x-variant": options.header } : {},
+            body: method === "GET" || method === "HEAD" ? "" : "{}",
+            bodyType: "json",
+            pre: "",
+            post: "",
+            ...(options.cache === undefined ? {} : { cache: options.cache }),
+          },
+        ],
+        input: {},
+        variables: [],
+        folderPath: "Base",
+      }),
+    )
+    .run();
+}
+
 describe("tenant execution secrets", () => {
   it("uses platform secrets live in tenant scope and redacts them", async () => {
     await seedSecretFlow();
     const seen: Array<{ url: string; headers: Record<string, string> }> = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: unknown, init?: { headers?: unknown }) => {
+      vi.fn(async (request: unknown, init?: { headers?: unknown }) => {
+        const requestHeaders: Record<string, string> = {};
+        if (request instanceof Request)
+          request.headers.forEach((value, key) => {
+            requestHeaders[key] = value;
+          });
+        else Object.assign(requestHeaders, init?.headers);
         seen.push({
-          url: String(url),
-          headers: { ...(init?.headers as Record<string, string>) },
+          url: request instanceof Request ? request.url : String(request),
+          headers: { ...requestHeaders },
         });
         return Response.json({ echo: "topsecret", ok: true });
       }),
@@ -142,5 +188,146 @@ describe("tenant execution secrets", () => {
       overridden: false,
       value: "topsecret",
     });
+  }, 30_000);
+});
+
+describe("flow step request cache", () => {
+  it("caches opted-in live GETs and exposes cache metadata in the trace", async () => {
+    const id = `cache-flow-${crypto.randomUUID()}`;
+    const policy = {
+      enabled: true,
+      ttlSeconds: 60,
+      scope: "tenant",
+    } as const;
+    await seedCacheFlow(id, { cache: policy });
+    const fetcher = vi.fn(async () => Response.json({ cached: true }));
+    vi.stubGlobal("fetch", fetcher);
+    const flow = (await getFlow(platform.env, id, TENANT_A))!;
+
+    const first = await execute(platform.env, flow, {}, "live", null, TENANT_A);
+    const second = await execute(
+      platform.env,
+      flow,
+      {},
+      "live",
+      null,
+      TENANT_A,
+    );
+
+    expect(first.status).toBe("success");
+    expect(second.status).toBe("success");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(first.steps[0]).toMatchObject({ cacheStatus: "miss" });
+    expect(second.steps[0]).toMatchObject({ cacheStatus: "hit" });
+    expect(second.steps[0]?.cacheAgeMs).toEqual(expect.any(Number));
+  }, 30_000);
+
+  it("invalidates a cached response when step configuration changes", async () => {
+    const id = `cache-revision-${crypto.randomUUID()}`;
+    const policy = { enabled: true, ttlSeconds: 60, scope: "tenant" } as const;
+    await seedCacheFlow(id, { cache: policy, header: "one" });
+    const fetcher = vi.fn(async () => Response.json({ cached: true }));
+    vi.stubGlobal("fetch", fetcher);
+    const firstFlow = (await getFlow(platform.env, id, TENANT_A))!;
+    const changedFlow = {
+      ...firstFlow,
+      steps: firstFlow.steps.map((step) => ({
+        ...step,
+        headers: { "x-variant": "two" },
+      })),
+    };
+
+    const first = await execute(
+      platform.env,
+      firstFlow,
+      {},
+      "live",
+      null,
+      TENANT_A,
+    );
+    const changed = await execute(
+      platform.env,
+      changedFlow,
+      {},
+      "live",
+      null,
+      TENANT_A,
+    );
+
+    expect(first.status).toBe("success");
+    expect(changed.status).toBe("success");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(first.steps[0]).toMatchObject({ cacheStatus: "miss" });
+    expect(changed.steps[0]).toMatchObject({ cacheStatus: "miss" });
+  }, 30_000);
+
+  it("does not cache writes even if a definition carries a cache policy", async () => {
+    const id = `cache-post-${crypto.randomUUID()}`;
+    await seedCacheFlow(id, {
+      method: "POST",
+      cache: { enabled: true, ttlSeconds: 60, scope: "tenant" },
+    });
+    const fetcher = vi.fn(async () => Response.json({ accepted: true }));
+    vi.stubGlobal("fetch", fetcher);
+    const flow = (await getFlow(platform.env, id, TENANT_A))!;
+
+    const first = await execute(platform.env, flow, {}, "live", null, TENANT_A);
+    const second = await execute(
+      platform.env,
+      flow,
+      {},
+      "live",
+      null,
+      TENANT_A,
+    );
+
+    expect(first.status).toBe("success");
+    expect(second.status).toBe("success");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(first.steps[0]?.cacheStatus).toBeUndefined();
+    expect(second.steps[0]?.cacheStatus).toBeUndefined();
+  }, 30_000);
+
+  it("never caches authentication flows, even when a GET step opts in", async () => {
+    const id = `cache-auth-${crypto.randomUUID()}`;
+    await seedCacheFlow(id, {
+      kind: "auth",
+      cache: { enabled: true, ttlSeconds: 60, scope: "tenant" },
+    });
+    const fetcher = vi.fn(async () => Response.json({ token: "fresh" }));
+    vi.stubGlobal("fetch", fetcher);
+    const flow = (await getFlow(platform.env, id, TENANT_A))!;
+
+    const first = await execute(platform.env, flow, {}, "live", null, TENANT_A);
+    const second = await execute(
+      platform.env,
+      flow,
+      {},
+      "live",
+      null,
+      TENANT_A,
+    );
+
+    expect(first.status).toBe("success");
+    expect(second.status).toBe("success");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(first.steps[0]).toMatchObject({ cacheStatus: "bypass" });
+    expect(second.steps[0]).toMatchObject({ cacheStatus: "bypass" });
+  }, 30_000);
+
+  it("keeps mock executions outside the cache and network", async () => {
+    const id = `cache-mock-${crypto.randomUUID()}`;
+    await seedCacheFlow(id, {
+      cache: { enabled: true, ttlSeconds: 60, scope: "tenant" },
+    });
+    const fetcher = vi.fn(async () => Response.json({ unexpected: true }));
+    vi.stubGlobal("fetch", fetcher);
+    const flow = (await getFlow(platform.env, id, TENANT_A))!;
+
+    const run = await execute(platform.env, flow, {}, "mock", null, TENANT_A);
+
+    expect(run.status).toBe("success");
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(run.steps[0]?.cacheStatus).toBeUndefined();
   }, 30_000);
 });

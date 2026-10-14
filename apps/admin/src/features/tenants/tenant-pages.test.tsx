@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/app";
 import type { AppServices } from "@/app-services";
+import { ApiClientError } from "@/api/api-client";
 import { invalidateTenantWorkspaces } from "@/api/tenant-workspaces-client";
 
 const originalElementScrollTo = Object.getOwnPropertyDescriptor(
@@ -436,5 +437,151 @@ describe("generic tenant pages", () => {
         }),
       ),
     );
+  });
+
+  it("requires the exact tenant name before a platform admin can cascade delete it", async () => {
+    open("/tenants/101");
+    const appServices = services(),
+      user = userEvent.setup();
+    let finishDelete!: (result: { data: typeof tenant }) => void;
+    vi.mocked(appServices.dataProvider.delete).mockReturnValue(
+      new Promise((resolve) => {
+        finishDelete = resolve;
+      }),
+    );
+    await renderApp(appServices);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Eliminar tenant y todos sus datos",
+      }),
+    );
+    const confirmation = await screen.findByRole("textbox", {
+      name: "Escribe Comunidad para confirmar",
+    });
+    const confirmButton = screen.getByRole("button", {
+      name: "Eliminar definitivamente",
+    });
+
+    await user.type(confirmation, "comunidad");
+    await user.click(confirmButton);
+    expect(appServices.dataProvider.delete).not.toHaveBeenCalled();
+
+    await user.clear(confirmation);
+    await user.type(confirmation, "Comunidad");
+    await user.click(confirmButton);
+    await waitFor(() =>
+      expect(appServices.dataProvider.delete).toHaveBeenCalledWith(
+        "tenants",
+        expect.objectContaining({
+          id: 101,
+          meta: { cascade: true, confirmation: "Comunidad" },
+        }),
+      ),
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Eliminando…" })).toBeDisabled();
+    finishDelete({ data: tenant });
+    await waitFor(() => expect(window.location.hash).toBe("#/tenants"));
+  });
+
+  it("explains a cleanup failure and keeps the cascade dialog ready to retry", async () => {
+    open("/tenants/101");
+    const appServices = services(),
+      user = userEvent.setup();
+    vi.mocked(appServices.dataProvider.delete).mockRejectedValue(
+      new ApiClientError(
+        503,
+        "TENANT_CLEANUP_UNAVAILABLE",
+        "No se pudo eliminar la data de Savia Request. El tenant queda inactivo; reintenta la eliminación.",
+      ),
+    );
+    await renderApp(appServices);
+    await screen.findByDisplayValue("Comunidad");
+    vi.mocked(appServices.dataProvider.getOne).mockClear();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Eliminar tenant y todos sus datos",
+      }),
+    );
+    await user.type(
+      await screen.findByRole("textbox", {
+        name: "Escribe Comunidad para confirmar",
+      }),
+      "Comunidad",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Eliminar definitivamente" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Algunos servicios de limpieza no están disponibles. Actualiza el tenant e intenta eliminarlo de nuevo.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Escribe Comunidad para confirmar" }),
+    ).toHaveValue("Comunidad");
+    await waitFor(() =>
+      expect(appServices.dataProvider.getOne).toHaveBeenCalledWith(
+        "tenants",
+        expect.objectContaining({ id: "101" }),
+      ),
+    );
+  });
+
+  it("explains when the tenant name confirmation is stale", async () => {
+    open("/tenants/101");
+    const appServices = services(),
+      user = userEvent.setup();
+    vi.mocked(appServices.dataProvider.delete).mockRejectedValue(
+      new ApiClientError(
+        400,
+        "TENANT_CONFIRMATION_REQUIRED",
+        "Escribe el nombre exacto del tenant para eliminarlo con todos sus datos.",
+      ),
+    );
+    await renderApp(appServices);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Eliminar tenant y todos sus datos",
+      }),
+    );
+    await user.type(
+      await screen.findByRole("textbox", {
+        name: "Escribe Comunidad para confirmar",
+      }),
+      "Comunidad",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Eliminar definitivamente" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "El nombre del tenant cambió o no coincide. Actualiza el tenant y confirma con su nombre actual.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("hides cascade deletion from users without platform administration", async () => {
+    open("/tenants/101");
+    const appServices = services();
+    vi.mocked(appServices.authProvider.getPermissions!).mockResolvedValue({
+      memberships: [{ tenantId: 101, role: "tenant_admin" }],
+      canManageIdentity: false,
+    });
+    await renderApp(appServices);
+
+    await screen.findByDisplayValue("Comunidad");
+    expect(
+      screen.queryByRole("button", {
+        name: "Eliminar tenant y todos sus datos",
+      }),
+    ).not.toBeInTheDocument();
   });
 });

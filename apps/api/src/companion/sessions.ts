@@ -612,13 +612,13 @@ export class CompanionSessions {
       throw error;
     }
   }
-  async getAudio(
+  private async readAudioChunk(
     access: RecordingAccess,
     id: string,
     source: z.infer<typeof sessionSourceSchema>,
     sequence: number,
+    manifest: Manifest,
   ) {
-    const manifest = (await this.readManifest(access, id)).manifest;
     const chunk = manifest.chunks.find(
       (candidate) =>
         candidate.source === source && candidate.sequence === sequence,
@@ -670,6 +670,15 @@ export class CompanionSessions {
       bytes,
     };
   }
+  async getAudio(
+    access: RecordingAccess,
+    id: string,
+    source: z.infer<typeof sessionSourceSchema>,
+    sequence: number,
+  ) {
+    const manifest = (await this.readManifest(access, id)).manifest;
+    return this.readAudioChunk(access, id, source, sequence, manifest);
+  }
   /** Concatenated single-stream audio for one source, in timeline order. */
   async getFullAudio(
     access: RecordingAccess,
@@ -714,14 +723,21 @@ export class CompanionSessions {
     const bytes: Uint8Array<ArrayBuffer> = new Uint8Array(total);
     let offset = 0;
     try {
-      for (const chunk of timeline) {
-        const audio = await this.getAudio(access, id, source, chunk.sequence);
-        offset = appendOggOpusLink(
-          bytes,
-          offset,
-          audio.bytes,
-          chunk.sequence + 1,
+      const readBatchSize = 8;
+      for (let start = 0; start < timeline.length; start += readBatchSize) {
+        const batch = timeline.slice(start, start + readBatchSize);
+        const audioChunks = await Promise.all(
+          batch.map((chunk) =>
+            this.readAudioChunk(access, id, source, chunk.sequence, manifest),
+          ),
         );
+        for (const audio of audioChunks)
+          offset = appendOggOpusLink(
+            bytes,
+            offset,
+            audio.bytes,
+            audio.sequence + 1,
+          );
       }
       if (offset !== total)
         throw new Error(

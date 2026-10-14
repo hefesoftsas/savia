@@ -301,7 +301,7 @@ export function OfficeSuitePage({
     };
     const events = [
       "savia:active-tenant-changed",
-      "savia:identity-changed",
+      "savia:principal-changed",
       "savia:session-cleared",
     ];
     for (const event of events) window.addEventListener(event, contextChanged);

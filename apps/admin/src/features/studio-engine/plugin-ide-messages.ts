@@ -1,4 +1,8 @@
 export const pluginIdeMessages = {
+  cssLanguage: ["CSS", "CSS", "CSS"],
+  svgLanguage: ["SVG", "SVG", "SVG"],
+  javascriptLanguage: ["JavaScript", "JavaScript", "JavaScript"],
+  typescriptSourceLanguage: ["TypeScript", "TypeScript", "TypeScript"],
   elapsedSeconds: ["%{seconds} s", "%{seconds} s", "%{seconds} s"],
   generationTimeout: [
     "La IA no respondió a tiempo. Tu código está intacto. Reintenta; puedes probar el código actual mientras esperas.",
@@ -43,7 +47,59 @@ export const pluginIdeMessages = {
   shortTitle: ["Plugin", "Plugin", "Plugin"],
   typescriptLanguage: ["TypeScript JSX", "TypeScript JSX", "TypeScript JSX"],
   jsonLanguage: ["JSON", "JSON", "JSON"],
+  formatDocument: ["Formatear", "Format", "Formatar"],
+  editorExtensions: ["Extensiones", "Extensions", "Extensões"],
+  search: ["Buscar", "Search", "Buscar"],
+  searchCode: ["Buscar en el código", "Search code", "Buscar no código"],
+  searchPlaceholder: [
+    "Texto en todo el plugin",
+    "Text across the plugin",
+    "Texto em todo o plugin",
+  ],
+  searchShortcut: [
+    "Buscar en todo el plugin (Ctrl/Cmd+Shift+F)",
+    "Search the plugin (Ctrl/Cmd+Shift+F)",
+    "Buscar no plugin (Ctrl/Cmd+Shift+F)",
+  ],
+  searchNoResults: [
+    "Sin coincidencias",
+    "No matches",
+    "Nenhuma correspondência",
+  ],
+  searchResultCount: [
+    "%{count} coincidencias",
+    "%{count} matches",
+    "%{count} correspondências",
+  ],
+  searchTruncated: [
+    "Se muestran las primeras 500 coincidencias. Refina la búsqueda.",
+    "Showing the first 500 matches. Refine your search.",
+    "Mostrando as primeiras 500 correspondências. Refine a busca.",
+  ],
   explorer: ["Explorador", "Explorer", "Explorador"],
+  filterFiles: ["Buscar archivos", "Find files", "Buscar arquivos"],
+  originalSource: [
+    "Código fuente original",
+    "Original source code",
+    "Código-fonte original",
+  ],
+  originalSourceHint: [
+    "Edita los archivos del plugin. La vista previa y la publicación compilan estos cambios como una versión nueva.",
+    "Edit the plugin files. Preview and publication build these changes as a new version.",
+    "Edite os arquivos do plugin. A prévia e a publicação compilam essas alterações como uma nova versão.",
+  ],
+  editLatest: ["Editar última versión", "Edit latest", "Editar última versão"],
+  olderVersions: [
+    "Versiones anteriores (%{count})",
+    "Older versions (%{count})",
+    "Versões anteriores (%{count})",
+  ],
+  useAsBase: ["Usar como base", "Use as base", "Usar como base"],
+  sourceChatHint: [
+    "Modifica este plugin desde el editor de código. El asistente aún no edita proyectos con varios módulos.",
+    "Edit this plugin in the code editor. The assistant does not yet edit projects with multiple modules.",
+    "Modifique este plugin no editor de código. O assistente ainda não edita projetos com vários módulos.",
+  ],
   openFiles: ["Archivos abiertos", "Open files", "Arquivos abertos"],
   closeFile: ["Cerrar", "Close", "Fechar"],
   review: ["Revisar", "Review", "Revisar"],
@@ -108,6 +164,37 @@ export const pluginIdeMessages = {
     "Arquivos do projeto",
   ],
   tryPreview: ["Probar", "Run", "Testar"],
+  publishAndActivate: [
+    "Publicar y activar en este espacio",
+    "Publish and activate in this workspace",
+    "Publicar e ativar neste espaço",
+  ],
+  publishAndActivateShort: [
+    "Publicar y activar",
+    "Publish and activate",
+    "Publicar e ativar",
+  ],
+  publishOnly: [
+    "Publicar sin activar",
+    "Publish without activating",
+    "Publicar sem ativar",
+  ],
+  activateVersion: [
+    "Activar esta versión",
+    "Activate this version",
+    "Ativar esta versão",
+  ],
+  activating: ["Activando…", "Activating…", "Ativando…"],
+  publishedActive: [
+    "Publicado y activo en este espacio",
+    "Published and active in this workspace",
+    "Publicado e ativo neste espaço",
+  ],
+  previewBeforePublish: [
+    "Prueba el plugin antes de publicar",
+    "Preview the plugin before publishing",
+    "Teste o plugin antes de publicar",
+  ],
   publishShort: ["Publicar", "Publish", "Publicar"],
   projectOptions: [
     "Opciones del proyecto",
@@ -254,8 +341,8 @@ export const pluginIdeMessages = {
     "O projeto mudou. Execute a prévia novamente.",
   ],
   tooLarge: [
-    "El proyecto supera el tamaño máximo de 512 KB.",
-    "The project exceeds the 512 KB limit.",
-    "O projeto excede o limite de 512 KB.",
+    "El proyecto supera el tamaño máximo de 5 MB.",
+    "The project exceeds the 5 MB limit.",
+    "O projeto excede o limite de 5 MB.",
   ],
 } as const;

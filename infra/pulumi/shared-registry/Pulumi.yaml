@@ -1,0 +1,13 @@
+name: savia-shared-registry
+description: Protected shared Cloudflare R2 storage and deployment manifest for the Savia plugin registry Worker.
+runtime: nodejs
+template:
+  config:
+    cloudflare:apiToken:
+      description: Cloudflare API token for shared registry storage
+      secret: true
+    savia-shared-registry:accountId:
+      description: Cloudflare account ID that owns the shared registry bucket
+    savia-shared-registry:adoptExisting:
+      description: Import the pre-existing shared registry bucket into this stack on first deployment
+      default: true

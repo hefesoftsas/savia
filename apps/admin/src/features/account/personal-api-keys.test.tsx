@@ -285,3 +285,73 @@ it("deletes a revoked key after confirmation", async () => {
   await waitFor(() => expect(deletions).toHaveLength(1));
   await waitFor(() => expect(screen.queryByText("Companion")).toBeNull());
 });
+
+it("opts into plugin authoring permissions when creating a personal key", async () => {
+  const user = userEvent.setup();
+  let posted: any;
+  const api = new ApiClient({
+    baseUrl: "https://preview.test",
+    tokenSource: {
+      async getAccessToken() {
+        return "jwt";
+      },
+    },
+    fetcher: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith("/tenants"))
+        return Response.json({ tenants: [{ id: 1, name: "My workspace" }] });
+      if (init?.method === "POST") {
+        posted = JSON.parse(String(init.body));
+        const key = {
+          id: "key-1",
+          name: posted.name,
+          prefix: "savia_pat_prefix",
+          tenantId: 1,
+          scopes: posted.scopes,
+          createdAt: "2026-10-03",
+          expiresAt: "2026-11-02",
+          revokedAt: null,
+          lastUsedAt: null,
+        };
+        return Response.json(
+          { key, secret: "savia_pat_once" },
+          { status: 201 },
+        );
+      }
+      return Response.json({ keys: [] });
+    },
+  });
+
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <PersonalApiKeysPanel api={api} />
+    </StoreContextProvider>,
+  );
+  await screen.findByRole("option", { name: "My workspace" });
+  await user.type(screen.getByLabelText("Key name"), "Records integration");
+  expect(
+    screen
+      .getByText("Read plugin sources")
+      .closest("label")!
+      .querySelector("input"),
+  ).not.toBeChecked();
+  expect(
+    screen
+      .getByText("Publish plugin versions")
+      .closest("label")!
+      .querySelector("input"),
+  ).not.toBeChecked();
+  await user.click(screen.getByText("Read plugin sources").closest("label")!);
+  await user.click(
+    screen.getByText("Publish plugin versions").closest("label")!,
+  );
+  await user.click(screen.getByRole("button", { name: "Create key" }));
+  await screen.findByDisplayValue("savia_pat_once");
+
+  expect(posted.scopes).toEqual([
+    "recordings:read",
+    "recordings:upload",
+    "plugins:read",
+    "plugins:publish",
+  ]);
+});

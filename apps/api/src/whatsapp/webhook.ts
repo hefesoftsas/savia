@@ -23,6 +23,7 @@ export type WhatsappWebhookDependencies = {
   appSecret?: string;
   verifyToken?: string;
   process?: () => Promise<unknown>;
+  wake?: (input: WhatsappInboundInput) => Promise<void>;
   deferProcessing?: boolean;
 };
 
@@ -260,15 +261,17 @@ export function registerWhatsappWebhook(
               !nonemptyString(message.timestamp)
             )
               return c.text("Invalid webhook payload", 400);
-            acceptedInbound =
-              (await deps.repository.receive({
-                phoneNumberId,
-                wabaId,
-                messageId: message.id,
-                contactPhone: message.from,
-                timestamp: message.timestamp,
-                ...parsed,
-              })) || acceptedInbound;
+            const input: WhatsappInboundInput = {
+              phoneNumberId,
+              wabaId,
+              messageId: message.id,
+              contactPhone: message.from,
+              timestamp: message.timestamp,
+              ...parsed,
+            };
+            const newlyAccepted = await deps.repository.receive(input);
+            if (deps.wake) await deps.wake(input);
+            acceptedInbound = newlyAccepted || acceptedInbound;
           }
 
           for (const status of (statuses ?? []) as unknown[]) {
@@ -306,7 +309,12 @@ export function registerWhatsappWebhook(
       return c.text("Could not persist webhook events", 503);
     }
 
-    if (acceptedInbound && deps.process && !deps.deferProcessing) {
+    if (
+      !deps.wake &&
+      acceptedInbound &&
+      deps.process &&
+      !deps.deferProcessing
+    ) {
       let waitUntil: ((promise: Promise<unknown>) => void) | undefined;
       try {
         waitUntil = c.executionCtx?.waitUntil.bind(c.executionCtx);

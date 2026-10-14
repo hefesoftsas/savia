@@ -1,3 +1,9 @@
+import {
+  REQUEST_TIMEOUT_MS,
+  RequestTimeoutError,
+  withRequestTimeout,
+} from "./request-timeout";
+
 export type AccessTokenSource = {
   getAccessToken(): Promise<string | null>;
 };
@@ -97,36 +103,116 @@ export class ApiClient {
   async requestResponse(
     path: string,
     init: RequestInit = {},
+    timeoutMs = REQUEST_TIMEOUT_MS,
   ): Promise<Response> {
-    const token = await this.tokenSource.getAccessToken();
+    const { response } = await this.requestResponseWithBody(
+      path,
+      init,
+      async (result) => result,
+      timeoutMs,
+    );
+    return response;
+  }
+
+  /** Keeps the request timeout active while consuming the response body. */
+  async requestResponseWithBody<T>(
+    path: string,
+    init: RequestInit,
+    consume: (response: Response) => Promise<T>,
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  ): Promise<{ response: Response; body: T }> {
+    const token = await this.getAccessToken(init.signal);
+    return withRequestTimeout(
+      async (signal) => {
+        const response = await this.fetchResponse(path, init, signal, token);
+        const body = await consume(response);
+        return { response, body };
+      },
+      timeoutMs,
+      init.signal,
+    );
+  }
+
+  async request<T>(
+    path: string,
+    init: RequestInit = {},
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  ): Promise<T> {
+    try {
+      const token = await this.getAccessToken(init.signal);
+      return await withRequestTimeout(
+        async (signal) => {
+          const response = await this.fetchResponse(path, init, signal, token);
+          const body = await responseBody(response);
+          if (!response.ok) {
+            const envelope = body as ApiErrorEnvelope | null;
+            const serverError = envelope?.error;
+            throw new ApiClientError(
+              response.status,
+              serverError && typeof serverError === "object"
+                ? (serverError.code ?? `HTTP_${response.status}`)
+                : `HTTP_${response.status}`,
+              typeof serverError === "string"
+                ? serverError
+                : (serverError?.message ??
+                    response.statusText ??
+                    "Request failed"),
+              body,
+            );
+          }
+          return body as T;
+        },
+        timeoutMs,
+        init.signal,
+      );
+    } catch (error) {
+      if (error instanceof RequestTimeoutError) {
+        throw new ApiClientError(0, "REQUEST_TIMEOUT", error.message, {
+          timeoutMs: error.timeoutMs,
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async fetchResponse(
+    path: string,
+    init: RequestInit,
+    signal: AbortSignal,
+    token: string | null,
+  ): Promise<Response> {
     const headers = new Headers(init.headers);
     headers.set("Accept", "application/json");
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
     return this.fetcher(requestUrl(this.baseUrl, path), {
       ...init,
+      signal,
       credentials: init.credentials ?? "include",
       headers,
     });
   }
 
-  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const response = await this.requestResponse(path, init);
-    const body = await responseBody(response);
-    if (!response.ok) {
-      const envelope = body as ApiErrorEnvelope | null;
-      const serverError = envelope?.error;
-      throw new ApiClientError(
-        response.status,
-        serverError && typeof serverError === "object"
-          ? (serverError.code ?? `HTTP_${response.status}`)
-          : `HTTP_${response.status}`,
-        typeof serverError === "string"
-          ? serverError
-          : (serverError?.message ?? response.statusText ?? "Request failed"),
-        body,
-      );
+  private async getAccessToken(
+    signal?: AbortSignal | null,
+  ): Promise<string | null> {
+    if (!signal) return this.tokenSource.getAccessToken();
+    if (signal.aborted)
+      throw signal.reason ?? new DOMException("Aborted", "AbortError");
+
+    let removeAbortListener: (() => void) | undefined;
+    const aborted = new Promise<never>((_resolve, reject) => {
+      const abort = () =>
+        reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      signal.addEventListener("abort", abort, { once: true });
+      removeAbortListener = () => signal.removeEventListener("abort", abort);
+      if (signal.aborted) abort();
+    });
+
+    try {
+      return await Promise.race([this.tokenSource.getAccessToken(), aborted]);
+    } finally {
+      removeAbortListener?.();
     }
-    return body as T;
   }
 }

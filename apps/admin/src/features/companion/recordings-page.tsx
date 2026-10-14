@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import { Button } from "@/components/ui/button";
+import { isReadAccessDenied } from "@/queries/read-state";
 import {
   Dialog,
   DialogContent,
@@ -124,12 +125,16 @@ function AudioFilesPage({
 }) {
   const client = useMemo(
     () => supplied ?? new CompanionRecordingsClient(services!.apiClient),
-    [services, supplied],
+    [services?.apiClient, supplied],
   );
   const t = useMessages(companionMessages),
     locale = useAppLocale();
   const [recordings, setRecordings] = useState<Recording[]>([]),
     [cursor, setCursor] = useState<string | null>(null);
+  const [loadedListClient, setLoadedListClient] =
+    useState<CompanionRecordingsClient | null>(null);
+  const [successfulListClient, setSuccessfulListClient] =
+    useState<CompanionRecordingsClient | null>(null);
   const [selected, setSelected] = useState<Recording | null>(null),
     [notes, setNotes] = useState<RecordingNotes | null>(null);
   const [audio, setAudio] = useState<string | null>(null),
@@ -151,6 +156,9 @@ function AudioFilesPage({
   const recordingPickerTrigger = useRef<HTMLButtonElement>(null);
   const mounted = useRef(true),
     inFlight = useRef(false);
+  const listGeneration = useRef(0);
+  const hasCurrentList = loadedListClient === client;
+  const hasSuccessfulList = successfulListClient === client;
   const source = (r: Recording) =>
     r.name ??
     t(
@@ -169,6 +177,8 @@ function AudioFilesPage({
       timeStyle: "short",
     });
   const load = async (next?: string) => {
+    const request = ++listGeneration.current;
+    const hadCurrentList = loadedListClient === client;
     setLoading(true);
     setError(null);
     try {
@@ -180,7 +190,8 @@ function AudioFilesPage({
         visited.add(result.cursor);
         result = await client.list(result.cursor);
       }
-      if (!mounted.current) return;
+      if (!mounted.current || request !== listGeneration.current) return;
+      setSuccessfulListClient(client);
       setRecordings((previous) =>
         next
           ? [
@@ -203,12 +214,28 @@ function AudioFilesPage({
             null,
         );
     } catch (e) {
-      if (mounted.current)
+      if (mounted.current && request === listGeneration.current) {
         setError(
           e instanceof Error ? e.message : t("Unable to load recordings."),
         );
+        if (!hadCurrentList || isReadAccessDenied(e)) {
+          setRecordings([]);
+          setCursor(null);
+          setSelected(null);
+          setAudio(null);
+          setNotes(null);
+          setSuccessfulListClient(null);
+        }
+        if (isReadAccessDenied(e)) {
+          setUploadOpen(false);
+          setCaptureOpen(false);
+        }
+      }
     } finally {
-      if (mounted.current) setLoading(false);
+      if (mounted.current && request === listGeneration.current) {
+        setLoading(false);
+        setLoadedListClient(client);
+      }
     }
   };
   useEffect(() => {
@@ -216,6 +243,7 @@ function AudioFilesPage({
     void load();
     return () => {
       mounted.current = false;
+      listGeneration.current++;
     };
   }, [client]);
   useEffect(() => {
@@ -223,7 +251,7 @@ function AudioFilesPage({
     setNotes(null);
     setLanguage("auto");
     setRetranscribeAck(false);
-    if (!selected) {
+    if (!selected || !hasCurrentList) {
       setLoadingDetail(false);
       return;
     }
@@ -237,6 +265,22 @@ function AudioFilesPage({
       client.notes(selected.id),
     ]).then((results) => {
       if (disposed) return;
+      const denied = results.find(
+        (result) =>
+          result.status === "rejected" && isReadAccessDenied(result.reason),
+      );
+      if (denied?.status === "rejected") {
+        setSelected(null);
+        setAudio(null);
+        setNotes(null);
+        setError(
+          denied.reason instanceof Error
+            ? denied.reason.message
+            : t("Unable to load this recording."),
+        );
+        setLoadingDetail(false);
+        return;
+      }
       const [media, savedNotes] = results;
       if (media.status === "fulfilled") {
         objectUrl = URL.createObjectURL(media.value);
@@ -259,7 +303,7 @@ function AudioFilesPage({
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [client, selected?.id, detailRevision]);
+  }, [client, selected?.id, detailRevision, hasCurrentList]);
   const remove = async () => {
     if (!selected || inFlight.current) return;
     const id = selected.id;
@@ -330,7 +374,13 @@ function AudioFilesPage({
             size="sm"
             variant="outline"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-            disabled={loading || processing || uploading || deleting}
+            disabled={
+              !hasSuccessfulList ||
+              loading ||
+              processing ||
+              uploading ||
+              deleting
+            }
             onClick={() => setCaptureOpen(true)}
           >
             <Mic className="size-4" aria-hidden="true" />
@@ -339,7 +389,13 @@ function AudioFilesPage({
           <Button
             size="sm"
             className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
-            disabled={loading || processing || uploading || deleting}
+            disabled={
+              !hasSuccessfulList ||
+              loading ||
+              processing ||
+              uploading ||
+              deleting
+            }
             onClick={() => setUploadOpen(true)}
           >
             <Upload className="size-4" aria-hidden="true" />
@@ -353,7 +409,9 @@ function AudioFilesPage({
             className="max-sm:size-11"
             aria-label={t("Refresh")}
             title={t("Refresh")}
-            disabled={loading || processing || uploading || deleting}
+            disabled={
+              !hasCurrentList || loading || processing || uploading || deleting
+            }
             onClick={() => void load()}
           >
             <RefreshCw className="size-4" aria-hidden="true" />
@@ -392,7 +450,7 @@ function AudioFilesPage({
           }}
         />
       )}
-      {error && (
+      {error && hasCurrentList && (
         <p
           role="alert"
           className="mb-4 rounded-lg border border-destructive/40 p-3 text-sm text-destructive"
@@ -406,14 +464,14 @@ function AudioFilesPage({
               : providerFailureMessage(error, t)}
         </p>
       )}
-      {loading && !recordings.length ? (
+      {!hasCurrentList || (loading && !recordings.length) ? (
         <p
           role="status"
           className="py-16 text-center text-sm text-muted-foreground"
         >
           {t("Loading recordings…")}
         </p>
-      ) : !recordings.length ? (
+      ) : !hasSuccessfulList ? null : !recordings.length ? (
         <section className="py-20 text-center">
           <AudioLines
             className="mx-auto mb-5 size-7 text-muted-foreground"
@@ -426,7 +484,7 @@ function AudioFilesPage({
           {cursor && (
             <Button
               variant="outline"
-              disabled={loading}
+              disabled={!hasCurrentList || loading}
               onClick={() => void load(cursor)}
             >
               {t("Load more")}
@@ -498,7 +556,13 @@ function AudioFilesPage({
                   className="mt-3 w-full max-sm:h-11"
                   variant="ghost"
                   size="sm"
-                  disabled={loading || processing || uploading || deleting}
+                  disabled={
+                    !hasCurrentList ||
+                    loading ||
+                    processing ||
+                    uploading ||
+                    deleting
+                  }
                   onClick={() => void load(cursor)}
                 >
                   {t("Load more")}

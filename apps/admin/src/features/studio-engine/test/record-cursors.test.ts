@@ -42,7 +42,7 @@ it("falls back to a numbered page if the server rejects an obsolete cursor", asy
   expect(transport).toHaveBeenCalledTimes(3);
 });
 
-it.each(["savia:session-cleared", "savia:identity-changed"])(
+it.each(["savia:session-cleared", "savia:principal-changed"])(
   "clears navigation hints on %s",
   async (event) => {
     const transport = vi.fn(async (_path: string) =>

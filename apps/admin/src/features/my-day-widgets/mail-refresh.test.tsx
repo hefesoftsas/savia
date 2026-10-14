@@ -146,7 +146,7 @@ it("retains the last successful inbox on failure and backs off until recovery", 
   expect(result.current.messages[0]?.id).toBe("next");
 });
 
-it("clears notices and establishes a fresh baseline after identity changes", async () => {
+it("clears notices and establishes a fresh baseline after principal replacement", async () => {
   const client = service();
   const { result } = renderHook(() => useMyDayMail(client));
   await advance(0);
@@ -154,7 +154,7 @@ it("clears notices and establishes a fresh baseline after identity changes", asy
   await advance(60_000);
   expect(result.current.newMessageCount).toBe(1);
   vi.mocked(client.listMessages).mockResolvedValue([message("other-user")]);
-  act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+  act(() => window.dispatchEvent(new Event("savia:principal-changed")));
   await advance(0);
   expect(result.current.messages[0]?.id).toBe("other-user");
   expect(result.current.newMessageCount).toBe(0);
@@ -169,7 +169,7 @@ it("cancels scheduled reads when unmounted", async () => {
   expect(client.listMessages).toHaveBeenCalledOnce();
 });
 
-it("removes old identity rows immediately while the next inbox is pending", async () => {
+it("removes old identity rows immediately while the replacement principal inbox is pending", async () => {
   const client = service();
   const { result } = renderHook(() => useMyDayMail(client));
   await advance(0);
@@ -180,7 +180,7 @@ it("removes old identity rows immediately while the next inbox is pending", asyn
         resolve = done;
       }),
   );
-  act(() => window.dispatchEvent(new Event("savia:identity-changed")));
+  act(() => window.dispatchEvent(new Event("savia:principal-changed")));
   await advance(0);
   expect(result.current.messages).toEqual([]);
   await act(async () => {

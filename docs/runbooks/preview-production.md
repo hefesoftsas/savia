@@ -18,6 +18,15 @@ replacement activates while existing tabs are open and triggers the app's
 update notice. The user chooses **Actualizar y recargar** to load the new app;
 activation itself does not reload an open form or discard its draft. Do not
 clear site data to recover a stale shell, because it can contain offline edits.
+Public forms, pages, bookings, and quote reports bypass the private app-shell
+fallback and service-worker update recovery; their direct gateway responses
+retain the public route's security headers. When a public visitor arrives with
+an older administrative worker already controlling the tab, the route-aware
+public boot unregisters that root worker and reloads once so the route is
+fetched without the stale cached shell. This cleanup runs after the updated
+public boot has loaded; a browser still running an older cached application
+shell must first receive the normal worker update or retry before this code can
+run. Public visitors do not register an administrative worker.
 
 ## Isolated resources
 

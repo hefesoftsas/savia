@@ -20,6 +20,7 @@ vi.mock("ra-core", async (importOriginal) => {
         "savia.layout.noPreviousScreen": "No hay una pantalla anterior",
         "savia.layout.noNextScreen": "No hay una pantalla siguiente",
         "savia.layout.toggleSidebar": "Mostrar u ocultar menú",
+        "savia.layout.backToSavia": "Volver a Savia",
       };
       return labels[key] ?? key;
     },
@@ -90,6 +91,80 @@ function RouteControls() {
 }
 
 describe("admin layout", () => {
+  it.each([
+    "/savia-flows?tenantId=0",
+    "/savia-flows/",
+    "/savia-flows/workflows/demo?tenantId=0",
+  ])("uses only module navigation when opening %s directly", (route) => {
+    render(
+      <MemoryRouter initialEntries={[route]}>
+        <Layout>
+          <nav aria-label="Flows">Workflow editor</nav>
+        </Layout>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("navigation", { name: "Flows" })).toBeVisible();
+    expect(screen.queryByText("Navigation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Mostrar u ocultar menú" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Volver a Savia" })).toBeVisible();
+  });
+
+  it("returns to Savia and restores its navigation", async () => {
+    render(
+      <MemoryRouter initialEntries={["/savia-flows?tenantId=0"]}>
+        <Layout>
+          <RouteControls />
+        </Layout>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "Volver a Savia" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("/my-day"),
+    );
+    expect(screen.getByText("Navigation")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Mostrar u ocultar menú" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Volver a Savia" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Volver" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "/savia-flows?tenantId=0",
+      ),
+    );
+    expect(screen.getByRole("link", { name: "Volver a Savia" })).toBeVisible();
+    expect(screen.queryByText("Navigation")).not.toBeInTheDocument();
+  });
+
+  it.each(["/studio", "/savia-request", "/savia-flows-other"])(
+    "keeps Savia navigation on %s without independent module navigation",
+    (route) => {
+      render(
+        <MemoryRouter initialEntries={[route]}>
+          <Layout>
+            <p>Contenido</p>
+          </Layout>
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByText("Navigation")).toBeVisible();
+      expect(
+        screen.getByRole("button", { name: "Mostrar u ocultar menú" }),
+      ).toBeVisible();
+      expect(
+        screen.queryByRole("link", { name: "Volver a Savia" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it("shows a sidebar toggle alongside history navigation", () => {
     render(
       <MemoryRouter>

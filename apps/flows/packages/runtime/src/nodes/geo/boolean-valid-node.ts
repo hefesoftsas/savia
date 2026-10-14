@@ -1,0 +1,53 @@
+import { booleanValid } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+export class BooleanValidNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "boolean-valid",
+    name: "Boolean Valid",
+    type: "boolean-valid",
+    description:
+      "Checks if the geometry is valid according to the OGC Simple Feature Specification",
+    tags: ["Geo", "GeoJSON", "Boolean", "Valid"],
+    icon: "check-circle",
+    documentation:
+      "This node validates whether a GeoJSON geometry conforms to the OGC Simple Feature Specification.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "feature",
+        type: "geojson",
+        description: "GeoJSON Feature or Geometry to validate",
+        required: true,
+      },
+    ],
+    outputs: [
+      {
+        name: "valid",
+        type: "boolean",
+        description: "True if the geometry is valid, false otherwise",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { feature } = context.inputs;
+
+      // Delegate everything to Turf.js booleanValid function
+      // The function handles null, undefined, and invalid inputs by returning false
+      const valid = booleanValid(feature);
+
+      return this.createSuccessResult({
+        valid,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error validating geometry: ${error.message}`
+      );
+    }
+  }
+}

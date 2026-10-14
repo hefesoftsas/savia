@@ -18,6 +18,7 @@ import {
   type PublicFormRow,
 } from "./service";
 import { captchaConfiguration, publicFormChallenge } from "./captcha";
+import { publicLinkUrl, revokePublicLink } from "../public-links/lifecycle";
 export type PublicFormsOptions = PublicFormOptions;
 const jsonResponse = {
   description: "Public form response",
@@ -136,10 +137,10 @@ export function registerPublicFormRoutes(
       if (form.short_url)
         return c.json({ data: { shortUrl: form.short_url } }, 200);
       if (options.shortener) {
-        const destination = new URL(
+        const destination = publicLinkUrl(
+          options.publicOrigin ?? new URL(c.req.url).origin,
           "/public/forms/" + form.token,
-          options.publicOrigin ?? c.req.url,
-        ).href;
+        );
         try {
           const shortUrl = await options.shortener.shorten(destination);
           const persistedShortUrl = await persistPublicFormShortUrl(
@@ -178,10 +179,10 @@ export function registerPublicFormRoutes(
           message: "Could not create a short URL.",
         });
 
-      const shortUrl = new URL(
+      const shortUrl = publicLinkUrl(
+        options.publicOrigin ?? new URL(c.req.url).origin,
         "/s/" + row.code,
-        options.publicOrigin ?? c.req.url,
-      ).href;
+      );
       return c.json({ data: { shortUrl } }, 200);
     },
   );
@@ -207,11 +208,11 @@ export function registerPublicFormRoutes(
         .bind(code, new Date().toISOString())
         .first<{ token: string }>();
       if (!form) return c.json({ error: "Public form unavailable." }, 404);
-      const destination = new URL(
+      const destination = publicLinkUrl(
+        options.publicOrigin ?? new URL(c.req.url).origin,
         "/public/forms/" + form.token,
-        options.publicOrigin ?? c.req.url,
       );
-      return c.redirect(destination.href, 302);
+      return c.redirect(destination, 302);
     },
   );
   app.openapi(
@@ -323,12 +324,7 @@ export function registerPublicFormRoutes(
         ]);
         return c.json({ ok: true }, 200);
       }
-      await db
-        .prepare(
-          "UPDATE public_forms SET revoked_at=? WHERE id=? AND revoked_at IS NULL",
-        )
-        .bind(new Date().toISOString(), id)
-        .run();
+      await revokePublicLink(db, { type: "form", id });
       return c.json({ ok: true }, 200);
     },
   );

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiClientError } from "@/api/api-client";
+import { getLogoutPending } from "./logout-progress";
 import { createReactAdminAuthProvider } from "./react-admin-auth-provider";
 
 describe("React Admin authentication provider", () => {
@@ -24,13 +25,42 @@ describe("React Admin authentication provider", () => {
     const onLogout = vi.fn();
     const provider = createReactAdminAuthProvider(session, { onLogout });
     const logout = provider.logout({ logoutFromProvider: true });
+    expect(getLogoutPending()).toBe(true);
     const cleanupBeforeSignOut = onLogout.mock.calls.length;
     finishSignOut("https://savia.example/api/auth/admin/authorize");
     await expect(logout).resolves.toBe(
       "https://savia.example/api/auth/admin/authorize",
     );
+    expect(getLogoutPending()).toBe(false);
     expect(cleanupBeforeSignOut).toBe(0);
     expect(onLogout).toHaveBeenCalledOnce();
+  });
+  it("releases sign-out feedback after a server failure and cleanup", async () => {
+    let finishCleanup!: () => void;
+    const session = {
+      checkSession: vi.fn(),
+      clearSession: vi.fn(),
+      getAccessToken: vi.fn(),
+      getIdentity: vi.fn(),
+      getPermissions: vi.fn(),
+      handleCallback: vi.fn(),
+      login: vi.fn(),
+      getAuthorizeUrl: vi.fn(),
+      logout: vi.fn().mockRejectedValue(new Error("Server unavailable")),
+    };
+    const provider = createReactAdminAuthProvider(session, {
+      onLogout: () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve;
+        }),
+    });
+    const logout = provider.logout({ logoutFromProvider: true });
+    const rejected = expect(logout).rejects.toThrow("Server unavailable");
+    await Promise.resolve();
+    expect(getLogoutPending()).toBe(true);
+    finishCleanup();
+    await rejected;
+    expect(getLogoutPending()).toBe(false);
   });
   it("keeps automatic access failures local and reserves the provider logout for an explicit sign out", async () => {
     const session = {
@@ -53,7 +83,9 @@ describe("React Admin authentication provider", () => {
     const providerLogoutRedirect = await provider.logout({
       logoutFromProvider: true,
     });
-    const localLogoutRedirect = await provider.logout({});
+    const localLogout = provider.logout({});
+    expect(getLogoutPending()).toBe(false);
+    const localLogoutRedirect = await localLogout;
     expect(providerLogoutRedirect).toBe(
       "http://127.0.0.1:8787/api/auth/admin/authorize",
     );
@@ -334,6 +366,29 @@ describe("React Admin authentication provider", () => {
     });
     await expect(
       provider.canAccess?.({ resource: "savia-request", action: "list" }),
+    ).resolves.toBe(true);
+  });
+
+  it("allows active tenant members into Savia Flows while the gateway scopes their actions", async () => {
+    const session = {
+      checkSession: vi.fn(),
+      clearSession: vi.fn(),
+      getAccessToken: vi.fn(),
+      getIdentity: vi.fn(),
+      getPermissions: vi.fn().mockResolvedValue({
+        canReadDocuments: true,
+        canExecuteCommands: false,
+        canManageIdentity: false,
+        memberships: [{ tenantId: 101, role: "operator" }],
+      }),
+      handleCallback: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+      getAuthorizeUrl: vi.fn(),
+    };
+    const provider = createReactAdminAuthProvider(session);
+    await expect(
+      provider.canAccess?.({ resource: "savia-flows", action: "list" }),
     ).resolves.toBe(true);
   });
 });

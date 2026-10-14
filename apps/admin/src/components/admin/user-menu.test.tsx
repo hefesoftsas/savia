@@ -3,6 +3,12 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
+let refreshAccount: (() => Promise<unknown>) | undefined;
+vi.mock("@/realtime/use-realtime-refresh", () => ({
+  useRealtimeRefresh: (options: { refresh: () => Promise<unknown> }) => {
+    refreshAccount = options.refresh;
+  },
+}));
 const refetch = vi.fn();
 const setTheme = vi.fn();
 const setColorTheme = vi.fn();
@@ -83,9 +89,9 @@ vi.mock("@/pwa", () => ({
 
 import { UserMenu } from "./user-menu";
 
-function renderMenu() {
+function renderMenu(client = new QueryClient()) {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <MemoryRouter>
         <UserMenu />
       </MemoryRouter>
@@ -94,6 +100,30 @@ function renderMenu() {
 }
 
 describe("UserMenu", () => {
+  it("refreshes account permissions without invalidating session checks or unrelated reads", async () => {
+    const client = new QueryClient();
+    client.setQueryData(["auth", "checkAuth"], true);
+    client.setQueryData(["auth", "getPermissions", {}], {
+      canManageIdentity: true,
+    });
+    client.setQueryData(["users", "getList", {}], {
+      data: [{ id: "user-1" }],
+      total: 1,
+    });
+    renderMenu(client);
+    await refreshAccount?.();
+    expect(client.getQueryState(["auth", "checkAuth"])?.isInvalidated).toBe(
+      false,
+    );
+    expect(
+      client.getQueryState(["auth", "getPermissions", {}])?.isInvalidated,
+    ).toBe(true);
+    expect(client.getQueryState(["users", "getList", {}])?.isInvalidated).toBe(
+      false,
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   beforeEach(() => {
     mockBranding = null;
     mockPermissions = { canManageIdentity: false, memberships: [] };

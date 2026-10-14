@@ -33,6 +33,8 @@ it("refreshes only the subscribed tenant on events and reconnect", async () => {
   expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   expect(client.getQueryState(other)?.isInvalidated).toBe(false);
   client.setQueryData(key, {});
-  options.onConnected();
+  options.onConnected("subscription-change");
+  expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+  options.onConnected("recovered");
   expect(client.getQueryState(key)?.isInvalidated).toBe(true);
 });

@@ -1,0 +1,77 @@
+import type {
+  NodeExecution,
+  Workflow,
+  WorkflowExecution,
+  WorkflowExecutionStatus,
+} from "@savia/flows-types";
+
+/**
+ * Execution metadata row structure
+ */
+export interface ExecutionRow {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  organizationId: string;
+  status: WorkflowExecutionStatus;
+  error: string | null;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  usage: number;
+  definitionHash?: string;
+  /** True when this run was a rehearsal — outward writes were stubbed. */
+  rehearsal?: boolean;
+}
+
+/**
+ * Data required to save an execution record
+ */
+export interface SaveExecutionRecord {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  userId: string;
+  organizationId: string;
+  status: WorkflowExecutionStatus;
+  nodeExecutions: NodeExecution[];
+  error?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  startedAt?: Date;
+  endedAt?: Date;
+  workflowDefinition?: Workflow;
+  definitionHash?: string;
+  runtimeVersion?: string;
+  /** True when this run was a rehearsal — outward writes were stubbed. */
+  rehearsal?: boolean;
+}
+
+/**
+ * Options for listing executions
+ */
+export interface ListExecutionsOptions {
+  workflowId?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Execution store abstraction for persisting and querying workflow executions.
+ */
+export interface ExecutionStore {
+  save(record: SaveExecutionRecord): Promise<WorkflowExecution>;
+  get(id: string, organizationId: string): Promise<ExecutionRow | undefined>;
+  getWithData(
+    id: string,
+    organizationId: string
+  ): Promise<(ExecutionRow & { data: WorkflowExecution }) | undefined>;
+  list(
+    organizationId: string,
+    options?: ListExecutionsOptions
+  ): Promise<ExecutionRow[]>;
+}

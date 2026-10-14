@@ -21,6 +21,16 @@ open it. Other workspaces require an active tenant and authorized membership or
 platform administration. Custom access policies remain tenant-scoped. Global
 `platform` administration is a privilege scope, not a separate data workspace.
 
+Platform administrators can permanently delete a commercial tenant from its
+edit page. The action requires typing the tenant's exact current name and
+deletes its associated data. The UI sends
+`DELETE /v1/tenants/{id}?cascade=true&confirmation=<exact tenant name>` only
+after that confirmation. The ordinary tenant delete request remains unchanged.
+If an external cleanup step fails, the API reports the failure and leaves the
+tenant inactive so an administrator can retry the cleanup. Shared identity
+principals are preserved. Core database cleanup runs as a batch; external file
+and service cleanup can be partial when a remote service fails.
+
 The users list resolves tenant names through the authorized tenant data provider.
 Its scope heading and access column show the tenant name, never an internal ID.
 If the name is unavailable, the heading stays generic and the access cell uses

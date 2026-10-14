@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Workflows from "../workflows";
 import { api } from "../api";
 import { setStudioRuntime } from "../runtime";
+import { createStudioQueryClient } from "../studio-query-cache";
 import { TriggerEditor } from "../workflow-editor";
 import { TriggerConditions } from "../workflow-trigger-conditions";
 import { makeConfig } from "@savia/studio-shared/metadata";
@@ -154,6 +155,84 @@ it("creates a general draft, saves it on the backend, and keeps publication expl
   expect(
     vi.mocked(api).mock.calls.some(([url]) => url.includes("publish")),
   ).toBe(false);
+});
+it("removes cached workflow history and execution details after a 403 refresh", async () => {
+  const flow = {
+    id: "flow-1",
+    name: "Protected flow",
+    revision: 2,
+    enabled: 1,
+    published_version: "version-2",
+    definition: {
+      trigger: { type: "manual" as const },
+      nodes: [{ id: "step_1", type: "transform" as const, values: {} }],
+    },
+  };
+  const run = {
+    id: "run-1",
+    status: "running",
+    created_at: "2026-10-09T12:00:00.000Z",
+    version_id: "version-2",
+    node_id: "step_1",
+    jobs: [
+      {
+        node_id: "step_1",
+        type: "transform",
+        attempts: 1,
+        output: { marker: "private-workflow-output" },
+      },
+    ],
+  };
+  vi.mocked(api).mockImplementation(async (url) => {
+    if (url === "/workflow-bundles" || url === "/workflow-inbox")
+      return { data: [] };
+    if (url === "/workflows") return { data: [flow] };
+    if (url === "/workflows/flow-1/executions") return { data: [run] };
+    if (url === "/workflow-executions/run-1") return { data: run };
+    throw new Error(`Unexpected workflow request: ${url}`);
+  });
+  const queryClient = createStudioQueryClient();
+  render(
+    <QueryClientProvider client={queryClient}>
+      <Workflows objects={[]} />
+    </QueryClientProvider>,
+  );
+
+  fireEvent.click(
+    await screen.findByRole("button", { name: /Protected flow/ }),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: /En ejecución/ }));
+  expect(
+    await screen.findByText(/private-workflow-output/),
+  ).toBeInTheDocument();
+
+  vi.mocked(api).mockImplementation(async (url) => {
+    if (url.includes("/executions") || url.startsWith("/workflow-executions/"))
+      throw Object.assign(new Error("Workflow access revoked"), {
+        status: 403,
+      });
+    if (url === "/workflow-bundles" || url === "/workflow-inbox")
+      return { data: [] };
+    if (url === "/workflows") return { data: [flow] };
+    throw new Error(`Unexpected workflow request: ${url}`);
+  });
+
+  void queryClient.invalidateQueries({ queryKey: ["workflow-history"] });
+  await waitFor(() =>
+    expect(
+      queryClient.getQueryCache().findAll({ queryKey: ["workflow-history"] })[0]
+        ?.state.data,
+    ).toBeUndefined(),
+  );
+  void queryClient.invalidateQueries({ queryKey: ["workflow-execution"] });
+  await waitFor(() =>
+    expect(
+      queryClient
+        .getQueryCache()
+        .findAll({ queryKey: ["workflow-execution"] })[0]?.state.data,
+    ).toBeUndefined(),
+  );
+  expect(screen.queryByText(/private-workflow-output/)).not.toBeInTheDocument();
 });
 it("shows invalid configuration without sending it to the API", async () => {
   setup();

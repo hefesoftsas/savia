@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslate } from "ra-core";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSessionGeneration } from "@/auth/session-scope";
 import {
   Archive,
   Bell,
@@ -14,6 +15,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,6 +27,7 @@ import {
   type NotificationClient,
 } from "./client";
 import { useNotificationInbox } from "./queries";
+import { notificationReadKey } from "./queries";
 
 const filterIds: InboxFilter[] = ["all", "unread", "pending"];
 
@@ -60,10 +63,19 @@ export function NotificationInbox({
   const translate = useTranslate();
   const t = (key: string) => translate(`savia.notificationInbox.${key}`);
   const queryClient = useQueryClient();
+  const sessionGeneration = useSessionGeneration();
   const inbox = useNotificationInbox(filter, client);
 
   const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: notificationReadKey(sessionGeneration, "unread-count"),
+        exact: true,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: notificationReadKey(sessionGeneration, "inbox"),
+      }),
+    ]);
 
   const run = async (id: string, action: () => Promise<unknown>) => {
     setBusy(id);
@@ -79,7 +91,10 @@ export function NotificationInbox({
   };
 
   const items: NoticeItem[] = inbox.data?.items ?? [];
-  const showEmpty = !inbox.isPending && !inbox.isError && items.length === 0;
+  const showEmpty =
+    !inbox.isPending &&
+    (!inbox.isError || inbox.data !== undefined) &&
+    items.length === 0;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-10 sm:px-6">
@@ -164,7 +179,14 @@ export function NotificationInbox({
           </div>
         )}
 
-        {inbox.isError && (
+        {inbox.isError && inbox.data !== undefined && (
+          <ReadRefreshStatus
+            error={t("loadError")}
+            onRetry={() => void refresh()}
+          />
+        )}
+
+        {inbox.isError && inbox.data === undefined && (
           <Alert variant="destructive" className="rounded-2xl">
             <CircleAlert aria-hidden="true" />
             <AlertTitle>{t("loadError")}</AlertTitle>

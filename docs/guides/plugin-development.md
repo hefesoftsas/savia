@@ -153,14 +153,31 @@ workspace. Choose an authorized workspace, then create or reopen a saved project
 The store's **Create plugin** and **Edit source** actions also open this workspace.
 The editor, compiler and React runtime load on demand.
 
-Desktop opens with a keyboard-accessible file explorer, Monaco editor and Savia AI
-conversation. Drag the separators to resize panels, or hide Files/Chat from the
-workspace toolbar. Files open in tabs; returning to a file preserves its editor
-and undo history during the session. Preview is another editor tab. Narrow layouts
-show **Files**, **Code**, **Preview** or **Chat** one at a time, without resetting
+Desktop opens with a hierarchical file explorer and Monaco editor; open the Savia
+AI conversation from **Chat** when needed. Expand folders with the mouse or arrow
+keys, and use **Find files** to filter paths. Drag separators to resize panels,
+or hide Files/Chat from the workspace toolbar. Source files and configuration files
+open in separate closable tabs; returning to a file preserves its editor and undo
+history during the session. Archived source files appear under **src** so their
+filenames remain distinct from the project's configuration files. Monaco includes syntax highlighting, line numbers,
+folding, suggestions, and Find/Replace (Ctrl/Cmd+F). **Search** (Ctrl/Cmd+Shift+F)
+searches literal text across all editable source and configuration files, ignoring
+case. Results are grouped by file with line numbers; selecting one opens its tab,
+scrolls to the line, and selects the match. Results update with edits. Binary assets
+and the compiled recovery bundle are excluded when original sources are present.
+The first 500 matches are shown; refine the query if the limit is reached.
+Preview is another editor tab.
+Below 600px of available workspace width, narrow layouts
+show **Files**, **Search**, **Code**, **Preview** or **Chat** one at a time, without resetting
 source or the running plugin. Monaco is bundled with the app shell (no CDN), and
 `entry.tsx` offers ghost-text inline completions from the workspace's
 server-side AI configuration; provider keys never reach the browser.
+
+Retained archive source editors enable Monaco syntax diagnostics and completion.
+Semantic type diagnostics are disabled there because archives do not include the complete
+dependency and type-only source environment. **Preview** resolves the actual
+retained import graph and supported runtime dependencies and reports compilation
+errors before publication. Standalone entry files and other code editor surfaces retain semantic diagnostics.
 
 Send a request with Enter (Shift+Enter inserts a line break). The request appears
 immediately and the assistant answer streams live, with input/output token usage
@@ -174,8 +191,10 @@ status bar.
 
 **Run** validates and opens preview; **Publish** releases the validated revision.
 The project options menu contains import/export and the optional publication
-destination. This is a bounded Savia plugin workspace with the four files below,
-not a general-purpose npm workspace, terminal or VS Code extension host.
+destination. This bounded Savia plugin workspace starts with the four files
+below and supports the reviewed web extension catalog described at the end of
+this guide. General-purpose npm workspaces and terminal extensions are outside
+its scope.
 
 The resizable layout uses [Allotment](https://github.com/johnwalley/allotment),
 a React component derived from VS Code's split-view implementation, alongside
@@ -236,7 +255,11 @@ Publication is enabled only after the current revision previews successfully.
 Any edit invalidates that preview. The preview gate is checked immediately before
 upload starts; a later runtime error does not roll back an acknowledged release.
 **Publish to store** uploads the validated ZIP
-to this workspace's store; installation is a separate store action. Existing
+to this workspace's store and activates that exact version in the workspace.
+For an installed plugin with the same ID, this updates its active version.
+**Publish without activating** in project options retains a catalog-only release.
+If activation fails, the publication receipt offers **Activate this version**
+to retry without uploading again. Existing
 permission checks, quotas and immutable versions still apply. Increment the
 manifest version for a changed release. When the deployment explicitly configures
 a separate registry publisher credential, a destination selector also offers the
@@ -252,14 +275,42 @@ pending edits across reloads when local storage is available. The editor warns
 before unloading while a server save is still pending. Do not close the page until
 “Project saved” appears if browser recovery storage is unavailable.
 
-**Edit source** on a store release creates a new project from its retained source
-and increments a plain semantic patch version. Older packages uploaded without
-authoring sources open as a synthesized editable copy built from the retained
-manifest and store configuration, with a notice that the original source was
-not stored. Runtime artifacts and sources are retained atomically; published
-source versions are immutable. The **Create plugin** project list also offers
+The store project list groups releases by plugin ID and sorts semantic versions newest
+first. **Edit latest version** creates an editable project from the latest release.
+Historical releases offer **Use as base**: the selected release's files are copied
+into a new project, with its target version incremented from the current catalog
+latest version (not from the historical version). Published releases remain
+immutable; publishing a new version at or below the catalog latest is rejected.
+Identical retries of an existing release remain idempotent.
+After publishing, the project picker refreshes its catalog before returning so
+its latest-version actions reflect the new release.
+
+Repository-built ZIPs include `src/original-source.json`, a map of workspace-owned
+files from the build graph, including original TSX, JavaScript, CSS, JSON, and image
+assets. The editor opens the source entry in Monaco and lets users edit source
+modules and text assets with their repository paths. Retained PNG/WebP data URIs
+are read-only. Preview and publication compile the edited module graph, including
+relative imports, `@savia` workspace aliases, CSS, and literal dynamic imports.
+Archives must contain exactly one source entry module; ambiguous entries are
+rejected rather than selecting a dependency by filename ordering.
+React, Zod, and PDF-lib are bundled locally; no dependency is downloaded during
+compilation. The old compiled entry is kept only for exact runtime recovery and
+is hidden while complete originals are available. Saving, exporting, importing,
+and publishing preserve the source map. The assistant currently supports
+single-module projects; edit multi-module originals directly in the code editor.
+Reopen a published release to obtain newly attached originals; existing drafts
+are not overwritten.
+
+Older packages uploaded without
+authoring sources, or whose historical source archives omitted required image
+assets, open the retained compiled JavaScript together with the original
+manifest and store configuration. A notice identifies this as a compiled copy; original TSX
+cannot be reconstructed from the bundle. Preview runs the actual plugin rather
+than a replacement starter. Reopen the published version to recover it; existing
+projects created from the older counter fallback remain separate drafts. Runtime artifacts and sources are retained atomically;
+published source versions are immutable. The **Create plugin** project list also offers
 published store versions to open as new projects. **Export project**
-and **Import project** remain available for portable four-file JSON backups (chat
+and **Import project** remain available for portable JSON backups (chat
 history is saved in server projects but is not included in that portable export).
 
 Deployment requires database migration `0038_plugin_authoring_projects.sql` (D1
@@ -267,9 +318,119 @@ or the matching PostgreSQL migration), the API and admin bundles, and existing
 workspace AI configuration. Shared publication additionally needs `publishToken`
 in `PLUGIN_REGISTRY_TENANTS`; see [the registry guide](plugin-registry.md).
 
-This first authoring contract supports one TSX module, built-in React, and the
-Savia host API. It does not install arbitrary npm dependencies, run Node processes,
+AI authoring supports one TSX module, built-in React, and the Savia host API.
+Manual source editing additionally supports the retained multi-module build graph
+and the shipped dependencies described above. Preview settings start from the
+package's `store.json` defaults, with `preview.json` settings overriding matching
+keys; mock preview changes do not modify workspace settings. It does not install arbitrary npm dependencies, run Node processes,
 or grant direct network access. Use the repository SDK/build workflow for plugins
-requiring extra bundled libraries. Each authoring file is limited to 100 KB;
-preview fixtures allow up to 200 records per collection. Existing store artifact
-size and quota limits apply independently.
+requiring extra bundled libraries. AI authoring files remain limited to 100 KB.
+Saved editor projects accept up to 2 MB in `entry.tsx` for compiled release recovery, 100 KB per configuration
+file, and 5 MB for serialized project JSON (including escape sequences);
+the optional original source archive accepts up to 256 files and 2 MB.
+preview fixtures allow up to 200 records per collection. Store artifacts are
+limited to 6 MB each, with a 64 MiB aggregate quota per tenant and up to 10
+versions per plugin.
+
+Large retained source records and editor drafts are compressed transparently on
+backend storage to fit the database row limit. The API and editor recover the
+exact original file text; existing uncompressed records remain readable. Records
+that still exceed the storage limit after compression are rejected before writing.
+
+## Editor extensions
+
+The plugin editor's **Extensions** panel enables reviewed web extensions for the
+current project. The initial catalog contains **Prettier** (`savia.formatter`)
+for TS/TSX, JS/JSX, JSON, CSS and HTML, and **React snippets**
+(`savia.react-snippets`) for React components (`sfc`) and state (`useState`).
+Use **Format document** or Shift+Alt+F to format, and Ctrl+Space to open
+completion suggestions. Disable an extension to unregister its providers.
+
+These reviewed bundled extensions are separate from extensions installed from
+the marketplace. A project manager can search the Open VSX registry or upload a
+`.vsix` package in the Extensions panel. Savia inspects the package before
+installation and shows its publisher, version, license, compatibility, and
+declared dependencies. Installing and updating are explicit actions; registry
+metadata or a successful inspection never installs or enables code by itself.
+
+Registry API requests stay on `https://open-vsx.org`. VSIX downloads can follow
+bounded redirects from that registry to its official content host,
+`https://openvsx.eclipsecontent.org`; arbitrary hosts, HTTP URLs, and credentials
+in URLs are rejected. Download deadlines and size limits apply across redirects.
+
+Packages are limited to 20 MiB compressed, 64 MiB expanded, 10,000 files, and
+8 MiB per file. Installed package storage is limited to 128 MiB per tenant;
+each project can reference up to 32 installations. Enabling a theme selects
+its matching light or dark theme. Snippet contributions become editor completions.
+
+Only browser-compatible VS Code web extensions can run. An extension that
+requires Node.js, a terminal, native modules, or unsupported VS Code APIs stays
+unavailable in this editor. Dependencies must be installed explicitly. Installed
+packages are immutable and project settings pin the chosen installation and
+digest. Updating a pinned extension requires an explicit update; removing a
+package is blocked while any project still references it. Project extension
+references are saved in the backend and restored when reopening the project.
+
+Third-party extensions run in a separately hosted, cross-origin WebWorker
+runtime. They do not receive Savia application cookies or access to the parent
+page. Installation and project changes require the existing project management
+permission. Review the publisher, license, and package details before enabling
+an extension in a project.
+
+Preview deployment waits for the isolated runtime before building the parent
+application. Bounded readiness retries allow a newly published origin to
+propagate; missing isolation headers or cookies still fail the deployment.
+
+Enabling an extension starts an isolated VS Code API editor with retained file
+models, undo history, project search navigation, and the existing draft/preview
+publication flow. The isolated editor retains the plugin's React, JSX and
+`createRoot` declarations. A dedicated TypeScript worker provides completion
+from the current project files, including unsaved edits, without executing them.
+Project extension settings are saved in the backend and
+restored when reopening the project; they are not part of the plugin ZIP or
+browser recovery storage. Versions opened for inspection remain read-only.
+
+The standalone editor document is excluded from the offline app-shell fallback
+at both `/plugin-editor.html` and Cloudflare's canonical `/plugin-editor` URL,
+including query strings. Keep both routes excluded when changing PWA routing.
+
+The preview editor currently searches Open VSX and also accepts local VSIX
+uploads; it does not use Microsoft's Marketplace. A package that fails the
+browser compatibility checks cannot be activated even if it can be inspected.
+The same-origin bundled-extension fallback remains available when the isolated
+runtime is unavailable, but marketplace and VSIX extensions stay disabled.
+
+The Extensions panel opens on popular Open VSX snippet candidates filtered for
+this web editor, rather than the registry's desktop-heavy overall download chart.
+Marketplace cards show Open VSX's
+average star rating, review count, and download count with localized number
+formatting. Download counts are registry downloads, not unique installations;
+missing statistics are shown as unavailable and are not replaced with zero.
+Each candidate's exact-version manifest is checked against the same
+engine, desktop-only, API proposal, and declarative contribution rules used by
+VSIX inspection. Candidates whose manifests cannot be verified are omitted.
+This is a manifest preflight, not a guarantee that the complete package works:
+inspection still validates archive limits, resources, and browser code before
+installation. Desktop-only packages are rejected before downloading their VSIX;
+packages over the 20 MiB compressed limit receive a size error rather than a
+generic upstream service error. When a candidate has a specific web or universal
+build, that target platform is retained through listing, inspection, manifest
+lookup and package download so another platform variant cannot be substituted.
+
+Its single search field
+queries the marketplace automatically as you type; typing from Installed returns
+to Marketplace. Clear the field to browse popular snippets again. Select Installed
+to filter installed and bundled extensions with the current query. The fixed
+header includes Upload VSIX, and package inspection appears above the scrolling
+results before an explicit install or update. Filtering can leave an empty page
+while later registry pages still contain candidates; Load more remains available
+until the registry has no further pages. Installed and bundled extensions keep
+their existing local filter and are not hidden by marketplace preflight.
+
+### Delete published versions
+
+Use **My plugins → Delete version** to remove a specific release, or expand **Older versions** to delete a historical release. Deleting an older release preserves the active installation; the active release must first be disabled. The confirmation can also remove its shared R2 ZIP when publisher credentials are configured. It is selected by default and warns that future imports elsewhere will no longer work. Local cleanup removes the release and source files while preserving editable drafts. See [registry deletion and ownership](plugin-registry.md#delete-a-release-from-the-ui) for failure and credential behavior.
+
+## Native VS Code authoring
+
+Use the [native VS Code extension](vscode-plugin-development.md) to check out published workspace sources, edit ordinary files, build with the shared browser compiler, and publish guarded immutable versions.

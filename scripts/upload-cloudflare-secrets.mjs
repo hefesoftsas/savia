@@ -1,3 +1,4 @@
+import { buildFlowsSecretUploads } from "./flows-preview-policy.mjs";
 import { readFile } from "node:fs/promises";
 import { createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -118,7 +119,7 @@ export function buildSecretUploads(environment, values) {
     STUDIO_INTEGRATION_KEY:
       values.STUDIO_INTEGRATION_KEY ?? values.CRM_INTEGRATION_KEY,
   };
-  return definitions.map(([app, name, keys]) => {
+  const plans = definitions.map(([app, name, keys]) => {
     const secrets = Object.fromEntries(
       Object.entries(keys).map(([key, source]) => {
         if (!resolved[source]) throw new Error(`${source} is required`);
@@ -162,6 +163,13 @@ export function buildSecretUploads(environment, values) {
       secrets,
     };
   });
+  const flowPlans = buildFlowsSecretUploads(environment, values);
+  for (const plan of flowPlans) {
+    const existing = plans.find((entry) => entry.app === plan.app);
+    if (existing) Object.assign(existing.secrets, plan.secrets);
+    else plans.push(plan);
+  }
+  return plans;
 }
 
 async function main() {

@@ -1,3 +1,5 @@
+import { QueryClientProvider } from "@tanstack/react-query";
+import { createAdminQueryClient } from "@/queries/query-policy";
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import {
   cleanup,
@@ -66,14 +68,18 @@ afterEach(cleanup);
 
 it("switches integrations and virtual employees copy through EN/ES/PT", async () => {
   render(
-    <StoreContextProvider value={memoryStore({ locale: "en" })}>
-      <AppLocaleProvider>
-        <MemoryRouter initialEntries={["/my-integrations?tab=virtual-employees"]}>
-          <Switcher />
-          <PersonalIntegrationsPage services={createServices()} />
-        </MemoryRouter>
-      </AppLocaleProvider>
-    </StoreContextProvider>,
+    <QueryClientProvider client={createAdminQueryClient()}>
+      <StoreContextProvider value={memoryStore({ locale: "en" })}>
+        <AppLocaleProvider>
+          <MemoryRouter
+            initialEntries={["/my-integrations?tab=virtual-employees"]}
+          >
+            <Switcher />
+            <PersonalIntegrationsPage services={createServices()} />
+          </MemoryRouter>
+        </AppLocaleProvider>
+      </StoreContextProvider>
+    </QueryClientProvider>,
   );
 
   expect(
@@ -82,9 +88,7 @@ it("switches integrations and virtual employees copy through EN/ES/PT", async ()
   expect(
     screen.getByRole("tab", { name: "Virtual Employees (AI)" }),
   ).toBeVisible();
-  expect(
-    screen.getByRole("button", { name: "New Employee" }),
-  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "New Employee" })).toBeVisible();
 
   fireEvent.click(screen.getByText("ES"));
   await waitFor(() =>
@@ -95,9 +99,7 @@ it("switches integrations and virtual employees copy through EN/ES/PT", async ()
   expect(
     screen.getByRole("tab", { name: "Empleados Virtuales (IA)" }),
   ).toBeVisible();
-  expect(
-    screen.getByRole("button", { name: "Nuevo Empleado" }),
-  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Nuevo Empleado" })).toBeVisible();
   expect(
     screen.getByPlaceholderText("Buscar empleado por nombre o @handle..."),
   ).toBeVisible();

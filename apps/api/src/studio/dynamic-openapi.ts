@@ -1,5 +1,7 @@
 import { mcpSourceInputSchema } from "./mcp-source-service";
 import { mcpMappingSchema } from "@savia/studio-shared/mcp-sources";
+import { pluginDevelopmentOpenApiPaths } from "./plugin-development-openapi";
+import { pluginEditorOpenApiPaths } from "./plugin-editor-openapi";
 import { hubspotObjects } from "../external-crm/hubspot-workspace-catalog";
 import { recordPerformanceUpdateSchema } from "@savia/studio-server/schema";
 import {
@@ -12,7 +14,7 @@ import type { StudioObject } from "@savia/studio-shared/metadata";
 import { disabledSolutionObjects } from "@savia/studio-server/solution-state";
 import { parseObject } from "@savia/studio-server/services";
 import { workflowDraftSchema } from "@savia/studio-shared/workflows";
-import { workflowRequests } from "@savia/studio-server/workflows/routes";
+import { workflowRequests } from "@savia/flows-native/routes";
 
 type Schema = Record<string, unknown>;
 type Paths = Record<string, Record<string, unknown>>;
@@ -1475,6 +1477,11 @@ export async function dynamicOpenApi(
       },
     },
   };
+  Object.assign(
+    paths,
+    pluginEditorOpenApiPaths(),
+    pluginDevelopmentOpenApiPaths(),
+  );
   return {
     openapi: "3.1.0" as const,
     info: {

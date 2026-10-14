@@ -173,6 +173,9 @@ function TicketSummaryElement(props: PlateElementProps) {
   const readOnly = useReadOnly();
   const config = (props.element.ticketSummaryConfig ??
     {}) as TicketSummaryConfig;
+  // Memoized element views can retain a stale path after drag moves.
+  // Resolve against the current document at interaction time.
+  const currentPath = () => editor.api.findPath(props.element) ?? path;
   return (
     <PlateElement {...props}>
       <div contentEditable={false}>
@@ -182,14 +185,26 @@ function TicketSummaryElement(props: PlateElementProps) {
           connected={issueProviders.includes("jira")}
           readOnly={readOnly}
           onConfigChange={(nextConfig) => {
+            const at = currentPath();
             if (Object.keys(nextConfig).length === 0)
-              editor.tf.unsetNodes(["ticketSummaryConfig"], { at: path });
+              editor.tf.unsetNodes(["ticketSummaryConfig"], { at });
             else
-              editor.tf.setNodes(
-                { ticketSummaryConfig: nextConfig },
-                { at: path },
-              );
+              editor.tf.setNodes({ ticketSummaryConfig: nextConfig }, { at });
           }}
+          onInsertSnapshot={
+            readOnly
+              ? undefined
+              : (blocks) => {
+                  const base = currentPath();
+                  const parent = base.slice(0, -1);
+                  const index = base[base.length - 1] ?? 0;
+                  const at = [...parent, index + 1];
+                  editor.tf.insertNodes(blocks as never, { at });
+                  const focusPath = [...at, 0];
+                  editor.tf.select({ path: focusPath, offset: 0 });
+                  editor.tf.focus();
+                }
+          }
         />
       </div>
       {props.children}
@@ -829,8 +844,11 @@ export const PageEditor = memo(function PageEditor({
         ...targetPath.slice(0, -1),
         targetPath[targetPath.length - 1] + 1,
       ];
+      // Void blocks (divider, ticket summary) hold no editable text.
+      // Focus the trailing paragraph so typing continues instead of
+      // trapping the caret inside the void node.
       const focusPath =
-        type === "divider"
+        type === "divider" || type === "ticket_summary"
           ? [...nextSiblingPath, 0]
           : type === "toggle"
             ? [...targetPath, 0, 0]

@@ -60,6 +60,93 @@ it("limits insurance claims to the safely serialized enabled catalog", () => {
   expect(system).not.toMatch(/hogar|vida|salud/i);
 });
 
+it("supplies verified quote requirements and keeps the form-read fallback", () => {
+  const system = whatsappOperationInstructionsForProducts(
+    [{ id: "sura-auto", label: "Auto" }],
+    {
+      groups: [
+        {
+          name: "Vehicle",
+          fields: {
+            "vehicle.plate": "Plate",
+            "vehicle.fasecoldaCode": "Fasecolda code",
+          },
+        },
+      ],
+      instructions: "Use verified vehicle lookup data.",
+    },
+  );
+
+  expect(system).toContain('"vehicle.plate":"Plate"');
+  expect(system).toContain('"vehicle.fasecoldaCode":"Fasecolda code"');
+  expect(system).toMatch(/already provided.*skip.*savia_get_quote_form/i);
+  expect(system).toContain("Use verified vehicle lookup data.");
+
+  const fallback = whatsappOperationInstructionsForProducts([
+    { id: "sura-auto", label: "Auto" },
+  ]);
+  expect(fallback).toMatch(/read savia_get_quote_form/i);
+});
+
+it.each([
+  [
+    "too many groups",
+    {
+      groups: Array.from({ length: 13 }, (_, index) => ({
+        name: `Group ${index}`,
+        fields: { field: "Value" },
+      })),
+    },
+  ],
+  [
+    "too many fields",
+    {
+      groups: [
+        {
+          name: "Group",
+          fields: Object.fromEntries(
+            Array.from({ length: 61 }, (_, index) => [
+              `field${index}`,
+              "Value",
+            ]),
+          ),
+        },
+      ],
+    },
+  ],
+  [
+    "truncated field label",
+    { groups: [{ name: "Group", fields: { field: "x".repeat(201) } }] },
+  ],
+  [
+    "truncated field key",
+    { groups: [{ name: "Group", fields: { ["x".repeat(121)]: "Value" } }] },
+  ],
+  [
+    "invalid field among valid fields",
+    { groups: [{ name: "Group", fields: { valid: "Value", invalid: 42 } }] },
+  ],
+  [
+    "oversized instructions",
+    {
+      groups: [{ name: "Group", fields: { field: "Value" } }],
+      instructions: "x".repeat(1201),
+    },
+  ],
+])(
+  "falls back to the quote-form read when requirements are incomplete: %s",
+  (_name, requirements) => {
+    const system = whatsappOperationInstructionsForProducts(
+      [{ id: "sura-auto", label: "Auto" }],
+      requirements as any,
+    );
+    expect(system).toMatch(/read savia_get_quote_form/i);
+    expect(system).not.toMatch(
+      /already provided, skip the savia_get_quote_form/i,
+    );
+  },
+);
+
 it("does not expose quote tools or product claims when catalog preflight fails", () => {
   const employee = {
     id: "alice",

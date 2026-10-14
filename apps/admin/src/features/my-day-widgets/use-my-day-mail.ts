@@ -402,12 +402,12 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
       setRetryDelay(REFRESH_INTERVAL_MS);
       if (canRefreshMail()) void refresh();
     };
-    window.addEventListener("savia:identity-changed", clear);
+    window.addEventListener("savia:principal-changed", clear);
     window.addEventListener("savia:session-cleared", clear);
     return () => {
       ++revision.current;
       pending.current = null;
-      window.removeEventListener("savia:identity-changed", clear);
+      window.removeEventListener("savia:principal-changed", clear);
       window.removeEventListener("savia:session-cleared", clear);
     };
   }, [client, refresh]);

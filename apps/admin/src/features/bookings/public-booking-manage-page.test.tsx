@@ -77,15 +77,51 @@ function availabilityData(startsAt = "2026-10-06T15:00:00Z") {
   };
 }
 
-function renderManagePage() {
+function renderManagePage(token = manageToken) {
   return render(
     <StoreContextProvider value={memoryStore({ locale: "en" })}>
       <AppLocaleProvider>
-        <PublicBookingManagePage token={manageToken} />
+        <PublicBookingManagePage token={token} />
       </AppLocaleProvider>
     </StoreContextProvider>,
   );
 }
+
+it("hides the previous reservation when its public management link is revoked", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), "https://savia.test").pathname;
+      if (path === `/api/public/bookings/manage/${manageToken}`)
+        return Response.json({ data: manageData() });
+      return Response.json(
+        { error: { message: "This link has expired." } },
+        { status: 410 },
+      );
+    }),
+  );
+
+  const page = renderManagePage();
+  expect(
+    await screen.findByRole("heading", {
+      name: "Manage or cancel this appointment",
+    }),
+  ).toBeInTheDocument();
+  page.rerender(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <AppLocaleProvider>
+        <PublicBookingManagePage token="revoked-manage-token-123456789" />
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+  expect(
+    screen.queryByRole("heading", {
+      name: "Manage or cancel this appointment",
+    }),
+  ).not.toBeInTheDocument();
+});
 
 it("uses private inline availability, requires review, and keeps the reservation revision", async () => {
   const calls: Array<{ path: string; init?: RequestInit }> = [];

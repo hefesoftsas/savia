@@ -1,13 +1,21 @@
 import type { Context, Hono } from "hono";
 import { z } from "zod";
+import { dialectFor } from "@savia/db/dialect";
 import {
   pluginProjectIdSchema,
   pluginProjectSaveSchema,
   type PluginProjectFiles,
 } from "@savia/studio-shared/plugin-projects";
+import { findOwnedEditorExtension } from "./plugin-editor-extension-artifacts";
+import type { ProjectEditorExtensionReference } from "@savia/studio-shared/plugin-editor-extensions";
 import type { Env } from "./context";
 import { fail } from "./context";
 import type { PluginStoreOptions } from "./plugin-store";
+
+import {
+  encodePluginFilesJson,
+  decodePluginFilesJson,
+} from "./plugin-file-storage";
 
 const MAX_PROJECTS_PER_SCOPE = 100;
 
@@ -16,6 +24,8 @@ type ProjectRow = {
   label?: string;
   files: string;
   history: string;
+  editor_extensions?: string;
+  installed_editor_extensions?: string;
   version: number;
   updated_at: string;
 };
@@ -33,14 +43,20 @@ function projectLabel(filesJson: string): string {
   }
 }
 
-function toProject(row: ProjectRow) {
+async function toProject(row: ProjectRow) {
   return {
     id: row.id,
-    files: JSON.parse(row.files) as PluginProjectFiles,
+    files: JSON.parse(
+      await decodePluginFilesJson(row.files),
+    ) as PluginProjectFiles,
     history: JSON.parse(row.history) as Array<{
       role: "user" | "assistant";
       content: string;
     }>,
+    editorExtensions: JSON.parse(row.editor_extensions ?? "[]") as string[],
+    installedEditorExtensions: JSON.parse(
+      row.installed_editor_extensions ?? "[]",
+    ) as ProjectEditorExtensionReference[],
     version: row.version,
     updatedAt: row.updated_at,
   };
@@ -87,7 +103,7 @@ export function registerPluginProjects(
       "plugin-projects",
     );
     const result = await c.env.DB.prepare(
-      `SELECT id,label,version,updated_at FROM plugin_authoring_projects
+      `SELECT id,label,installed_editor_extensions,version,updated_at FROM plugin_authoring_projects
        WHERE tenant_id=? AND principal_id=? ORDER BY updated_at DESC,id`,
     )
       .bind(tenant, principalId)
@@ -96,6 +112,9 @@ export function registerPluginProjects(
       data: result.results.map((row) => ({
         id: row.id,
         label: row.label,
+        installedEditorExtensions: JSON.parse(
+          row.installed_editor_extensions ?? "[]",
+        ) as ProjectEditorExtensionReference[],
         version: row.version,
         updatedAt: row.updated_at,
       })),
@@ -111,13 +130,13 @@ export function registerPluginProjects(
       id.data,
     );
     const row = await c.env.DB.prepare(
-      `SELECT id,files,history,version,updated_at FROM plugin_authoring_projects
+      `SELECT id,files,history,editor_extensions,installed_editor_extensions,version,updated_at FROM plugin_authoring_projects
        WHERE tenant_id=? AND principal_id=? AND id=?`,
     )
       .bind(tenant, principalId, id.data)
       .first<ProjectRow>();
     if (!row) return fail("Plugin project not found.", 404);
-    return c.json({ data: toProject(row) });
+    return c.json({ data: await toProject(row) });
   });
 
   app.put("/api/plugin-projects/:id", async (c) => {
@@ -136,27 +155,53 @@ export function registerPluginProjects(
     }
     const parsed = pluginProjectSaveSchema.safeParse(input);
     if (!parsed.success) return fail("Invalid plugin project.", 422);
+    const references = parsed.data.installedEditorExtensions;
+    for (const reference of references) {
+      const installation = await findOwnedEditorExtension(c.env.DB, {
+        tenantId: tenant,
+        principalId,
+        ...reference,
+      });
+      if (!installation?.compatibility.supported)
+        return fail(
+          "Installed editor extension reference is unavailable or incompatible.",
+          422,
+        );
+    }
+    const referencesJson = JSON.stringify(references);
+    const dialect = dialectFor(c.env.DB);
+    // Bind the JSON once: PostgreSQL's lateral JSON iterator repeats its input
+    // expression while normalizing objects, arrays, and scalars.
+    const validReferences = `(SELECT count(*) FROM (SELECT ? AS references_json) input, ${dialect.jsonEach("input.references_json", "$", "refs")} JOIN plugin_editor_extension_installations installed ON installed.id=${dialect.jsonText("refs.value", "$.installationId")} AND installed.sha256=${dialect.jsonText("refs.value", "$.sha256")} WHERE installed.tenant_id=? AND installed.principal_id=?) = ?`;
     const now = new Date().toISOString();
-    const label = projectLabel(JSON.stringify(parsed.data.files));
+    const filesJson = JSON.stringify(parsed.data.files);
+    const label = projectLabel(filesJson);
+    const storedFiles = await encodePluginFilesJson(filesJson);
     if (parsed.data.version === 0) {
       let inserted: { meta: { changes: number } };
       try {
         inserted = await c.env.DB.prepare(
-          `INSERT INTO plugin_authoring_projects(tenant_id,principal_id,id,label,files,history,version,updated_at)
-           SELECT ?,?,?,?,?,?,1,? WHERE
-             (SELECT count(*) FROM plugin_authoring_projects WHERE tenant_id=? AND principal_id=?) < ?`,
+          `INSERT INTO plugin_authoring_projects(tenant_id,principal_id,id,label,files,history,editor_extensions,installed_editor_extensions,version,updated_at)
+           SELECT ?,?,?,?,?,?,?,?,1,? WHERE
+             (SELECT count(*) FROM plugin_authoring_projects WHERE tenant_id=? AND principal_id=?) < ? AND ${validReferences}`,
         )
           .bind(
             tenant,
             principalId,
             id.data,
             label,
-            JSON.stringify(parsed.data.files),
+            storedFiles,
             JSON.stringify(parsed.data.history),
+            JSON.stringify(parsed.data.editorExtensions),
+            referencesJson,
             now,
             tenant,
             principalId,
             MAX_PROJECTS_PER_SCOPE,
+            referencesJson,
+            tenant,
+            principalId,
+            references.length,
           )
           .run();
       } catch {
@@ -169,18 +214,24 @@ export function registerPluginProjects(
         );
     } else {
       const updated = await c.env.DB.prepare(
-        `UPDATE plugin_authoring_projects SET label=?,files=?,history=?,version=version+1,
-             updated_at=? WHERE tenant_id=? AND principal_id=? AND id=? AND version=?`,
+        `UPDATE plugin_authoring_projects SET label=?,files=?,history=?,editor_extensions=?,installed_editor_extensions=?,version=version+1,
+             updated_at=? WHERE tenant_id=? AND principal_id=? AND id=? AND version=? AND ${validReferences}`,
       )
         .bind(
           label,
-          JSON.stringify(parsed.data.files),
+          storedFiles,
           JSON.stringify(parsed.data.history),
+          JSON.stringify(parsed.data.editorExtensions),
+          referencesJson,
           now,
           tenant,
           principalId,
           id.data,
           parsed.data.version,
+          referencesJson,
+          tenant,
+          principalId,
+          references.length,
         )
         .run();
       if (updated.meta.changes !== 1)
@@ -191,6 +242,8 @@ export function registerPluginProjects(
         id: id.data,
         files: parsed.data.files,
         history: parsed.data.history,
+        editorExtensions: parsed.data.editorExtensions,
+        installedEditorExtensions: references,
         version: parsed.data.version + 1,
         updatedAt: now,
       },

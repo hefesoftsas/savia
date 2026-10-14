@@ -1,14 +1,21 @@
 import {
+  PLUGIN_PROJECT_MAX_BYTES,
+  pluginOriginalSourceFilesSchema,
+} from "@savia/studio-shared/plugin-projects";
+import {
   useEffect,
   useLayoutEffect,
   useRef,
   useId,
   useState,
+  useMemo,
   type ReactNode,
 } from "react";
 import {
   ArrowLeft,
   Files,
+  Blocks,
+  Search,
   Check,
   Bot,
   ArrowUp,
@@ -38,6 +45,8 @@ import {
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { AssistantMarkdown } from "@/features/assistant/assistant-response-ui";
+import { PluginProjectSearchPanel } from "./plugin-project-search-panel";
+import type { PluginProjectSearchMatch } from "./plugin-project-search";
 import { PluginFileTree } from "./plugin-file-tree";
 import { PluginDiffEditor } from "./plugin-diff-editor";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,6 +61,7 @@ import {
 } from "./plugin-authoring-request";
 import { MonacoCodeEditor } from "./monaco-code-editor";
 import { pluginIdeMessages } from "./plugin-ide-messages";
+import { pluginVscodeGuideMessages } from "./plugin-vscode-guide-messages";
 import { pluginIdeDeclarations } from "./plugin-ide-declarations";
 import {
   compilePluginProject,
@@ -82,37 +92,88 @@ type Preview = {
   state: "loading" | "ready" | "error";
 };
 
+import { PluginEditorExtensionsPanel } from "./plugin-editor-extensions-panel";
+import { createEmbeddedTransport } from "@/api/embedded-transport";
+import { getStudioRuntime } from "./runtime";
+import { PluginEditorExtensionClient } from "./plugin-editor-extension-client";
+import type { ProjectEditorExtensionReference } from "@savia/studio-shared/plugin-editor-extensions";
+import { resolvePluginEditorRuntimeUrl } from "./plugin-editor-session";
+import { PluginVscodeEditor } from "./plugin-vscode-editor";
+
 export default function PluginIde({
   tenantId,
+  projectId = "draft",
+  initialInstalledEditorExtensions = [],
+  onInstalledExtensionsChange,
   onClose,
   onPublished,
   initialFiles,
   initialHistory,
+  initialEditorExtensions = [],
   onDraftChange,
   canPublishShared = false,
   saveStatus,
   backLabel,
 }: {
   tenantId: number;
+  projectId?: string;
+  initialInstalledEditorExtensions?: ProjectEditorExtensionReference[];
+  onInstalledExtensionsChange?: (draft: ProjectDraft) => Promise<void>;
   saveStatus?: ReactNode;
   backLabel?: string;
   initialFiles?: IdeFiles;
   initialHistory?: ChatMessage[];
+  initialEditorExtensions?: string[];
   onDraftChange?: (draft: ProjectDraft) => void;
   canPublishShared?: boolean;
   onClose: () => void;
   onPublished: () => void | Promise<unknown>;
 }) {
   const t = useMessages(pluginIdeMessages);
+  const vscodeT = useMessages(pluginVscodeGuideMessages);
   const panelId = useId();
   const [wide, setWide] = useState(false);
-  const [pane, setPane] = useState<"files" | "chat" | "code" | "preview">(
-    "code",
-  );
+  const [pane, setPane] = useState<
+    "files" | "search" | "extensions" | "chat" | "code" | "preview"
+  >("code");
   const [explorerOpen, setExplorerOpen] = useState(true);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [fileFilter, setFileFilter] = useState("");
+  const [sidebarView, setSidebarView] = useState<
+    "files" | "search" | "extensions"
+  >("files");
+  const [editorExtensions, setEditorExtensions] = useState(
+    initialEditorExtensions,
+  );
+  const [extensionsStarted, setExtensionsStarted] = useState(
+    initialEditorExtensions.length > 0 ||
+      initialInstalledEditorExtensions.length > 0,
+  );
+  const [installedEditorExtensions, setInstalledEditorExtensions] = useState(
+    initialInstalledEditorExtensions,
+  );
+  const [activationErrors, setActivationErrors] = useState<
+    Record<string, string>
+  >({});
+  const extensionRollback = useRef<{
+    previous: ProjectEditorExtensionReference[];
+    pending: Set<string>;
+    next: ProjectEditorExtensionReference[];
+    applied: boolean;
+    resolve(): void;
+    reject(error: Error): void;
+  } | null>(null);
+  const runtimeAvailable = !!resolvePluginEditorRuntimeUrl(
+    import.meta.env.VITE_PLUGIN_EDITOR_RUNTIME_URL,
+    location.origin,
+  );
+  const [formatRequest, setFormatRequest] = useState(0);
+  const [editorError, setEditorError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const [searchSelection, setSearchSelection] =
+    useState<PluginProjectSearchMatch | null>(null);
   const [reviewFile, setReviewFile] = useState<keyof IdeFiles | null>(null);
-  const [openFiles, setOpenFiles] = useState<(keyof IdeFiles)[]>(["entry.tsx"]);
   const [visitedFiles, setVisitedFiles] = useState<(keyof IdeFiles)[]>([
     "entry.tsx",
   ]);
@@ -121,6 +182,17 @@ export default function PluginIde({
   const conversation = useRef<HTMLDivElement>(null);
   const locale = useAppLocale();
   const { apiClient } = useAppServices();
+  const extensionClient = useMemo(
+    () =>
+      new PluginEditorExtensionClient(
+        getStudioRuntime().pluginTransport ??
+          createEmbeddedTransport(
+            apiClient,
+            getStudioRuntime().apiBasePath ?? `/v1/studio/${tenantId}`,
+          ),
+      ),
+    [apiClient, tenantId],
+  );
   const [files, setFiles] = useState<IdeFiles>(
     () => initialFiles ?? createPluginProject(),
   );
@@ -128,13 +200,54 @@ export default function PluginIde({
   const draftCallback = useRef(onDraftChange);
   draftCallback.current = onDraftChange;
   const [selected, setSelected] = useState<keyof IdeFiles>("entry.tsx");
+  const originalArchive = files["original-source.json"];
+  const originalFiles = useMemo(
+    () =>
+      originalArchive
+        ? pluginOriginalSourceFilesSchema.parse(JSON.parse(originalArchive))
+        : {},
+    [originalArchive],
+  );
+  const searchableFiles = useMemo(
+    () => ({
+      ...Object.fromEntries(
+        Object.entries(files).filter(
+          ([name]) =>
+            name !== "original-source.json" &&
+            !(originalArchive && name === "entry.tsx"),
+        ),
+      ),
+      ...Object.fromEntries(
+        Object.entries(originalFiles).map(([name, text]) => [
+          `src/${name}`,
+          text,
+        ]),
+      ),
+    }),
+    [files, originalArchive, originalFiles],
+  );
+  const [selectedOriginal, setSelectedOriginal] = useState<string | null>(
+    () =>
+      Object.keys(originalFiles).find((name) =>
+        /(?:^|\/)entry\.(?:tsx|jsx|js)$/.test(name),
+      ) ??
+      Object.keys(originalFiles)[0] ??
+      null,
+  );
+  const [openFiles, setOpenFiles] = useState<string[]>(() => [
+    selectedOriginal ? `src/${selectedOriginal}` : "entry.tsx",
+  ]);
+  const activeFile = selectedOriginal ? `src/${selectedOriginal}` : selected;
+  const [visitedOriginal, setVisitedOriginal] = useState<string[]>(() =>
+    selectedOriginal ? [selectedOriginal] : [],
+  );
   const [prompt, setPrompt] = useState("");
   const [history, setHistory] = useState<ChatMessage[]>(initialHistory ?? []);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [undo, setUndo] = useState<IdeFiles | null>(null);
-  const [busy, setBusy] = useState<"compile" | "publish" | "import" | null>(
-    null,
-  );
+  const [busy, setBusy] = useState<
+    "compile" | "publish" | "activate" | "import" | null
+  >(null);
   const [generating, setGenerating] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
   const [liveUsage, setLiveUsage] = useState<{
@@ -174,16 +287,110 @@ export default function PluginIde({
     version: string;
     snapshot: string;
     destination: "tenant" | "shared";
+    activated: boolean;
   } | null>(null);
   useEffect(() => {
     draftCallback.current?.({
       files,
+      editorExtensions,
+      installedEditorExtensions,
       history: history.slice(-10).map((item) => ({
         role: item.role,
         content: item.content.slice(0, 4000),
       })),
     });
-  }, [files, history]);
+  }, [files, history, editorExtensions, installedEditorExtensions]);
+  const extensionSessionActive = useRef(true);
+  const latestExtensionDraft = useRef<ProjectDraft>({
+    files,
+    editorExtensions,
+    history,
+  });
+  latestExtensionDraft.current = {
+    files,
+    editorExtensions,
+    history: history.slice(-10).map((item) => ({
+      role: item.role,
+      content: item.content.slice(0, 4000),
+    })),
+  };
+  useEffect(() => {
+    extensionSessionActive.current = true;
+    return () => {
+      extensionSessionActive.current = false;
+      extensionRollback.current?.reject(new Error("Editor session ended."));
+    };
+  }, []);
+  async function changeInstalledExtensions(
+    next: ProjectEditorExtensionReference[],
+  ) {
+    if (extensionRollback.current)
+      throw new Error("An extension change is already in progress.");
+    if (!onInstalledExtensionsChange)
+      throw new Error("Project persistence is unavailable.");
+    const previous = installedEditorExtensions;
+    const draft: ProjectDraft = {
+      files,
+      editorExtensions,
+      installedEditorExtensions: next,
+      history: history.slice(-10).map((item) => ({
+        role: item.role,
+        content: item.content.slice(0, 4000),
+      })),
+    };
+    // Set the transition before persistence so concurrent actions cannot replace it.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const applied = new Promise<void>((resolve, reject) => {
+      extensionRollback.current = {
+        previous,
+        next,
+        applied: false,
+        pending: new Set(
+          next
+            .filter(
+              (ref) =>
+                !previous.some(
+                  (old) => old.installationId === ref.installationId,
+                ),
+            )
+            .map((ref) => ref.installationId),
+        ),
+        resolve,
+        reject,
+      };
+      timer = setTimeout(
+        () => reject(new Error("Extension synchronization timed out.")),
+        120000,
+      );
+    });
+    // Avoid an unhandled rejection while the backend save is pending.
+    void applied.catch(() => {});
+    try {
+      await onInstalledExtensionsChange(draft);
+      if (!extensionSessionActive.current)
+        throw new Error("Editor session ended.");
+      setInstalledEditorExtensions(next);
+      setExtensionsStarted(true);
+      await applied;
+    } catch (error) {
+      if (extensionSessionActive.current) {
+        await onInstalledExtensionsChange({
+          ...latestExtensionDraft.current,
+          installedEditorExtensions: previous,
+        });
+        setInstalledEditorExtensions(previous);
+      }
+      throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
+      extensionRollback.current = null;
+    }
+  }
+  function finishExtensionTransition() {
+    const transition = extensionRollback.current;
+    if (transition?.applied && !transition.pending.size) transition.resolve();
+  }
+
   const snapshot = JSON.stringify(files);
   const savedSnapshot = useRef(snapshot);
   const currentSnapshot = useRef(snapshot);
@@ -193,7 +400,7 @@ export default function PluginIde({
   useEffect(() => {
     if (!surface.current) return;
     const update = () =>
-      setWide(surface.current!.getBoundingClientRect().width >= 850);
+      setWide(surface.current!.getBoundingClientRect().width >= 600);
     update();
     const observer = new ResizeObserver(update);
     observer.observe(surface.current);
@@ -203,16 +410,45 @@ export default function PluginIde({
     const element = conversation.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [history, generating, proposal, chatError, streamingMessage, queue]);
-  function openFile(name: keyof IdeFiles) {
-    setSelected(name);
+  function openFile(name: string) {
+    setSearchSelection(null);
+    const sourcePath = name.startsWith("src/") ? name.slice(4) : null;
+    const original =
+      sourcePath !== null && Object.hasOwn(originalFiles, sourcePath);
+    if (!original && !Object.hasOwn(files, name)) return;
+    setSelectedOriginal(original ? sourcePath : null);
+    if (!original) setSelected(name as keyof IdeFiles);
     setOpenFiles((current) =>
       current.includes(name) ? current : [...current, name],
     );
-    setVisitedFiles((current) =>
-      current.includes(name) ? current : [...current, name],
-    );
+    if (original) {
+      setVisitedOriginal((current) =>
+        current.includes(sourcePath!) ? current : [...current, sourcePath!],
+      );
+    } else {
+      const projectFile = name as keyof IdeFiles;
+      setVisitedFiles((current) =>
+        current.includes(projectFile) ? current : [...current, projectFile],
+      );
+    }
     setReviewFile(null);
     setPane("code");
+  }
+  function openSearch() {
+    requestAnimationFrame(() => searchInput.current?.focus());
+    setSidebarView("search");
+    setExplorerOpen(true);
+    if (!wide) setPane("search");
+  }
+  function openSearchMatch(match: PluginProjectSearchMatch) {
+    openFile(match.path);
+    setSearchSelection({ ...match });
+  }
+  function closeFile(name: string) {
+    const next = openFiles.filter((file) => file !== name);
+    if (!next.length) return;
+    setOpenFiles(next);
+    if (activeFile === name) openFile(next.at(-1)!);
   }
 
   useEffect(() => {
@@ -302,6 +538,46 @@ export default function PluginIde({
 
   function replaceFiles(next: IdeFiles) {
     currentPreview.current = null;
+    if (next["original-source.json"] !== files["original-source.json"]) {
+      const names = next["original-source.json"]
+        ? Object.keys(
+            pluginOriginalSourceFilesSchema.parse(
+              JSON.parse(next["original-source.json"]),
+            ),
+          )
+        : [];
+      const entry =
+        names.find((name) => /(?:^|\/)entry\.(?:tsx|jsx|js)$/.test(name)) ??
+        names[0] ??
+        null;
+      setSelectedOriginal((current) =>
+        current && names.includes(current) ? current : entry,
+      );
+      setVisitedOriginal((current) =>
+        Array.from(
+          new Set([
+            ...current.filter((name) => names.includes(name)),
+            ...(entry ? [entry] : []),
+          ]),
+        ),
+      );
+      setOpenFiles((current) => {
+        const retained = current.filter(
+          (name) =>
+            (name.startsWith("src/") && names.includes(name.slice(4))) ||
+            (Object.hasOwn(next, name) &&
+              name !== "original-source.json" &&
+              !(entry && name === "entry.tsx")),
+        );
+        const active =
+          selectedOriginal && names.includes(selectedOriginal)
+            ? `src/${selectedOriginal}`
+            : entry
+              ? `src/${entry}`
+              : selected;
+        return retained.includes(active) ? retained : [...retained, active];
+      });
+    }
     setFiles(next);
     setPreview(null);
     setError("");
@@ -332,7 +608,7 @@ export default function PluginIde({
   }
   async function generate(input = prompt) {
     const requestPrompt = input.trim();
-    if (!requestPrompt || busy) return;
+    if (!requestPrompt || busy || originalArchive) return;
     if (generating) {
       if (enqueuePrompt(requestPrompt) && input === prompt) setPrompt("");
       return;
@@ -354,6 +630,8 @@ export default function PluginIde({
         ? history.slice(0, -1)
         : history);
     const baseFiles = context?.files ?? proposal?.files ?? files;
+    const { "original-source.json": originalSource, ...authoringFiles } =
+      baseFiles;
     setLastPrompt(requestPrompt);
     setChatError("");
     setHistory(
@@ -366,7 +644,9 @@ export default function PluginIde({
     setStreamingMessage("");
     setLiveUsage(null);
     setEstimatedInput(
-      Math.ceil((requestPrompt.length + JSON.stringify(baseFiles).length) / 4),
+      Math.ceil(
+        (requestPrompt.length + JSON.stringify(authoringFiles).length) / 4,
+      ),
     );
     setError("");
     let streamedText = "";
@@ -384,7 +664,7 @@ export default function PluginIde({
             body: JSON.stringify({
               tenantId,
               prompt: requestPrompt,
-              files: baseFiles,
+              files: authoringFiles,
               history: priorHistory.slice(-10).map((item) => ({
                 role: item.role,
                 content: item.content.slice(0, 4000),
@@ -449,7 +729,10 @@ export default function PluginIde({
       if (!active.current || operation.current !== requestId) return;
       if (currentSnapshot.current !== snapshot) throw new Error(t("stale"));
       // Treat the response as data, including when returned by a proxy.
-      const proposedFiles = pluginAuthoringResultSchema.parse(result).files;
+      const proposedFiles = {
+        ...pluginAuthoringResultSchema.parse(result).files,
+        ...(originalSource ? { "original-source.json": originalSource } : {}),
+      };
       setProposal({ message: result.message, files: proposedFiles });
       const nextHistory = [
         ...priorHistory,
@@ -559,7 +842,39 @@ export default function PluginIde({
       if (active.current) setBusy(null);
     }
   }
-  async function publish() {
+  async function installPublished(release: { id: string; version: string }) {
+    await pluginApi(
+      `/extensions/${encodeURIComponent(release.id)}/install`,
+      "POST",
+      { version: release.version },
+    );
+    if (!active.current) return;
+    setPublished((current) =>
+      current?.id === release.id && current.version === release.version
+        ? { ...current, activated: true }
+        : current,
+    );
+  }
+  async function activatePublished() {
+    if (
+      locked ||
+      !published ||
+      published.destination !== "tenant" ||
+      published.activated
+    )
+      return;
+    setBusy("activate");
+    setError("");
+    try {
+      await installPublished(published);
+      if (active.current) await onPublished();
+    } catch (reason) {
+      if (active.current) setError(message(reason));
+    } finally {
+      if (active.current) setBusy(null);
+    }
+  }
+  async function publish(activate = destination === "tenant") {
     if (locked || preview?.state !== "ready" || preview.snapshot !== snapshot)
       return;
     const revision = snapshot;
@@ -594,8 +909,21 @@ export default function PluginIde({
         form,
       );
       if (!active.current) return;
-      setPublished({ ...response.data, snapshot: revision, destination });
-      // Keep the publication receipt even when refreshing the catalog fails.
+      setPublished({
+        ...response.data,
+        snapshot: revision,
+        destination,
+        activated: false,
+      });
+      if (activate && destination === "tenant") {
+        try {
+          await installPublished(response.data);
+        } catch (reason) {
+          if (active.current) setError(message(reason));
+        }
+      }
+      if (!active.current) return;
+      // Keep the publication receipt even when activation or catalog refresh fails.
       await onPublished();
     } catch (reason) {
       if (active.current) setError(message(reason));
@@ -622,7 +950,7 @@ export default function PluginIde({
     if (!file || locked) return;
     setBusy("import");
     try {
-      if (file.size > 512 * 1024) throw new Error(t("tooLarge"));
+      if (file.size > PLUGIN_PROJECT_MAX_BYTES) throw new Error(t("tooLarge"));
       const next = parsePluginProject(await file.text());
       if (!active.current || !window.confirm(t("importConfirm"))) return;
       replaceFiles(next);
@@ -656,7 +984,22 @@ export default function PluginIde({
     preview.snapshot === snapshot &&
     (published?.snapshot !== snapshot || published.destination !== destination);
   return (
-    <section ref={surface} className="plugin-ide" aria-label={t("title")}>
+    <section
+      ref={surface}
+      className="plugin-ide"
+      aria-label={t("title")}
+      onKeyDownCapture={(event) => {
+        if (
+          (event.ctrlKey || event.metaKey) &&
+          event.shiftKey &&
+          event.key.toLowerCase() === "f"
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          openSearch();
+        }
+      }}
+    >
       <header className="plugin-ide-header">
         <div className="plugin-ide-heading">
           <Button
@@ -679,7 +1022,9 @@ export default function PluginIde({
             <span className="plugin-ide-title-full">{t("title")}</span>
             <span className="plugin-ide-title-short">{t("shortTitle")}</span>
           </h2>
-          <span className="plugin-ide-project-name">{projectName}</span>
+          <span className="plugin-ide-project-name" title={projectName}>
+            {projectName}
+          </span>
         </div>
         <div className="plugin-ide-actions">
           <Button
@@ -695,11 +1040,24 @@ export default function PluginIde({
           <Button
             size="sm"
             disabled={!canPublish}
-            aria-label={t(busy === "publish" ? "publishing" : "publish")}
+            aria-label={t(
+              busy === "publish"
+                ? "publishing"
+                : destination === "tenant"
+                  ? "publishAndActivate"
+                  : "publish",
+            )}
+            title={!canPublish ? t("previewBeforePublish") : undefined}
             onClick={() => void publish()}
           >
             <Upload aria-hidden="true" />
-            {t(busy === "publish" ? "publishing" : "publishShort")}
+            {t(
+              busy === "publish"
+                ? "publishing"
+                : destination === "tenant"
+                  ? "publishAndActivateShort"
+                  : "publishShort",
+            )}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -713,6 +1071,26 @@ export default function PluginIde({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <a
+                  href={`#/studio?tenantId=${tenantId}&view=admin&tab=extensions&help=vscode`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Code2 aria-hidden="true" />
+                  {vscodeT("title")}
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {destination === "tenant" && (
+                <DropdownMenuItem
+                  disabled={!canPublish}
+                  onSelect={() => void publish(false)}
+                >
+                  <Upload aria-hidden="true" />
+                  {t("publishOnly")}
+                </DropdownMenuItem>
+              )}
               {preview && (
                 <DropdownMenuItem
                   onSelect={() => {
@@ -766,13 +1144,44 @@ export default function PluginIde({
       <nav className="plugin-ide-navigation" aria-label={t("workspaceViews")}>
         <button
           type="button"
-          aria-pressed={wide ? explorerOpen : pane === "files"}
-          onClick={() =>
-            wide ? setExplorerOpen(!explorerOpen) : setPane("files")
+          aria-pressed={
+            wide ? explorerOpen && sidebarView === "files" : pane === "files"
           }
+          onClick={() => {
+            setSidebarView("files");
+            if (wide) setExplorerOpen(sidebarView !== "files" || !explorerOpen);
+            else setPane("files");
+          }}
         >
           <Files />
           {t("files")}
+        </button>
+        <button
+          type="button"
+          title={t("searchShortcut")}
+          aria-pressed={
+            wide ? explorerOpen && sidebarView === "search" : pane === "search"
+          }
+          onClick={openSearch}
+        >
+          <Search />
+          {t("search")}
+        </button>
+        <button
+          type="button"
+          aria-pressed={
+            wide
+              ? explorerOpen && sidebarView === "extensions"
+              : pane === "extensions"
+          }
+          onClick={() => {
+            setSidebarView("extensions");
+            setExplorerOpen(true);
+            if (!wide) setPane("extensions");
+          }}
+        >
+          <Blocks />
+          {t("editorExtensions")}
         </button>
         <button
           type="button"
@@ -815,32 +1224,110 @@ export default function PluginIde({
             {t(
               published.destination === "shared"
                 ? "sharedPublished"
-                : "published",
+                : published.activated
+                  ? "publishedActive"
+                  : "published",
             )}
             : {published.id} · {published.version}. {t("versionHint")}
           </span>
+          {published.destination === "tenant" && !published.activated && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={locked}
+              onClick={() => void activatePublished()}
+            >
+              {t(busy === "activate" ? "activating" : "activateVersion")}
+            </Button>
+          )}
         </div>
       )}
       <div className="plugin-ide-workbench">
-        <Allotment defaultSizes={[190, 640, 320]}>
+        <Allotment defaultSizes={[220, 640, 300]}>
           <Allotment.Pane
-            preferredSize={190}
-            minSize={wide ? 150 : 0}
-            maxSize={wide ? 300 : Infinity}
-            visible={wide ? explorerOpen : pane === "files"}
+            preferredSize={220}
+            minSize={wide ? 160 : 0}
+            maxSize={wide ? 360 : Infinity}
+            visible={
+              wide
+                ? explorerOpen
+                : pane === "files" || pane === "search" || pane === "extensions"
+            }
           >
-            <aside className="plugin-ide-explorer" aria-label={t("files")}>
-              <h3 className="plugin-ide-panel-title">{t("explorer")}</h3>
-              <PluginFileTree
-                names={Object.keys(files) as (keyof IdeFiles)[]}
-                selected={selected}
-                projectName={projectName}
-                label={t("files")}
-                onSelect={openFile}
-              />
-              <p className="plugin-ide-explorer-hint">
-                {t("projectFilesHint")}
-              </p>
+            <aside
+              className="plugin-ide-explorer"
+              aria-label={t(
+                sidebarView === "extensions"
+                  ? "editorExtensions"
+                  : sidebarView === "search"
+                    ? "search"
+                    : "files",
+              )}
+            >
+              {sidebarView === "extensions" ? (
+                <PluginEditorExtensionsPanel
+                  client={extensionClient}
+                  runtimeAvailable={runtimeAvailable}
+                  installedReferences={installedEditorExtensions}
+                  onInstalledChange={(next) => changeInstalledExtensions(next)}
+                  activationErrors={activationErrors}
+                  enabled={editorExtensions}
+                  disabled={locked}
+                  error={editorError}
+                  onChange={(next) => {
+                    setEditorExtensions(next);
+                    if (next.length) setExtensionsStarted(true);
+                  }}
+                />
+              ) : sidebarView === "search" ? (
+                <PluginProjectSearchPanel
+                  inputRef={searchInput}
+                  files={searchableFiles}
+                  query={searchQuery}
+                  onQueryChange={setSearchQuery}
+                  onSelect={openSearchMatch}
+                  labels={{
+                    search: t("searchCode"),
+                    placeholder: t("searchPlaceholder"),
+                    noResults: t("searchNoResults"),
+                    resultCount: (count) => t("searchResultCount", { count }),
+                    truncated: t("searchTruncated"),
+                  }}
+                />
+              ) : (
+                <>
+                  <h3 className="plugin-ide-panel-title">{t("explorer")}</h3>
+                  <input
+                    type="search"
+                    className="plugin-ide-file-filter"
+                    aria-label={t("filterFiles")}
+                    placeholder={t("filterFiles")}
+                    value={fileFilter}
+                    onChange={(event) => setFileFilter(event.target.value)}
+                  />
+                  <PluginFileTree
+                    names={[
+                      ...Object.keys(files).filter(
+                        (name) =>
+                          name !== "original-source.json" &&
+                          !(originalArchive && name === "entry.tsx"),
+                      ),
+                      ...Object.keys(originalFiles).map(
+                        (name) => `src/${name}`,
+                      ),
+                    ].filter((name) =>
+                      name
+                        .toLowerCase()
+                        .includes(fileFilter.trim().toLowerCase()),
+                    )}
+                    selected={activeFile}
+                    projectName={projectName}
+                    label={t("files")}
+                    onSelect={openFile}
+                    filterActive={!!fileFilter.trim()}
+                  />
+                </>
+              )}
             </aside>
           </Allotment.Pane>
           <Allotment.Pane
@@ -885,38 +1372,34 @@ export default function PluginIde({
                     role="presentation"
                     className="plugin-ide-editor-tab"
                     data-active={
-                      pane !== "preview" && selected === name && !reviewFile
+                      pane !== "preview" && activeFile === name && !reviewFile
                     }
                     key={name}
                   >
                     <button
                       role="tab"
+                      aria-label={name}
+                      title={name}
                       id={`${panelId}-${name}`}
                       aria-controls={`${panelId}-code`}
                       tabIndex={
-                        pane !== "preview" && selected === name && !reviewFile
+                        pane !== "preview" && activeFile === name && !reviewFile
                           ? 0
                           : -1
                       }
                       aria-selected={
-                        pane !== "preview" && selected === name && !reviewFile
+                        pane !== "preview" && activeFile === name && !reviewFile
                       }
                       onClick={() => openFile(name)}
                     >
                       <FileCode2 />
-                      {name}
+                      {name.split("/").at(-1)}
                     </button>
                     {openFiles.length > 1 && (
                       <button
                         className="plugin-ide-close-tab"
                         aria-label={`${t("closeFile")} ${name}`}
-                        onClick={() => {
-                          const next = openFiles.filter(
-                            (file) => file !== name,
-                          );
-                          setOpenFiles(next);
-                          if (selected === name) openFile(next[0]);
-                        }}
+                        onClick={() => closeFile(name)}
                       >
                         <X />
                       </button>
@@ -952,7 +1435,11 @@ export default function PluginIde({
               <section
                 id={`${panelId}-code`}
                 role="tabpanel"
-                aria-labelledby={`${panelId}-${reviewFile ? "review" : selected}`}
+                aria-labelledby={
+                  selectedOriginal
+                    ? `${panelId}-src/${selectedOriginal}`
+                    : `${panelId}-${reviewFile ? "review" : selected}`
+                }
                 className="plugin-ide-code"
                 hidden={pane === "preview"}
                 aria-label={t("codeTab")}
@@ -960,60 +1447,251 @@ export default function PluginIde({
                 <div className="plugin-ide-breadcrumb">
                   <span>{projectName}</span>
                   <span>/</span>
-                  <span>{reviewFile ?? selected}</span>
+                  <span title={selectedOriginal ?? reviewFile ?? selected}>
+                    {selectedOriginal ?? reviewFile ?? selected}
+                  </span>
+                  {(editorExtensions.includes("savia.formatter") ||
+                    installedEditorExtensions.length > 0) && (
+                    <button
+                      type="button"
+                      disabled={locked}
+                      onClick={() => setFormatRequest((value) => value + 1)}
+                    >
+                      {t("formatDocument")}
+                    </button>
+                  )}
+                  {selectedOriginal && <span>{t("originalSource")}</span>}
                   {reviewFile && <span>{t("proposed")}</span>}
                 </div>
                 <div className="plugin-ide-editors">
-                  {visitedFiles.map((name) => (
-                    <div
-                      className="plugin-ide-editor-document"
-                      key={name}
-                      hidden={selected !== name || !!reviewFile}
-                    >
-                      <MonacoCodeEditor
-                        value={files[name]}
-                        onChange={(value) => {
-                          setUndo(null);
-                          replaceFiles({ ...files, [name]: value });
-                        }}
-                        language={name === "entry.tsx" ? "typescript" : "json"}
-                        ariaLabel={name}
-                        inlineCompletion={
-                          name === "entry.tsx"
-                            ? {
-                                filename: "entry.tsx",
-                                fetchCompletion: async (prefix, suffix) => {
-                                  try {
-                                    const result = await apiClient.post<{
-                                      completion: string;
-                                    }>("/api/assistant/plugin-completion", {
-                                      tenantId,
-                                      filename: "entry.tsx",
-                                      prefix,
-                                      suffix,
-                                    });
-                                    return result.completion?.trim()
-                                      ? result.completion
-                                      : null;
-                                  } catch {
-                                    // Inline completions are best-effort.
-                                    return null;
-                                  }
-                                },
-                              }
-                            : undefined
+                  {extensionsStarted && (
+                    <PluginVscodeEditor
+                      projectId={projectId}
+                      installedExtensions={installedEditorExtensions}
+                      loadInstalledExtension={async (reference) => {
+                        const installations = await extensionClient.list();
+                        const installation = installations.find(
+                          (item) =>
+                            item.installationId === reference.installationId &&
+                            item.sha256 === reference.sha256,
+                        );
+                        if (!installation)
+                          throw new Error(
+                            "Installed extension is unavailable.",
+                          );
+                        const bytes = await extensionClient.downloadPackage(
+                          reference.installationId,
+                        );
+                        return { installation, bytes };
+                      }}
+                      onExtensionStatus={(id, error) => {
+                        setActivationErrors((current) => {
+                          const next = { ...current };
+                          if (error) next[id] = error;
+                          else delete next[id];
+                          return next;
+                        });
+                        const transition = extensionRollback.current;
+                        if (transition?.pending.has(id)) {
+                          transition.pending.delete(id);
+                          if (error) transition.reject(new Error(error));
+                          else finishExtensionTransition();
                         }
-                        readOnly={locked}
-                        contextDeclarations={pluginIdeDeclarations}
-                        height={520}
-                      />
-                    </div>
-                  ))}
+                      }}
+                      onExtensionsApplied={(references, error) => {
+                        const transition = extensionRollback.current;
+                        if (
+                          !transition ||
+                          JSON.stringify(references) !==
+                            JSON.stringify(transition.next)
+                        )
+                          return;
+                        if (error) transition.reject(new Error(error));
+                        else {
+                          transition.applied = true;
+                          finishExtensionTransition();
+                        }
+                      }}
+                      files={Object.fromEntries(
+                        Object.entries(searchableFiles).filter(
+                          ([name]) =>
+                            !/\.(?:png|webp|jpg|jpeg|gif|b64|base64)$/i.test(
+                              name,
+                            ),
+                        ),
+                      )}
+                      activeFile={activeFile}
+                      formatRequest={formatRequest}
+                      extensions={editorExtensions}
+                      hidden={!!reviewFile}
+                      readOnly={
+                        locked ||
+                        !!reviewFile ||
+                        (!!originalArchive && activeFile === "entry.tsx") ||
+                        /\.(?:png|webp)$/.test(activeFile)
+                      }
+                      selection={
+                        searchSelection?.path === activeFile
+                          ? searchSelection
+                          : undefined
+                      }
+                      onSearch={openSearch}
+                      onError={setEditorError}
+                      fetchCompletion={async (prefix, suffix) => {
+                        try {
+                          const result = await apiClient.post<{
+                            completion: string;
+                          }>("/api/assistant/plugin-completion", {
+                            tenantId,
+                            filename: "entry.tsx",
+                            prefix,
+                            suffix,
+                          });
+                          return result.completion?.trim()
+                            ? result.completion
+                            : null;
+                        } catch {
+                          return null;
+                        }
+                      }}
+                      onChange={(path, value) => {
+                        setUndo(null);
+                        if (path.startsWith("src/") && originalArchive) {
+                          replaceFiles({
+                            ...files,
+                            "original-source.json": JSON.stringify({
+                              ...originalFiles,
+                              [path.slice(4)]: value,
+                            }),
+                          });
+                        } else if (Object.hasOwn(files, path)) {
+                          replaceFiles({ ...files, [path]: value });
+                        }
+                      }}
+                    />
+                  )}
+                  {!extensionsStarted && (
+                    <>
+                      {visitedFiles
+                        .filter(
+                          (name) => !originalArchive || name !== "entry.tsx",
+                        )
+                        .map((name) => (
+                          <div
+                            className="plugin-ide-editor-document"
+                            key={name}
+                            hidden={
+                              selected !== name ||
+                              !!reviewFile ||
+                              !!selectedOriginal
+                            }
+                          >
+                            <MonacoCodeEditor
+                              value={files[name] ?? ""}
+                              onChange={(value) => {
+                                setUndo(null);
+                                replaceFiles({ ...files, [name]: value });
+                              }}
+                              language={
+                                name === "entry.tsx" ? "typescript" : "json"
+                              }
+                              ariaLabel={name}
+                              selection={
+                                searchSelection?.path === name
+                                  ? searchSelection
+                                  : undefined
+                              }
+                              inlineCompletion={
+                                name === "entry.tsx"
+                                  ? {
+                                      filename: "entry.tsx",
+                                      fetchCompletion: async (
+                                        prefix,
+                                        suffix,
+                                      ) => {
+                                        try {
+                                          const result = await apiClient.post<{
+                                            completion: string;
+                                          }>(
+                                            "/api/assistant/plugin-completion",
+                                            {
+                                              tenantId,
+                                              filename: "entry.tsx",
+                                              prefix,
+                                              suffix,
+                                            },
+                                          );
+                                          return result.completion?.trim()
+                                            ? result.completion
+                                            : null;
+                                        } catch {
+                                          // Inline completions are best-effort.
+                                          return null;
+                                        }
+                                      },
+                                    }
+                                  : undefined
+                              }
+                              readOnly={
+                                locked ||
+                                (!!originalArchive && name === "entry.tsx")
+                              }
+                              contextDeclarations={pluginIdeDeclarations}
+                              height={520}
+                            />
+                          </div>
+                        ))}
+                      {visitedOriginal
+                        .filter((name) => Object.hasOwn(originalFiles, name))
+                        .map((name) => (
+                          <div
+                            key={name}
+                            className="plugin-ide-editor-document"
+                            hidden={name !== selectedOriginal || !!reviewFile}
+                          >
+                            <MonacoCodeEditor
+                              value={originalFiles[name] ?? ""}
+                              onChange={(value) => {
+                                setUndo(null);
+                                replaceFiles({
+                                  ...files,
+                                  "original-source.json": JSON.stringify({
+                                    ...originalFiles,
+                                    [name]: value,
+                                  }),
+                                });
+                              }}
+                              language={
+                                name.endsWith(".css")
+                                  ? "css"
+                                  : name.endsWith(".json")
+                                    ? "json"
+                                    : name.endsWith(".svg")
+                                      ? "html"
+                                      : /\.(?:js|jsx)$/.test(name)
+                                        ? "javascript"
+                                        : "typescript"
+                              }
+                              ariaLabel={name}
+                              selection={
+                                searchSelection?.path === `src/${name}`
+                                  ? searchSelection
+                                  : undefined
+                              }
+                              readOnly={locked || /\.(?:png|webp)$/.test(name)}
+                              contextDeclarations={pluginIdeDeclarations}
+                              semanticValidation={false}
+                              height={520}
+                            />
+                          </div>
+                        ))}
+                    </>
+                  )}
                   {reviewFile && proposal && (
                     <PluginDiffEditor
                       key={reviewFile}
-                      original={files[reviewFile]}
-                      modified={proposal.files[reviewFile]}
+                      original={files[reviewFile] ?? ""}
+                      modified={proposal.files[reviewFile] ?? ""}
                       filename={reviewFile}
                       originalLabel={t("currentCode")}
                       modifiedLabel={t("proposedCode")}
@@ -1098,23 +1776,27 @@ export default function PluginIde({
                 {!history.length && (
                   <div className="plugin-ide-chat-welcome">
                     <h4>{t("welcome")}</h4>
-                    <p>{t("welcomeHint")}</p>
-                    <div className="plugin-ide-suggestions">
-                      {["suggestTasks", "suggestDashboard"].map((key) => (
-                        <button
-                          key={key}
-                          onClick={() => {
-                            setPrompt(t(key as "suggestTasks"));
-                            document
-                              .getElementById("plugin-ide-prompt")
-                              ?.focus();
-                          }}
-                        >
-                          {t(key as "suggestTasks")}
-                          <ArrowUp />
-                        </button>
-                      ))}
-                    </div>
+                    <p>
+                      {t(originalArchive ? "sourceChatHint" : "welcomeHint")}
+                    </p>
+                    {!originalArchive && (
+                      <div className="plugin-ide-suggestions">
+                        {["suggestTasks", "suggestDashboard"].map((key) => (
+                          <button
+                            key={key}
+                            onClick={() => {
+                              setPrompt(t(key as "suggestTasks"));
+                              document
+                                .getElementById("plugin-ide-prompt")
+                                ?.focus();
+                            }}
+                          >
+                            {t(key as "suggestTasks")}
+                            <ArrowUp />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 {history.map((item, index) => (
@@ -1229,6 +1911,7 @@ export default function PluginIde({
                         key={name}
                         onClick={() => {
                           setReviewFile(name);
+                          setSelectedOriginal(null);
                           setPane("code");
                         }}
                       >
@@ -1280,7 +1963,7 @@ export default function PluginIde({
                     value={prompt}
                     maxLength={8000}
                     rows={3}
-                    disabled={!!busy}
+                    disabled={!!busy || !!originalArchive}
                     placeholder={
                       generating ? t("queuePlaceholder") : t("placeholder")
                     }
@@ -1324,7 +2007,7 @@ export default function PluginIde({
                     <Button
                       type="submit"
                       size="icon"
-                      disabled={!!busy || !prompt.trim()}
+                      disabled={!!busy || !!originalArchive || !prompt.trim()}
                       aria-label={generating ? t("queueSend") : t("send")}
                       title={generating ? t("queueSend") : undefined}
                     >
@@ -1341,7 +2024,17 @@ export default function PluginIde({
       <footer className="plugin-ide-statusbar">
         <span role="status">{saveStatus ?? t("draft")}</span>
         <span>
-          {t(selected === "entry.tsx" ? "typescriptLanguage" : "jsonLanguage")}
+          {(selectedOriginal ?? selected).endsWith(".json")
+            ? t("jsonLanguage")
+            : (selectedOriginal ?? selected).endsWith(".css")
+              ? t("cssLanguage")
+              : (selectedOriginal ?? selected).endsWith(".svg")
+                ? t("svgLanguage")
+                : /\.(?:js|jsx)$/.test(selectedOriginal ?? selected)
+                  ? t("javascriptLanguage")
+                  : (selectedOriginal ?? selected).endsWith(".ts")
+                    ? t("typescriptSourceLanguage")
+                    : t("typescriptLanguage")}
         </span>
         {undo && (
           <button

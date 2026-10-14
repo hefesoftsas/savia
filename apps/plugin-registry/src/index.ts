@@ -24,12 +24,44 @@ type Release = {
   sizeBytes: number;
   createdAt: string;
 };
+type OwnershipClaim = {
+  ownerTokenSha256: string;
+  semanticSha256: string;
+};
+class OwnershipUnknownError extends Error {}
 
 const app = new Hono<AppEnv>();
 const idPattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const namespacePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/;
 const noStore = "private, no-store, max-age=0";
+
+function ownershipClaimKey(namespace: string, id: string, version: string) {
+  return `.__registry_claims/${namespace}/${id}/${version}.json`;
+}
+
+function parseOwnershipClaim(value: string): OwnershipClaim | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !("ownerTokenSha256" in parsed) ||
+      typeof parsed.ownerTokenSha256 !== "string" ||
+      !/^[a-f0-9]{64}$/i.test(parsed.ownerTokenSha256) ||
+      !("semanticSha256" in parsed) ||
+      typeof parsed.semanticSha256 !== "string" ||
+      !/^[a-f0-9]{64}$/i.test(parsed.semanticSha256)
+    )
+      return null;
+    return {
+      ownerTokenSha256: parsed.ownerTokenSha256.toLowerCase(),
+      semanticSha256: parsed.semanticSha256.toLowerCase(),
+    };
+  } catch {
+    return null;
+  }
+}
 
 function jsonError(status: number, code: string, message: string): Response {
   return Response.json(
@@ -125,6 +157,106 @@ async function semanticSha256(
   return sha256Hex(semantic);
 }
 
+async function semanticSha256ForExisting(
+  bucket: R2Bucket,
+  key: string,
+  id: string,
+  version: string,
+  object: R2Object,
+): Promise<string> {
+  const stored = object.customMetadata?.semanticSha256;
+  if (stored && /^[a-f0-9]{64}$/i.test(stored)) return stored.toLowerCase();
+  const body = await bucket.get(key);
+  if (!body || body.size > PLUGIN_STORE_MAX_ZIP_BYTES)
+    throw new Error("The registry package cannot be verified.");
+  const parsed = await parsePluginStoreZip(
+    new Uint8Array(await body.arrayBuffer()),
+  );
+  if (parsed.manifest.id !== id || parsed.manifest.version !== version)
+    throw new Error("The registry package metadata does not match its path.");
+  return semanticSha256(parsed);
+}
+
+async function ensureOwnershipClaim(
+  bucket: R2Bucket,
+  namespace: string,
+  id: string,
+  version: string,
+  ownerTokenSha256: string,
+  semanticHash: string,
+): Promise<OwnershipClaim> {
+  const claimKey = ownershipClaimKey(namespace, id, version);
+  const releaseKey = `${namespace}/${id}/${version}.zip`;
+  const readClaim = async (): Promise<OwnershipClaim | null> => {
+    const object = await bucket.get(claimKey);
+    if (!object) return null;
+    if (object.size > 1024) throw new Error("The version claim is invalid.");
+    const claim = parseOwnershipClaim(await object.text());
+    if (!claim) throw new Error("The version claim is invalid.");
+    return claim;
+  };
+
+  let claim = await readClaim();
+  if (!claim) {
+    let claimOwner = ownerTokenSha256;
+    let claimSemantic = semanticHash;
+    const existing = await bucket.head(releaseKey);
+    if (existing) {
+      const release = releaseFromMetadata(existing);
+      if (!release || release.id !== id || release.version !== version)
+        throw new Error("The registry release metadata is invalid.");
+      const existingOwner = existing.customMetadata?.publisherTokenSha256;
+      if (!existingOwner || !/^[a-f0-9]{64}$/i.test(existingOwner))
+        throw new OwnershipUnknownError(
+          "The existing release has no verifiable publisher.",
+        );
+      claimOwner = existingOwner;
+      claimSemantic = await semanticSha256ForExisting(
+        bucket,
+        releaseKey,
+        id,
+        version,
+        existing,
+      );
+    }
+    const proposed: OwnershipClaim = {
+      ownerTokenSha256: claimOwner.toLowerCase(),
+      semanticSha256: claimSemantic.toLowerCase(),
+    };
+    try {
+      const created = await bucket.put(claimKey, JSON.stringify(proposed), {
+        onlyIf: { etagDoesNotMatch: "*" },
+      });
+      if (created) claim = proposed;
+    } catch {
+      // Another request may have created the immutable claim first.
+    }
+    claim ??= await readClaim();
+  }
+  if (!claim) throw new Error("The version claim could not be stored.");
+  return claim;
+}
+
+function checkOwnershipClaim(
+  claim: OwnershipClaim,
+  ownerTokenSha256: string,
+  semanticHash: string,
+): Response | null {
+  if (!secureEqual(claim.ownerTokenSha256, ownerTokenSha256))
+    return jsonError(
+      403,
+      "FORBIDDEN",
+      "Only the publisher can use this plugin version.",
+    );
+  if (!secureEqual(claim.semanticSha256, semanticHash))
+    return jsonError(
+      409,
+      "IMMUTABLE_VERSION",
+      "This plugin version already contains different content.",
+    );
+  return null;
+}
+
 async function authenticate(
   c: Context<AppEnv>,
   next: () => Promise<void>,
@@ -146,7 +278,8 @@ async function authenticate(
   );
   if (!credential)
     return jsonError(401, "UNAUTHORIZED", "A valid bearer token is required.");
-  const permission: Permission = c.req.method === "PUT" ? "publish" : "read";
+  const permission: Permission =
+    c.req.method === "PUT" || c.req.method === "DELETE" ? "publish" : "read";
   if (!credential.permissions.includes(permission))
     return jsonError(
       403,
@@ -365,6 +498,35 @@ app.put("/v1/plugins/:id/:version", async (c) => {
   const key = `${namespace}/${id}/${version}.zip`;
   const sha256 = parsed.sha256;
   const semanticHash = await semanticSha256(parsed);
+  let claim: OwnershipClaim;
+  try {
+    claim = await ensureOwnershipClaim(
+      c.env.PLUGIN_REGISTRY,
+      namespace,
+      id,
+      version,
+      c.get("publisherTokenSha256"),
+      semanticHash,
+    );
+  } catch (reason) {
+    if (reason instanceof OwnershipUnknownError)
+      return jsonError(
+        403,
+        "FORBIDDEN",
+        "A release without verified publisher ownership cannot be republished.",
+      );
+    return jsonError(
+      503,
+      "REGISTRY_UNAVAILABLE",
+      "The registry is temporarily unavailable.",
+    );
+  }
+  const claimError = checkOwnershipClaim(
+    claim,
+    c.get("publisherTokenSha256"),
+    semanticHash,
+  );
+  if (claimError) return claimError;
   const createdAt = new Date().toISOString();
   const metadata = {
     id,
@@ -480,6 +642,90 @@ app.get("/v1/plugins/:id/:version", async (c) => {
       },
     });
   } catch {
+    return jsonError(
+      503,
+      "REGISTRY_UNAVAILABLE",
+      "The registry is temporarily unavailable.",
+    );
+  }
+});
+
+app.delete("/v1/plugins/:id/:version", async (c) => {
+  const id = c.req.param("id");
+  const version = c.req.param("version");
+  if (
+    !idPattern.test(id) ||
+    id.length > 100 ||
+    !versionPattern.test(version) ||
+    version.length > 30
+  )
+    return jsonError(
+      400,
+      "INVALID_RELEASE",
+      "The plugin ID or version is invalid.",
+    );
+
+  const key = `${c.get("namespace")}/${id}/${version}.zip`;
+  try {
+    const object = await c.env.PLUGIN_REGISTRY.head(key);
+    if (!object)
+      return jsonError(
+        404,
+        "RELEASE_NOT_FOUND",
+        "The plugin release was not found.",
+      );
+    const release = releaseFromMetadata(object);
+    if (!release || release.id !== id || release.version !== version)
+      return jsonError(
+        503,
+        "REGISTRY_UNAVAILABLE",
+        "The registry release metadata is invalid.",
+      );
+    const owner = object.customMetadata?.publisherTokenSha256;
+    if (!owner || !secureEqual(owner, c.get("publisherTokenSha256")))
+      return jsonError(
+        403,
+        "FORBIDDEN",
+        "Only the publisher can delete this release.",
+      );
+    const semanticHash = await semanticSha256ForExisting(
+      c.env.PLUGIN_REGISTRY,
+      key,
+      id,
+      version,
+      object,
+    );
+    const claim = await ensureOwnershipClaim(
+      c.env.PLUGIN_REGISTRY,
+      c.get("namespace"),
+      id,
+      version,
+      c.get("publisherTokenSha256"),
+      semanticHash,
+    );
+    const claimError = checkOwnershipClaim(
+      claim,
+      c.get("publisherTokenSha256"),
+      semanticHash,
+    );
+    if (claimError) return claimError;
+    await c.env.PLUGIN_REGISTRY.delete(key);
+    return Response.json(
+      { data: { id, version, deleted: true } },
+      {
+        headers: {
+          "cache-control": noStore,
+          "x-content-type-options": "nosniff",
+        },
+      },
+    );
+  } catch (reason) {
+    if (reason instanceof OwnershipUnknownError)
+      return jsonError(
+        403,
+        "FORBIDDEN",
+        "A release without verified publisher ownership cannot be deleted.",
+      );
     return jsonError(
       503,
       "REGISTRY_UNAVAILABLE",

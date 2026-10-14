@@ -1,0 +1,727 @@
+import { NonRetryableError } from "cloudflare:workflows";
+import type {
+  ParameterValue as ApiParameterValue,
+  Node,
+  ObjectReference,
+  Schema,
+} from "@savia/flows-types";
+
+import type { RuntimeValue } from "./execution-types";
+import {
+  isObjectReference,
+  type AudioParameter as NodeAudioParameter,
+  type BlobParameter as NodeBlobParameter,
+  type DocumentParameter as NodeDocumentParameter,
+  type GltfParameter as NodeGltfParameter,
+  type ImageParameter as NodeImageParameter,
+  type ParameterValue as NodeParameterValue,
+  type VideoParameter as NodeVideoParameter,
+} from "./node-types";
+import type { ObjectStore } from "./object-store";
+import type { SchemaService } from "./schema-service";
+
+/**
+ * Optional context for parameter converters that need access to services
+ * beyond the ObjectStore (e.g. schema resolution).
+ */
+export interface ParameterMapperContext {
+  schemaService?: SchemaService;
+  organizationId?: string;
+}
+
+function isSchemaObject(value: unknown): value is Schema {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "name" in value &&
+    "fields" in value &&
+    Array.isArray((value as Schema).fields)
+  );
+}
+
+/**
+ * Type guard for native BlobParameter (Uint8Array only).
+ * Used for parameter mapping where we work with in-memory data.
+ */
+function isNativeBlobParameter(value: unknown): value is NodeBlobParameter {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "data" in value &&
+    "mimeType" in value &&
+    value.data instanceof Uint8Array &&
+    typeof value.mimeType === "string"
+  );
+}
+
+// Alias type guards - all semantic blob types have the same structure
+const isImageParameter = isNativeBlobParameter as (
+  value: unknown,
+) => value is NodeImageParameter;
+const isDocumentParameter = isNativeBlobParameter as (
+  value: unknown,
+) => value is NodeDocumentParameter;
+const isAudioParameter = isNativeBlobParameter as (
+  value: unknown,
+) => value is NodeAudioParameter;
+const isGltfParameter = isNativeBlobParameter as (
+  value: unknown,
+) => value is NodeGltfParameter;
+const isVideoParameter = isNativeBlobParameter as (
+  value: unknown,
+) => value is NodeVideoParameter;
+
+// Helper functions for common converter patterns
+const createJsonParsingNodeToApi = () => (value: NodeParameterValue) =>
+  value as ApiParameterValue;
+const createJsonParsingApiToNode = () => (value: ApiParameterValue) => {
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value) as NodeParameterValue;
+    } catch (_error) {
+      return value as NodeParameterValue;
+    }
+  }
+  return value as NodeParameterValue;
+};
+
+const typeValidatingNodeToApi =
+  (expectedType: string) => (value: NodeParameterValue) =>
+    typeof value === expectedType ? value : undefined;
+const typeValidatingApiToNode =
+  (expectedType: string) => (value: ApiParameterValue) =>
+    typeof value === expectedType ? value : undefined;
+
+// Factory functions for blob-like converters (blob, image, document, audio, gltf)
+// All blob types share identical read/write logic; only the type guard differs.
+function createBlobNodeToApi(
+  typeGuard: (value: unknown) => value is NodeBlobParameter,
+) {
+  return async (
+    value: NodeParameterValue,
+    objectStore?: ObjectStore,
+    organizationId?: string,
+    executionId?: string,
+  ) => {
+    if (!typeGuard(value)) return undefined;
+    if (!objectStore || !organizationId) {
+      throw new Error("ObjectStore and organizationId required for blob type");
+    }
+    // Written straight through. This used to round-trip the bytes via a Blob
+    // to reach `arrayBuffer()`, which copied the payload twice for nothing:
+    // the type guard above has already established that `data` is a
+    // Uint8Array and `mimeType` a string, so there was nothing left to
+    // normalise but the casing the Blob applied. On a generated video that
+    // round trip tripled peak memory against a 128MB isolate, and it is what
+    // held the gateway node's download ceiling down.
+    return await objectStore.writeObject(
+      value.data,
+      value.mimeType.toLowerCase(),
+      organizationId,
+      executionId,
+      value.filename,
+    );
+  };
+}
+
+function assertObjectTenant(
+  metadata: Record<string, string> | undefined,
+  context?: ParameterMapperContext,
+) {
+  if (
+    context?.organizationId &&
+    metadata?.organizationId !== context.organizationId
+  ) {
+    throw new Error("Object not found or access denied.");
+  }
+}
+
+function createBlobApiToNode() {
+  return async (
+    value: ApiParameterValue,
+    objectStore?: ObjectStore,
+    context?: ParameterMapperContext,
+  ) => {
+    if (
+      !value ||
+      typeof value !== "object" ||
+      !("id" in value) ||
+      !("mimeType" in value)
+    )
+      return undefined;
+    if (!objectStore) {
+      throw new Error("ObjectStore required for blob type");
+    }
+    const result = await objectStore.readObject(value as ObjectReference);
+    if (!result) return undefined;
+    assertObjectTenant(result.metadata, context);
+    const objRef = value as ObjectReference;
+    const param: NodeBlobParameter = {
+      data: result.data,
+      mimeType: objRef.mimeType,
+    };
+    if (objRef.filename) {
+      param.filename = objRef.filename;
+    }
+    return param;
+  };
+}
+
+// Uniform converter interface — all converters share the same signature.
+// Value converters ignore the extra params; blob converters validate them internally.
+interface Converter {
+  nodeToApi: (
+    value: NodeParameterValue,
+    objectStore?: ObjectStore,
+    organizationId?: string,
+    executionId?: string,
+  ) => Promise<ApiParameterValue> | ApiParameterValue;
+  apiToNode: (
+    value: ApiParameterValue,
+    objectStore?: ObjectStore,
+    context?: ParameterMapperContext,
+  ) => Promise<NodeParameterValue> | NodeParameterValue;
+}
+
+// Static mapping of converters
+const converters: Record<string, Converter> = {
+  string: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  date: {
+    nodeToApi: (value: NodeParameterValue) => {
+      if (typeof value === "string") {
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+      }
+      if (value instanceof Date) return value.toISOString();
+      if (typeof value === "number") {
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+      }
+      return undefined;
+    },
+    apiToNode: (value: ApiParameterValue) => {
+      if (typeof value === "string") {
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+      }
+      if (typeof value === "number") {
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+      }
+      return undefined;
+    },
+  },
+  number: {
+    nodeToApi: typeValidatingNodeToApi("number"),
+    apiToNode: typeValidatingApiToNode("number"),
+  },
+  boolean: {
+    nodeToApi: typeValidatingNodeToApi("boolean"),
+    apiToNode: typeValidatingApiToNode("boolean"),
+  },
+  blob: {
+    nodeToApi: createBlobNodeToApi(isNativeBlobParameter),
+    apiToNode: createBlobApiToNode(),
+  },
+  image: {
+    nodeToApi: createBlobNodeToApi(isImageParameter),
+    apiToNode: createBlobApiToNode(),
+  },
+  document: {
+    nodeToApi: createBlobNodeToApi(isDocumentParameter),
+    apiToNode: createBlobApiToNode(),
+  },
+  audio: {
+    nodeToApi: createBlobNodeToApi(isAudioParameter),
+    apiToNode: createBlobApiToNode(),
+  },
+  gltf: {
+    nodeToApi: createBlobNodeToApi(isGltfParameter),
+    apiToNode: createBlobApiToNode(),
+  },
+  buffergeometry: {
+    nodeToApi: createBlobNodeToApi(isNativeBlobParameter),
+    apiToNode: createBlobApiToNode(),
+  },
+  video: {
+    nodeToApi: createBlobNodeToApi(isVideoParameter),
+    apiToNode: createBlobApiToNode(),
+  },
+  json: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  point: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  multipoint: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  linestring: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  multilinestring: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  polygon: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  multipolygon: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  geometry: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  geometrycollection: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  feature: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  featurecollection: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  geojson: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: createJsonParsingApiToNode(),
+  },
+  secret: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  database: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  schema: {
+    nodeToApi: createJsonParsingNodeToApi(),
+    apiToNode: async (
+      value: ApiParameterValue,
+      _objectStore?: ObjectStore,
+      context?: ParameterMapperContext,
+    ) => {
+      // Already a Schema object (e.g. from a wired upstream node output)
+      if (isSchemaObject(value)) {
+        return value as unknown as NodeParameterValue;
+      }
+      // String ID from UI — resolve via SchemaService
+      if (
+        typeof value === "string" &&
+        value &&
+        context?.schemaService &&
+        context?.organizationId
+      ) {
+        const schema = await context.schemaService.resolve(
+          value,
+          context.organizationId,
+        );
+        if (!schema) {
+          throw new Error(`Schema '${value}' not found or access denied.`);
+        }
+        return schema as unknown as NodeParameterValue;
+      }
+      return undefined;
+    },
+  },
+  dataset: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  queue: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  email: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  integration: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  telegram: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  discord: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  whatsapp: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  slack: {
+    nodeToApi: typeValidatingNodeToApi("string"),
+    apiToNode: typeValidatingApiToNode("string"),
+  },
+  any: {
+    nodeToApi: (
+      value: NodeParameterValue,
+      objectStore?: ObjectStore,
+      organizationId?: string,
+      executionId?: string,
+    ): Promise<ApiParameterValue> | ApiParameterValue => {
+      // Handle binary types that need object storage
+      if (
+        isImageParameter(value) ||
+        isDocumentParameter(value) ||
+        isAudioParameter(value) ||
+        isGltfParameter(value) ||
+        isVideoParameter(value)
+      ) {
+        if (!objectStore || !organizationId) {
+          throw new Error(
+            `ObjectStore and organizationId required for binary data`,
+          );
+        }
+        if (isImageParameter(value)) {
+          return converters.image.nodeToApi(
+            value,
+            objectStore,
+            organizationId,
+            executionId,
+          );
+        }
+        if (isDocumentParameter(value)) {
+          return converters.document.nodeToApi(
+            value,
+            objectStore,
+            organizationId,
+            executionId,
+          );
+        }
+        if (isAudioParameter(value)) {
+          return converters.audio.nodeToApi(
+            value,
+            objectStore,
+            organizationId,
+            executionId,
+          );
+        }
+        if (isGltfParameter(value)) {
+          return converters.gltf.nodeToApi(
+            value,
+            objectStore,
+            organizationId,
+            executionId,
+          );
+        }
+        if (isVideoParameter(value)) {
+          return converters.video.nodeToApi(
+            value,
+            objectStore,
+            organizationId,
+            executionId,
+          );
+        }
+      }
+
+      // Handle object references
+      if (isObjectReference(value)) {
+        return value;
+      }
+
+      // Handle simple types (no async needed)
+      return value as ApiParameterValue;
+    },
+    apiToNode: (
+      value: ApiParameterValue,
+      objectStore?: ObjectStore,
+      context?: ParameterMapperContext,
+    ): Promise<NodeParameterValue> | NodeParameterValue => {
+      // Handle object references that need to be resolved
+      if (isObjectReference(value)) {
+        if (!objectStore) {
+          throw new Error(`ObjectStore required to resolve object reference`);
+        }
+
+        return (async () => {
+          const result = await objectStore.readObject(value as ObjectReference);
+          if (!result) return undefined;
+          assertObjectTenant(result.metadata, context);
+
+          const objRef = value as ObjectReference;
+          const mimeType = objRef.mimeType;
+          const baseParam = {
+            data: result.data,
+            mimeType,
+            ...(objRef.filename && { filename: objRef.filename }),
+          };
+          if (mimeType.startsWith("image/")) {
+            return baseParam as NodeImageParameter;
+          }
+          if (mimeType.startsWith("audio/")) {
+            return baseParam as NodeAudioParameter;
+          }
+          if (mimeType.startsWith("video/")) {
+            return baseParam as NodeVideoParameter;
+          }
+          if (mimeType === "model/gltf-binary") {
+            return baseParam as NodeGltfParameter;
+          }
+          return baseParam as NodeDocumentParameter;
+        })();
+      }
+
+      // Handle JSON strings
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value);
+          // Return parsed JSON (objects, arrays, primitives)
+          return parsed;
+        } catch (_error) {
+          return value;
+        }
+      }
+
+      // Handle simple types
+      return value as NodeParameterValue;
+    },
+  },
+};
+
+type ParameterType = keyof typeof converters;
+
+const MAX_BINARY_VALUES_PER_NODE = 32;
+const MAX_BINARY_BYTES_PER_NODE = 8 * 1024 * 1024;
+const MAX_REPEATED_PARAMETER_ELEMENTS = 256;
+const BINARY_PARAMETER_TYPES = new Set([
+  "blob",
+  "image",
+  "document",
+  "audio",
+  "gltf",
+  "video",
+  "any",
+]);
+
+function assertRepeatedParameterSize(
+  name: string,
+  value: unknown,
+  repeated: boolean,
+): void {
+  if (
+    repeated &&
+    Array.isArray(value) &&
+    value.length > MAX_REPEATED_PARAMETER_ELEMENTS
+  ) {
+    throw new NonRetryableError(
+      `Repeated parameter ${name} exceeds the ${MAX_REPEATED_PARAMETER_ELEMENTS}-element limit`,
+    );
+  }
+}
+
+function assertBinaryValueCount(count: number): void {
+  if (count > MAX_BINARY_VALUES_PER_NODE) {
+    throw new NonRetryableError(
+      `Node exceeds the ${MAX_BINARY_VALUES_PER_NODE}-binary-value limit`,
+    );
+  }
+}
+
+function assertAggregateBinaryBytes(bytes: number): void {
+  if (bytes > MAX_BINARY_BYTES_PER_NODE) {
+    throw new NonRetryableError(
+      `Node aggregate binary data exceeds the ${MAX_BINARY_BYTES_PER_NODE}-byte limit`,
+    );
+  }
+}
+
+function isBinaryInputReference(type: string, value: unknown): boolean {
+  return BINARY_PARAMETER_TYPES.has(type) && isObjectReference(value);
+}
+
+/** Preflight all native blob outputs so a limit failure cannot leave partial R2 writes. */
+function preflightBinaryOutputs(
+  node: Node,
+  outputs: Record<string, unknown>,
+): void {
+  let count = 0;
+  let bytes = 0;
+  for (const name in outputs) {
+    if (!Object.hasOwn(outputs, name)) continue;
+    const output = node.outputs.find((item) => item.name === name);
+    const type = output?.type ?? "string";
+    const value = outputs[name];
+    assertRepeatedParameterSize(name, value, output?.repeated ?? false);
+    if (!BINARY_PARAMETER_TYPES.has(type)) continue;
+
+    const values = output?.repeated && Array.isArray(value) ? value : [value];
+    for (const item of values) {
+      if (!isNativeBlobParameter(item)) continue;
+      count++;
+      bytes += item.data.byteLength;
+      assertBinaryValueCount(count);
+      assertAggregateBinaryBytes(bytes);
+    }
+  }
+}
+
+function preflightBinaryInputs(
+  node: Node,
+  inputs: Record<string, RuntimeValue | RuntimeValue[]>,
+): void {
+  let count = 0;
+  for (const name in inputs) {
+    if (!Object.hasOwn(inputs, name)) continue;
+    const input = node.inputs.find((item) => item.name === name);
+    const value = inputs[name];
+    assertRepeatedParameterSize(name, value, input?.repeated ?? false);
+    const type = input?.type ?? "string";
+    if (!BINARY_PARAMETER_TYPES.has(type)) continue;
+    const values = Array.isArray(value) ? value : [value];
+    for (const item of values) {
+      if (!isBinaryInputReference(type, item)) continue;
+      count++;
+      assertBinaryValueCount(count);
+    }
+  }
+}
+
+function resolvedBinaryByteLength(
+  type: string | undefined,
+  value: unknown,
+): number {
+  if (
+    !BINARY_PARAMETER_TYPES.has(type ?? "string") ||
+    !value ||
+    typeof value !== "object" ||
+    !("data" in value)
+  ) {
+    return 0;
+  }
+  const data = (value as { data?: unknown }).data;
+  return data instanceof Uint8Array ? data.byteLength : 0;
+}
+
+export async function nodeToApiParameter(
+  type: ParameterType,
+  value: NodeParameterValue,
+  objectStore?: ObjectStore,
+  organizationId?: string,
+  executionId?: string,
+): Promise<ApiParameterValue> {
+  const converter = converters[type];
+  if (!converter) throw new Error(`No converter for type: ${type}`);
+  return Promise.resolve(
+    converter.nodeToApi(value, objectStore, organizationId, executionId),
+  );
+}
+
+export async function apiToNodeParameter(
+  type: ParameterType,
+  value: ApiParameterValue,
+  objectStore?: ObjectStore,
+  context?: ParameterMapperContext,
+): Promise<NodeParameterValue> {
+  const converter = converters[type];
+  if (!converter) throw new Error(`No converter for type: ${type}`);
+  return Promise.resolve(converter.apiToNode(value, objectStore, context));
+}
+
+/**
+ * Converts a node's emitted outputs from node-native format to API format,
+ * resolving each value against the parameter type declared on the node.
+ *
+ * Only parameters declared `repeated` are mapped element-wise; an array value
+ * on a non-repeated output is a single JSON value and is converted as one.
+ */
+export async function nodeOutputsToApi(
+  node: Node,
+  outputs: Record<string, unknown>,
+  objectStore?: ObjectStore,
+  organizationId?: string,
+  executionId?: string,
+): Promise<Record<string, RuntimeValue | RuntimeValue[]>> {
+  preflightBinaryOutputs(node, outputs);
+  const mapped: Record<string, RuntimeValue | RuntimeValue[]> = {};
+
+  for (const name in outputs) {
+    if (!Object.hasOwn(outputs, name)) continue;
+    const value = outputs[name];
+    const output = node.outputs.find((o) => o.name === name);
+    const convert = (item: unknown) =>
+      nodeToApiParameter(
+        (output?.type ?? "string") as ParameterType,
+        item as NodeParameterValue,
+        objectStore,
+        organizationId,
+        executionId,
+      ) as Promise<RuntimeValue>;
+
+    if (output?.repeated && Array.isArray(value)) {
+      const converted: RuntimeValue[] = [];
+      for (const item of value) converted.push(await convert(item));
+      mapped[name] = converted;
+    } else {
+      mapped[name] = await convert(value);
+    }
+  }
+
+  return mapped;
+}
+
+/**
+ * Converts collected inputs from API format to the node-native format a node's
+ * `execute` expects, resolving each value against its declared parameter type.
+ *
+ * Unlike outputs, any array value is mapped element-wise: input collection has
+ * already folded repeated parameters into arrays.
+ */
+export async function apiInputsToNode(
+  node: Node,
+  inputs: Record<string, RuntimeValue | RuntimeValue[]>,
+  objectStore?: ObjectStore,
+  context?: ParameterMapperContext,
+): Promise<Record<string, unknown>> {
+  preflightBinaryInputs(node, inputs);
+  const resolved: Record<string, unknown> = {};
+
+  let binaryBytes = 0;
+  for (const name in inputs) {
+    if (!Object.hasOwn(inputs, name)) continue;
+    const value = inputs[name];
+    const declaredType = node.inputs.find((i) => i.name === name)?.type;
+    const convert = (item: RuntimeValue) =>
+      apiToNodeParameter(
+        (declaredType ?? "string") as ParameterType,
+        item as ApiParameterValue,
+        objectStore,
+        context,
+      );
+
+    // A repeated parameter arrives as RuntimeValue[]; a `json` parameter can
+    // also be an array, but its elements are converted the same way.
+    if (Array.isArray(value)) {
+      const converted: unknown[] = [];
+      for (const item of value as RuntimeValue[]) {
+        const result = await convert(item);
+        binaryBytes += resolvedBinaryByteLength(declaredType, result);
+        assertAggregateBinaryBytes(binaryBytes);
+        converted.push(result);
+      }
+      resolved[name] = converted;
+    } else {
+      const result = await convert(value);
+      binaryBytes += resolvedBinaryByteLength(declaredType, result);
+      assertAggregateBinaryBytes(binaryBytes);
+      resolved[name] = result;
+    }
+  }
+
+  return resolved;
+}

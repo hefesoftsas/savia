@@ -1,3 +1,5 @@
+import type { RequestCachePolicy } from "./request-cache";
+
 export interface Variable {
   key: string;
   value: string;
@@ -16,6 +18,7 @@ export interface Step {
   bodyType?: string;
   auth?: { username: string; password: string };
   sourcePath?: string;
+  cache?: RequestCachePolicy;
   pre: string;
   post: string;
 }
@@ -41,6 +44,8 @@ export interface Trace {
   responseJson?: unknown;
   extracted?: string[];
   error?: string;
+  cacheStatus?: "hit" | "miss" | "coalesced" | "bypass";
+  cacheAgeMs?: number;
 }
 export interface Run {
   id: string;

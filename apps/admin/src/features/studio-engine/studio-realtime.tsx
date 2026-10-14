@@ -255,7 +255,8 @@ export function StudioRealtimeBridge() {
     topics: TOPICS,
     tenantId,
     enabled: tenantId !== undefined,
-    onConnected: () => {
+    onConnected: (reason) => {
+      if (reason === "subscription-change") return;
       if (runtime.localWorkspace) runtime.localWorkspace.requestSync();
       enqueue(reconnectQueryKeys(runtime, client));
     },

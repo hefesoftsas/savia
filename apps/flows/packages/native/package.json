@@ -1,0 +1,28 @@
+{
+  "name": "@savia/flows-native",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "pnpm --filter @savia/studio-server exec vitest run test/workflows.test.ts test/workflow-webhooks.test.ts test/workflow-webhook-transport.test.ts --maxWorkers=1 --no-file-parallelism",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@savia/db": "workspace:*",
+    "@savia/studio-shared": "workspace:*",
+    "hono": "^4.13.11",
+    "zod": "^4.1.0"
+  },
+  "peerDependencies": {
+    "@savia/studio-server": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260901.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,5 +1,15 @@
 [
   {
+    "file": "../features/studio-engine/plugin-vscode-guide.tsx",
+    "text": "plugins:read",
+    "reason": "Canonical API permission identifier; translating it would give users an invalid scope name."
+  },
+  {
+    "file": "../features/studio-engine/plugin-vscode-guide.tsx",
+    "text": "plugins:publish",
+    "reason": "Canonical API permission identifier; translating it would give users an invalid scope name."
+  },
+  {
     "file": "../features/studio-engine/collection-operations-panel.tsx",
     "text": "{id}",
     "reason": "Technical identifier or executable configuration example; translation would change its meaning."

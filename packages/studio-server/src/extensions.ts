@@ -22,6 +22,7 @@ import {
   storeObjectRequirements,
   storePluginCatalogWithConfigs,
   storePluginManifest,
+  storePluginManifestRecord,
 } from "./plugin-store";
 import { audit, guard, transaction } from "./services";
 import type { Hono } from "hono";
@@ -276,17 +277,30 @@ export function registerExtensions(
     tenant: string,
     id: string,
     version?: string,
-  ): Promise<{ manifest: ExtensionManifest; builtIn: boolean } | null> {
+  ): Promise<{
+    manifest: ExtensionManifest;
+    builtIn: boolean;
+    storeArtifact: { version: string; storedManifest: string } | null;
+  } | null> {
     // Lo subido por el tenant prevalece sobre lo compilado: permite
     // migrar un plugin fuera del release sin cambiar su id.
-    const stored = await storePluginManifest(db, tenant, id, version);
-    if (stored) return { manifest: stored, builtIn: false };
+    const stored = await storePluginManifestRecord(db, tenant, id, version);
+    if (stored)
+      return {
+        manifest: stored.manifest,
+        builtIn: false,
+        storeArtifact: {
+          version: stored.version,
+          storedManifest: stored.storedManifest,
+        },
+      };
     if (version) return null;
     const compiled = registry.get(id);
     if (compiled)
       return {
         manifest: compiled.manifest,
         builtIn: compiled.builtIn === true,
+        storeArtifact: null,
       };
     return null;
   }
@@ -408,7 +422,30 @@ export function registerExtensions(
     // Deployment updates must never install an optional plugin or re-enable it.
     if (c.req.query("update") === "enabled" && current?.enabled !== 1)
       return fail("Deployment updates require an enabled installation.", 409);
+    const currentGuard = current
+      ? guard(
+          c.env.DB,
+          "SELECT version=? AND enabled=? AND manifest=? FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+          [current.version, current.enabled, current.manifest, tenant, id],
+        )
+      : guard(
+          c.env.DB,
+          "SELECT count(*)=0 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+          [tenant, id],
+        );
     const manifest = canonicalJson(extension.manifest);
+    const storeArtifactGuard = extension.storeArtifact
+      ? guard(
+          c.env.DB,
+          "SELECT count(*)=1 FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=? AND manifest=?",
+          [
+            tenant,
+            id,
+            extension.storeArtifact.version,
+            extension.storeArtifact.storedManifest,
+          ],
+        )
+      : null;
     if (current) {
       const order = compareSolutionVersions(
         extension.manifest.version,
@@ -438,26 +475,19 @@ export function registerExtensions(
         );
         if (provisioning.starts.length)
           await transaction(c.env.DB, [
+            ...(storeArtifactGuard ? [storeArtifactGuard.start] : []),
+            currentGuard.start,
             ...provisioning.starts,
             ...provisioning.writes,
             ...provisioning.ends,
+            currentGuard.end,
+            ...(storeArtifactGuard ? [storeArtifactGuard.end] : []),
           ]);
         return c.json({
           data: { id, version: current.version, enabled: true, builtIn: false },
         });
       }
     }
-    const currentGuard = current
-      ? guard(
-          c.env.DB,
-          "SELECT version=? AND enabled=? AND manifest=? FROM studio_extension_installations WHERE tenant_id=? AND id=?",
-          [current.version, current.enabled, current.manifest, tenant, id],
-        )
-      : guard(
-          c.env.DB,
-          "SELECT count(*)=0 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
-          [tenant, id],
-        );
     const dependencyGuards = activeDependencyGuards(
       c.env.DB,
       tenant,
@@ -476,6 +506,7 @@ export function registerExtensions(
       id,
     );
     await transaction(c.env.DB, [
+      ...(storeArtifactGuard ? [storeArtifactGuard.start] : []),
       currentGuard.start,
       ...dependencyGuards.map((dependency) => dependency.start),
       ...provisioning.starts,
@@ -494,6 +525,7 @@ export function registerExtensions(
       ...provisioning.ends,
       ...dependencyGuards.map((dependency) => dependency.end),
       currentGuard.end,
+      ...(storeArtifactGuard ? [storeArtifactGuard.end] : []),
     ]);
     return c.json({
       data: {

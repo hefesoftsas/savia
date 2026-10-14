@@ -225,7 +225,7 @@ it("prefetches screen settings while the plugin iframe starts and reuses them", 
   );
 });
 
-it("drops a pending settings prefetch when the authenticated identity changes", async () => {
+it("drops a pending settings prefetch when the authenticated principal changes", async () => {
   let resolvePrevious!: (response: Response) => void;
   const transport = vi
     .fn()
@@ -262,7 +262,7 @@ it("drops a pending settings prefetch when the authenticated identity changes", 
       },
     }),
   );
-  fireEvent(window, new Event("savia:identity-changed"));
+  fireEvent(window, new Event("savia:principal-changed"));
   await waitFor(() => expect(transport).toHaveBeenCalledTimes(2));
   await act(async () =>
     resolvePrevious(
@@ -820,7 +820,7 @@ it("hosts only verified owner requests, keeps the list mounted and confirms dirt
     "*",
   );
 });
-it("allows closing failed editors and removes panels when identity changes", () => {
+it("allows closing failed editors and removes panels when the principal changes", () => {
   render(
     <CustomPluginFrame
       pluginId="insurance.collections"
@@ -844,7 +844,7 @@ it("allows closing failed editors and removes panels when identity changes", () 
     }),
   );
   expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
-  fireEvent(window, new Event("savia:identity-changed"));
+  fireEvent(window, new Event("savia:principal-changed"));
   expect(screen.queryByTitle("Editor")).toBeNull();
 });
 it("opens a host editor from the store viewer without a selected screen", () => {

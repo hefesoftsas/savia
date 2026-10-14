@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import { render } from "../studio-engine/test/locale-test-render";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -12,6 +12,18 @@ import {
 const tenantState = vi.hoisted(() => ({
   id: null as number | null,
   isLoading: false,
+  scopeStatus: undefined as "error" | "resolved" | undefined,
+}));
+
+const realtime = vi.hoisted(() => ({
+  refresh: undefined as undefined | (() => void | Promise<unknown>),
+}));
+
+vi.mock("@/realtime/use-realtime-refresh", () => ({
+  useRealtimeRefresh: (options: { refresh: () => void | Promise<unknown> }) => {
+    realtime.refresh = options.refresh;
+    return { changed: false, status: "live", reload: options.refresh };
+  },
 }));
 
 vi.mock("@/features/tenants/use-current-tenant", () => ({
@@ -19,6 +31,7 @@ vi.mock("@/features/tenants/use-current-tenant", () => ({
     id: tenantState.id,
     isPlatformAdmin: false,
     isLoading: tenantState.isLoading,
+    scopeStatus: tenantState.scopeStatus,
   }),
 }));
 
@@ -26,6 +39,8 @@ afterEach(() => {
   cleanup();
   tenantState.id = null;
   tenantState.isLoading = false;
+  tenantState.scopeStatus = undefined;
+  realtime.refresh = undefined;
 });
 
 function createServices() {
@@ -67,6 +82,18 @@ function createServices() {
         webhookReady: false,
       }),
       updateAssistant: vi.fn(),
+      getChannel: vi.fn().mockResolvedValue({
+        configuration: {
+          routingEnabled: false,
+          tasks: [],
+          staff: [],
+          internalCapabilities: [],
+          externalCapabilities: [],
+        },
+        employees: [],
+        members: [],
+      }),
+      updateChannel: vi.fn(),
       getNative: vi.fn().mockResolvedValue({
         configuration: {
           replyButtons: false,
@@ -97,6 +124,340 @@ function createServices() {
 }
 
 describe("WhatsappConnectionsPage", () => {
+  it("does not let a late background failure hide a newer send result", async () => {
+    tenantState.id = 101;
+    const user = userEvent.setup();
+    const services = createServices();
+    const connection = await services.whatsapp.complete("connection-1", {
+      agencyId: 101,
+    });
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      { ...connection, phoneNumberId: "12345" },
+    ]);
+    vi.mocked(services.whatsapp.testSend).mockResolvedValue({
+      messageId: "wamid.test",
+    });
+    render(
+      <MemoryRouter>
+        <WhatsappConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("button", { name: "Desconectar" });
+    await user.type(
+      screen.getByRole("textbox", { name: "Destino" }),
+      "+573001234567",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Texto" }),
+      "Hello from Savia",
+    );
+    let rejectRead!: (reason: Error) => void;
+    vi.mocked(services.whatsapp.listConnections).mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectRead = reject;
+      }),
+    );
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = Promise.resolve(realtime.refresh?.());
+    });
+    await user.click(screen.getByRole("button", { name: "Enviar prueba" }));
+    await screen.findByText("Mensaje de prueba aceptado (wamid.test).");
+    await act(async () => {
+      rejectRead(new Error("Late background failure"));
+      await pending;
+    });
+    expect(
+      screen.getByText("Mensaje de prueba aceptado (wamid.test)."),
+    ).toBeVisible();
+    expect(screen.queryByText("Late background failure")).toBeNull();
+  });
+
+  it.each([
+    ["send", "Mensaje de prueba aceptado (wamid.test)."],
+    ["number", "Number update rejected"],
+    ["connect", "Connect session unavailable"],
+  ])(
+    "shows %s action feedback after a background read failure",
+    async (action, message) => {
+      tenantState.id = 101;
+      const user = userEvent.setup();
+      const services = createServices();
+      const connection = await services.whatsapp.complete("connection-1", {
+        agencyId: 101,
+      });
+      vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+        { ...connection, phoneNumberId: "12345" },
+      ]);
+      vi.mocked(services.whatsapp.testSend).mockResolvedValue({
+        messageId: "wamid.test",
+      });
+      vi.mocked(services.whatsapp.updateNumber).mockRejectedValue(
+        new Error("Number update rejected"),
+      );
+      vi.mocked(services.whatsapp.createConnectSession).mockRejectedValue(
+        new Error("Connect session unavailable"),
+      );
+      render(
+        <MemoryRouter>
+          <WhatsappConnectionsPage services={services} />
+        </MemoryRouter>,
+      );
+      await screen.findByRole("button", { name: "Desconectar" });
+      vi.mocked(services.whatsapp.listConnections).mockRejectedValueOnce(
+        new Error("Background read failed"),
+      );
+      await act(async () => {
+        await realtime.refresh?.();
+      });
+      expect(screen.getByText("Background read failed")).toBeVisible();
+      if (action === "send") {
+        await user.type(
+          screen.getByRole("textbox", { name: "Destino" }),
+          "+573001234567",
+        );
+        await user.type(
+          screen.getByRole("textbox", { name: "Texto" }),
+          "Hello from Savia",
+        );
+        await user.click(screen.getByRole("button", { name: "Enviar prueba" }));
+      } else {
+        await user.click(
+          screen.getByRole("button", {
+            name: action === "number" ? "Vincular número" : "Reconectar",
+          }),
+        );
+      }
+      expect(await screen.findByText(message)).toBeVisible();
+      expect(screen.queryByText("Background read failed")).toBeNull();
+    },
+  );
+
+  it("preserves edited number fields while refreshing untouched fields", async () => {
+    tenantState.id = 101;
+    const user = userEvent.setup();
+    const services = createServices();
+    const connection = {
+      ...(await services.whatsapp.complete("connection-1", { agencyId: 101 })),
+      phoneNumberId: "12345",
+      displayPhoneNumber: "+573001234567",
+      wabaId: "54321",
+    };
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      connection,
+    ]);
+    render(
+      <MemoryRouter>
+        <WhatsappConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+    const phone = await screen.findByRole("textbox", {
+      name: "Phone number ID",
+    });
+    await user.clear(phone);
+    await user.type(phone, "99999");
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      {
+        ...connection,
+        phoneNumberId: "77777",
+        displayPhoneNumber: "+573007654321",
+        wabaId: "88888",
+      },
+    ]);
+    await act(async () => {
+      await realtime.refresh?.();
+    });
+    expect(
+      screen.getByRole("textbox", { name: "Phone number ID" }),
+    ).toHaveValue("99999");
+    expect(screen.getByRole("textbox", { name: "Número visible" })).toHaveValue(
+      "+573007654321",
+    );
+    expect(screen.getByRole("textbox", { name: "WABA ID" })).toHaveValue(
+      "88888",
+    );
+  });
+
+  it("ignores an old tenant background response after switching tenants", async () => {
+    tenantState.id = 101;
+    const services = createServices();
+    const connection = await services.whatsapp.complete("connection-1", {
+      agencyId: 101,
+    });
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      connection,
+    ]);
+    const page = () => (
+      <MemoryRouter>
+        <WhatsappConnectionsPage services={services} />
+      </MemoryRouter>
+    );
+    const { rerender } = render(page());
+    await screen.findByRole("tab", { name: "Avanzado" });
+    let resolveOld!: (value: (typeof connection)[]) => void;
+    vi.mocked(services.whatsapp.listConnections).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = Promise.resolve(realtime.refresh?.());
+    });
+    tenantState.id = 202;
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      { ...connection, agencyId: 202, displayPhoneNumber: "+573007654321" },
+    ]);
+    rerender(page());
+    expect(screen.queryByRole("tab", { name: "Avanzado" })).toBeNull();
+    await screen.findByText("+573007654321");
+    await act(async () => {
+      resolveOld([{ ...connection, displayPhoneNumber: "+573001234567" }]);
+      await pending;
+    });
+    expect(screen.getByText("+573007654321")).toBeVisible();
+    expect(screen.queryByText("+573001234567")).toBeNull();
+    expect(services.whatsapp.listConnections).toHaveBeenLastCalledWith(202);
+  });
+
+  it("does not reload or reset drafts when a parent recreates the services wrapper", async () => {
+    tenantState.id = 101;
+    const user = userEvent.setup();
+    const services = createServices();
+    const page = () => (
+      <MemoryRouter>
+        <WhatsappConnectionsPage services={{ whatsapp: services.whatsapp }} />
+      </MemoryRouter>
+    );
+    const { rerender } = render(page());
+    await user.click(await screen.findByRole("tab", { name: "Asistente IA" }));
+    await user.type(
+      await screen.findByRole("textbox", { name: "Contactos de prueba" }),
+      "+573028648594",
+    );
+    rerender(page());
+    await waitFor(() =>
+      expect(services.whatsapp.listProviders).toHaveBeenCalledTimes(1),
+    );
+    expect(services.whatsapp.getAssistant).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("textbox", { name: "Contactos de prueba" }),
+    ).toHaveValue("+573028648594");
+    expect(screen.getByRole("tab", { name: "Asistente IA" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("keeps the selected form and drafts mounted during background refresh and failure", async () => {
+    tenantState.id = 101;
+    const user = userEvent.setup();
+    const services = createServices();
+    const connection = await services.whatsapp.complete("connection-1", {
+      agencyId: 101,
+    });
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      connection,
+    ]);
+    render(
+      <MemoryRouter>
+        <WhatsappConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByRole("tab", { name: "Asistente IA" }));
+    await user.type(
+      await screen.findByRole("textbox", { name: "Contactos de prueba" }),
+      "+573028648594",
+    );
+    let resolveConnections!: (value: (typeof connection)[]) => void;
+    vi.mocked(services.whatsapp.listConnections).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveConnections = resolve;
+      }),
+    );
+    let refresh!: Promise<unknown>;
+    act(() => {
+      refresh = Promise.resolve(realtime.refresh?.());
+    });
+    expect(
+      screen.getByRole("textbox", { name: "Contactos de prueba" }),
+    ).toHaveValue("+573028648594");
+    expect(screen.getByRole("tab", { name: "Asistente IA" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await act(async () => {
+      resolveConnections([connection]);
+      await refresh;
+    });
+    expect(services.whatsapp.getAssistant).toHaveBeenCalledTimes(1);
+    expect(services.whatsapp.getChannel).toHaveBeenCalledTimes(1);
+    expect(services.whatsapp.getNative).toHaveBeenCalledTimes(1);
+    vi.mocked(services.whatsapp.listConnections).mockRejectedValueOnce(
+      new Error("Temporary connection failure"),
+    );
+    await act(async () => {
+      await realtime.refresh?.();
+    });
+    expect(screen.getByText("Temporary connection failure")).toBeVisible();
+    expect(
+      screen.getByRole("textbox", { name: "Contactos de prueba" }),
+    ).toHaveValue("+573028648594");
+    expect(services.whatsapp.getAssistant).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await realtime.refresh?.();
+    });
+    expect(screen.queryByText("Temporary connection failure")).toBeNull();
+  });
+
+  it("shows only the selected section and preserves unsaved assistant changes", async () => {
+    tenantState.id = 101;
+    const user = userEvent.setup();
+    const services = createServices();
+    vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
+      await services.whatsapp.complete("connection-1", { agencyId: 101 }),
+    ]);
+
+    render(
+      <MemoryRouter>
+        <WhatsappConnectionsPage services={services} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("tab", { name: "Avanzado" });
+    const expectOnlySelectedPanel = () => {
+      const panels = screen.getAllByRole("tabpanel", { hidden: true });
+      expect(panels).toHaveLength(4);
+      for (const panel of panels) {
+        if (panel.dataset.state === "active") expect(panel).toBeVisible();
+        else expect(panel).not.toBeVisible();
+      }
+    };
+    expectOnlySelectedPanel();
+    await user.click(screen.getByRole("tab", { name: "Conexión" }));
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("tab", { name: "Asistente IA" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Asistente IA" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expectOnlySelectedPanel();
+    const contacts = await screen.findByRole("textbox", {
+      name: "Contactos de prueba",
+    });
+    await user.type(contacts, "+573028648594");
+    for (const name of ["Menú y equipo", "Avanzado", "Conexión"]) {
+      await user.click(screen.getByRole("tab", { name }));
+      expectOnlySelectedPanel();
+    }
+    await user.click(screen.getByRole("tab", { name: "Asistente IA" }));
+    expectOnlySelectedPanel();
+    expect(
+      screen.getByRole("textbox", { name: "Contactos de prueba" }),
+    ).toHaveValue("+573028648594");
+    expect(services.whatsapp.updateAssistant).not.toHaveBeenCalled();
+  });
+
   it("renders the WhatsApp integration with its brand logo", async () => {
     const services = createServices();
 
@@ -159,6 +520,7 @@ describe("WhatsappConnectionsPage", () => {
   });
 
   it("shows number linking and test send once connected", async () => {
+    const user = userEvent.setup();
     tenantState.id = 101;
     const services = createServices();
     vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
@@ -186,6 +548,14 @@ describe("WhatsappConnectionsPage", () => {
     await screen.findByRole("button", { name: "Desconectar" });
     expect(screen.getByText("+573001234567 · Acme")).toBeVisible();
     expect(screen.getByRole("button", { name: "Enviar prueba" })).toBeVisible();
+    expect(screen.queryByText(/Nango/i)).toBeNull();
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Ayuda: Número de WhatsApp" }),
+    );
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Savia valida el número antes de vincularlo.",
+    );
   });
 
   it("keeps a saved assistant available to disable after disconnect", async () => {
@@ -226,6 +596,7 @@ describe("WhatsappConnectionsPage", () => {
       </MemoryRouter>,
     );
 
+    await user.click(await screen.findByRole("tab", { name: "Asistente IA" }));
     const assistantToggle = await screen.findByRole("checkbox", {
       name: "Responder con IA",
     });
@@ -253,6 +624,7 @@ describe("WhatsappConnectionsPage", () => {
 
   it("keeps the connected integration usable when the native settings request fails", async () => {
     tenantState.id = 101;
+    const user = userEvent.setup();
     const services = createServices();
     vi.mocked(services.whatsapp.listConnections).mockResolvedValue([
       {
@@ -280,9 +652,26 @@ describe("WhatsappConnectionsPage", () => {
     );
 
     expect(
+      await screen.findByRole("button", { name: "Desconectar" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Enviar prueba" })).toBeVisible();
+    await user.click(await screen.findByRole("tab", { name: "Avanzado" }));
+    expect(
       await screen.findByText("Native settings are not available"),
     ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Desconectar" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Enviar prueba" })).toBeVisible();
   });
+});
+
+it("does not read a default WhatsApp scope when dedicated tenant resolution fails", async () => {
+  tenantState.id = null;
+  tenantState.scopeStatus = "error";
+  const services = createServices();
+  render(
+    <MemoryRouter>
+      <WhatsappConnectionsPage services={services as unknown as AppServices} />
+    </MemoryRouter>,
+  );
+  await act(async () => {});
+  expect(services.whatsapp.listProviders).not.toHaveBeenCalled();
+  expect(services.whatsapp.listConnections).not.toHaveBeenCalled();
 });

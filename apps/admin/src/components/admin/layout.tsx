@@ -1,3 +1,7 @@
+import { useLogoutPending } from "@/auth/logout-progress";
+import { LogoutTransition } from "./logout-transition";
+import { TenantScopeBoundary } from "@/features/tenants/tenant-scope-boundary";
+import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 import { BrandingRealtimeSync } from "@/realtime/branding-realtime";
 import { DeploymentUpdateNotice } from "@/pwa/deployment-recovery-ui";
 import { PwaInstallBanner } from "@/pwa";
@@ -8,7 +12,12 @@ import { cn } from "@/lib/utils";
 import type { CoreLayoutProps } from "ra-core";
 import { useTranslate } from "ra-core";
 import { ErrorBoundary } from "react-error-boundary";
-import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+} from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Notification } from "@/components/admin/notification";
@@ -24,7 +33,7 @@ const AssistantBar = lazy(async () => {
   return { default: module.AssistantBar };
 });
 
-function GlobalHistoryNav() {
+function GlobalHistoryNav({ moduleNavigation }: { moduleNavigation: boolean }) {
   const translate = useTranslate();
   const location = useLocation();
   const navigate = useNavigate();
@@ -85,6 +94,17 @@ function GlobalHistoryNav() {
     navigate(next);
   };
 
+  if (moduleNavigation) {
+    return (
+      <Button asChild variant="ghost" className="h-11 px-3 sm:h-8">
+        <Link to="/my-day">
+          <ArrowLeft aria-hidden="true" size={17} />
+          {translate("savia.layout.backToSavia")}
+        </Link>
+      </Button>
+    );
+  }
+
   return (
     <div className="flex items-center gap-0.5">
       <Button
@@ -144,67 +164,91 @@ function LayoutSidebarTrigger() {
 }
 
 export const Layout = (props: CoreLayoutProps) => {
+  const { pathname } = useLocation();
+  const hasModuleNavigation =
+    pathname === "/savia-flows" || pathname.startsWith("/savia-flows/");
+  const closingSession = useLogoutPending();
+  const tenant = useCurrentTenant();
   const [errorInfo, setErrorInfo] = useState<ErrorInfo | undefined>(undefined);
   const handleError = (_: unknown, info: ErrorInfo) => {
     setErrorInfo(info);
   };
   return (
-    <SidebarProvider>
-      <BrandingRealtimeSync />
-      <SaviaRequestProvider>
-        <AppSidebar />
-        <main
-          className={cn(
-            "ml-auto min-w-0 w-full max-w-full overflow-x-hidden",
-            "md:peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon)-1rem)]",
-            "md:peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))]",
-            "sm:transition-[width] sm:duration-200 sm:ease-linear",
-            "group-data-[resizing]/sidebar-wrapper:transition-none",
-            "flex h-svh flex-col",
-            "group-data-[scroll-locked=1]/body:h-full",
-            "has-[main.fixed-main]:group-data-[scroll-locked=1]/body:h-svh",
-          )}
-        >
-          <header className="relative flex h-16 md:h-12 shrink-0 items-center gap-2 px-3 sm:px-4">
-            <LayoutSidebarTrigger />
-            <GlobalHistoryNav />
-            <div
-              className="min-w-0 flex flex-1 items-center overflow-hidden pr-2"
-              id="breadcrumb"
-            />
-            <div
-              id="header-actions"
-              className="flex min-w-0 shrink-0 items-center gap-1"
-            >
-              <NotificationBell />
-              {/* Keep the assistant immediately available without covering mobile form actions. */}
-              <Suspense fallback={null}>
-                <AssistantBar />
-              </Suspense>
-            </div>
-          </header>
-          <DeploymentUpdateNotice />
-          <ErrorBoundary
-            onError={handleError}
-            fallbackRender={({ error, resetErrorBoundary }) => (
-              <Error
-                error={error}
-                errorInfo={errorInfo}
-                resetErrorBoundary={resetErrorBoundary}
-              />
+    <>
+      <SidebarProvider
+        controlsEnabled={!hasModuleNavigation}
+        inert={closingSession}
+        aria-busy={closingSession}
+      >
+        <BrandingRealtimeSync />
+        <SaviaRequestProvider>
+          {!hasModuleNavigation && <AppSidebar />}
+          <main
+            className={cn(
+              "ml-auto min-w-0 w-full max-w-full overflow-x-hidden",
+              !hasModuleNavigation && [
+                "md:peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon)-1rem)]",
+                "md:peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))]",
+              ],
+              "sm:transition-[width] sm:duration-200 sm:ease-linear",
+              "group-data-[resizing]/sidebar-wrapper:transition-none",
+              "flex h-svh flex-col",
+              "group-data-[scroll-locked=1]/body:h-full",
+              "has-[main.fixed-main]:group-data-[scroll-locked=1]/body:h-svh",
             )}
           >
-            <Suspense fallback={<Loading />}>
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pb-6 sm:px-4">
-                {props.children}
+            <header className="relative flex h-16 md:h-12 shrink-0 items-center gap-2 px-3 sm:px-4">
+              {!hasModuleNavigation && <LayoutSidebarTrigger />}
+              <GlobalHistoryNav moduleNavigation={hasModuleNavigation} />
+              <div
+                className="min-w-0 flex flex-1 items-center overflow-hidden pr-2"
+                id="breadcrumb"
+              />
+              <div
+                id="header-actions"
+                className="flex min-w-0 shrink-0 items-center gap-1"
+              >
+                <NotificationBell />
+                {/* Keep the assistant immediately available without covering mobile form actions. */}
+                <Suspense fallback={null}>
+                  <AssistantBar />
+                </Suspense>
               </div>
-            </Suspense>
-          </ErrorBoundary>
-        </main>
-      </SaviaRequestProvider>
-      <Notification />
-      <PwaInstallBanner />
-      <CookieConsentBanner />
-    </SidebarProvider>
+            </header>
+            <DeploymentUpdateNotice />
+            <ErrorBoundary
+              onError={handleError}
+              fallbackRender={({ error, resetErrorBoundary }) => (
+                <Error
+                  error={error}
+                  errorInfo={errorInfo}
+                  resetErrorBoundary={resetErrorBoundary}
+                />
+              )}
+            >
+              <Suspense fallback={<Loading />}>
+                <div
+                  className={cn(
+                    "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto",
+                    !hasModuleNavigation && "px-3 pb-6 sm:px-4",
+                  )}
+                >
+                  <TenantScopeBoundary
+                    status={tenant.scopeStatus}
+                    retry={tenant.retry}
+                  >
+                    {props.children}
+                  </TenantScopeBoundary>
+                </div>
+              </Suspense>
+            </ErrorBoundary>
+          </main>
+        </SaviaRequestProvider>
+        <Notification />
+        <PwaInstallBanner />
+        <CookieConsentBanner />
+      </SidebarProvider>
+      {closingSession && <LogoutTransition />}
+    </>
   );
 };

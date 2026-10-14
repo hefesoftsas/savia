@@ -9,7 +9,7 @@ import { setCachedAppearance } from "./appearance-cache";
  */
 export function AppearancePreferencesSync() {
   const { theme, setTheme, colorTheme, setColorTheme } = useTheme();
-  const services = useAppServices();
+  const preferences = useAppServices().userPreferences;
   const hydrated = useRef(false);
   const applying = useRef(false);
   const lastSaved = useRef("");
@@ -18,11 +18,11 @@ export function AppearancePreferencesSync() {
 
   useEffect(() => {
     let active = true;
-    if (!services?.userPreferences?.getAppearance) {
+    if (!preferences?.getAppearance) {
       hydrated.current = true;
       return;
     }
-    void services.userPreferences.getAppearance().then(
+    void preferences.getAppearance().then(
       (saved) => {
         if (!active) return;
         lastSaved.current = JSON.stringify({
@@ -30,8 +30,9 @@ export function AppearancePreferencesSync() {
           colorTheme: saved.colorTheme,
         });
         applying.current = true;
-        setTheme(saved.theme);
-        setColorTheme(saved.colorTheme as ColorTheme);
+        if (saved.theme !== current.current.theme) setTheme(saved.theme);
+        if (saved.colorTheme !== current.current.colorTheme)
+          setColorTheme(saved.colorTheme as ColorTheme);
         setCachedAppearance({
           theme: saved.theme,
           colorTheme: saved.colorTheme as ColorTheme,
@@ -46,22 +47,23 @@ export function AppearancePreferencesSync() {
     return () => {
       active = false;
     };
-  }, [services, setColorTheme, setTheme]);
+  }, [preferences, setColorTheme, setTheme]);
 
   useEffect(() => {
     let active = true;
     const refresh = async () => {
       const snapshot = JSON.stringify(current.current);
       try {
-        const saved = await services?.userPreferences?.getAppearance?.();
+        const saved = await preferences?.getAppearance?.();
         if (!active || !saved || JSON.stringify(current.current) !== snapshot)
           return;
         lastSaved.current = JSON.stringify({
           theme: saved.theme,
           colorTheme: saved.colorTheme,
         });
-        setTheme(saved.theme);
-        setColorTheme(saved.colorTheme as ColorTheme);
+        if (saved.theme !== current.current.theme) setTheme(saved.theme);
+        if (saved.colorTheme !== current.current.colorTheme)
+          setColorTheme(saved.colorTheme as ColorTheme);
       } catch {
         /* Retain the current appearance until reconnection. */
       }
@@ -71,17 +73,17 @@ export function AppearancePreferencesSync() {
       active = false;
       window.removeEventListener("savia:account-changed", refresh);
     };
-  }, [services, setTheme, setColorTheme]);
+  }, [preferences, setTheme, setColorTheme]);
 
   useEffect(() => {
     if (!hydrated.current || applying.current) return;
     setCachedAppearance({ theme, colorTheme });
-    if (!services?.userPreferences?.saveAppearance) return;
+    if (!preferences?.saveAppearance) return;
     const fingerprint = JSON.stringify({ theme, colorTheme });
     if (fingerprint === lastSaved.current) return;
     const timer = window.setTimeout(() => {
       const settings = { version: 1 as const, theme, colorTheme };
-      void services.userPreferences
+      void preferences
         .saveAppearance(settings)
         .then(() => {
           lastSaved.current = fingerprint;
@@ -89,7 +91,7 @@ export function AppearancePreferencesSync() {
         .catch(() => undefined);
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [colorTheme, services, theme]);
+  }, [colorTheme, preferences, theme]);
 
   return null;
 }

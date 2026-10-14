@@ -1,12 +1,18 @@
+import type { WhatsappQueueScope } from "./queue";
 import { cleanupChannelState } from "./channel-cleanup";
 import { deliverChannelActionResults } from "./action-results";
+import { deliverChannelActionProgress } from "./action-progress";
+import { createActionProgressPump } from "./progress-pump";
 import {
   createChannelOperationAdapter,
   type ChannelOperationDependencies,
 } from "../assistant/operation-adapter";
 import { processChannelActions } from "./action-jobs";
 import { WhatsappChannelRepository } from "./channel-repository";
-import { createRoutedWhatsappGenerator } from "./channel-runtime";
+import {
+  prepareFailedQuoteReply,
+  createRoutedWhatsappGenerator,
+} from "./channel-runtime";
 import { CompanionService } from "../companion/service";
 import { whatsappIntakeContributions } from "@savia/release-catalog/whatsapp";
 import {
@@ -24,10 +30,10 @@ import type { WhatsappRouteDependencies } from "../routes/whatsapp";
 import { WhatsappInboundRepository } from "./inbound-repository";
 import { drainWhatsappInbox, processWhatsappInbox } from "./inbound-processor";
 import { createWhatsappAssistant, sendWhatsappReply } from "./assistant";
-import { humanSupportRecoveryReply } from "./human-support";
 import { VirtualEmployeesRepository } from "../assistant/virtual-employees";
 import { retrieveRelevantChunks, type RagEnvironment } from "../assistant/rag";
 import type { AssistantConfigurationRepository } from "../assistant/configuration";
+import { createWhatsappQuotePresentationFactory } from "./quote-presentation";
 
 export type WhatsappSecrets = {
   WHATSAPP_PROCESSING_MODE?: string;
@@ -37,6 +43,7 @@ export type WhatsappSecrets = {
   NANGO_CONNECT_URL?: string;
   NANGO_API_KEY?: string;
   NANGO_WHATSAPP_INTEGRATION_ID?: string;
+  SAVIA_PUBLIC_ORIGIN?: string;
 };
 
 export function whatsappInboundFromEnvironment(
@@ -53,10 +60,41 @@ export function whatsappInboundFromEnvironment(
     whatsappNangoConfigurationFromEnvironment(environment),
   );
   const channelRepository = new WhatsappChannelRepository(environment.DB);
+  const progressPumps = new Map<
+    string,
+    ReturnType<typeof createActionProgressPump>
+  >();
+  const resolveBinding = async (connectionId: string, tenantId: number) => {
+    const row = await environment.DB.prepare(
+      "SELECT phone_number_id,waba_id FROM tenant_whatsapp_connections WHERE id=? AND tenant_id=?",
+    )
+      .bind(connectionId, tenantId)
+      .first<{ phone_number_id: string; waba_id: string }>();
+    return row
+      ? repository.resolve(row.phone_number_id, row.waba_id)
+      : undefined;
+  };
+  const sendProgress = (
+    binding: import("./inbound-contracts").WhatsappAssistantBinding,
+    text: string,
+    phone: string,
+  ) => sendWhatsappReply(nango, binding, text, phone);
+  const employees = new VirtualEmployeesRepository(environment.DB);
+  const productionQuotePresentation = createWhatsappQuotePresentationFactory({
+    repository: channelRepository,
+    configuration,
+    employees,
+    resolveBinding,
+    publicOrigin: environment.SAVIA_PUBLIC_ORIGIN,
+    notifyProgress: (action) => progressPumps.get(action.id)?.notify(),
+  });
   const operations = channelOptions
     ? createChannelOperationAdapter({
         ...channelOptions,
         repository: channelRepository,
+        quotePresentation:
+          channelOptions.quotePresentation ?? productionQuotePresentation,
+        onActionProgress: (action) => progressPumps.get(action.id)?.notify(),
       })
     : undefined;
   const humanSupportContact = async (
@@ -77,6 +115,8 @@ export function whatsappInboundFromEnvironment(
   };
   const generate = createWhatsappAssistant({
     humanSupportContact,
+    quoteFailureReply: (binding, input) =>
+      prepareFailedQuoteReply(channelRepository, binding, input),
     ...(operations ? { capabilities: operations.capabilities } : {}),
     configuration,
     prepareInput: createWhatsappMediaInput(
@@ -84,7 +124,7 @@ export function whatsappInboundFromEnvironment(
       environment.DOCUMENTS,
       new CompanionService({ sttModel: environment.COMPANION_STT_MODEL }),
     ),
-    employees: new VirtualEmployeesRepository(environment.DB),
+    employees,
     knowledge: (employeeId, query) =>
       retrieveRelevantChunks(
         environment as RagEnvironment,
@@ -96,9 +136,42 @@ export function whatsappInboundFromEnvironment(
   const routed = createRoutedWhatsappGenerator(channelRepository, generate);
   return {
     repository,
-    processActions: async () => {
-      if (!operations?.actions) return { completed: 0, uncertain: 0 };
-      await cleanupChannelState(channelRepository);
+    processActions: async (scope?: WhatsappQueueScope, dispatch = true) => {
+      if (!operations?.actions)
+        return { completed: 0, uncertain: 0, processed: 0, delivered: 0 };
+      if (!scope) await cleanupChannelState(channelRepository);
+      let delivered = 0;
+      const deliverResults = async () => {
+        await deliverChannelActionProgress(
+          channelRepository,
+          resolveBinding,
+          sendProgress,
+          scope,
+        );
+        const result = await deliverChannelActionResults(
+          channelRepository,
+          async (connectionId, tenantId) => {
+            const row = await environment.DB.prepare(
+              "SELECT phone_number_id,waba_id FROM tenant_whatsapp_connections WHERE id=? AND tenant_id=?",
+            )
+              .bind(connectionId, tenantId)
+              .first<{ phone_number_id: string; waba_id: string }>();
+            return row
+              ? repository.resolve(row.phone_number_id, row.waba_id)
+              : undefined;
+          },
+          (binding, text, phone) =>
+            sendWhatsappReply(nango, binding, text, phone),
+          scope,
+        );
+        delivered += result.delivered;
+      };
+      // A completed action from an earlier tick must not wait behind a new
+      // provider job. Deliver it before dispatching queued work, then after
+      // each job so a slow later action cannot hold its result.
+      await deliverResults();
+      if (!dispatch)
+        return { completed: 0, uncertain: 0, processed: 0, delivered };
       const report = await processChannelActions(
         operations.actions,
         async (action) => {
@@ -118,35 +191,45 @@ export function whatsappInboundFromEnvironment(
             !binding.allowedContacts.includes(action.session.access.contact)
           )
             throw new Error("CHANNEL_BINDING_REVOKED");
-          return operations.execute(binding, action);
+          const actionScope = {
+            connectionId: action.session.access.connectionId,
+            contact: action.session.access.contact,
+          };
+          const pump = createActionProgressPump(async () => {
+            const result = await deliverChannelActionProgress(
+              channelRepository,
+              resolveBinding,
+              sendProgress,
+              actionScope,
+            );
+            return result.delivered > 0;
+          });
+          progressPumps.set(action.id, pump);
+          try {
+            return await operations.execute(binding, action);
+          } finally {
+            await pump.drain();
+            progressPumps.delete(action.id);
+          }
         },
+        scope ? 1 : 3,
+        deliverResults,
+        scope,
       );
-      await deliverChannelActionResults(
-        channelRepository,
-        async (connectionId, tenantId) => {
-          const row = await environment.DB.prepare(
-            "SELECT phone_number_id,waba_id FROM tenant_whatsapp_connections WHERE id=? AND tenant_id=?",
-          )
-            .bind(connectionId, tenantId)
-            .first<{ phone_number_id: string; waba_id: string }>();
-          return row
-            ? repository.resolve(row.phone_number_id, row.waba_id)
-            : undefined;
-        },
-        (binding, text, phone) =>
-          sendWhatsappReply(nango, binding, text, phone),
-      );
-      return report;
+      return { ...report, delivered };
     },
     appSecret: environment.WHATSAPP_META_APP_SECRET?.trim(),
     verifyToken: environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim(),
     deferProcessing: environment.WHATSAPP_PROCESSING_MODE === "scheduled",
-    process: async (options?: { scheduled?: boolean }) => {
+    process: async (options?: {
+      scheduled?: boolean;
+      scope?: WhatsappQueueScope;
+    }) => {
       const processingDependencies = {
-        recoveryReply: async (binding) =>
-          humanSupportRecoveryReply(await humanSupportContact(binding)),
+        recoveryReply: routed.recoveryReply,
         generate: routed.generate,
         authorizeReply: routed.authorizeReply,
+        completionStatements: routed.completionStatements,
         afterReply: routed.afterReply,
         indicator: async (binding, messageId) => {
           if (binding.native?.readReceipts || binding.native?.typingIndicator)
@@ -189,9 +272,16 @@ export function whatsappInboundFromEnvironment(
                 },
               ),
       } satisfies import("./inbound-contracts").WhatsappInboundDependencies;
-      return options?.scheduled
-        ? drainWhatsappInbox(repository, processingDependencies)
-        : processWhatsappInbox(repository, processingDependencies, 5);
+      return options?.scope
+        ? processWhatsappInbox(
+            repository,
+            processingDependencies,
+            1,
+            options.scope,
+          )
+        : options?.scheduled
+          ? drainWhatsappInbox(repository, processingDependencies)
+          : processWhatsappInbox(repository, processingDependencies, 5);
     },
   };
 }

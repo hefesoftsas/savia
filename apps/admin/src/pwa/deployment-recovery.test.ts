@@ -1,6 +1,49 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { isModuleLoadError, prepareAppReload } from "./deployment-recovery";
-afterEach(() => vi.restoreAllMocks());
+import { subscribeOnlineStatus } from "../offline/connectivity-status";
+import {
+  isModuleLoadError,
+  prepareAppReload,
+  PUBLIC_VISITOR_ROUTE_DENYLIST,
+} from "./deployment-recovery";
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+it("allows updates when Savia responds despite the browser offline hint", async () => {
+  const worker = new Worker();
+  worker.state = "activated";
+  const update = vi.fn().mockResolvedValue(undefined);
+  environment({ update, waiting: worker });
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
+  const unsubscribe = subscribeOnlineStatus(() => {});
+  try {
+    await Promise.resolve();
+    await expect(prepareAppReload()).resolves.toBeUndefined();
+    expect(update).toHaveBeenCalledOnce();
+  } finally {
+    unsubscribe();
+    vi.unstubAllGlobals();
+  }
+});
+it("verifies recovery connectivity when the application has been unmounted", async () => {
+  const worker = new Worker();
+  worker.state = "activated";
+  const update = vi.fn().mockResolvedValue(undefined);
+  environment({ update, waiting: worker });
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  const fetcher = vi.fn().mockResolvedValue(new Response(null));
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    await expect(prepareAppReload()).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledOnce();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 class Worker extends EventTarget {
   state: ServiceWorkerState = "installing";
   postMessage = vi.fn();
@@ -32,6 +75,16 @@ it("recognizes obsolete module and stylesheet loads without swallowing ordinary 
   ).toBe(true);
   expect(isModuleLoadError(new Error("Failed to fetch"))).toBe(false);
   expect(isModuleLoadError(new Error("Permission denied"))).toBe(false);
+});
+it.each([
+  "/public/bookings",
+  "/public/bookings/token",
+  "/public/quotes",
+  "/public/quotes/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+])("keeps public route %s out of the app-shell fallback", (path) => {
+  expect(
+    PUBLIC_VISITOR_ROUTE_DENYLIST.some((pattern) => pattern.test(path)),
+  ).toBe(true);
 });
 it("waits for the replacement worker to activate before allowing reload", async () => {
   const worker = new Worker();
@@ -76,6 +129,10 @@ it("does not reload after update failure, redundant installation or offline requ
   await pending;
   expect(unregister).toHaveBeenCalledOnce();
   vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockRejectedValue(new TypeError("Network unavailable")),
+  );
   await expect(prepareAppReload()).rejects.toThrow(/conexión/);
 });
 it("drops a stalled worker and reloads from network instead of stranding on timeout", async () => {
@@ -158,6 +215,8 @@ it("does not reload the broken shell when unregister fails", async () => {
 
 it.each([
   "/public/forms/0123456789abcdef0123456789abcdef",
+  "/public/bookings/0123456789abcdefghijkl",
+  "/public/quotes/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "/register",
   "/public/pages",
   "/public/pages/fixture",

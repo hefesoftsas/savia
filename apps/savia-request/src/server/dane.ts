@@ -1,9 +1,24 @@
-import type { Flow } from "./types";
+import type { Flow, Trace } from "./types";
+import type { Env } from "./env";
+import { cacheRequest, type RequestCachePolicy } from "./request-cache";
 
 export const daneSource = "https://www.datos.gov.co/resource/gdxc-w37w.json";
 type Municipality = { code: string; city: string; department: string };
-let cached:
-  { rows: Municipality[]; retrievedAt: string; expires: number } | undefined;
+function parseCatalog(body: unknown): Municipality[] {
+  if (!Array.isArray(body) || !body.length || body.length >= 5000)
+    throw new Error("El catálogo DANE no está disponible completo.");
+  const rows: Municipality[] = body.flatMap((row) =>
+    row &&
+    /^\d{5}$/.test(row.cod_mpio) &&
+    typeof row.nom_mpio === "string" &&
+    typeof row.dpto === "string"
+      ? [{ code: row.cod_mpio, city: row.nom_mpio, department: row.dpto }]
+      : [],
+  );
+  if (rows.length !== body.length)
+    throw new Error("El catálogo DANE contiene datos inválidos.");
+  return rows;
+}
 const normalize = (value: string) =>
   value
     .normalize("NFD")
@@ -16,6 +31,9 @@ export async function lookupDaneCity(
   city: string,
   department?: string,
   fetcher: typeof fetch = fetch,
+  environment?: Pick<Env, "DB">,
+  policy: RequestCachePolicy | undefined = daneCityFlow.steps[0]?.cache,
+  tenant = "",
 ) {
   if (
     typeof city !== "string" ||
@@ -27,41 +45,47 @@ export async function lookupDaneCity(
     throw new Error(
       "Indica una ciudad válida y, si es necesario, su departamento.",
     );
-  let catalog =
-    fetcher === fetch && cached && cached.expires > Date.now()
-      ? cached
+  const response = await cacheRequest(
+    environment ?? {},
+    new Request(daneCityFlow.steps[0].url, {
+      headers: daneCityFlow.steps[0].headers,
+      signal: AbortSignal.timeout(15000),
+    }),
+    policy,
+    {
+      tenant,
+      revision: JSON.stringify({
+        operation: daneCityFlow.id,
+        contract: 1,
+        policy,
+      }),
+      validateResponse: async (candidate) => {
+        try {
+          parseCatalog(await candidate.json());
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    },
+    fetcher,
+  );
+  if (!response.ok)
+    throw new Error("No se pudo consultar el catálogo oficial DANE.");
+  const rows = parseCatalog(await response.json());
+  const ageHeader = response.headers.get("x-savia-cache-age-ms");
+  const rawAge = Number(ageHeader);
+  const cacheAgeMs =
+    ageHeader !== null && Number.isFinite(rawAge)
+      ? Math.max(0, rawAge)
       : undefined;
-  if (!catalog) {
-    const response = await fetcher(
-      daneSource + "?$select=cod_mpio,nom_mpio,dpto&$limit=5000",
-      { signal: AbortSignal.timeout(15000) },
-    );
-    if (!response.ok)
-      throw new Error("No se pudo consultar el catálogo oficial DANE.");
-    const body: unknown = await response.json();
-    if (!Array.isArray(body) || !body.length || body.length >= 5000)
-      throw new Error("El catálogo DANE no está disponible completo.");
-    const rows: Municipality[] = body.flatMap((row) =>
-      row &&
-      /^\d{5}$/.test(row.cod_mpio) &&
-      typeof row.nom_mpio === "string" &&
-      typeof row.dpto === "string"
-        ? [{ code: row.cod_mpio, city: row.nom_mpio, department: row.dpto }]
-        : [],
-    );
-    if (rows.length !== body.length)
-      throw new Error("El catálogo DANE contiene datos inválidos.");
-    catalog = {
-      rows,
-      retrievedAt: new Date().toISOString(),
-      expires: Date.now() + 3600_000,
-    };
-    if (fetcher === fetch) cached = catalog;
-  }
+  const cacheStatus = (response.headers.get("x-savia-cache") ??
+    "bypass") as NonNullable<Trace["cacheStatus"]>;
+  const retrievedAt = new Date(Date.now() - (cacheAgeMs ?? 0)).toISOString();
   const query = normalize(city),
     region = department?.trim() ? normalize(department) : undefined;
   if (query.length < 2) throw new Error("Indica una ciudad válida.");
-  const candidates = catalog.rows.filter(
+  const candidates = rows.filter(
     (row) => !region || normalize(row.department) === region,
   );
   const exact = candidates.filter(
@@ -80,7 +104,9 @@ export async function lookupDaneCity(
     matches: matches.slice(0, 20),
     totalMatches: matches.length,
     source: daneSource,
-    retrievedAt: catalog.retrievedAt,
+    retrievedAt,
+    cacheStatus,
+    ...(cacheAgeMs === undefined ? {} : { cacheAgeMs }),
   };
 }
 export const daneCityFlow: Flow = {
@@ -101,6 +127,7 @@ export const daneCityFlow: Flow = {
       method: "GET",
       url: daneSource + "?$select=cod_mpio,nom_mpio,dpto&$limit=5000",
       headers: { Accept: "application/json" },
+      cache: { enabled: true, ttlSeconds: 86400, scope: "public" },
       body: "",
       pre: "",
       post: "",

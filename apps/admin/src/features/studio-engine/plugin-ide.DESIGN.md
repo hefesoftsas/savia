@@ -4,14 +4,14 @@ Mode: Operate. This surface replaces the embedded store authoring form with a
 workspace for writing, reviewing and running a Savia plugin. It extends the shared
 Savia theme; it does not change the surrounding Studio/CRM design system.
 
-The first viewport opens code, an expandable file explorer and an assistant
-conversation together. The user's work fills the available area. Project actions
+The first viewport opens code and a hierarchical file explorer. The assistant
+conversation opens on demand. The user's work fills the available area. Project actions
 sit in a compact toolbar; save state belongs in the bottom status bar. No outer
 card, page hero or separate explanatory heading competes with the editor.
 
 Desktop uses Allotment's adjustable panes. The explorer is narrow, code receives
 remaining space, and the assistant has enough width to read responses and review
-changed files. Below 850px of available workspace width, Files, Code, Preview and
+changed files. Below 600px of available workspace width, Files, Code, Preview and
 Chat expose one area at a time. Pane switches preserve mounted editors and preview.
 
 The assistant reads as a conversation: user request, pending state, assistant
@@ -45,9 +45,27 @@ Tokens derive from the active Savia palette:
 - Secondary text: foreground mixed at 68% (`--ide-secondary`).
 - Selection/action/focus: `--primary`, `--ring`; errors: `--destructive`.
 - Typeface: inherited `--font-sans`; code: Monaco's inherited monospace font.
-- Dense labels: 11–12px; body and editor: 13px; welcome title: 16px.
+- Dense labels: 11–12px; body: 13px; editor: 14px with a 22px line height; welcome title: 16px.
 - Panel titles/tabs: 38px; mobile navigation and file rows: 44px.
 
 Selection uses restrained tint and a tab rule. Plain copy uses neutral foreground
 rather than the primary accent. Light/dark changes update editors and preview
 without discarding the code, conversation or running plugin state.
+
+The explorer displays folder hierarchy and basenames, with complete paths in
+accessible labels and tooltips. Matching paths expand while filtering. Source
+files and configuration files share closable tabs and preserve mounted Monaco
+models when switching. Monaco bundles tokenizers and standalone contributions
+for syntax colors, Find/Replace, folding, bracket guides and suggestions.
+
+Retained archive source editors show syntax diagnostics; full semantic diagnostics require a
+dependency/type environment that retained archives do not ship. Preview resolves
+the actual import graph and reports compiler errors before publication. Standalone
+entry files retain full semantic diagnostics.
+
+The Search view complements the filename filter and Monaco's in-file Find. It
+searches project source/configuration text with Ctrl/Cmd+Shift+F, groups matches by
+path and shows line snippets. Selecting a result opens the file and selects the
+match in its existing Monaco model. Keep search state across views; exclude binary
+assets and compiled recovery bundles when original sources exist. Cap results at
+500 and invite a narrower query.

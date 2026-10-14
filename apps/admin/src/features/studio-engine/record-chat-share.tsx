@@ -181,11 +181,11 @@ export function RecordChatShareAction({
       inFlight.current = false;
       setSending(false);
     };
-    window.addEventListener("savia:identity-changed", invalidate);
+    window.addEventListener("savia:principal-changed", invalidate);
     window.addEventListener("savia:session-cleared", invalidate);
     window.addEventListener("savia:tenant-changed", invalidate);
     return () => {
-      window.removeEventListener("savia:identity-changed", invalidate);
+      window.removeEventListener("savia:principal-changed", invalidate);
       window.removeEventListener("savia:session-cleared", invalidate);
       window.removeEventListener("savia:tenant-changed", invalidate);
     };

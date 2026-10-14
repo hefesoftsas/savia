@@ -1086,3 +1086,67 @@ it("hides My tickets command when Jira is disconnected", async () => {
     screen.queryByRole("option", { name: "My tickets" }),
   ).not.toBeInTheDocument();
 });
+
+it("inserts a loaded ticket snapshot as editable blocks below the live card", async () => {
+  const changed = vi.fn();
+  const user = userEvent.setup();
+  const snapshotApi = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => null },
+    fetcher: async (input: RequestInfo | URL) =>
+      String(input).includes("/v1/personal-integrations/ticket-summary")
+        ? Response.json({
+            data: {
+              updatedAt: "2026-06-03T12:00:00.000Z",
+              tickets: [
+                {
+                  key: "OPS-41",
+                  title: "Restore the release pipeline",
+                  url: "https://jira.example/browse/OPS-41",
+                  status: "In Code Review",
+                  comments: { total: 1, latest: null },
+                  pullRequests: [],
+                  prLookup: "complete",
+                },
+              ],
+              partial: false,
+              warnings: [],
+            },
+          })
+        : Response.json({ error: {} }, { status: 403 }),
+  });
+  render(
+    <PageEditor
+      pageId="tickets-snapshot"
+      api={snapshotApi}
+      pages={new PagesClient(snapshotApi)}
+      readOnly={false}
+      initialValue={[
+        {
+          type: "ticket_summary",
+          ticketSummaryConfig: {},
+          children: [{ text: "" }],
+        },
+        { type: "p", children: [{ text: "" }] },
+      ]}
+      issueProviders={["jira"]}
+      onChange={changed}
+    />,
+  );
+  await user.click(
+    await screen.findByRole("button", {
+      name: "Insert snapshot as editable blocks",
+    }),
+  );
+  await waitFor(() => expect(changed).toHaveBeenCalled());
+  const value = changed.mock.calls.at(-1)?.[0] as Array<
+    Record<string, unknown>
+  >;
+  expect(value[0]).toMatchObject({ type: "ticket_summary" });
+  expect(
+    value.some(
+      (node) =>
+        node.type === "bullet" && JSON.stringify(node).includes("OPS-41"),
+    ),
+  ).toBe(true);
+});

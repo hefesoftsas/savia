@@ -27,6 +27,8 @@ import {
   writeSaviaRequestSnapshot,
 } from "./savia-request-cache";
 import type { FlowSummary, RequestFlow } from "./types";
+import { useSessionGeneration } from "@/auth/session-scope";
+import { isReadAccessDenied } from "@/queries/read-state";
 
 type WorkspaceValue = {
   active: boolean;
@@ -85,6 +87,7 @@ function safeStepIndex(flow: RequestFlow, step: number) {
 
 export function SaviaRequestProvider({ children }: PropsWithChildren) {
   const services = useAppServices();
+  const principalGeneration = useSessionGeneration();
   const scopeState = useSaviaRequestScope();
   const scope: SaviaRequestScope | undefined = scopeState.scope
     ? { tenant: scopeState.scope }
@@ -116,6 +119,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
   const scopeRef = useRef<string | undefined>(scopeState.scope);
   const requestRef = useRef(0);
   const identityRef = useRef<string | null>(null);
+  const identityGenerationRef = useRef(principalGeneration);
   // Evita revalidar la navegación dos veces seguidas: tras sincronizar la
   // URL el efecto se re-ejecuta y caería en la rama temprana con datos
   // recién revalidados.
@@ -128,6 +132,26 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
     draftRef.current = next;
     setFlow(next);
   }, []);
+
+  const clearAfterDeniedRead = useCallback(
+    (cause: unknown) => {
+      if (!isReadAccessDenied(cause)) return;
+      requestRef.current += 1;
+      dirtyRef.current = false;
+      setDirty(false);
+      replaceFlow(null);
+      setFlows([]);
+      setFolders([]);
+      setStepIndex(0);
+      clearAllSaviaRequestSnapshots();
+      clearCachedTenantOptions();
+      setBusy(false);
+      setError(
+        cause instanceof Error ? cause.message : "No pudimos cargar los flows.",
+      );
+    },
+    [replaceFlow],
+  );
 
   const persistSnapshot = useCallback(() => {
     writeSaviaRequestSnapshot(scopeState.scope, {
@@ -151,6 +175,20 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
   // Aislamiento entre usuarios: si cambia la identidad, vacía estado y caché.
   useEffect(() => {
     let active = true;
+    if (identityGenerationRef.current !== principalGeneration) {
+      identityGenerationRef.current = principalGeneration;
+      requestRef.current += 1;
+      identityRef.current = null;
+      dirtyRef.current = false;
+      setDirty(false);
+      replaceFlow(null);
+      setFlows([]);
+      setFolders([]);
+      setStepIndex(0);
+      setError(null);
+      clearAllSaviaRequestSnapshots();
+      clearCachedTenantOptions();
+    }
     try {
       const session = (
         services as { authSession?: { getIdentity?: () => Promise<unknown> } }
@@ -167,6 +205,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
           }
           if (identityRef.current !== id) {
             identityRef.current = id;
+            requestRef.current += 1;
             dirtyRef.current = false;
             setDirty(false);
             replaceFlow(null);
@@ -185,17 +224,28 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, [replaceFlow, services]);
+  }, [principalGeneration, replaceFlow, services]);
 
   const refreshNavigation = useCallback(async () => {
-    const [nextFlows, nextFolders] = await Promise.all([
-      api.listFlows(),
-      api.listFolders(),
-    ]);
-    setFlows(nextFlows);
-    setFolders(nextFolders);
-    return nextFlows;
-  }, [api]);
+    const readGeneration = requestRef.current;
+    const readScope = scopeRef.current;
+    const isCurrentRead = () =>
+      readGeneration === requestRef.current && readScope === scopeRef.current;
+    try {
+      const [nextFlows, nextFolders] = await Promise.all([
+        api.listFlows(),
+        api.listFolders(),
+      ]);
+      if (!isCurrentRead()) return [];
+      setFlows(nextFlows);
+      setFolders(nextFolders);
+      return nextFlows;
+    } catch (cause) {
+      if (!isCurrentRead()) return [];
+      clearAfterDeniedRead(cause);
+      throw cause;
+    }
+  }, [api, clearAfterDeniedRead]);
 
   const saveDraft = useCallback(async () => {
     const draft = draftRef.current;
@@ -280,6 +330,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
       await refreshNavigation();
       return true;
     } catch (exception) {
+      clearAfterDeniedRead(exception);
       setError(
         exception instanceof Error
           ? exception.message
@@ -289,7 +340,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
     } finally {
       setBusy(false);
     }
-  }, [api, refreshNavigation, replaceFlow]);
+  }, [api, clearAfterDeniedRead, refreshNavigation, replaceFlow]);
 
   useEffect(() => {
     if (scopeRef.current === scopeState.scope) return;
@@ -379,8 +430,9 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
               if (!isCurrent()) return;
               setFlows(nextFlows);
               setFolders(nextFolders);
-            } catch {
-              // Conserva lo mostrado; el error se reintenta al navegar.
+            } catch (cause) {
+              if (isCurrent()) clearAfterDeniedRead(cause);
+              // Conserva lo mostrado tras fallos transitorios.
             }
           })();
         }
@@ -425,7 +477,9 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
             .then((nextFolders) => {
               if (isCurrent()) setFolders(nextFolders);
             })
-            .catch(() => undefined);
+            .catch((cause) => {
+              if (isCurrent()) clearAfterDeniedRead(cause);
+            });
           const nextFlow = await flowPromise;
           if (!isCurrent()) return;
           setFlows(nextFlows);
@@ -459,8 +513,9 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
           }
           if (!isCurrent()) return;
           setError(null);
-        } catch {
-          // Una respuesta tardía o fallida no reemplaza el ámbito actual.
+        } catch (cause) {
+          if (isCurrent()) clearAfterDeniedRead(cause);
+          // Una respuesta tardía o transitoria no reemplaza el ámbito actual.
         }
       })();
       return;
@@ -493,6 +548,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
           setFolders(nextFolders);
         } catch (exception) {
           if (!isCurrent()) return;
+          clearAfterDeniedRead(exception);
           setError(
             exception instanceof Error
               ? exception.message
@@ -536,7 +592,9 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
           .then((nextFolders) => {
             if (isCurrent()) setFolders(nextFolders);
           })
-          .catch(() => undefined);
+          .catch((cause) => {
+            if (isCurrent()) clearAfterDeniedRead(cause);
+          });
         const nextFlow = await flowPromise;
         if (!isCurrent()) return;
         if (!summary || !nextFlow) {
@@ -556,6 +614,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
         }
       } catch (exception) {
         if (!isCurrent()) return;
+        clearAfterDeniedRead(exception);
         setError(
           exception instanceof Error
             ? exception.message
@@ -568,6 +627,8 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
   }, [
     active,
     api,
+    clearAfterDeniedRead,
+    principalGeneration,
     scopeKey,
     location.search,
     navigate,

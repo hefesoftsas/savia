@@ -9,6 +9,8 @@ load_environment_file() {
 }
 
 secrets_directory="${SAVIA_SECRETS_DIR:-infra/secrets}"
+export SAVIA_FLOWS_ENABLED="${SAVIA_FLOWS_ENABLED:-1}"
+export WRANGLER_REGISTRY_PATH="${WRANGLER_REGISTRY_PATH:-$PWD/.wrangler/savia-local-dev-registry}"
 load_environment_file "$secrets_directory/auth.dev.env"
 load_environment_file "$secrets_directory/assistant-api.dev.env"
 load_environment_file "$secrets_directory/mcp.dev.env"
@@ -126,6 +128,20 @@ start_process pnpm --filter @savia/hook-executor exec wrangler dev --local \
   --ip 127.0.0.1 --port 8798 --inspector-port 9233 --config wrangler.jsonc
 start_process pnpm --filter @savia/request exec wrangler dev --local \
   --ip 127.0.0.1 --port 8797 --inspector-port 9232 --config wrangler.jsonc
+
+if [ "$SAVIA_FLOWS_ENABLED" = "1" ]; then
+  pnpm flows:build
+  start_process env "SAVIA_FLOWS_PUBLIC_ORIGIN=$admin_origin" pnpm flows:dev
+  attempts=0
+  while ! curl --fail --silent --max-time 2 http://127.0.0.1:8796/health >/dev/null; do
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 100 ]; then
+      printf '%s\n' "Local Savia Flows did not become ready" >&2
+      exit 1
+    fi
+    sleep 0.1
+  done
+fi
 
 start_process env "SAVIA_PUBLIC_ORIGIN=$admin_origin" "SAVIA_INTERNAL_BRIDGE_KEY=$identity_bridge_key" "SAVIA_DISABLE_CAPTCHA=1" "SAVIA_MOCK_QUOTES=${SAVIA_MOCK_QUOTES:-1}" pnpm exec node scripts/dev-api-runtime.mjs
 start_process pnpm exec node scripts/crm-sync-local-scheduler.mjs

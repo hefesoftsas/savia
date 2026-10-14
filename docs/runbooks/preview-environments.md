@@ -4,6 +4,17 @@ Spin up an isolated copy of the stack for a branch, test it, then destroy it.
 Nothing is shared with production: fresh D1 databases (migrated), a fresh R2
 bucket, ephemeral secrets, and `*.workers.dev` URLs (no custom domain).
 
+Infrastructure declarations live in `infra/pulumi/branch-preview/` and
+`infra/pulumi/branch-preview-worker-config.mjs`. Each branch uses a separate
+`branch-<slug>` Pulumi stack in the configured remote R2 backend. Existing exact
+branch D1/R2 resources are adopted before applying; deployments never silently
+replace them with a fresh state. Install the pinned Pulumi CLI and run
+`npm ci --prefix infra/pulumi --ignore-scripts` locally. Set `PULUMI_BACKEND_URL`,
+`PULUMI_CONFIG_PASSPHRASE`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` in
+addition to Cloudflare credentials. GitHub uses the preview environment secrets
+described in [the infrastructure runbook](pulumi-infrastructure.md). Dry runs
+stay credential-free and never create a stack.
+
 ## One-click deploy
 
 GitHub Actions → **Preview environment** → Run workflow:
@@ -19,8 +30,9 @@ the deploy summary (ephemeral per preview, like all its secrets).
 
 Same workflow, `action: destroy`, `confirm:` set to the exact branch name.
 Without a matching confirm the job refuses. Destroy deletes the 5 workers,
-both D1 databases, and empties + deletes the R2 bucket (a leftover bucket is
-reported as a warning, never silently kept).
+both D1 databases, and empties + deletes the R2 bucket through the branch Pulumi
+stack. A missing/mismatched stack or deletion failure stops the job; the shared
+state bucket and plugin registry are never targets.
 
 Local equivalents:
 

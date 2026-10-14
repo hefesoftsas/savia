@@ -1,3 +1,4 @@
+import { registerPluginDevelopment } from "./plugin-development";
 import {
   getMaintainedSummary,
   maintainedGroupCountStatement,
@@ -82,7 +83,7 @@ import { registerExtensions, type ExtensionOptions } from "./extensions";
 import { registerPluginStore, type PluginStoreOptions } from "./plugin-store";
 import { registerExtensionActions } from "./extension-actions";
 import { registerExtensionSummaries } from "./extension-summaries";
-import { registerWorkflows, type WorkflowOptions } from "./workflows/routes";
+import { registerWorkflows, type WorkflowOptions } from "@savia/flows-native/routes";
 import {
   registerNotifications,
   type NotificationRouteOptions,
@@ -118,13 +119,19 @@ export function createStudioApp(
     NotificationRouteOptions,
 ) {
   const app = new Hono<Env>();
-  app.use(
-    "/api/*",
-    bodyLimit({
-      maxSize: 6 * 1024 * 1024,
-      onError: (c) => c.json({ error: "Máximo 6 MB por solicitud." }, 413),
-    }),
-  );
+  app.use("/api/*", async (c, next) => {
+    const nativePublication =
+      c.req.method === "POST" &&
+      /^\/api\/plugin-development\/[^/]+\/publish$/.test(c.req.path);
+    return bodyLimit({
+      maxSize: 6 * 1024 * 1024 + (nativePublication ? 64 * 1024 : 0),
+      onError: (context) =>
+        context.json(
+          { error: "Request exceeds the plugin package limit." },
+          413,
+        ),
+    })(c, next);
+  });
   app.use("/api/*", async (c, next) => {
     c.set(
       "principalId",
@@ -216,6 +223,8 @@ export function createStudioApp(
     };
     await next();
   });
+  // Native authoring has its own scoped ACL; keep collection grants narrowed.
+  registerPluginDevelopment(app, options);
   if (options?.accessPolicy)
     registerAccessMiddleware(app, options.accessPolicy);
   app.get("/api/access-context", (c) => c.json({ data: null }));

@@ -69,6 +69,12 @@ it("stores encrypted input and consumes a contact-bound confirmation only once",
   expect(await s.actions.consume(s.session, id)).toMatchObject({
     state: "queued",
   });
+  const queued = await env.DB.prepare(
+    "SELECT queued_at FROM whatsapp_channel_actions WHERE id=?",
+  )
+    .bind(action.id)
+    .first<{ queued_at: string | null }>();
+  expect(queued?.queued_at).toBeTruthy();
   expect(await s.actions.consume(s.session, id)).toBeNull();
 });
 it("invalidates the fifth wrong code and a menu switch cancels pending previews", async () => {

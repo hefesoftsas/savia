@@ -31,6 +31,7 @@ import {
   type ExtensionConnectionConnector,
 } from "./extension-connections";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
+import { isReadAccessDenied } from "@/queries/read-state";
 
 type ExtensionManifest = {
   id: string;
@@ -116,8 +117,20 @@ export default function ExtensionManager({
 
   async function reload() {
     const generation = ++listGeneration.current;
-    const response = await api<{ data: ExtensionEntry[] }>("/extensions");
-    if (generation === listGeneration.current) setEntries(response.data);
+    try {
+      const response = await api<{ data: ExtensionEntry[] }>("/extensions");
+      if (generation === listGeneration.current) {
+        setEntries(response.data);
+        setError("");
+      }
+    } catch (reason) {
+      if (generation === listGeneration.current && isReadAccessDenied(reason)) {
+        setEntries([]);
+        setConfiguredExtensionId(null);
+        setError(message(reason));
+      }
+      throw reason;
+    }
   }
 
   async function reloadRemoteChanges() {
@@ -142,7 +155,10 @@ export default function ExtensionManager({
           setEntries(response.data);
       })
       .catch((reason) => {
-        if (active) setError(message(reason));
+        if (active && generation === listGeneration.current) {
+          if (isReadAccessDenied(reason)) setEntries([]);
+          setError(message(reason));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);

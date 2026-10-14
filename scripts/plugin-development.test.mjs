@@ -117,6 +117,23 @@ test("development versions are staged without changing the release manifest", ()
     assert.ok(
       result.inputs.some((path) => path.includes("packages/plugin-ui/src/")),
     );
+    const originals = JSON.parse(
+      execFileSync("unzip", ["-p", outputPath, "src/original-source.json"], {
+        encoding: "utf8",
+      }),
+    );
+    assert.equal(
+      originals["packages/plugin-example-tasks/entry.tsx"],
+      readFileSync(join(directory, "entry.tsx"), "utf8"),
+    );
+    assert.equal(
+      originals["packages/plugin-ui/src/workbench.tsx"],
+      readFileSync(join(root, "packages/plugin-ui/src/workbench.tsx"), "utf8"),
+    );
+    assert.ok(Object.keys(originals).some((path) => path.endsWith(".css")));
+    assert.ok(
+      Object.keys(originals).every((path) => !path.includes("node_modules")),
+    );
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

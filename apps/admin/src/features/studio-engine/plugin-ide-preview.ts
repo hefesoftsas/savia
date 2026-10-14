@@ -121,7 +121,7 @@ export function createPluginPreviewDocument(
       catch { try { return String(part); } catch { return "[unprintable value]"; } }
     }
     const rowsByCollection = safe(payload.fixtures.collections || {});
-    const settingsValue = safe(payload.fixtures.settings || {});
+    const settingsValue = safe({ ...(payload.store.settings?.defaults || {}), ...(payload.fixtures.settings || {}) });
     let settingsVersion = 1;
     let settingsUpdatedAt = null;
     const mockPanel = { dirty: false, busy: false };

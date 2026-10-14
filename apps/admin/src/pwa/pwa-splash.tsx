@@ -4,6 +4,10 @@ import {
   saviaLoadingCss,
 } from "@savia/tenant-host/loading";
 import { cn } from "@/lib/utils";
+import {
+  LoadingRecovery,
+  useLoadingTimeout,
+} from "@/components/admin/loading-recovery";
 
 export type PwaSpinnerSize = "xs" | "sm" | "md" | "lg" | "xl";
 
@@ -52,17 +56,20 @@ export const PWA_SPLASH_MESSAGE = SAVIA_LOADING_MESSAGE;
 export function PwaSplash({
   message = PWA_SPLASH_MESSAGE,
   contained = false,
+  recoveryHref,
 }: {
   message?: string;
   contained?: boolean;
+  recoveryHref?: string;
   loadingPrimary?: string;
   loadingSecondary?: string;
 }) {
   const Container = contained ? "div" : "main";
+  const timedOut = useLoadingTimeout(`${message}:${contained}`);
   return (
     <Container
       role="status"
-      aria-label={message}
+      aria-label={timedOut ? undefined : message}
       className="savia-loading"
       style={
         contained
@@ -71,17 +78,23 @@ export function PwaSplash({
       }
     >
       <style>{saviaLoadingCss}</style>
-      <span className="savia-loading-mark">
-        <PwaSpinner size="xl" className="savia-ring-cover" />
-        <img
-          src={SAVIA_LOADING_LOGO}
-          alt=""
-          width={64}
-          height={64}
-          className="size-16 rounded-2xl"
-        />
-      </span>
-      <p>{message}</p>
+      {timedOut ? (
+        <LoadingRecovery signInHref={recoveryHref} />
+      ) : (
+        <>
+          <span className="savia-loading-mark">
+            <PwaSpinner size="xl" className="savia-ring-cover" />
+            <img
+              src={SAVIA_LOADING_LOGO}
+              alt=""
+              width={64}
+              height={64}
+              className="size-16 rounded-2xl"
+            />
+          </span>
+          <p>{message}</p>
+        </>
+      )}
     </Container>
   );
 }

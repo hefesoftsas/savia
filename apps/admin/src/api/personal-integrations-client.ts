@@ -138,7 +138,7 @@ export class PersonalIntegrationsClient {
   constructor(private readonly api: ApiClient) {
     if (typeof window !== "undefined") {
       window.addEventListener("savia:session-cleared", this.clearCache);
-      window.addEventListener("savia:identity-changed", this.clearCache);
+      window.addEventListener("savia:principal-changed", this.clearCache);
     }
   }
   private connectionsPromise: Promise<PersonalIntegrationConnection[]> | null =

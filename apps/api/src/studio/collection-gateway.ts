@@ -50,7 +50,7 @@ export type CollectionGatewayContext = {
   tenant: string;
   publicApiBasePath?: string;
   publicOrigin?: string;
-  pluginRegistry?: { url: string; token: string };
+  pluginRegistry?: { url: string; token: string; publishToken?: string };
   documentDelivery?: DocumentDeliveryBridge;
   actor: AppActor;
   accessPolicy?: AccessPolicy;
@@ -114,6 +114,17 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
       apiBasePath: context.publicApiBasePath,
       entryGrantSecret: integrationKey,
       pluginRegistry: context.pluginRegistry,
+      pluginDevelopmentAccess: {
+        workspaceLabel: `Workspace ${tenant.replace(/^tenant:/, "")}`,
+        read:
+          canManageTenantExtensions(actor, tenant) &&
+          (actor.credential?.kind !== "personal-api-key" ||
+            actor.credential.scopes.includes("plugins:read")),
+        publish:
+          canManageTenantExtensions(actor, tenant) &&
+          (actor.credential?.kind !== "personal-api-key" ||
+            actor.credential.scopes.includes("plugins:publish")),
+      },
       policy: createNotificationPolicy(db),
       integrationFetch: context.collectionFetch,
       authorizeWorkflow: async ({ workspace }) =>

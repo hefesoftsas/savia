@@ -6,7 +6,36 @@ import {
   execFileWithInput,
   parseWorkersDevUrl,
   requireGatewayOrigin,
+  workerConfig,
 } from "./preview-deploy.mjs";
+import { previewNames } from "./preview-environment.mjs";
+
+test("branch preview schedules are opt-in", () => {
+  const names = previewNames("schedule-opt-in");
+  const ids = { auth: "auth-id", domain: "domain-id" };
+  const origin = "https://preview.example.test";
+
+  const defaultConfig = workerConfig("api", names, ids, origin);
+  const scheduledConfig = workerConfig("api", names, ids, origin, {
+    enableSchedules: true,
+  });
+
+  assert.equal(defaultConfig.triggers, undefined);
+  assert.deepEqual(scheduledConfig.triggers, { crons: ["* * * * *"] });
+});
+
+test("routes public quote reports through the preview gateway", () => {
+  const config = workerConfig(
+    "gateway",
+    { workers: { gateway: "savia-preview-test" } },
+    {},
+    "https://savia-preview-test.workers.dev",
+    { assetsDir: "/tmp/savia-admin-assets" },
+  );
+
+  assert.ok(config.assets.run_worker_first.includes("/public/quotes"));
+  assert.ok(config.assets.run_worker_first.includes("/public/quotes/*"));
+});
 
 test("parses Cloudflare account-subdomain worker URLs", () => {
   assert.equal(

@@ -153,7 +153,15 @@ test("writes only the supported production workers and retains their runtime set
     );
     assert.equal("TURNSTILE_SECRET_KEY" in api.vars, false);
     assert.equal(api.keep_vars, true);
-    assert.equal(api.vars.WHATSAPP_PROCESSING_MODE, "scheduled");
+    assert.equal(api.vars.WHATSAPP_PROCESSING_MODE, "events");
+    assert.deepEqual(api.durable_objects.bindings, [
+      { name: "REALTIME_HUB", class_name: "RealtimeHub" },
+      { name: "WHATSAPP_DISPATCHER", class_name: "WhatsappDispatcher" },
+    ]);
+    assert.deepEqual(api.migrations, [
+      { tag: "v1", new_sqlite_classes: ["RealtimeHub"] },
+      { tag: "v2", new_sqlite_classes: ["WhatsappDispatcher"] },
+    ]);
     assert.deepEqual(api.triggers, { crons: ["* * * * *"] });
     assert.deepEqual(api.observability, {
       enabled: true,
@@ -257,6 +265,48 @@ test("writes only the supported production workers and retains their runtime set
   }
 });
 
+test("routes public quote pages through the admin worker for security headers", async () => {
+  const outputRoot = await mkdtemp(
+    join(tmpdir(), "savia-public-quote-config-"),
+  );
+  try {
+    for (const deploymentEnvironment of ["production", "preview"]) {
+      await renderProductionConfigs({
+        deploymentEnvironment,
+        authD1Id: `${deploymentEnvironment}-auth-id`,
+        domainD1Id: `${deploymentEnvironment}-domain-id`,
+        ...(deploymentEnvironment === "preview"
+          ? {
+              documentsBucket: "savia-documents-preview-test",
+              publicOrigin: "https://savia-preview.hefesoft.com",
+            }
+          : {}),
+        outputRoot,
+      });
+      const admin = JSON.parse(
+        await readFile(
+          join(
+            outputRoot,
+            `apps/admin/wrangler.${deploymentEnvironment}.jsonc`,
+          ),
+          "utf8",
+        ),
+      );
+      assert.ok(admin.assets.run_worker_first.includes("/public/quotes"));
+      assert.ok(admin.assets.run_worker_first.includes("/public/quotes/*"));
+    }
+
+    const local = await readFile(
+      new URL("../apps/admin/wrangler.jsonc", import.meta.url),
+      "utf8",
+    );
+    assert.match(local, /"\/public\/quotes"/);
+    assert.match(local, /"\/public\/quotes\/\*"/);
+  } finally {
+    await rm(outputRoot, { recursive: true, force: true });
+  }
+});
+
 test("renders Jira only when its integration ID is explicitly configured", async () => {
   const outputRoot = await mkdtemp(join(tmpdir(), "savia-jira-config-"));
   try {
@@ -321,7 +371,7 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
       if (app === "api") {
         assert.deepEqual(conf.triggers, { crons: ["* * * * *"] });
         assert.equal(conf.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE, "true");
-        assert.equal(conf.vars.WHATSAPP_PROCESSING_MODE, "scheduled");
+        assert.equal(conf.vars.WHATSAPP_PROCESSING_MODE, "events");
         assert.equal(conf.vars.COMPANION_ENABLED, "true");
         assert.equal(conf.r2_buckets[0].bucket_name, "savia-documents-preview");
         assert.equal(

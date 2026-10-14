@@ -1,4 +1,11 @@
 export const settingsMessages = {
+  "No se pudo cargar el listado de usuarios. Comprueba tu conexión e inténtalo de nuevo.":
+    [
+      "No se pudo cargar el listado de usuarios. Comprueba tu conexión e inténtalo de nuevo.",
+      "Could not load the user list. Check your connection and try again.",
+      "Não foi possível carregar a lista de usuários. Verifique sua conexão e tente novamente.",
+    ],
+  Reintentar: ["Reintentar", "Retry", "Tentar novamente"],
   "Tu URL de Savia": ["Tu URL de Savia", "Your Savia URL", "Sua URL do Savia"],
   "Savia asigna esta URL a tu organización. No se puede editar aquí. Compártela para acceder a tu espacio.":
     [

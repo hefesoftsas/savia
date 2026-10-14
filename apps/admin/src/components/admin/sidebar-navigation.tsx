@@ -121,6 +121,13 @@ export const navigationDefinitions: Record<
     section: "administration",
     icon: Palette,
   },
+  "savia-flows": {
+    id: "savia-flows",
+    labelKey: "savia.sidebar.items.savia-flows",
+    route: "/savia-flows",
+    section: "productivity",
+    icon: Workflow,
+  },
   "access-control": {
     id: "access-control",
     labelKey: "savia.sidebar.items.access-control",

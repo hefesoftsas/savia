@@ -13,6 +13,7 @@ const saviaEnglish = {
         "domain-history": "Tenant history",
         "domain-packages": "Packages and extensions",
         "plugin-studio": "Plugin Studio",
+        "savia-flows": "Savia Flows",
         "virtual-employees": "AI employees",
         "tenant-branding": "Workspace identity",
 
@@ -49,6 +50,7 @@ const saviaEnglish = {
       resetOrderShort: "Reset",
       noSearchResults: "We couldn't find tools with that name.",
       saveOrderError: "We couldn't save the menu order. Please try again.",
+      dismissSaveError: "Dismiss menu order error",
       moveToPreviousGroup: "Move %{item} to previous group",
       moveToNextGroup: "Move %{item} to next group",
       reorder: "Reorder %{item}",
@@ -91,6 +93,7 @@ const saviaEnglish = {
       noPreviousScreen: "There is no previous screen",
       noNextScreen: "There is no next screen",
       toggleSidebar: "Toggle sidebar",
+      backToSavia: "Back to Savia",
     },
     notificationInbox: {
       title: "Notifications",
@@ -568,6 +571,7 @@ const saviaSpanish = {
         "domain-history": "Historial del tenant",
         "domain-packages": "Paquetes y extensiones",
         "plugin-studio": "Editor de plugins",
+        "savia-flows": "Savia Flows",
         "virtual-employees": "Empleados IA",
         "tenant-branding": "Identidad del espacio",
 
@@ -605,6 +609,7 @@ const saviaSpanish = {
       noSearchResults: "No encontramos herramientas con ese nombre.",
       saveOrderError:
         "No pudimos guardar el orden del menú. Inténtalo de nuevo.",
+      dismissSaveError: "Descartar error del orden del menú",
       moveToPreviousGroup: "Mover %{item} al grupo anterior",
       moveToNextGroup: "Mover %{item} al grupo siguiente",
       reorder: "Reordenar %{item}",
@@ -647,6 +652,7 @@ const saviaSpanish = {
       noPreviousScreen: "No hay una pantalla anterior",
       noNextScreen: "No hay una pantalla siguiente",
       toggleSidebar: "Mostrar u ocultar menú",
+      backToSavia: "Volver a Savia",
     },
     notificationInbox: {
       title: "Notificaciones",
@@ -1126,6 +1132,7 @@ const saviaPortuguese = {
         "domain-history": "Histórico do tenant",
         "domain-packages": "Pacotes e extensões",
         "plugin-studio": "Editor de plugins",
+        "savia-flows": "Savia Flows",
         "virtual-employees": "Funcionários IA",
         "tenant-branding": "Identidade do espaço",
 
@@ -1163,6 +1170,7 @@ const saviaPortuguese = {
       noSearchResults: "Não encontramos ferramentas com esse nome.",
       saveOrderError:
         "Não foi possível salvar a ordem do menu. Tente novamente.",
+      dismissSaveError: "Dispensar erro da ordem do menu",
       moveToPreviousGroup: "Mover %{item} para o grupo anterior",
       moveToNextGroup: "Mover %{item} para o grupo seguinte",
       reorder: "Reordenar %{item}",
@@ -1205,6 +1213,7 @@ const saviaPortuguese = {
       noPreviousScreen: "Não há uma tela anterior",
       noNextScreen: "Não há uma tela seguinte",
       toggleSidebar: "Alternar menu lateral",
+      backToSavia: "Voltar à Savia",
     },
     notificationInbox: {
       title: "Notificações",

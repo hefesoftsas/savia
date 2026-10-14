@@ -11,6 +11,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PublicLinkQr } from "./public-link-qr";
+import { QuoteLinkManager } from "../public-quotes/quote-link-manager";
 import {
   ArrowLeft,
   Ban,
@@ -1202,6 +1203,10 @@ export function PublicLinkManager({
           </div>
         )}
       </div>
+
+      {kind === "quote" && (
+        <QuoteLinkManager tenantId={tenantId} request={request} />
+      )}
     </section>
   );
 }

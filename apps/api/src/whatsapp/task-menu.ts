@@ -34,7 +34,7 @@ export function buildTaskMenu(
   if (!menu.tasks.length)
     return "No hay tareas disponibles para tu número en este momento.";
   const text =
-    "¿Qué deseas hacer? Escribe menú o inicio para volver aquí en cualquier momento.";
+    "¿Qué deseas hacer? Escribe menú o inicio para volver aquí en cualquier momento. Para reiniciar tus borradores y conversación, escribe Borrar mis datos y empezar de nuevo.";
   const options = menuOptions(menu);
   return nativeLists
     ? { kind: "list", text, buttonLabel: "Elegir tarea", options }

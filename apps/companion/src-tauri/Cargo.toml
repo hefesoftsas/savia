@@ -30,8 +30,16 @@ ruopus = "=0.1.2"
 rubato = "=5.0.1"
 url = "=2.5.8"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Without this feature keyring falls back to an in-memory mock and remembered
+# credentials would never survive a restart.
+keyring = { version = "=3.6.3", features = ["apple-native"] }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 wasapi = "=0.24.0"
+# Without this feature keyring falls back to an in-memory mock and remembered
+# credentials would never survive a restart.
+keyring = { version = "=3.6.3", features = ["windows-native"] }
 
 [profile.release]
 panic = "abort"

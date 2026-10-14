@@ -27,6 +27,7 @@ export type TestAppOptions = {
   assistantConfiguration?: Param<12>;
   assistantModelCatalog?: Param<13>;
   saviaRequestService?: Param<14>;
+  saviaFlows?: Param<29>;
   personalIntegrations?: Param<15>;
   studioIntegrationKey?: Param<16>;
   externalCollections?: Param<17>;
@@ -75,5 +76,8 @@ export function createTestApp(options: TestAppOptions = {}) {
     options.identityBridgeKey,
     options.companion,
     options.pagesSearch,
+    undefined,
+    undefined,
+    options.saviaFlows,
   );
 }

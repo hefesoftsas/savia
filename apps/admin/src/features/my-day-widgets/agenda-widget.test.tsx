@@ -49,7 +49,7 @@ describe("useMyDayAgenda", () => {
       () => new Promise(() => {}),
     );
     act(() => {
-      window.dispatchEvent(new Event("savia:identity-changed"));
+      window.dispatchEvent(new Event("savia:principal-changed"));
       lateUpdate([
         {
           id: "private",
@@ -181,7 +181,7 @@ describe("useMyDayAgenda", () => {
     );
   });
 
-  it("does not show a previous session agenda after identity changes", async () => {
+  it("does not show a previous session agenda after principal replacement", async () => {
     const client = integrations({
       listConnections: vi
         .fn()
@@ -194,7 +194,7 @@ describe("useMyDayAgenda", () => {
     await waitFor(() => expect(first.result.current.events).toHaveLength(1));
     first.unmount();
 
-    window.dispatchEvent(new Event("savia:identity-changed"));
+    window.dispatchEvent(new Event("savia:principal-changed"));
     const second = renderHook(() => useMyDayAgenda(client));
 
     expect(second.result.current.events).toEqual([]);
@@ -224,7 +224,7 @@ describe("useMyDayAgenda", () => {
     const oldSession = renderHook(() => useMyDayAgenda(client));
     oldSession.unmount();
 
-    window.dispatchEvent(new Event("savia:identity-changed"));
+    window.dispatchEvent(new Event("savia:principal-changed"));
     const currentSession = renderHook(() => useMyDayAgenda(client));
     await waitFor(() =>
       expect(currentSession.result.current.events[0]?.title).toBe(

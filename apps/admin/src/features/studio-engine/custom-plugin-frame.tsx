@@ -225,16 +225,16 @@ export function CustomPluginFrame({
       );
       uiSession.current = "";
     };
-    const onIdentityChanged = () => {
+    const onPrincipalChanged = () => {
       revoked.current = false;
       setAccessEnded(false);
       invalidatePrefetch(true);
     };
     window.addEventListener("savia:session-cleared", onSessionCleared);
-    window.addEventListener("savia:identity-changed", onIdentityChanged);
+    window.addEventListener("savia:principal-changed", onPrincipalChanged);
     return () => {
       window.removeEventListener("savia:session-cleared", onSessionCleared);
-      window.removeEventListener("savia:identity-changed", onIdentityChanged);
+      window.removeEventListener("savia:principal-changed", onPrincipalChanged);
     };
   }, []);
 

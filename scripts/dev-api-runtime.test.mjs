@@ -6,6 +6,44 @@ import { resolve } from "node:path";
 import { parseEnv } from "node:util";
 import { prepareApiRuntime } from "./dev-api-runtime.mjs";
 
+test("enables the private local Flows binding only for an explicitly enabled local runtime", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "savia-flows-core-config-"));
+  for (const app of ["api", "connector-gateway"]) {
+    await mkdir(resolve(root, `apps/${app}`), { recursive: true });
+    await writeFile(
+      resolve(root, `apps/${app}/wrangler.jsonc`),
+      JSON.stringify({ name: app, main: "src/index.ts" }),
+    );
+  }
+  await mkdir(resolve(root, "apps/flows/.wrangler"), { recursive: true });
+  await writeFile(
+    resolve(root, "apps/flows/.wrangler/local-secrets.json"),
+    JSON.stringify({ bridgeSecret: "local-bridge-" + "x".repeat(32) }),
+  );
+  const [enabledCore, connectors] = await prepareApiRuntime(root, {
+    SAVIA_FLOWS_ENABLED: "1",
+  });
+  const config = JSON.parse(await readFile(enabledCore, "utf8"));
+  assert.deepEqual(config.services, [
+    { binding: "SAVIA_FLOWS", service: "savia-flows" },
+  ]);
+  const variables = parseEnv(
+    await readFile(resolve(enabledCore, "../.dev.vars"), "utf8"),
+  );
+  assert.equal(
+    variables.SAVIA_FLOWS_BRIDGE_SECRET,
+    "local-bridge-" + "x".repeat(32),
+  );
+  assert.equal(variables.SAVIA_FLOWS_LOCAL_ONLY, "true");
+  const connectorVariables = parseEnv(
+    await readFile(resolve(connectors, "../.dev.vars"), "utf8"),
+  );
+  assert.equal(connectorVariables.SAVIA_FLOWS_BRIDGE_SECRET, undefined);
+  const [disabledCore] = await prepareApiRuntime(root, {});
+  const disabledConfig = JSON.parse(await readFile(disabledCore, "utf8"));
+  assert.equal(disabledConfig.services, undefined);
+});
+
 test("isolates core and connector configs while supplying their scoped secret vars", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "savia-runtime-"));
   for (const [app, name] of [

@@ -56,6 +56,7 @@ function setup(
     receive?: (input: WhatsappInboundInput) => Promise<boolean>;
     receipt?: (input: WhatsappDeliveryInput) => Promise<void>;
     process?: () => Promise<unknown>;
+    wake?: (input: WhatsappInboundInput) => Promise<void>;
     configured?: boolean;
     deferProcessing?: boolean;
   } = {},
@@ -68,6 +69,7 @@ function setup(
     repository: { receive, receipt },
     ...(options.configured === false ? {} : { appSecret, verifyToken }),
     process,
+    wake: options.wake,
     deferProcessing: options.deferProcessing,
   });
   return { app, receive, receipt, process };
@@ -193,6 +195,67 @@ describe("WhatsApp webhook", () => {
     });
     expect((await post(app, webhookBody(messageValue()))).status).toBe(200);
     expect(receive).toHaveBeenCalledOnce();
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it("awaits a durable event wake before acknowledging inbound messages", async () => {
+    const calls: string[] = [];
+    const { app } = setup({
+      receive: async () => {
+        calls.push("receive");
+        return true;
+      },
+      wake: async (input) => {
+        calls.push(`wake:${input.messageId}`);
+        await Promise.resolve();
+      },
+      process: async () => {
+        calls.push("process");
+      },
+    });
+
+    const response = await post(app, webhookBody(messageValue()));
+    expect(response.status).toBe(200);
+    expect(calls).toEqual(["receive", "wake:wamid.1"]);
+  });
+
+  it("wakes duplicate persisted inputs so a lost signal can be repaired", async () => {
+    const wake = vi.fn(async () => undefined);
+    const { app, receive, process } = setup({
+      receive: async () => false,
+      wake,
+    });
+    expect((await post(app, webhookBody(messageValue()))).status).toBe(200);
+    expect(receive).toHaveBeenCalledOnce();
+    expect(wake).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ messageId: "wamid.1" }),
+    );
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 when the event wake fails and does not run legacy processing", async () => {
+    const process = vi.fn(async () => undefined);
+    const { app } = setup({
+      wake: async () => {
+        throw new Error("dispatcher unavailable");
+      },
+      process,
+    });
+    expect((await post(app, webhookBody(messageValue()))).status).toBe(503);
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it("does not wake receipt-only callbacks or invoke legacy processing in event mode", async () => {
+    const wake = vi.fn(async () => undefined);
+    const process = vi.fn(async () => undefined);
+    const { app, receipt } = setup({ wake, process });
+    const body = webhookBody({
+      metadata: { phone_number_id: "phone-456" },
+      statuses: [{ id: "wamid.outbound", status: "delivered" }],
+    });
+    expect((await post(app, body)).status).toBe(200);
+    expect(receipt).toHaveBeenCalledOnce();
+    expect(wake).not.toHaveBeenCalled();
     expect(process).not.toHaveBeenCalled();
   });
 

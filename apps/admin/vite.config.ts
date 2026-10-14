@@ -1,62 +1,19 @@
 import { companionDownloadsResponse } from "./src/companion-downloads-catalog";
+import { PUBLIC_VISITOR_ROUTE_DENYLIST } from "./src/pwa/deployment-recovery";
 import { pluginDevelopmentReload } from "./build/plugin-development";
 import { officePlugin } from "./build/office-plugin";
 import { collectOfflineShellAssets } from "./build/offline-shell-assets";
 import { reactSandboxPlugin } from "./build/react-sandbox-plugin";
 import { pluginIdeRuntimePlugin } from "./build/plugin-ide-runtime";
+import { compactBrandIcons } from "./build/compact-brand-icons";
+import { saviaManualChunk } from "./build/manual-chunks";
+import { flowsPlugin } from "./build/flows-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { brotliCompressSync, gzipSync, constants } from "node:zlib";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
-
-function precompressionPlugin(): Plugin {
-  return {
-    name: "savia-precompression",
-    apply: "build",
-    closeBundle() {
-      const distDir = fileURLToPath(new URL("./dist", import.meta.url));
-      function processDir(dir: string) {
-        try {
-          const entries = readdirSync(dir, { withFileTypes: true });
-          for (const entry of entries) {
-            const fullPath = join(dir, entry.name);
-            if (entry.isDirectory()) {
-              processDir(fullPath);
-            } else if (
-              entry.isFile() &&
-              (entry.name.endsWith(".js") ||
-                entry.name.endsWith(".css") ||
-                entry.name.endsWith(".html") ||
-                entry.name.endsWith(".svg")) &&
-              !entry.name.endsWith(".gz") &&
-              !entry.name.endsWith(".br")
-            ) {
-              const content = readFileSync(fullPath);
-              if (content.length >= 1024) {
-                const gz = gzipSync(content, { level: 9 });
-                writeFileSync(`${fullPath}.gz`, gz);
-                const br = brotliCompressSync(content, {
-                  params: {
-                    [constants.BROTLI_PARAM_QUALITY]: 5,
-                  },
-                });
-                writeFileSync(`${fullPath}.br`, br);
-              }
-            }
-          }
-        } catch {
-          // ignore directory access errors during closeBundle
-        }
-      }
-      processDir(distDir);
-    },
-  };
-}
 
 // Include the CRM route and its static dependencies without precaching the
 // thousands of optional icon/editor chunks shipped by the application.
@@ -75,11 +32,13 @@ function offlineShellPlugin(): Plugin {
 }
 
 const devApiTarget = process.env.SAVIA_DEV_API_URL || "http://127.0.0.1:8787";
-// Isolated previews preserve their public origin for authentication redirects.
-const devChangeOrigin = !process.env.SAVIA_DEV_API_URL;
+// Keep the browser's public origin for CSRF checks, authentication redirects,
+// and editor socket URLs, including the default local API on a different port.
+const devChangeOrigin = false;
 
 export default defineConfig({
   plugins: [
+    compactBrandIcons(),
     {
       name: "companion-download-catalog",
       configureServer(server) {
@@ -101,12 +60,12 @@ export default defineConfig({
       },
     },
     react(),
+    flowsPlugin(),
     pluginDevelopmentReload(),
     officePlugin(),
     tailwindcss(),
     reactSandboxPlugin(),
     pluginIdeRuntimePlugin(),
-    precompressionPlugin(),
     offlineShellPlugin(),
     // App shell precache for airplane-mode boot. Data stays in the Dexie
     // collection replica: no runtime caching of /v1/* here, so no API
@@ -127,18 +86,19 @@ export default defineConfig({
         navigateFallbackDenylist: [
           /^\/api/,
           /^\/v1/,
-          /^\/public\/forms/,
-          /^\/public\/bookings(?:\/|\?|$)/,
-          /^\/public\/pages(?:\/|\?|$)/,
+          ...PUBLIC_VISITOR_ROUTE_DENYLIST,
           /^\/s\/p(?:\/|\?|$)/,
           /^\/register(?:\/|\?|$)/,
           /^\/office(?:\/|$)/,
+          /^\/plugin-editor(?:\.html)?(?:\/|\?|$)/,
+          /^\/flows-ui(?:\/|\?|$)/,
         ],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         // Precache only the boot shell: dist ships ~9k chunks (43 MB),
         // precaching all of it would tax first visits. Remaining
         // same-origin assets cache on first use below.
+        globIgnores: ["assets/plugin-editor-vendor-*.js"],
         globPatterns: [
           "index.html",
           "assets/*.js",
@@ -158,6 +118,9 @@ export default defineConfig({
               ...entries.filter((entry) => {
                 if (entry.url === "index.html") return true;
                 if (shell.has(entry.url)) return true;
+                // The embedded Flows bundle is served as a separate child
+                // application and loads on demand through /flows-ui/*.
+                if (entry.url.startsWith("flows-ui/")) return false;
                 if (!entry.url.startsWith("assets/")) return true;
                 // Boot CSS is not part of the JS closure walk; it stays
                 // precached (few small files) so first paint is styled.
@@ -223,6 +186,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        pluginEditor: fileURLToPath(
+          new URL("./plugin-editor.html", import.meta.url),
+        ),
         office: fileURLToPath(new URL("./office/index.html", import.meta.url)),
       },
       output: {
@@ -232,40 +198,7 @@ export default defineConfig({
         // Excepción: los iconos de lookup por `import.meta.glob`
         // (lucide dist/esm/icons, @thesvg dist) DEBEN quedar divididos:
         // fusionarlos crea un único chunk eager de ~32 MB.
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return undefined;
-          const sep = String.raw`[/\\]`;
-          if (
-            new RegExp(`lucide-react${sep}dist${sep}esm${sep}icons${sep}`).test(
-              id,
-            )
-          )
-            return undefined;
-          if (new RegExp(`@thesvg${sep}react${sep}dist${sep}`).test(id))
-            return undefined;
-          if (
-            id.includes("lucide-react") ||
-            id.includes("@thesvg") ||
-            id.includes("lucide")
-          )
-            return "icons";
-          if (
-            id.includes("react-router") ||
-            id.includes("react-dom") ||
-            id.includes("/react/") ||
-            id.endsWith("/react")
-          )
-            return "react-vendor";
-          if (id.includes("@tanstack/react-query")) return "query-vendor";
-          if (id.includes("@dnd-kit")) return "dnd-vendor";
-          if (
-            id.includes("@radix-ui") ||
-            id.includes("sonner") ||
-            id.includes("tailwind")
-          )
-            return "ui-vendor";
-          return "vendor";
-        },
+        manualChunks: saviaManualChunk,
       },
     },
   },

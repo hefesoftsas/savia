@@ -1,6 +1,11 @@
-import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
+import { useRealtimeQuery } from "@/realtime/use-realtime-query";
 import { useSearchParams } from "react-router-dom";
-import { useEffect, useMemo, useState, type ElementType } from "react";
+import { useCallback, useMemo, useState, type ElementType } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionGeneration } from "@/auth/session-scope";
+import { readKey } from "@/queries/query-keys";
+import { isReadAccessDenied } from "@/queries/read-state";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
 import Nango from "@nangohq/frontend";
 import GoogleCalendar from "@thesvg/react/google-calendar";
 import GoogleDrive from "@thesvg/react/google-drive";
@@ -357,42 +362,51 @@ export function PersonalIntegrationsPage({
     next.set("tab", tab);
     setSearchParams(next);
   };
-  const [providers, setProviders] = useState<PersonalIntegrationProvider[]>([]);
-  const [connections, setConnections] = useState<
-    PersonalIntegrationConnection[]
-  >([]);
-  const [loading, setLoading] = useState(true);
   const [actionProvider, setActionProvider] =
     useState<PersonalIntegrationProviderId>();
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [providerLoadFailed, setProviderLoadFailed] = useState(false);
-
-  async function refresh() {
-    setLoading(true);
-    try {
+  const queryClient = useQueryClient();
+  const sessionGeneration = useSessionGeneration();
+  const queryKey = useMemo(
+    () =>
+      readKey(
+        { sessionGeneration, kind: "principal", id: "current" },
+        "personal-integrations",
+      ),
+    [sessionGeneration],
+  );
+  const read = useQuery({
+    queryKey,
+    queryFn: async ({ signal }) => {
       const [nextProviders, nextConnections] = await Promise.all([
         services.personalIntegrations.listProviders(),
         services.personalIntegrations.listConnections(true),
       ]);
-      setProviders(nextProviders);
-      setConnections(nextConnections);
-      setFeedback(null);
-      setProviderLoadFailed(false);
-    } catch (error) {
-      setProviders(unavailableProviders);
-      setConnections([]);
-      setFeedback(providerLoadFeedback(t, error));
-      setProviderLoadFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }
+      if (signal.aborted)
+        throw new DOMException("Read cancelled", "AbortError");
+      return { providers: nextProviders, connections: nextConnections };
+    },
+  });
+  const loading = read.isPending;
+  const accessDenied = isReadAccessDenied(read.error);
+  const providerLoadFailed =
+    read.isError && (read.data === undefined || accessDenied);
+  const providers =
+    read.data?.providers ??
+    (providerLoadFailed && !accessDenied ? unavailableProviders : []);
+  const connections = accessDenied ? [] : (read.data?.connections ?? []);
+  const loadError = read.error
+    ? providerLoadFeedback(t, read.error)
+    : undefined;
+  const refresh = useCallback(
+    () => queryClient.invalidateQueries({ queryKey, exact: true }),
+    [queryClient, queryKey],
+  );
 
-  useEffect(() => {
-    void refresh();
-  }, [services]);
-
-  useRealtimeRefresh({ topics: ["personal-integrations"], refresh });
+  useRealtimeQuery({
+    topics: ["personal-integrations"],
+    queryKeys: [queryKey],
+  });
 
   const connectionsByProvider = useMemo(
     () =>
@@ -424,7 +438,6 @@ export function PersonalIntegrationsPage({
     if (provider.availability !== "enabled") return;
     setActionProvider(provider.id);
     setFeedback(null);
-    setProviderLoadFailed(false);
     if (connection?.status === "connected") {
       try {
         await services.personalIntegrations.disconnect(provider.id);
@@ -545,7 +558,10 @@ export function PersonalIntegrationsPage({
           <TabsTrigger className="min-h-11 sm:min-h-0" value="whatsapp">
             WhatsApp
           </TabsTrigger>
-          <TabsTrigger className="min-h-11 sm:min-h-0" value="virtual-employees">
+          <TabsTrigger
+            className="min-h-11 sm:min-h-0"
+            value="virtual-employees"
+          >
             {t("Empleados Virtuales (IA)")}
           </TabsTrigger>
           <TabsTrigger className="min-h-11 sm:min-h-0" value="ai-assistants">
@@ -555,21 +571,23 @@ export function PersonalIntegrationsPage({
         </TabsList>
 
         <TabsContent value="connections" className="space-y-6">
-          {feedback ? (
+          {feedback || providerLoadFailed ? (
             <div
               className="integrations-feedback flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
               role="alert"
-              aria-label={feedback}
+              aria-label={accessDenied ? loadError : (feedback ?? loadError)}
             >
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-primary" />
-              <p className="flex-1 leading-6">{feedback}</p>
-              {providerLoadFailed ? (
+              <p className="flex-1 leading-6">
+                {accessDenied ? loadError : (feedback ?? loadError)}
+              </p>
+              {providerLoadFailed && !accessDenied ? (
                 <Button
                   size="sm"
                   className="max-sm:h-11"
                   variant="outline"
-                  disabled={loading}
-                  onClick={() => void refresh()}
+                  disabled={read.isFetching}
+                  onClick={() => void read.refetch()}
                 >
                   {t("Reintentar")}
                 </Button>
@@ -577,9 +595,17 @@ export function PersonalIntegrationsPage({
             </div>
           ) : null}
 
+          {read.data && !feedback && !accessDenied ? (
+            <ReadRefreshStatus
+              refreshing={read.isFetching}
+              error={read.isError ? loadError : undefined}
+              onRetry={() => void read.refetch()}
+            />
+          ) : null}
+
           {loading ? (
             <IntegrationGroupsSkeleton groups={3} />
-          ) : (
+          ) : accessDenied ? null : (
             <div className="integrations-groups">
               {groups.map((group) => (
                 <IntegrationGroup

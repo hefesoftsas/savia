@@ -1,3 +1,5 @@
+import { verifyOnlineStatus } from "../offline/connectivity-status";
+
 /** Match asset-loader failures, not ordinary API/network failures. */
 export function isModuleLoadError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : "";
@@ -11,6 +13,14 @@ export function isModuleLoadError(error: unknown): boolean {
  * of hanging forever. */
 export const UPDATE_DEADLINE_MS = 30_000;
 const UNREGISTER_DEADLINE_MS = 5_000;
+
+/** Public visitor pages must bypass both the offline shell and its recovery registration. */
+export const PUBLIC_VISITOR_ROUTE_DENYLIST = [
+  /^\/public\/forms/,
+  /^\/public\/bookings(?:\/|\?|$)/,
+  /^\/public\/quotes(?:\/|\?|$)/,
+  /^\/public\/pages(?:\/|\?|$)/,
+] as const;
 
 async function removeStaleWorker(
   registration: ServiceWorkerRegistration,
@@ -69,7 +79,7 @@ function waitForActivation(
 
 /** Called only after user confirmation. Never clears caches, replicas, queues or credentials. */
 export async function prepareAppReload(): Promise<void> {
-  if (navigator.onLine === false)
+  if (!(await verifyOnlineStatus()))
     throw new Error(
       "Necesitas conexión para buscar la nueva versión. Tus datos locales se conservan.",
     );
@@ -77,10 +87,7 @@ export async function prepareAppReload(): Promise<void> {
   // Public visitors must not download or initialize the administrative offline shell.
   if (
     pathname === "/register" ||
-    pathname === "/public/forms" ||
-    pathname.startsWith("/public/forms/") ||
-    pathname === "/public/pages" ||
-    pathname.startsWith("/public/pages/") ||
+    PUBLIC_VISITOR_ROUTE_DENYLIST.some((pattern) => pattern.test(pathname)) ||
     pathname === "/office" ||
     pathname.startsWith("/office/") ||
     !("serviceWorker" in navigator)

@@ -82,10 +82,14 @@ export function useIssueProviders(api: ApiClient): IssueProvider[] {
       controller?.abort();
       setProviders([]);
     };
+    const principalChanged = () => {
+      clear();
+      reload();
+    };
     reload();
     window.addEventListener("focus", reload);
     window.addEventListener("savia:personal-integrations-changed", invalidate);
-    window.addEventListener("savia:identity-changed", invalidate);
+    window.addEventListener("savia:principal-changed", principalChanged);
     window.addEventListener("savia:session-cleared", clear);
     document.addEventListener("visibilitychange", visible);
     return () => {
@@ -96,7 +100,7 @@ export function useIssueProviders(api: ApiClient): IssueProvider[] {
         "savia:personal-integrations-changed",
         invalidate,
       );
-      window.removeEventListener("savia:identity-changed", invalidate);
+      window.removeEventListener("savia:principal-changed", principalChanged);
       window.removeEventListener("savia:session-cleared", clear);
       document.removeEventListener("visibilitychange", visible);
     };

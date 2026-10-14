@@ -67,6 +67,53 @@ function setup(employeeOverride = {}) {
 }
 
 describe("restricted WhatsApp assistant", () => {
+  it("returns the failure menu without another model call when quote preflight fails", async () => {
+    const s = setup();
+    const input = { messageId: "failed-quote", text: "Una nueva" } as any;
+    const quoteFailureReply = vi
+      .fn()
+      .mockResolvedValue("No pude cotizar.\n1. Consultar seguros");
+    const generate = createWhatsappAssistant({
+      ...s,
+      capabilities: async () => ({
+        tools: {},
+        system: "",
+        quoteFailed: () => true,
+      }),
+      quoteFailureReply,
+    });
+    expect(await generate(binding, [], input.text, input)).toContain(
+      "Consultar seguros",
+    );
+    expect(quoteFailureReply).toHaveBeenCalledWith(binding, input);
+    expect(s.complete).not.toHaveBeenCalled();
+  });
+
+  it("returns the failure menu after a fatal quote tool failure", async () => {
+    const s = setup();
+    let failed = false;
+    s.complete.mockImplementation(async () => {
+      failed = true;
+      return "Misleading model response";
+    });
+    const generate = createWhatsappAssistant({
+      ...s,
+      capabilities: async () => ({
+        tools: {},
+        system: "",
+        quoteFailed: () => failed,
+      }),
+      quoteFailureReply: async () => "Quote failed. Consultar seguros",
+    });
+    expect(
+      await generate(binding, [], "Cotizar", {
+        messageId: "tool-failure",
+        text: "Cotizar",
+      } as any),
+    ).toContain("Consultar seguros");
+    expect(s.complete).toHaveBeenCalledOnce();
+  });
+
   it("uses explicit tenant configuration and employee knowledge without tools or caller identity", async () => {
     const s = setup();
     const history = [

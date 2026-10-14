@@ -11,6 +11,7 @@ const whatsappTables = [
   "whatsapp_channel_contacts",
   "whatsapp_channel_history",
   "whatsapp_channel_actions",
+  "whatsapp_channel_action_progress",
   "whatsapp_channel_resources",
   "whatsapp_channel_dispatches",
 ];

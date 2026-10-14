@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
 import { officeEditorUrl } from "@/features/office/office-api";
 import { useMessages } from "@/i18n/core";
 import {
@@ -21,12 +22,12 @@ type RecentDocument = {
   updatedAt: string;
 };
 
-type WidgetState =
-  | { status: "loading"; documents: RecentDocument[]; hasMore: boolean }
-  | { status: "disabled"; documents: RecentDocument[]; hasMore: boolean }
-  | { status: "ready"; documents: RecentDocument[]; hasMore: boolean }
-  | { status: "partial"; documents: RecentDocument[]; hasMore: boolean }
-  | { status: "error"; documents: RecentDocument[]; hasMore: boolean };
+type WidgetState = {
+  status: "loading" | "disabled" | "ready" | "partial" | "error";
+  documents: RecentDocument[];
+  hasMore: boolean;
+  refreshing?: boolean;
+};
 
 const emptyState: WidgetState = {
   status: "loading",
@@ -42,6 +43,15 @@ const providers = new Set<StorageProvider>([
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAccessDenied(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error.status === 401 || error.status === 403)
+  );
 }
 
 function toRecentDocuments(
@@ -110,72 +120,163 @@ export function OfficeDocumentsWidgetBody({
 }) {
   const t = useMessages(officeDocumentsWidgetMessages);
   const [state, setState] = useState<WidgetState>(emptyState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const [loadedClient, setLoadedClient] = useState<ApiClient>();
+  const loadedClientRef = useRef<ApiClient | undefined>(undefined);
+  const hasSuccessfulRead = useRef(false);
   const generation = useRef(0);
-  const load = useCallback(async () => {
-    const request = ++generation.current;
-    setState(emptyState);
-    if (!apiClient) {
-      setState({ status: "error", documents: [], hasMore: false });
-      return;
-    }
-    try {
-      const settings = await apiClient.get<{ data: { enabled: boolean } }>(
-        "/v1/office-settings",
-        { signal: AbortSignal.timeout(15_000) },
-      );
-      if (request !== generation.current) return;
-      if (settings.data.enabled !== true) {
-        setState({ status: "disabled", documents: [], hasMore: false });
+  const publish = useCallback((next: WidgetState) => {
+    stateRef.current = next;
+    setState(next);
+  }, []);
+  const load = useCallback(
+    async (background = true) => {
+      const request = ++generation.current;
+      const previous = stateRef.current;
+      const hasCurrentRead =
+        loadedClientRef.current === apiClient && hasSuccessfulRead.current;
+      if (background && hasCurrentRead) {
+        publish({ ...previous, refreshing: true });
+      } else {
+        if (!hasCurrentRead) {
+          hasSuccessfulRead.current = false;
+          loadedClientRef.current = undefined;
+          setLoadedClient(undefined);
+        }
+        publish(emptyState);
+      }
+      if (!apiClient) {
+        hasSuccessfulRead.current = false;
+        loadedClientRef.current = undefined;
+        setLoadedClient(undefined);
+        publish({ status: "error", documents: [], hasMore: false });
         return;
       }
-      const [savedResult, connectedResult] = await Promise.allSettled([
-        apiClient.get<{ data: unknown[] }>("/v1/office-documents", {
-          signal: AbortSignal.timeout(15_000),
-        }),
-        apiClient.get<{ data: unknown[] }>("/v1/connected-office-documents", {
-          signal: AbortSignal.timeout(15_000),
-        }),
-      ]);
-      if (request !== generation.current) return;
-      const saved =
-        savedResult.status === "fulfilled" ? savedResult.value.data : [];
-      const connected =
-        connectedResult.status === "fulfilled"
-          ? connectedResult.value.data
-          : [];
-      if (
-        savedResult.status === "rejected" &&
-        connectedResult.status === "rejected"
-      ) {
-        setState({ status: "error", documents: [], hasMore: false });
-        return;
-      }
-      setState({
-        status:
-          savedResult.status === "fulfilled" &&
+      try {
+        const settings = await apiClient.get<{ data: { enabled: boolean } }>(
+          "/v1/office-settings",
+          { signal: AbortSignal.timeout(15_000) },
+        );
+        if (request !== generation.current) return;
+        if (settings.data.enabled !== true) {
+          hasSuccessfulRead.current = true;
+          loadedClientRef.current = apiClient;
+          setLoadedClient(apiClient);
+          publish({ status: "disabled", documents: [], hasMore: false });
+          return;
+        }
+        const [savedResult, connectedResult] = await Promise.allSettled([
+          apiClient.get<{ data: unknown[] }>("/v1/office-documents", {
+            signal: AbortSignal.timeout(15_000),
+          }),
+          apiClient.get<{ data: unknown[] }>("/v1/connected-office-documents", {
+            signal: AbortSignal.timeout(15_000),
+          }),
+        ]);
+        if (request !== generation.current) return;
+        const saved =
+          savedResult.status === "fulfilled" ? savedResult.value.data : [];
+        const connected =
           connectedResult.status === "fulfilled"
-            ? "ready"
-            : "partial",
-        ...toRecentDocuments(saved, connected),
-      });
-    } catch {
-      if (request === generation.current)
-        setState({ status: "error", documents: [], hasMore: false });
-    }
-  }, [apiClient]);
+            ? connectedResult.value.data
+            : [];
+        const retainedFromFailedSource = hasCurrentRead
+          ? previous.documents.filter((document) =>
+              document.provider === "savia"
+                ? savedResult.status === "rejected" &&
+                  !isAccessDenied(savedResult.reason)
+                : connectedResult.status === "rejected" &&
+                  !isAccessDenied(connectedResult.reason),
+            )
+          : [];
+        const currentDocuments = toRecentDocuments(saved, connected);
+        if (
+          savedResult.status === "rejected" &&
+          connectedResult.status === "rejected"
+        ) {
+          const deniedSaved = isAccessDenied(savedResult.reason);
+          const deniedConnected = isAccessDenied(connectedResult.reason);
+          const retained = hasCurrentRead
+            ? previous.documents.filter((document) =>
+                document.provider === "savia" ? !deniedSaved : !deniedConnected,
+              )
+            : [];
+          hasSuccessfulRead.current =
+            hasCurrentRead &&
+            !(deniedSaved && deniedConnected) &&
+            (retained.length > 0 || (!deniedSaved && !deniedConnected));
+          publish({
+            status: "error",
+            documents: retained,
+            hasMore: previous.hasMore,
+          });
+          loadedClientRef.current = apiClient;
+          setLoadedClient(apiClient);
+          return;
+        }
+        const documents = [
+          ...currentDocuments.documents,
+          ...retainedFromFailedSource.filter(
+            (document) =>
+              !currentDocuments.documents.some(
+                (current) => current.id === document.id,
+              ),
+          ),
+        ].sort(
+          (left, right) =>
+            Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
+        );
+        publish({
+          status:
+            savedResult.status === "fulfilled" &&
+            connectedResult.status === "fulfilled"
+              ? "ready"
+              : "partial",
+          documents,
+          hasMore: currentDocuments.hasMore,
+        });
+        hasSuccessfulRead.current = true;
+        loadedClientRef.current = apiClient;
+        setLoadedClient(apiClient);
+      } catch (error) {
+        if (request !== generation.current) return;
+        if (isAccessDenied(error)) {
+          hasSuccessfulRead.current = false;
+          loadedClientRef.current = undefined;
+          setLoadedClient(apiClient);
+          publish({ status: "error", documents: [], hasMore: false });
+          return;
+        }
+        if (hasCurrentRead) {
+          publish({ ...previous, status: "error", refreshing: false });
+          loadedClientRef.current = apiClient;
+          setLoadedClient(apiClient);
+        } else {
+          publish({ status: "error", documents: [], hasMore: false });
+          loadedClientRef.current = apiClient;
+          setLoadedClient(apiClient);
+        }
+      }
+    },
+    [apiClient, publish],
+  );
 
   useEffect(() => {
-    void load();
-    const refresh = () => void load();
+    void load(false);
+    const refresh = () => void load(true);
     const resetAndRefresh = () => {
       generation.current += 1;
-      setState(emptyState);
-      void load();
+      hasSuccessfulRead.current = false;
+      loadedClientRef.current = undefined;
+      setLoadedClient(undefined);
+      publish(emptyState);
+      void load(false);
     };
     window.addEventListener("focus", refresh);
     window.addEventListener("savia:personal-integrations-changed", refresh);
     window.addEventListener("savia:office-settings-changed", refresh);
-    window.addEventListener("savia:identity-changed", resetAndRefresh);
+    window.addEventListener("savia:principal-changed", resetAndRefresh);
     window.addEventListener("savia:active-tenant-changed", resetAndRefresh);
     window.addEventListener("savia:session-cleared", resetAndRefresh);
     return () => {
@@ -186,16 +287,19 @@ export function OfficeDocumentsWidgetBody({
         refresh,
       );
       window.removeEventListener("savia:office-settings-changed", refresh);
-      window.removeEventListener("savia:identity-changed", resetAndRefresh);
+      window.removeEventListener("savia:principal-changed", resetAndRefresh);
       window.removeEventListener(
         "savia:active-tenant-changed",
         resetAndRefresh,
       );
       window.removeEventListener("savia:session-cleared", resetAndRefresh);
     };
-  }, [load]);
+  }, [load, publish]);
 
-  if (state.status === "loading")
+  if (
+    state.status === "loading" ||
+    (apiClient !== undefined && loadedClient !== apiClient)
+  )
     return (
       <div
         role="status"
@@ -217,7 +321,16 @@ export function OfficeDocumentsWidgetBody({
 
   return (
     <div className="space-y-3">
-      {state.status === "error" ? (
+      <ReadRefreshStatus
+        refreshing={state.refreshing}
+        error={
+          state.status === "error" && hasSuccessfulRead.current
+            ? t("Could not load recent documents.")
+            : undefined
+        }
+        onRetry={() => void load(true)}
+      />
+      {state.status === "error" && !hasSuccessfulRead.current ? (
         <div role="alert" className="flex items-center justify-between gap-2">
           <p className="text-sm text-destructive">
             {t("Could not load recent documents.")}
@@ -231,32 +344,30 @@ export function OfficeDocumentsWidgetBody({
             {t("Retry")}
           </Button>
         </div>
-      ) : (
+      ) : null}
+      {state.status === "partial" ? (
+        <div role="alert" className="flex items-center justify-between gap-2">
+          <p className="text-sm text-destructive">
+            {state.documents.length > 0
+              ? t(
+                  "One document source could not be loaded. Showing available documents.",
+                )
+              : t(
+                  "One document source could not be loaded. The list may be incomplete.",
+                )}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void load(true)}
+          >
+            {t("Retry")}
+          </Button>
+        </div>
+      ) : null}
+      {state.status !== "error" || hasSuccessfulRead.current ? (
         <>
-          {state.status === "partial" ? (
-            <div
-              role="alert"
-              className="flex items-center justify-between gap-2"
-            >
-              <p className="text-sm text-destructive">
-                {state.documents.length > 0
-                  ? t(
-                      "One document source could not be loaded. Showing available documents.",
-                    )
-                  : t(
-                      "One document source could not be loaded. The list may be incomplete.",
-                    )}
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void load()}
-              >
-                {t("Retry")}
-              </Button>
-            </div>
-          ) : null}
           {state.documents.length > 0 ? (
             <ul className="divide-y">
               {state.documents.map((document) => (
@@ -310,7 +421,7 @@ export function OfficeDocumentsWidgetBody({
             ) : null}
           </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

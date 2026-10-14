@@ -1,0 +1,340 @@
+import type {
+  ClientMessage,
+  Edge,
+  Node,
+  ServerMessage,
+  WorkflowExecution,
+  WorkflowRuntime,
+  WorkflowState,
+  WorkflowTrigger,
+} from "@savia/flows-types";
+
+import { requestSaviaFlowsSocketTicket } from "@/savia/transport";
+
+// Re-export for convenience
+export type { WorkflowState };
+
+export interface WorkflowWSOptions {
+  // Message-level callbacks (happy path only)
+  onInit?: (state: WorkflowState) => void;
+  onUpdate?: (state: WorkflowState) => void;
+  onExecutionUpdate?: (execution: WorkflowExecution) => void;
+
+  // Connection-level callbacks (problems)
+  onConnectionOpen?: () => void;
+  onConnectionClose?: (event: CloseEvent) => void;
+  onConnectionError?: (event: Event) => void;
+}
+
+export class WorkflowWebSocket {
+  // WebSocket close codes
+  private static readonly NORMAL_CLOSURE = 1000;
+  private static readonly GOING_AWAY = 1001;
+  private static readonly MAX_RECONNECT_DELAY = 30000; // 30 seconds
+
+  private ws: WebSocket | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 1000; // Start with 1 second
+  private shouldReconnect = true;
+  private currentState: WorkflowState | null = null;
+  private activeExecutionId: string | null = null;
+  private ticketPending = false;
+
+  constructor(
+    private orgId: string,
+    private workflowId: string,
+    private options: WorkflowWSOptions = {},
+  ) {}
+
+  connect(): void {
+    if (!this.shouldReconnect || this.isConnectedOrConnecting()) {
+      return;
+    }
+
+    this.ticketPending = true;
+    void requestSaviaFlowsSocketTicket(`/${this.orgId}/ws/${this.workflowId}`)
+      .then((url) => {
+        this.ticketPending = false;
+        if (!this.shouldReconnect) return;
+        this.ws = new WebSocket(url);
+
+        this.ws.onopen = () => {
+          this.reconnectAttempts = 0;
+          this.reconnectDelay = 1000;
+          this.options.onConnectionOpen?.();
+        };
+
+        this.ws.onmessage = (event) => this.handleMessage(event);
+
+        this.ws.onerror = (event) => {
+          console.error("[WorkflowWS] Connection error:", event);
+          this.options.onConnectionError?.(event);
+        };
+
+        this.ws.onclose = (event) => {
+          this.options.onConnectionClose?.(event);
+
+          if (this.shouldAttemptReconnect(event)) {
+            this.reconnectAttempts++;
+            const attempt = this.reconnectAttempts;
+
+            setTimeout(() => {
+              void attempt;
+              this.connect();
+            }, this.reconnectDelay);
+
+            // Exponential backoff
+            this.reconnectDelay = Math.min(
+              this.reconnectDelay * 2,
+              WorkflowWebSocket.MAX_RECONNECT_DELAY,
+            );
+          }
+        };
+      })
+      .catch((error: unknown) => {
+        this.ticketPending = false;
+        console.error("[WorkflowWS] Failed to create WebSocket:", error);
+        this.options.onConnectionError?.(
+          new Event("error", { cancelable: false }),
+        );
+      });
+  }
+
+  /**
+   * Handle incoming WebSocket message
+   */
+  private handleMessage(event: MessageEvent): void {
+    try {
+      const message = JSON.parse(event.data) as ServerMessage;
+
+      // Route typed messages (happy path only)
+      if (!("type" in message)) {
+        // Protocol violation: message must have a type
+        console.error("[WorkflowWS] Protocol violation: message missing type");
+        this.ws?.close(1002, "Message missing type");
+        return;
+      }
+
+      switch (message.type) {
+        case "init":
+          this.currentState = message.state;
+          this.options.onInit?.(message.state);
+          // Re-subscribe to active execution after reconnection
+          if (this.activeExecutionId) {
+            this.registerForExecutionUpdates(this.activeExecutionId);
+          }
+          break;
+
+        case "update":
+          this.currentState = message.state;
+          this.options.onUpdate?.(message.state);
+          break;
+
+        case "execution_update":
+          // Track active execution for reconnection re-subscription
+          if (message.executionId) {
+            this.activeExecutionId = message.executionId;
+          }
+          // Clear tracking on terminal statuses
+          if (
+            message.status === "completed" ||
+            message.status === "error" ||
+            message.status === "exhausted" ||
+            message.status === "cancelled"
+          ) {
+            this.activeExecutionId = null;
+          }
+          // Execution updates are normal results, not errors
+          // Even if execution.error is set, this is just a summary
+          this.options.onExecutionUpdate?.({
+            id: message.executionId,
+            workflowId: this.workflowId,
+            status: message.status,
+            nodeExecutions: message.nodeExecutions,
+            error: message.error,
+          });
+          break;
+
+        default:
+          // Unknown message type - protocol violation
+          console.error(
+            "[WorkflowWS] Protocol violation: unknown message type",
+          );
+          this.ws?.close(1002, "Unknown message type");
+          break;
+      }
+    } catch (error) {
+      // Parse failure - protocol violation, close connection
+      console.error(
+        "[WorkflowWS] Protocol violation: failed to parse message:",
+        error,
+      );
+      this.ws?.close(1002, "Failed to parse message");
+    }
+  }
+
+  /**
+   * Determine if we should attempt to reconnect after close
+   */
+  private shouldAttemptReconnect(event: CloseEvent): boolean {
+    const leaseExpired =
+      event.code === 1008 &&
+      event.reason === "Editor session expired; reconnect required";
+    return (
+      this.shouldReconnect &&
+      this.reconnectAttempts < this.maxReconnectAttempts &&
+      (!event.wasClean || leaseExpired) &&
+      event.code !== WorkflowWebSocket.NORMAL_CLOSURE &&
+      event.code !== WorkflowWebSocket.GOING_AWAY
+    );
+  }
+
+  /**
+   * Send workflow state update (nodes and edges)
+   */
+  sendStateUpdate(nodes: Node[], edges: Edge[]): void {
+    if (!this.currentState) {
+      console.warn(
+        "[WorkflowWS] No current state available, cannot send update",
+      );
+      return;
+    }
+
+    const updatedState: WorkflowState = {
+      ...this.currentState,
+      nodes,
+      edges,
+      timestamp: Date.now(),
+    };
+
+    const success = this.sendMessage(
+      { type: "update", state: updatedState },
+      "send state update",
+    );
+
+    if (success) {
+      this.currentState = updatedState;
+    }
+  }
+
+  /**
+   * Update workflow metadata (name, description, trigger, runtime)
+   * This updates the local state and sends it to the server
+   */
+  updateMetadata(metadata: {
+    name?: string;
+    description?: string;
+    trigger?: WorkflowTrigger;
+    runtime?: WorkflowRuntime;
+  }): void {
+    if (!this.currentState) {
+      console.warn(
+        "[WorkflowWS] No current state available, cannot update metadata",
+      );
+      return;
+    }
+
+    const updatedState: WorkflowState = {
+      ...this.currentState,
+      ...(metadata.name !== undefined && { name: metadata.name }),
+      ...(metadata.description !== undefined && {
+        description: metadata.description,
+      }),
+      ...(metadata.trigger !== undefined && { trigger: metadata.trigger }),
+      ...(metadata.runtime !== undefined && { runtime: metadata.runtime }),
+      timestamp: Date.now(),
+    };
+
+    const success = this.sendMessage(
+      { type: "update", state: updatedState },
+      "send metadata update",
+    );
+
+    if (success) {
+      this.currentState = updatedState;
+    }
+  }
+
+  /**
+   * Send a JSON message via WebSocket
+   */
+  private sendMessage(message: ClientMessage, errorContext: string): boolean {
+    if (!this.isConnected()) {
+      console.warn("[WorkflowWS] Not connected, cannot send message");
+      return false;
+    }
+
+    try {
+      this.ws?.send(JSON.stringify(message));
+      return true;
+    } catch (error) {
+      console.error(`[WorkflowWS] Failed to ${errorContext}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Execute workflow and receive realtime updates via WebSocket
+   */
+  executeWorkflow(options?: { parameters?: Record<string, unknown> }): void {
+    // Clear previous execution tracking — server will assign a new ID
+    this.activeExecutionId = null;
+    this.sendMessage(
+      {
+        type: "execute",
+        parameters: options?.parameters,
+      },
+      "execute workflow",
+    );
+  }
+
+  /**
+   * Register to receive updates for an existing execution
+   */
+  registerForExecutionUpdates(executionId: string): void {
+    this.activeExecutionId = executionId;
+    this.sendMessage(
+      {
+        type: "execute",
+        executionId,
+      },
+      "register for execution updates",
+    );
+  }
+
+  disconnect(): void {
+    this.shouldReconnect = false;
+    this.ticketPending = false;
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  private isConnectedOrConnecting(): boolean {
+    return (
+      this.ws?.readyState === WebSocket.OPEN ||
+      this.ws?.readyState === WebSocket.CONNECTING ||
+      this.ticketPending
+    );
+  }
+
+  getWorkflowId(): string {
+    return this.workflowId;
+  }
+}
+
+export const connectWorkflowWS = (
+  orgId: string,
+  workflowId: string,
+  options: WorkflowWSOptions = {},
+): WorkflowWebSocket => {
+  const ws = new WorkflowWebSocket(orgId, workflowId, options);
+  ws.connect();
+  return ws;
+};

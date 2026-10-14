@@ -87,13 +87,30 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
 
 1. A user with an active tenant membership opens
    `#/my-integrations?tab=whatsapp` (WhatsApp row, brand logo).
+   WhatsApp settings use a left-side section menu on desktop and a compact
+   vertical menu above the content on mobile. **Conexión**, **Asistente IA**,
+   **Menú y equipo**, and **Avanzado** show only the selected section. Switching
+   sections preserves unsaved form edits; it does not save them or send messages.
+   Sections remain subject to the tenant's connection and service availability.
+   Secondary explanations live behind labeled help buttons, available on hover,
+   keyboard focus, or tap. Operator-facing copy describes the WhatsApp action
+   rather than the connection broker. Connection errors, setup blockers, contact
+   restrictions, and recipient consent remain visible in the form.
+   Same-tenant connection updates run in the background without replacing the
+   section menu or remounting assistant, channel, and native settings while those
+   sections remain available. Unsaved
+   number edits are retained while untouched number fields receive current
+   metadata. Failed background reads show an error and retain the last loaded
+   settings; the next successful refresh clears that error. Starting a user
+   action clears stale refresh errors so its result remains visible. Switching tenants
+   still hides the previous tenant's settings until the new scope loads.
 2. **Conectar** creates a short-lived Nango Connect session for that tenant.
    The browser receives only the session token and the public Nango URLs.
 3. The user authorizes the `whatsapp-business` integration in Nango with the
    Meta system-user token prepared by the platform administrator.
 4. Nango returns an opaque connection id. After completion, the user fills
    the phone number id, visible number, and WABA id in the **Número de
-   WhatsApp** panel. The completion API can also accept this metadata when
+   WhatsApp** panel of the **Conexión** tab. The completion API can also accept this metadata when
    it is already available.
 5. Savia verifies the Nango connection belongs to `user:<principal-id>` and
    its `agency_id` tag matches the explicitly selected tenant. Missing or
@@ -101,7 +118,7 @@ separate; sharing a test phone does not mean sharing a Nango connection id.
    cannot substitute for tenant Connect sessions. Savia then validates the
    phone number live against the WhatsApp Cloud API through
    the proxy, and persists only safe metadata with status `connected`.
-6. **Probar envío** sends a short free-form text through
+6. **Probar envío** (in the **Conexión** tab) sends a short free-form text through
    `POST /v21.0/<phone_number_id>/messages`. Destination numbers may include
    whitespace for readability; Savia removes whitespace before validating and
    sending the number. The plus sign and digits are preserved, and other
@@ -136,7 +153,7 @@ replacement connections do not invalidate an existing healthy connection.
    optional reference documents. Use the tenant's default model or a model
    explicitly enabled by its administrator. External contacts receive plain-text
    answers without MCP tools, user credentials or administrative actions.
-4. Open **My integrations → WhatsApp → Asistente de WhatsApp**. Select the
+4. Open **My integrations → WhatsApp**, then the **Asistente IA** tab. Select the
    employee, enter pilot contacts with country codes (one per line), enable
    **Responder con IA**, and save. An empty contact list never means everyone.
    Authenticated `GET` and `PUT /v1/whatsapp/assistant` require an explicit
@@ -172,22 +189,102 @@ binding before reconnecting. Sending and enabling still require a healthy sender
 
 The webhook checks `X-Hub-Signature-256` against the raw body and durably stores
 accepted messages before acknowledging them, including validated native payloads.
-Unsupported event types are ignored. Incoming
-message IDs deduplicate retries. The existing minute scheduler recovers pending
-work. Managed preview and production deployments set
-`WHATSAPP_PROCESSING_MODE=scheduled`: generation runs from the minute scheduler,
-not HTTP `waitUntil`, whose post-response lifetime can interrupt multi-step AI
-work. Allow up to one minute before processing starts. Local runtimes may omit
-this setting to start background processing immediately. Each scheduled invocation
-drains multiple small batches within a five-minute scan budget and a bounded
-batch count, rather than imposing a fixed five-message global quota per minute.
+Unsupported event types are ignored. Incoming message IDs deduplicate retries.
+Managed preview and production deployments set `WHATSAPP_PROCESSING_MODE=events`
+and bind `WHATSAPP_DISPATCHER` to the `WhatsappDispatcher` Durable Object. After
+persistence, the webhook awaits a short wake request before acknowledging Meta;
+it never runs AI or provider jobs in HTTP `waitUntil`. If a wake fails, it returns 503. A redelivered message resolves its existing inbox row and repairs the wake
+without inserting or sending twice. Receipt-only callbacks do not wake processors.
+
+Each connection/contact pair has a coordinator named by a SHA-256 digest of its
+scope. Its storage contains only scope, wake revision, retry metadata and an
+alarm; messages, encrypted drafts, actions and results remain in D1. Duplicate
+wakes coalesce into the earliest alarm. One alarm delivers at most one existing result per delivery pass, then processes at most one inbound
+message or one confirmed action, prioritizing already queued actions over new
+inputs to prevent starvation. A confirmation acknowledgement is sent before
+its queued action can run in the next alarm; settled action results are delivered
+immediately afterward.
+New confirmations or remaining messages schedule another alarm without waiting
+for a cron tick. Separate conversations have separate coordinators.
+
+After processing, the coordinator schedules the oldest inbound retry, active
+lease expiry, queued action or pending delivery. When no unfinished work remains,
+it removes the alarm. Wakes arriving during processing are fenced by a durable
+revision so they cannot be erased by completion. A watchdog is stored before
+external work; failures leave a durable retry with backoff. Alarms may execute
+more than once, so existing atomic claims, reply fences and uncertain-send rules
+remain required. Due rows that cannot currently progress back off for a minute
+rather than spinning.
+
+The shared cron still runs each minute for other platform functions. In event
+mode, WhatsApp retention/media maintenance and recovery run only on five-minute
+boundaries. Recovery finds unfinished conversation scopes and wakes coordinators
+with bounded request concurrency; it does not execute AI itself. Apply migration
+`0050_whatsapp_dispatch_indexes.sql` before enabling events. Deployment config
+adds Durable Object migration `v2` while preserving `RealtimeHub` migration `v1`.
+To roll back, set `WHATSAPP_PROCESSING_MODE=scheduled`: existing alarms stop
+processing and the minute cron resumes inbox draining and action execution. An
+events deployment without its dispatcher binding fails closed rather than
+silently using short-lived HTTP processing. Self-hosted runtimes without Durable
+Objects should retain scheduled mode. Legacy inline mode remains available only
+when the processing-mode setting is omitted.
+
+Latency diagnostics emit `whatsapp_inbound_claimed` with `queue_wait_ms` and
+`whatsapp_inbound_timing` for preparation, indicators, generation, transport, acknowledgement persistence and
+total processing. `whatsapp_action_result_timing` records result-send,
+acknowledgement-persistence and history-repair duration/outcome. The
+`whatsapp_quote_lifecycle_reset` event reports whether the generation reset was
+applied or skipped, including after history repair. These events correlate by
+action or message ID, generation and selection revision; they do not include
+phone numbers, message bodies, drafts, applicant data, raw errors or credentials.
+`whatsapp_assistant_timing` separates configuration,
+capability setup, input preparation, knowledge retrieval and model/tool work.
+`whatsapp_operation` records start and terminal outcomes for each named tool,
+quote-catalog preflight, action preparation and typed backend request; failed
+HTTP responses include only status codes. A per-operation `call_id` disambiguates
+concurrent or repeated calls. `whatsapp_model_call` isolates each model invocation
+from tool execution and reports response duration, token counts when supplied by
+the provider, and bounded failure categories (including timeout/abort).
+`whatsapp_action_prepared` and `whatsapp_action_confirmation` connect inbound
+message IDs to the resulting action ID without logging confirmation codes.
+Filter by `message_id` for intake and model/tool latency, then use `action_id` to
+follow dispatch, delivery and reset. A start event without a terminal event can
+indicate a process interruption; it is not evidence of successful execution.
+These events carry operational IDs and durations, without phone numbers, message
+bodies, drafts, raw errors or credentials. Existing action-started and action-finished events
+measure confirmed-operation queue waits and execution durations. Queue wait is
+measured from server acceptance; provider-to-server latency can be compared using
+the inbox's `provider_timestamp` and `received_at`. Event admission removes the
+normal minute-tick wait; model, media, provider and DB time still contribute to
+latency. Alarm scheduling does not establish a fixed response-time SLA.
+
 Individual batches retain the bounded media and model timeouts, leaving room
-inside the scheduled Worker lifetime. Overlapping ticks retain atomic message
+inside the alarm or scheduled Worker lifetime. Overlapping retries retain atomic message
 claims and per-contact leases. Leases serialize each
 contact's conversation and fence stale processors. A four-minute processing
-lease accommodates media transcription followed by AI completion. Generation retries are
-bounded; after the final generation failure, a safe recovery message follows the
-same access checks and durable send path. Replies use a natural, concise tone,
+lease accommodates media transcription followed by AI completion. Model timeouts
+and aborts immediately use the authorized, durable recovery send path instead of
+replaying the entire tool loop up to three times. Recovery preserves the selected
+task and saved draft so the contact can continue; it does not claim unsaved input
+was stored. Other generation failures retain bounded retries and recovery after
+exhaustion. `whatsapp_inbound_generation_error` records the attempt, bounded error
+category and retry decision without raw error details.
+
+The conversation model retains a 60-second overall deadline, uses the configured
+authorized model with reasoning disabled, and allows at most four tool steps
+followed by a reply-only fifth step. A verified server-prepared consent or
+confirmation reply stops further model calls; that reply can also be recovered
+after a subsequent model timeout. Server authorization and field validation
+still apply. Model context includes at most the latest 12 history entries within
+8,000 characters, with prior assistant replies capped at 1,024 characters and
+prior user messages at 4,096. Current input retains its separate 20,000-character
+limit; backend history and saved task fields remain unchanged.
+Quote intake receives the current verified form requirements during catalog
+preflight and can skip the redundant form-read tool step. The read tool remains
+available when requirements are absent. Preparation reuses the same-turn form
+snapshot; execution still verifies current authorization and enabled products.
+
+Replies use a natural, concise tone,
 avoid repeated greetings and generic service lists, and stay transparent about
 the virtual assistant identity. Failed consultations or operations explain the
 problem and ask the user to contact an advisor directly, without inventing contact
@@ -228,14 +325,15 @@ prevent delayed events from downgrading delivered/read messages. Check these
 records using tenant-scoped operational queries; do not export private message
 content or credentials to logs or public handoffs.
 
-Disable **Responder con IA** to stop the pilot without disconnecting Nango.
+Disable **Responder con IA** (in the **Asistente IA** tab) to stop the pilot without disconnecting Nango.
 Automatic free-form replies require a recent inbound message; expired pending
 messages do not trigger a send. Native capabilities are configured separately
 for each tenant; the existing text behavior remains available with all flags off.
 
 ### Native messages and account resources
 
-Use the native WhatsApp panel after assigning an assistant and enabling the
+Use the native WhatsApp panel in the **Avanzado** tab of
+**My integrations → WhatsApp** after assigning an assistant and enabling the
 connection for explicitly allowed pilot contacts. Enable reply buttons (up to
 three choices), lists (up to ten options), read receipts, typing indication and
 attachment understanding individually. Meta combines typing indication with a
@@ -341,12 +439,111 @@ inputs and drafts are encrypted using the backend `SAVIA_MCP_SHARED_SECRET`.
 Without that secret the channel cannot prepare writes. Keep it stable across
 restarts, or existing sealed actions and drafts become unreadable.
 
-The minute scheduler executes confirmed jobs outside the AI completion request.
+The event dispatcher executes confirmed jobs outside the AI completion request;
+scheduled mode retains the minute scheduler.
 Atomic claims and per-product dispatch evidence prevent automatic replay after
 an uncertain outcome. Operators must reconcile **uncertain** results against
 saved records and provider evidence before asking for a fresh action. Results
 are sent only while the Meta 24-hour reply window and current access permit it;
-a later menu selection does not change their originating identity.
+a later menu selection does not change their originating identity. Verified
+priced offers remain visible in partial-result messages, alongside counts of
+unverified and unpriced responses and relevant persistence warnings. A result
+send acknowledged by Meta is added to the originating employee's scoped history
+for follow-up questions. An uncertain send is not added as delivered history and
+is not automatically retried.
+
+An acknowledged send whose history write failed uses delivery state
+`history_pending`. The next dispatcher or scheduler run repairs only its stored history;
+it does not send again. The outbound message ID and exact sent text remain
+recorded with the action. History repair is conditional on the unchanged result
+and delivery state, so a concurrent conversation reset cannot recreate scrubbed
+history. Result sends claim a 60-second lease; an interrupted or expired sending
+claim is classified as uncertain and never automatically resent. Permanently
+revoked deliveries become terminal. Expired deliveries remain dormant until a
+valid inbound opens a new reply window, then resume through the same access checks;
+neither state keeps the coordinator awake. Failures before attempting a send can retry normally.
+
+Confirmed quotes report product results incrementally. Each provider outcome is
+persisted in `whatsapp_channel_action_progress` before delivery. The channel groups
+results arriving within a 300 ms window into messages of at most 4096 characters,
+with one active progress sender per action. Provider calls do not wait for the
+WhatsApp send. Each update identifies the quote and product, reports a verified
+premium and quote number when present, and distinguishes unpriced or unverified
+responses. It never declares a winning offer before the final comparison.
+
+The progress outbox is shared channel infrastructure; insurance supplies its
+typed product events and text. An `(action_id,event_key)` constraint deduplicates
+events. Delivery revalidates the contact generation, selected task and reply
+window. A pre-send failure retries after 30 seconds; an ambiguous send or a
+15-second send timeout becomes uncertain and is not blindly replayed. Known
+acknowledgements with a failed history write repair history without another send.
+The coordinator also recovers unfinished progress from the DB. The final summary
+and menu wait until earlier progress deliveries are resolved. Progress messages
+do not clear the draft or change the selected task. Incremental delivery exposes
+received results sooner; it does not fix provider responses without a premium.
+
+After a quote-auto operation ends in a terminal completed, failed, or uncertain
+result, an acknowledged result message includes the main task menu and starts a
+fresh contact generation. A terminal quote preparation or catalog failure that
+is acknowledged follows the same lifecycle, as does an exhausted model-generation
+failure for a quote flow, excluding model timeouts and aborts before completion.
+Those deadline recoveries retain the current task and draft. The current draft, employee selection, buffered input
+and reset challenge are cleared only after the acknowledgement is durable; an
+uncertain outbound send does not reset the conversation. For a terminal inbound
+quote failure, the prepared reset and inbox completion commit in the same database
+transaction, so a later history write failure cannot leave the old draft active. Prior conversational
+history remains in its original generation and is excluded from the new
+conversation. A `history_pending` repair performs the same reset without sending
+the message again. The quote, action, dispatch and audit records remain in their
+originating generation for follow-up by an operator, while the new conversation
+starts with no selected employee or prior quote context.
+
+An explicit request for a new quote, such as `Hagamos una nueva` or
+`Nueva cotización`, follows the same acknowledged reset path while a quote task
+is selected. The server returns the task menu directly, without asking the model
+to claim that the draft was cleared. A queued or executing action, or a terminal
+result still awaiting delivery, blocks this reset. The contact must wait for that
+result before starting a new cycle. Starting a new cycle preserves domain quote
+and audit records; it does not erase customer records.
+
+An unreferenced quote summary is limited to the selected employee and current
+contact generation, including for staff contacts. An authorized staff contact can
+request a historical quote by its explicit reference. External contacts remain
+limited to their own current channel results even when supplying a reference.
+
+WhatsApp quote execution uses a 15-second limit for each backend request and a
+90-second execution budget. The confirmed product list is checked against the
+current catalog inside that budget, before any quote write or provider dispatch;
+there is no separate unbounded catalog preflight. A local deadline settles the operation even if the
+underlying backend ignores cancellation. Available offers are retained when a
+provider exceeds its deadline; a dispatched request with an unverified outcome
+is classified as uncertain and is never automatically resent. Products not
+dispatched before the global deadline are reported separately. Late provider
+responses cannot overwrite the returned summary or trigger another dispatch.
+If a dispatch-claim write commits after its deadline, its evidence is retained
+even though this execution does not call the provider. Reconciliation requires
+checking the saved history; the claim is not deleted or automatically replayed.
+The existing six-minute action lease remains interruption recovery, rather than
+the normal deadline for completing a quote. Interactive quote execution outside
+WhatsApp retains its existing request behavior.
+
+Contacts can request a fresh conversation with the exact command
+`Borrar mis datos y empezar de nuevo`. The server returns a contact-bound,
+five-minute confirmation code: `BORRAR <code>`. A bare `Sí` does not confirm;
+`CANCELAR BORRADO` or returning to the main menu cancels the request. Five wrong
+attempts invalidate the code. These controls run before the model or its tools,
+and only a hash of the code is persisted.
+
+A confirmed reset rotates the contact generation, clears all task drafts,
+selections and assistant history for that contact on the connection, removes
+unexecuted approvals, and scrubs earlier inbox text, payloads and routing
+snapshots. Newer accepted messages survive the reset. Pending result-history
+repairs are revoked and their cached conversation text is removed. Reset is
+blocked while a confirmed operation is queued, dispatching, or sending a result.
+Executed actions, dispatch evidence, resource ownership and domain quote records
+remain stored; they are not automatically exposed in the fresh generation. This
+is a conversation reset, not full erasure of customer or policy records, and it
+does not delete messages from the contact's WhatsApp app.
 
 History, resolved action records and inactive drafts use a 30-day channel
 retention window. Uncertain or active dispatch evidence survives cleanup;

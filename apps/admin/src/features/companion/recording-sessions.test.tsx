@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { StoreContextProvider, memoryStore } from "ra-core";
@@ -51,6 +57,255 @@ const session = (id: string): RecordingSession => ({
     summary: null,
   },
 });
+
+it("hides sessions from the prior API scope while the new list is loading", async () => {
+  let oldListCalls = 0;
+  let resolveOldRefresh!: (response: Response) => void;
+  const oldApi = new ApiClient({
+    baseUrl: "https://old.savia.test",
+    tokenSource: { getAccessToken: async () => "old" },
+    fetcher: async (input) => {
+      if (new URL(String(input)).pathname !== "/v1/companion/sessions")
+        return Response.json(session("old"));
+      oldListCalls += 1;
+      if (oldListCalls === 1)
+        return Response.json({ sessions: [session("old")], cursor: null });
+      return new Promise((resolve) => (resolveOldRefresh = resolve));
+    },
+  });
+  const newApi = new ApiClient({
+    baseUrl: "https://new.savia.test",
+    tokenSource: { getAccessToken: async () => "new" },
+    fetcher: async (input) =>
+      new URL(String(input)).pathname === "/v1/companion/sessions"
+        ? Response.json({ sessions: [session("new")], cursor: null })
+        : Response.json(session("new")),
+  });
+  const store = memoryStore({ locale: "en" });
+  const view = render(
+    <StoreContextProvider value={store}>
+      <RecordingSessions api={oldApi} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+
+  await screen.findByRole("heading", { name: "Interview old" });
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  await waitFor(() => expect(oldListCalls).toBe(2));
+  view.rerender(
+    <StoreContextProvider value={store}>
+      <RecordingSessions api={newApi} />
+    </StoreContextProvider>,
+  );
+
+  expect(screen.queryAllByText("Interview old")).toHaveLength(0);
+  await screen.findByRole("heading", { name: "Interview new" });
+  resolveOldRefresh(
+    Response.json({ sessions: [session("late-old")], cursor: null }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("heading", { name: "Interview new" }),
+    ).toBeInTheDocument(),
+  );
+  expect(
+    screen.queryByRole("heading", { name: "Interview late-old" }),
+  ).toBeNull();
+});
+
+it("clears protected sessions on 403 and allows a retry", async () => {
+  let listCalls = 0;
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      if (new URL(String(input)).pathname === "/v1/companion/sessions") {
+        listCalls += 1;
+        if (listCalls === 2)
+          return Response.json(
+            { error: { message: "Denied" } },
+            { status: 403 },
+          );
+        if (listCalls === 4)
+          return Response.json(
+            { error: { message: "Temporary network failure" } },
+            { status: 503 },
+          );
+        return Response.json({ sessions: [session("private")], cursor: null });
+      }
+      return Response.json(session("private"));
+    },
+  });
+  const user = userEvent.setup();
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+
+  expect(
+    await screen.findByRole("heading", { name: "Interview private" }),
+  ).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  expect(
+    screen.queryByRole("heading", { name: "Interview private" }),
+  ).toBeNull();
+  expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(
+    await screen.findByRole("heading", { name: "Interview private" }),
+  ).toBeVisible();
+
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  expect(
+    screen.getByRole("heading", { name: "Interview private" }),
+  ).toBeVisible();
+});
+
+it("hides selected session details after a 403 and allows a retry", async () => {
+  let denyDetail = false;
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/v1/companion/sessions")
+        return Response.json({ sessions: [session("private")], cursor: null });
+      if (path === "/v1/companion/sessions/private") {
+        if (denyDetail)
+          return Response.json(
+            { error: { message: "Details denied" } },
+            { status: 403 },
+          );
+        return Response.json(session("private"));
+      }
+      return Response.json(session("private"));
+    },
+  });
+  const user = userEvent.setup();
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+
+  expect(await screen.findByTestId("recording-assistant")).toBeVisible();
+  denyDetail = true;
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  expect(screen.queryByTestId("recording-assistant")).toBeNull();
+  denyDetail = false;
+  await user.click(screen.getByRole("button", { name: /Interview private/ }));
+  expect(await screen.findByTestId("recording-assistant")).toBeVisible();
+});
+
+it.each([403, 503])(
+  "shows an initial %s sessions failure without claiming the list is empty",
+  async (status) => {
+    let listCalls = 0;
+    const api = new ApiClient({
+      baseUrl: "https://savia.test",
+      tokenSource: { getAccessToken: async () => "test" },
+      fetcher: async (input) => {
+        if (new URL(String(input)).pathname !== "/v1/companion/sessions")
+          return Response.json(session("one"));
+        listCalls += 1;
+        if (listCalls === 1)
+          return Response.json(
+            { error: { message: "List unavailable" } },
+            { status },
+          );
+        return Response.json({ sessions: [], cursor: null });
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <StoreContextProvider value={memoryStore({ locale: "en" })}>
+        <RecordingSessions api={api} />
+      </StoreContextProvider>,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load recordings.",
+    );
+    expect(
+      screen.queryByRole("heading", { name: "No recording sessions yet" }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(
+      await screen.findByRole("heading", { name: "No recording sessions yet" }),
+    ).toBeVisible();
+  },
+);
+
+it("does not reuse an old successful sessions marker after changing API scopes", async () => {
+  let firstListCalls = 0;
+  let secondListCalls = 0;
+  const firstApi = new ApiClient({
+    baseUrl: "https://first.savia.test",
+    tokenSource: { getAccessToken: async () => "first" },
+    fetcher: async () => {
+      firstListCalls += 1;
+      if (firstListCalls === 1)
+        return Response.json({ sessions: [], cursor: null });
+      return Response.json(
+        { error: { message: "First scope unavailable" } },
+        { status: 503 },
+      );
+    },
+  });
+  const secondApi = new ApiClient({
+    baseUrl: "https://second.savia.test",
+    tokenSource: { getAccessToken: async () => "second" },
+    fetcher: async () => {
+      secondListCalls += 1;
+      return Response.json(
+        { error: { message: "Second scope unavailable" } },
+        { status: 503 },
+      );
+    },
+  });
+  const store = memoryStore({ locale: "en" });
+  const renderPage = (api: ApiClient) => (
+    <StoreContextProvider value={store}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>
+  );
+  const view = render(renderPage(firstApi));
+  expect(
+    await screen.findByRole("heading", { name: "No recording sessions yet" }),
+  ).toBeVisible();
+
+  view.rerender(renderPage(secondApi));
+  await waitFor(() => expect(secondListCalls).toBe(1));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  view.rerender(renderPage(firstApi));
+  await waitFor(() => expect(firstListCalls).toBe(2));
+  await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to load recordings.",
+  );
+  expect(
+    screen.queryByRole("heading", { name: "No recording sessions yet" }),
+  ).toBeNull();
+});
+
 it("keeps retry acknowledgement for ambiguous processing and passes session context to chat", async () => {
   const submissions: { path: string; body: unknown }[] = [];
   const api = new ApiClient({
@@ -174,7 +429,7 @@ it("requires acknowledgement to switch transcript language", async () => {
   ]);
 });
 
-it("plays and downloads the full concatenated audio per source", async () => {
+it("downloads original chunks as a ZIP and hides separate audio controls", async () => {
   const withChunks: RecordingSession = {
     ...session("full"),
     chunks: [
@@ -238,16 +493,103 @@ it("plays and downloads the full concatenated audio per source", async () => {
       <RecordingSessions api={fetchingApi} />
     </StoreContextProvider>,
   );
+  const downloads: string[] = [];
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+    this: HTMLAnchorElement,
+  ) {
+    downloads.push(this.download);
+  });
   const user = userEvent.setup();
   await user.click(
-    await screen.findByRole("button", { name: "Play full audio" }),
+    await screen.findByRole("button", {
+      name: "Download original audio (ZIP)",
+    }),
+  );
+  await waitFor(() =>
+    expect(downloads).toEqual(["savia-full-original-audio.zip"]),
+  );
+  expect(requested).toContain(
+    "/v1/companion/sessions/full/chunks/microphone/0",
+  );
+  expect(requested).toContain(
+    "/v1/companion/sessions/full/chunks/microphone/1",
+  );
+  expect(requested.some((path) => path.includes("/audio?"))).toBe(false);
+  expect(screen.queryByText("Full audio")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Play full audio" }),
+  ).not.toBeInTheDocument();
+});
+
+it("shows download progress, prevents duplicate downloads and lets users retry failures", async () => {
+  const recorded: RecordingSession = {
+    ...session("retry"),
+    chunks: [
+      {
+        source: "microphone",
+        sequence: 0,
+        startSeconds: 0,
+        durationSeconds: 30,
+        bytes: 4,
+        format: "ogg",
+      },
+    ],
+  };
+  let resolveChunk!: (response: Response) => void;
+  let attempts = 0;
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/v1/companion/sessions")
+        return Response.json({ sessions: [recorded], cursor: null });
+      if (path.includes("/chunks/")) {
+        attempts++;
+        if (attempts === 1)
+          return new Promise<Response>((resolve) => {
+            resolveChunk = resolve;
+          });
+        return new Response("original");
+      }
+      return Response.json(recorded);
+    },
+  });
+  URL.createObjectURL = vi.fn(() => "blob:zip");
+  URL.revokeObjectURL = vi.fn();
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", {
+      name: "Download original audio (ZIP)",
+    }),
   );
   expect(
-    await screen.findByRole("link", { name: "Download full audio" }),
-  ).toHaveAttribute("download", "savia-full-microphone.ogg");
-  expect(requested).toContain(
-    "/v1/companion/sessions/full/audio?source=microphone",
+    screen.getByRole("button", { name: "Preparing audio ZIP…" }),
+  ).toBeDisabled();
+  expect(
+    screen.getByText("Preparing audio ZIP…", { selector: "p" }),
+  ).toHaveAttribute("role", "status");
+  resolveChunk(new Response("unavailable", { status: 500 }));
+  expect(
+    await screen.findByText("Unable to download original audio. Try again."),
+  ).toHaveAttribute("role", "alert");
+  expect(click).not.toHaveBeenCalled();
+  await user.click(
+    screen.getByRole("button", { name: "Download original audio (ZIP)" }),
   );
+  await waitFor(() => expect(click).toHaveBeenCalledOnce());
+  expect(attempts).toBe(2);
+  expect(
+    screen.queryByText("Unable to download original audio. Try again."),
+  ).not.toBeInTheDocument();
 });
 
 it("plays microphone and system audio together as one combined call", async () => {
@@ -321,6 +663,22 @@ it("plays microphone and system audio together as one combined call", async () =
   );
   await screen.findByText("Microphone and system audio, played together.");
   expect(document.querySelectorAll("audio")).toHaveLength(2);
+  const play = vi
+    .spyOn(HTMLMediaElement.prototype, "play")
+    .mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  await user.click(
+    screen.getByRole("button", { name: "Start combined playback" }),
+  );
+  expect(play).toHaveBeenCalledTimes(2);
+
+  play.mockRejectedValueOnce(new Error("Playback was blocked"));
+  await user.click(
+    screen.getByRole("button", { name: "Start combined playback" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "One or more audio tracks could not start",
+  );
 });
 
 it("masters the combined call from the longest source timeline", async () => {
@@ -393,9 +751,35 @@ it("masters the combined call from the longest source timeline", async () => {
     "src",
     "blob:23",
   );
+  const play = vi
+    .spyOn(HTMLMediaElement.prototype, "play")
+    .mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  await user.click(
+    screen.getByRole("button", { name: "Start combined playback" }),
+  );
+  const [master, microphone] = document.querySelectorAll("audio");
+  Object.defineProperties(master, {
+    paused: { configurable: true, writable: true, value: false },
+    currentTime: { configurable: true, writable: true, value: 40 },
+  });
+  Object.defineProperties(microphone, {
+    paused: { configurable: true, writable: true, value: true },
+    ended: { configurable: true, value: true },
+    duration: { configurable: true, value: 30 },
+    currentTime: { configurable: true, writable: true, value: 30 },
+  });
+
+  fireEvent.timeUpdate(master);
+
+  expect(play).toHaveBeenCalledTimes(2);
+
+  master.currentTime = 10;
+  fireEvent.timeUpdate(master);
+  expect(play).toHaveBeenCalledTimes(3);
 });
 
-it("falls back to per-segment playback for mobile M4A sources", async () => {
+it("offers original ZIP download for mobile M4A without separate players", async () => {
   const mobile: RecordingSession = {
     ...session("mobile"),
     chunks: [
@@ -446,13 +830,18 @@ it("falls back to per-segment playback for mobile M4A sources", async () => {
       <RecordingSessions api={fetchingApi} />
     </StoreContextProvider>,
   );
-  expect(await screen.findByLabelText("Listen from")).toBeVisible();
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  await userEvent.setup().click(
+    await screen.findByRole("button", {
+      name: "Download original audio (ZIP)",
+    }),
+  );
+  await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+  expect(screen.queryByLabelText("Listen from")).not.toBeInTheDocument();
   expect(requested).toContain(
     "/v1/companion/sessions/mobile/chunks/microphone/0",
   );
-  await waitFor(() =>
-    expect(document.querySelectorAll("audio")).toHaveLength(1),
-  );
+  expect(document.querySelectorAll("audio")).toHaveLength(0);
   expect(
     screen.queryByRole("button", { name: "Play combined call" }),
   ).not.toBeInTheDocument();

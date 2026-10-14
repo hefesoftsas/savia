@@ -11,6 +11,7 @@ import type {
   ExtensionConnectionSummary,
   ExtensionRuntimeClient,
 } from "../../api/extension-runtime-client";
+import { isReadAccessDenied } from "@/queries/read-state";
 
 export type ExtensionConnectionField = {
   name: string;
@@ -71,8 +72,22 @@ export function ExtensionConnections({
 
   async function reload() {
     const generation = ++listGeneration.current;
-    const listed = await client.listConnections(extensionId);
-    if (generation === listGeneration.current) setConnections(listed);
+    try {
+      const listed = await client.listConnections(extensionId);
+      if (generation === listGeneration.current) {
+        setConnections(listed);
+        setError("");
+      }
+    } catch (reason) {
+      if (generation === listGeneration.current && isReadAccessDenied(reason)) {
+        setConnections([]);
+        setConnectionId("");
+        setValues({});
+        setDraftDirty(false);
+        setError(message(reason));
+      }
+      throw reason;
+    }
   }
 
   async function reloadRemoteChanges() {
@@ -101,7 +116,15 @@ export function ExtensionConnections({
           setConnections(listed);
       })
       .catch((reason) => {
-        if (active) setError(message(reason));
+        if (active && generation === listGeneration.current) {
+          if (isReadAccessDenied(reason)) {
+            setConnections([]);
+            setConnectionId("");
+            setValues({});
+            setDraftDirty(false);
+          }
+          setError(message(reason));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);

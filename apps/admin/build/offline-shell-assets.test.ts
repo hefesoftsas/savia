@@ -21,6 +21,11 @@ it("precaches record routes and their static closure without traversing optional
       ...chunk("office.js", "/office/index.html", ["office-engine.js"]),
       isEntry: true,
     },
+    "pluginEditor.js": {
+      ...chunk("pluginEditor.js", "/plugin-editor.html", ["extension-host.js"]),
+      isEntry: true,
+    },
+    "extension-host.js": chunk("extension-host.js", "extension-host"),
     "office-engine.js": chunk(
       "office-engine.js",
       "/features/office/office-engine.ts",
@@ -46,10 +51,7 @@ it("precaches record routes and their static closure without traversing optional
       ["editor.js"],
     ),
     "detail.js": chunk("detail.js", "/studio-engine/record-detail.tsx"),
-    "form.js": chunk(
-      "form.js",
-      "/studio-engine/collection-record-form.tsx",
-    ),
+    "form.js": chunk("form.js", "/studio-engine/collection-record-form.tsx"),
     "shared.js": chunk("shared.js", "shared"),
     "table.js": chunk("table.js", "table", ["shared.js"]),
     "studio.js": chunk("studio.js", "/studio-engine/screen-manager.tsx"),

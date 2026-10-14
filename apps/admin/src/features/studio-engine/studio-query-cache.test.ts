@@ -58,3 +58,24 @@ describe("studio-query-cache", () => {
     expect(isStudioBootstrapped("gone", "env|user-2")).toBe(false);
   });
 });
+
+it.each([401, 403])(
+  "removes denied Studio workflow snapshots after HTTP %s",
+  async (status) => {
+    const client = getStudioQueryClient("tenant-7", "env|user-1");
+    const queryKey = ["workflow-detail", "42"];
+    client.setQueryData(queryKey, { secret: "protected fixture" });
+    const error = Object.assign(new Error("Access denied"), { status });
+    await expect(
+      client.fetchQuery({
+        queryKey,
+        staleTime: 0,
+        queryFn: async () => {
+          throw error;
+        },
+      }),
+    ).rejects.toBe(error);
+    expect(client.getQueryData(queryKey)).toBeUndefined();
+    expect(client.getQueryState(queryKey)?.error).toBe(error);
+  },
+);

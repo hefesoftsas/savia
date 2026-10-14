@@ -7,8 +7,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type { AppServices } from "@/app-services";
+import { ApiClientError } from "@/api/api-client";
+import { invalidateTenantWorkspaces } from "@/api/tenant-workspaces-client";
 import { getStudioRuntime } from "@/features/studio-engine/runtime";
 import { PluginStudioPage, StudioPage } from "./studio-page";
+import { STUDIO_TENANTS_CHANGED } from "./studio-tenants";
 const workspaceRendered = vi.hoisted(() => vi.fn());
 
 vi.mock("ra-core", async (importOriginal) => ({
@@ -40,6 +43,7 @@ vi.mock("@/components/ui/popover", () => ({
 
 afterEach(() => {
   cleanup();
+  invalidateTenantWorkspaces();
   vi.restoreAllMocks();
   workspaceRendered.mockClear();
 });
@@ -136,6 +140,30 @@ describe("Studio tenant integration", () => {
     expect(await screen.findByText(/Espacio CRM/)).toBeVisible();
     expect(getStudioRuntime().tenantId).toBe(101);
     expect(screen.queryByLabelText("Tenant")).not.toBeInTheDocument();
+  });
+
+  it("clears the authorized workspace after a background tenant access denial", async () => {
+    let denyReads = false;
+    const apiClient = {
+      get: vi.fn(async () => {
+        if (denyReads) throw new ApiClientError(403, "forbidden", "Denied");
+        return { data: [tenant] };
+      }),
+    };
+    const services = {
+      authSession: { getIdentity: async () => ({ id: "user-1" }) },
+      apiClient,
+    } as unknown as AppServices;
+    mount(services, "/studio?tenantId=101");
+
+    expect(await screen.findByText(/Espacio CRM/)).toBeVisible();
+    denyReads = true;
+    window.dispatchEvent(new Event(STUDIO_TENANTS_CHANGED));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Espacio CRM/)).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Denied");
   });
 
   it("closes the local workspace when leaving Studio", async () => {

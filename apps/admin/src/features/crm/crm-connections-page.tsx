@@ -1,6 +1,11 @@
-import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
+import { useRealtimeQuery } from "@/realtime/use-realtime-query";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
-import { useEffect, useMemo, useRef, useState, type ElementType } from "react";
+import { useMemo, useRef, useState, type ElementType } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionGeneration } from "@/auth/session-scope";
+import { readKey } from "@/queries/query-keys";
+import { isReadAccessDenied } from "@/queries/read-state";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
 import Nango from "@nangohq/frontend";
 import Hubspot from "@thesvg/react/hubspot";
 import Pipedrive from "@thesvg/react/pipedrive";
@@ -215,90 +220,83 @@ export function CrmConnectionsPage({
   embedded?: boolean;
 }) {
   const currentTenant = useCurrentTenant();
-  const [providers, setProviders] = useState<CrmProvider[]>([]);
-  const [connections, setConnections] = useState<CrmConnection[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionProvider, setActionProvider] = useState<CrmProviderId>();
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [loadedTenantId, setLoadedTenantId] = useState<number | null>();
-  const refreshRequestId = useRef(0);
+  const [actionProvider, setActionProvider] = useState<CrmProviderId>();
   const latestTenant = useRef(currentTenant);
   latestTenant.current = currentTenant;
-
-  async function refresh() {
-    if (latestTenant.current.id !== currentTenant.id) return;
-    if (currentTenant.isLoading || latestTenant.current.isLoading) {
-      setLoading(true);
-      setProviders([]);
-      setConnections([]);
-      setLoadedTenantId(undefined);
-      return;
-    }
-
-    const requestId = ++refreshRequestId.current;
-    const requestTenantId = currentTenant.id;
-    setLoading(true);
-    setFeedback(null);
-    try {
+  const crm = services.crm;
+  const sessionGeneration = useSessionGeneration();
+  const scope = useMemo(() => {
+    if (currentTenant.isPlatformAdmin)
+      return { kind: "platform" as const, id: "platform" };
+    if (currentTenant.id !== null)
+      return { kind: "tenant" as const, id: String(currentTenant.id) };
+    return { kind: "principal" as const, id: "current" };
+  }, [currentTenant.id, currentTenant.isPlatformAdmin]);
+  const queryKey = useMemo(
+    () =>
+      readKey({ sessionGeneration, ...scope }, "crm-connections", {
+        tenantId: currentTenant.id,
+        isPlatformAdmin: currentTenant.isPlatformAdmin,
+      }),
+    [currentTenant.id, currentTenant.isPlatformAdmin, scope, sessionGeneration],
+  );
+  const queryClient = useQueryClient();
+  const tenantScopeReady =
+    currentTenant.scopeStatus === undefined
+      ? !currentTenant.isLoading
+      : currentTenant.scopeStatus === "platform" ||
+        currentTenant.scopeStatus === "resolved";
+  const tenantScopeFailed =
+    currentTenant.scopeStatus === "error" ||
+    currentTenant.scopeStatus === "unavailable";
+  const read = useQuery({
+    queryKey,
+    enabled: tenantScopeReady,
+    queryFn: async ({ signal }) => {
+      const tenantId = currentTenant.id ?? undefined;
       const [nextProviders, nextConnections] = await Promise.all([
-        services.crm.listProviders(requestTenantId ?? undefined),
-        services.crm.listConnections(requestTenantId ?? undefined),
+        crm.listProviders(tenantId),
+        crm.listConnections(tenantId),
       ]);
-      if (
-        requestId !== refreshRequestId.current ||
-        requestTenantId !== latestTenant.current.id
-      )
-        return;
-      setProviders(nextProviders ?? []);
-      setConnections(nextConnections ?? []);
-      setLoadedTenantId(requestTenantId);
-    } catch (exception) {
-      if (
-        requestId !== refreshRequestId.current ||
-        requestTenantId !== latestTenant.current.id
-      )
-        return;
-      setFeedback(feedbackFrom(exception));
-      setProviders([]);
-      setConnections([]);
-      setLoadedTenantId(requestTenantId);
-    } finally {
-      if (
-        requestId === refreshRequestId.current &&
-        requestTenantId === latestTenant.current.id
-      )
-        setLoading(false);
-    }
-  }
+      if (signal.aborted)
+        throw new DOMException("Read cancelled", "AbortError");
+      return {
+        providers: nextProviders ?? [],
+        connections: nextConnections ?? [],
+      };
+    },
+  });
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey, exact: true });
+  const loading =
+    currentTenant.scopeStatus === "loading" ||
+    (currentTenant.scopeStatus === undefined && currentTenant.isLoading) ||
+    (tenantScopeReady && read.isPending && read.data === undefined);
+  const accessDenied = isReadAccessDenied(read.error);
+  const tenantDataIsCurrent =
+    tenantScopeReady && read.data !== undefined && !accessDenied;
+  const providersForCurrentTenant = accessDenied
+    ? []
+    : (read.data?.providers ?? []);
+  const connectionsForCurrentTenant = accessDenied
+    ? []
+    : (read.data?.connections ?? []);
+  const loadError = read.error ? feedbackFrom(read.error) : undefined;
+  const scopeError = tenantScopeFailed
+    ? (currentTenant.scopeError ?? "Unable to resolve the current tenant.")
+    : undefined;
+  const readFeedback =
+    scopeError ?? (accessDenied ? loadError : (feedback ?? loadError));
 
-  useEffect(() => {
-    if (currentTenant.isLoading) {
-      refreshRequestId.current += 1;
-      setLoading(true);
-      setProviders([]);
-      setConnections([]);
-      setLoadedTenantId(undefined);
-      return;
-    }
-    void refresh();
-    return () => {
-      refreshRequestId.current += 1;
-    };
-  }, [services, currentTenant.id, currentTenant.isLoading]);
-
-  useRealtimeRefresh({
+  useRealtimeQuery({
     topics: ["integrations"],
     tenantId: currentTenant.isPlatformAdmin
       ? 0
       : (currentTenant.id ?? undefined),
-    enabled: !currentTenant.isLoading,
-    refresh,
+    enabled: tenantScopeReady,
+    queryKeys: [queryKey],
   });
-
-  const tenantDataIsCurrent =
-    !currentTenant.isLoading && loadedTenantId === currentTenant.id;
-  const providersForCurrentTenant = tenantDataIsCurrent ? providers : [];
-  const connectionsForCurrentTenant = tenantDataIsCurrent ? connections : [];
 
   const connectionsByProvider = useMemo(
     () =>
@@ -446,16 +444,45 @@ export function CrmConnectionsPage({
   if (embedded) {
     return (
       <>
-        {tenantDataIsCurrent && feedback ? (
+        {scopeError || feedback || (read.isError && !tenantDataIsCurrent) ? (
           <div
             className="integrations-feedback flex items-start gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
-            role="status"
+            role={feedback ? "status" : "alert"}
           >
             <CircleAlert className="mt-0.5 size-4 shrink-0 text-primary" />
-            <p className="leading-6">{feedback}</p>
+            <p className="leading-6">{readFeedback}</p>
+            {currentTenant.scopeStatus === "error" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="link"
+                onClick={() => void currentTenant.retry?.()}
+              >
+                Reintentar
+              </Button>
+            ) : read.isError &&
+              !tenantDataIsCurrent &&
+              read.data === undefined &&
+              !accessDenied ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="link"
+                onClick={() => void read.refetch()}
+              >
+                Reintentar
+              </Button>
+            ) : null}
           </div>
         ) : null}
-        {loading || !tenantDataIsCurrent ? (
+        {tenantDataIsCurrent && !feedback ? (
+          <ReadRefreshStatus
+            refreshing={read.isFetching}
+            error={read.isError ? loadError : undefined}
+            onRetry={() => void read.refetch()}
+          />
+        ) : null}
+        {loading ? (
           <IntegrationGroup title="CRM" headingId="crm-integrations-heading">
             {Array.from({ length: 4 }, (_, index) => (
               <li key={index} className="px-5 py-4">
@@ -463,14 +490,14 @@ export function CrmConnectionsPage({
               </li>
             ))}
           </IntegrationGroup>
-        ) : (
+        ) : tenantDataIsCurrent ? (
           <IntegrationGroup title="CRM" headingId="crm-integrations-heading">
             {rows}
             {providersForCurrentTenant.length === 0 ? (
               <IntegrationGroupEmpty message="No hay integraciones CRM disponibles." />
             ) : null}
           </IntegrationGroup>
-        )}
+        ) : null}
       </>
     );
   }
@@ -479,17 +506,46 @@ export function CrmConnectionsPage({
     <IntegrationsPageShell>
       <IntegrationsPageHeader title="Conexiones CRM" />
 
-      {tenantDataIsCurrent && feedback ? (
+      {scopeError || feedback || (read.isError && !tenantDataIsCurrent) ? (
         <div
           className="integrations-feedback flex items-start gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
-          role="status"
+          role={feedback ? "status" : "alert"}
         >
           <CircleAlert className="mt-0.5 size-4 shrink-0 text-primary" />
-          <p className="leading-6">{feedback}</p>
+          <p className="leading-6">{readFeedback}</p>
+          {currentTenant.scopeStatus === "error" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="link"
+              onClick={() => void currentTenant.retry?.()}
+            >
+              Reintentar
+            </Button>
+          ) : read.isError &&
+            !tenantDataIsCurrent &&
+            read.data === undefined &&
+            !accessDenied ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="link"
+              onClick={() => void read.refetch()}
+            >
+              Reintentar
+            </Button>
+          ) : null}
         </div>
       ) : null}
+      {tenantDataIsCurrent && !feedback ? (
+        <ReadRefreshStatus
+          refreshing={read.isFetching}
+          error={read.isError ? loadError : undefined}
+          onRetry={() => void read.refetch()}
+        />
+      ) : null}
 
-      {loading || !tenantDataIsCurrent ? (
+      {loading ? (
         <IntegrationGroup title="CRM">
           {Array.from({ length: 4 }, (_, index) => (
             <li key={index} className="px-5 py-4">
@@ -497,14 +553,14 @@ export function CrmConnectionsPage({
             </li>
           ))}
         </IntegrationGroup>
-      ) : (
+      ) : tenantDataIsCurrent ? (
         <IntegrationGroup title="CRM">
           {rows}
           {providersForCurrentTenant.length === 0 ? (
             <IntegrationGroupEmpty message="No hay integraciones CRM disponibles." />
           ) : null}
         </IntegrationGroup>
-      )}
+      ) : null}
     </IntegrationsPageShell>
   );
 }

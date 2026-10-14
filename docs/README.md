@@ -21,6 +21,11 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [Stable background refresh](guides/background-refresh.md) — scoped queries, initial versus background loading, session changes, draft preservation and migration coverage.
+- [Browser connectivity](guides/connectivity.md) — verified offline hints, shared checks and reconnect behavior.
+
+- [Request caching](guides/request-caching.md) — declarative server cache policies for reference reads, scopes, invalidation and execution traces.
+
 - [Jitsi meetings](guides/jitsi-meetings.md) — schedule calls from My Day and Bookings and share the same room with attendees.
 - [Slack and Teams sharing](guides/slack-teams-sharing.md) — personal Nango connections, channel selection, record sharing and OAuth setup.
 
@@ -47,6 +52,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [my-day-widgets.md](my-day-widgets.md) — My Day collection widgets, layout persistence and plugin seam.
 
 - [workflows.md](workflows.md) — general-purpose workflow authoring, execution, permissions and recovery.
+- [SPA build performance](guides/spa-build-performance.md) — asset budgets, catalog compaction and reproducible startup payload measurements.
+- [Savia Flows](guides/savia-flows.md) — Dafthunk-based visual editor, local Miniflare runtime, tenant permissions and execution history.
 - [notifications.md](notifications.md) — durable personal inbox for collection activity, assigned work, administrator messages and authentication events.
 - [Direct Office editing](office-editing.md): WASM editor, revision storage, runtime setup and deployment.
 
@@ -107,6 +114,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 - [Tenant email registration](guides/tenant-registration.md): independent tenant opt-in, Turnstile/ALTCHA configuration, verified Viewer provisioning and quota handling.
 
+- [Native VS Code plugin authoring](guides/vscode-plugin-development.md): source checkout, immutable publication, conflict recovery, and VSIX installation.
 - [Plugin development kit](guides/plugin-development.md): scaffold, SDK, generic UI, local iframe development, and testing.
 
 - [Personal API keys](guides/personal-api-keys.md) — create and revoke scoped credentials for Companion.

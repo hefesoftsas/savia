@@ -24,6 +24,14 @@ print or in-person sharing. The default budget is
 review and publish a new link after changing a form. Revoke the previous link when
 replacing it.
 
+Read-only quote result links use the same public-link lifecycle primitives as
+forms and shared Pages: 256-bit random bearer tokens, canonical expiry checks,
+no-store/noindex responses, and idempotent revocation. They remain a separate
+link type because their payload is an immutable allowlisted quote report, not a
+form definition or permission to submit another quote. WhatsApp-created reports
+expire after seven days and can be revoked by an active tenant administrator
+from the quote link manager; opening one never starts provider or model work.
+
 Savia keeps an internal random short code as a fallback. When Shlink is configured,
 it also creates a short URL on the self-hosted `go.cloud.hefesoft.com` domain and
 caches it with the published form. Until an external URL is saved, the stored

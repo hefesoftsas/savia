@@ -16,7 +16,10 @@ Desktop keeps one private pending draft in the native app data directory. Its
 manifest is written atomically after completed audio segments. Closing preserves
 completed audio; reopening exposes a recovered draft and never restarts recording
 automatically. Discard removes that local draft, not uploaded backend audio.
-Credentials are kept in memory, never in the capture spool. An interrupted segment
+Credentials are kept in memory, never in the capture spool, unless the user
+opts into Remember on this device: origin and token are then stored as one
+envelope in the OS keychain, reloaded and revalidated on launch, and removed
+on demand. An interrupted segment
 that has not been committed may be lost; completed segments remain recoverable.
 
 Mobile records AAC-LC mono 24 kHz at 32 kbps for up to an hour with the app open.
@@ -135,13 +138,24 @@ processing state, partial transcripts, summary and questions. When a session has
 more than one Ogg source, the review screen offers a single “combined call”
 player: it loads each source as one chained file and plays microphone and
 system audio together in lockstep, so a meeting is heard as one conversation.
-Per-source full-audio players and downloads remain below for isolated review.
+Use **Start combined playback** to start every source from the same user action;
+if the browser cannot start a source, the review screen displays an error and
+offers the original audio ZIP download for review.
+**Download original audio (ZIP)** downloads every uploaded segment without
+conversion, grouped into `microphone/` and `system/` folders with sequence-numbered
+`.ogg` or `.m4a` filenames. The download is available after upload is finalized;
+preparation fetches and archives one fragment at a time to avoid full-session
+binary copies, disables the button, and errors allow retry. Switching sessions or
+leaving the review cancels preparation. Separate “Full audio”, microphone and
+system playback controls are hidden.
 `GET /v1/companion/sessions/{id}/audio?source=` returns one source as a single
 chained Ogg file for listening and download. Each validated complete logical
 stream gets a distinct serial number and recomputed page checksums; codec packets,
 granule positions and pre-skip remain intact. The endpoint requires a finalized
 session with Ogg-only segments (desktop captures) and is capped at 64 MB.
-Sessions with M4A segments keep per-segment playback only.
+The web review UI allows up to 60 seconds for each full-source audio download;
+individual segment requests keep the standard API timeout.
+Sessions with M4A segments can download their originals through the same ZIP action.
 A session with saved transcript segments can answer questions before all work is
 complete. Answers include the source/sequence/time references sent as evidence.
 For long transcripts, bounded lexical retrieval selects whole excerpts; the UI

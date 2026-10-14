@@ -10,6 +10,7 @@ const calls = vi.hoisted(() => ({
   admin: vi.fn(),
   appearance: vi.fn(),
   worker: vi.fn(),
+  retire: vi.fn(),
 }));
 vi.mock("./app", () => {
   calls.admin();
@@ -20,9 +21,15 @@ vi.mock("./components/admin/appearance-cache", () => ({
 }));
 vi.mock("./pwa/register-service-worker", () => ({
   registerPwaServiceWorker: calls.worker,
+  retireAdministrativeWorkerForPublicRoute: calls.retire,
 }));
 vi.mock("./features/tenant-registration/registration-captcha", () => ({
   RegistrationCaptcha: () => null,
+}));
+vi.mock("./features/public-quotes/public-quote-page", () => ({
+  PublicQuotePage: ({ token }: { token: string }) => (
+    <div>Public quote {token}</div>
+  ),
 }));
 vi.mock("./features/public-forms/public-form-page", () => ({
   PublicFormPage: ({ token }: { token: string }) => (
@@ -147,4 +154,48 @@ it("opens tenant registration anonymously without loading private services", asy
   ).toBeInTheDocument();
   expect(calls.admin.mock.calls.length).toBe(previous);
   vi.unstubAllGlobals();
+});
+
+it("opens quote result links anonymously and keeps malformed quote paths out of private app", async () => {
+  document.documentElement.lang = "es";
+  localStorage.setItem("savia.locale", "es");
+  const previous = calls.admin.mock.calls.length;
+  const previousAppearance = calls.appearance.mock.calls.length;
+  const previousWorker = calls.worker.mock.calls.length;
+  const token = "a".repeat(64);
+  render(<ApplicationRoot pathname={`/public/quotes/${token}`} />);
+  expect(await screen.findByText(`Public quote ${token}`)).toBeInTheDocument();
+  render(<ApplicationRoot pathname="/public/quotes/not-a-token" />);
+  expect(screen.getByRole("alert")).toHaveTextContent("no es válido");
+  expect(calls.admin.mock.calls.length).toBe(previous);
+  expect(calls.appearance.mock.calls.length).toBe(previousAppearance);
+  expect(calls.worker.mock.calls.length).toBe(previousWorker);
+});
+
+it("asks the public bootstrap to retire a stale administrative controller", async () => {
+  const pathname = `/public/quotes/${"a".repeat(64)}`;
+  const serviceWorker = { controller: { scriptURL: "/sw.js" } };
+  const descriptor = Object.getOwnPropertyDescriptor(
+    navigator,
+    "serviceWorker",
+  );
+  Object.defineProperty(navigator, "serviceWorker", {
+    configurable: true,
+    value: serviceWorker,
+  });
+  try {
+    render(<ApplicationRoot pathname={pathname} />);
+    expect(await screen.findByText(/Public quote/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(calls.retire).toHaveBeenCalledWith(
+        pathname,
+        serviceWorker,
+        expect.any(Function),
+      ),
+    );
+  } finally {
+    if (descriptor)
+      Object.defineProperty(navigator, "serviceWorker", descriptor);
+    else Reflect.deleteProperty(navigator, "serviceWorker");
+  }
 });

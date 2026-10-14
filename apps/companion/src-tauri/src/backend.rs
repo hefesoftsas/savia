@@ -55,7 +55,7 @@ pub struct CompanionRequest {
     pub body: Option<Value>,
 }
 
-fn validate_origin(value: &str) -> Result<Url, String> {
+pub(crate) fn validate_origin(value: &str) -> Result<Url, String> {
     let url = Url::parse(value).map_err(|_| "Enter a valid Savia server origin.".to_string())?;
     let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
     let local = matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1" | "[::1]");
@@ -72,7 +72,7 @@ fn validate_origin(value: &str) -> Result<Url, String> {
     Ok(url)
 }
 
-fn validate_token(token: &str) -> Result<(), String> {
+pub(crate) fn validate_token(token: &str) -> Result<(), String> {
     if token.is_empty()
         || token.len() > MAX_TOKEN_BYTES
         || token.bytes().any(|byte| !(0x21..=0x7e).contains(&byte))

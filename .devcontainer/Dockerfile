@@ -17,12 +17,21 @@ RUN mkdir -p \
     /workspace/apps/companion/node_modules \
     /workspace/apps/connector-gateway/node_modules \
     /workspace/apps/db-bridge/node_modules \
+    /workspace/apps/flows/node_modules \
+    /workspace/apps/flows/api/node_modules \
+    /workspace/apps/flows/app/node_modules \
+    /workspace/apps/flows/packages/geo/node_modules \
+    /workspace/apps/flows/packages/native/node_modules \
+    /workspace/apps/flows/packages/runtime/node_modules \
+    /workspace/apps/flows/packages/types/node_modules \
+    /workspace/apps/flows/packages/utils/node_modules \
     /workspace/apps/legacy-exporter/node_modules \
     /workspace/apps/mcp/node_modules \
     /workspace/apps/plugin-registry/node_modules \
     /workspace/apps/hook-executor/node_modules \
     /workspace/apps/savia-request/node_modules \
     /workspace/apps/self-hosted/node_modules \
+    /workspace/apps/vscode/node_modules \
     /workspace/packages/db/node_modules \
     /workspace/packages/insurance-accounting/node_modules \
     /workspace/packages/insurance-activities/node_modules \
@@ -50,6 +59,7 @@ RUN mkdir -p \
     /workspace/packages/insurance-service/node_modules \
     /workspace/packages/insurance-settlements/node_modules \
     /workspace/packages/insurance-workbench/node_modules \
+    /workspace/packages/plugin-authoring/node_modules \
     /workspace/packages/plugin-example-tasks/node_modules \
     /workspace/packages/plugin-sdk/node_modules \
     /workspace/packages/plugin-ui/node_modules \

@@ -143,12 +143,29 @@ describe("ports del store", () => {
           .split("\n")
           .map((line) => line.trim())
           .filter(Boolean);
-        for (const required of ["savia-extension.json", "dist/plugin.js"]) {
+        for (const required of [
+          "savia-extension.json",
+          "dist/plugin.js",
+          "src/original-source.json",
+        ]) {
           assert.ok(
             names.includes(required),
             `${port}: falta ${required} en ${names.join(", ")}`,
           );
         }
+        const originals = JSON.parse(
+          execFileSync("unzip", ["-p", output, "src/original-source.json"], {
+            encoding: "utf8",
+            maxBuffer: 2 * 1024 * 1024,
+          }),
+        );
+        const entryName = ["entry.tsx", "entry.js", "entry.jsx"].find((name) =>
+          existsSync(join(portsDir, port, name)),
+        );
+        assert.equal(
+          originals[`store-ports/${port}/${entryName}`],
+          readFileSync(join(portsDir, port, entryName), "utf8"),
+        );
         const manifest = JSON.parse(
           execFileSync("unzip", ["-p", output, "savia-extension.json"], {
             cwd: root,

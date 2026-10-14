@@ -14,7 +14,35 @@ import {
   type SaveState,
 } from "./plugin-project-session";
 import { pluginProjectSaveSchema } from "@savia/studio-shared/plugin-projects";
+import { compareSolutionVersions } from "@savia/studio-shared/solution-package";
+import { findMissingPluginSourceAssets } from "./plugin-source-compiler";
 type Project = RecoveryDraft & { id: string; updatedAt: string };
+type StoreCatalogItem = { id: string; label: string; version: string };
+
+function groupStoreVersions(items: StoreCatalogItem[]) {
+  const byId = new Map<string, StoreCatalogItem[]>();
+  for (const item of items) {
+    const versions = byId.get(item.id);
+    if (versions) versions.push(item);
+    else byId.set(item.id, [item]);
+  }
+  return [...byId.entries()]
+    .map(([id, versions]) => {
+      const sorted = [...versions].sort((a, b) =>
+        compareSolutionVersions(b.version, a.version),
+      );
+      return { id, latest: sorted[0], older: sorted.slice(1) };
+    })
+    .sort((a, b) => a.latest.label.localeCompare(b.latest.label));
+}
+
+function nextPatchVersion(version: string): string {
+  const parts = version.split(".");
+  if (parts.length !== 3 || parts.some((part) => !/^\d+$/.test(part)))
+    throw new Error(`Cannot increment invalid plugin version: ${version}`);
+  return `${parts[0]}.${parts[1]}.${(BigInt(parts[2]) + 1n).toString()}`;
+}
+
 export default function PluginProjectWorkspace({
   tenantId,
   source,
@@ -68,6 +96,7 @@ export default function PluginProjectWorkspace({
   const owner = useRef("");
   const latest = useRef<ProjectDraft | null>(null);
   const mounted = useRef(true);
+  const storeCatalogRequest = useRef(0);
   const key = (id: string) =>
     `savia:plugin-project:${encodeURIComponent(owner.current)}:${tenantId}:${id}`;
   function activate(value: Project) {
@@ -93,8 +122,18 @@ export default function PluginProjectWorkspace({
       return;
     }
     const draft: ProjectDraft = recovery ?? value;
-    latest.current = { files: draft.files, history: draft.history };
-    const initial = { files: value.files, history: value.history };
+    latest.current = {
+      files: draft.files,
+      history: draft.history,
+      editorExtensions: value.editorExtensions ?? [],
+      installedEditorExtensions: value.installedEditorExtensions ?? [],
+    };
+    const initial = {
+      files: value.files,
+      history: value.history,
+      editorExtensions: value.editorExtensions ?? [],
+      installedEditorExtensions: value.installedEditorExtensions ?? [],
+    };
     const current = new PluginProjectSession(
       value.version,
       initial,
@@ -114,8 +153,14 @@ export default function PluginProjectWorkspace({
       },
       (input) => {
         try {
-          if (input) localStorage.setItem(key(value.id), JSON.stringify(input));
-          else localStorage.removeItem(key(value.id));
+          if (input) {
+            const {
+              editorExtensions: _editorExtensions,
+              installedEditorExtensions: _installed,
+              ...recovery
+            } = input;
+            localStorage.setItem(key(value.id), JSON.stringify(recovery));
+          } else localStorage.removeItem(key(value.id));
         } catch {
           if (mounted.current)
             setError(
@@ -132,14 +177,73 @@ export default function PluginProjectWorkspace({
       },
     );
     session.current = current;
-    setProject({ ...value, ...draft });
+    setProject({
+      ...value,
+      ...draft,
+      editorExtensions: value.editorExtensions ?? [],
+      installedEditorExtensions: value.installedEditorExtensions ?? [],
+    });
     setStatus({ state: "saved" });
     if (recovery)
-      current.update({ files: recovery.files, history: recovery.history });
+      current.update({
+        files: recovery.files,
+        history: recovery.history,
+        editorExtensions: value.editorExtensions ?? [],
+        installedEditorExtensions: value.installedEditorExtensions ?? [],
+      });
   }
   function fail(reason: unknown) {
     if (mounted.current)
       setError(reason instanceof Error ? reason.message : String(reason));
+  }
+  async function refreshStoreCatalog(isCancelled: () => boolean = () => false) {
+    const requestId = ++storeCatalogRequest.current;
+    const result = await request<{
+      data: Array<{
+        manifest: { id: string; label?: string };
+        version: string;
+      }>;
+    }>("/plugin-store");
+    if (!Array.isArray(result.data)) return;
+    const items = result.data
+      .filter(
+        (item) =>
+          item &&
+          typeof item.manifest?.id === "string" &&
+          typeof item.version === "string",
+      )
+      .map((item) => ({
+        id: item.manifest.id,
+        label:
+          typeof item.manifest.label === "string" && item.manifest.label.trim()
+            ? item.manifest.label
+            : item.manifest.id,
+        version: item.version,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    if (
+      mounted.current &&
+      !isCancelled() &&
+      requestId === storeCatalogRequest.current
+    )
+      setStoreItems(items);
+  }
+  async function handlePublished() {
+    await onPublished();
+    if (!mounted.current) return;
+    try {
+      await refreshStoreCatalog();
+      if (mounted.current) setError("");
+    } catch {
+      if (mounted.current)
+        setError(
+          tr(
+            "El plugin se publicó, pero no se pudo actualizar el catálogo. Recarga la página para volver a intentarlo.",
+            "The plugin was published, but the catalog could not be refreshed. Reload the page to try again.",
+            "O plugin foi publicado, mas não foi possível atualizar o catálogo. Recarregue a página para tentar novamente.",
+          ),
+        );
+    }
   }
   function formatUpdatedAt(value: string): string {
     const date = new Date(value);
@@ -167,20 +271,69 @@ export default function PluginProjectWorkspace({
     }>(
       `/plugin-store/${encodeURIComponent(sourceId)}/source?version=${encodeURIComponent(sourceVersion)}`,
     );
-    const files = { ...response.data.files };
-    const manifest = JSON.parse(files["savia-extension.json"]);
-    const parts = String(manifest.version).split(".");
-    if (parts.length === 3 && parts.every((part) => /^\d+$/.test(part)))
-      manifest.version = `${parts[0]}.${parts[1]}.${Number(parts[2]) + 1}`;
-    files["savia-extension.json"] = JSON.stringify(manifest, null, 2);
-    if ((response.data as { synthesized?: boolean }).synthesized)
-      setNotice(
+    const catalog = await request<{
+      data: Array<{
+        manifest: { id: string; label?: string };
+        version: string;
+      }>;
+    }>("/plugin-store");
+    const versions = catalog.data
+      .filter(
+        (item) =>
+          item?.manifest?.id === sourceId && typeof item.version === "string",
+      )
+      .map((item) => item.version);
+    if (!versions.includes(sourceVersion))
+      throw new Error(
         tr(
-          "Este plugin no incluía su código fuente; se abrió una copia editable como base.",
-          "This plugin did not include its source; an editable copy was opened as a starting point.",
-          "Este plugin não incluía seu código-fonte; uma cópia editável foi aberta como base.",
+          "La versión seleccionada ya no está disponible. Actualiza el catálogo e inténtalo de nuevo.",
+          "The selected release is no longer available. Refresh the catalog and try again.",
+          "A versão selecionada não está mais disponível. Atualize o catálogo e tente novamente.",
         ),
       );
+    const latestVersion = versions.reduce((latest, candidate) =>
+      compareSolutionVersions(candidate, latest) > 0 ? candidate : latest,
+    );
+    const files = { ...response.data.files };
+    const missingAssets = files["original-source.json"]
+      ? findMissingPluginSourceAssets(files["original-source.json"])
+      : [];
+    if (missingAssets.length) {
+      const compiled = await transport(
+        `/api/plugin-store/${encodeURIComponent(sourceId)}/entry?version=${encodeURIComponent(sourceVersion)}`,
+        { method: "GET", signal: requests.signal },
+      );
+      if (!compiled.ok)
+        throw new Error("Could not recover the compiled plugin entry.");
+      files["entry.tsx"] = await compiled.text();
+      delete files["original-source.json"];
+    }
+    const manifest = JSON.parse(files["savia-extension.json"]);
+    const targetVersion = nextPatchVersion(latestVersion);
+    manifest.version = targetVersion;
+    files["savia-extension.json"] = JSON.stringify(manifest, null, 2);
+    const notices = [
+      tr(
+        `Se abrió ${sourceVersion} como base; el nuevo borrador será ${targetVersion} (última publicada: ${latestVersion}).`,
+        `Opened ${sourceVersion} as the base; the new draft will be ${targetVersion} (latest release: ${latestVersion}).`,
+        `A versão ${sourceVersion} foi aberta como base; o novo rascunho será ${targetVersion} (última publicada: ${latestVersion}).`,
+      ),
+      (response.data as { synthesized?: boolean }).synthesized
+        ? tr(
+            "Este plugin no incluía su código fuente; se abrió una copia de su JavaScript compilado.",
+            "This plugin did not include its source; a copy of its compiled JavaScript was opened.",
+            "Este plugin não incluía seu código-fonte; uma cópia do JavaScript compilado foi aberta.",
+          )
+        : "",
+      missingAssets.length
+        ? tr(
+            "Esta versión no conserva todos sus archivos fuente; se recuperó su JavaScript compilado como base editable.",
+            "This release does not retain all of its source files; its compiled JavaScript was recovered as the editable base.",
+            "Esta versão não conserva todos os arquivos-fonte; seu JavaScript compilado foi recuperado como base editável.",
+          )
+        : "",
+    ].filter(Boolean);
+    setNotice(notices.join(" "));
     await create({ files, history: [] });
   }
   useEffect(() => {
@@ -196,36 +349,9 @@ export default function PluginProjectWorkspace({
       );
       if (cancelled) return;
       setProjects(result.data);
-      void request<{
-        data: Array<{
-          manifest: { id: string; label?: string };
-          version: string;
-        }>;
-      }>("/plugin-store")
-        .then((store) => {
-          if (cancelled || !Array.isArray(store.data)) return;
-          const items = store.data
-            .filter(
-              (item) =>
-                item &&
-                typeof item.manifest?.id === "string" &&
-                typeof item.version === "string",
-            )
-            .map((item) => ({
-              id: item.manifest.id,
-              label:
-                typeof item.manifest.label === "string" &&
-                item.manifest.label.trim()
-                  ? item.manifest.label
-                  : item.manifest.id,
-              version: item.version,
-            }))
-            .sort((a, b) => a.label.localeCompare(b.label));
-          if (!cancelled) setStoreItems(items);
-        })
-        .catch(() => {
-          /* The store list is best-effort; projects remain usable. */
-        });
+      void refreshStoreCatalog(() => cancelled).catch(() => {
+        /* The store list is best-effort; projects remain usable. */
+      });
       if (source) {
         await importFromStore(source.id, source.version);
         if (cancelled) return;
@@ -252,7 +378,7 @@ export default function PluginProjectWorkspace({
       onClose();
     };
     window.addEventListener("savia:session-cleared", leave);
-    window.addEventListener("savia:identity-changed", leave);
+    window.addEventListener("savia:principal-changed", leave);
     const guard = (event: BeforeUnloadEvent) => {
       if (session.current && !session.current.isSaved) {
         event.preventDefault();
@@ -267,7 +393,7 @@ export default function PluginProjectWorkspace({
       session.current?.dispose();
       window.removeEventListener("beforeunload", guard);
       window.removeEventListener("savia:session-cleared", leave);
-      window.removeEventListener("savia:identity-changed", leave);
+      window.removeEventListener("savia:principal-changed", leave);
     };
     // The direct-source route is captured on mount. Clearing its query after
     // opening must not re-run the import and create a duplicate draft.
@@ -314,6 +440,7 @@ export default function PluginProjectWorkspace({
       fail(reason);
     }
   }
+  const groupedStoreItems = groupStoreVersions(storeItems);
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {project ? (
@@ -391,6 +518,11 @@ export default function PluginProjectWorkspace({
               tenantId={tenantId}
               initialFiles={project.files}
               initialHistory={project.history}
+              projectId={project.id}
+              initialInstalledEditorExtensions={
+                project.installedEditorExtensions
+              }
+              initialEditorExtensions={project.editorExtensions}
               backLabel={tr(
                 "Volver a proyectos",
                 "Back to plugin projects",
@@ -409,13 +541,20 @@ export default function PluginProjectWorkspace({
                       : tr("Guardando…", "Saving…", "Salvando…")}
                 </span>
               }
+              onInstalledExtensionsChange={async (draft) => {
+                latest.current = draft;
+                if (!session.current)
+                  throw new Error("Project session is unavailable.");
+                session.current.update(draft);
+                await session.current.flush();
+              }}
               onDraftChange={(draft) => {
                 latest.current = draft;
                 session.current?.update(draft);
               }}
               canPublishShared={canPublishShared}
               onClose={() => void close()}
-              onPublished={onPublished}
+              onPublished={handlePublished}
             />
           </div>
         </section>
@@ -553,36 +692,77 @@ export default function PluginProjectWorkspace({
               </h2>
               <p className="text-sm text-muted-foreground">
                 {tr(
-                  "Elige una versión publicada para editarla como un proyecto nuevo.",
-                  "Pick a published version to edit it as a new project.",
-                  "Escolha uma versão publicada para editá-la como um novo projeto.",
+                  "La última versión inicia una actualización. Las anteriores solo sirven como base para un nuevo borrador.",
+                  "Start an update from the latest release. Older releases are available only as bases for a new draft.",
+                  "Comece uma atualização a partir da última versão. As versões anteriores só podem ser usadas como base para um novo rascunho.",
                 )}
               </p>
               <ul className="divide-y">
-                {storeItems.map((item) => (
-                  <li
-                    key={`${item.id}@${item.version}`}
-                    className="flex min-w-0 items-center gap-3 py-2"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {item.label}{" "}
-                      <span className="text-xs text-muted-foreground">
-                        {item.version}
+                {groupedStoreItems.map(({ id, latest, older }) => (
+                  <li key={id} className="py-2">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        {latest.label}{" "}
+                        <span className="text-xs text-muted-foreground">
+                          {latest.version}
+                        </span>
                       </span>
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      disabled={acting}
-                      onClick={() =>
-                        void action(() =>
-                          importFromStore(item.id, item.version),
-                        )
-                      }
-                    >
-                      {tr("Editar", "Edit", "Editar")}
-                    </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        disabled={acting}
+                        onClick={() =>
+                          void action(() => importFromStore(id, latest.version))
+                        }
+                      >
+                        {tr(
+                          "Editar última versión",
+                          "Edit latest",
+                          "Editar última versão",
+                        )}
+                      </Button>
+                    </div>
+                    {older.length > 0 && (
+                      <details className="mt-2 pl-3 text-sm">
+                        <summary className="cursor-pointer text-muted-foreground">
+                          {tr(
+                            `Versiones anteriores (${older.length})`,
+                            `Older versions (${older.length})`,
+                            `Versões anteriores (${older.length})`,
+                          )}
+                        </summary>
+                        <ul className="mt-1 divide-y border-l pl-3">
+                          {older.map((item) => (
+                            <li
+                              key={`${item.id}@${item.version}`}
+                              className="flex min-w-0 items-center gap-3 py-2"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-sm">
+                                {item.version}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="shrink-0"
+                                disabled={acting}
+                                onClick={() =>
+                                  void action(() =>
+                                    importFromStore(item.id, item.version),
+                                  )
+                                }
+                              >
+                                {tr(
+                                  "Usar como base",
+                                  "Use as base",
+                                  "Usar como base",
+                                )}
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                   </li>
                 ))}
               </ul>

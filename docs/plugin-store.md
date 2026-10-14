@@ -310,7 +310,7 @@ subida) porque viajan en claro en el `fetch` saliente.
 
 ## Cuotas
 
-Por tenant: máximo 10 versiones por plugin y 20 MB agregados en el
+Por tenant: máximo 10 versiones por plugin y 64 MiB agregados en el
 store. Al superarlos la subida responde 409/413: elimina versiones
 viejas antes de publicar.
 

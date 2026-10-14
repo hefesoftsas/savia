@@ -1,0 +1,165 @@
+/**
+ * Integration-related types for third-party service connections
+ */
+
+// Integration provider types
+export type IntegrationProvider =
+  | "google-mail"
+  | "google-calendar"
+  | "discord"
+  | "instagram"
+  | "reddit"
+  | "linkedin"
+  | "github"
+  | "x"
+  | "wordpress";
+
+// Integration status types
+export type IntegrationStatus = "active" | "expired" | "revoked";
+
+// Base integration type (without sensitive token data)
+export interface Integration {
+  id: string;
+  name: string;
+  provider: IntegrationProvider;
+  status: IntegrationStatus;
+  tokenExpiresAt?: Date;
+  metadata?: string; // JSON string for provider-specific data
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Integration with the actual token values (only returned when creating)
+export interface IntegrationWithTokens {
+  id: string;
+  name: string;
+  provider: IntegrationProvider;
+  status: IntegrationStatus;
+  token: string;
+  refreshToken?: string;
+  tokenExpiresAt?: Date;
+  metadata?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Request types
+export interface CreateIntegrationRequest {
+  name: string;
+  provider: IntegrationProvider;
+  token: string;
+  refreshToken?: string;
+  tokenExpiresAt?: Date;
+  metadata?: string;
+}
+
+export interface UpdateIntegrationRequest {
+  name?: string;
+  token?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: Date;
+  metadata?: string;
+}
+
+// Response types
+export interface ListIntegrationsResponse {
+  integrations: Integration[];
+}
+
+export interface CreateIntegrationResponse {
+  integration: Integration;
+}
+
+export interface GetIntegrationResponse {
+  integration: Integration;
+}
+
+export interface UpdateIntegrationResponse {
+  integration: Integration;
+}
+
+export interface DeleteIntegrationResponse {
+  success: boolean;
+}
+
+// OAuth-specific types
+export interface OAuthProvider {
+  id: IntegrationProvider;
+  name: string;
+  description: string;
+  supportsOAuth: boolean;
+  oauthEndpoint?: string;
+}
+
+export const OAUTH_PROVIDERS: OAuthProvider[] = [
+  {
+    id: "google-mail",
+    name: "Google Mail",
+    description: "Connect your Google Mail account to send and receive emails",
+    supportsOAuth: true,
+    oauthEndpoint: "/oauth/google-mail/connect",
+  },
+  {
+    id: "google-calendar",
+    name: "Google Calendar",
+    description: "Sync with Google Calendar to manage events",
+    supportsOAuth: true,
+    oauthEndpoint: "/oauth/google-calendar/connect",
+  },
+  {
+    id: "discord",
+    name: "Discord",
+    description:
+      "Connect your Discord account to send messages and manage servers",
+    supportsOAuth: true,
+    oauthEndpoint: "/oauth/discord/connect",
+  },
+  {
+    id: "instagram",
+    name: "Instagram",
+    description:
+      "Connect your Instagram professional account to publish images and reels",
+    supportsOAuth: true,
+    oauthEndpoint: "/oauth/instagram/connect",
+  },
+  {
+    id: "reddit",
+    name: "Reddit",
+    description:
+      "Connect your Reddit account to post, comment, and interact with communities",
+    supportsOAuth: true,
+    oauthEndpoint: "/oauth/reddit/connect",
+  },
+  {
+    id: "linkedin",
+    name: "LinkedIn",
+    description:
+      "Connect your LinkedIn account to share posts and manage your profile",
+    supportsOAuth: true,
+    oauthEndpoint: "/oauth/linkedin/connect",
+  },
+  {
+    id: "github",
+    name: "GitHub",
+    description:
+      "Connect your GitHub account to manage repositories, issues, and pull requests",
+    supportsOAuth: true,
+    oauthEndpoint: "/oauth/github/connect",
+  },
+  {
+    id: "x",
+    name: "X",
+    description:
+      "Connect your X account to post tweets, search, and interact with users",
+    supportsOAuth: true,
+    oauthEndpoint: "/oauth/x/connect",
+  },
+  {
+    id: "wordpress",
+    name: "WordPress",
+    description:
+      "Connect your WordPress.com site to publish posts, manage content, and read media",
+    supportsOAuth: true,
+    oauthEndpoint: "/oauth/wordpress/connect",
+  },
+];

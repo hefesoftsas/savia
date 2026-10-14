@@ -1,5 +1,7 @@
 import type { UserIdentity } from "ra-core";
+import { getSessionGeneration, rotateSessionScope } from "./session-scope";
 import { isOfflineError } from "../offline/offline-error";
+import { REQUEST_TIMEOUT_MS, withRequestTimeout } from "../api/request-timeout";
 import type {
   AuthPermissions,
   AuthSession,
@@ -138,6 +140,8 @@ export class BetterAuthOAuthSession implements AuthSession {
 
   private identityPromise: Promise<SaviaIdentity> | null = null;
 
+  private principalId: string | undefined;
+
   private avatarPromise: Promise<string | undefined> | null = null;
 
   private cachedAvatar: string | undefined;
@@ -156,8 +160,20 @@ export class BetterAuthOAuthSession implements AuthSession {
   private readonly navigation: BrowserNavigation;
 
   constructor(private readonly settings: BetterAuthOAuthSettings) {
-    this.fetcher =
+    const fetcher =
       settings.fetcher ?? ((input, init) => globalThis.fetch(input, init));
+    this.fetcher = (input, init) =>
+      withRequestTimeout(
+        async (signal) => {
+          const response = await fetcher(input, { ...init, signal });
+          // Auth responses are small JSON payloads. Read a clone before
+          // resolving so a stalled body is covered by the same deadline.
+          if (response.body) await response.clone().arrayBuffer();
+          return response;
+        },
+        REQUEST_TIMEOUT_MS,
+        init?.signal,
+      );
     this.navigation = settings.navigation ?? defaultNavigation();
     if (typeof window !== "undefined") {
       window.addEventListener("savia:identity-changed", () => {
@@ -195,6 +211,8 @@ export class BetterAuthOAuthSession implements AuthSession {
   }
 
   async clearSession(): Promise<void> {
+    rotateSessionScope("logout");
+    this.principalId = undefined;
     if (typeof window !== "undefined")
       window.dispatchEvent(new Event("savia:session-cleared"));
     this.accessToken = null;
@@ -234,7 +252,12 @@ export class BetterAuthOAuthSession implements AuthSession {
   async getIdentity(): Promise<UserIdentity> {
     const accessToken = await this.requireAccessToken();
     const identity = await this.saviaIdentity(accessToken);
+    const identityGeneration = getSessionGeneration();
     const avatar = await this.sessionAvatar();
+    if (identityGeneration !== getSessionGeneration())
+      throw new Error(
+        "The authenticated session changed during the identity read.",
+      );
     return {
       id: identity.id,
       fullName: identity.attributes.displayName,
@@ -440,6 +463,7 @@ export class BetterAuthOAuthSession implements AuthSession {
 
   private async saviaIdentity(accessToken: string): Promise<SaviaIdentity> {
     if (!this.identityPromise) {
+      const requestGeneration = getSessionGeneration();
       this.identityPromise = (async () => {
         const response = await this.fetcher(
           requestUrl(this.settings.apiUrl, "/v1/identity/me"),
@@ -457,6 +481,10 @@ export class BetterAuthOAuthSession implements AuthSession {
             status: response.status,
           });
         const identity = ((await response.json()) as IdentityResponse).data;
+        if (requestGeneration !== getSessionGeneration())
+          throw new Error(
+            "The authenticated session changed during the identity read.",
+          );
         if (
           !identity ||
           typeof identity.id !== "string" ||
@@ -464,6 +492,17 @@ export class BetterAuthOAuthSession implements AuthSession {
         ) {
           throw new Error("Savia devolvió una identidad inválida.");
         }
+        if (
+          this.principalId !== undefined &&
+          this.principalId !== identity.id
+        ) {
+          this.lastKnownPermissions = undefined;
+          this.avatarPromise = null;
+          this.cachedAvatar = undefined;
+          this.avatarLoaded = false;
+          rotateSessionScope("principal-change");
+        }
+        this.principalId = identity.id;
         return {
           id: identity.id,
           attributes: {

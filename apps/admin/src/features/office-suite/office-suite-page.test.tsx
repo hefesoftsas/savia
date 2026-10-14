@@ -148,7 +148,7 @@ function setup(
 }
 it.each([
   "savia:active-tenant-changed",
-  "savia:identity-changed",
+  "savia:principal-changed",
   "savia:session-cleared",
 ])(
   "clears private document links and reloads when %s fires",

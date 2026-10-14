@@ -6,6 +6,24 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import PluginIde from "../plugin-ide";
 
+it("opens VS Code setup guidance without closing the current draft", async () => {
+  const onClose = vi.fn();
+  render(<PluginIde tenantId={12} onClose={onClose} onPublished={vi.fn()} />);
+  fireEvent.pointerDown(
+    screen.getByRole("button", { name: "Opciones del proyecto" }),
+    { button: 0, ctrlKey: false },
+  );
+  const guide = await screen.findByRole("menuitem", {
+    name: "Trabajar desde VS Code",
+  });
+  expect(guide).toHaveAttribute(
+    "href",
+    "#/studio?tenantId=12&view=admin&tab=extensions&help=vscode",
+  );
+  expect(guide).toHaveAttribute("target", "_blank");
+  expect(onClose).not.toHaveBeenCalled();
+});
+
 const mocks = vi.hoisted(() => ({
   post: vi.fn(),
   requestResponse: vi.fn(),
@@ -82,9 +100,18 @@ function streamPayload(callIndex = 0) {
 }
 vi.mock("../api", () => ({ pluginApi: mocks.publish }));
 vi.mock("../monaco-code-editor", () => ({
-  MonacoCodeEditor: ({ value, onChange, ariaLabel, readOnly }: any) => (
+  MonacoCodeEditor: ({
+    value,
+    onChange,
+    ariaLabel,
+    readOnly,
+    semanticValidation,
+    selection,
+  }: any) => (
     <textarea
       aria-label={ariaLabel}
+      data-semantic-validation={semanticValidation !== false}
+      data-selection={selection ? JSON.stringify(selection) : undefined}
       value={value}
       readOnly={readOnly}
       onChange={(e) => onChange(e.target.value)}
@@ -117,6 +144,168 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+it("keeps semantic diagnostics for standalone entry files", () => {
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  expect(
+    screen.getByRole("textbox", { name: "entry.tsx", exact: true }),
+  ).toHaveAttribute("data-semantic-validation", "true");
+});
+
+it("keeps source files in separate closable tabs and filters the explorer", async () => {
+  const entry = "store-ports/demo/entry.tsx";
+  const module = "packages/demo/src/screen.tsx";
+  const entryTab = `src/${entry}`;
+  const moduleTab = `src/${module}`;
+  render(
+    <PluginIde
+      tenantId={2}
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+      initialFiles={{
+        "entry.tsx": "export function render() {}",
+        "savia-extension.json": '{"id":"custom.demo","version":"1.0.1"}',
+        "store.json": "{}",
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          [entry]: "// Entry source",
+          [module]: "// Screen source",
+        }),
+      }}
+    />,
+  );
+  expect(
+    screen.getByRole("textbox", { name: entry, exact: true }),
+  ).toHaveAttribute("data-semantic-validation", "false");
+  for (const folder of [
+    "src/packages",
+    "src/packages/demo",
+    "src/packages/demo/src",
+  ]) {
+    fireEvent.click(
+      screen
+        .getByRole("treeitem", { name: folder, exact: true })
+        .querySelector(".plugin-file-tree-row")!,
+    );
+  }
+  fireEvent.click(
+    screen.getByRole("treeitem", { name: moduleTab, exact: true }),
+  );
+  expect(
+    screen.getByRole("tab", { name: entryTab, exact: true }),
+  ).toHaveAttribute("aria-selected", "false");
+  expect(
+    screen.getByRole("tab", { name: moduleTab, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  fireEvent.change(screen.getByRole("textbox", { name: module, exact: true }), {
+    target: { value: "// Edited screen" },
+  });
+  fireEvent.click(screen.getByRole("tab", { name: entryTab, exact: true }));
+  fireEvent.click(screen.getByRole("tab", { name: moduleTab, exact: true }));
+  expect(
+    screen.getByRole("textbox", { name: module, exact: true }),
+  ).toHaveValue("// Edited screen");
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: `Cerrar ${moduleTab}`,
+      exact: true,
+    }),
+  );
+  expect(
+    screen.queryByRole("tab", { name: moduleTab, exact: true }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("tab", { name: entryTab, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  fireEvent.change(
+    screen.getByRole("searchbox", { name: "Buscar archivos", exact: true }),
+    { target: { value: "screen" } },
+  );
+  expect(
+    screen.queryByRole("treeitem", { name: entryTab, exact: true }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("treeitem", { name: moduleTab, exact: true }),
+  ).toBeInTheDocument();
+});
+
+it("keeps archived root files separate from project config files", async () => {
+  const onDraftChange = vi.fn();
+  const entry = "src/entry.tsx";
+  const sourceStore = "src/store.json";
+  render(
+    <PluginIde
+      tenantId={2}
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+      onDraftChange={onDraftChange}
+      initialFiles={{
+        "entry.tsx": "export function render() {}",
+        "savia-extension.json": '{"id":"custom.demo","version":"1.0.1"}',
+        "store.json": '{"project":"before"}',
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          "entry.tsx": "// archived entry",
+          "store.json": '{"source":"before"}',
+        }),
+      }}
+    />,
+  );
+
+  expect(screen.getByRole("tab", { name: entry, exact: true })).toBeVisible();
+  fireEvent.click(
+    screen.getByRole("treeitem", { name: "store.json", exact: true }),
+  );
+  expect(
+    screen.getByRole("tab", { name: "store.json", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+    {
+      target: { value: '{"project":"edited"}' },
+    },
+  );
+  await waitFor(() =>
+    expect(onDraftChange.mock.lastCall?.[0].files["store.json"]).toBe(
+      '{"project":"edited"}',
+    ),
+  );
+
+  fireEvent.click(
+    screen.getByRole("treeitem", { name: sourceStore, exact: true }),
+  );
+  expect(
+    screen.getByRole("tab", { name: "store.json", exact: true }),
+  ).toHaveAttribute("aria-selected", "false");
+  expect(
+    screen.getByRole("tab", { name: sourceStore, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  expect(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+  ).toHaveValue('{"source":"before"}');
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+    {
+      target: { value: '{"source":"edited"}' },
+    },
+  );
+  await waitFor(() => {
+    const draft = onDraftChange.mock.lastCall?.[0].files;
+    expect(draft?.["store.json"]).toBe('{"project":"edited"}');
+    expect(
+      JSON.parse(draft?.["original-source.json"] ?? "{}")["store.json"],
+    ).toBe('{"source":"edited"}');
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "store.json", exact: true }));
+  expect(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+  ).toHaveValue('{"project":"edited"}');
+  fireEvent.click(screen.getByRole("tab", { name: sourceStore, exact: true }));
+  expect(
+    screen.getByRole("textbox", { name: "store.json", exact: true }),
+  ).toHaveValue('{"source":"edited"}');
+});
+
 function previewReady() {
   const frame = screen.getByTitle(
     "Vista previa del plugin",
@@ -135,7 +324,80 @@ function previewReady() {
   );
 }
 
-it("publishes only a successfully previewed revision and invalidates it after edits", async () => {
+it("shows editable workspace source and hides the retained compiled entry", () => {
+  const entry = "export function render() {}";
+  const original =
+    'import { Screen } from "./screen";\nexport function render() { return Screen; }';
+  const draft = vi.fn();
+  render(
+    <PluginIde
+      tenantId={12}
+      onClose={() => {}}
+      onPublished={() => {}}
+      onDraftChange={draft}
+      initialFiles={{
+        "entry.tsx": entry,
+        "savia-extension.json": '{"id":"custom.demo","version":"1.0.0"}',
+        "store.json": "{}",
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          "store-ports/demo/entry.tsx": original,
+        }),
+      }}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Archivos", exact: true }),
+  );
+  fireEvent.click(
+    screen.getByRole("treeitem", {
+      name: "src/store-ports/demo/entry.tsx",
+      exact: true,
+    }),
+  );
+  const source = screen.getByRole("textbox", {
+    name: "store-ports/demo/entry.tsx",
+  });
+  expect(source).toHaveValue(original);
+  expect(source).not.toHaveAttribute("readonly");
+  expect(
+    screen.queryByRole("tab", { name: "entry.tsx", exact: true }),
+  ).toBeNull();
+  expect(
+    screen.getByRole("tab", {
+      name: "src/store-ports/demo/entry.tsx",
+      exact: true,
+    }),
+  ).toBeInTheDocument();
+  expect(draft.mock.calls.at(-1)?.[0].files["original-source.json"]).toContain(
+    "store-ports/demo/entry.tsx",
+  );
+});
+
+it("keeps multi-module editing in the code editor instead of generating an ignored compiled entry", () => {
+  render(
+    <PluginIde
+      tenantId={12}
+      onClose={() => {}}
+      onPublished={() => {}}
+      initialFiles={{
+        "entry.tsx": "export function render() {}",
+        "savia-extension.json": '{"id":"custom.demo","version":"1.0.0"}',
+        "store.json": "{}",
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          "demo/entry.tsx": "export function render() {}",
+        }),
+      }}
+    />,
+  );
+  expect(screen.getByLabelText("Describe tu plugin")).toBeDisabled();
+  expect(
+    screen.getByText(/El asistente aún no edita proyectos/),
+  ).toBeInTheDocument();
+});
+
+it("publishes and activates only a successfully previewed revision and invalidates it after edits", async () => {
   mocks.compile.mockResolvedValue({
     entryJs: "compiled",
     fixtures: {},
@@ -151,7 +413,7 @@ it("publishes only a successfully previewed revision and invalidates it after ed
   });
   render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   fireEvent.click(
     screen.getByRole("button", { name: "Ejecutar vista previa" }),
@@ -160,7 +422,9 @@ it("publishes only a successfully previewed revision and invalidates it after ed
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
   fireEvent.change(
@@ -170,7 +434,7 @@ it("publishes only a successfully previewed revision and invalidates it after ed
     },
   );
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   fireEvent.click(
     screen.getByRole("button", { name: "Ejecutar vista previa" }),
@@ -179,16 +443,161 @@ it("publishes only a successfully previewed revision and invalidates it after ed
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Publicar en el store" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
+  );
   expect(await screen.findByText(/custom.demo · 1.0.0/)).toBeInTheDocument();
   expect(mocks.publish).toHaveBeenCalledWith(
     "/plugin-store/upload",
     "POST",
     expect.any(FormData),
   );
+  await waitFor(() =>
+    expect(mocks.publish).toHaveBeenCalledWith(
+      "/extensions/custom.demo/install",
+      "POST",
+      { version: "1.0.0" },
+    ),
+  );
+  expect(
+    await screen.findByText(/Publicado y activo en este espacio/),
+  ).toBeInTheDocument();
+});
+
+it("keeps a published version when activation fails and retries without uploading again", async () => {
+  mocks.compile.mockResolvedValue({
+    entryJs: "compiled",
+    fixtures: {},
+    store: {},
+  });
+  mocks.pack.mockResolvedValue({
+    entryJs: "compiled",
+    manifest: { id: "custom.demo", version: "1.0.0" },
+    blob: new Blob(["zip"]),
+  });
+  mocks.publish
+    .mockResolvedValueOnce({ data: { id: "custom.demo", version: "1.0.0" } })
+    .mockRejectedValueOnce(new Error("Activation failed"))
+    .mockResolvedValueOnce({
+      data: { id: "custom.demo", version: "1.0.0", enabled: true },
+    });
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ejecutar vista previa" }),
+  );
+  await screen.findByTitle("Vista previa del plugin");
+  previewReady();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Activation failed",
+  );
+  expect(screen.getByText(/custom.demo · 1.0.0/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Activar esta versión" }));
+  expect(
+    await screen.findByText(/Publicado y activo en este espacio/),
+  ).toBeInTheDocument();
+  expect(
+    mocks.publish.mock.calls.filter(
+      ([path]) => path === "/plugin-store/upload",
+    ),
+  ).toHaveLength(1);
+  expect(
+    mocks.publish.mock.calls.filter(
+      ([path]) => path === "/extensions/custom.demo/install",
+    ),
+  ).toHaveLength(2);
+});
+
+it("publishes without activating when selected in project options", async () => {
+  mocks.compile.mockResolvedValue({
+    entryJs: "compiled",
+    fixtures: {},
+    store: {},
+  });
+  mocks.pack.mockResolvedValue({
+    entryJs: "compiled",
+    manifest: { id: "custom.demo", version: "1.0.0" },
+    blob: new Blob(["zip"]),
+  });
+  mocks.publish.mockResolvedValue({
+    data: { id: "custom.demo", version: "1.0.0" },
+  });
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ejecutar vista previa" }),
+  );
+  await screen.findByTitle("Vista previa del plugin");
+  previewReady();
+  fireEvent.pointerDown(
+    screen.getByRole("button", { name: "Opciones del proyecto" }),
+    { button: 0, ctrlKey: false },
+  );
+  fireEvent.click(
+    await screen.findByRole("menuitem", { name: "Publicar sin activar" }),
+  );
+  expect(
+    await screen.findByRole("button", { name: "Activar esta versión" }),
+  ).toBeEnabled();
+  expect(mocks.publish).toHaveBeenCalledTimes(1);
+  expect(mocks.publish).toHaveBeenCalledWith(
+    "/plugin-store/upload",
+    "POST",
+    expect.any(FormData),
+  );
+});
+
+it("publishes shared releases without installing them in the workspace", async () => {
+  mocks.compile.mockResolvedValue({
+    entryJs: "compiled",
+    fixtures: {},
+    store: {},
+  });
+  mocks.pack.mockResolvedValue({
+    entryJs: "compiled",
+    manifest: { id: "custom.demo", version: "1.0.0" },
+    blob: new Blob(["zip"]),
+  });
+  mocks.publish.mockResolvedValue({
+    data: { id: "custom.demo", version: "1.0.0" },
+  });
+  render(
+    <PluginIde
+      tenantId={2}
+      canPublishShared
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+    />,
+  );
+  fireEvent.pointerDown(
+    screen.getByRole("button", { name: "Opciones del proyecto" }),
+    { button: 0, ctrlKey: false },
+  );
+  fireEvent.click(
+    await screen.findByRole("menuitemradio", { name: "Catálogo compartido" }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ejecutar vista previa" }),
+  );
+  await screen.findByTitle("Vista previa del plugin");
+  previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "Publicar en el store" }));
+  await screen.findByText(/custom.demo · 1.0.0/);
+  expect(mocks.publish).toHaveBeenCalledTimes(1);
+  expect(mocks.publish).toHaveBeenCalledWith(
+    "/plugin-store/registry/publish",
+    "POST",
+    expect.any(FormData),
+  );
+  expect(
+    screen.queryByRole("button", { name: "Activar esta versión" }),
+  ).not.toBeInTheDocument();
 });
 
 it("keeps AI changes as a proposal until applied and supports undo", async () => {
@@ -240,10 +649,14 @@ it("preserves editable source and reports upload failures without claiming publi
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Publicar en el store" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
+  );
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Version already exists",
   );
@@ -273,12 +686,14 @@ it("ignores readiness messages from another frame and blocks publication after r
   };
   fireEvent(window, new MessageEvent("message", { source: window, data }));
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
   fireEvent(
@@ -290,11 +705,11 @@ it("ignores readiness messages from another frame and blocks publication after r
   );
   expect(screen.getByRole("alert")).toHaveTextContent("Render failed");
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   previewReady();
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
 });
 
@@ -354,10 +769,14 @@ it("does not upload if preview fails while the package is being prepared", async
   previewReady();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Publicar en el store" }),
+      screen.getByRole("button", {
+        name: "Publicar y activar en este espacio",
+      }),
     ).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Publicar en el store" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
+  );
   fireEvent(
     window,
     new MessageEvent("message", {
@@ -517,11 +936,11 @@ it("runs preview while AI is pending without clearing the generation state", asy
   fireEvent.click(screen.getByRole("button", { name: "Chat", exact: true }));
   expect(screen.getByRole("button", { name: "Cancelar" })).toBeInTheDocument();
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
   expect(
-    screen.getByRole("button", { name: "Publicar en el store" }),
+    screen.getByRole("button", { name: "Publicar y activar en este espacio" }),
   ).toBeEnabled();
 });
 
@@ -732,4 +1151,128 @@ it("keeps a full-queue prompt in the composer instead of discarding it", async (
   fireEvent.change(composer, { target: { value: "Keep this prompt" } });
   fireEvent.click(screen.getByRole("button", { name: "Encolar mensaje" }));
   expect(composer).toHaveValue("Keep this prompt");
+});
+
+it("edits original modules and saves the source archive used by preview", async () => {
+  const onDraftChange = vi.fn();
+  const name = "store-ports/demo/entry.tsx";
+  const initialFiles = {
+    "entry.tsx": "export function render() {}",
+    "savia-extension.json": '{"id":"custom.demo","version":"1.0.1"}',
+    "store.json": "{}",
+    "preview.json": "{}",
+    "original-source.json": JSON.stringify({
+      [name]: "export function render() { /* before */ }",
+    }),
+  };
+  render(
+    <PluginIde
+      tenantId={2}
+      initialFiles={initialFiles}
+      onDraftChange={onDraftChange}
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+    />,
+  );
+  const editor = screen.getByRole("textbox", { name, exact: true });
+  expect(editor).not.toHaveAttribute("readonly");
+  fireEvent.change(editor, {
+    target: { value: "export function render() { /* after */ }" },
+  });
+  await waitFor(() =>
+    expect(
+      JSON.parse(onDraftChange.mock.lastCall![0].files["original-source.json"])[
+        name
+      ],
+    ).toContain("after"),
+  );
+  expect(screen.getByRole("textbox", { name, exact: true })).toHaveValue(
+    "export function render() { /* after */ }",
+  );
+  mocks.compile.mockResolvedValue({
+    entryJs: "export function render() {}",
+    manifest: {},
+    store: {},
+    fixtures: {},
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ejecutar vista previa" }),
+  );
+  await waitFor(() =>
+    expect(
+      JSON.parse(mocks.compile.mock.lastCall![0]["original-source.json"])[name],
+    ).toContain("after"),
+  );
+});
+
+it("searches project content and opens an archived match at its line", async () => {
+  const path = "packages/demo/src/screen.tsx";
+  render(
+    <PluginIde
+      tenantId={2}
+      onClose={vi.fn()}
+      onPublished={vi.fn()}
+      initialFiles={{
+        "entry.tsx": "// Compiled needle must be excluded",
+        "savia-extension.json": '{"id":"demo","version":"1.0.0"}',
+        "store.json": "{}",
+        "preview.json": "{}",
+        "original-source.json": JSON.stringify({
+          "store-ports/demo/entry.tsx": "// Entry",
+          [path]: "// Screen\nconst needle = 1;\n",
+        }),
+      }}
+    />,
+  );
+  fireEvent.keyDown(screen.getByRole("region", { name: "Editor de plugins" }), {
+    key: "f",
+    ctrlKey: true,
+    shiftKey: true,
+  });
+  const query = screen.getByRole("searchbox", { name: "Buscar en el código" });
+  fireEvent.change(query, { target: { value: "needle" } });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: `src/${path}:2:7 const needle = 1;`,
+      exact: true,
+    }),
+  );
+  const editor = screen.getByRole("textbox", { name: path, exact: true });
+  expect(editor).toHaveAttribute(
+    "data-selection",
+    expect.stringContaining('"lineNumber":2'),
+  );
+  expect(editor).toHaveAttribute(
+    "data-selection",
+    expect.stringContaining('"column":7'),
+  );
+  expect(
+    screen.getByRole("tab", { name: `src/${path}`, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+});
+
+it("offers a visible content search for standalone projects and updates matches after editing", () => {
+  render(<PluginIde tenantId={2} onClose={vi.fn()} onPublished={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Buscar", exact: true }));
+  fireEvent.change(
+    screen.getByRole("searchbox", { name: "Buscar en el código" }),
+    { target: { value: "render" } },
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "entry.tsx:1:17 export function render() {}",
+      exact: true,
+    }),
+  );
+  const entry = screen.getByRole("textbox", { name: "entry.tsx", exact: true });
+  expect(entry).toHaveAttribute(
+    "data-selection",
+    expect.stringContaining('"column":17'),
+  );
+  fireEvent.change(entry, { target: { value: "// Replaced entry" } });
+  fireEvent.click(screen.getByRole("button", { name: "Buscar", exact: true }));
+  expect(
+    screen.getByRole("searchbox", { name: "Buscar en el código" }),
+  ).toHaveValue("render");
+  expect(screen.getByText("Sin coincidencias")).toBeInTheDocument();
 });

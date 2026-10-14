@@ -1,6 +1,7 @@
 pub mod backend;
 pub mod capture;
 mod capture_error;
+mod credential;
 
 use std::{
     path::PathBuf,
@@ -776,6 +777,49 @@ async fn read_capture_chunk(
     .map_err(|_| "Could not read captured segment.".to_string())?
 }
 
+#[tauri::command]
+async fn credential_save(origin: String, token: String) -> Result<(), String> {
+    let secret = credential::envelope(&origin, &token)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let entry = keyring::Entry::new(credential::service(), credential::account())
+            .map_err(|_| "Could not save the credential on this device.".to_string())?;
+        entry
+            .set_password(&secret)
+            .map_err(|_| "Could not save the credential on this device.".to_string())
+    })
+    .await
+    .map_err(|_| "Could not save the credential on this device.".to_string())?
+}
+
+#[tauri::command]
+async fn credential_load() -> Result<Option<credential::SavedCredential>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let entry = keyring::Entry::new(credential::service(), credential::account())
+            .map_err(|_| "Could not read the saved credential.".to_string())?;
+        match entry.get_password() {
+            Ok(secret) => credential::parse_envelope(&secret).map(Some),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(_) => Err("Could not read the saved credential.".to_string()),
+        }
+    })
+    .await
+    .map_err(|_| "Could not read the saved credential.".to_string())?
+}
+
+#[tauri::command]
+async fn credential_clear() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let entry = keyring::Entry::new(credential::service(), credential::account())
+            .map_err(|_| "Could not forget the saved credential.".to_string())?;
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(_) => Err("Could not forget the saved credential.".to_string()),
+        }
+    })
+    .await
+    .map_err(|_| "Could not forget the saved credential.".to_string())?
+}
+
 #[derive(Serialize)]
 pub struct ApiError {
     message: String,
@@ -835,6 +879,9 @@ pub fn run() {
             discard_capture,
             read_capture,
             read_capture_chunk,
+            credential_save,
+            credential_load,
+            credential_clear,
             open_savia,
             companion_request,
         ])
@@ -898,5 +945,62 @@ mod tests {
         assert_eq!(cleanup.request_close(), CleanupRequest::Start);
         assert_eq!(cleanup.finish(), CleanupCompletion::CloseWindow);
         assert_eq!(cleanup.request_close(), CleanupRequest::Continue);
+    }
+
+    #[test]
+    fn recovered_interrupted_draft_previews_and_discards_cleanly() {
+        use crate::capture::lifecycle::Sources;
+        use std::time::Duration;
+
+        let root = tempfile::TempDir::new().unwrap();
+        let mut spool = CaptureSpool::create(
+            root.path(),
+            "1f2c83ab-4d6e-4a10-9f71-c11a3f4d2e80".into(),
+            vec![Source::Microphone],
+        )
+        .unwrap();
+        spool
+            .append_chunk(
+                ChunkInfo {
+                    source: Source::Microphone,
+                    sequence: 0,
+                    start_seconds: 0.0,
+                    duration_seconds: 30.0,
+                    bytes: 4,
+                    sample_rate: 48_000,
+                },
+                b"OggS",
+            )
+            .unwrap();
+        spool.stop(30.0, true).unwrap();
+        // Mirror run(): a spool left recording becomes an interrupted draft
+        // surfaced as ready with its chunks available for preview.
+        let mut session = CaptureSession {
+            lifecycle: Lifecycle {
+                state: State::Ready,
+                started_at: None,
+                elapsed: Duration::from_secs_f64(30.0),
+                sources: Sources {
+                    microphone: true,
+                    system: false,
+                },
+                tracks: Vec::new(),
+                error: None,
+            },
+            spool: Some(Arc::new(Mutex::new(spool))),
+            spool_root: Some(root.path().to_path_buf()),
+            recovered: true,
+            ..Default::default()
+        };
+        let status = session.status();
+        assert!(status.recovered);
+        assert_eq!(status.chunks.len(), 1);
+        session
+            .discard()
+            .expect("a recovered draft must always discard");
+        let status = session.status();
+        assert!(!status.recovered);
+        assert!(status.chunks.is_empty());
+        assert!(CaptureSpool::load(root.path()).unwrap().is_none());
     }
 }

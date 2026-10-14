@@ -1,5 +1,7 @@
+import { encodeStoredZipBlob } from "@savia/plugin-authoring/zip";
 import { ApiClient } from "@/api/api-client";
 import type { RecordingNotes } from "./client";
+const FULL_AUDIO_REQUEST_TIMEOUT_MS = 60_000;
 export type SessionChunk = {
   source: "microphone" | "system";
   sequence: number;
@@ -76,12 +78,39 @@ export class CompanionSessionsClient {
     chunk: SessionChunk,
     signal?: AbortSignal,
   ): Promise<Blob> {
-    const response = await this.api.requestResponse(
+    const { response, body } = await this.api.requestResponseWithBody(
       `/v1/companion/sessions/${encodeURIComponent(id)}/chunks/${chunk.source}/${chunk.sequence}`,
       { signal },
+      async (result) => (result.ok ? result.blob() : null),
     );
-    if (!response.ok) throw new Error("Audio unavailable");
-    return response.blob();
+    if (!response.ok || !body) throw new Error("Audio unavailable");
+    return body;
+  }
+  /** Preserve uploaded bytes and formats, grouped by source in timeline order. */
+  async originalAudioZip(
+    session: RecordingSession,
+    signal?: AbortSignal,
+  ): Promise<Blob> {
+    const client = this;
+    const chunks = [...session.chunks].sort(
+      (a, b) => a.source.localeCompare(b.source) || a.sequence - b.sequence,
+    );
+    // The archive consumes each chunk before fetching the next. Only ZIP Blob
+    // records are retained, avoiding multiple full-session binary buffers.
+    async function* entries() {
+      for (const chunk of chunks) {
+        signal?.throwIfAborted();
+        const blob = await client.audio(session.id, chunk, signal);
+        const data = new Uint8Array(await blob.arrayBuffer());
+        signal?.throwIfAborted();
+        yield {
+          name: `${chunk.source}/${String(chunk.sequence).padStart(6, "0")}.${chunk.format ?? "ogg"}`,
+          data,
+        };
+      }
+      signal?.throwIfAborted();
+    }
+    return encodeStoredZipBlob(entries());
   }
   /** Single concatenated Ogg file for one source, in timeline order. */
   async fullAudio(
@@ -89,11 +118,13 @@ export class CompanionSessionsClient {
     source: SessionChunk["source"],
     signal?: AbortSignal,
   ): Promise<Blob> {
-    const response = await this.api.requestResponse(
+    const { response, body } = await this.api.requestResponseWithBody(
       `/v1/companion/sessions/${encodeURIComponent(id)}/audio?source=${source}`,
       { signal },
+      async (result) => (result.ok ? result.blob() : null),
+      FULL_AUDIO_REQUEST_TIMEOUT_MS,
     );
-    if (!response.ok) throw new Error("Audio unavailable");
-    return response.blob();
+    if (!response.ok || !body) throw new Error("Audio unavailable");
+    return body;
   }
 }

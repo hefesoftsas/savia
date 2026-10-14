@@ -3,6 +3,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { useRealtimeTopics } from "./use-realtime";
+import { rotateSessionScope } from "@/auth/session-scope";
 
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
@@ -288,6 +289,7 @@ it("shares one room socket across components and filters their topics", async ()
     .mockResolvedValue({ data: { room: "principal:self", ticket: "shared" } });
   const account = vi.fn();
   const notifications = vi.fn();
+  const personalIntegrations = vi.fn();
   function Subscriber({
     topic,
     listener,
@@ -308,7 +310,7 @@ it("shares one room socket across components and filters their topics", async ()
   await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
   expect(post).toHaveBeenCalledTimes(1);
   expect(post).toHaveBeenCalledWith("/v1/realtime/ticket", {
-    topics: ["account", "notifications"],
+    topics: ["account", "notifications", "personal-integrations"],
   });
   const first = MockWebSocket.instances[0];
   await act(async () =>
@@ -320,21 +322,47 @@ it("shares one room socket across components and filters their topics", async ()
   expect(notifications).not.toHaveBeenCalled();
   rerender(
     <AppServicesProvider services={services}>
+      <Subscriber topic="account" listener={account} />
       <Subscriber topic="notifications" listener={notifications} />
+      <Subscriber
+        topic="personal-integrations"
+        listener={personalIntegrations}
+      />
     </AppServicesProvider>,
   );
-  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(2));
+  await act(async () => Promise.resolve());
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(MockWebSocket.instances).toHaveLength(1);
   await act(async () =>
     first.onmessage?.({
       data: JSON.stringify({ topic: "notifications", type: "updated" }),
     }),
   );
-  expect(notifications).not.toHaveBeenCalled();
+  expect(notifications).toHaveBeenCalledOnce();
   await act(async () =>
-    MockWebSocket.instances[1].onmessage?.({
-      data: JSON.stringify({ topic: "notifications", type: "updated" }),
+    first.onmessage?.({
+      data: JSON.stringify({ topic: "personal-integrations", type: "updated" }),
     }),
   );
+  expect(personalIntegrations).toHaveBeenCalledOnce();
+  expect(account).toHaveBeenCalledOnce();
+  expect(notifications).toHaveBeenCalledOnce();
+  rerender(
+    <AppServicesProvider services={services}>
+      <Subscriber topic="account" listener={account} />
+      <Subscriber topic="notifications" listener={notifications} />
+    </AppServicesProvider>,
+  );
+  await act(async () => Promise.resolve());
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(MockWebSocket.instances).toHaveLength(1);
+  await act(async () =>
+    first.onmessage?.({
+      data: JSON.stringify({ topic: "personal-integrations", type: "updated" }),
+    }),
+  );
+  expect(personalIntegrations).toHaveBeenCalledOnce();
+  expect(account).toHaveBeenCalledOnce();
   expect(notifications).toHaveBeenCalledOnce();
   unmount();
 });
@@ -366,7 +394,9 @@ it("does not share tickets between tenants or between tenant and personal rooms"
     expect.arrayContaining([
       { topics: ["records"], tenantId: 1 },
       { topics: ["records"], tenantId: 2 },
-      { topics: ["account"] },
+      {
+        topics: ["account", "notifications", "personal-integrations"],
+      },
     ]),
   );
 });
@@ -393,5 +423,78 @@ it("disconnects pooled sockets when the authenticated session is cleared", async
       data: JSON.stringify({ topic: "users", type: "updated" }),
     }),
   );
+  expect(onEvent).not.toHaveBeenCalled();
+});
+
+it("labels topic replacement separately from recovery for existing subscribers", async () => {
+  vi.stubGlobal("WebSocket", MockWebSocket);
+  const post = vi.fn().mockResolvedValue({
+    data: {
+      room: "platform",
+      ticket: "ticket",
+      topics: ["users", "tenants"],
+      expiresAt: "future",
+    },
+  });
+  const services = servicesWith(post);
+  const connected = vi.fn();
+  function TopicProbe({
+    topics,
+    onConnected,
+  }: {
+    topics: string[];
+    onConnected?: (reason: string) => void;
+  }) {
+    useRealtimeTopics({ topics, onConnected });
+    return null;
+  }
+  function View({ extra }: { extra: boolean }) {
+    return (
+      <AppServicesProvider services={services}>
+        <TopicProbe topics={["users"]} onConnected={connected} />
+        {extra ? <TopicProbe topics={["tenants"]} /> : null}
+      </AppServicesProvider>
+    );
+  }
+  const { rerender } = render(<View extra={false} />);
+  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+  await act(async () => {
+    MockWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({ type: "connected" }),
+    });
+  });
+  expect(connected).toHaveBeenLastCalledWith("initial");
+  rerender(<View extra />);
+  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(2));
+  await act(async () => {
+    MockWebSocket.instances[1].onmessage?.({
+      data: JSON.stringify({ type: "connected" }),
+    });
+  });
+  expect(connected).toHaveBeenLastCalledWith("subscription-change");
+});
+
+it("replaces pooled sockets and ignores old hints when the principal changes", async () => {
+  vi.stubGlobal("WebSocket", MockWebSocket);
+  const post = vi
+    .fn()
+    .mockResolvedValue({ data: { room: "platform", ticket: "ticket" } });
+  const onEvent = vi.fn();
+  render(
+    <AppServicesProvider services={servicesWith(post)}>
+      <Probe onEvent={onEvent} />
+    </AppServicesProvider>,
+  );
+  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+  const old = MockWebSocket.instances[0];
+  await act(async () => {
+    rotateSessionScope("principal-change");
+  });
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+  await act(async () => {
+    old.onmessage?.({
+      data: JSON.stringify({ topic: "users", type: "updated" }),
+    });
+  });
   expect(onEvent).not.toHaveBeenCalled();
 });

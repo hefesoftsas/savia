@@ -1,7 +1,15 @@
 # General workflows
 
 Workflows belong to a data workspace, not to an insurance or agency package.
-Open **Build → Workflows** in the sidebar, or the **Flujos de trabajo** tab in collection operations.
+These capabilities now run in the native mode of **Savia Flows**. Open
+**Productivity → Savia Flows** and choose the tenant. Existing Studio workflow
+links open the replacement catalog. The native editor uses a connected graph
+with a properties inspector, while preserving the original execution contracts.
+
+The transactional implementation lives in `apps/flows/packages/native`.
+Existing definitions, published versions, executions, tasks and webhook state
+are adopted in place in Core's database; opening the new module does not copy
+or execute them. Compatibility API paths and public webhook URLs remain active.
 
 ## Author and run
 
@@ -10,7 +18,7 @@ Open **Build → Workflows** in the sidebar, or the **Flujos de trabajo** tab in
    with a UTC start time.
 2. Add steps and configure their inputs. Values preserve their type: text,
    number, boolean, null, or a reference to trigger data or previous results.
-3. Choose the next step explicitly. Conditions have separate true/false destinations.
+3. Connect the next-step handle. Conditions have separate true/false handles.
    The first step is the entrypoint. Every step must be reachable and cycles are rejected.
 4. Save the draft, then publish. Publication activates an immutable revision.
    Editing a draft does not change the active version or any existing execution.
@@ -73,10 +81,9 @@ transaction leaves no event or execution. The scheduler runs the accepted steps
 asynchronously; these triggers cannot reject a save. Relation preloading and
 synchronous pre-save validation workflows remain future capabilities.
 
-Apply `packages/db/migrations/0059_workflow_collection_triggers.sql` on the host,
-or `packages/studio-server/migrations/0019_workflow_collection_triggers.sql` on the
-standalone stack, before using the new configuration. Neither migration replays
-historical records.
+The collection triggers are included in the consolidated `0001_initial.sql`
+baselines in `packages/db/migrations` and `packages/studio-server/migrations`.
+Use the normal migration runner. Adoption does not replay historical records.
 
 ## Incoming and outgoing webhooks
 
@@ -140,9 +147,8 @@ rejected. DNS preflight is defense in depth and does not pin the socket's DNS
 resolution in the Worker transport. Network work is bounded to ten seconds. Payloads
 are limited to 32 KiB, and the existing execution-context limit still applies.
 
-Apply `packages/db/migrations/0058_workflow_webhooks.sql` (host) or
-`packages/studio-server/migrations/0018_workflow_webhooks.sql` (standalone) before using
-webhooks. Existing definitions require no rewrite. Preview runs a workflow-only
+Webhook storage is included in the consolidated `0001_initial.sql` baselines.
+Existing definitions require no rewrite. Preview runs a workflow-only
 scheduler once per minute. Other hosts with cron disabled need an intentional
 scheduler tick.
 
@@ -191,9 +197,9 @@ arbitrary native side effect atomic. For this native-only delivery, D1 checkpoin
 write and receipt together. This is not a claim that managed Workflows lacks durability;
 it would still require adapter idempotency if adopted later.
 
-Apply `packages/db/migrations/0054_workflows.sql` before deploying the API. The standalone
-Studio test/local stack uses `packages/studio-server/migrations/0016_workflows.sql`. Existing
-automations are untouched. Neither migration dispatches historical records.
+Workflow storage is included in `packages/db/migrations/0001_initial.sql`.
+The standalone Studio stack uses `packages/studio-server/migrations/0001_initial.sql`.
+Run the normal migration runner for the selected host.
 
 Focused verification:
 
@@ -203,10 +209,11 @@ pnpm --filter @savia/studio-server exec vitest run test/workflows.test.ts test/m
 pnpm --filter @savia/admin exec vitest run src/features/studio-engine/test/workflows.test.tsx --maxWorkers=1
 ```
 
-The loopback-only `test/fixtures/workflow-preview.ts` worker and admin
-`test/fixtures/workflows-preview.html` are browser-test entrypoints, not deployment
-entrypoints. Use a separate temporary D1 persistence directory; they intentionally use
-a fixed test identity and must never be deployed or pointed at user data.
+`apps/flows/scripts/browser-smoke.mjs` is the replacement browser verification
+entry point, backed by a synthetic host identity and isolated Miniflare state.
+`apps/flows/scripts/native-workflows.test.mjs` verifies adoption, publishing,
+native steps, inbox, failed-step retry, webhooks, schedules and restart recovery.
+Legacy Studio preview files are compatibility test fixtures.
 
 ## Current boundaries
 
@@ -217,9 +224,10 @@ a fixed test identity and must never be deployed or pointed at user data.
   or inbox items and 100 executions. Retention/archival tooling is not yet included.
 - Approvals, blocking human tasks, arbitrary cron expressions, parallel branches,
   loops, subflows and connector nodes remain future capabilities.
-- The visual editor is a selectable step sequence with explicit branch destinations,
-  not a free-positioned drag-and-drop graph. Manual action is currently in that editor,
-  not yet an action embedded in every record screen.
+- The native editor supports positioned nodes and explicit branch connections.
+  Graph layout is stored with the backend draft and its immutable published revision.
+  Manual action is in the editor; an action embedded in every record screen remains
+  a future capability.
 
 ## References
 

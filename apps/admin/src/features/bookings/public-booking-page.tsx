@@ -74,6 +74,7 @@ export function PublicBookingPage({ token }: { token: string }) {
     undefined,
   );
   const [catalog, setCatalog] = useState<PublicCatalog>();
+  const [loadedToken, setLoadedToken] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [catalogError, setCatalogError] = useState(false);
@@ -108,7 +109,24 @@ export function PublicBookingPage({ token }: { token: string }) {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setLoadedToken(undefined);
+    setCatalog(undefined);
+    setError("");
     setCatalogError(false);
+    setServiceId("");
+    setProfessionalId("");
+    setDisplayTimeZone("");
+    setSelection(undefined);
+    setCustomerName("");
+    setCustomerEmail("");
+    setCaptchaToken("");
+    setCaptchaError("");
+    setCaptchaAttempt(0);
+    setSlotsAttempt(0);
+    setStep(1);
+    previousStepRef.current = 1;
+    setReservation(undefined);
+    idempotency.current = undefined;
     void publicRequest<PublicCatalog>(
       `/api/public/bookings/${encodeURIComponent(token)}`,
     )
@@ -139,11 +157,13 @@ export function PublicBookingPage({ token }: { token: string }) {
         setStep(chooseService || chooseProfessional ? 1 : 2);
         if (data.captcha.captchaProvider === "disabled")
           setCaptchaToken("local-bypass");
+        setLoadedToken(token);
       })
       .catch(() => {
         if (active) {
           setCatalogError(true);
           setError(t("Booking settings could not be loaded."));
+          setLoadedToken(token);
         }
       })
       .finally(() => {
@@ -328,7 +348,7 @@ export function PublicBookingPage({ token }: { token: string }) {
     }
   }
 
-  if (loading)
+  if (loading || loadedToken !== token)
     return (
       <main className="mx-auto grid max-w-2xl gap-4 px-4 py-10" role="status">
         <div className="h-8 w-56 animate-pulse rounded bg-muted" />

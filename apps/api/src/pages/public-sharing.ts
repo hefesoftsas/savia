@@ -1,4 +1,13 @@
 import type { AppActor } from "../auth/types";
+import {
+  createPublicLinkToken,
+  isPublicLinkActive,
+  isPublicLinkToken,
+  normalizePublicLinkExpiry,
+  persistPublicLinkShortUrl,
+  publicLinkUrl,
+  revokePublicLink,
+} from "../public-links/lifecycle";
 import { PagesError, PagesService } from "./service";
 
 export type PublicPageLink = {
@@ -37,12 +46,6 @@ type PublicPageRow = {
 const unavailable = () =>
   new PagesError(404, "PAGE_NOT_FOUND", "Page not found");
 const timestamp = () => new Date().toISOString();
-const makeToken = () => {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
-  );
-};
 const makeShortCode = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
@@ -86,16 +89,11 @@ export async function createPublicPageLink(
   expiresAt?: string | null,
 ): Promise<PublicPageLink> {
   await requireOwner(db, actor, pageId);
-  let normalizedExpiry = expiresAt ?? null;
-  if (expiresAt !== undefined && expiresAt !== null) {
-    const expiry = Date.parse(expiresAt);
-    if (!Number.isFinite(expiry) || expiry <= Date.now())
-      throw new PagesError(
-        400,
-        "INVALID_EXPIRY",
-        "Expiry must be a future date",
-      );
-    normalizedExpiry = new Date(expiry).toISOString();
+  let normalizedExpiry: string | null;
+  try {
+    normalizedExpiry = normalizePublicLinkExpiry(expiresAt);
+  } catch {
+    throw new PagesError(400, "INVALID_EXPIRY", "Expiry must be a future date");
   }
   const pageTenant = await db
     .prepare("SELECT tenant_id FROM pages WHERE id=?")
@@ -106,7 +104,7 @@ export async function createPublicPageLink(
   const createdAt = timestamp();
   let inserted: LinkRow | null = null;
   for (let attempt = 0; attempt < 5 && !inserted; attempt++) {
-    const token = makeToken();
+    const token = createPublicLinkToken();
     try {
       await db
         .prepare(
@@ -155,13 +153,15 @@ export async function revokePublicPageLink(
     .first<LinkRow>();
   if (!row) throw unavailable();
   if (!row.revoked_at) {
-    row.revoked_at = timestamp();
-    await db
+    const revokedAt = timestamp();
+    await revokePublicLink(db, { type: "page", id: linkId, pageId }, revokedAt);
+    const latest = await db
       .prepare(
-        "UPDATE page_public_links SET revoked_at=? WHERE id=? AND page_id=? AND revoked_at IS NULL",
+        "SELECT revoked_at FROM page_public_links WHERE id=? AND page_id=?",
       )
-      .bind(row.revoked_at, linkId, pageId)
-      .run();
+      .bind(linkId, pageId)
+      .first<{ revoked_at: string | null }>();
+    row.revoked_at = latest?.revoked_at ?? revokedAt;
   }
   return publicLink(row);
 }
@@ -187,30 +187,21 @@ export async function createPublicPageShortUrl(
     .first<LinkRow>();
   if (
     !row ||
-    row.revoked_at !== null ||
-    (row.expires_at !== null && row.expires_at <= now)
+    !isPublicLinkActive(row.expires_at, row.revoked_at, Date.parse(now))
   )
     throw unavailable();
   if (row.short_url) return row.short_url;
 
   if (options.shortener) {
-    const destination = new URL(
-      `/public/pages/${row.token}`,
-      options.publicOrigin ?? options.requestUrl,
-    ).href;
+    const origin = options.publicOrigin ?? new URL(options.requestUrl).origin;
+    const destination = publicLinkUrl(origin, `/public/pages/${row.token}`);
     try {
       const shortUrl = await options.shortener.shorten(destination);
-      await db
-        .prepare(
-          "UPDATE page_public_links SET short_url=? WHERE id=? AND short_url IS NULL",
-        )
-        .bind(shortUrl, linkId)
-        .run();
-      const stored = await db
-        .prepare("SELECT short_url FROM page_public_links WHERE id=?")
-        .bind(linkId)
-        .first<{ short_url: string | null }>();
-      if (stored?.short_url) return stored.short_url;
+      return await persistPublicLinkShortUrl(
+        db,
+        { type: "page", id: linkId },
+        shortUrl,
+      );
     } catch {
       // A provider outage falls through to the Savia-hosted code.
     }
@@ -241,21 +232,9 @@ export async function createPublicPageShortUrl(
       "SHORT_URL_UNAVAILABLE",
       "Could not create a short URL",
     );
-  const shortUrl = new URL(
-    `/s/p/${shortLink.code}`,
-    options.publicOrigin ?? options.requestUrl,
-  ).href;
-  await db
-    .prepare(
-      "UPDATE page_public_links SET short_url=? WHERE id=? AND short_url IS NULL",
-    )
-    .bind(shortUrl, linkId)
-    .run();
-  const stored = await db
-    .prepare("SELECT short_url FROM page_public_links WHERE id=?")
-    .bind(linkId)
-    .first<{ short_url: string | null }>();
-  return stored?.short_url ?? shortUrl;
+  const origin = options.publicOrigin ?? new URL(options.requestUrl).origin;
+  const shortUrl = publicLinkUrl(origin, `/s/p/${shortLink.code}`);
+  return persistPublicLinkShortUrl(db, { type: "page", id: linkId }, shortUrl);
 }
 
 export async function publicPageTokenForShortCode(
@@ -275,7 +254,7 @@ export async function publicPageTokenForShortCode(
 }
 
 async function currentLink(db: D1Database, token: string): Promise<LinkRow> {
-  if (!/^[a-f0-9]{64}$/.test(token)) throw unavailable();
+  if (!isPublicLinkToken(token)) throw unavailable();
   const now = timestamp();
   const row = await db
     .prepare(
@@ -289,7 +268,11 @@ async function currentLink(db: D1Database, token: string): Promise<LinkRow> {
     )
     .bind(token, now)
     .first<LinkRow>();
-  if (!row) throw unavailable();
+  if (
+    !row ||
+    !isPublicLinkActive(row.expires_at, row.revoked_at, Date.parse(now))
+  )
+    throw unavailable();
   return row;
 }
 

@@ -1,7 +1,16 @@
 import "./recording-sessions.css";
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AudioLines, Download, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
+import { isReadAccessDenied } from "@/queries/read-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,16 +69,28 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
   const [sessions, setSessions] = useState<RecordingSession[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [loadedListClient, setLoadedListClient] =
+    useState<CompanionSessionsClient | null>(null);
+  const [successfulListClient, setSuccessfulListClient] =
+    useState<CompanionSessionsClient | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const generation = useRef(0);
+  const hasCurrentScope = loadedListClient === client;
+  const hasSuccessfulList = successfulListClient === client;
+  const handleDetailDenied = useCallback(() => {
+    setSelected(null);
+    setError(true);
+  }, []);
   async function load(next?: string) {
     const version = ++generation.current;
+    const hadCurrentScope = loadedListClient === client;
     setLoading(true);
     setError(false);
     try {
       const result = await client.list(next);
       if (version !== generation.current) return;
+      setSuccessfulListClient(client);
       setSessions((previous) =>
         next
           ? [
@@ -87,10 +108,21 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
             ? current
             : (result.sessions[0]?.id ?? null),
         );
-    } catch {
-      if (version === generation.current) setError(true);
+    } catch (error) {
+      if (version === generation.current) {
+        setError(true);
+        if (!hadCurrentScope || isReadAccessDenied(error)) {
+          setSessions([]);
+          setCursor(null);
+          setSelected(null);
+          setSuccessfulListClient(null);
+        }
+      }
     } finally {
-      if (version === generation.current) setLoading(false);
+      if (version === generation.current) {
+        setLoading(false);
+        setLoadedListClient(client);
+      }
     }
   }
   useEffect(() => {
@@ -115,7 +147,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
         </div>
         <Button
           variant="outline"
-          disabled={loading}
+          disabled={loading || !hasCurrentScope}
           onClick={() => void load()}
         >
           <RefreshCw className="size-4" aria-hidden="true" />
@@ -127,9 +159,9 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
           {t("Unable to load recordings.")}
         </p>
       )}
-      {loading && !sessions.length ? (
+      {!hasCurrentScope || (loading && !sessions.length) ? (
         <p role="status">{t("Loading recordings…")}</p>
-      ) : !sessions.length ? (
+      ) : !hasSuccessfulList ? null : !sessions.length ? (
         <div className="border-t py-12">
           <AudioLines
             className="mb-4 size-8 text-muted-foreground"
@@ -153,7 +185,10 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
                   <button
                     className={`w-full rounded-md px-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-ring ${selected === item.id ? "bg-muted" : "hover:bg-muted/50"}`}
                     aria-current={selected === item.id ? "true" : undefined}
-                    onClick={() => setSelected(item.id)}
+                    onClick={() => {
+                      setError(false);
+                      setSelected(item.id);
+                    }}
                   >
                     <span className="block break-words font-medium">
                       {item.name}
@@ -179,7 +214,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
             {cursor && (
               <Button
                 variant="ghost"
-                disabled={loading}
+                disabled={loading || !hasCurrentScope}
                 onClick={() => void load(cursor)}
               >
                 {t("Load more")}
@@ -191,6 +226,7 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
               key={session.id}
               initial={session}
               client={client}
+              onReadDenied={handleDetailDenied}
               onRenamed={(id, name) =>
                 setSessions((previous) =>
                   previous.map((item) =>
@@ -215,11 +251,13 @@ export function RecordingSessions({ api }: { api: ApiClient }) {
 function SessionDetail({
   initial,
   client,
+  onReadDenied,
   onRenamed,
   onDeleted,
 }: {
   initial: RecordingSession;
   client: CompanionSessionsClient;
+  onReadDenied: () => void;
   onRenamed: (id: string, name: string) => void;
   onDeleted: (id: string) => void;
 }) {
@@ -260,11 +298,14 @@ function SessionDetail({
         if (!abort.signal.aborted && revision === nameRevision.current)
           setSession(next);
       })
-      .catch(() => {
-        if (!abort.signal.aborted) setError(true);
+      .catch((error) => {
+        if (!abort.signal.aborted) {
+          if (isReadAccessDenied(error)) onReadDenied();
+          else setError(true);
+        }
       });
     return () => abort.abort();
-  }, [initial, client]);
+  }, [initial, client, onReadDenied]);
   useEffect(() => {
     if (!editing) setDraftName(session.name);
   }, [session.name, editing]);
@@ -287,8 +328,14 @@ function SessionDetail({
           setSession(next);
           setError(false);
         }
-      } catch {
-        if (!abort.signal.aborted) setError(true);
+      } catch (error) {
+        if (!abort.signal.aborted) {
+          if (isReadAccessDenied(error)) {
+            onReadDenied();
+            return;
+          }
+          setError(true);
+        }
       }
       if (!abort.signal.aborted) timer = setTimeout(() => void poll(), 5000);
     };
@@ -297,7 +344,7 @@ function SessionDetail({
       abort.abort();
       clearTimeout(timer);
     };
-  }, [client, initial.id, running]);
+  }, [client, initial.id, onReadDenied, running]);
   async function run(cancel: boolean) {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -532,7 +579,7 @@ function SessionDetail({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <SessionPlayer session={session} client={client} />
+      <SessionPlayer key={session.id} session={session} client={client} />
       <section className="mt-8 border-t pt-6">
         <h3 className="text-lg font-medium">{t("Transcript and summary")}</h3>
         <p className="mt-2 text-sm" role="status">
@@ -764,23 +811,16 @@ function SessionPlayer({
   const [combined, setCombined] = useState<string[] | null>(null);
   const [combinedLoading, setCombinedLoading] = useState(false);
   const [combinedFailed, setCombinedFailed] = useState(false);
-  const [full, setFull] = useState<{
-    source: SessionChunk["source"];
-    url: string;
-  } | null>(null);
-  const [fullLoading, setFullLoading] = useState<SessionChunk["source"] | null>(
-    null,
-  );
-  const [fullFailed, setFullFailed] = useState<SessionChunk["source"] | null>(
-    null,
-  );
-  const fullUrl = useRef<string | null>(null);
+  const [combinedPlaybackFailed, setCombinedPlaybackFailed] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
+  const downloadAbort = useRef<AbortController | null>(null);
   const combinedUrls = useRef<string[]>([]);
   const masterRef = useRef<HTMLAudioElement>(null);
   const slavesRef = useRef<Array<HTMLAudioElement | null>>([]);
   useEffect(
     () => () => {
-      if (fullUrl.current) URL.revokeObjectURL(fullUrl.current);
+      downloadAbort.current?.abort();
       for (const url of combinedUrls.current) URL.revokeObjectURL(url);
       combinedUrls.current = [];
     },
@@ -789,8 +829,7 @@ function SessionPlayer({
   useEffect(() => {
     setCombined(null);
     setCombinedFailed(false);
-    setFull(null);
-    setFullFailed(null);
+    setDownloadFailed(false);
   }, [session.id]);
   if (!session.chunks.length) return null;
   const sources = [...new Set(session.chunks.map((item) => item.source))];
@@ -817,24 +856,35 @@ function SessionPlayer({
       items.every((item) => (item.format ?? "ogg") === "ogg")
     );
   };
-  const loadFull = async (source: SessionChunk["source"]) => {
-    setFullLoading(source);
-    setFullFailed(null);
+  const downloadOriginal = async () => {
+    const abort = new AbortController();
+    downloadAbort.current = abort;
+    setDownloading(true);
+    setDownloadFailed(false);
     try {
-      const blob = await client.fullAudio(session.id, source);
-      const objectUrl = URL.createObjectURL(blob);
-      if (fullUrl.current) URL.revokeObjectURL(fullUrl.current);
-      fullUrl.current = objectUrl;
-      setFull({ source, url: objectUrl });
+      const blob = await client.originalAudioZip(session, abort.signal);
+      if (abort.signal.aborted) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `savia-${session.id}-original-audio.zip`;
+      document.body.appendChild(link);
+      try {
+        link.click();
+      } finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
     } catch {
-      setFullFailed(source);
+      if (!abort.signal.aborted) setDownloadFailed(true);
     } finally {
-      setFullLoading(null);
+      if (!abort.signal.aborted) setDownloading(false);
     }
   };
   const loadCombined = async () => {
     setCombinedLoading(true);
     setCombinedFailed(false);
+    setCombinedPlaybackFailed(false);
     try {
       const blobs = await Promise.all(
         orderedSources.map((source) => client.fullAudio(session.id, source)),
@@ -855,7 +905,12 @@ function SessionPlayer({
    * Chained full-audio files start at each source's first chunk, so a slave
    * seeks to the same session time, not the same media time.
    */
-  const syncSlaves = () => {
+  const failCombinedPlayback = () => {
+    setCombinedPlaybackFailed(true);
+    masterRef.current?.pause();
+    for (const slave of slavesRef.current) slave?.pause();
+  };
+  const syncSlaves = (forcePlay = false) => {
     const master = masterRef.current;
     if (!master) return;
     const masterStart = timelineStart(orderedSources[0]);
@@ -866,12 +921,37 @@ function SessionPlayer({
       const clamped = Number.isFinite(slave.duration)
         ? Math.min(Math.max(target, 0), slave.duration)
         : Math.max(target, 0);
-      if (Math.abs(slave.currentTime - clamped) > 0.15)
-        slave.currentTime = clamped;
+      const previousTime = slave.currentTime;
+      const seeking = Math.abs(previousTime - clamped) > 0.15;
+      if (seeking) slave.currentTime = clamped;
       slave.playbackRate = master.playbackRate;
-      if (master.paused) slave.pause();
-      else void slave.play().catch(() => {});
+      slave.volume = master.volume;
+      slave.muted = master.muted;
+      const reachedEnd =
+        Number.isFinite(slave.duration) &&
+        slave.duration > 0 &&
+        clamped >= slave.duration;
+      const endedAtTarget =
+        slave.ended && (!seeking || clamped >= previousTime);
+      if (reachedEnd || endedAtTarget) {
+        if (!slave.paused) slave.pause();
+        return;
+      }
+      if (master.paused && !forcePlay) {
+        if (!slave.paused) slave.pause();
+      } else if (forcePlay || slave.paused) {
+        void slave.play().catch(failCombinedPlayback);
+      }
     });
+  };
+  const startCombinedPlayback = () => {
+    const master = masterRef.current;
+    if (!master) return;
+    setCombinedPlaybackFailed(false);
+    // Start every source directly from this user gesture. Some browsers reject
+    // playback started later from the master's asynchronous play event.
+    syncSlaves(true);
+    void master.play().catch(failCombinedPlayback);
   };
   const pauseSlaves = () => {
     for (const slave of slavesRef.current) slave?.pause();
@@ -892,10 +972,12 @@ function SessionPlayer({
                 className="w-full"
                 src={combined[0]}
                 controls
-                onPlay={syncSlaves}
+                onPlay={() => syncSlaves()}
                 onPause={pauseSlaves}
-                onSeeked={syncSlaves}
-                onRateChange={syncSlaves}
+                onSeeked={() => syncSlaves()}
+                onTimeUpdate={() => syncSlaves()}
+                onRateChange={() => syncSlaves()}
+                onVolumeChange={() => syncSlaves()}
                 onEnded={pauseSlaves}
               />
               {combined.slice(1).map((url, index) => (
@@ -911,6 +993,20 @@ function SessionPlayer({
                   preload="auto"
                 />
               ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={startCombinedPlayback}
+              >
+                {t("Start combined playback")}
+              </Button>
+              {combinedPlaybackFailed && (
+                <p className="text-sm" role="alert">
+                  {t(
+                    "One or more audio tracks could not start. Download the original audio to listen to it.",
+                  )}
+                </p>
+              )}
             </>
           ) : (
             <Button
@@ -939,176 +1035,30 @@ function SessionPlayer({
           )}
         </div>
       )}
-      <div className="space-y-4 border-t pt-4">
-        <p className="text-sm font-medium">{t("Full audio")}</p>
-        {sources.map((source) => (
-          <div key={source} className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              {t(source === "microphone" ? "Microphone" : "System audio")}
-            </p>
-            {fullEligible(source) ? (
-              full?.source === source ? (
-                <>
-                  <audio className="w-full" src={full.url} controls autoPlay />
-                  <a
-                    href={full.url}
-                    download={`savia-${session.id}-${source}.ogg`}
-                    className="inline-flex min-h-9 items-center gap-1.5 text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    <Download className="size-3.5" aria-hidden="true" />
-                    {t("Download full audio")}
-                  </a>
-                </>
-              ) : (
-                <Button
-                  variant="outline"
-                  disabled={fullLoading !== null}
-                  onClick={() => void loadFull(source)}
-                >
-                  {t(
-                    fullLoading === source
-                      ? "Loading full audio…"
-                      : "Play full audio",
-                  )}
-                </Button>
-              )
-            ) : (
-              <SegmentSourcePlayer
-                session={session}
-                source={source}
-                client={client}
-              />
-            )}
-            {fullFailed === source && (
-              <p className="text-sm" role="alert">
-                {t("Audio unavailable")}{" "}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void loadFull(source)}
-                >
-                  {t("Retry audio")}
-                </Button>
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-/** Per-segment fallback for sources without chained full audio (mobile M4A). */
-function SegmentSourcePlayer({
-  session,
-  source,
-  client,
-}: {
-  session: RecordingSession;
-  client: CompanionSessionsClient;
-  source: SessionChunk["source"];
-}) {
-  const t = useMessages(companionMessages);
-  const items = session.chunks
-    .filter((item) => item.source === source)
-    .sort((a, b) => a.sequence - b.sequence);
-  const [selected, setSelected] = useState<SessionChunk | undefined>(items[0]);
-  const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-  const [playNext, setPlayNext] = useState(false);
-  const [revision, setRevision] = useState(0);
-  useEffect(() => {
-    if (!selected) return;
-    const abort = new AbortController();
-    let objectUrl: string | null = null;
-    setUrl(null);
-    setError(false);
-    void client
-      .audio(session.id, selected, abort.signal)
-      .then((blob) => {
-        if (abort.signal.aborted) return;
-        objectUrl = URL.createObjectURL(blob);
-        setUrl(objectUrl);
-      })
-      .catch(() => {
-        if (!abort.signal.aborted) setError(true);
-      });
-    return () => {
-      abort.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [client, session.id, selected, revision]);
-  if (!selected) return null;
-  const previous = items.find(
-    (item) => item.sequence === selected.sequence - 1,
-  );
-  return (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium">
-        {t("Listen from")}
-        <select
-          className="mt-2 block w-full rounded-md border bg-background p-2"
-          value={`${selected.source}:${selected.sequence}`}
-          onChange={(event) => {
-            setPlayNext(false);
-            setSelected(
-              items.find(
-                (item) =>
-                  `${item.source}:${item.sequence}` === event.target.value,
-              ),
-            );
-          }}
+      <div className="space-y-2">
+        <Button
+          variant="outline"
+          disabled={downloading || session.state !== "ready"}
+          onClick={() => void downloadOriginal()}
         >
-          {items.map((item) => (
-            <option
-              key={`${item.source}:${item.sequence}`}
-              value={`${item.source}:${item.sequence}`}
-            >
-              {sessionTime(item.startSeconds)} ·{" "}
-              {t(item.source === "microphone" ? "Microphone" : "System audio")}
-            </option>
-          ))}
-        </select>
-      </label>
-      {previous &&
-        selected.startSeconds -
-          previous.startSeconds -
-          previous.durationSeconds >
-          0.1 && (
-          <p className="text-sm text-muted-foreground">
-            {t("There is a gap before this part of the recording.")}
+          <Download className="size-4" aria-hidden="true" />
+          {t(
+            downloading
+              ? "Preparing audio ZIP…"
+              : "Download original audio (ZIP)",
+          )}
+        </Button>
+        {downloading && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {t("Preparing audio ZIP…")}
           </p>
         )}
-      {url ? (
-        <audio
-          className="w-full"
-          src={url}
-          controls
-          autoPlay={playNext}
-          onEnded={() => {
-            const next = items.find(
-              (item) => item.sequence === selected.sequence + 1,
-            );
-            if (next) {
-              setPlayNext(true);
-              setSelected(next);
-            }
-          }}
-        />
-      ) : (
-        <p className="text-sm" role={error ? "alert" : "status"}>
-          {t(error ? "Audio unavailable" : "Loading audio…")}
-          {error && (
-            <Button
-              className="ml-3"
-              size="sm"
-              variant="outline"
-              onClick={() => setRevision((value) => value + 1)}
-            >
-              {t("Retry audio")}
-            </Button>
-          )}
-        </p>
-      )}
+        {downloadFailed && (
+          <p role="alert" className="text-sm text-destructive">
+            {t("Unable to download original audio. Try again.")}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

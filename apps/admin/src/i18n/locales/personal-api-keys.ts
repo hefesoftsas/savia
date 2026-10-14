@@ -20,6 +20,41 @@ export const personalApiKeyMessages = {
     "Permissions for Companion recordings and notes.",
     "Permissões para gravações e notas do Companion.",
   ],
+  "Plugin authoring unavailable for platform": [
+    "El desarrollo de plugins requiere un espacio comercial.",
+    "Plugin authoring requires a commercial workspace.",
+    "O desenvolvimento de plugins requer um espaço comercial.",
+  ],
+  "Plugin authoring": [
+    "Desarrollo de plugins",
+    "Plugin authoring",
+    "Desenvolvimento de plugins",
+  ],
+  "Plugin authoring description": [
+    "Acceso desde VS Code sujeto a tus permisos actuales para administrar plugins.",
+    "VS Code access subject to your current plugin management permissions.",
+    "Acesso pelo VS Code sujeito às suas permissões atuais de gerenciamento de plugins.",
+  ],
+  "Read plugin sources": [
+    "Leer fuentes de plugins",
+    "Read plugin sources",
+    "Ler fontes de plugins",
+  ],
+  "Publish plugin versions": [
+    "Publicar versiones de plugins",
+    "Publish plugin versions",
+    "Publicar versões de plugins",
+  ],
+  "Read plugin sources description": [
+    "Consultar versiones publicadas y descargar su código fuente.",
+    "View published versions and download their source code.",
+    "Consultar versões publicadas e baixar seu código-fonte.",
+  ],
+  "Publish plugin versions description": [
+    "Publicar versiones nuevas sin activar ni borrar plugins.",
+    "Publish new versions without activating or deleting plugins.",
+    "Publicar novas versões sem ativar ou excluir plugins.",
+  ],
   "Savia collection data": [
     "Datos de colecciones Savia",
     "Savia collection data",

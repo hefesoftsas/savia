@@ -205,6 +205,50 @@
     {
       "filename": "0047_whatsapp_contact_access_fingerprint.sql",
       "sha256": "e0b621a39e98db1bd9f9c7aa4d7608bc1740410e1225162b075ad47313bec7bf"
+    },
+    {
+      "filename": "0048_whatsapp_action_queue_timestamp.sql",
+      "sha256": "468beb134d34381cff330f2ec478eea14f5dd038847b3f8fc89f3c4bbc7846e4"
+    },
+    {
+      "filename": "0049_whatsapp_conversation_reset.sql",
+      "sha256": "c4739b69fcd5a547cb2ae9f1ba64e297695e5110d84d133189f7dbfe51863fb0"
+    },
+    {
+      "filename": "0050_whatsapp_dispatch_indexes.sql",
+      "sha256": "c0f7b5d0b68d11c56bd5f782e2406292fa8f4428e01c1326117738007c043aa8"
+    },
+    {
+      "filename": "0051_whatsapp_action_progress.sql",
+      "sha256": "0f9617bae07e8fc41ef4782ee5509d0af904269d1f14486c5a630620f6c42270"
+    },
+    {
+      "filename": "0052_request_cache.sql",
+      "sha256": "ba9b4401675ad9016fe194ba5be417908d4fe0a6c798407e54d1de8cbeaf602b"
+    },
+    {
+      "filename": "0053_public_quote_links.sql",
+      "sha256": "eb5fea0d519eb1d01393dd71afb41fcdde638bf6c764d5de61dea4be6bae509e"
+    },
+    {
+      "filename": "0054_plugin_project_editor_extensions.sql",
+      "sha256": "5c9bec4fba3e84215f4e833bb9cc265f1358a32ad9d75ba8182209d61aa3f99f"
+    },
+    {
+      "filename": "0055_plugin_editor_installations.sql",
+      "sha256": "83b4a3472e6341673650594cce908f3fee94b8fb698d3325b3dbecc1fcccb6d2"
+    },
+    {
+      "filename": "0056_savia_flows_ws_tickets.sql",
+      "sha256": "70befa1432c43dd6a17824f7017ffed8e1b63bd965d363b9ad2bb24fca1197f9"
+    },
+    {
+      "filename": "0057_savia_flows_collection_events.sql",
+      "sha256": "01bc646d6b8ff0322e4df3b5db080d71b8088588263346b883b0ece851ff02e4"
+    },
+    {
+      "filename": "0058_savia_flows_native_causation.sql",
+      "sha256": "0335c692aa263cab68139acafe121b33c42b3e2723873bd141a6e3217b86714b"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -1746,6 +1790,11 @@
       "table": "whatsapp_inbox"
     },
     {
+      "type": "index",
+      "name": "whatsapp_inbox_dispatch_scope",
+      "table": "whatsapp_inbox"
+    },
+    {
       "type": "table",
       "name": "whatsapp_inbox",
       "table": "whatsapp_inbox"
@@ -1829,6 +1878,126 @@
       "type": "index",
       "name": "whatsapp_channel_action_jobs",
       "table": "whatsapp_channel_actions"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_action_dispatch_scope",
+      "table": "whatsapp_channel_actions"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_action_delivery_scope",
+      "table": "whatsapp_channel_actions"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_action_unfinished_scope",
+      "table": "whatsapp_channel_actions"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_action_progress_pending",
+      "table": "whatsapp_channel_action_progress"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_action_progress_action",
+      "table": "whatsapp_channel_action_progress"
+    },
+    {
+      "type": "index",
+      "name": "whatsapp_action_progress_expired_lease",
+      "table": "whatsapp_channel_action_progress"
+    },
+    {
+      "type": "index",
+      "name": "savia_request_cache_expiry",
+      "table": "savia_request_cache"
+    },
+    {
+      "type": "index",
+      "name": "savia_request_cache_lease",
+      "table": "savia_request_cache"
+    },
+    {
+      "type": "index",
+      "name": "public_quote_links_tenant_quote",
+      "table": "public_quote_links"
+    },
+    {
+      "type": "index",
+      "name": "public_quote_links_expiry",
+      "table": "public_quote_links"
+    },
+    {
+      "type": "index",
+      "name": "plugin_editor_extension_inspections_scope_expiry",
+      "table": "plugin_editor_extension_inspections"
+    },
+    {
+      "type": "index",
+      "name": "plugin_editor_extension_installations_scope",
+      "table": "plugin_editor_extension_installations"
+    },
+    {
+      "type": "table",
+      "name": "plugin_editor_extension_artifacts",
+      "table": "plugin_editor_extension_artifacts"
+    },
+    {
+      "type": "table",
+      "name": "plugin_editor_extension_cleanup",
+      "table": "plugin_editor_extension_cleanup"
+    },
+    {
+      "type": "table",
+      "name": "plugin_editor_extension_inspections",
+      "table": "plugin_editor_extension_inspections"
+    },
+    {
+      "type": "table",
+      "name": "plugin_editor_extension_installations",
+      "table": "plugin_editor_extension_installations"
+    },
+    {
+      "type": "index",
+      "name": "savia_flows_collection_events_delivered",
+      "table": "savia_flows_collection_event_outbox"
+    },
+    {
+      "type": "index",
+      "name": "savia_flows_collection_events_ready",
+      "table": "savia_flows_collection_event_outbox"
+    },
+    {
+      "type": "index",
+      "name": "savia_flows_ws_tickets_expiry",
+      "table": "savia_flows_ws_tickets"
+    },
+    {
+      "type": "table",
+      "name": "savia_flows_collection_event_outbox",
+      "table": "savia_flows_collection_event_outbox"
+    },
+    {
+      "type": "table",
+      "name": "savia_flows_collection_receipts",
+      "table": "savia_flows_collection_receipts"
+    },
+    {
+      "type": "table",
+      "name": "savia_flows_ws_tickets",
+      "table": "savia_flows_ws_tickets"
+    },
+    {
+      "type": "trigger",
+      "name": "savia_flows_collection_events_insert",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "savia_flows_collection_events_update",
+      "table": "studio_records"
     }
   ],
   "tables": [
@@ -1895,7 +2064,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["scope", "principal_id", "role_id"],
+          "columns": [
+            "scope",
+            "principal_id",
+            "role_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -1973,7 +2146,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -2064,7 +2239,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -2094,7 +2271,9 @@
       "seedRows": 2,
       "uniqueKeys": [
         {
-          "columns": ["scope"],
+          "columns": [
+            "scope"
+          ],
           "origin": "pk"
         }
       ],
@@ -2191,11 +2370,17 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["scope", "name"],
+          "columns": [
+            "scope",
+            "name"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["scope", "id"],
+          "columns": [
+            "scope",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -2233,7 +2418,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["token_hash"],
+          "columns": [
+            "token_hash"
+          ],
           "origin": "pk"
         }
       ],
@@ -2303,7 +2490,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["state"],
+          "columns": [
+            "state"
+          ],
           "origin": "pk"
         }
       ],
@@ -2362,7 +2551,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id"],
+          "columns": [
+            "principal_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -2499,11 +2690,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["agency_id"],
+          "columns": [
+            "agency_id"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -2597,7 +2792,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -2710,7 +2907,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -2801,7 +3000,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -2890,7 +3091,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -3027,15 +3230,22 @@
       "seedRows": 2,
       "uniqueKeys": [
         {
-          "columns": ["handle"],
+          "columns": [
+            "handle"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["agency_id", "handle"],
+          "columns": [
+            "agency_id",
+            "handle"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -3089,7 +3299,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["scope", "flow_id"],
+          "columns": [
+            "scope",
+            "flow_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -3236,11 +3449,17 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "owner_id", "request_id"],
+          "columns": [
+            "tenant_id",
+            "owner_id",
+            "request_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -3315,7 +3534,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "object_name"],
+          "columns": [
+            "tenant_id",
+            "object_name"
+          ],
           "origin": "pk"
         }
       ],
@@ -3409,7 +3631,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "object_name", "id"],
+          "columns": [
+            "tenant_id",
+            "object_name",
+            "id"
+          ],
           "origin": "u"
         }
       ],
@@ -3479,7 +3705,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "principal_id", "mutation_id"],
+          "columns": [
+            "tenant_id",
+            "principal_id",
+            "mutation_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -3552,7 +3782,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -3590,7 +3822,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["attempt_id"],
+          "columns": [
+            "attempt_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -3699,19 +3933,27 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["membership_id"],
+          "columns": [
+            "membership_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["principal_id"],
+          "columns": [
+            "principal_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["auth_subject"],
+          "columns": [
+            "auth_subject"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["attempt_id"],
+          "columns": [
+            "attempt_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -3821,7 +4063,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "run_id"],
+          "columns": [
+            "tenant_id",
+            "run_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -3907,7 +4152,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4001,7 +4248,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "extension_id", "id"],
+          "columns": [
+            "tenant_id",
+            "extension_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4079,7 +4330,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "extension_id"],
+          "columns": [
+            "tenant_id",
+            "extension_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4149,7 +4403,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4195,7 +4451,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["flow_id", "key"],
+          "columns": [
+            "flow_id",
+            "key"
+          ],
           "origin": "pk"
         }
       ],
@@ -4241,7 +4500,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4271,7 +4532,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4293,7 +4556,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["path"],
+          "columns": [
+            "path"
+          ],
           "origin": "pk"
         }
       ],
@@ -4342,7 +4607,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id", "role"],
+          "columns": [
+            "principal_id",
+            "role"
+          ],
           "origin": "pk"
         }
       ],
@@ -4420,11 +4688,16 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["issuer", "subject"],
+          "columns": [
+            "issuer",
+            "subject"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4515,11 +4788,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id"],
+          "columns": [
+            "principal_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4557,7 +4834,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4659,7 +4938,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["integration_id", "account_id"],
+          "columns": [
+            "integration_id",
+            "account_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4745,11 +5027,16 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["integration_id", "nango_connection_id"],
+          "columns": [
+            "integration_id",
+            "nango_connection_id"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["generation"],
+          "columns": [
+            "generation"
+          ],
           "origin": "pk"
         }
       ],
@@ -4803,7 +5090,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["integration_id"],
+          "columns": [
+            "integration_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4865,7 +5154,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -4970,11 +5261,17 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["event_id", "recipient_id", "channel"],
+          "columns": [
+            "event_id",
+            "recipient_id",
+            "channel"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -5100,11 +5397,17 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["scope_kind", "scope_id", "event_key"],
+          "columns": [
+            "scope_kind",
+            "scope_id",
+            "event_key"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -5134,7 +5437,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["name"],
+          "columns": [
+            "name"
+          ],
           "origin": "pk"
         }
       ],
@@ -5207,7 +5512,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["event_id", "recipient_id"],
+          "columns": [
+            "event_id",
+            "recipient_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -5245,7 +5553,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id"],
+          "columns": [
+            "workspace_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -5291,7 +5601,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "actor_id", "window_start"],
+          "columns": [
+            "workspace_id",
+            "actor_id",
+            "window_start"
+          ],
           "origin": "pk"
         }
       ],
@@ -5337,7 +5651,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "principal_id", "collection"],
+          "columns": [
+            "workspace_id",
+            "principal_id",
+            "collection"
+          ],
           "origin": "pk"
         }
       ],
@@ -5420,11 +5738,16 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["document_id", "version"],
+          "columns": [
+            "document_id",
+            "version"
+          ],
           "origin": "pk"
         },
         {
-          "columns": ["storage_key"],
+          "columns": [
+            "storage_key"
+          ],
           "origin": "u"
         }
       ],
@@ -5509,7 +5832,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["document_id", "principal_id"],
+          "columns": [
+            "document_id",
+            "principal_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -5632,7 +5958,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -5707,7 +6035,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -5769,7 +6099,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "collection"],
+          "columns": [
+            "tenant_id",
+            "collection"
+          ],
           "origin": "pk"
         }
       ],
@@ -5866,11 +6199,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["storage_key"],
+          "columns": [
+            "storage_key"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -5977,11 +6314,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["token"],
+          "columns": [
+            "token"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -6030,11 +6371,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["link_id"],
+          "columns": [
+            "link_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["code"],
+          "columns": [
+            "code"
+          ],
           "origin": "pk"
         }
       ],
@@ -6099,7 +6444,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["page_id", "version"],
+          "columns": [
+            "page_id",
+            "version"
+          ],
           "origin": "pk"
         }
       ],
@@ -6174,7 +6522,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["root_id", "principal_id"],
+          "columns": [
+            "root_id",
+            "principal_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -6321,7 +6672,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -6418,11 +6771,16 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id", "request_id"],
+          "columns": [
+            "principal_id",
+            "request_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -6521,7 +6879,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -6658,11 +7018,16 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id", "provider"],
+          "columns": [
+            "principal_id",
+            "provider"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -6825,7 +7190,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id", "resource_key"],
+          "columns": [
+            "principal_id",
+            "resource_key"
+          ],
           "origin": "pk"
         }
       ],
@@ -6927,7 +7295,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "id", "version"],
+          "columns": [
+            "tenant_id",
+            "id",
+            "version"
+          ],
           "origin": "pk"
         }
       ],
@@ -6976,11 +7348,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["form_id"],
+          "columns": [
+            "form_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["code"],
+          "columns": [
+            "code"
+          ],
           "origin": "pk"
         }
       ],
@@ -7085,11 +7461,16 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["captcha_hash"],
+          "columns": [
+            "captcha_hash"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["form_id", "submission_id"],
+          "columns": [
+            "form_id",
+            "submission_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -7239,11 +7620,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["token"],
+          "columns": [
+            "token"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -7316,11 +7701,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["request_id"],
+          "columns": [
+            "request_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["proof_hash"],
+          "columns": [
+            "proof_hash"
+          ],
           "origin": "pk"
         }
       ],
@@ -7438,7 +7827,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -7508,7 +7899,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -7538,7 +7931,9 @@
       "seedRows": 1,
       "uniqueKeys": [
         {
-          "columns": ["resource"],
+          "columns": [
+            "resource"
+          ],
           "origin": "pk"
         }
       ],
@@ -7611,7 +8006,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -7649,7 +8046,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["attempt_id"],
+          "columns": [
+            "attempt_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -7766,19 +8165,27 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["membership_id"],
+          "columns": [
+            "membership_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["principal_id"],
+          "columns": [
+            "principal_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["auth_subject"],
+          "columns": [
+            "auth_subject"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["attempt_id"],
+          "columns": [
+            "attempt_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -7908,7 +8315,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8002,11 +8411,17 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "automation_id", "event_key"],
+          "columns": [
+            "tenant_id",
+            "automation_id",
+            "event_key"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8084,7 +8499,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8175,7 +8592,12 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "object_name", "record_id", "connection_id"],
+          "columns": [
+            "tenant_id",
+            "object_name",
+            "record_id",
+            "connection_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8334,7 +8756,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "id"],
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8388,7 +8813,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "request_key"],
+          "columns": [
+            "tenant_id",
+            "request_key"
+          ],
           "origin": "pk"
         }
       ],
@@ -8466,7 +8894,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "owner_principal_id", "id"],
+          "columns": [
+            "tenant_id",
+            "owner_principal_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8512,7 +8944,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "collection"],
+          "columns": [
+            "tenant_id",
+            "collection"
+          ],
           "origin": "pk"
         }
       ],
@@ -8582,7 +9017,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "id"],
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8684,11 +9122,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["storage_key"],
+          "columns": [
+            "storage_key"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8769,11 +9211,17 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "file_id", "version"],
+          "columns": [
+            "tenant_id",
+            "file_id",
+            "version"
+          ],
           "origin": "pk"
         },
         {
-          "columns": ["storage_key"],
+          "columns": [
+            "storage_key"
+          ],
           "origin": "u"
         }
       ],
@@ -8896,11 +9344,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["storage_key"],
+          "columns": [
+            "storage_key"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8938,7 +9390,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9073,7 +9527,9 @@
           "origin": "c"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9151,7 +9607,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9197,7 +9655,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "id"],
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9296,7 +9757,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9366,7 +9829,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "name"],
+          "columns": [
+            "tenant_id",
+            "name"
+          ],
           "origin": "pk"
         }
       ],
@@ -9468,7 +9934,12 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "object_name", "record_id", "version"],
+          "columns": [
+            "tenant_id",
+            "object_name",
+            "record_id",
+            "version"
+          ],
           "origin": "pk"
         }
       ],
@@ -9514,7 +9985,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9581,7 +10054,12 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "relation_id", "source_id", "target_id"],
+          "columns": [
+            "tenant_id",
+            "relation_id",
+            "source_id",
+            "target_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9688,7 +10166,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "id"],
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9734,7 +10215,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "request_key"],
+          "columns": [
+            "tenant_id",
+            "request_key"
+          ],
           "origin": "pk"
         }
       ],
@@ -9788,7 +10272,12 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "object_name", "version", "record_id"],
+          "columns": [
+            "tenant_id",
+            "object_name",
+            "version",
+            "record_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9842,7 +10331,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "object_name", "version"],
+          "columns": [
+            "tenant_id",
+            "object_name",
+            "version"
+          ],
           "origin": "pk"
         }
       ],
@@ -9880,7 +10373,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -9950,7 +10445,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "id"],
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -10017,7 +10515,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "object_name"],
+          "columns": [
+            "tenant_id",
+            "object_name"
+          ],
           "origin": "pk"
         }
       ],
@@ -10132,7 +10633,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -10186,7 +10689,12 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "object_name", "field_name", "value"],
+          "columns": [
+            "tenant_id",
+            "object_name",
+            "field_name",
+            "value"
+          ],
           "origin": "pk"
         }
       ],
@@ -10240,7 +10748,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -10270,7 +10780,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -10427,11 +10939,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["object_key"],
+          "columns": [
+            "object_key"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -10477,7 +10993,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "id"],
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -10594,7 +11113,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -10741,19 +11262,30 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["created_by_principal_id", "tenant_id", "provider"],
+          "columns": [
+            "created_by_principal_id",
+            "tenant_id",
+            "provider"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["nango_integration_id", "nango_connection_id"],
+          "columns": [
+            "nango_integration_id",
+            "nango_connection_id"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -10900,15 +11432,22 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["nango_integration_id", "nango_connection_id"],
+          "columns": [
+            "nango_integration_id",
+            "nango_connection_id"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -10986,7 +11525,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11048,7 +11589,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "flow_id", "key"],
+          "columns": [
+            "tenant_id",
+            "flow_id",
+            "key"
+          ],
           "origin": "pk"
         }
       ],
@@ -11102,7 +11647,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11148,7 +11695,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "flow_id"],
+          "columns": [
+            "tenant_id",
+            "flow_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11178,7 +11728,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "path"],
+          "columns": [
+            "tenant_id",
+            "path"
+          ],
           "origin": "pk"
         }
       ],
@@ -11249,7 +11802,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["page_id"],
+          "columns": [
+            "page_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11312,7 +11867,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "page_id"],
+          "columns": [
+            "tenant_id",
+            "page_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11367,7 +11925,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11406,7 +11966,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["slug"],
+          "columns": [
+            "slug"
+          ],
           "origin": "pk"
         }
       ],
@@ -11445,7 +12007,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11515,11 +12079,15 @@
       "seedRows": 1,
       "uniqueKeys": [
         {
-          "columns": ["id_slug"],
+          "columns": [
+            "id_slug"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11568,7 +12136,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id"],
+          "columns": [
+            "principal_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11617,7 +12187,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id"],
+          "columns": [
+            "principal_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11666,7 +12238,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id"],
+          "columns": [
+            "principal_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11765,7 +12339,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11914,11 +12490,16 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["owner_principal_id", "provider"],
+          "columns": [
+            "owner_principal_id",
+            "provider"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -12178,11 +12759,18 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "workflow_id", "event_key"],
+          "columns": [
+            "workspace_id",
+            "workflow_id",
+            "event_key"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["workspace_id", "id"],
+          "columns": [
+            "workspace_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -12289,7 +12877,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "execution_id", "node_id"],
+          "columns": [
+            "workspace_id",
+            "execution_id",
+            "node_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -12404,11 +12996,18 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "execution_id", "node_id"],
+          "columns": [
+            "workspace_id",
+            "execution_id",
+            "node_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["workspace_id", "id"],
+          "columns": [
+            "workspace_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -12499,11 +13098,18 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "workflow_id", "revision"],
+          "columns": [
+            "workspace_id",
+            "workflow_id",
+            "revision"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["workspace_id", "id"],
+          "columns": [
+            "workspace_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -12552,7 +13158,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["endpoint_id", "minute"],
+          "columns": [
+            "endpoint_id",
+            "minute"
+          ],
           "origin": "pk"
         }
       ],
@@ -12677,7 +13286,12 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "execution_id", "node_id", "sequence"],
+          "columns": [
+            "workspace_id",
+            "execution_id",
+            "node_id",
+            "sequence"
+          ],
           "origin": "pk"
         }
       ],
@@ -12830,7 +13444,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "execution_id", "node_id"],
+          "columns": [
+            "workspace_id",
+            "execution_id",
+            "node_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -12913,7 +13531,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "id", "revision"],
+          "columns": [
+            "workspace_id",
+            "id",
+            "revision"
+          ],
           "origin": "pk"
         }
       ],
@@ -12991,7 +13613,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "id"],
+          "columns": [
+            "workspace_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -13058,15 +13683,23 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "workflow_id"],
+          "columns": [
+            "workspace_id",
+            "workflow_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["workspace_id", "id"],
+          "columns": [
+            "workspace_id",
+            "id"
+          ],
           "origin": "pk"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "u"
         }
       ],
@@ -13161,7 +13794,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "endpoint_id", "event_key"],
+          "columns": [
+            "workspace_id",
+            "endpoint_id",
+            "event_key"
+          ],
           "origin": "pk"
         }
       ],
@@ -13207,7 +13844,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "record_id"],
+          "columns": [
+            "workspace_id",
+            "record_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -13301,7 +13941,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["workspace_id", "id"],
+          "columns": [
+            "workspace_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -13432,11 +14075,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["secret_digest"],
+          "columns": [
+            "secret_digest"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -13519,7 +14166,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "principal_id"],
+          "columns": [
+            "tenant_id",
+            "principal_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -13586,7 +14236,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "booking_id"],
+          "columns": [
+            "tenant_id",
+            "booking_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -13709,11 +14362,18 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "booking_id", "revision", "kind"],
+          "columns": [
+            "tenant_id",
+            "booking_id",
+            "revision",
+            "kind"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -13780,7 +14440,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "principal_id", "minute"],
+          "columns": [
+            "tenant_id",
+            "principal_id",
+            "minute"
+          ],
           "origin": "pk"
         }
       ],
@@ -13818,7 +14482,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["bucket"],
+          "columns": [
+            "bucket"
+          ],
           "origin": "pk"
         }
       ],
@@ -13875,11 +14541,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["public_token"],
+          "columns": [
+            "public_token"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -14112,19 +14782,29 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "request_key"],
+          "columns": [
+            "tenant_id",
+            "request_key"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["tenant_id", "id"],
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["manage_token"],
+          "columns": [
+            "manage_token"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -14261,7 +14941,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -14310,7 +14992,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id"],
+          "columns": [
+            "principal_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -14455,11 +15139,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["token"],
+          "columns": [
+            "token"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -14566,15 +15254,21 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["captcha_hash"],
+          "columns": [
+            "captcha_hash"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["request_key"],
+          "columns": [
+            "request_key"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -14633,7 +15327,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "principal_id"],
+          "columns": [
+            "tenant_id",
+            "principal_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -14760,11 +15457,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["connection_id"],
+          "columns": [
+            "connection_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["tenant_id"],
+          "columns": [
+            "tenant_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -15023,15 +15724,22 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["connection_id", "normalized_contact"],
+          "columns": [
+            "connection_id",
+            "normalized_contact"
+          ],
           "origin": "c"
         },
         {
-          "columns": ["outbound_message_id"],
+          "columns": [
+            "outbound_message_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["message_id"],
+          "columns": [
+            "message_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -15101,7 +15809,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["phone_number_id", "waba_id", "message_id"],
+          "columns": [
+            "phone_number_id",
+            "waba_id",
+            "message_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -15240,11 +15952,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["outbound_message_id"],
+          "columns": [
+            "outbound_message_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["idempotency_key"],
+          "columns": [
+            "idempotency_key"
+          ],
           "origin": "pk"
         }
       ],
@@ -15337,7 +16053,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id", "cache_key"],
+          "columns": [
+            "principal_id",
+            "cache_key"
+          ],
           "origin": "pk"
         }
       ],
@@ -15409,17 +16128,414 @@
           "notnull": 1,
           "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
           "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "editor_extensions",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'[]'",
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "installed_editor_extensions",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'[]'",
+          "pk": 0
         }
       ],
       "foreignKeys": [],
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "principal_id", "id"],
+          "columns": [
+            "tenant_id",
+            "principal_id",
+            "id"
+          ],
           "origin": "pk"
         }
       ],
-      "checkCount": 1
+      "checkCount": 3
+    },
+    {
+      "name": "plugin_editor_extension_artifacts",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "sha256",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "object_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "compressed_bytes",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "expanded_bytes",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "reference_count",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "principal_id",
+            "sha256"
+          ],
+          "origin": "pk"
+        },
+        {
+          "columns": [
+            "object_key"
+          ],
+          "origin": "u"
+        }
+      ],
+      "checkCount": 3
+    },
+    {
+      "name": "plugin_editor_extension_cleanup",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "object_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "object_key"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "plugin_editor_extension_inspections",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "source",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "manifest_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "object_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "expires_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "reservation_bytes",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 4
+    },
+    {
+      "name": "plugin_editor_extension_installations",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "publisher",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "sha256",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "source",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "object_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "plugin_editor_extension_artifacts",
+          "from": "tenant_id",
+          "to": "tenant_id",
+          "on_update": "NO ACTION",
+          "on_delete": "RESTRICT",
+          "match": "NONE"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "table": "plugin_editor_extension_artifacts",
+          "from": "principal_id",
+          "to": "principal_id",
+          "on_update": "NO ACTION",
+          "on_delete": "RESTRICT",
+          "match": "NONE"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "table": "plugin_editor_extension_artifacts",
+          "from": "sha256",
+          "to": "sha256",
+          "on_update": "NO ACTION",
+          "on_delete": "RESTRICT",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        },
+        {
+          "columns": [
+            "tenant_id",
+            "principal_id",
+            "publisher",
+            "name",
+            "version"
+          ],
+          "origin": "u"
+        }
+      ],
+      "checkCount": 3
     },
     {
       "name": "plugin_store_sources",
@@ -15500,7 +16616,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["tenant_id", "id", "version"],
+          "columns": [
+            "tenant_id",
+            "id",
+            "version"
+          ],
           "origin": "pk"
         }
       ],
@@ -15593,7 +16713,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["connection_id"],
+          "columns": [
+            "connection_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -15673,6 +16795,38 @@
           "notnull": 0,
           "dflt_value": null,
           "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "reset_token_hash",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "reset_expires_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "reset_attempts",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "last_reset_message_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -15690,7 +16844,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["connection_id", "contact"],
+          "columns": [
+            "connection_id",
+            "contact"
+          ],
           "origin": "pk"
         }
       ],
@@ -15779,7 +16936,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["message_id"],
+          "columns": [
+            "message_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -15931,6 +17090,14 @@
           "notnull": 0,
           "dflt_value": null,
           "pk": 0
+        },
+        {
+          "cid": 18,
+          "name": "queued_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -15958,11 +17125,143 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
       "checkCount": 1
+    },
+    {
+      "name": "whatsapp_channel_action_progress",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "action_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "event_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "progress_text",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "retry_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "lease_until",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "lease_token",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "outbound_message_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "delivery_text",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "delivery_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "whatsapp_channel_actions",
+          "from": "action_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "action_id",
+            "event_key"
+          ],
+          "origin": "u"
+        },
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
     },
     {
       "name": "whatsapp_channel_resources",
@@ -16087,7 +17386,585 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["action_id", "product_id"],
+          "columns": [
+            "action_id",
+            "product_id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "savia_request_cache",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "cache_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "response_status",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "response_status_text",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "response_headers",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "response_body",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "retrieved_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "expires_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "lease_token",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "lease_until",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "cache_key"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "public_quote_links",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "action_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "quote_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "token",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "report_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_by",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "expires_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "revoked_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        },
+        {
+          "columns": [
+            "token"
+          ],
+          "origin": "u"
+        },
+        {
+          "columns": [
+            "tenant_id",
+            "action_id"
+          ],
+          "origin": "u"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "savia_flows_collection_event_outbox",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "collection_name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "operation",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "record_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "record_version",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "occurred_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "before_snapshot",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "after_snapshot",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "changed_fields",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "actor_kind",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "actor_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "cause_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'pending'",
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "attempt_count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "available_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "lease_token",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 17,
+          "name": "lease_expires_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 18,
+          "name": "delivered_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 19,
+          "name": "last_error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 20,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "collection_name",
+            "record_id",
+            "record_version",
+            "operation"
+          ],
+          "origin": "u"
+        },
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 5
+    },
+    {
+      "name": "savia_flows_collection_receipts",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "workflow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "execution_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "node_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 4
+        },
+        {
+          "cid": 4,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "fingerprint",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "response",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant",
+            "workflow_id",
+            "execution_id",
+            "node_id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "savia_flows_ws_tickets",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "jti",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "path",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "expires_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "jti"
+          ],
           "origin": "pk"
         }
       ],

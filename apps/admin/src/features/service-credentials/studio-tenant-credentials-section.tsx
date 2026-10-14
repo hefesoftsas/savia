@@ -243,7 +243,7 @@ export function StudioTenantCredentialsSection({
     return () => {
       active = false;
     };
-  }, [services]);
+  }, [services.apiClient]);
 
   useLayoutEffect(() => {
     if (!tenant || !transport) return;

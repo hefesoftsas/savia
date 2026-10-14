@@ -404,6 +404,8 @@ export interface paths {
                   | "records:read"
                   | "records:create"
                   | "records:update"
+                  | "plugins:read"
+                  | "plugins:publish"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -437,6 +439,8 @@ export interface paths {
               | "records:read"
               | "records:create"
               | "records:update"
+              | "plugins:read"
+              | "plugins:publish"
             )[];
             /** @default 30 */
             lifetimeDays?: 7 | 30 | 90;
@@ -465,6 +469,8 @@ export interface paths {
                   | "records:read"
                   | "records:create"
                   | "records:update"
+                  | "plugins:read"
+                  | "plugins:publish"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -534,7 +540,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Revoke your personal key */
+    /** Revoke an active key, or permanently delete it once revoked */
     delete: {
       parameters: {
         query?: never;
@@ -546,7 +552,7 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Revoked or already absent */
+        /** @description Revoked, deleted, or already absent */
         204: {
           headers: {
             [name: string]: unknown;
@@ -600,6 +606,8 @@ export interface paths {
                   | "records:read"
                   | "records:create"
                   | "records:update"
+                  | "plugins:read"
+                  | "plugins:publish"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -637,6 +645,8 @@ export interface paths {
               | "records:read"
               | "records:create"
               | "records:update"
+              | "plugins:read"
+              | "plugins:publish"
             )[];
             /** @default 30 */
             lifetimeDays?: 7 | 30 | 90;
@@ -666,6 +676,8 @@ export interface paths {
                   | "records:read"
                   | "records:create"
                   | "records:update"
+                  | "plugins:read"
+                  | "plugins:publish"
                 )[];
                 createdAt: string;
                 expiresAt: string;
@@ -738,7 +750,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Revoke a personal key in this tenant */
+    /** Revoke an active tenant key, or delete it once revoked */
     delete: {
       parameters: {
         query?: never;
@@ -751,7 +763,7 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Revoked or already absent */
+        /** @description Revoked, deleted, or already absent */
         204: {
           headers: {
             [name: string]: unknown;
@@ -3389,7 +3401,9 @@ export interface paths {
             id: string;
             /** @enum {string} */
             provider:
-              "google_drive" | "onedrive_personal" | "onedrive_business";
+              | "google_drive"
+              | "onedrive_personal"
+              | "onedrive_business";
             fileId: string;
             /** @enum {boolean} */
             consent: true;
@@ -5583,7 +5597,9 @@ export interface paths {
                   conferenceProvider: "auto" | "zoom";
                   /** @enum {string} */
                   zoomStatus:
-                    "connected" | "not_connected" | "reconnect_required";
+                    | "connected"
+                    | "not_connected"
+                    | "reconnect_required";
                 };
               };
             };
@@ -5740,7 +5756,9 @@ export interface paths {
                   conferenceProvider: "auto" | "zoom";
                   /** @enum {string} */
                   zoomStatus:
-                    "connected" | "not_connected" | "reconnect_required";
+                    | "connected"
+                    | "not_connected"
+                    | "reconnect_required";
                 };
               };
             };
@@ -5931,7 +5949,9 @@ export interface paths {
                   conferenceProvider: "auto" | "zoom";
                   /** @enum {string} */
                   zoomStatus:
-                    "connected" | "not_connected" | "reconnect_required";
+                    | "connected"
+                    | "not_connected"
+                    | "reconnect_required";
                 };
               };
             };
@@ -6107,7 +6127,9 @@ export interface paths {
                   conferenceProvider: "auto" | "zoom";
                   /** @enum {string} */
                   zoomStatus:
-                    "connected" | "not_connected" | "reconnect_required";
+                    | "connected"
+                    | "not_connected"
+                    | "reconnect_required";
                 };
               };
             };
@@ -6274,7 +6296,9 @@ export interface paths {
                   conferenceProvider: "auto" | "zoom";
                   /** @enum {string} */
                   zoomStatus:
-                    "connected" | "not_connected" | "reconnect_required";
+                    | "connected"
+                    | "not_connected"
+                    | "reconnect_required";
                 };
               };
             };
@@ -10232,7 +10256,10 @@ export interface paths {
                     id: string;
                     /** @enum {string} */
                     role:
-                      "tenant_admin" | "agency_admin" | "operator" | "viewer";
+                      | "tenant_admin"
+                      | "agency_admin"
+                      | "operator"
+                      | "viewer";
                     attributes: {
                       isActive: boolean;
                     };
@@ -10374,7 +10401,10 @@ export interface paths {
                     id: string;
                     /** @enum {string} */
                     role:
-                      "tenant_admin" | "agency_admin" | "operator" | "viewer";
+                      | "tenant_admin"
+                      | "agency_admin"
+                      | "operator"
+                      | "viewer";
                     attributes: {
                       isActive: boolean;
                     };
@@ -10466,7 +10496,10 @@ export interface paths {
                     id: string;
                     /** @enum {string} */
                     role:
-                      "tenant_admin" | "agency_admin" | "operator" | "viewer";
+                      | "tenant_admin"
+                      | "agency_admin"
+                      | "operator"
+                      | "viewer";
                     attributes: {
                       isActive: boolean;
                     };
@@ -10590,7 +10623,10 @@ export interface paths {
                     id: string;
                     /** @enum {string} */
                     role:
-                      "tenant_admin" | "agency_admin" | "operator" | "viewer";
+                      | "tenant_admin"
+                      | "agency_admin"
+                      | "operator"
+                      | "viewer";
                     attributes: {
                       isActive: boolean;
                     };
@@ -10686,7 +10722,10 @@ export interface paths {
                     id: string;
                     /** @enum {string} */
                     role:
-                      "tenant_admin" | "agency_admin" | "operator" | "viewer";
+                      | "tenant_admin"
+                      | "agency_admin"
+                      | "operator"
+                      | "viewer";
                     attributes: {
                       isActive: boolean;
                     };
@@ -10819,7 +10858,10 @@ export interface paths {
                     id: string;
                     /** @enum {string} */
                     role:
-                      "tenant_admin" | "agency_admin" | "operator" | "viewer";
+                      | "tenant_admin"
+                      | "agency_admin"
+                      | "operator"
+                      | "viewer";
                     attributes: {
                       isActive: boolean;
                     };
@@ -11147,7 +11189,9 @@ export interface paths {
                 applicationType: "native" | "web";
                 /** @enum {string} */
                 clientAuthentication:
-                  "none" | "client_secret_basic" | "client_secret_post";
+                  | "none"
+                  | "client_secret_basic"
+                  | "client_secret_post";
                 clientId: string;
                 clientName: string;
                 grantTypes: ("authorization_code" | "refresh_token")[];
@@ -11183,7 +11227,9 @@ export interface paths {
             applicationType?: "native" | "web";
             /** @enum {string} */
             clientAuthentication:
-              "none" | "client_secret_basic" | "client_secret_post";
+              | "none"
+              | "client_secret_basic"
+              | "client_secret_post";
             clientName: string;
             grantTypes?: ("authorization_code" | "refresh_token")[];
             redirectUris: string[];
@@ -11206,7 +11252,9 @@ export interface paths {
                 applicationType: "native" | "web";
                 /** @enum {string} */
                 clientAuthentication:
-                  "none" | "client_secret_basic" | "client_secret_post";
+                  | "none"
+                  | "client_secret_basic"
+                  | "client_secret_post";
                 clientId: string;
                 clientName: string;
                 grantTypes: ("authorization_code" | "refresh_token")[];
@@ -11303,7 +11351,9 @@ export interface paths {
                 applicationType: "native" | "web";
                 /** @enum {string} */
                 clientAuthentication:
-                  "none" | "client_secret_basic" | "client_secret_post";
+                  | "none"
+                  | "client_secret_basic"
+                  | "client_secret_post";
                 clientId: string;
                 clientName: string;
                 grantTypes: ("authorization_code" | "refresh_token")[];
@@ -11553,6 +11603,220 @@ export interface paths {
       };
     };
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/quotes/{token}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read a shared quote comparison */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Shared quote report */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              report: {
+                /** @enum {number} */
+                version: 1;
+                reference: string;
+                /** Format: date-time */
+                createdAt: string;
+                proposals: {
+                  id: string;
+                  provider: string;
+                  product: string;
+                  /** @enum {string} */
+                  state: "priced" | "unpriced" | "failed" | "uncertain";
+                  premium?: number;
+                  /** @enum {string} */
+                  currency: "COP";
+                  facts?: {
+                    label: string;
+                    value: string;
+                    /** @enum {string} */
+                    source: "provider" | "saved_verified";
+                  }[];
+                }[];
+                analysis?: {
+                  proposals: {
+                    id: string;
+                    explanation: string;
+                  }[];
+                  suggestion: string;
+                  preferredProposalId?: string;
+                  limitations: string[];
+                };
+              };
+              /** Format: date-time */
+              expiresAt: string;
+            };
+          };
+        };
+        /** @description Quote report not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+        /** @description Rate limit exceeded */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: string;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/tenants/{tenantId}/quote-links": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List shared quote links for a tenant */
+    get: {
+      parameters: {
+        query?: {
+          quoteId?: string;
+        };
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Quote links */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              items: {
+                /** Format: uuid */
+                id: string;
+                quoteId: string;
+                /** Format: uri */
+                url: string;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                expiresAt: string;
+                /** Format: date-time */
+                revokedAt: string | null;
+              }[];
+            };
+          };
+        };
+        /** @description Tenant administration is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Tenant not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/tenants/{tenantId}/quote-links/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Revoke a shared quote link */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Quote link revoked */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Tenant administration is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Quote link not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
     options?: never;
     head?: never;
     patch?: never;
@@ -12484,7 +12748,10 @@ export interface paths {
                   connectionBlocked?: boolean;
                   /** @enum {string} */
                   activeProvider?:
-                    "hubspot" | "salesforce" | "zoho" | "pipedrive";
+                    | "hubspot"
+                    | "salesforce"
+                    | "zoho"
+                    | "pipedrive";
                 };
               }[];
             };
@@ -16727,7 +16994,12 @@ export interface paths {
                  * @enum {string}
                  */
                 color:
-                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                  | "blue"
+                  | "emerald"
+                  | "violet"
+                  | "amber"
+                  | "rose"
+                  | "slate";
                 /** @default UTC */
                 timeZone: string;
                 visible: boolean;
@@ -16762,7 +17034,12 @@ export interface paths {
                  * @enum {string}
                  */
                 color?:
-                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                  | "blue"
+                  | "emerald"
+                  | "violet"
+                  | "amber"
+                  | "rose"
+                  | "slate";
                 /** @default UTC */
                 timeZone?: string;
                 url: string;
@@ -16776,7 +17053,12 @@ export interface paths {
                  * @enum {string}
                  */
                 color?:
-                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                  | "blue"
+                  | "emerald"
+                  | "violet"
+                  | "amber"
+                  | "rose"
+                  | "slate";
                 /** @default UTC */
                 timeZone?: string;
                 content: string;
@@ -16801,7 +17083,12 @@ export interface paths {
                  * @enum {string}
                  */
                 color:
-                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                  | "blue"
+                  | "emerald"
+                  | "violet"
+                  | "amber"
+                  | "rose"
+                  | "slate";
                 /** @default UTC */
                 timeZone: string;
                 visible: boolean;
@@ -16914,7 +17201,12 @@ export interface paths {
                  * @enum {string}
                  */
                 color:
-                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                  | "blue"
+                  | "emerald"
+                  | "violet"
+                  | "amber"
+                  | "rose"
+                  | "slate";
                 /** @default UTC */
                 timeZone: string;
                 visible: boolean;
@@ -17047,7 +17339,12 @@ export interface paths {
                  * @enum {string}
                  */
                 color:
-                  "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
+                  | "blue"
+                  | "emerald"
+                  | "violet"
+                  | "amber"
+                  | "rose"
+                  | "slate";
                 /** @default UTC */
                 timeZone: string;
                 visible: boolean;
@@ -20191,7 +20488,9 @@ export interface paths {
               data: {
                 /** @enum {string} */
                 provider:
-                  "google_drive" | "onedrive_personal" | "onedrive_business";
+                  | "google_drive"
+                  | "onedrive_personal"
+                  | "onedrive_business";
                 label: string;
                 accountLabel: string | null;
               }[];
@@ -20267,7 +20566,9 @@ export interface paths {
                 format: "docx" | "xlsx" | "pptx";
                 /** @enum {string} */
                 provider:
-                  "google_drive" | "onedrive_personal" | "onedrive_business";
+                  | "google_drive"
+                  | "onedrive_personal"
+                  | "onedrive_business";
                 /** Format: uri */
                 url: string;
                 createdAt: string;
@@ -20341,7 +20642,9 @@ export interface paths {
                 format: "docx" | "xlsx" | "pptx";
                 /** @enum {string} */
                 provider:
-                  "google_drive" | "onedrive_personal" | "onedrive_business";
+                  | "google_drive"
+                  | "onedrive_personal"
+                  | "onedrive_business";
                 /** Format: uri */
                 url: string;
                 createdAt: string;
@@ -20363,7 +20666,9 @@ export interface paths {
                 format: "docx" | "xlsx" | "pptx";
                 /** @enum {string} */
                 provider:
-                  "google_drive" | "onedrive_personal" | "onedrive_business";
+                  | "google_drive"
+                  | "onedrive_personal"
+                  | "onedrive_business";
                 /** Format: uri */
                 url: string;
                 createdAt: string;
@@ -21416,6 +21721,7 @@ export interface paths {
                         | (
                             | "dashboard"
                             | "studio"
+                            | "savia-flows"
                             | "my-day"
                             | "bookings"
                             | "pages"
@@ -21430,16 +21736,19 @@ export interface paths {
                             | "tenants"
                             | "page-administrator"
                             | "domain-sources"
-                            | "domain-workflows"
-                            | "domain-reports"
-                            | "domain-api"
+                            | "domain-operations"
                             | "domain-history"
                             | "domain-packages"
                             | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
-                        | "dynamic-crm"
+                        | (
+                            | "dynamic-crm"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                          )
                         | string
                       )[];
                       collapsed: boolean;
@@ -21453,6 +21762,7 @@ export interface paths {
                         | (
                             | "dashboard"
                             | "studio"
+                            | "savia-flows"
                             | "my-day"
                             | "bookings"
                             | "pages"
@@ -21467,16 +21777,19 @@ export interface paths {
                             | "tenants"
                             | "page-administrator"
                             | "domain-sources"
-                            | "domain-workflows"
-                            | "domain-reports"
-                            | "domain-api"
+                            | "domain-operations"
                             | "domain-history"
                             | "domain-packages"
                             | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
-                        | "dynamic-crm"
+                        | (
+                            | "dynamic-crm"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                          )
                         | string
                       )[];
                       collapsed: boolean;
@@ -21486,6 +21799,7 @@ export interface paths {
                   | (
                       | "dashboard"
                       | "studio"
+                      | "savia-flows"
                       | "my-day"
                       | "bookings"
                       | "pages"
@@ -21500,16 +21814,19 @@ export interface paths {
                       | "tenants"
                       | "page-administrator"
                       | "domain-sources"
-                      | "domain-workflows"
-                      | "domain-reports"
-                      | "domain-api"
+                      | "domain-operations"
                       | "domain-history"
                       | "domain-packages"
                       | "plugin-studio"
                       | "virtual-employees"
                       | "tenant-branding"
                     )
-                  | "dynamic-crm"
+                  | (
+                      | "dynamic-crm"
+                      | "domain-workflows"
+                      | "domain-reports"
+                      | "domain-api"
+                    )
                   | string
                 )[];
               };
@@ -21558,6 +21875,7 @@ export interface paths {
                         | (
                             | "dashboard"
                             | "studio"
+                            | "savia-flows"
                             | "my-day"
                             | "bookings"
                             | "pages"
@@ -21572,16 +21890,19 @@ export interface paths {
                             | "tenants"
                             | "page-administrator"
                             | "domain-sources"
-                            | "domain-workflows"
-                            | "domain-reports"
-                            | "domain-api"
+                            | "domain-operations"
                             | "domain-history"
                             | "domain-packages"
                             | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
-                        | "dynamic-crm"
+                        | (
+                            | "dynamic-crm"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                          )
                         | string
                       )[];
                       collapsed: boolean;
@@ -21595,6 +21916,7 @@ export interface paths {
                         | (
                             | "dashboard"
                             | "studio"
+                            | "savia-flows"
                             | "my-day"
                             | "bookings"
                             | "pages"
@@ -21609,16 +21931,19 @@ export interface paths {
                             | "tenants"
                             | "page-administrator"
                             | "domain-sources"
-                            | "domain-workflows"
-                            | "domain-reports"
-                            | "domain-api"
+                            | "domain-operations"
                             | "domain-history"
                             | "domain-packages"
                             | "plugin-studio"
                             | "virtual-employees"
                             | "tenant-branding"
                           )
-                        | "dynamic-crm"
+                        | (
+                            | "dynamic-crm"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                          )
                         | string
                       )[];
                       collapsed: boolean;
@@ -21628,6 +21953,7 @@ export interface paths {
                   | (
                       | "dashboard"
                       | "studio"
+                      | "savia-flows"
                       | "my-day"
                       | "bookings"
                       | "pages"
@@ -21642,16 +21968,19 @@ export interface paths {
                       | "tenants"
                       | "page-administrator"
                       | "domain-sources"
-                      | "domain-workflows"
-                      | "domain-reports"
-                      | "domain-api"
+                      | "domain-operations"
                       | "domain-history"
                       | "domain-packages"
                       | "plugin-studio"
                       | "virtual-employees"
                       | "tenant-branding"
                     )
-                  | "dynamic-crm"
+                  | (
+                      | "dynamic-crm"
+                      | "domain-workflows"
+                      | "domain-reports"
+                      | "domain-api"
+                    )
                   | string
                 )[];
               };
@@ -21840,7 +22169,8 @@ export interface paths {
                       apiBasePath: string;
                       collection: string;
                       kind:
-                        ("summary" | "items" | "chart" | "actions") | string;
+                        | ("summary" | "items" | "chart" | "actions")
+                        | string;
                       title?: string;
                       config?: {
                         statusField?: string;
@@ -21859,7 +22189,10 @@ export interface paths {
                       id: string;
                       /** @enum {string} */
                       kind:
-                        "agenda" | "quick_task" | "mail" | "office_documents";
+                        | "agenda"
+                        | "quick_task"
+                        | "mail"
+                        | "office_documents";
                       title?: string;
                       /** @enum {string} */
                       size?: "sm" | "md" | "lg";
@@ -21901,7 +22234,8 @@ export interface paths {
                       apiBasePath: string;
                       collection: string;
                       kind:
-                        ("summary" | "items" | "chart" | "actions") | string;
+                        | ("summary" | "items" | "chart" | "actions")
+                        | string;
                       title?: string;
                       config?: {
                         statusField?: string;
@@ -21920,7 +22254,10 @@ export interface paths {
                       id: string;
                       /** @enum {string} */
                       kind:
-                        "agenda" | "quick_task" | "mail" | "office_documents";
+                        | "agenda"
+                        | "quick_task"
+                        | "mail"
+                        | "office_documents";
                       title?: string;
                       /** @enum {string} */
                       size?: "sm" | "md" | "lg";
@@ -22387,7 +22724,10 @@ export interface paths {
     post?: never;
     delete: {
       parameters: {
-        query?: never;
+        query?: {
+          cascade?: "true" | "false";
+          confirmation?: string;
+        };
         header?: never;
         path: {
           tenantId: number | null;
@@ -22447,6 +22787,20 @@ export interface paths {
         };
         /** @description Rejected */
         409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Rejected */
+        503: {
           headers: {
             [name: string]: unknown;
           };

@@ -146,6 +146,68 @@ describe("ApiClient", () => {
     expect(new Headers(request.headers).has("Content-Type")).toBe(false);
   });
 
+  it("starts a response request timeout after access-token refresh", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn().mockResolvedValue(new Response("audio"));
+      const client = new ApiClient({
+        baseUrl: "http://127.0.0.1:8787",
+        tokenSource: {
+          getAccessToken: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            return "access-token";
+          },
+        },
+        fetcher,
+      });
+
+      const response = client.requestResponse(
+        "/v1/companion/sessions/audio",
+        {},
+        100,
+      );
+      const outcome = response.then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error }),
+      );
+      await vi.advanceTimersByTimeAsync(200);
+
+      await expect(outcome).resolves.toEqual({ value: expect.any(Response) });
+      expect(fetcher).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts a JSON request timeout after access-token refresh", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn().mockResolvedValue(Response.json({ ok: true }));
+      const client = new ApiClient({
+        baseUrl: "http://127.0.0.1:8787",
+        tokenSource: {
+          getAccessToken: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            return "access-token";
+          },
+        },
+        fetcher,
+      });
+
+      const response = client.get("/v1/domains");
+      const outcome = response.then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error }),
+      );
+      await vi.advanceTimersByTimeAsync(200);
+
+      await expect(outcome).resolves.toEqual({ value: { ok: true } });
+      expect(fetcher).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     "/v1/domains",
     "/v1/agency-network/agency-profiles?limit=10",

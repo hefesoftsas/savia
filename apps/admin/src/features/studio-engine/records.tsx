@@ -2064,7 +2064,7 @@ function RecordsFooter({
     </div>
   );
 }
-function PipelineColumn({
+export function PipelineColumn({
   object,
   settings,
   stage,
@@ -2146,9 +2146,8 @@ function PipelineColumn({
         <strong>{label}</strong>
         <span>{query.data?.total ?? 0}</span>
       </header>
-      {query.error ? (
-        <p role="alert">{query.error.message}</p>
-      ) : query.isPending ? (
+      {query.error ? <p role="alert">{query.error.message}</p> : null}
+      {query.isPending ? (
         <div
           className="space-y-2 py-2"
           role="status"
@@ -2167,7 +2166,7 @@ function PipelineColumn({
           </div>
         </div>
       ) : (
-        query.data.data.map((r: StudioRecord) => (
+        query.data?.data.map((r: StudioRecord) => (
           <article
             className="opportunity-card"
             key={r.id}

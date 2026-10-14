@@ -13,7 +13,7 @@ if (typeof window !== "undefined") {
     caches = new WeakMap();
   };
   window.addEventListener("savia:session-cleared", clear);
-  window.addEventListener("savia:identity-changed", clear);
+  window.addEventListener("savia:principal-changed", clear);
 }
 
 /** Bounded, session-only read cache. Never persist private page content globally. */

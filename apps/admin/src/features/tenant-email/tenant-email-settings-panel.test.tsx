@@ -56,3 +56,34 @@ it("loads redacted settings, retains blank passwords on save, tests delivery and
     "/v1/tenants/42/email-settings",
   );
 });
+
+it("retains SMTP draft fields and focus when saving fails", async () => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      configured: true,
+      host: "smtp.example.test",
+      username: "relay",
+      from: "mail@example.test",
+    }),
+    put: vi.fn().mockRejectedValue(new Error("Offline")),
+  };
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <AppLocaleProvider>
+        <TenantEmailSettingsPanel
+          services={{ apiClient } as never}
+          tenantId={42}
+        />
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+  const host = await screen.findByLabelText("SMTP host");
+  fireEvent.change(host, { target: { value: "smtp.draft.test" } });
+  host.focus();
+  fireEvent.click(screen.getByRole("button", { name: "Save email settings" }));
+  await screen.findByRole("alert");
+  expect(screen.getByLabelText("SMTP host")).toBe(host);
+  expect(host).toHaveValue("smtp.draft.test");
+  expect(host).toHaveFocus();
+  expect(apiClient.put).toHaveBeenCalledTimes(1);
+});

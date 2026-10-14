@@ -7,19 +7,25 @@ The registry stores published ZIP releases in a dedicated private R2 bucket, ind
 - `apps/plugin-registry` is a standalone Worker. Its `PLUGIN_REGISTRY` binding points to `savia-plugin-registry`, never to an environment document bucket.
 - Each server credential selects exactly one namespace. Clients cannot choose another namespace in a request. Separate tokens may share a namespace across environments.
 - `REGISTRY_CREDENTIALS` is a Worker secret containing an array of `{tokenSha256, namespace, permissions}`. Permissions are `read` and `publish`; use read-only tokens for catalog browsing/import. In-app publication requires a separate, explicitly configured publisher token. Use cryptographically random tokens of at least 32 characters. Only hashes are stored in registry credential configuration.
-- The complete original ZIP is stored with its digest and release metadata in one conditional R2 write. Publishing different semantic contents under an existing version fails. Repacking unchanged contents returns the original release and digest.
-- There is no public bucket endpoint, anonymous download, overwrite, or delete API. Removing a local installation does not remove its published release.
+- The complete original ZIP is stored with its digest and release metadata in one conditional R2 write. Publishing different semantic contents under an existing version fails. New workspace store versions must be greater than that plugin's current latest semantic version; restoring historical files creates a new version. Repacking unchanged contents returns the original release and digest.
+- There is no public bucket endpoint, anonymous download, or overwrite API. Authenticated release deletion requires its publisher credential. Removing a local installation does not remove its published release unless shared catalog deletion is explicitly selected.
 
 Do not put credentials in plugin manifests, lockfiles, Git, frontend environment variables, or browser storage. Never embed tenant SMTP, OAuth, provider or database credentials in plugin source or `store.json`; publishing does not redact package contents. Per-tenant connection secrets and runtime settings remain in the existing environment database.
 
 ## Provision the independent registry
 
-From a trusted operator machine with Cloudflare credentials, first create the dedicated bucket:
+The independent `infra/pulumi/shared-registry` project owns the protected bucket.
+Adopt the existing bucket into its `shared` stack first, using the
+[infrastructure runbook](../runbooks/pulumi-infrastructure.md#other-deployment-profiles).
+A new account can explicitly set `adoptExisting: false` after reviewing the resource
+plan. Never bootstrap an empty replacement state against an existing bucket.
+
+From a trusted operator machine with the configured backend and Cloudflare credentials:
 
 ```sh
-pnpm --filter @savia/plugin-registry exec wrangler r2 bucket create savia-plugin-registry
-pnpm --filter @savia/plugin-registry exec wrangler deploy
-pnpm --filter @savia/plugin-registry exec wrangler secret put REGISTRY_CREDENTIALS
+node infra/pulumi/shared-registry/render.mjs
+pnpm --filter @savia/plugin-registry exec wrangler deploy --config wrangler.production.jsonc
+pnpm --filter @savia/plugin-registry exec wrangler secret put REGISTRY_CREDENTIALS --config wrangler.production.jsonc
 ```
 
 The last command reads the JSON secret interactively. Generate a separate random bearer token for each publisher/consumer and compute each token's lowercase SHA-256. Example secret structure (replace placeholders; the token itself is not the hash):
@@ -46,7 +52,7 @@ The last command reads the JSON secret interactively. Generate a separate random
 
 The Worker denies all access before valid credentials exist. Use its HTTPS origin or attach a dedicated domain. Keep bucket lifecycle rules from expiring release objects. Configure an appropriate R2 bucket retention lock and independent scheduled backups of **both objects and custom metadata**; API immutability alone does not prevent a Cloudflare account operator from deleting the bucket. Back up credential configuration securely and test restoration with a pinned release. Retention and backup policies require operator configuration; this implementation does not silently create a retention lock or backup schedule.
 
-`.github/workflows/deploy-plugin-registry.yml` provides a manual independent deployment. It accepts only dispatches from `main`, checks out the selected commit explicitly, and rejects a commit superseded on `main` after tests and immediately before the credential-bearing deployment step. It uses the protected `production` GitHub environment with its existing `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, plus `PLUGIN_REGISTRY_CREDENTIALS`. Credentials are available only in the deployment step; installation and tests run without them. The independent Worker and bucket remain outside preview teardown. Provision the bucket before running it. Preview reset and teardown workflows do not manage this bucket. Credential changes take effect independently of Savia releases.
+`.github/workflows/deploy-plugin-registry.yml` provides a manual independent deployment. It accepts only dispatches from `main`, checks out the selected commit explicitly, and rejects a commit superseded on `main` after tests and immediately before the credential-bearing deployment step. It uses the protected `production` GitHub environment with its existing `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, plus `PLUGIN_REGISTRY_CREDENTIALS`. Credentials are available only in the deployment step; installation and tests run without them. The independent Worker and bucket remain outside preview teardown. The existing `shared` stack and production backend secrets must be configured before running it; the workflow fails closed if either is missing. Preview reset and teardown workflows do not manage this bucket. Credential changes take effect independently of Savia releases.
 
 ## Configure consumers
 
@@ -96,7 +102,7 @@ A lockfile is an auditable release input, not a digital signature. Trust depends
 
 Existing packages are not automatically copied to the shared registry or exposed to other tenants. Publish retained original ZIPs or rebuild the corresponding source under its original version only if contents are identical. Database-only artifacts remain covered by the environment database backup until exported/rebuilt and published; this feature does not claim to migrate them automatically. Review package contents before widening access to a namespace.
 
-To roll back, import a previously published explicit version, then request the extension installation API with `{ "version": "1.0.0", "allowDowngrade": true }`. An explicit downgrade is available only to an authorized administrator; the UI does not silently downgrade an installation. Review any data/schema compatibility before rolling back a plugin that changed collections. Removing a version from a local catalog does not delete the central copy.
+To roll back, import a previously published explicit version, then request the extension installation API with `{ "version": "1.0.0", "allowDowngrade": true }`. An explicit downgrade is available only to an authorized administrator; the UI does not silently downgrade an installation. Review any data/schema compatibility before rolling back a plugin that changed collections. Removing a local version preserves the central copy unless **Also delete from the shared catalog (R2)** is selected.
 
 To rotate, add the new credential hash to `REGISTRY_CREDENTIALS`, update consumers/publishers, verify access, and remove the previous hash. Revoked tokens stop new downloads; installed plugins keep running from local storage.
 
@@ -121,3 +127,13 @@ The initial publication reused 24 retained ZIPs after comparing their contents w
 The environment-specific tenant maps are stored in the API Worker secrets and GitHub environment secrets. They take effect in the UI when the consumer changes pass review and deploy through the existing preview/production gates. The central service is already active independently of that rollout.
 
 In the plugin IDE, the shared catalog destination is shown only when the server reports a configured publisher. Publication requires workspace extension administration, validates the ZIP before forwarding it, rejects redirects, and preserves immutable-version conflicts. Neither registry credential reaches the browser. A shared release still requires import and installation in each consuming workspace.
+
+## Delete a release from the UI
+
+In **My plugins**, each release has a **Delete version** action; expand **Older versions** to select a historical release. The confirmation names the exact version. An active installed version must be disabled before deletion, while deleting another version preserves the current installation. Local deletion removes the artifact and its source files. Editable project drafts remain independent.
+
+When a separate registry publisher credential is configured, **Also delete from the shared catalog (R2)** is selected by default. The confirmation explains that the ZIP will no longer be available to other workspaces. Uncheck it to remove only the workspace copy. Existing copies installed elsewhere remain available locally; future imports and pinned lockfile downloads of the deleted release fail.
+
+The backend deletes the pinned R2 ZIP before committing local cleanup. If the registry rejects the request or is unavailable, the local version remains and the UI reports the failure. A missing remote ZIP is treated as already removed, allowing a retry after a partial failure. Deleting an entire inactive plugin applies the selected scope to every local version. R2 and the workspace database do not share a transaction: an interrupted multi-version deletion can remove some remote ZIPs while preserving local copies. Retry to finish cleanup. If a version becomes active while the remote request is in flight, the guarded database deletion preserves its local files and installation; the UI reports that the remote ZIP was already removed and asks to disable the plugin before retrying.
+
+Registry deletion requires a publish-capable credential in the same namespace and the publisher hash stored on the release. A conditional, permanent coordinate claim binds the plugin ID/version to that publisher and semantic digest. Deleting the ZIP preserves only this ownership metadata, so another publisher cannot claim the deleted coordinate or race a second deletion. Changed contents require a new version even after the ZIP was deleted. Reader credentials cannot delete releases; legacy releases without publisher ownership metadata require operator handling and cannot be claimed by a subsequent publishing request. After publisher credential rotation, releases owned by the old credential cannot be deleted using the new credential. The registry Worker must be deployed independently to make its DELETE endpoint available.

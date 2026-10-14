@@ -13,6 +13,7 @@ vi.mock("../src/bookings/jobs", () => ({
 }));
 import { runBookingJobs } from "../src/bookings/jobs";
 vi.mock("../src/workflows", () => ({
+  nativeExecutionPolicyFromEnvironment: vi.fn(() => undefined),
   runScheduledWorkflows: vi.fn(async () => undefined),
 }));
 vi.mock("../src/studio/plugin-monitors", () => ({
@@ -38,6 +39,18 @@ vi.mock("../src/notifications", () => ({
 vi.mock("../src/personal-integrations/jira-privacy-runtime", () => ({
   runJiraPrivacyMaintenance: vi.fn(async () => undefined),
 }));
+vi.mock("../src/whatsapp/channel-cleanup", () => ({
+  cleanupChannelState: vi.fn(async () => undefined),
+}));
+vi.mock("../src/whatsapp/queue", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/whatsapp/queue")>();
+  return {
+    ...actual,
+    recoverWhatsappScopes: vi.fn(async () => []),
+    wakeWhatsappScope: vi.fn(async () => undefined),
+  };
+});
+import { cleanupChannelState } from "../src/whatsapp/channel-cleanup";
 import { runJiraPrivacyMaintenance } from "../src/personal-integrations/jira-privacy-runtime";
 import worker from "../src/index";
 import { runScheduledWorkflows } from "../src/workflows";
@@ -48,6 +61,11 @@ const migrations = Object.entries(
     query: "?raw",
   }),
 ).sort(([a], [b]) => a.localeCompare(b));
+import {
+  recoverWhatsappScopes,
+  wakeWhatsappScope,
+} from "../src/whatsapp/queue";
+const localSchedulerEnv = { ...env, SAVIA_FLOWS_LOCAL_ONLY: "true" };
 beforeAll(async () => {
   // Scheduled jobs share the real current schema, including empty channel queues.
   for (const [, sql] of migrations)
@@ -62,7 +80,7 @@ beforeAll(async () => {
 
 it("runs scheduled workflows without the legacy CRM synchronization worker", async () => {
   await expect(
-    worker.scheduled({} as ScheduledController, env),
+    worker.scheduled({} as ScheduledController, localSchedulerEnv),
   ).resolves.toBeUndefined();
   expect(runBookingJobs).toHaveBeenCalledTimes(1);
   expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
@@ -75,7 +93,7 @@ it("ticks workflows in preview without activating external CRM synchronization",
   vi.clearAllMocks();
   await expect(
     worker.scheduled({} as ScheduledController, {
-      ...env,
+      ...localSchedulerEnv,
       SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
     }),
   ).resolves.toBeUndefined();
@@ -90,8 +108,9 @@ it.each(["true", "false"])(
   async (mode) => {
     vi.clearAllMocks();
     await worker.scheduled({} as ScheduledController, {
-      ...env,
+      ...localSchedulerEnv,
       SAVIA_WORKFLOW_ONLY_SCHEDULE: mode,
+      WHATSAPP_PROCESSING_MODE: "scheduled",
       WHATSAPP_META_APP_SECRET: "test-app-secret",
       WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-verify-token",
     });
@@ -104,7 +123,7 @@ it("passes the native webhook transport to scheduled workflows", async () => {
   const workflowFetch = vi.fn<typeof fetch>();
   const runtime = createApiRuntime(
     {
-      ...env,
+      ...localSchedulerEnv,
       SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
       CRM_INTEGRATION_KEY: "test-key",
     },
@@ -119,6 +138,31 @@ it("passes the native webhook transport to scheduled workflows", async () => {
   expect(call[2] === workflowFetch).toBe(true);
   expect(workflowFetch).not.toHaveBeenCalled();
 });
+
+it.each(["true", "false"])(
+  "denies native workflow egress in the local Flows edition in scheduler mode %s",
+  async (mode) => {
+    vi.clearAllMocks();
+    const runtime = createApiRuntime({
+      ...localSchedulerEnv,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: mode,
+      SAVIA_FLOWS_LOCAL_ONLY: "true",
+    });
+    await runtime.scheduled();
+    const transport = vi.mocked(runScheduledWorkflows).mock.calls[0][2];
+    expect(typeof transport).toBe("function");
+    for (const address of [
+      "https://example.com/billable",
+      "http://127.0.0.1:9999/local-service",
+    ]) {
+      const response = await transport!(address);
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        error: { code: "EXTERNAL_SERVICES_DISABLED" },
+      });
+    }
+  },
+);
 
 it("prunes domain audit history on the preview scheduled tick", async () => {
   await env.DB.batch(
@@ -137,7 +181,7 @@ it("prunes domain audit history on the preview scheduled tick", async () => {
   );
 
   await worker.scheduled({} as ScheduledController, {
-    ...env,
+    ...localSchedulerEnv,
     SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
   });
 
@@ -157,7 +201,7 @@ it.each(["true", "false"])(
   async (mode) => {
     vi.clearAllMocks();
     await worker.scheduled({} as ScheduledController, {
-      ...env,
+      ...localSchedulerEnv,
       SAVIA_WORKFLOW_ONLY_SCHEDULE: mode,
       NANGO_JIRA_INTEGRATION_ID: "jira-prod",
       NANGO_JIRA_REPORTING_CONNECTION_ID: "owner-prod",
@@ -179,7 +223,7 @@ it("surfaces Jira maintenance failures while other scheduled jobs still run", as
   );
   await expect(
     worker.scheduled({} as ScheduledController, {
-      ...env,
+      ...localSchedulerEnv,
       SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
     }),
   ).rejects.toThrow("Scheduled jobs failed");
@@ -194,7 +238,7 @@ it("surfaces booking job failures while other scheduled jobs still run", async (
   );
   await expect(
     worker.scheduled({} as ScheduledController, {
-      ...env,
+      ...localSchedulerEnv,
       SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
     }),
   ).rejects.toThrow("Scheduled jobs failed");
@@ -211,13 +255,19 @@ it("cleans private WhatsApp media even after webhook secrets are removed", async
     }),
     delete: vi.fn(),
   } as unknown as R2Bucket;
-  await worker.scheduled({} as ScheduledController, {
-    ...env,
-    DOCUMENTS: documents,
-    SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
-    WHATSAPP_META_APP_SECRET: undefined,
-    WHATSAPP_WEBHOOK_VERIFY_TOKEN: undefined,
-  });
+  await worker.scheduled(
+    {
+      scheduledTime: Date.parse("2026-10-07T12:05:00.000Z"),
+    } as ScheduledController,
+    {
+      ...localSchedulerEnv,
+      WHATSAPP_PROCESSING_MODE: "events",
+      DOCUMENTS: documents,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+      WHATSAPP_META_APP_SECRET: undefined,
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: undefined,
+    },
+  );
   expect(documents.delete).toHaveBeenCalledWith([key]);
   expect(drainWhatsappInbox).not.toHaveBeenCalled();
 });
@@ -229,7 +279,7 @@ it.each(["true", "false"])(
     const monitorFetch = vi.fn<typeof fetch>();
     await createApiRuntime(
       {
-        ...env,
+        ...localSchedulerEnv,
         SAVIA_WORKFLOW_ONLY_SCHEDULE: mode,
         CRM_INTEGRATION_KEY: "monitor-test-key",
       },
@@ -245,3 +295,83 @@ it.each(["true", "false"])(
     expect(monitorFetch).not.toHaveBeenCalled();
   },
 );
+it("skips WhatsApp media cleanup off the event recovery boundary while running other minute jobs", async () => {
+  vi.clearAllMocks();
+  const documents = {
+    list: vi.fn().mockResolvedValue({ objects: [] }),
+    delete: vi.fn(),
+  } as unknown as R2Bucket;
+
+  await worker.scheduled(
+    {
+      scheduledTime: Date.parse("2026-10-07T12:06:00.000Z"),
+    } as ScheduledController,
+    {
+      ...localSchedulerEnv,
+      WHATSAPP_PROCESSING_MODE: "events",
+      DOCUMENTS: documents,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+    },
+  );
+
+  expect(documents.list).not.toHaveBeenCalled();
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
+  expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+});
+
+it("recovers event-driven WhatsApp scopes on the five-minute boundary and attempts every wake", async () => {
+  vi.clearAllMocks();
+  vi.mocked(recoverWhatsappScopes).mockResolvedValueOnce([
+    { connectionId: "connection-1", contact: "+15550000001" },
+    { connectionId: "connection-1", contact: "+15550000002" },
+  ]);
+  vi.mocked(wakeWhatsappScope)
+    .mockRejectedValueOnce(new Error("dispatcher unavailable"))
+    .mockResolvedValueOnce(undefined);
+
+  await expect(
+    worker.scheduled(
+      {
+        scheduledTime: Date.parse("2026-10-07T12:05:00.000Z"),
+      } as ScheduledController,
+      {
+        ...localSchedulerEnv,
+        WHATSAPP_PROCESSING_MODE: "events",
+        WHATSAPP_META_APP_SECRET: "test-app-secret",
+        WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-verify-token",
+        WHATSAPP_DISPATCHER: {} as DurableObjectNamespace,
+        SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+      },
+    ),
+  ).rejects.toThrow("Scheduled jobs failed");
+
+  expect(cleanupChannelState).toHaveBeenCalledTimes(1);
+  expect(recoverWhatsappScopes).toHaveBeenCalledTimes(1);
+  expect(wakeWhatsappScope).toHaveBeenCalledTimes(2);
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
+  expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+});
+
+it("does not recover event-driven WhatsApp scopes off the five-minute boundary", async () => {
+  vi.clearAllMocks();
+
+  await worker.scheduled(
+    {
+      scheduledTime: Date.parse("2026-10-07T12:06:00.000Z"),
+    } as ScheduledController,
+    {
+      ...localSchedulerEnv,
+      WHATSAPP_PROCESSING_MODE: "events",
+      WHATSAPP_META_APP_SECRET: "test-app-secret",
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-verify-token",
+      WHATSAPP_DISPATCHER: {} as DurableObjectNamespace,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+    },
+  );
+
+  expect(cleanupChannelState).not.toHaveBeenCalled();
+  expect(recoverWhatsappScopes).not.toHaveBeenCalled();
+  expect(wakeWhatsappScope).not.toHaveBeenCalled();
+  expect(runBookingJobs).toHaveBeenCalledTimes(1);
+  expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+});

@@ -21,6 +21,9 @@ Past takes live in Savia, not in a local history.
 ## Constraints
 
 Provider keys belong to the backend. No automatic recording or business writes.
+The Savia credential stays in memory; only an explicit “remember on this
+device” opt-in stores origin and token in the OS keychain and reconnects on
+launch, removable at any time from connection settings.
 Microphone and output sources are not speaker identities. Keep Savia attribution.
 The monorepo's current monochrome interface and emerald theme are the visual
 reference; this app extends that family. Controls must work with keyboard input

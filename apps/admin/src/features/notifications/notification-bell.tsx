@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslate } from "ra-core";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSessionGeneration } from "@/auth/session-scope";
 import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/popover";
 import { notificationClient, type NotificationClient } from "./client";
 import { useUnreadNotifications } from "./queries";
+import { notificationReadKey } from "./queries";
 
 export function NotificationBell({
   client = notificationClient,
@@ -21,6 +23,7 @@ export function NotificationBell({
   const translate = useTranslate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const sessionGeneration = useSessionGeneration();
   const unread = useUnreadNotifications(client);
   const count = typeof unread.data === "number" ? unread.data : 0;
 
@@ -30,7 +33,10 @@ export function NotificationBell({
       onOpenChange={(next) => {
         setOpen(next);
         if (!next) {
-          void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+          void queryClient.invalidateQueries({
+            queryKey: notificationReadKey(sessionGeneration, "unread-count"),
+            exact: true,
+          });
         }
       }}
     >

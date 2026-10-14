@@ -1,6 +1,6 @@
 # Insurance quoting
 
-Owner: Savia maintainers. Last reviewed: 2026-09-25.
+Owner: Savia maintainers. Last reviewed: 2026-10-07.
 
 Step-by-step auto quote flow (`savia.insurance-quoter` + `insurance.quotes`).
 Each selected insurer product runs as its own independent flow; products run
@@ -25,12 +25,102 @@ A stable execution key supports existing record-create idempotency. The contact
 ownership link is persisted before provider dispatch, and each product receives
 a durable dispatch claim. A lost dispatch acknowledgement becomes uncertain and
 is never automatically replayed. Customer summaries return only that contact's
-own completed channel results; linked advisers use their own tenant permissions.
+own completed or uncertain channel results; linked advisers use their own tenant
+permissions.
+
+WhatsApp result messages retain verified priced offers even when another insurer
+request is uncertain. They distinguish failed, unverified and unpriced responses,
+include relevant persistence warnings, and label results as partial when any
+requests fail or return unverified or unpriced responses. Human support is
+suggested when no priced offers are received; verified priced offers remain
+available without an automatic adviser referral. Unverified requests require
+history review before quoting again and are never automatically repeated.
+Prices alone do not
+establish a coverage recommendation. Internal CRM links stay out of customer
+messages.
+
+After Meta acknowledges a result send, its text is saved to the originating
+contact, access generation and employee's conversation history, together with
+the outbound message ID. Follow-up questions therefore receive the delivered
+result as context. Duplicate delivery attempts do not send or record it twice;
+uncertain sends are not recorded as delivered and are never automatically retried.
+Current access checks and the reply window still apply.
+
+If the history transaction fails after a send acknowledgement, the channel saves
+the outbound ID, exact message text and send time in a `history_pending` delivery.
+The scheduler retries only the history write, under the original access scope,
+without sending again or requiring a new reply window. Preparation failures
+before a send attempt can retry; an attempted send without an acknowledgement
+remains uncertain.
 
 The pilot test uses simulated provider responses and a synthetic vehicle. No
 real insurer call is made by the test. See the
 [WhatsApp channel runbook](runbooks/nango-whatsapp.md#task-menu-and-virtual-employee-channel)
 for settings and a separately authorized live pilot.
+
+## Quote explanations and shared results
+
+Confirmed WhatsApp quotes collect a public proposal for every configured product.
+Intermediate WhatsApp messages include confirmed positive premiums and a bounded
+summary of up to eight verified coverage and deductible facts, without waiting
+for model analysis. Complete facts stay in the public report. Failed, unpriced,
+and uncertain responses are summarized once at the end. The terminal message
+lists up to five priced proposals, including offers outside the lowest-price
+group, with a compact evidence summary; older results without proposals retain
+their lowest-price summary. Terminal guidance, persistence warnings, the public
+link, and the task menu reserve space before optional coverage summaries. Internal action
+references and provider transaction numbers do not appear in these messages.
+Public reports have a separate short customer reference.
+Only confirmed premiums and an explicit allowlist of coverage and deductible
+fields returned by the provider are included. Static catalog profiles are not
+verified coverage evidence. WhatsApp and public forms share the same provider
+fact projection. It accepts normalized `coverages`, canonical `coverageDetails`
+(`label`, `limit`, `deductible`), and returned `response.amparo` entries
+(`nombre`, `capital`, `tdeducible`/`deducible`). Reports retain up to 40 facts,
+including zero deductibles; zero capital is shown as reported and never treated
+as unlimited coverage. Missing values remain explicitly unreported. Unknown
+fields, contacts, and raw payloads are excluded.
+Failed, unpriced, and uncertain proposals remain
+visible as such; they do not acquire estimated premiums.
+
+The assigned employee's configured LLM explains priced proposals in asynchronous
+batches while provider calls continue. The final analysis gives comparison
+guidance and identifies missing evidence. Equal prices without verified coverage
+do not justify a winning proposal. Model calls have a twenty-second deadline,
+no tools, and no automatic retries. A model failure preserves provider results
+and the customer link, with analysis availability clearly indicated.
+Analysis disables model reasoning to reserve the bounded output budget for the
+customer explanation. The OpenRouter adapter sends a strict JSON schema through
+the provider's structured-output API and requires compatible provider routing.
+An explicit null preference means no verified preferred proposal and is normalized
+to the public report's optional field. Local validation still checks proposal IDs
+and unsafe output. Schema failures record at most five static field paths and
+validation codes, without rejected values or model error messages.
+Model input includes only priced proposals and the count of remaining options.
+Identical facts are sent once, with explicit indices attaching each fact to its
+proposal. Distinct limits, deductibles, and evidence sources remain distinct;
+proposals without facts never inherit another proposal's evidence. The public
+report retains the full evidence for every offer.
+The private action result and structured diagnostics
+identify safe reasons such as unavailable configuration or authorization,
+timeout, malformed or truncated output, and proposal ID mismatch. They do not
+retain prompts, model responses, credentials, or contact details. Batch and
+final-analysis outcomes are logged separately.
+
+The final WhatsApp message includes an opaque public link to a read-only report.
+It expires seven days after creation and contains offers and saved analysis,
+without applicant documents, contact details, raw provider responses, or internal
+CRM links. Opening the report does not call the model or insurers again. Report
+responses and the public page use `no-store`; unknown, expired, and revoked links
+return the same unavailable result.
+Production, preview, and local admin Worker configs route `/public/quotes` and
+`/public/quotes/*` through the gateway so these responses retain their security
+headers instead of falling through to the static single-page app.
+
+Tenant administrators can inspect and revoke these links in the quote screen's
+public-link settings, under shared quote results. Revocation is tenant-scoped
+and requires authenticated administration access. Sharing a result does not
+create a new quote or grant access to the authenticated workspace.
 
 ## WhatsApp intake
 
@@ -57,6 +147,11 @@ provider execution out of AI tools. Receiving a questionnaire is not a quote;
 quote results and their CRM history should follow the existing quote lifecycle.
 
 ## Performance
+
+Provider calls in confirmed WhatsApp execution have a 30-second request deadline;
+persistence requests retain a 15-second deadline. Both remain capped by the
+90-second total execution budget. A completed response received within the
+provider deadline is used immediately; expiry never triggers a replay.
 
 - Quote startup records elapsed time for setup (`setupMs`), CRM persistence
   (`crmMs`) and each product flow (`duracion_ms` per detail, surfaced as

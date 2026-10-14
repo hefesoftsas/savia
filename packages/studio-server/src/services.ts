@@ -212,9 +212,9 @@ export async function assertLocalCollection(
       422,
     );
 }
-export type RecordCheckpoint = {
+export type RecordCheckpoint<T = StudioRecord> = {
   before: D1PreparedStatement[];
-  after: (record: StudioRecord) => D1PreparedStatement[];
+  after: (record: T) => D1PreparedStatement[];
 };
 export async function createRecord(
   db: D1Database,
@@ -225,7 +225,7 @@ export async function createRecord(
     idempotencyKey?: string;
     id?: string;
     createdBy?: string;
-    checkpoint?: RecordCheckpoint;
+    checkpoint?: RecordCheckpoint<StudioRecord>;
   } = {},
 ) {
   await assertLocalCollection(db, tenant, name);
@@ -324,7 +324,7 @@ export async function updateRecord(
   name: string,
   id: string,
   input: Record<string, unknown>,
-  options: { version: number; checkpoint?: RecordCheckpoint },
+  options: { version: number; checkpoint?: RecordCheckpoint<StudioRecord> },
 ) {
   await assertLocalCollection(db, tenant, name);
   if (!Number.isInteger(options.version) || options.version < 1)
@@ -401,7 +401,10 @@ export async function deleteRecord(
   tenant: string,
   name: string,
   id: string,
-  options: { version: number },
+  options: {
+    version: number;
+    checkpoint?: RecordCheckpoint<{ id: string; _version: number }>;
+  },
 ) {
   await assertLocalCollection(db, tenant, name);
   const record = await getRecord(db, tenant, name, id, "delete");
@@ -538,7 +541,9 @@ export async function deleteRecord(
         .bind(tenant, id, tenant, name, id, tenant, name),
     );
   // All read guards run before any mutation, including counts affected by our own clears.
+  const result = { id, _version: options.version + 1 };
   await transaction(db, [
+    ...(options.checkpoint?.before ?? []),
     ...guards.map((g) => g.start),
     ...relationGuards,
     ...statements,
@@ -554,8 +559,9 @@ export async function deleteRecord(
       .bind(tenant, id),
     audit(db, tenant, "record.deleted", name, id, record),
     ...guards.map((g) => g.end),
+    ...(options.checkpoint?.after(result) ?? []),
   ]);
-  return { id, _version: options.version + 1 };
+  return result;
 }
 export async function restoreRecord(
   db: D1Database,

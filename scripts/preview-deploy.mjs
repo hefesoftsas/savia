@@ -9,12 +9,31 @@ import { fileURLToPath } from "node:url";
 import {
   dryRunDatabaseUuid,
   ephemeralSecret,
-  findDatabaseUuid,
   flagValue,
   hasFlag,
   previewNames,
   slugifyBranch,
 } from "./preview-environment.mjs";
+import { ensureBranchInfrastructure } from "../infra/pulumi/branch-preview-resources.mjs";
+import { workerConfig as buildWorkerConfig } from "../infra/pulumi/branch-preview-worker-config.mjs";
+
+export function workerConfig(
+  kind,
+  names,
+  ids,
+  origin,
+  { enableSchedules = false, ...options } = {},
+) {
+  const config = buildWorkerConfig(kind, names, ids, origin, options);
+  if (kind === "api") {
+    config.compatibility_flags = [
+      ...(config.compatibility_flags ?? []),
+      "global_fetch_strictly_public",
+    ];
+    if (enableSchedules) config.triggers = { crons: ["* * * * *"] };
+  }
+  return config;
+}
 
 const execFileAsync = promisify(execFile);
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -27,143 +46,6 @@ const WORKER_APP = {
   api: "api",
   gateway: "admin",
 };
-
-export function workerConfig(
-  kind,
-  names,
-  ids,
-  origin,
-  { assetsDir, bootstrap, identityReady = true, enableSchedules = false } = {},
-) {
-  const base = {
-    compatibility_date: kind === "request" ? "2026-09-04" : "2026-08-31",
-    workers_dev: true,
-  };
-  if (kind === "auth")
-    return {
-      ...base,
-      name: names.workers.auth,
-      main: resolve(workspaceRoot, "apps/auth/src/index.ts"),
-      compatibility_flags: ["nodejs_compat"],
-      ...(identityReady
-        ? {
-            services: [
-              { binding: "SAVIA_IDENTITY", service: names.workers.api },
-            ],
-          }
-        : {}),
-      d1_databases: [
-        {
-          binding: "AUTH_DB",
-          database_name: names.databases.auth,
-          database_id: ids.auth,
-        },
-      ],
-      vars: {
-        BETTER_AUTH_URL: origin,
-        BETTER_AUTH_BOOTSTRAP_EMAIL: "savia.admin@example.test",
-        BETTER_AUTH_BOOTSTRAP_PASSWORD: bootstrap?.password ?? "preview-only",
-        SAVIA_API_RESOURCE: origin,
-        SAVIA_ADMIN_REDIRECT_URI: `${origin}/auth/callback`,
-        SAVIA_SCALAR_REDIRECT_URI: `${origin}/docs`,
-      },
-    };
-  if (kind === "request")
-    return {
-      ...base,
-      name: names.workers.request,
-      main: resolve(workspaceRoot, "apps/savia-request/src/server/index.ts"),
-      workers_dev: false,
-      preview_urls: false,
-      services: [
-        { binding: "HOOK_SERVICE", service: names.workers.hookExecutor },
-      ],
-      d1_databases: [
-        {
-          binding: "DB",
-          database_name: names.databases.domain,
-          database_id: ids.domain,
-        },
-      ],
-    };
-  if (kind === "hookExecutor")
-    return {
-      ...base,
-      name: names.workers.hookExecutor,
-      main: resolve(workspaceRoot, "apps/hook-executor/src/index.ts"),
-      compatibility_date: "2026-09-04",
-      workers_dev: false,
-      preview_urls: false,
-      limits: { cpu_ms: 30000 },
-      rules: [
-        {
-          type: "CompiledWasm",
-          globs: ["**/*.wasm"],
-          fallthrough: true,
-        },
-      ],
-    };
-  if (kind === "mcp")
-    return {
-      ...base,
-      name: names.workers.mcp,
-      main: resolve(workspaceRoot, "apps/mcp/src/worker.ts"),
-      compatibility_flags: ["nodejs_compat"],
-      services: [{ binding: "API", service: names.workers.api }],
-      vars: { SAVIA_API_URL: origin },
-    };
-  if (kind === "api")
-    return {
-      ...base,
-      name: names.workers.api,
-      ...(enableSchedules ? { triggers: { crons: ["* * * * *"] } } : {}),
-      compatibility_flags: ["global_fetch_strictly_public"],
-      main: resolve(workspaceRoot, "apps/api/src/index.ts"),
-      services: [
-        { binding: "AUTH", service: names.workers.auth },
-        { binding: "MCP", service: names.workers.mcp },
-        { binding: "SAVIA_REQUEST", service: names.workers.request },
-      ],
-      d1_databases: [
-        {
-          binding: "DB",
-          database_name: names.databases.domain,
-          database_id: ids.domain,
-        },
-      ],
-      r2_buckets: [{ binding: "DOCUMENTS", bucket_name: names.bucket }],
-      vars: {
-        SAVIA_API_RESOURCE: origin,
-        SAVIA_OAUTH_ISSUER: `${origin}/api/auth`,
-        SAVIA_PUBLIC_ORIGIN: origin,
-        SAVIA_MCP_URL: `https://${names.workers.mcp}.workers.dev/mcp`,
-      },
-    };
-  return {
-    ...base,
-    name: names.workers.gateway,
-    main: resolve(workspaceRoot, "apps/admin/src/edge-gateway.ts"),
-    services: [{ binding: "API", service: names.workers.api }],
-    assets: {
-      directory: assetsDir ?? resolve(workspaceRoot, "apps/admin/dist"),
-      binding: "ASSETS",
-      not_found_handling: "single-page-application",
-      run_worker_first: [
-        "/companion-downloads.json",
-        "/public/bookings",
-        "/public/bookings/*",
-        "/api/*",
-        "/v1/*",
-        "/webhooks/whatsapp",
-        "/s/*",
-        "/.well-known/*",
-        "/health",
-        "/docs",
-        "/openapi.json",
-      ],
-    },
-  };
-}
 
 export function execFileWithInput(
   executable,
@@ -239,16 +121,6 @@ async function runWrangler(args, { cwd, input } = {}) {
   }
 }
 
-async function ensureDatabase(name) {
-  const listed = await runWrangler(["d1", "list", "--json"]);
-  const existing = findDatabaseUuid(listed, name);
-  if (existing) return { uuid: existing, created: false };
-  const created = await runWrangler(["d1", "create", name, "--json"]);
-  const uuid = findDatabaseUuid(created, name);
-  if (!uuid) throw new Error(`Could not parse database id for ${name}`);
-  return { uuid, created: true };
-}
-
 async function migrateDatabase(uuid) {
   await execFileAsync("node", ["scripts/apply-d1-migrations.mjs"], {
     cwd: workspaceRoot,
@@ -256,15 +128,13 @@ async function migrateDatabase(uuid) {
   });
 }
 
-async function ensureBucket(name) {
-  try {
-    await runWrangler(["r2", "bucket", "create", name]);
-    return true;
-  } catch (error) {
-    if (/already exists/i.test(error.stderr ?? error.stdout ?? error.message))
-      return false;
-    throw error;
-  }
+async function runBranchCommand(executable, args, options = {}) {
+  const { stdout, stderr } = await execFileAsync(executable, args, {
+    cwd: options.cwd,
+    env: options.env,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  return { stdout, stderr };
 }
 
 async function putSecrets(kind, names, configPath, values) {
@@ -310,15 +180,21 @@ async function main() {
   const assetsDir = dryRun
     ? await mkdtemp(join(tmpdir(), "savia-preview-assets-"))
     : undefined;
-  const ids = dryRun
-    ? { domain: dryRunDatabaseUuid(), auth: dryRunDatabaseUuid() }
-    : {
-        domain: (await ensureDatabase(names.databases.domain)).uuid,
-        auth: (await ensureDatabase(names.databases.auth)).uuid,
-      };
+  let ids;
+  if (dryRun) {
+    ids = { domain: dryRunDatabaseUuid(), auth: dryRunDatabaseUuid() };
+  }
   if (!dryRun) {
+    const infrastructure = await ensureBranchInfrastructure({
+      slug,
+      env: process.env,
+      run: runBranchCommand,
+    });
+    ids = {
+      domain: infrastructure.outputs.domainD1Id,
+      auth: infrastructure.outputs.authD1Id,
+    };
     await migrateDatabase(ids.domain);
-    await ensureBucket(names.bucket);
   }
 
   const secrets = {

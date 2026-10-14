@@ -65,7 +65,18 @@ native record-version support. It declares two fixed read actions and does not
 contain a source URL, API key, OAuth token or secret. The action's source ID and
 mapping are metadata; user input cannot select a different endpoint or tool.
 
-## Preview
+## Shared preview delivery
+
+The user-facing preview is `https://savia-preview.hefesoft.com`. Host changes
+reach it through a pull request into `main`, successful Savia CI, and the
+**Deploy Savia preview** workflow. Preserve the current shared preview resources
+and encryption keys; never replace that deployment with an older branch build.
+After deployment, upload and install `procurement.secop` in the requested
+workspace (for example tenant `12`). Its user must create or reconnect their own
+`secop_live` OAuth source there. Installing in an isolated Platform workspace does
+not deliver the plugin to an existing shared-preview workspace.
+
+## Branch verification
 
 Use the documented [branch-preview workflow](runbooks/preview-environments.md) for
 unreleased host changes. A branch preview has isolated databases, credentials and

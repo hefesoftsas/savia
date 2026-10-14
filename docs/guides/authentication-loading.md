@@ -40,13 +40,40 @@ The shared loading style is delivered through the existing authentication CSS
 route; it does not require a new script or animation library. It represents
 pending work and does not add a minimum display time or delay navigation.
 
+Admin API requests have a 15-second deadline; JSON and OAuth session requests
+also apply that deadline while reading the response body. Page-file uploads and
+companion recording uploads use a five-minute deadline to allow larger files
+and slower connections to finish. If the application splash or a route fallback
+remains visible for 15 seconds, it replaces the spinner or skeleton with
+actions to retry or return to sign-in. The users list also shows a retry action
+when its data request fails, including when it reaches the request deadline.
+
 Explicit logout waits for the server sign-out and workspace cleanup before
 clearing mounted queries and redirecting to authorization. Clearing auth queries
 while asynchronous cleanup is still pending can trigger another authentication
 check and repeated logout, leaving the current tab blank. Query cleanup still
 runs if workspace cleanup fails.
 
+Logout still rotates the session read generation to invalidate protected reads,
+but only principal replacement changes the application subtree key. Keep React
+Admin mounted during logout so its active logout hook can finish cleanup and
+redirect. Remounting that boundary on every session clear restarts Office
+availability and appearance reads and can cause a repeated logout/request loop.
+
 If the browser does not finish an OAuth redirect within ten seconds, the page
 restores its content and exposes **Continue to Savia** as a normal link to the
 same server-provided destination. It preserves the authorization, PKCE and MFA
 requirements; the link does not create a different session or grant.
+
+Profile refresh and background route reads do not re-enter the application boot
+splash. Actual principal replacement rotates the authenticated subtree and
+discards previous-owner state. Dedicated tenant lookup has a separate boundary:
+its initial failure offers retry and prevents protected default-scope reads while
+keeping sign-in available. See [stable background refresh](background-refresh.md)
+for read retention and authorization-denial rules.
+
+Explicit sign-out immediately shows a branded “Signing out…” transition and
+makes the workspace inert while server sign-out and cleanup finish. The workspace
+stays mounted so pending auth work can complete. The transition adds no artificial
+delay, respects reduced motion, and releases its busy state if sign-out fails.
+Automatic access failures do not display this explicit sign-out transition.

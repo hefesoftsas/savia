@@ -71,6 +71,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
   const locale = useAppLocale();
   const managePath = `/api/public/bookings/manage/${encodeURIComponent(token)}`;
   const [bootstrap, setBootstrap] = useState<ManageBootstrap>();
+  const [loadedToken, setLoadedToken] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -90,20 +91,30 @@ export function PublicBookingManagePage({ token }: { token: string }) {
     let active = true;
     setLoading(true);
     setError("");
+    setBootstrap(undefined);
+    setLoadedToken(undefined);
+    setRescheduling(false);
+    setReviewing(false);
+    setUpdated(false);
+    setSelection(undefined);
+    setConferenceRefreshError("");
     void publicRequest<ManageBootstrap>(managePath)
       .then((data) => {
         if (active) {
           setBootstrap(data);
           setDisplayTimeZone(data.timeZone);
+          setLoadedToken(token);
         }
       })
       .catch(() => {
-        if (active)
+        if (active) {
           setError(
             t(
               "This booking link could not be loaded. Ask the booking owner for help.",
             ),
           );
+          setLoadedToken(token);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -111,7 +122,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
     return () => {
       active = false;
     };
-  }, [managePath, t]);
+  }, [managePath, t, token]);
 
   useEffect(() => {
     if (rescheduling) stepHeading.current?.focus();
@@ -291,7 +302,7 @@ export function PublicBookingManagePage({ token }: { token: string }) {
     }
   }
 
-  if (loading)
+  if (loading || loadedToken !== token)
     return (
       <main className="mx-auto max-w-2xl px-4 py-10" role="status">
         {t("Loading booking settings…")}

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --local --ip 127.0.0.1 --port 8798",
-    "test": "vitest run && node --test test/workerd.mjs",
+    "test": "vitest run --maxWorkers=1 --no-file-parallelism && node --test test/workerd.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

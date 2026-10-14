@@ -3,8 +3,8 @@ import {
   acceptWorkflowWebhook,
   readWebhookJson,
   webhookHash,
-} from "@savia/studio-server/workflows/webhook-endpoints";
-import type { WorkflowAuthorization } from "@savia/studio-server/workflows/runtime";
+} from "@savia/flows-native/webhook-endpoints";
+import type { WorkflowAuthorization } from "@savia/flows-native/runtime";
 import { workflowAuthorizer } from "./workflows";
 export function registerWorkflowWebhookRoutes(
   app: OpenAPIHono,
