@@ -56,7 +56,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await setPlatformAdministrator(db, owner, true);
   await db.exec(
-    "DELETE FROM studio_plugin_monitor_checks; DELETE FROM studio_plugin_monitor_cursor; DELETE FROM notification_deliveries; DELETE FROM notification_recipient_retries; DELETE FROM notification_events;",
+    "DELETE FROM studio_plugin_monitor_checks; DELETE FROM studio_plugin_monitor_cursor; DELETE FROM savia_flows_collection_event_outbox; DELETE FROM notification_deliveries; DELETE FROM notification_recipient_retries; DELETE FROM notification_events;",
   );
   await db
     .prepare("UPDATE identity_principal SET is_active=1 WHERE id=?")
