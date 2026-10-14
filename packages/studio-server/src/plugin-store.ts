@@ -1347,7 +1347,14 @@ addEventListener("message", (event) => {
   if (!slot || (standby && (slot.panelId !== activePanelId || message.panelId !== slot.panelId))) return;
   pending.delete(message.id);
   if (message.ok) slot.resolve(message.data);
-  else slot.reject(new Error(message.error || "Error del host."));
+  else {
+    const error = new Error(message.error || "Error del host.");
+    if (Number.isInteger(message.errorStatus) && message.errorStatus >= 100 && message.errorStatus <= 599)
+      error.status = message.errorStatus;
+    if (typeof message.errorCode === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(message.errorCode))
+      error.code = message.errorCode;
+    slot.reject(error);
+  }
 });
 function createSavia(panelId) {
 const callHost = (path, method, body, consistency) => requestHost(path, method, body, panelId, consistency);

@@ -604,19 +604,19 @@ export default function CollectionSourcesPanel({
       throw new Error(t("Los argumentos MCP deben ser un objeto JSON."));
     if (!mcpIdField.trim())
       throw new Error(t("Indica el campo identificador MCP."));
+    if (Boolean(mcpLimitArgument.trim()) !== Boolean(mcpOffsetArgument.trim()))
+      throw new Error(
+        t("Completa ambos argumentos de paginación o deja los dos vacíos."),
+      );
     return {
       arguments: parsed,
       itemsPointer: mcpItemsPointer,
       idField: mcpIdField.trim(),
-      ...(mcpLimitArgument.trim() || mcpOffsetArgument.trim()
+      ...(mcpLimitArgument.trim() && mcpOffsetArgument.trim()
         ? {
             pagination: {
-              ...(mcpLimitArgument.trim()
-                ? { limitArgument: mcpLimitArgument.trim() }
-                : {}),
-              ...(mcpOffsetArgument.trim()
-                ? { offsetArgument: mcpOffsetArgument.trim() }
-                : {}),
+              limitArgument: mcpLimitArgument.trim(),
+              offsetArgument: mcpOffsetArgument.trim(),
             },
           }
         : {}),
@@ -1215,7 +1215,7 @@ export default function CollectionSourcesPanel({
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              if (!sourceId.trim()) setSourceId("secop");
+                              if (!sourceId.trim()) setSourceId("secop_live");
                               if (!sourceLabel.trim()) setSourceLabel("SECOP");
                               setMcpEndpoint(
                                 "https://secop-live-worker.jose-douglas-dev.workers.dev/mcp",
@@ -1225,7 +1225,7 @@ export default function CollectionSourcesPanel({
                               setMcpReadOnlyTools(
                                 "buscar_licitaciones, detalle_licitacion, buscar_documentos",
                               );
-                              setMcpItemsPointer("/data");
+                              setMcpItemsPointer("/filas");
                               setMcpIdField(":id");
                               setMcpLimitArgument("limit");
                               setMcpOffsetArgument("offset");

@@ -3224,6 +3224,11 @@ export const studioMessages = {
     "No read-only MCP tools were found.",
     "Nenhuma ferramenta MCP somente leitura foi encontrada.",
   ],
+  "Completa ambos argumentos de paginación o deja los dos vacíos.": [
+    "Completa ambos argumentos de paginación o deja los dos vacíos.",
+    "Enter both pagination arguments or leave both blank.",
+    "Preencha os dois argumentos de paginação ou deixe ambos em branco.",
+  ],
   "Campos MCP listos para vincular en modo de solo lectura.": [
     "Campos MCP listos para vincular en modo de solo lectura.",
     "MCP fields are ready to link in read-only mode.",

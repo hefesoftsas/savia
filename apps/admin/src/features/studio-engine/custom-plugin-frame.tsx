@@ -34,6 +34,27 @@ type PrefetchedSettings = {
   promise: Promise<unknown>;
 };
 
+function safeErrorMetadata(error: unknown) {
+  if (!(error instanceof Error)) return {};
+  const value = error as { status?: unknown; code?: unknown };
+  const status =
+    typeof value.status === "number" &&
+    Number.isInteger(value.status) &&
+    value.status >= 100 &&
+    value.status <= 599
+      ? value.status
+      : undefined;
+  const code =
+    typeof value.code === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(value.code)
+      ? value.code
+      : undefined;
+  return {
+    ...(status === undefined ? {} : { errorStatus: status }),
+    ...(code === undefined ? {} : { errorCode: code }),
+  };
+}
+
 const THEME_VARIABLES = [
   "--background",
   "--foreground",
@@ -490,6 +511,7 @@ export function CustomPluginFrame({
             panelId: message.panelId,
             ok: false,
             error: error instanceof Error ? error.message : "Error del host.",
+            ...safeErrorMetadata(error),
           },
           "*",
         );

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createMockPluginApi } from "@savia/plugin-sdk/testing";
 import {
   COLLECTION,
+  isTrackingConflict,
   interestValues,
   normalizeSearchOutput,
   normalizeSecopRow,
@@ -218,4 +219,20 @@ describe("interest persistence", () => {
     });
     await expect(saveInterest(api, row!)).rejects.toThrow("offline");
   });
+});
+
+it("recognizes structured conflict metadata from the sandbox without a localization service", () => {
+  expect(
+    isTrackingConflict(
+      Object.assign(new Error("Record changed"), { status: 409 }),
+    ),
+  ).toBe(true);
+  expect(isTrackingConflict({ code: "VERSION_CONFLICT" })).toBe(true);
+  expect(isTrackingConflict({ code: "write_conflict" })).toBe(true);
+  expect(
+    isTrackingConflict(
+      Object.assign(new Error("Conflict in provider"), { status: 503 }),
+    ),
+  ).toBe(false);
+  expect(isTrackingConflict(undefined)).toBe(false);
 });

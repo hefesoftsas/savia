@@ -80,3 +80,101 @@ it("preloads without business rendering, cleans each activation, and rejects sta
   ui({ type: "dispose" });
   expect(cleanup).toHaveBeenCalledTimes(2);
 });
+
+it("reconstructs safe host API status and code on the SDK error", async () => {
+  const listeners = new Map<string, Set<(event: any) => void>>();
+  const postMessage = vi.fn();
+  const parent = { postMessage };
+  const send = (data: unknown) =>
+    listeners.get("message")?.forEach((fn) => fn({ source: parent, data }));
+  const root = { innerHTML: "" };
+  const document = {
+    getElementById: () => root,
+    documentElement: { style: { setProperty() {} } },
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const window = {
+    parent,
+    document,
+    crypto: { randomUUID: () => "n" },
+    fetch: vi.fn(),
+    setTimeout,
+    clearTimeout,
+    addEventListener(type: string, fn: any) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(fn);
+    },
+    removeEventListener(type: string, fn: any) {
+      listeners.get(type)?.delete(fn);
+    },
+  };
+  let request!: Promise<unknown>;
+  let unsafeRequest!: Promise<unknown>;
+  const module = {
+    render(_element: unknown, savia: any) {
+      request = savia.collections.collection("items").list();
+      unsafeRequest = savia.collections.collection("items").list();
+    },
+  };
+  const code = shellBootstrapJs()
+    .replaceAll(
+      "import.meta.url",
+      JSON.stringify(
+        "https://host/api/plugin-store/shell-bootstrap.js?plugin=test&entry=https://host/api/plugin-store/test/entry",
+      ),
+    )
+    .replace("import(ENTRY_URL)", "Promise.resolve(importedModule)");
+  const run = new Function(
+    "window",
+    "parent",
+    "document",
+    "addEventListener",
+    "importedModule",
+    `return (async () => { ${code} })()`,
+  );
+  await run(
+    window,
+    parent,
+    document,
+    window.addEventListener.bind(window),
+    module,
+  );
+  const requestMessage = postMessage.mock.calls.find(
+    ([message]) => message.type === "request" && message.id === "1",
+  )?.[0];
+  expect(requestMessage).toMatchObject({ type: "request", id: "1" });
+  const unsafeRequestMessage = postMessage.mock.calls.find(
+    ([message]) => message.type === "request" && message.id === "2",
+  )?.[0];
+
+  send({
+    ns: "savia-plugin",
+    type: "response",
+    id: requestMessage.id,
+    ok: false,
+    error: "Record version conflict",
+    errorStatus: 409,
+    errorCode: "VERSION_CONFLICT",
+  });
+  await expect(request).rejects.toMatchObject({
+    message: "Record version conflict",
+    status: 409,
+    code: "VERSION_CONFLICT",
+  });
+  send({
+    ns: "savia-plugin",
+    type: "response",
+    id: unsafeRequestMessage.id,
+    ok: false,
+    error: "Invalid metadata",
+    errorStatus: 600,
+    errorCode: "unsafe\ncode",
+    detail: { secret: "must not be copied" },
+  });
+  const unsafeError = await unsafeRequest.catch((error) => error);
+  expect(unsafeError).toMatchObject({ message: "Invalid metadata" });
+  expect(unsafeError).not.toHaveProperty("status");
+  expect(unsafeError).not.toHaveProperty("code");
+  expect(unsafeError).not.toHaveProperty("detail");
+});

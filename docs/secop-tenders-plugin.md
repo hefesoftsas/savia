@@ -17,6 +17,8 @@ persisted opportunities, with tracking status, priority, owner, next follow-up d
 and notes. The same Socrata `:id` can be saved only once per workspace. Saving an
 already followed row does not overwrite its existing follow-up information.
 Updates use Savia record versions; conflicting changes are reported for review.
+The sandbox preserves safe error status and code fields, so a concurrent change
+reloads the current interest even when host localization services are absent.
 
 Only selected opportunities are copied into the local collection, including a
 bounded source snapshot. All durable follow-up data uses the backend collections

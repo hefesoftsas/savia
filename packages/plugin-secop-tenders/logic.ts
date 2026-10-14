@@ -334,3 +334,16 @@ export async function updateInterest(
       version: record._version,
     });
 }
+
+/** Conflict metadata is preserved by the sandbox even without host i18n. */
+export function isTrackingConflict(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { status?: unknown; code?: unknown };
+  const code =
+    typeof candidate.code === "string" ? candidate.code.toLowerCase() : "";
+  return (
+    candidate.status === 409 ||
+    code === "version_conflict" ||
+    code === "write_conflict"
+  );
+}

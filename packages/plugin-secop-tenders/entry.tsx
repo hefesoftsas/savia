@@ -6,6 +6,7 @@ import {
   COLLECTION,
   PAGE_SIZE,
   RequestSequence,
+  isTrackingConflict,
   saveInterest,
   searchSecop,
   updateInterest,
@@ -520,12 +521,7 @@ function Screen({ savia }: { savia: PluginApi }) {
     } catch (error) {
       if (!mounted.current) return;
       const localized = savia.i18n?.error(error);
-      const code = localized?.code?.toLowerCase();
-      if (
-        localized?.status === 409 ||
-        code === "version_conflict" ||
-        code === "write_conflict"
-      ) {
+      if (isTrackingConflict(localized) || isTrackingConflict(error)) {
         setNotice(t.conflict);
         try {
           const current = await collection.get(record.id);
