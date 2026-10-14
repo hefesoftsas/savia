@@ -56,11 +56,14 @@ const report = {
   },
 };
 
+const futureExpiration = () =>
+  new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
 it("renders only the published report facts and analysis, with no catalog fallback", async () => {
   const fetchMock = vi.fn(async () =>
     Response.json({
       report,
-      expiresAt: "2026-10-14T12:00:00.000Z",
+      expiresAt: futureExpiration(),
     }),
   );
   vi.stubGlobal("fetch", fetchMock);
@@ -97,7 +100,7 @@ it("rejects report payloads containing unknown private fields", async () => {
     vi.fn(async () =>
       Response.json({
         report: { ...report, applicant: { documentNumber: "123456" } },
-        expiresAt: "2026-10-14T12:00:00.000Z",
+        expiresAt: futureExpiration(),
       }),
     ),
   );
@@ -119,7 +122,7 @@ it("offers retry when the public link cannot be loaded", async () => {
     .fn()
     .mockResolvedValueOnce(new Response(null, { status: 404 }))
     .mockResolvedValueOnce(
-      Response.json({ report, expiresAt: "2026-10-14T12:00:00.000Z" }),
+      Response.json({ report, expiresAt: futureExpiration() }),
     );
   vi.stubGlobal("fetch", fetchMock);
   render(<PublicQuotePage token={"b".repeat(64)} />);
@@ -137,7 +140,7 @@ it("renders verified proposals when analysis is absent", async () => {
     vi.fn(async () =>
       Response.json({
         report: { ...report, analysis: undefined },
-        expiresAt: "2026-10-14T12:00:00.000Z",
+        expiresAt: futureExpiration(),
       }),
     ),
   );

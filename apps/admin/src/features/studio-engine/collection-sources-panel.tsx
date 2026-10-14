@@ -1253,7 +1253,7 @@ export default function CollectionSourcesPanel({
                             onChange={(event) =>
                               setMcpEndpoint(event.target.value)
                             }
-                            placeholder="https://mcp.example.com/mcp"
+                            placeholder={t("https://mcp.example.com/mcp")}
                           />
                         </div>
                       )}
@@ -1273,7 +1273,7 @@ export default function CollectionSourcesPanel({
                               )
                             }
                           >
-                            <option value="oauth">OAuth</option>
+                            <option value="oauth">{t("OAuth")}</option>
                             <option value="bearer">{t("Token Bearer")}</option>
                             <option value="none">
                               {t("Sin autenticación")}
@@ -1321,7 +1321,7 @@ export default function CollectionSourcesPanel({
                                 onChange={(event) =>
                                   setMcpScope(event.target.value)
                                 }
-                                placeholder="read"
+                                placeholder={t("read")}
                               />
                             </div>
                           )}
@@ -1373,7 +1373,9 @@ export default function CollectionSourcesPanel({
                             onChange={(event) =>
                               setMcpReadOnlyTools(event.target.value)
                             }
-                            placeholder="buscar_licitaciones, detalle_licitacion"
+                            placeholder={t(
+                              "buscar_licitaciones, detalle_licitacion",
+                            )}
                           />
                           <p className="text-xs leading-5 text-muted-foreground">
                             {t(
@@ -1510,7 +1512,7 @@ export default function CollectionSourcesPanel({
                               {isDatabaseSource(source)
                                 ? databaseKinds[source.kind].label
                                 : source.kind === "mcp"
-                                  ? "MCP"
+                                  ? t("MCP")
                                   : "JSON:API"}
                             </Badge>
                             <Badge
@@ -2023,7 +2025,7 @@ export default function CollectionSourcesPanel({
                                         setMcpItemsPointer(event.target.value);
                                         setMcpFieldsInspected(false);
                                       }}
-                                      placeholder="/items"
+                                      placeholder={t("/items")}
                                     />
                                   </div>
                                   <div className="grid gap-1.5 text-sm">
@@ -2038,7 +2040,7 @@ export default function CollectionSourcesPanel({
                                         setMcpIdField(event.target.value);
                                         setMcpFieldsInspected(false);
                                       }}
-                                      placeholder="id"
+                                      placeholder={t("id")}
                                     />
                                   </div>
                                 </div>
@@ -2057,7 +2059,7 @@ export default function CollectionSourcesPanel({
                                         setMcpLimitArgument(event.target.value);
                                         setMcpFieldsInspected(false);
                                       }}
-                                      placeholder="limit"
+                                      placeholder={t("limit")}
                                     />
                                   </div>
                                   <div className="grid gap-1.5 text-sm">
@@ -2073,7 +2075,7 @@ export default function CollectionSourcesPanel({
                                         );
                                         setMcpFieldsInspected(false);
                                       }}
-                                      placeholder="offset"
+                                      placeholder={t("offset")}
                                     />
                                   </div>
                                 </fieldset>

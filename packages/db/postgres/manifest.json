@@ -207,8 +207,16 @@
       "sha256": "e0b621a39e98db1bd9f9c7aa4d7608bc1740410e1225162b075ad47313bec7bf"
     },
     {
+      "filename": "0048_mcp_collection_sources.sql",
+      "sha256": "f7b9f6e58f8099ba09642f69a4bd5074d437fc727bbd6c5ab18a093c8202c7d8"
+    },
+    {
       "filename": "0048_whatsapp_action_queue_timestamp.sql",
       "sha256": "468beb134d34381cff330f2ec478eea14f5dd038847b3f8fc89f3c4bbc7846e4"
+    },
+    {
+      "filename": "0049_plugin_record_monitors.sql",
+      "sha256": "04a563b53ca9ef8184e8f704694dd1734df542e2bf7f096513c1c76b6c1dff22"
     },
     {
       "filename": "0049_whatsapp_conversation_reset.sql",
@@ -521,6 +529,11 @@
     },
     {
       "type": "index",
+      "name": "studio_plugin_monitor_due",
+      "table": "studio_plugin_monitor_checks"
+    },
+    {
+      "type": "index",
       "name": "zoom_personal_meetings_calendar_event_idx",
       "table": "zoom_personal_meetings"
     },
@@ -598,6 +611,11 @@
       "type": "index",
       "name": "studio_notes_record",
       "table": "studio_notes"
+    },
+    {
+      "type": "index",
+      "name": "studio_mcp_oauth_flows_expiry",
+      "table": "studio_mcp_oauth_flows"
     },
     {
       "type": "index",
@@ -693,6 +711,21 @@
       "type": "index",
       "name": "tenant_whatsapp_connections_owner_index",
       "table": "tenant_whatsapp_connections"
+    },
+    {
+      "type": "table",
+      "name": "studio_mcp_oauth_flows",
+      "table": "studio_mcp_oauth_flows"
+    },
+    {
+      "type": "table",
+      "name": "studio_plugin_monitor_checks",
+      "table": "studio_plugin_monitor_checks"
+    },
+    {
+      "type": "table",
+      "name": "studio_plugin_monitor_cursor",
+      "table": "studio_plugin_monitor_cursor"
     },
     {
       "type": "table",
@@ -7032,6 +7065,246 @@
         }
       ],
       "checkCount": 2
+    },
+    {
+      "name": "studio_mcp_oauth_flows",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "owner_principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "source_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "encrypted_flow",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "expires_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "state"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "studio_plugin_monitor_checks",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "extension_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "monitor_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "record_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 4
+        },
+        {
+          "cid": 4,
+          "name": "owner_principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "next_check_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "lease_token",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "lease_expires_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "observation",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "error_code",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "error_sequence",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "last_checked_at",
+          "type": "BIGINT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "studio_records",
+          "from": "tenant_id",
+          "to": "tenant_id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "table": "studio_records",
+          "from": "record_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "extension_id",
+            "monitor_id",
+            "record_id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "studio_plugin_monitor_cursor",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "after_tenant",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "after_extension",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
     },
     {
       "name": "zoom_personal_meetings",

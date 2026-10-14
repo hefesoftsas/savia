@@ -576,6 +576,111 @@ it("pins every source migration checksum for both native baselines", () => {
   }
 });
 
+it("includes MCP OAuth and record-monitor additions in the native core inventory", async () => {
+  const sqlite = new SqliteDatabase(":memory:");
+  try {
+    await sqlite.migrate(join(root, "packages/db/migrations"));
+    const manifest = JSON.parse(
+      readFileSync(join(coreDirectory, "manifest.json"), "utf8"),
+    );
+    const expected = [
+      {
+        name: "studio_mcp_oauth_flows",
+        columns: [
+          "state",
+          "tenant_id",
+          "owner_principal_id",
+          "source_id",
+          "encrypted_flow",
+          "expires_at",
+        ],
+        indexes: ["studio_mcp_oauth_flows_expiry"],
+      },
+      {
+        name: "studio_plugin_monitor_checks",
+        columns: [
+          "tenant_id",
+          "extension_id",
+          "monitor_id",
+          "record_id",
+          "owner_principal_id",
+          "next_check_at",
+          "lease_token",
+          "lease_expires_at",
+          "observation",
+          "error_code",
+          "error_sequence",
+          "last_checked_at",
+        ],
+        indexes: ["studio_plugin_monitor_due"],
+      },
+      {
+        name: "studio_plugin_monitor_cursor",
+        columns: ["id", "after_tenant", "after_extension"],
+        indexes: [],
+      },
+    ];
+    for (const table of expected) {
+      const nativeTable = manifest.tables.find(
+        (entry: { name: string }) => entry.name === table.name,
+      );
+      expect(
+        nativeTable?.columns.map((column: { name: string }) => column.name),
+      ).toEqual(table.columns);
+      expect(
+        (
+          await sqlite.prepare(`PRAGMA table_info(${table.name})`).all()
+        ).results.map((column: { name: string }) => column.name),
+      ).toEqual(table.columns);
+      expect(
+        manifest.objects.some(
+          (entry: { type: string; name: string; table: string }) =>
+            entry.type === "table" &&
+            entry.name === table.name &&
+            entry.table === table.name,
+        ),
+      ).toBe(true);
+      for (const index of table.indexes) {
+        expect(
+          manifest.objects.some(
+            (entry: { type: string; name: string; table: string }) =>
+              entry.type === "index" &&
+              entry.name === index &&
+              entry.table === table.name,
+          ),
+        ).toBe(true);
+        expect(
+          (
+            await sqlite.prepare(`PRAGMA index_list(${table.name})`).all()
+          ).results.some((entry: { name: string }) => entry.name === index),
+        ).toBe(true);
+      }
+    }
+
+    const nativeMcp = readFileSync(
+      join(coreDirectory, "0048_mcp_collection_sources.sql"),
+      "utf8",
+    );
+    const nativeMonitors = readFileSync(
+      join(coreDirectory, "0049_plugin_record_monitors.sql"),
+      "utf8",
+    );
+    expect(nativeMcp).toContain(
+      "CREATE TABLE savia_core.studio_mcp_oauth_flows",
+    );
+    expect(nativeMcp).toContain("expires_at BIGINT NOT NULL");
+    expect(nativeMcp).toContain("CREATE INDEX studio_mcp_oauth_flows_expiry");
+    expect(nativeMonitors).toContain(
+      "CREATE TABLE savia_core.studio_plugin_monitor_checks",
+    );
+    expect(nativeMonitors).toContain(
+      "CREATE TABLE savia_core.studio_plugin_monitor_cursor",
+    );
+  } finally {
+    sqlite.close();
+  }
+});
+
 live("native trigger behavior", () => {
   it(
     "matches workflow dispatch and rejects conflicting relation mappings",

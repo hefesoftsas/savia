@@ -3025,6 +3025,23 @@ export const studioMessages = {
     "Tela fornecida por plugin / extensão",
   ],
   "Conexión MCP": ["Conexión MCP", "MCP connection", "Conexão MCP"],
+  MCP: ["MCP", "MCP", "MCP"],
+  OAuth: ["OAuth", "OAuth", "OAuth"],
+  "https://mcp.example.com/mcp": [
+    "https://mcp.example.com/mcp",
+    "https://mcp.example.com/mcp",
+    "https://mcp.example.com/mcp",
+  ],
+  read: ["read", "read", "read"],
+  "buscar_licitaciones, detalle_licitacion": [
+    "buscar_licitaciones, detalle_licitacion",
+    "buscar_licitaciones, detalle_licitacion",
+    "buscar_licitaciones, detalle_licitacion",
+  ],
+  "/items": ["/items", "/items", "/items"],
+  id: ["id", "id", "id"],
+  limit: ["limit", "limit", "limit"],
+  offset: ["offset", "offset", "offset"],
   "SECOP preset": [
     "Configuración de SECOP",
     "SECOP preset",
