@@ -99,7 +99,10 @@
           "Authorization": "Bearer {{connection.apiKey}}",
           "Content-Type": "application/json"
         },
-        "body": "{{input}}"
+        "body": {
+          "operation": "{{input.operation}}",
+          "arguments": "{{input.arguments}}"
+        }
       }
     }
   ],
@@ -138,12 +141,12 @@
         "values": ["awarded", "discarded"]
       },
       "notifications": {
-        "changedTitle": "Cambi\u00f3 el estado SECOP: {name}",
+        "changedTitle": "Cambió el estado SECOP: {name}",
         "changedBody": "Estado anterior: {previous}. Estado actual: {current}.",
-        "closingTitle": "Cierre pr\u00f3ximo: {name}",
+        "closingTitle": "Cierre próximo: {name}",
         "closingBody": "Cierre de {name}: {deadline}. Aviso dentro de las {hours} horas previas.",
         "connectionTitle": "No se pudo revisar: {name}",
-        "connectionBody": "Autoriza de nuevo tu conexi\u00f3n SECOP para continuar el monitoreo de {name}."
+        "connectionBody": "Autoriza de nuevo tu conexión SECOP para continuar el monitoreo de {name}."
       }
     }
   ],
@@ -210,9 +213,9 @@
               "type": "Textbox",
               "label": "Procurement modality",
               "labels": {
-                "es": "Modalidad de contrataci\u00f3n",
+                "es": "Modalidad de contratación",
                 "en": "Procurement modality",
-                "pt": "Modalidade de contrata\u00e7\u00e3o"
+                "pt": "Modalidade de contratação"
               }
             },
             "amount": {
@@ -228,18 +231,18 @@
               "type": "Textbox",
               "label": "Publication date",
               "labels": {
-                "es": "Fecha de publicaci\u00f3n",
+                "es": "Fecha de publicación",
                 "en": "Publication date",
-                "pt": "Data de publica\u00e7\u00e3o"
+                "pt": "Data de publicação"
               }
             },
             "deadline": {
               "type": "Textbox",
               "label": "Submission deadline",
               "labels": {
-                "es": "Fecha l\u00edmite de presentaci\u00f3n",
+                "es": "Fecha límite de presentación",
                 "en": "Submission deadline",
-                "pt": "Prazo para apresenta\u00e7\u00e3o"
+                "pt": "Prazo para apresentação"
               }
             },
             "source_status": {
@@ -263,11 +266,11 @@
             },
             "monitoring_checked_at": {
               "type": "Textbox",
-              "label": "\u00daltima revisi\u00f3n SECOP",
+              "label": "Última revisión SECOP",
               "labels": {
-                "es": "\u00daltima revisi\u00f3n SECOP",
+                "es": "Última revisión SECOP",
                 "en": "Last SECOP check",
-                "pt": "\u00daltima verifica\u00e7\u00e3o SECOP"
+                "pt": "Última verificação SECOP"
               }
             },
             "monitoring_error": {
@@ -306,9 +309,9 @@
                   "value": "evaluating",
                   "label": "Evaluating",
                   "labels": {
-                    "es": "En evaluaci\u00f3n",
+                    "es": "En evaluación",
                     "en": "Evaluating",
-                    "pt": "Em avalia\u00e7\u00e3o"
+                    "pt": "Em avaliação"
                   }
                 },
                 {
@@ -399,16 +402,16 @@
               "labels": {
                 "es": "Responsable",
                 "en": "Owner",
-                "pt": "Respons\u00e1vel"
+                "pt": "Responsável"
               }
             },
             "next_follow_up": {
               "type": "DateControl",
               "label": "Next follow-up",
               "labels": {
-                "es": "Pr\u00f3ximo seguimiento",
+                "es": "Próximo seguimiento",
                 "en": "Next follow-up",
-                "pt": "Pr\u00f3ximo acompanhamento"
+                "pt": "Próximo acompanhamento"
               }
             },
             "notes": {

@@ -1,7 +1,14 @@
+import { renderTemplate } from "../../studio-shared/src/plugin-store";
+import store from "../store.json";
 import { describe, it, expect, vi } from "vitest";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { DossierClient, safeDossierUploadUrl } from "../dossier";
 describe("dossier connector client", () => {
+  it("renders the actual HTTP dispatch body with the host template contract", () => {
+    const action = store.actions.find((a) => a.id === "dossier-call")!;
+    const input = { operation: "dossier", arguments: { id: "CO1.REQ.1" } };
+    expect(renderTemplate(action.request!.body, { input })).toEqual(input);
+  });
   it("uses the configured secret-backed HTTP connector and unwraps results", async () => {
     const execute = vi
       .fn()
@@ -20,11 +27,9 @@ describe("dossier connector client", () => {
   it("rejects malformed results and propagates safe service errors", async () => {
     const api = {
       actions: {
-        execute: vi
-          .fn()
-          .mockResolvedValue({
-            output: { error: { code: "REVISION_CONFLICT" } },
-          }),
+        execute: vi.fn().mockResolvedValue({
+          output: { error: { code: "REVISION_CONFLICT" } },
+        }),
       },
     } as unknown as PluginApi;
     await expect(new DossierClient(api, "c").call("chat", {})).rejects.toThrow(
