@@ -128,7 +128,11 @@ describe("tender dossier flow", () => {
     expect(execute).not.toHaveBeenCalled();
   });
   it("marks partial coverage and keeps chat unavailable without a report", async () => {
-    await mount(true, true);
+    const { execute } = await mount(true, true);
+    const conversation = execute.mock.calls.find(
+      ([, a]) => a.input.operation === "conversation",
+    )?.[1].input as { operation: string; arguments: Record<string, unknown> };
+    expect(conversation.arguments).not.toHaveProperty("companyProfileId");
     expect(host.textContent).toContain("Análisis parcial");
     await click("Asistente");
     expect(host.textContent).toContain("Tu pregunta");

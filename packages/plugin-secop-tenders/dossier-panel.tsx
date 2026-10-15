@@ -200,7 +200,7 @@ export function DossierPanel({
         data.dossier
           ? active.call<Conversation | null>("conversation", {
               dossierId: processId,
-              companyProfileId: companyId,
+              ...(companyId ? { companyProfileId: companyId } : {}),
             })
           : Promise.resolve(null),
       ]);
