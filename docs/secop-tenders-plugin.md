@@ -47,6 +47,10 @@ refused link shows recovery guidance rather than silently doing nothing.
 
 ## Tender documents and PDF analysis
 
+Version 1.5.3 adds decorative Lucide icons to the result actions while retaining
+visible labels and keyboard-accessible controls. Followed tenders use a checked
+bookmark to reinforce their saved state.
+
 Version 1.5.2 groups each search result's Documents, SECOP link and Follow actions
 with matching control heights and spacing. On narrow screens, Documents and the
 SECOP link share the first row and Follow spans the second row. Keyboard order

@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
   type FormEvent,
 } from "react";
+import { Bookmark, BookmarkCheck, ExternalLink, FileText } from "lucide-react";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { defineReactPlugin } from "@savia/plugin-sdk/react";
 import "./styles.css";
@@ -938,6 +939,11 @@ function Screen({ savia }: { savia: PluginApi }) {
                           type="button"
                           onClick={() => setDocumentRow(row)}
                         >
+                          <FileText
+                            className="secop-action-icon"
+                            size={16}
+                            aria-hidden="true"
+                          />
                           {locale === "en"
                             ? "Documents"
                             : locale === "pt"
@@ -950,6 +956,11 @@ function Screen({ savia }: { savia: PluginApi }) {
                             target="_blank"
                             rel="noopener noreferrer"
                           >
+                            <ExternalLink
+                              className="secop-action-icon"
+                              size={16}
+                              aria-hidden="true"
+                            />
                             {t.source}
                           </a>
                         ) : (
@@ -962,6 +973,19 @@ function Screen({ savia }: { savia: PluginApi }) {
                           disabled={isSaved || savingId === row.id}
                           onClick={() => void markInterest(row)}
                         >
+                          {isSaved ? (
+                            <BookmarkCheck
+                              className="secop-action-icon"
+                              size={16}
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Bookmark
+                              className="secop-action-icon"
+                              size={16}
+                              aria-hidden="true"
+                            />
+                          )}
                           {savingId === row.id
                             ? t.saving
                             : isSaved
