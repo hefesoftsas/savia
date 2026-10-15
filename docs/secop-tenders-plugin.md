@@ -40,6 +40,11 @@ errors and credentials are not shown. New searches reset pagination and ignore l
 Loading stops when SECOP has no next page or returns no new IDs. Values absent
 from SECOP are shown as unavailable.
 
+**View in SECOP** opens the supplied process URL in a new browser tab through
+Savia's host-mediated external-link bridge. Search cards and saved interests use
+the same behavior; the plugin iframe retains its sandbox. An unavailable or
+refused link shows recovery guidance rather than silently doing nothing.
+
 Choose **Track** on a result to save that selected row. **My interests** lists
 persisted opportunities, with tracking status, priority, owner, next follow-up date
 and notes. The same Socrata `:id` can be saved only once per workspace. Saving an

@@ -13,8 +13,10 @@ import { setStudioRuntime } from "../runtime";
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.useRealTimers();
   setStudioRuntime({ embedded: false });
+  delete (navigator as Navigator & { userActivation?: unknown }).userActivation;
 });
 
 it("sizes plugin screens to their content and resets on navigation", () => {
@@ -142,6 +144,156 @@ it("allows a plugin to download a generated PDF while keeping its origin isolate
   const permissions = (frame.getAttribute("sandbox") ?? "").split(/\s+/);
   expect(permissions).toContain("allow-downloads");
   expect(permissions).not.toContain("allow-same-origin");
+  expect(permissions).not.toContain("allow-popups");
+});
+
+it("opens valid external HTTPS URLs through the host during a user gesture", () => {
+  Object.defineProperty(navigator, "userActivation", {
+    configurable: true,
+    value: { isActive: true },
+  });
+  const open = vi.spyOn(window, "open").mockReturnValue(null);
+  render(<CustomPluginFrame pluginId="custom.demo" title="Plugin" />);
+  const frame = screen.getByTitle("Plugin") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "open-secops",
+        path: "/navigation/external",
+        method: "POST",
+        body: { url: "https://www.colombiacompra.gov.co:443/secop" },
+        panelId: "panel-1",
+      },
+    }),
+  );
+
+  expect(open).toHaveBeenCalledWith(
+    "https://www.colombiacompra.gov.co/secop",
+    "_blank",
+    "noopener,noreferrer",
+  );
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      ns: "savia-plugin",
+      type: "response",
+      id: "open-secops",
+      panelId: "panel-1",
+      ok: true,
+      data: null,
+    }),
+    "*",
+  );
+});
+
+it("rejects invalid external navigation requests without opening a window", () => {
+  Object.defineProperty(navigator, "userActivation", {
+    configurable: true,
+    value: { isActive: true },
+  });
+  const open = vi.spyOn(window, "open").mockReturnValue(null);
+  render(<CustomPluginFrame pluginId="custom.demo" title="Plugin" />);
+  const frame = screen.getByTitle("Plugin") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  const requests = [
+    { id: "http", body: { url: "http://example.com" } },
+    { id: "javascript", body: { url: "javascript:alert(1)" } },
+    { id: "data", body: { url: "data:text/html,hello" } },
+    { id: "file", body: { url: "file:///etc/passwd" } },
+    { id: "credentials", body: { url: "https://user:secret@example.com" } },
+    { id: "relative", body: { url: "/secop" } },
+    { id: "control", body: { url: "https://example.com/\nnext" } },
+    {
+      id: "too-long",
+      body: { url: `https://example.com/${"a".repeat(2048)}` },
+    },
+    { id: "method", method: "GET", body: { url: "https://example.com" } },
+  ];
+  for (const request of requests) {
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          path: "/navigation/external",
+          method: "POST",
+          ...request,
+        },
+      }),
+    );
+  }
+
+  expect(open).not.toHaveBeenCalled();
+  for (const request of requests)
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: request.id,
+        ok: false,
+        error: expect.any(String),
+      }),
+      "*",
+    );
+});
+
+it("requires an active gesture and the current authorized frame for external navigation", () => {
+  Object.defineProperty(navigator, "userActivation", {
+    configurable: true,
+    value: { isActive: false },
+  });
+  const open = vi.spyOn(window, "open").mockReturnValue(null);
+  render(<CustomPluginFrame pluginId="custom.demo" title="Plugin" />);
+  const frame = screen.getByTitle("Plugin") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  const request = {
+    ns: "savia-plugin",
+    type: "request",
+    id: "gesture-required",
+    path: "/navigation/external",
+    method: "POST",
+    body: { url: "https://example.com" },
+  };
+
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: window,
+      data: { ...request, id: "unauthorized-frame" },
+    }),
+  );
+  fireEvent(
+    window,
+    new MessageEvent("message", { source: frame.contentWindow, data: request }),
+  );
+  expect(open).not.toHaveBeenCalled();
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "gesture-required", ok: false }),
+    "*",
+  );
+  expect(send).not.toHaveBeenCalledWith(
+    expect.objectContaining({ id: "unauthorized-frame" }),
+    "*",
+  );
+
+  fireEvent(window, new Event("savia:session-cleared"));
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: { ...request, id: "revoked-session" },
+    }),
+  );
+  expect(open).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalledWith(
+    expect.objectContaining({ id: "revoked-session" }),
+    "*",
+  );
 });
 
 it("loads the plugin shell through the selected tenant", () => {

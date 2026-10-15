@@ -1,5 +1,20 @@
 # Store de plugins por tenant
 
+## External links
+
+Plugin links with `target="_blank"` are routed through the host after a real user
+click. The host requires an active browser user gesture and an absolute HTTPS
+URL without embedded credentials before opening a new tab with `noopener` and
+`noreferrer`. It rejects script-generated clicks, other protocols, malformed
+requests and messages from other or revoked frames. Navigation is handled in the
+browser and never forwarded to the business API. Download links retain their
+existing behavior. A refused request shows an accessible message beside the link.
+
+The iframe keeps its opaque origin and existing sandbox permissions; external
+links do not enable popups or same-origin access inside the plugin. Both the API
+bootstrap and admin host must be deployed before existing plugins can use this
+behavior. Their ZIPs do not need to be republished.
+
 ## Loading performance
 
 Plugin shells preload their entry module while the sandbox bootstrap downloads.

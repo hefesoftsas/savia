@@ -1485,6 +1485,31 @@ window.fetch = (resource, init) => {
   }
   return nativeFetch(resource, init);
 };
+// External links are opened by the authenticated host, never by the sandbox.
+function routePluginExternalClick(event) {
+  if (!event.isTrusted || event.defaultPrevented || event.button !== 0) return;
+  const anchor = event.target?.closest?.("a[href]");
+  if (!anchor || anchor.target !== "_blank" || anchor.hasAttribute("download")) return;
+  event.preventDefault();
+  const previous = anchor.nextElementSibling;
+  if (previous?.hasAttribute("data-plugin-link-error")) previous.remove();
+  void requestHost("/navigation/external", "POST", { url: anchor.href }, activePanelId).catch(() => {
+    if (!anchor.isConnected) return;
+    const status = document.createElement("span");
+    status.setAttribute("role", "alert");
+    status.setAttribute("data-plugin-link-error", "");
+    const language = (document.documentElement.lang || "es").split("-")[0];
+    const messages = {
+      es: "No se pudo abrir el enlace. Usa el menú del enlace para abrirlo o copiar su dirección.",
+      en: "Could not open the link. Use the link menu to open it or copy its address.",
+      pt: "Não foi possível abrir o link. Use o menu do link para abri-lo ou copiar o endereço.",
+    };
+    status.textContent = " " + (messages[language] || messages.en);
+    anchor.insertAdjacentElement("afterend", status);
+    scheduleResize();
+  });
+}
+document.addEventListener("click", routePluginExternalClick);
 function selectRender(module, widgetId) {
   if (!widgetId) return module.render;
   return module.widgets?.[widgetId] ?? module.renderWidget ?? module.render;
