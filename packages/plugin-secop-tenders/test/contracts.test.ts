@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import manifest from "../savia-extension.json";
 import store from "../store.json";
+import {
+  validateRecord,
+  type StudioObject,
+} from "../../studio-shared/src/metadata";
 import { extensionManifestSchema } from "../../studio-shared/src/extension-package";
 import {
   storeJsonSchema,
@@ -8,6 +12,19 @@ import {
 } from "../../studio-shared/src/plugin-store";
 
 describe("SECOP plugin package contracts", () => {
+  it("persists detailed PDF reports beyond the default text field limit", () => {
+    const parsed = storeJsonSchema.parse(store);
+    const { object } = parsed.collections
+      .map(sanitizeStoreCollection)
+      .find((item) => item.object.name === "procurement_documents")!;
+    const report = "Document requirements and page references. ".repeat(500);
+    const result = validateRecord(object as unknown as StudioObject, {
+      name: "Invitation.pdf",
+      analysis: report,
+    });
+    expect(result.errors).toEqual({});
+    expect(result.data.analysis).toBe(report);
+  });
   it("accepts the localized extension manifest and store declarations", () => {
     expect(extensionManifestSchema.safeParse(manifest).success).toBe(true);
     const parsed = storeJsonSchema.safeParse(store);

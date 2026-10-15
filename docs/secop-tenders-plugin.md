@@ -96,6 +96,12 @@ completed analysis fails, its text remains visible with **Save result**; returni
 is disabled until the result is saved. The saved history shows up to 50 analyses
 for the process. No document or report is persisted in browser storage.
 
+Plugin 1.5.1 declares a 100,000-character analysis field limit, so detailed
+reports can be saved without truncation. Existing collections preserve their
+workspace field settings during upgrades. For an existing installation, also set
+the **AI analysis** field's maximum length to 100,000 in **Fields and form**;
+new installations receive that limit from the plugin declaration.
+
 The 1.4.0 feature requires both the shared host document-analysis deployment and
 the updated tenant ZIP. Later UI-only document changes can be delivered by ZIP
 without a host release.
@@ -157,6 +163,12 @@ across the entire SECOP II processes dataset. It returns a single catalog record
 under `/data`, with `id`, `values`, `count`, `complete` and `updated_at` fields.
 The three plugin actions fix the requested field in metadata, so user input
 cannot inject a query or select another endpoint.
+
+Catalogs use the owner's OAuth source. If all filters report a catalog error,
+test **SECOP Live** in **Sources and collections → External sources**. When the
+test asks for authorization, choose **Authorize again**, complete the existing
+read-only connection and reopen SECOP. The host coordinates concurrent token
+renewal across Workers; deploy its OAuth refresh lease migration with that fix.
 
 `provider/catalogs.mjs` contains the optional provider extension and its tests.
 Bind a dedicated `CATALOG_KV` namespace for public snapshots, separate from OAuth

@@ -75,6 +75,7 @@ export type McpSourceRow = {
   kind: string;
   config: string;
   encrypted_secret: string | null;
+  created_at?: string;
 };
 type Credentials = {
   token?: string;
@@ -92,6 +93,9 @@ type Flow = Credentials & {
 function reject(status: number, message: string): never {
   throw new McpAdapterError(status, message);
 }
+const OAUTH_REFRESH_LEASE_MS = 30_000;
+const OAUTH_REFRESH_WAIT_MS = 20_000;
+const OAUTH_REFRESH_POLL_MS = 100;
 export function createMcpSourceService(options: {
   db: D1Database;
   tenant: string;
@@ -143,13 +147,33 @@ export function createMcpSourceService(options: {
       : {};
   const encode = (id: string, data: Credentials) =>
     encryptSecret(JSON.stringify(data), integrationKey, credentialContext(id));
-  async function persist(row: McpSourceRow, data: Credentials) {
+  async function persist(
+    row: McpSourceRow,
+    data: Credentials,
+    refreshLeaseOwner?: string,
+  ) {
+    if (!row.created_at)
+      reject(409, "The connection changed. Refresh and try again.");
     const encrypted = await encode(row.id, data);
+    const leaseGuard = refreshLeaseOwner
+      ? ` AND EXISTS (SELECT 1 FROM studio_mcp_oauth_refresh_leases WHERE tenant_id=? AND owner_principal_id=? AND source_id=? AND lease_owner=? AND lease_expires_at>?)`
+      : "";
+    const values: unknown[] = [
+      encrypted,
+      tenant,
+      principalId,
+      row.id,
+      row.config,
+      row.created_at,
+      row.encrypted_secret,
+    ];
+    if (refreshLeaseOwner)
+      values.push(tenant, principalId, row.id, refreshLeaseOwner, Date.now());
     const result = await db
       .prepare(
-        "UPDATE studio_collection_sources SET encrypted_secret=? WHERE tenant_id=? AND owner_principal_id=? AND id=? AND encrypted_secret IS ?",
+        `UPDATE studio_collection_sources SET encrypted_secret=? WHERE tenant_id=? AND owner_principal_id=? AND id=? AND kind='mcp' AND config=? AND created_at=? AND encrypted_secret IS ?${leaseGuard}`,
       )
-      .bind(encrypted, tenant, principalId, row.id, row.encrypted_secret)
+      .bind(...values)
       .run();
     if (!result.meta.changes)
       reject(409, "The connection changed. Refresh and try again.");
@@ -158,8 +182,9 @@ export function createMcpSourceService(options: {
   function provider(
     data: Flow,
     config: McpSourceConfig,
-    save: () => Promise<void>,
+    save: (refreshLeaseOwner?: string) => Promise<void>,
     allowRedirect = false,
+    refreshLeaseOwner?: string,
   ): OAuthClientProvider {
     return {
       redirectUrl: data.redirectUri,
@@ -182,21 +207,21 @@ export function createMcpSourceService(options: {
         data.tokenExpiresAt = tokens.expires_in
           ? Date.now() + tokens.expires_in * 1000
           : undefined;
-        await save();
+        await save(refreshLeaseOwner);
       },
       clientInformation: () => data.client,
       saveClientInformation: async (client) => {
         data.client = client;
-        await save();
+        await save(refreshLeaseOwner);
       },
       authorizationServerInformation: () => data.server,
       saveAuthorizationServerInformation: async (server) => {
         data.server = server;
-        await save();
+        await save(refreshLeaseOwner);
       },
       saveCodeVerifier: async (v) => {
         data.verifier = v;
-        await save();
+        await save(refreshLeaseOwner);
       },
       codeVerifier: () =>
         data.verifier ??
@@ -204,7 +229,7 @@ export function createMcpSourceService(options: {
       state: () => data.state,
       saveState: async (state) => {
         data.state = state;
-        await save();
+        await save(refreshLeaseOwner);
       },
       storedState: () => data.state,
       redirectToAuthorization: async (url) => {
@@ -234,9 +259,128 @@ export function createMcpSourceService(options: {
           data.tokenExpiresAt = undefined;
         }
         if (scope === "all" || scope === "verifier") data.verifier = undefined;
-        await save();
+        await save(refreshLeaseOwner);
       },
     };
+  }
+  const loadCurrentSource = (row: McpSourceRow) =>
+    db
+      .prepare(
+        "SELECT id,kind,config,encrypted_secret,created_at FROM studio_collection_sources WHERE tenant_id=? AND owner_principal_id=? AND id=?",
+      )
+      .bind(tenant, principalId, row.id)
+      .first<McpSourceRow>();
+  function assertSameSource(
+    row: McpSourceRow,
+    current: McpSourceRow | null,
+  ): asserts current is McpSourceRow & { created_at: string } {
+    if (
+      !row.created_at ||
+      !current ||
+      current.kind !== "mcp" ||
+      current.config !== row.config ||
+      current.created_at !== row.created_at
+    )
+      reject(409, "The connection changed. Refresh and try again.");
+  }
+  const usableTokens = (data: Credentials) =>
+    Boolean(
+      data.tokens?.access_token &&
+      (!data.tokenExpiresAt || data.tokenExpiresAt >= Date.now() + 30000),
+    );
+  function flowFromLatest(data: Credentials): Flow {
+    if (!data.tokens?.access_token || !data.redirectUri)
+      reject(401, "Authorize this MCP source before using it.");
+    return { ...data, state: "", redirectUri: data.redirectUri };
+  }
+  async function claimRefreshLease(row: McpSourceRow, leaseOwner: string) {
+    const now = Date.now();
+    const lease = await db
+      .prepare(
+        "INSERT INTO studio_mcp_oauth_refresh_leases(tenant_id,owner_principal_id,source_id,lease_owner,lease_expires_at) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,owner_principal_id,source_id) DO UPDATE SET lease_owner=excluded.lease_owner,lease_expires_at=excluded.lease_expires_at WHERE studio_mcp_oauth_refresh_leases.lease_expires_at<=? RETURNING lease_owner",
+      )
+      .bind(
+        tenant,
+        principalId,
+        row.id,
+        leaseOwner,
+        now + OAUTH_REFRESH_LEASE_MS,
+        now,
+      )
+      .first<{ lease_owner: string }>();
+    return lease?.lease_owner === leaseOwner;
+  }
+  async function releaseRefreshLease(row: McpSourceRow, leaseOwner: string) {
+    await db
+      .prepare(
+        "DELETE FROM studio_mcp_oauth_refresh_leases WHERE tenant_id=? AND owner_principal_id=? AND source_id=? AND lease_owner=?",
+      )
+      .bind(tenant, principalId, row.id, leaseOwner)
+      .run();
+  }
+  const pause = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+  async function refreshExpiredTokens(
+    row: McpSourceRow,
+    config: McpSourceConfig,
+    initial: Flow,
+  ): Promise<Flow> {
+    const deadline = Date.now() + OAUTH_REFRESH_WAIT_MS;
+    let data = initial;
+    while (Date.now() < deadline) {
+      const leaseOwner = crypto.randomUUID();
+      if (await claimRefreshLease(row, leaseOwner)) {
+        try {
+          const current = await loadCurrentSource(row);
+          assertSameSource(row, current);
+          if (current.encrypted_secret !== row.encrypted_secret) {
+            const latest = await decode(current);
+            row.encrypted_secret = current.encrypted_secret;
+            data = flowFromLatest(latest);
+            if (usableTokens(data)) return data;
+          }
+          const flow: Flow = {
+            ...data,
+            state: "",
+            redirectUri: data.redirectUri,
+          };
+          if (usableTokens(flow)) return flow;
+          const save = (owner?: string) => persist(row, flow, owner);
+          await runOAuth(provider(flow, config, save, false, leaseOwner), {
+            serverUrl: config.endpoint,
+            scope: config.oauth?.scope,
+          });
+          if (!usableTokens(flow))
+            reject(401, "OAuth refresh failed. Connect this source again.");
+          const afterRefresh = await loadCurrentSource(row);
+          assertSameSource(row, afterRefresh);
+          if (afterRefresh.encrypted_secret !== row.encrypted_secret)
+            reject(409, "The connection changed. Refresh and try again.");
+          return flow;
+        } catch (error) {
+          if (error instanceof McpAdapterError && error.status === 409)
+            throw error;
+          reject(401, "OAuth refresh failed. Connect this source again.");
+        } finally {
+          try {
+            await releaseRefreshLease(row, leaseOwner);
+          } catch {
+            // The lease expires automatically if D1 is temporarily unavailable.
+          }
+        }
+      }
+
+      const current = await loadCurrentSource(row);
+      assertSameSource(row, current);
+      if (current.encrypted_secret !== row.encrypted_secret) {
+        const latest = await decode(current);
+        row.encrypted_secret = current.encrypted_secret;
+        data = flowFromLatest(latest);
+        if (usableTokens(data)) return data;
+      }
+      await pause(OAUTH_REFRESH_POLL_MS);
+    }
+    reject(503, "OAuth refresh is already in progress. Try again shortly.");
   }
   return {
     async initial(input: z.infer<typeof mcpSourceInputSchema>) {
@@ -289,19 +433,17 @@ export function createMcpSourceService(options: {
         };
       if (!data.tokens || !data.redirectUri)
         reject(401, "Authorize this MCP source before using it.");
-      const flow: Flow = { ...data, state: "", redirectUri: data.redirectUri };
+      let flow: Flow = { ...data, state: "", redirectUri: data.redirectUri };
       const save = () => persist(row, flow);
-      const authProvider = provider(flow, config, save);
       if (data.tokenExpiresAt && data.tokenExpiresAt < Date.now() + 30000) {
         try {
-          await runOAuth(authProvider, {
-            serverUrl: config.endpoint,
-            scope: config.oauth?.scope,
-          });
-        } catch {
+          flow = await refreshExpiredTokens(row, config, flow);
+        } catch (error) {
+          if (error instanceof McpAdapterError) throw error;
           reject(401, "OAuth refresh failed. Connect this source again.");
         }
       }
+      const authProvider = provider(flow, config, save);
       return {
         endpoint: config.endpoint,
         authProvider,

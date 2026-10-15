@@ -503,7 +503,8 @@
             },
             "analysis": {
               "type": "Textarea",
-              "label": "AI analysis"
+              "label": "AI analysis",
+              "config": { "maxLength": 100000 }
             },
             "model": {
               "type": "Textbox",

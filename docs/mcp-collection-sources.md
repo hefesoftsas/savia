@@ -12,6 +12,13 @@ Savia consumes external Streamable HTTP MCP servers through **Sources and collec
 
 Tokens, refresh tokens, client secrets and PKCE verifiers are encrypted in backend storage using the integrations key. They are not returned by source listing. OAuth state is tenant/owner/source scoped, expires after ten minutes and is consumed once. Source management and record access enforce the creating principal and tenant. A revoked or expired remote grant may require authorization again.
 
+Expiring OAuth tokens are renewed once per source, tenant and owner using a
+database lease shared across API Workers. Concurrent reads wait for that renewal
+and use its saved credentials, so opening several catalog filters does not send
+competing refresh grants. Source changes and deletion still invalidate pending
+work. If the remote grant was already revoked, authorize the source again in
+**Sources and collections**; retrying a catalog cannot restore a revoked grant.
+
 Discovery normally admits tools with `annotations.readOnlyHint: true`. Some existing servers omit annotations. An administrator who has reviewed their behavior may explicitly list those tools under **Additional read-only tool names** when creating the source. A tool explicitly annotated `readOnlyHint: false` cannot be enabled by this list. These declarations are trust decisions about the remote implementation; Savia cannot prove what a remote server does internally.
 
 ## Map records
@@ -42,6 +49,10 @@ SECOP's authorization page asks for an access key and checks it against the Work
 ## Deployment and checks
 
 Apply migration `0048_mcp_collection_sources.sql` before deploying API and Admin. It preserves existing sources while extending the source kind and adds expiring OAuth flows. Existing installations must retain their integrations encryption key. Do not edit the generated API reference; the tenant's OpenAPI/Scalar surface derives the new endpoints and payloads from runtime schemas.
+
+Apply `0059_mcp_oauth_refresh_leases.sql` before deploying the coordinated OAuth
+refresh implementation. The lease table stores only source identity, a random
+lease identifier and expiry; OAuth credentials remain encrypted in the source.
 
 Run the MCP adapter/source API tests, existing database-source regressions, the collection source panel tests, and API/Admin/shared TypeScript checks. Mocked protocol tests do not prove that SECOP's real consent page has been completed. Network calls require public HTTPS DNS targets, reject redirects, bound responses to 1 MB, and use a 15-second operation budget.
 
