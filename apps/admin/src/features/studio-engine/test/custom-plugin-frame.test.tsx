@@ -147,7 +147,10 @@ it("allows a plugin to download a generated PDF while keeping its origin isolate
   expect(permissions).not.toContain("allow-popups");
 });
 
-it("opens valid external HTTPS URLs through the host during a user gesture", () => {
+it.each([
+  "https://www.colombiacompra.gov.co/secop",
+  `${window.location.origin}/v1/studio/12/api/file/test/download`,
+])("opens safe navigation URL %s during a user gesture", (url) => {
   Object.defineProperty(navigator, "userActivation", {
     configurable: true,
     value: { isActive: true },
@@ -167,17 +170,13 @@ it("opens valid external HTTPS URLs through the host during a user gesture", () 
         id: "open-secops",
         path: "/navigation/external",
         method: "POST",
-        body: { url: "https://www.colombiacompra.gov.co:443/secop" },
+        body: { url },
         panelId: "panel-1",
       },
     }),
   );
 
-  expect(open).toHaveBeenCalledWith(
-    "https://www.colombiacompra.gov.co/secop",
-    "_blank",
-    "noopener,noreferrer",
-  );
+  expect(open).toHaveBeenCalledWith(url, "_blank", "noopener,noreferrer");
   expect(send).toHaveBeenCalledWith(
     expect.objectContaining({
       ns: "savia-plugin",
@@ -636,7 +635,11 @@ it("forwards only safe API error status and code through the iframe bridge", asy
   const transport = vi.fn(async () =>
     Response.json(
       {
-        error: { message: "Record version conflict", code: "VERSION_CONFLICT" },
+        error: {
+          message: "Record version conflict",
+          code: "VERSION_CONFLICT",
+          fileId: "550e8400-e29b-41d4-a716-446655440000",
+        },
       },
       { status: 409 },
     ),
@@ -670,6 +673,7 @@ it("forwards only safe API error status and code through the iframe bridge", asy
         error: "Record version conflict",
         errorStatus: 409,
         errorCode: "VERSION_CONFLICT",
+        errorFileId: "550e8400-e29b-41d4-a716-446655440000",
       }),
       "*",
     ),

@@ -15,7 +15,14 @@ export function createEmbeddedTransport(client: ApiClient, prefix: string) {
     )
       return Response.json({ error: "Ruta no permitida." }, { status: 400 });
     try {
-      const response = await client.requestResponse(prefix + path, init);
+      const response = await client.requestResponse(
+        prefix + path,
+        init,
+        (init.method ?? "GET").toUpperCase() === "POST" &&
+          /^\/api\/extensions\/[a-z0-9.-]+\/document-analysis$/.test(decoded)
+          ? 90000
+          : undefined,
+      );
       if (
         !response.ok &&
         response.headers.get("content-type")?.includes("application/json")
@@ -24,6 +31,15 @@ export function createEmbeddedTransport(client: ApiClient, prefix: string) {
         return Response.json(
           {
             ...body,
+            ...(typeof body.error === "object" &&
+            typeof body.error?.code === "string"
+              ? { code: body.error.code }
+              : {}),
+            ...(typeof body.error === "object" &&
+            typeof body.error?.fileId === "string" &&
+            /^[0-9a-f-]{36}$/i.test(body.error.fileId)
+              ? { fileId: body.error.fileId }
+              : {}),
             error:
               typeof body.error === "string"
                 ? body.error

@@ -36,7 +36,11 @@ type PrefetchedSettings = {
 
 function safeErrorMetadata(error: unknown) {
   if (!(error instanceof Error)) return {};
-  const value = error as { status?: unknown; code?: unknown };
+  const value = error as {
+    status?: unknown;
+    code?: unknown;
+    detail?: { error?: { fileId?: unknown }; fileId?: unknown };
+  };
   const status =
     typeof value.status === "number" &&
     Number.isInteger(value.status) &&
@@ -49,7 +53,14 @@ function safeErrorMetadata(error: unknown) {
     /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(value.code)
       ? value.code
       : undefined;
+  const fileId = value.detail?.error?.fileId ?? value.detail?.fileId;
   return {
+    ...(typeof fileId === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      fileId,
+    )
+      ? { errorFileId: fileId }
+      : {}),
     ...(status === undefined ? {} : { errorStatus: status }),
     ...(code === undefined ? {} : { errorCode: code }),
   };
@@ -96,8 +107,12 @@ function normalizeExternalNavigationUrl(value: unknown): string | null {
     return null;
   try {
     const url = new URL(value);
+    const localHttp =
+      url.protocol === "http:" &&
+      url.origin === window.location.origin &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
     if (
-      url.protocol !== "https:" ||
+      (url.protocol !== "https:" && !localHttp) ||
       !url.hostname ||
       url.username ||
       url.password
@@ -472,7 +487,10 @@ export function CustomPluginFrame({
         const body = message.body as { url?: unknown } | undefined;
         const url = normalizeExternalNavigationUrl(body?.url);
         if (!url) {
-          respond(false, "Only valid absolute HTTPS URLs can be opened.");
+          respond(
+            false,
+            "Only valid HTTPS or same-origin local development URLs can be opened.",
+          );
           return;
         }
         if (navigator.userActivation?.isActive !== true) {

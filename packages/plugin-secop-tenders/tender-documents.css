@@ -1,0 +1,91 @@
+.secop-document-page > button:first-child {
+  margin-bottom: 1rem;
+}
+.secop-document-page .secop-tabs [aria-selected="true"] {
+  border-bottom: 2px solid var(--secop-accent);
+  color: var(--secop-accent);
+}
+.secop-document-page [role="tabpanel"] {
+  padding-top: 1rem;
+}
+.secop-document-hint {
+  color: var(--secop-muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  max-width: 78ch;
+}
+.secop-document-list {
+  list-style: none;
+  margin: 1.2rem 0;
+  padding: 0;
+}
+.secop-document-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.2rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--secop-line);
+}
+.secop-document-list li > div:first-child {
+  min-width: 0;
+}
+.secop-document-list h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.4rem;
+  overflow-wrap: anywhere;
+}
+.secop-document-list p {
+  color: var(--secop-muted);
+  margin: 0;
+  font-size: 0.8rem;
+}
+.secop-document-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  flex-shrink: 0;
+}
+.secop-analysis-form {
+  margin: 1.5rem 0;
+  padding: 1.2rem;
+  background: var(--secop-soft);
+  border-radius: 8px;
+}
+.secop-analysis-form label {
+  display: grid;
+  gap: 0.6rem;
+}
+.secop-analysis-form input {
+  max-width: 100%;
+}
+.secop-analysis-history {
+  margin-top: 2rem;
+}
+.secop-analysis-report {
+  padding: 1rem 0;
+  border-top: 1px solid var(--secop-line);
+}
+.secop-analysis-report summary {
+  cursor: pointer;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.secop-analysis-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  max-width: 80ch;
+}
+@media (max-width: 700px) {
+  .secop-document-list li {
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+  .secop-document-actions {
+    flex-shrink: 1;
+  }
+}

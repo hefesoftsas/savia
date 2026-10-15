@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import manifest from "../savia-extension.json";
 import store from "../store.json";
 import { extensionManifestSchema } from "../../studio-shared/src/extension-package";
-import { storeJsonSchema } from "../../studio-shared/src/plugin-store";
+import {
+  storeJsonSchema,
+  sanitizeStoreCollection,
+} from "../../studio-shared/src/plugin-store";
 
 describe("SECOP plugin package contracts", () => {
   it("accepts the localized extension manifest and store declarations", () => {
@@ -10,6 +13,8 @@ describe("SECOP plugin package contracts", () => {
     const parsed = storeJsonSchema.safeParse(store);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
+    for (const collection of parsed.data.collections)
+      expect(() => sanitizeStoreCollection(collection)).not.toThrow();
     expect(parsed.data.actions).toContainEqual(
       expect.objectContaining({
         id: "detail",

@@ -695,3 +695,26 @@ the literal placeholders `{name}`, `{previous}`, `{current}`, `{deadline}` and
 record, so a tenant member's OAuth grant cannot be reused for another creator.
 For a complete declaration and end-user behavior, see the
 [SECOP tenders plugin guide](secop-tenders-plugin.md).
+
+## PDF analysis from installed plugins
+
+Installed Store plugins can submit a user-selected PDF for analysis in their
+current Studio workspace. This capability accepts only a collection declared by
+the enabled plugin and preserves the actor's normal record and attachment access
+checks. The file is stored as a record attachment before analysis; an existing
+attachment can be retried without uploading another copy. Requests and decoded
+files are bounded, and the host validates the PDF signature.
+
+Analysis uses the workspace's configured AI key and summary/chat model entirely
+on the server. The model receives the PDF through the configured provider's text
+parser, with instructions to treat document content as untrusted data and to avoid
+invented page references or conclusions from an unreadable file. The caller saves
+the returned report using its declared backend collection. Provider errors return
+a safe code and the owned stored file ID for retry; no credentials or upstream
+response bodies cross the sandbox bridge. Analysis requests have a 90-second bridge
+time budget; the provider call has a 60-second deadline. The iframe's sandbox and
+network restrictions remain unchanged.
+
+Stored attachment links preserve the actual public origin. HTTP is accepted only
+for the same loopback development origin; external navigation otherwise requires
+HTTPS. This keeps local Vite downloads working without changing production rules.

@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SecopCatalogDependencies } from "../provider/catalogs.mjs";
 import { registerSecopCatalogTool } from "../provider/catalogs.mjs";
 
 const DATASET = "p6dx-8zbt";
+afterEach(() => vi.useRealTimers());
 
 function setup({
   fetch = vi.fn(),
@@ -256,6 +257,8 @@ describe("SECOP provider catalog tool", () => {
   });
 
   it("returns a stale KV snapshot immediately and refreshes KV and edge cache in the background", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-14T12:00:00Z"));
     const stale = catalog(
       ["Caldas"],
       new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
