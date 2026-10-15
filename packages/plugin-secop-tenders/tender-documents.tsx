@@ -3,6 +3,7 @@ import type { PluginApi } from "@savia/plugin-sdk";
 import { normalizeSecopRow, saveInterest, type SecopRow } from "./logic";
 import {
   analyzeTenderPdf,
+  safeStoredFileUrl,
   DOCUMENTS_COLLECTION,
   loadTenderDocuments,
   pdfBase64,
@@ -555,9 +556,14 @@ export function TenderDocuments({
                 <p className="secop-document-hint">
                   {report.model} · {t.aiHint}
                 </p>
-                {report.file_url?.startsWith("https://") && (
+                {safeStoredFileUrl(report.file_url, window.location.origin) && (
                   <a
-                    href={report.file_url}
+                    href={
+                      safeStoredFileUrl(
+                        report.file_url,
+                        window.location.origin,
+                      ) ?? undefined
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                   >

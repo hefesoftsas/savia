@@ -107,8 +107,12 @@ function normalizeExternalNavigationUrl(value: unknown): string | null {
     return null;
   try {
     const url = new URL(value);
+    const localHttp =
+      url.protocol === "http:" &&
+      url.origin === window.location.origin &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
     if (
-      url.protocol !== "https:" ||
+      (url.protocol !== "https:" && !localHttp) ||
       !url.hostname ||
       url.username ||
       url.password
@@ -483,7 +487,10 @@ export function CustomPluginFrame({
         const body = message.body as { url?: unknown } | undefined;
         const url = normalizeExternalNavigationUrl(body?.url);
         if (!url) {
-          respond(false, "Only valid absolute HTTPS URLs can be opened.");
+          respond(
+            false,
+            "Only valid HTTPS or same-origin local development URLs can be opened.",
+          );
           return;
         }
         if (navigator.userActivation?.isActive !== true) {

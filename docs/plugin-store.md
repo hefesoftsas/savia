@@ -714,3 +714,7 @@ a safe code and the owned stored file ID for retry; no credentials or upstream
 response bodies cross the sandbox bridge. Analysis requests have a 90-second bridge
 time budget; the provider call has a 60-second deadline. The iframe's sandbox and
 network restrictions remain unchanged.
+
+Stored attachment links preserve the actual public origin. HTTP is accepted only
+for the same loopback development origin; external navigation otherwise requires
+HTTPS. This keeps local Vite downloads working without changing production rules.

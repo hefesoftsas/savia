@@ -5,6 +5,7 @@ import {
   normalizeTenderDocument,
   pdfBase64,
   documentKind,
+  safeStoredFileUrl,
 } from "../documents";
 const url =
   "https://community.secop.gov.co/Public/Archive/RetrieveFile/Index?DocumentId=123&InCommunity=False";
@@ -75,4 +76,22 @@ describe("tender documents", () => {
       pdfBase64(new File([new Uint8Array(5 * 1024 * 1024 + 1)], "large.pdf")),
     ).rejects.toThrow();
   });
+});
+
+it("retains authenticated local HTTP downloads and rejects foreign attachment origins", () => {
+  expect(
+    safeStoredFileUrl(
+      "http://localhost:5173/v1/studio/12/api/file/file1/download",
+      "http://localhost:5173",
+    ),
+  ).toBe("http://localhost:5173/v1/studio/12/api/file/file1/download");
+  expect(
+    safeStoredFileUrl(
+      "http://localhost:5173/file",
+      "https://savia-preview.hefesoft.com",
+    ),
+  ).toBeNull();
+  expect(
+    safeStoredFileUrl("http://example.com/file", "http://example.com"),
+  ).toBeNull();
 });

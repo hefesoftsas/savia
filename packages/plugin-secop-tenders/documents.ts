@@ -139,3 +139,21 @@ export async function analyzeTenderPdf(
     });
   return payload.data;
 }
+
+/** Saved attachments stay on the authenticated host, including local HTTP development. */
+export function safeStoredFileUrl(
+  value: unknown,
+  origin: string,
+): string | null {
+  try {
+    const url = new URL(String(value));
+    if (url.origin !== origin || url.username || url.password) return null;
+    return url.protocol === "https:" ||
+      (url.protocol === "http:" &&
+        ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}

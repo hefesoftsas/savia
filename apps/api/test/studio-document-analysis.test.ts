@@ -157,62 +157,67 @@ describe("Studio extension document analysis", () => {
     });
   });
 
-  it("retries analysis from an ACL-loaded saved file without uploading a duplicate", async () => {
-    const persist = vi.fn();
-    const fetchImpl = vi.fn(async () =>
-      Response.json({ choices: [{ message: { content: "Retry analysis" } }] }),
-    );
-    const request = new Request(
-      "https://savia.test/v1/studio/101/api/extensions/example.documents/document-analysis",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          object: "customer_documents",
-          recordId: "record-1",
-          fileId: "6f519c54-f669-4b2c-aed4-4a7999297bd2",
-          locale: "es",
+  it.each(["https://savia.test", "http://localhost:5173"])(
+    "retries a saved file and preserves public download origin %s",
+    async (origin) => {
+      const persist = vi.fn();
+      const fetchImpl = vi.fn(async () =>
+        Response.json({
+          choices: [{ message: { content: "Retry analysis" } }],
         }),
-      },
-    );
-    const response = await handleStudioDocumentAnalysis({
-      request,
-      tenantId: 101,
-      actor: { principal: { id: "member-1" } } as never,
-      extensionId: "example.documents",
-      assistantConfiguration: configuration(),
-      isExtensionAvailable: async () => true,
-      isCollectionDeclared: async () => true,
-      persist,
-      loadExisting: async ({ fileId, object, recordId }) => ({
-        file: {
-          id: fileId,
-          name: "pliego.pdf",
-          mime: "application/pdf",
-          size: pdfBytes.byteLength,
-          version: 1,
+      );
+      const request = new Request(
+        `${origin}/v1/studio/101/api/extensions/example.documents/document-analysis`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            object: "customer_documents",
+            recordId: "record-1",
+            fileId: "6f519c54-f669-4b2c-aed4-4a7999297bd2",
+            locale: "es",
+          }),
         },
-        input: {
-          object,
-          recordId,
-          filename: "pliego.pdf",
-          content: pdfBytes,
-          base64: pdfBase64,
-          locale: "es",
-        },
-      }),
-      fetchImpl,
-    });
-    const result = await response.json();
+      );
+      const response = await handleStudioDocumentAnalysis({
+        request,
+        tenantId: 101,
+        actor: { principal: { id: "member-1" } } as never,
+        extensionId: "example.documents",
+        assistantConfiguration: configuration(),
+        isExtensionAvailable: async () => true,
+        isCollectionDeclared: async () => true,
+        persist,
+        loadExisting: async ({ fileId, object, recordId }) => ({
+          file: {
+            id: fileId,
+            name: "pliego.pdf",
+            mime: "application/pdf",
+            size: pdfBytes.byteLength,
+            version: 1,
+          },
+          input: {
+            object,
+            recordId,
+            filename: "pliego.pdf",
+            content: pdfBytes,
+            base64: pdfBase64,
+            locale: "es",
+          },
+        }),
+        fetchImpl,
+      });
+      const result = await response.json();
 
-    expect(response.status).toBe(201);
-    expect(persist).not.toHaveBeenCalled();
-    expect(result.data.file.id).toBe("6f519c54-f669-4b2c-aed4-4a7999297bd2");
-    expect(result.data.file.downloadUrl).toBe(
-      "https://savia.test/v1/studio/101/api/file/6f519c54-f669-4b2c-aed4-4a7999297bd2/download",
-    );
-    expect(result.data.analysis).toBe("Retry analysis");
-  });
+      expect(response.status).toBe(201);
+      expect(persist).not.toHaveBeenCalled();
+      expect(result.data.file.id).toBe("6f519c54-f669-4b2c-aed4-4a7999297bd2");
+      expect(result.data.file.downloadUrl).toBe(
+        `${origin}/v1/studio/101/api/file/6f519c54-f669-4b2c-aed4-4a7999297bd2/download`,
+      );
+      expect(result.data.analysis).toBe("Retry analysis");
+    },
+  );
 
   it("rejects collections that are not declared by the installed extension", async () => {
     const request = new Request(

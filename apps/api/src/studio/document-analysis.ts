@@ -488,7 +488,6 @@ export async function handleStudioDocumentAnalysis(input: {
       now: input.now,
     });
     const requestUrl = new URL(input.request.url);
-    requestUrl.protocol = "https:";
     const studioPrefix = requestUrl.pathname.replace(
       /\/api\/extensions\/[^/]+\/document-analysis$/,
       "",
