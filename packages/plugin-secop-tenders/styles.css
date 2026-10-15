@@ -199,16 +199,41 @@
   font-size: 0.84rem;
   overflow-wrap: anywhere;
 }
-.secop-card footer,
 .secop-interest footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 0.8rem;
 }
-.secop-card footer button,
 .secop-interest footer button {
   min-width: 6.5rem;
+}
+.secop-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+.secop-card footer > :is(button, a) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 6.5rem;
+  padding: 0.55rem 0.7rem;
+}
+.secop-card footer > a {
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+  text-decoration: none;
+}
+.secop-card footer > a:hover {
+  text-decoration: underline;
+}
+.secop-card footer > .secop-muted {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 .secop-muted {
   color: var(--secop-muted);
@@ -322,6 +347,17 @@
   }
 }
 @media (max-width: 480px) {
+  .secop-card footer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .secop-card footer > :last-child {
+    grid-column: 1 / -1;
+  }
+  .secop-card footer > :is(button, a, .secop-muted) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
   .secop-advanced,
   .secop-edit-grid {
     grid-template-columns: 1fr;
