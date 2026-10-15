@@ -12,7 +12,9 @@ describe("dossier connector client", () => {
   it("uses the configured secret-backed HTTP connector and unwraps results", async () => {
     const execute = vi
       .fn()
-      .mockResolvedValue({ output: { data: { id: "job-1" } } });
+      .mockResolvedValue({
+        output: { status: 200, data: { data: { id: "job-1" } } },
+      });
     const api = { actions: { execute } } as unknown as PluginApi;
     expect(
       await new DossierClient(api, "connection-1").call("prepare", {
@@ -28,7 +30,10 @@ describe("dossier connector client", () => {
     const api = {
       actions: {
         execute: vi.fn().mockResolvedValue({
-          output: { error: { code: "REVISION_CONFLICT" } },
+          output: {
+            status: 200,
+            data: { error: { code: "REVISION_CONFLICT" } },
+          },
         }),
       },
     } as unknown as PluginApi;

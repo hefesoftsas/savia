@@ -150,6 +150,16 @@ export function DossierPanel({
         }),
       ]);
       if (!alive.current || request !== sequence.current) return;
+      if (
+        !data ||
+        !Array.isArray(data.documents) ||
+        !Array.isArray(data.requirements) ||
+        !Array.isArray(data.jobs) ||
+        !Array.isArray(list?.companies)
+      )
+        throw new Error(
+          "El servicio devolvió un expediente inválido. Reintenta Actualizar.",
+        );
       const loaded = Math.max(
         snapshotRef.current?.documents.length ?? 0,
         snapshotRef.current?.requirements.length ?? 0,

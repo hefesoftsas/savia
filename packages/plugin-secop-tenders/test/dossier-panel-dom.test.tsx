@@ -56,14 +56,17 @@ async function mount(configured = true, report = false) {
       };
       return {
         output: {
-          data:
-            input.operation === "companies"
-              ? { companies: [] }
-              : input.operation === "dossier"
-                ? state
-                : input.operation === "conversation"
-                  ? null
-                  : { job: { id: "job", state: "queued" } },
+          status: 200,
+          data: {
+            data:
+              input.operation === "companies"
+                ? { companies: [] }
+                : input.operation === "dossier"
+                  ? state
+                  : input.operation === "conversation"
+                    ? null
+                    : { job: { id: "job", state: "queued" } },
+          },
         },
       };
     },

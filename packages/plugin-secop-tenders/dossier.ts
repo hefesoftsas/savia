@@ -125,19 +125,22 @@ export class DossierClient {
   ) {}
   async call<T>(operation: string, input: Record<string, unknown>): Promise<T> {
     const result = await this.api.actions.execute<{
-      data?: T;
-      error?: { code?: string };
+      status: number;
+      data: { data?: T; error?: { code?: string } };
     }>("dossier-call", {
       connectionId: this.connectionId,
       input: { operation, arguments: input },
     });
+    const response = result.output?.data;
     if (
-      !result.output ||
-      result.output.error ||
-      !Object.hasOwn(result.output, "data")
+      !response ||
+      typeof response !== "object" ||
+      response.error ||
+      !Object.hasOwn(response, "data") ||
+      !Number.isInteger(result.output?.status)
     )
-      throw new Error(result.output?.error?.code ?? "INVALID_SERVICE_RESPONSE");
-    return result.output.data as T;
+      throw new Error(response?.error?.code ?? "INVALID_SERVICE_RESPONSE");
+    return response.data as T;
   }
 }
 export function safeDossierUploadUrl(value: unknown) {
