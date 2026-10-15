@@ -70,7 +70,7 @@ describe("remote document downloads", () => {
     ).rejects.toMatchObject({ code: "DOCUMENT_DOWNLOAD_FAILED" });
     expect(
       fetcher.mock.calls.filter(
-        ([url]) => !String(url).includes("cloudflare-dns.com"),
+        ([url]) => new URL(String(url)).hostname !== "cloudflare-dns.com",
       ),
     ).toHaveLength(1);
     expect(
@@ -107,7 +107,7 @@ describe("remote document downloads", () => {
     expect(result.base64).toBe(btoa("%PDF-1.7\nexample"));
     expect(
       fetcher.mock.calls.filter(
-        ([url]) => !String(url).includes("cloudflare-dns.com"),
+        ([url]) => new URL(String(url)).hostname !== "cloudflare-dns.com",
       ),
     ).toHaveLength(2);
   });
@@ -130,7 +130,7 @@ describe("remote document downloads", () => {
     ).rejects.toMatchObject({ code: "DOCUMENT_DOWNLOAD_FAILED" });
     expect(
       fetcher.mock.calls.filter(
-        ([url]) => !String(url).includes("cloudflare-dns.com"),
+        ([url]) => new URL(String(url)).hostname !== "cloudflare-dns.com",
       ),
     ).toHaveLength(1);
   });
@@ -156,7 +156,7 @@ describe("remote document downloads", () => {
     ).rejects.toMatchObject({ code: "DOCUMENT_DOWNLOAD_FAILED" });
     expect(
       fetcher.mock.calls.filter(
-        ([url]) => !String(url).includes("cloudflare-dns.com"),
+        ([url]) => new URL(String(url)).hostname !== "cloudflare-dns.com",
       ),
     ).toHaveLength(1);
   });
