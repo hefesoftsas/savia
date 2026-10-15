@@ -19,8 +19,17 @@ stay credential-free and never create a stack.
 
 GitHub Actions → **Preview environment** → Run workflow:
 
-- `branch`: the branch to deploy (never `main`)
+- Run the workflow from `main`. Other workflow refs are rejected.
+- `branch`: a non-production branch whose tip is already an ancestor of the
+  workflow commit on `main`. Unmerged or squash-merged branch tips are rejected.
 - `action`: `deploy`
+
+Before installing dependencies, the workflow validates the branch name, fetches
+its exact head, and checks that the commit belongs to the approved `main` history.
+It then checks out that immutable commit. Unreviewed branch scripts, package
+hooks, build configuration, and local actions never run with deployment secrets.
+Branch previews for unmerged code need a separate build pipeline without
+infrastructure credentials; the privileged workflow does not provide that mode.
 
 After a few minutes the job prints the gateway URL plus per-worker status.
 Log in with `savia.admin@example.test`; the bootstrap password is printed in
@@ -29,7 +38,11 @@ the deploy summary (ephemeral per preview, like all its secrets).
 ## One-click destroy
 
 Same workflow, `action: destroy`, `confirm:` set to the exact branch name.
-Without a matching confirm the job refuses. Destroy deletes the 5 workers,
+Without a matching confirm the job refuses. Destroy runs the scripts from the
+trusted workflow commit on `main`; the target branch may already be deleted.
+The branch name identifies resources and is never inserted into shell source.
+
+Destroy deletes the 5 workers,
 both D1 databases, and empties + deletes the R2 bucket through the branch Pulumi
 stack. A missing/mismatched stack or deletion failure stops the job; the shared
 state bucket and plugin registry are never targets.
