@@ -257,6 +257,10 @@
     {
       "filename": "0058_savia_flows_native_causation.sql",
       "sha256": "0335c692aa263cab68139acafe121b33c42b3e2723873bd141a6e3217b86714b"
+    },
+    {
+      "filename": "0059_mcp_oauth_refresh_leases.sql",
+      "sha256": "3efbcc41b66b9ef72fc35a2c2748ad3bd6398ad4924df4ed9716b4b98a7ea335"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -619,6 +623,11 @@
     },
     {
       "type": "index",
+      "name": "studio_mcp_oauth_refresh_leases_expiry",
+      "table": "studio_mcp_oauth_refresh_leases"
+    },
+    {
+      "type": "index",
       "name": "studio_record_history_expiry",
       "table": "studio_record_history"
     },
@@ -716,6 +725,11 @@
       "type": "table",
       "name": "studio_mcp_oauth_flows",
       "table": "studio_mcp_oauth_flows"
+    },
+    {
+      "type": "table",
+      "name": "studio_mcp_oauth_refresh_leases",
+      "table": "studio_mcp_oauth_refresh_leases"
     },
     {
       "type": "table",
@@ -7124,6 +7138,64 @@
         {
           "columns": [
             "state"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "studio_mcp_oauth_refresh_leases",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "owner_principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "source_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "lease_owner",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "lease_expires_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "owner_principal_id",
+            "source_id"
           ],
           "origin": "pk"
         }
