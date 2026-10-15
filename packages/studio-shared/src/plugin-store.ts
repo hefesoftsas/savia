@@ -647,6 +647,10 @@ export const storeJsonSchema = z
     formatVersion: z.literal(1),
     actions: z.array(storeActionSchema).max(20).default([]),
     connectors: z.array(storeConnectorSchema).max(10).default([]),
+    documentDownloads: z
+      .object({ allowedHosts: z.array(storeHostSchema).min(1).max(20) })
+      .strict()
+      .optional(),
     collections: z.array(storeCollectionSchema).max(20).default([]),
     monitors: z.array(storeRecordMonitorSchema).max(10).default([]),
     bundles: z.array(storeWorkflowBundleSchema).max(20).default([]),

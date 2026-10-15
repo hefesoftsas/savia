@@ -57,12 +57,21 @@ with retry and a link to the official process. Documents load in pages of 20 wit
 retry and load-more controls. The public file catalog covers documents since 2025;
 an empty catalog does not prove that the SECOP process has no attachments.
 
-**Download on SECOP** opens the original official document URL. If SECOP asks for
-a CAPTCHA, the user completes it on SECOP and downloads the file there. Savia does
-not solve or bypass that challenge. **Analyze this PDF** or **Analyze a downloaded
-PDF** accepts a user-selected PDF up to 5 MiB; the analysis reads the uploaded bytes,
-not the document title or URL. The selected file must begin with a PDF signature.
-Other attachments remain available through their original download links.
+**Analyze this PDF** downloads the official document on the server, verifies its
+PDF signature and 5 MiB limit, attaches it to the saved interest, and runs the
+configured AI analysis without a manual download or upload. The installed plugin declares `community.secop.gov.co` as its permitted download host. Public HTTPS URLs
+and every redirect are checked against that policy before fetching; credentials and browser cookies
+are never forwarded. The downloaded bytes, not the title or URL, are analyzed.
+Download errors remain distinct from AI provider errors.
+
+If the source returns a CAPTCHA or recognizable access challenge, Savia stops
+before attaching a file or invoking AI. The document stays selected and the UI
+shows the official link, **Retry automatic download**, and the existing manual
+PDF selection. Completing the challenge in the browser may not authorize the
+server's separate connection; if retry remains blocked, download on SECOP and
+attach the file. Savia does not solve or bypass CAPTCHAs. **Analyze a downloaded
+PDF** remains available for manually obtained files. Non-PDF attachments remain
+available through their original download links.
 
 **Save interest and analyze PDF** runs through an explicit React click handler,
 so it works without enabling native form submissions in the sandbox. It saves the tender as an interest,

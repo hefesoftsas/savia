@@ -380,6 +380,25 @@ export function registerStudioRoutes(
             ),
           );
         },
+        allowedDownloadHosts:
+          (await storeConfigFor(db, tenantKey, extensionId))?.documentDownloads
+            ?.allowedHosts ?? [],
+        authorizeTarget: async (object, recordId) => {
+          // Reuse the authenticated gateway's row ACL and existence check
+          // before making any outbound document request. Upload enforces write
+          // access again before persistence or AI analysis.
+          const target = await gateway.fetch(
+            new Request(
+              `https://crm.internal/api/files/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}`,
+            ),
+          );
+          if (!target.ok)
+            throw new DocumentAnalysisError(
+              "The document record is not accessible.",
+              target.status === 403 ? 403 : 404,
+              "DOCUMENT_TARGET_UNAVAILABLE",
+            );
+        },
         persist: async (document) => {
           const form = new FormData();
           const bytes = new Uint8Array(document.content.byteLength);

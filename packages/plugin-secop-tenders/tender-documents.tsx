@@ -26,7 +26,13 @@ const copy = {
     download: "Descargar en SECOP",
     analyze: "Analizar este PDF",
     upload: "Analizar un PDF descargado",
-    hint: "Si SECOP solicita un CAPTCHA, complétalo en su página y descarga el archivo. Luego selecciónalo aquí. No se analiza el enlace ni el nombre: se analiza el PDF que adjuntes.",
+    hint: "Analizar este PDF descarga el archivo oficial y guarda el análisis automáticamente. Solo se analiza el contenido del PDF, nunca el enlace ni su nombre.",
+    challenge:
+      "SECOP solicita un CAPTCHA o una comprobación de acceso. Abre el documento, completa la comprobación y reintenta. Si continúa bloqueado, descarga el PDF allí y adjúntalo aquí.",
+    retryDownload: "Reintentar descarga automática",
+    remoteRunning: "Descargando PDF y analizando…",
+    downloadFailed:
+      "No se pudo descargar el PDF. Reintenta o consulta el documento original en SECOP.",
     file: "PDF descargado (máximo 5 MB)",
     run: "Guardar interés y analizar PDF",
     running: "Guardando archivo y analizando…",
@@ -67,7 +73,13 @@ const copy = {
     download: "Download on SECOP",
     analyze: "Analyze this PDF",
     upload: "Analyze a downloaded PDF",
-    hint: "If SECOP requests a CAPTCHA, complete it on its page and download the file. Then select it here. Analysis reads the attached PDF, not the link or filename.",
+    hint: "Analyze this PDF downloads the official file and saves its analysis automatically. Only the PDF content is analyzed, never the link or filename.",
+    challenge:
+      "SECOP requires a CAPTCHA or access check. Open the document, complete the check, and retry. If it remains blocked, download the PDF there and attach it here.",
+    retryDownload: "Retry automatic download",
+    remoteRunning: "Downloading PDF and analyzing…",
+    downloadFailed:
+      "The PDF could not be downloaded. Retry or open the original document on SECOP.",
     file: "Downloaded PDF (up to 5 MB)",
     run: "Save interest and analyze PDF",
     running: "Saving file and analyzing…",
@@ -108,7 +120,13 @@ const copy = {
     download: "Baixar no SECOP",
     analyze: "Analisar este PDF",
     upload: "Analisar um PDF baixado",
-    hint: "Se o SECOP solicitar um CAPTCHA, resolva-o na página e baixe o arquivo. Depois selecione-o aqui. A análise lê o PDF anexado, não o link ou o nome.",
+    hint: "Analisar este PDF baixa o arquivo oficial e salva a análise automaticamente. Apenas o conteúdo do PDF é analisado, nunca o link ou o nome.",
+    challenge:
+      "O SECOP exige CAPTCHA ou verificação de acesso. Abra o documento, conclua a verificação e tente novamente. Se continuar bloqueado, baixe o PDF e anexe-o aqui.",
+    retryDownload: "Tentar download automático novamente",
+    remoteRunning: "Baixando PDF e analisando…",
+    downloadFailed:
+      "Não foi possível baixar o PDF. Tente novamente ou abra o documento original no SECOP.",
     file: "PDF baixado (até 5 MB)",
     run: "Salvar interesse e analisar PDF",
     running: "Salvando arquivo e analisando…",
@@ -136,6 +154,9 @@ const copy = {
     historyLoading: "Carregando análises salvas…",
   },
 };
+function analysisFilename(name: string) {
+  return name.length > 200 ? name.slice(0, 196) + name.slice(-4) : name;
+}
 type SavedAnalysis = Record<string, unknown> & {
   id: string;
   name: string;
@@ -166,6 +187,8 @@ export function TenderDocuments({
   const [selected, setSelected] = useState<TenderDocument | null | undefined>(
     undefined,
   );
+  const [manualUpload, setManualUpload] = useState(false);
+  const [remoteBusy, setRemoteBusy] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
@@ -173,6 +196,10 @@ export function TenderDocuments({
   const [historyError, setHistoryError] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [unsaved, setUnsaved] = useState<Record<string, unknown> | null>(null);
+  const feedback = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (analysisError) feedback.current?.focus();
+  }, [analysisError]);
   const alive = useRef(true);
   const currentRequest = useRef(0);
   const lock = useRef(false);
@@ -243,15 +270,22 @@ export function TenderDocuments({
       if (alive.current) setUnsaved(values);
     }
   }
-  async function analyze() {
-    if (!file || busy) return;
+  async function analyze(remote?: TenderDocument) {
+    if ((!file && !remote) || busy) return;
+    const document = remote ?? selected;
+    if (remote) {
+      setSelected(remote);
+      setManualUpload(false);
+      setFile(null);
+    }
+    setRemoteBusy(Boolean(remote));
     setBusy(true);
     setAnalysisError("");
     let targetRecordId: string | undefined;
     try {
-      let data: string;
+      let data: string | undefined;
       try {
-        data = await pdfBase64(file);
+        if (!remote) data = await pdfBase64(file!);
       } catch {
         setAnalysisError(t.invalid);
         return;
@@ -267,17 +301,22 @@ export function TenderDocuments({
         recordId: interest.record.id,
         ...(retryFile.current?.recordId === interest.record.id
           ? { fileId: retryFile.current.fileId }
-          : { filename: file.name, data }),
+          : remote
+            ? {
+                filename: analysisFilename(remote.name),
+                downloadUrl: remote.url,
+              }
+            : { filename: analysisFilename(file!.name), data: data! }),
         locale,
-        ...(selected ? { sourceUrl: selected.url } : {}),
+        ...(document ? { sourceUrl: document.url } : {}),
       });
       const downloadUrl = (result.file as { downloadUrl?: string }).downloadUrl;
       const values = {
-        name: file.name,
+        name: remote?.name ?? file!.name,
         process_id: processId,
         interest_id: interest.record.id,
-        document_id: selected?.id ?? "",
-        source_url: selected?.url ?? "",
+        document_id: document?.id ?? "",
+        source_url: document?.url ?? "",
         file_id: result.file.id,
         file_url: downloadUrl ?? "",
         analysis: result.analysis,
@@ -294,13 +333,25 @@ export function TenderDocuments({
       const failed = error as { code?: string; fileId?: string };
       if (failed.fileId && targetRecordId)
         retryFile.current = { fileId: failed.fileId, recordId: targetRecordId };
-      if (alive.current)
+      if (alive.current) {
+        if (failed.code === "DOCUMENT_ACCESS_CHALLENGE") setManualUpload(true);
         setAnalysisError(
-          (error as { code?: string })?.code?.includes("NOT_CONFIGURED") ||
-            (error as { code?: string }).code === "ANALYSIS_UNAVAILABLE"
-            ? t.notConfigured
-            : t.analysisError,
+          failed.code === "DOCUMENT_ACCESS_CHALLENGE"
+            ? t.challenge
+            : failed.code === "DOCUMENT_TOO_LARGE" ||
+                failed.code === "INVALID_DOCUMENT" ||
+                failed.code === "UNSUPPORTED_DOCUMENT_TYPE"
+              ? t.invalid
+              : failed.code === "DOCUMENT_DOWNLOAD_FAILED"
+                ? t.downloadFailed
+                : (error as { code?: string })?.code?.includes(
+                      "NOT_CONFIGURED",
+                    ) ||
+                    (error as { code?: string }).code === "ANALYSIS_UNAVAILABLE"
+                  ? t.notConfigured
+                  : t.analysisError,
         );
+      }
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -416,18 +467,20 @@ export function TenderDocuments({
                   <a href={item.url} target="_blank" rel="noopener noreferrer">
                     {t.download}
                   </a>
-                  <button
-                    type="button"
-                    disabled={busy || !!unsaved}
-                    onClick={() => {
-                      retryFile.current = null;
-                      setSelected(item);
-                      setFile(null);
-                      setAnalysisError("");
-                    }}
-                  >
-                    {t.analyze}
-                  </button>
+                  {/\.pdf$/i.test(item.name) && (
+                    <button
+                      type="button"
+                      disabled={busy || !!unsaved}
+                      onClick={() => {
+                        retryFile.current = null;
+                        void analyze(item);
+                      }}
+                    >
+                      {busy && selected?.id === item.id
+                        ? t.remoteRunning
+                        : t.analyze}
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
@@ -441,13 +494,15 @@ export function TenderDocuments({
               {t.more}
             </button>
           )}
-          {selected === undefined ? (
+          {selected === undefined || !manualUpload ? (
             <button
               type="button"
               disabled={busy || !!unsaved}
               onClick={() => {
                 retryFile.current = null;
                 setSelected(null);
+                setManualUpload(true);
+                setFile(null);
                 setAnalysisError("");
               }}
             >
@@ -504,13 +559,36 @@ export function TenderDocuments({
           )}
           {busy && (
             <p role="status" className="secop-loading">
-              {t.running}
+              {remoteBusy ? t.remoteRunning : t.running}
             </p>
           )}
           {analysisError && (
-            <p role="alert" className="secop-error">
-              {analysisError}
-            </p>
+            <div
+              ref={feedback}
+              tabIndex={-1}
+              role="alert"
+              className="secop-error"
+            >
+              <p>{analysisError}</p>
+              {selected && (
+                <div className="secop-document-actions">
+                  <a
+                    href={selected.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t.download}
+                  </a>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void analyze(selected)}
+                  >
+                    {t.retryDownload}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {unsaved && (
             <div role="alert" className="secop-error">

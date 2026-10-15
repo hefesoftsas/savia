@@ -1,6 +1,10 @@
 import { z } from "@hono/zod-openapi";
 import type { AssistantConfigurationRepository } from "../assistant/configuration";
 import type { AppActor } from "../auth/types";
+import {
+  downloadRemotePdf,
+  RemoteDocumentDownloadError,
+} from "./document-analysis-download";
 
 export const MAX_DOCUMENT_PDF_BYTES = 5 * 1024 * 1024;
 export const MAX_DOCUMENT_REQUEST_BYTES = 7 * 1024 * 1024;
@@ -27,6 +31,13 @@ const retryRequestSchema = z
     fileId: z.string().uuid(),
   })
   .strict();
+const remoteRequestSchema = z
+  .object({
+    ...requestBase,
+    filename: z.string().trim().min(1).max(200),
+    downloadUrl: z.string().trim().min(1).max(2048),
+  })
+  .strict();
 
 export type DocumentPdfRequest =
   | { kind: "upload"; value: DocumentPdfInput }
@@ -38,7 +49,18 @@ export type DocumentPdfRequest =
       locale: "es" | "en" | "pt";
       sourceUrl?: string;
       opportunityContext?: string;
-    };
+    }
+  | { kind: "remote"; value: RemoteDocumentPdfRequest };
+
+export type RemoteDocumentPdfRequest = {
+  object: string;
+  recordId: string;
+  filename: string;
+  downloadUrl: string;
+  locale: "es" | "en" | "pt";
+  sourceUrl?: string;
+  opportunityContext?: string;
+};
 
 export type DocumentPdfInput = {
   object: string;
@@ -210,6 +232,30 @@ export function parseDocumentPdfRequest(value: unknown): DocumentPdfRequest {
   const upload = uploadRequestSchema.safeParse(value);
   if (upload.success)
     return { kind: "upload", value: decodeDocumentPdfRequest(upload.data) };
+  const remote = remoteRequestSchema.safeParse(value);
+  if (remote.success) {
+    const filename = remote.data.filename.replace(/[\x00-\x1f\x7f/\\]/g, "_");
+    if (!filename.toLowerCase().endsWith(".pdf"))
+      throw new DocumentAnalysisError(
+        "Select a PDF document.",
+        415,
+        "UNSUPPORTED_DOCUMENT_TYPE",
+      );
+    return {
+      kind: "remote",
+      value: {
+        object: remote.data.object,
+        recordId: remote.data.recordId,
+        filename: filename.slice(0, 200) || "document.pdf",
+        downloadUrl: remote.data.downloadUrl,
+        locale: remote.data.locale,
+        ...(remote.data.sourceUrl ? { sourceUrl: remote.data.sourceUrl } : {}),
+        ...(remote.data.opportunityContext
+          ? { opportunityContext: remote.data.opportunityContext }
+          : {}),
+      },
+    };
+  }
   const retry = retryRequestSchema.safeParse(value);
   if (!retry.success)
     throw new DocumentAnalysisError(
@@ -420,7 +466,10 @@ export async function handleStudioDocumentAnalysis(input: {
     extensionId: string,
     object: string,
   ) => Promise<boolean>;
+  authorizeTarget?: (object: string, recordId: string) => Promise<void>;
+  allowedDownloadHosts?: readonly string[];
   fetchImpl?: typeof fetch;
+  downloadFetchImpl?: typeof fetch;
   now?: () => Date;
 }): Promise<Response> {
   if (input.request.method !== "POST")
@@ -449,7 +498,7 @@ export async function handleStudioDocumentAnalysis(input: {
       await readBoundedJson(input.request),
     );
     const object =
-      parsed.kind === "upload" ? parsed.value.object : parsed.object;
+      parsed.kind === "retry" ? parsed.object : parsed.value.object;
     if (!(await input.isCollectionDeclared?.(input.extensionId, object)))
       throw new DocumentAnalysisError(
         "Documents can only be attached to a collection declared by this extension.",
@@ -459,7 +508,52 @@ export async function handleStudioDocumentAnalysis(input: {
     let decoded: DocumentPdfInput;
     let existingFile: StoredDocumentFile | undefined;
     if (parsed.kind === "upload") decoded = parsed.value;
-    else {
+    else if (parsed.kind === "remote") {
+      if (!input.allowedDownloadHosts?.length)
+        throw new DocumentAnalysisError(
+          "Remote document sources are not configured.",
+          503,
+          "DOCUMENT_DOWNLOAD_HOSTS_UNAVAILABLE",
+        );
+      if (!input.authorizeTarget)
+        throw new DocumentAnalysisError(
+          "Document target authorization is unavailable.",
+          503,
+          "DOCUMENT_TARGET_AUTHORIZATION_UNAVAILABLE",
+        );
+      await input.authorizeTarget(parsed.value.object, parsed.value.recordId);
+      let downloaded: Awaited<ReturnType<typeof downloadRemotePdf>>;
+      try {
+        downloaded = await downloadRemotePdf(
+          parsed.value.downloadUrl,
+          parsed.value.filename,
+          input.downloadFetchImpl ?? fetch,
+          input.allowedDownloadHosts,
+        );
+      } catch (error) {
+        if (error instanceof RemoteDocumentDownloadError)
+          throw new DocumentAnalysisError(
+            error.message,
+            error.status,
+            error.code,
+          );
+        throw error;
+      }
+      decoded = {
+        object: parsed.value.object,
+        recordId: parsed.value.recordId,
+        filename: downloaded.filename,
+        content: downloaded.content,
+        base64: downloaded.base64,
+        locale: parsed.value.locale,
+        ...(parsed.value.sourceUrl
+          ? { sourceUrl: parsed.value.sourceUrl }
+          : {}),
+        ...(parsed.value.opportunityContext
+          ? { opportunityContext: parsed.value.opportunityContext }
+          : {}),
+      };
+    } else {
       if (!input.loadExisting)
         throw new DocumentAnalysisError(
           "The saved PDF could not be loaded.",

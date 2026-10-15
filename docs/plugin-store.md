@@ -698,7 +698,7 @@ For a complete declaration and end-user behavior, see the
 
 ## PDF analysis from installed plugins
 
-Installed Store plugins can submit a user-selected PDF for analysis in their
+Installed Store plugins can submit a user-selected PDF or import a public PDF from a declared HTTPS source for analysis in their
 current Studio workspace. This capability accepts only a collection declared by
 the enabled plugin and preserves the actor's normal record and attachment access
 checks. The file is stored as a record attachment before analysis; an existing
@@ -718,3 +718,16 @@ network restrictions remain unchanged.
 Stored attachment links preserve the actual public origin. HTTP is accepted only
 for the same loopback development origin; external navigation otherwise requires
 HTTPS. This keeps local Vite downloads working without changing production rules.
+
+Remote PDF imports require `documentDownloads.allowedHosts` in the installed
+`store.json`, for example `{ "documentDownloads": { "allowedHosts": ["documents.example.com"] } }`.
+The server reads this policy from the installed package, never from the request.
+Every initial URL and redirect must match a declared host and resolve to public
+addresses; HTTPS, response size, PDF signature, and a total download deadline
+remain enforced. Plugins must declare trusted document providers, not arbitrary
+user-controlled hosts. No credentials or browser cookies are sent to document
+sources. Undeclared hosts fail closed. This capability is generic; industry-specific
+source selection belongs to the optional plugin. Downloading additionally checks
+record read access before network calls; attachment write access is checked before
+saving or invoking AI. CAPTCHA/access challenges return a distinct error without
+saving the response or calling AI.
