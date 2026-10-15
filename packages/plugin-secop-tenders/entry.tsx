@@ -767,7 +767,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                 </div>
               )}
             {searchLoading && !searchPage && (
-              <p className="secop-state" role="status">
+              <p className="secop-state secop-loading" role="status">
                 {t.loading}
               </p>
             )}
@@ -873,7 +873,11 @@ function Screen({ savia }: { savia: PluginApi }) {
                         : t.moreError}
                   </p>
                 )}
-                {searchLoading && <p role="status">{t.loadingMore}</p>}
+                {searchLoading && (
+                  <p className="secop-loading" role="status">
+                    {t.loadingMore}
+                  </p>
+                )}
                 {searchPage.hasNext ? (
                   <button
                     type="button"
@@ -924,7 +928,7 @@ function Screen({ savia }: { savia: PluginApi }) {
             </button>
           </form>
           {interestLoading && (
-            <p className="secop-state" role="status">
+            <p className="secop-state secop-loading" role="status">
               {t.loadingInterests}
             </p>
           )}

@@ -19,7 +19,10 @@ in search inputs dispatch through React handlers, so searches work inside the
 plugin sandbox without allowing native form submissions. Pages come from the
 remote limit/offset inputs, 20 rows at a time. Scrolling near the end of the results
 loads the next page and appends unique source IDs. **Load more** provides a
-keyboard-accessible fallback. The count shows loaded results, not a remote total.
+keyboard-accessible fallback. Pending searches, additional pages and interest
+reads show a small animated loading ring beside their existing status text.
+The ring stays static when reduced motion is preferred; loaded cards remain
+visible during pagination. The count shows loaded results, not a remote total.
 Transient gateway, availability, rate-limit and timeout failures receive one
 automatic retry after a short backoff, using the same criteria and page.
 Authorization failures and errors without a recognized transient status are
