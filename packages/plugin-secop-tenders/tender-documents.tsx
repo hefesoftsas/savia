@@ -482,7 +482,8 @@ export function TenderDocuments({
               <p className="secop-document-hint">{t.aiHint}</p>
               <div className="secop-document-actions">
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => void analyze()}
                   className="secop-primary"
                   disabled={!file || busy}
                 >

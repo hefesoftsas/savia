@@ -119,6 +119,11 @@ describe("tender documents UI", () => {
     await act(async () =>
       input.dispatchEvent(new Event("change", { bubbles: true })),
     );
+    expect(
+      [...host.querySelectorAll("button")].find(
+        (button) => button.textContent === "Guardar interés y analizar PDF",
+      )?.type,
+    ).toBe("button");
     await click("Guardar interés y analizar PDF");
     expect(pdfBase64).toHaveBeenCalled();
     expect(analyzeTenderPdf).toHaveBeenCalledWith(
