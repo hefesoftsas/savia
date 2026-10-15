@@ -471,7 +471,7 @@
         "label": "SECOP document analyses",
         "description": "PDF analyses intentionally requested by workspace users.",
         "config": {
-          "version": 1,
+          "version": 2,
           "fields": {
             "name": {
               "type": "Textbox",
@@ -514,7 +514,19 @@
               "label": "Analysis date"
             }
           },
-          "lookupFields": ["name", "process_id"]
+          "lookupFields": ["name", "process_id"],
+          "fieldOrder": [
+            "name",
+            "process_id",
+            "interest_id",
+            "document_id",
+            "source_url",
+            "file_id",
+            "file_url",
+            "analysis",
+            "model",
+            "analyzed_at"
+          ]
         }
       }
     }
