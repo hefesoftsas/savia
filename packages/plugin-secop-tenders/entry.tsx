@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from "react";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { defineReactPlugin } from "@savia/plugin-sdk/react";
 import "./styles.css";
+import { SearchFeed } from "./search-feed";
 import {
   COLLECTION,
   PAGE_SIZE,
@@ -13,7 +21,6 @@ import {
   type Interest,
   type InterestStatus,
   type SearchInput,
-  type SearchPage,
   type SecopRow,
 } from "./logic";
 
@@ -36,7 +43,7 @@ const messages = {
       "Ingresa criterios y busca para consultar procesos disponibles.",
     noResults: "No se encontraron procesos con estos criterios.",
     searchError: "No se pudo consultar SECOP. Inténtalo de nuevo.",
-    resultCount: "procesos en esta página",
+    resultCount: "procesos cargados",
     process: "Proceso",
     entityLabel: "Entidad",
     departmentLabel: "Departamento",
@@ -97,8 +104,16 @@ const messages = {
     monitorPauseByStatus:
       "Los procesos adjudicados o descartados se pausan automáticamente.",
     pageOf: "de",
-    hideAdvanced: "Ocultar filtros",
-    showAdvanced: "Filtros avanzados",
+    clearSearch: "Limpiar búsqueda",
+    filtersHint: "Combina los filtros y pulsa Buscar para aplicarlos.",
+    anyValue: "Todos",
+    loadMore: "Cargar más",
+    loadingMore: "Cargando más procesos…",
+    moreError:
+      "No se pudieron cargar más procesos. Los resultados anteriores se conservaron.",
+    retry: "Reintentar",
+    endResults: "No hay más procesos para estos criterios.",
+    appliedFilters: "Filtros aplicados",
   },
   en: {
     title: "SECOP tenders",
@@ -116,7 +131,7 @@ const messages = {
     searchFirst: "Enter criteria and search to see available opportunities.",
     noResults: "No tenders match these criteria.",
     searchError: "SECOP search failed. Try again.",
-    resultCount: "tenders on this page",
+    resultCount: "tenders loaded",
     process: "Tender",
     entityLabel: "Entity",
     departmentLabel: "Department",
@@ -176,8 +191,16 @@ const messages = {
       "SECOP is unavailable. It will be retried automatically.",
     monitorPauseByStatus: "Awarded or discarded processes pause automatically.",
     pageOf: "of",
-    hideAdvanced: "Hide filters",
-    showAdvanced: "Advanced filters",
+    clearSearch: "Clear search",
+    filtersHint: "Combine filters and select Search to apply them.",
+    anyValue: "All",
+    loadMore: "Load more",
+    loadingMore: "Loading more tenders…",
+    moreError:
+      "More tenders could not be loaded. Previous results have been kept.",
+    retry: "Retry",
+    endResults: "No more tenders match these criteria.",
+    appliedFilters: "Applied filters",
   },
   pt: {
     title: "Licitações SECOP",
@@ -196,7 +219,7 @@ const messages = {
       "Informe os critérios e busque para consultar oportunidades disponíveis.",
     noResults: "Nenhuma licitação encontrada com estes critérios.",
     searchError: "Não foi possível consultar o SECOP. Tente novamente.",
-    resultCount: "licitações nesta página",
+    resultCount: "licitações carregadas",
     process: "Processo",
     entityLabel: "Entidade",
     departmentLabel: "Departamento",
@@ -256,8 +279,16 @@ const messages = {
     searchAria: "Critérios de busca SECOP",
     results: "Resultados SECOP",
     savedList: "Oportunidades salvas",
-    hideAdvanced: "Ocultar filtros",
-    showAdvanced: "Filtros avançados",
+    clearSearch: "Limpar busca",
+    filtersHint: "Combine os filtros e selecione Buscar para aplicá-los.",
+    anyValue: "Todos",
+    loadMore: "Carregar mais",
+    loadingMore: "Carregando mais licitações…",
+    moreError:
+      "Não foi possível carregar mais licitações. Os resultados anteriores foram mantidos.",
+    retry: "Tentar novamente",
+    endResults: "Não há mais licitações para estes critérios.",
+    appliedFilters: "Filtros aplicados",
     pageOf: "de",
   },
 } as const;
@@ -355,14 +386,19 @@ function Screen({ savia }: { savia: PluginApi }) {
     },
   });
   const [surface, setSurface] = useState<"search" | "interests">("search");
-  const [criteria, setCriteria] = useState<SearchInput>({});
   const [draft, setDraft] = useState<SearchInput>({});
-  const [advanced, setAdvanced] = useState(false);
-  const [searchPage, setSearchPage] = useState<SearchPage | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const [page, setPage] = useState(1);
+  const feed = useMemo(
+    () => new SearchFeed((input) => searchSecop(savia, input)),
+    [savia],
+  );
+  const {
+    result: searchPage,
+    criteria,
+    loading: searchLoading,
+    error: searchError,
+    searched,
+  } = useSyncExternalStore(feed.subscribe, feed.getSnapshot, feed.getSnapshot);
+  const searchSentinel = useRef<HTMLDivElement>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -387,7 +423,6 @@ function Screen({ savia }: { savia: PluginApi }) {
     >
   >({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const searchRequests = useRef(new RequestSequence()).current;
   const interestRequests = useRef(new RequestSequence()).current;
   const mounted = useRef(true);
 
@@ -399,37 +434,30 @@ function Screen({ savia }: { savia: PluginApi }) {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      searchRequests.invalidate();
+      feed.cancel();
       interestRequests.invalidate();
     };
-  }, []);
-  const loadSearch = async (nextPage: number, values = criteria) => {
-    const id = searchRequests.begin();
-    setSearchLoading(true);
-    setSearchError(false);
-    setNotice("");
-    try {
-      const result = await searchSecop(savia, {
-        ...values,
-        page: nextPage,
-        perPage: PAGE_SIZE,
-      });
-      if (!searchRequests.isCurrent(id)) return;
-      setCriteria(values);
-      setPage(nextPage);
-      setSearchPage(result);
-      setSearched(true);
-      setSavedIds((current) => new Set(current));
-    } catch {
-      if (searchRequests.isCurrent(id)) {
-        setSearchError(true);
-        setSearchPage(null);
-        setSearched(true);
-      }
-    } finally {
-      if (searchRequests.isCurrent(id)) setSearchLoading(false);
-    }
-  };
+  }, [feed]);
+  useEffect(() => {
+    const sentinel = searchSentinel.current;
+    if (
+      surface !== "search" ||
+      !sentinel ||
+      !searchPage?.hasNext ||
+      searchLoading ||
+      searchError ||
+      typeof IntersectionObserver === "undefined"
+    )
+      return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) void feed.more();
+      },
+      { rootMargin: "0px 0px 240px 0px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [feed, surface, searchPage, searchLoading, searchError]);
   const loadInterests = async (nextPage: number, query = interestQuery) => {
     const id = interestRequests.begin();
     setInterestLoading(true);
@@ -473,7 +501,8 @@ function Screen({ savia }: { savia: PluginApi }) {
   };
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
-    void loadSearch(1, draft);
+    setNotice("");
+    void feed.search(draft);
   };
   const submitInterestSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -614,61 +643,104 @@ function Screen({ savia }: { savia: PluginApi }) {
                 }
               />
             </label>
-            {advanced && (
-              <div className="secop-advanced">
-                <label>
-                  {t.status}
-                  <input
-                    value={draft.estado ?? ""}
-                    onChange={(event) =>
-                      setDraft({ ...draft, estado: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  {t.entity}
-                  <input
-                    value={draft.entidad ?? ""}
-                    onChange={(event) =>
-                      setDraft({ ...draft, entidad: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  {t.modality}
-                  <input
-                    value={draft.modalidad ?? ""}
-                    onChange={(event) =>
-                      setDraft({ ...draft, modalidad: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  {t.department}
-                  <input
-                    value={draft.departamento ?? ""}
-                    onChange={(event) =>
-                      setDraft({ ...draft, departamento: event.target.value })
-                    }
-                  />
-                </label>
-              </div>
-            )}
+            <div className="secop-advanced">
+              <label>
+                {t.status}
+                <input
+                  list="secop-filter-estado"
+                  placeholder={t.anyValue}
+                  value={draft.estado ?? ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, estado: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                {t.entity}
+                <input
+                  list="secop-filter-entidad"
+                  placeholder={t.anyValue}
+                  value={draft.entidad ?? ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, entidad: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                {t.modality}
+                <input
+                  list="secop-filter-modalidad"
+                  placeholder={t.anyValue}
+                  value={draft.modalidad ?? ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, modalidad: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                {t.department}
+                <input
+                  list="secop-filter-departamento"
+                  placeholder={t.anyValue}
+                  value={draft.departamento ?? ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, departamento: event.target.value })
+                  }
+                />
+              </label>
+            </div>
+            {(
+              [
+                ["estado", "source_status"],
+                ["entidad", "entity"],
+                ["modalidad", "modality"],
+                ["departamento", "department"],
+              ] as const
+            ).map(([key, field]) => (
+              <datalist id={`secop-filter-${key}`} key={key}>
+                {Array.from(
+                  new Set([
+                    ...(key === "estado"
+                      ? [
+                          "Publicado",
+                          "Borrador",
+                          "Evaluación",
+                          "Cancelado",
+                          "Aprobado",
+                        ]
+                      : []),
+                    ...(searchPage?.data ?? []).map((row) =>
+                      String(row[field] ?? "").trim(),
+                    ),
+                  ]),
+                )
+                  .filter(Boolean)
+                  .sort()
+                  .map((value) => (
+                    <option key={value} value={value} />
+                  ))}
+              </datalist>
+            ))}
+            <p className="secop-filter-hint">{t.filtersHint}</p>
             <div className="secop-search-actions">
               <button
                 type="button"
                 className="secop-text-button"
-                onClick={() => setAdvanced((value) => !value)}
+                onClick={() => {
+                  setDraft({});
+                  setNotice("");
+                  if (searched) void feed.search({});
+                }}
               >
-                {advanced ? t.hideAdvanced : t.showAdvanced}
+                {t.clearSearch}
               </button>
               <button
                 className="secop-primary"
                 type="button"
                 onClick={submitSearch}
-                disabled={searchLoading}
+                disabled={searchLoading && !searchPage}
               >
-                {searchLoading ? t.loading : t.run}
+                {searchLoading && !searchPage ? t.loading : t.run}
               </button>
             </div>
           </form>
@@ -676,21 +748,49 @@ function Screen({ savia }: { savia: PluginApi }) {
             <div className="secop-section-head">
               <h2 id="secop-results-title">{t.results}</h2>
               {searchPage && (
-                <span>
+                <span role="status">
                   {searchPage.data.length} {t.resultCount}
                 </span>
               )}
             </div>
-            {searchLoading && (
+            {searched &&
+              (
+                ["q", "estado", "entidad", "modalidad", "departamento"] as const
+              ).some((key) => criteria[key]?.trim()) && (
+                <div
+                  className="secop-applied-filters"
+                  aria-label={t.appliedFilters}
+                >
+                  {(
+                    [
+                      ["q", t.query],
+                      ["estado", t.status],
+                      ["entidad", t.entity],
+                      ["modalidad", t.modality],
+                      ["departamento", t.department],
+                    ] as const
+                  )
+                    .filter(([key]) => criteria[key]?.trim())
+                    .map(([key, label]) => (
+                      <span key={key}>
+                        {label}: {criteria[key]}
+                      </span>
+                    ))}
+                </div>
+              )}
+            {searchLoading && !searchPage && (
               <p className="secop-state" role="status">
                 {t.loading}
               </p>
             )}
-            {searchError && (
+            {searchError && !searchPage && (
               <p className="secop-error" role="alert">
                 {t.searchError}
-                <button type="button" onClick={() => void loadSearch(page)}>
-                  {t.run}
+                <button
+                  type="button"
+                  onClick={() => void feed.search(criteria)}
+                >
+                  {t.retry}
                 </button>
               </p>
             )}
@@ -771,26 +871,24 @@ function Screen({ savia }: { savia: PluginApi }) {
               </div>
             )}
             {!!searchPage?.data.length && (
-              <div className="secop-pagination">
-                <span>
-                  {t.page} {page}
-                </span>
-                <div>
+              <div className="secop-load-more" ref={searchSentinel}>
+                {searchError && (
+                  <p className="secop-error" role="alert">
+                    {t.moreError}
+                  </p>
+                )}
+                {searchLoading && <p role="status">{t.loadingMore}</p>}
+                {searchPage.hasNext ? (
                   <button
                     type="button"
-                    disabled={searchLoading || page <= 1}
-                    onClick={() => void loadSearch(page - 1)}
+                    disabled={searchLoading}
+                    onClick={() => void feed.more()}
                   >
-                    {t.previous}
+                    {searchError ? t.retry : t.loadMore}
                   </button>
-                  <button
-                    type="button"
-                    disabled={searchLoading || !searchPage.hasNext}
-                    onClick={() => void loadSearch(page + 1)}
-                  >
-                    {t.next}
-                  </button>
-                </div>
+                ) : (
+                  <p role="status">{t.endResults}</p>
+                )}
               </div>
             )}
           </section>

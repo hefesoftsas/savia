@@ -6,11 +6,20 @@ published as a tenant ZIP; procurement behavior does not become platform core.
 ## Search and follow up
 
 Open **SECOP tenders** in the installed workspace. Search submits your criteria to
-`buscar_licitaciones` through the configured MCP connection. Optional filters are
-entity, department, SECOP status and procurement method. Search buttons and Enter
+`buscar_licitaciones` through the configured MCP connection. The always-visible filters are
+entity, department, SECOP status and procurement method. Suggestions use provider
+values and the loaded results; free text is also accepted. Combine filters, then
+select **Search**. Applied criteria remain visible above the results. **Clear
+search** resets all criteria and starts a new first page when a search is active. Search buttons and Enter
 in search inputs dispatch through React handlers, so searches work inside the
 plugin sandbox without allowing native form submissions. Pages come from the
-remote limit/offset inputs. Values absent from SECOP are shown as unavailable.
+remote limit/offset inputs, 20 rows at a time. Scrolling near the end of the results
+loads the next page and appends unique source IDs. **Load more** provides a
+keyboard-accessible fallback. The count shows loaded results, not a remote total.
+A failed next page keeps the previous results and offers **Retry** for the same
+page. New searches reset pagination and ignore late responses from older searches.
+Loading stops when SECOP has no next page or returns no new IDs. Values absent
+from SECOP are shown as unavailable.
 
 Choose **Track** on a result to save that selected row. **My interests** lists
 persisted opportunities, with tracking status, priority, owner, next follow-up date

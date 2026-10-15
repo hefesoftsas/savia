@@ -348,3 +348,39 @@
     width: 100%;
   }
 }
+
+.secop-filter-hint {
+  margin: 0.7rem 0 0;
+  color: var(--secop-muted);
+  font-size: 0.8rem;
+}
+.secop-applied-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.65rem 0;
+}
+.secop-applied-filters span {
+  background: var(--secop-soft);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.secop-load-more {
+  min-height: 5rem;
+  padding: 1.2rem 0;
+  text-align: center;
+  color: var(--secop-muted);
+  font-size: 0.85rem;
+}
+.secop-load-more p {
+  margin: 0 0 0.65rem;
+}
+.secop-app button:not(:disabled):hover {
+  background: var(--secop-soft);
+}
+.secop-app .secop-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--secop-accent) 88%, var(--secop-ink));
+}
