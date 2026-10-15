@@ -47,6 +47,11 @@ refused link shows recovery guidance rather than silently doing nothing.
 
 ## Tender documents and PDF analysis
 
+Version 1.5.2 groups each search result's Documents, SECOP link and Follow actions
+with matching control heights and spacing. On narrow screens, Documents and the
+SECOP link share the first row and Follow spans the second row. Keyboard order
+continues to match the visual order.
+
 Choose **Documents** on a search result or saved interest. The tender detail has
 **Overview** and **Documents** tabs; returning preserves the current search.
 Document lookup uses the tender's exact `id_del_portafolio` to match the public
