@@ -355,7 +355,9 @@ export async function analyzeDocumentPdf(input: {
         model,
         max_tokens: 4000,
         temperature: 0.1,
-        plugins: [{ id: "file-parser", pdf: { engine: "pdf-text" } }],
+        // Use provider-native PDF support when available; otherwise OpenRouter
+        // selects its OCR parser. The legacy pdf-text alias can lose document text.
+        plugins: [{ id: "file-parser" }],
         messages: [
           { role: "system", content: instructions },
           {

@@ -79,9 +79,12 @@ attaches the PDF through the current user's collection permissions, and sends it
 to the workspace's existing configured AI provider. No provider key is included in
 the plugin. The shared host document-analysis capability validates the installed
 extension and its declared collection, bounds the request and decoded PDF size,
-and uses OpenRouter's `pdf-text` parser with the configured summary/chat model.
-Scanned or unreadable PDFs may need OCR; the analysis must report unreadable or
-missing content instead of drawing conclusions from filenames. Page references
+and uses OpenRouter's default native-PDF/OCR processing with the configured
+summary/chat model. OCR is selected by the provider when the model cannot read
+PDFs natively and may incur per-page processing charges. The deprecated
+`pdf-text` alias is not forced because it can lose extractable document text.
+Unreadable or insufficient PDFs must be reported without drawing conclusions
+from filenames. Page references
 are requested only when supported by the parsed document. Users must verify the
 analysis against the original file.
 
