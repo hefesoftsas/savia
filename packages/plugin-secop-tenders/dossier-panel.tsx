@@ -1,10 +1,5 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { DossierForm } from "./dossier-form";
 import {
   ArrowLeft,
   FileText,
@@ -336,8 +331,7 @@ export function DossierPanel({
       await refresh();
     });
   }
-  async function createCompany(event: FormEvent) {
-    event.preventDefault();
+  async function createCompany() {
     if (!client) return;
     await run(async () => {
       const profile = await client.call<Stored<Company>>("company", {
@@ -374,8 +368,7 @@ export function DossierPanel({
       setPendingJob(result.job);
     });
   }
-  async function sendQuestion(event: FormEvent) {
-    event.preventDefault();
+  async function sendQuestion() {
     if (!client || !question.trim()) return;
     await run(async () => {
       const result = await client.call<{ job: Job }>("chat", {
@@ -548,9 +541,8 @@ export function DossierPanel({
             Usa la credencial privada de este espacio, distinta de la conexión
             pública de búsquedas SECOP. Se guardará como secreto en Savia.
           </p>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
+          <DossierForm
+            onSubmit={() => {
               void run(async () => {
                 await savia.connections.replace("secop-dossier", {
                   connectorId: DOSSIER_CONNECTOR,
@@ -571,10 +563,10 @@ export function DossierPanel({
                 onChange={(event) => setToken(event.target.value)}
               />
             </label>
-            <button disabled={busy} type="submit">
+            <button disabled={busy} type="button" data-dossier-submit>
               Guardar conexión privada
             </button>
-          </form>
+          </DossierForm>
           <button type="button" onClick={() => setLegacy(true)}>
             Ver documentos y análisis anteriores
           </button>
@@ -914,7 +906,7 @@ export function DossierPanel({
                 </label>
                 <details>
                   <summary>Crear perfil de empresa</summary>
-                  <form onSubmit={(event) => void createCompany(event)}>
+                  <DossierForm onSubmit={() => void createCompany()}>
                     <label>
                       Nombre de la empresa
                       <input
@@ -937,10 +929,10 @@ export function DossierPanel({
                         onChange={(event) => setActivities(event.target.value)}
                       />
                     </label>
-                    <button type="submit" disabled={busy}>
+                    <button type="button" data-dossier-submit disabled={busy}>
                       Crear empresa
                     </button>
-                  </form>
+                  </DossierForm>
                 </details>
                 {detail && (
                   <>
@@ -1075,12 +1067,9 @@ export function DossierPanel({
                                 ))}
                               <details>
                                 <summary>Registrar revisión del equipo</summary>
-                                <form
-                                  onSubmit={(event) => {
-                                    event.preventDefault();
-                                    const data = new FormData(
-                                      event.currentTarget,
-                                    );
+                                <DossierForm
+                                  onSubmit={(form) => {
+                                    const data = new FormData(form);
                                     void run(async () => {
                                       await client.call("review-finding", {
                                         assessmentId: assessment.id,
@@ -1122,10 +1111,14 @@ export function DossierPanel({
                                       maxLength={2000}
                                     />
                                   </label>
-                                  <button type="submit" disabled={busy}>
+                                  <button
+                                    type="button"
+                                    data-dossier-submit
+                                    disabled={busy}
+                                  >
                                     Guardar revisión
                                   </button>
-                                </form>
+                                </DossierForm>
                               </details>
                             </li>
                           ))}
@@ -1207,7 +1200,7 @@ export function DossierPanel({
                     Ver mensajes anteriores
                   </button>
                 )}
-                <form onSubmit={(event) => void sendQuestion(event)}>
+                <DossierForm onSubmit={() => void sendQuestion()}>
                   <label>
                     Tu pregunta
                     <textarea
@@ -1219,13 +1212,14 @@ export function DossierPanel({
                     />
                   </label>
                   <button
-                    type="submit"
+                    type="button"
+                    data-dossier-submit
                     className="secop-primary"
                     disabled={busy || Boolean(activeJobs) || !report}
                   >
                     Preguntar al asistente
                   </button>
-                </form>
+                </DossierForm>
                 {!report && (
                   <p>
                     Primero prepara el expediente para que el asistente responda
