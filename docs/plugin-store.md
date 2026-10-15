@@ -706,8 +706,8 @@ attachment can be retried without uploading another copy. Requests and decoded
 files are bounded, and the host validates the PDF signature.
 
 Analysis uses the workspace's configured AI key and summary/chat model entirely
-on the server. The model receives the PDF through the configured provider's text
-parser, with instructions to treat document content as untrusted data and to avoid
+on the server. The model receives the PDF through the provider's default native
+PDF or OCR processing (which may have per-page charges), with instructions to treat document content as untrusted data and to avoid
 invented page references or conclusions from an unreadable file. The caller saves
 the returned report using its declared backend collection. Provider errors return
 a safe code and the owned stored file ID for retry; no credentials or upstream
@@ -731,3 +731,5 @@ source selection belongs to the optional plugin. Downloading additionally checks
 record read access before network calls; attachment write access is checked before
 saving or invoking AI. CAPTCHA/access challenges return a distinct error without
 saving the response or calling AI.
+
+OpenRouter [documents its native/OCR default and the deprecated `pdf-text` alias](https://openrouter.ai/docs/guides/overview/multimodal/pdfs). The host leaves engine selection to that default instead of forcing the legacy text-only path.

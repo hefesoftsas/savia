@@ -71,7 +71,7 @@ describe("Studio extension document analysis", () => {
     });
   });
 
-  it("persists the PDF and sends it as a file-parser data URL using tenant configuration", async () => {
+  it("persists the PDF and uses provider-native or OCR parsing instead of forcing legacy text extraction", async () => {
     const assistantConfiguration = configuration();
     const persist = vi.fn(async () => ({
       id: "file-1",
@@ -85,9 +85,7 @@ describe("Studio extension document analysis", () => {
         const body = JSON.parse(String(init?.body));
         expect(body.model).toBe("provider/summary");
         expect(body.max_tokens).toBe(4000);
-        expect(body.plugins).toEqual([
-          { id: "file-parser", pdf: { engine: "pdf-text" } },
-        ]);
+        expect(body.plugins).toEqual([{ id: "file-parser" }]);
         expect(body.messages[1].content[1].file.file_data).toMatch(
           /^data:application\/pdf;base64,/,
         );
