@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PAGE_SIZE, type SearchInput, type SearchPage } from "../logic";
 import { SearchFeed } from "../search-feed";
 
@@ -204,20 +204,108 @@ describe("SearchFeed", () => {
         : secondPage.promise,
     );
     let startedSecondSearch = false;
+    let secondSearch: Promise<void> | undefined;
     feed.subscribe(() => {
       if (
         !startedSecondSearch &&
         feed.getSnapshot().result?.data[0]?.id === "first"
       ) {
         startedSecondSearch = true;
-        void feed.search({ q: "second" });
+        secondSearch = feed.search({ q: "second" });
       }
     });
 
     await feed.search({ q: "first" });
     expect(feed.getSnapshot().loading).toBe(true);
     secondPage.resolve(page(["second"], 1, false));
-    await Promise.resolve();
+    await secondSearch;
     expect(feed.getSnapshot().result?.data[0]?.id).toBe("second");
+  });
+});
+
+describe("transient SECOP failures", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("recovers a failed next page once without advancing its offset or losing rows", async () => {
+    vi.useFakeTimers();
+    const calls: SearchInput[] = [];
+    let failures = 0;
+    const feed = new SearchFeed(async (input) => {
+      calls.push(input);
+      if (input.page === 1) return page(["first"], 1);
+      if (failures++ === 0)
+        throw Object.assign(new Error("upstream unavailable"), { status: 502 });
+      return page(["second"], 2, false);
+    });
+    await feed.search({ estado: "Publicado" });
+    const loading = feed.more();
+    await vi.runAllTimersAsync();
+    await loading;
+    expect(calls).toEqual([
+      { estado: "Publicado", page: 1, perPage: 20 },
+      { estado: "Publicado", page: 2, perPage: 20 },
+      { estado: "Publicado", page: 2, perPage: 20 },
+    ]);
+    expect(feed.getSnapshot()).toMatchObject({
+      result: page(["first", "second"], 2, false),
+      error: false,
+    });
+  });
+
+  it("bounds retries and reports a timeout while keeping the loaded page", async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    const feed = new SearchFeed(async (input) => {
+      if (input.page === 1) return page(["first"], 1);
+      attempts++;
+      throw Object.assign(new Error("MCP timeout"), { status: 504 });
+    });
+    await feed.search({});
+    const loading = feed.more();
+    await vi.runAllTimersAsync();
+    await loading;
+    expect(attempts).toBe(2);
+    expect(feed.getSnapshot()).toMatchObject({
+      result: page(["first"], 1),
+      error: true,
+      errorKind: "timeout",
+      loading: false,
+    });
+  });
+
+  it("does not retry a source requiring authorization", async () => {
+    let attempts = 0;
+    const feed = new SearchFeed(async () => {
+      attempts++;
+      throw Object.assign(new Error("unauthorized"), { status: 401 });
+    });
+    await feed.search({});
+    expect(attempts).toBe(1);
+    expect(feed.getSnapshot()).toMatchObject({
+      error: true,
+      errorKind: "authorization",
+    });
+  });
+
+  it("does not retry an obsolete query after its backoff expires", async () => {
+    vi.useFakeTimers();
+    const calls: string[] = [];
+    const feed = new SearchFeed(async (input) => {
+      calls.push(input.q ?? "");
+      if (input.q === "old")
+        throw Object.assign(new Error("temporary"), { status: 503 });
+      return page(["new"], 1, false);
+    });
+    const old = feed.search({ q: "old" });
+    await Promise.resolve();
+    await feed.search({ q: "new" });
+    await vi.runAllTimersAsync();
+    await old;
+    expect(calls).toEqual(["old", "new"]);
+    expect(feed.getSnapshot()).toMatchObject({
+      result: page(["new"], 1, false),
+      error: false,
+      loading: false,
+    });
   });
 });

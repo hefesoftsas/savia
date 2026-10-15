@@ -22,3 +22,16 @@
   implicit observer root follows the top-level viewport, as defined by the
   [Intersection Observer specification](https://www.w3.org/TR/intersection-observer/).
   Live verification confirmed that a tall iframe did not trigger eager loading.
+
+## Follow-up: autocomplete and transient read recovery
+
+The user observed a failed next page in shared preview. The same page succeeded
+on manual retry (20 to 40 results); a subsequent page also succeeded. The original
+upstream failure was not retained in client diagnostics, so its precise cause
+was not established. Improve resilience without claiming that every upstream
+failure is eliminated: retry known transient status codes once, retain the same
+offset, avoid retrying authorization failures, and keep manual recovery.
+
+Replace browser-native datalists with explicit accessible autocomplete controls,
+showing all options on open and narrowing only after typing. Keep the package
+optional and update the existing workspace installation.

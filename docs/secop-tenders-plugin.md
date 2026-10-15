@@ -8,7 +8,11 @@ published as a tenant ZIP; procurement behavior does not become platform core.
 Open **SECOP tenders** in the installed workspace. Search submits your criteria to
 `buscar_licitaciones` through the configured MCP connection. The always-visible filters are
 entity, department, SECOP status and procurement method. Suggestions use provider
-values and the loaded results; free text is also accepted. Combine filters, then
+values and the loaded results; free text is also accepted. Each filter has a
+visible dropdown control. Opening it shows the available options; typing narrows
+them without case or accent differences. Arrow keys and Enter select an option
+without submitting the search, Escape dismisses the list, and long entity names
+wrap within the dropdown. Suggestions are not an exhaustive remote catalog. Combine filters, then
 select **Search**. Applied criteria remain visible above the results. **Clear
 search** resets all criteria and starts a new first page when a search is active. Search buttons and Enter
 in search inputs dispatch through React handlers, so searches work inside the
@@ -16,8 +20,14 @@ plugin sandbox without allowing native form submissions. Pages come from the
 remote limit/offset inputs, 20 rows at a time. Scrolling near the end of the results
 loads the next page and appends unique source IDs. **Load more** provides a
 keyboard-accessible fallback. The count shows loaded results, not a remote total.
-A failed next page keeps the previous results and offers **Retry** for the same
-page. New searches reset pagination and ignore late responses from older searches.
+Transient gateway, availability, rate-limit and timeout failures receive one
+automatic retry after a short backoff, using the same criteria and page.
+Authorization failures and errors without a recognized transient status are
+not automatically retried. The host maps some upstream failures to 502; these
+also receive the single bounded retry. If a next page
+still fails, previous results remain available and **Retry** requests the same
+page. Safe messages distinguish authorization and timeout problems; raw upstream
+errors and credentials are not shown. New searches reset pagination and ignore late responses from older searches.
 Loading stops when SECOP has no next page or returns no new IDs. Values absent
 from SECOP are shown as unavailable.
 

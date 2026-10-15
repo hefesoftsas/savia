@@ -10,6 +10,7 @@ import type { PluginApi } from "@savia/plugin-sdk";
 import { defineReactPlugin } from "@savia/plugin-sdk/react";
 import "./styles.css";
 import { SearchFeed } from "./search-feed";
+import { FilterAutocomplete } from "./filter-autocomplete";
 import {
   COLLECTION,
   PAGE_SIZE,
@@ -107,6 +108,13 @@ const messages = {
     clearSearch: "Limpiar búsqueda",
     filtersHint: "Combina los filtros y pulsa Buscar para aplicarlos.",
     anyValue: "Todos",
+    showOptions: "Mostrar opciones",
+    noOptions: "Sin coincidencias. Puedes escribir otro valor.",
+    suggestionsHint:
+      "Las sugerencias usan los resultados cargados; también puedes escribir otro valor.",
+    searchTimeout: "SECOP tardó demasiado en responder. Inténtalo de nuevo.",
+    searchAuthorization:
+      "Revisa tus permisos y la conexión SECOP en Fuentes de datos para continuar.",
     loadMore: "Cargar más",
     loadingMore: "Cargando más procesos…",
     moreError:
@@ -194,6 +202,13 @@ const messages = {
     clearSearch: "Clear search",
     filtersHint: "Combine filters and select Search to apply them.",
     anyValue: "All",
+    showOptions: "Show options",
+    noOptions: "No matches. You can type another value.",
+    suggestionsHint:
+      "Suggestions use the loaded results; you can also type another value.",
+    searchTimeout: "SECOP took too long to respond. Try again.",
+    searchAuthorization:
+      "Check your permissions and SECOP connection in Data sources to continue.",
     loadMore: "Load more",
     loadingMore: "Loading more tenders…",
     moreError:
@@ -282,6 +297,13 @@ const messages = {
     clearSearch: "Limpar busca",
     filtersHint: "Combine os filtros e selecione Buscar para aplicá-los.",
     anyValue: "Todos",
+    showOptions: "Mostrar opções",
+    noOptions: "Sem resultados. Você pode digitar outro valor.",
+    suggestionsHint:
+      "As sugestões usam os resultados carregados; você também pode digitar outro valor.",
+    searchTimeout: "O SECOP demorou para responder. Tente novamente.",
+    searchAuthorization:
+      "Verifique suas permissões e a conexão SECOP em Fontes de dados para continuar.",
     loadMore: "Carregar mais",
     loadingMore: "Carregando mais licitações…",
     moreError:
@@ -396,6 +418,7 @@ function Screen({ savia }: { savia: PluginApi }) {
     criteria,
     loading: searchLoading,
     error: searchError,
+    errorKind: searchErrorKind,
     searched,
   } = useSyncExternalStore(feed.subscribe, feed.getSnapshot, feed.getSnapshot);
   const searchSentinel = useRef<HTMLDivElement>(null);
@@ -644,84 +667,49 @@ function Screen({ savia }: { savia: PluginApi }) {
               />
             </label>
             <div className="secop-advanced">
-              <label>
-                {t.status}
-                <input
-                  list="secop-filter-estado"
-                  placeholder={t.anyValue}
-                  value={draft.estado ?? ""}
-                  onChange={(event) =>
-                    setDraft({ ...draft, estado: event.target.value })
+              {(
+                [
+                  ["estado", "source_status", t.status],
+                  ["entidad", "entity", t.entity],
+                  ["modalidad", "modality", t.modality],
+                  ["departamento", "department", t.department],
+                ] as const
+              ).map(([key, field, label]) => (
+                <FilterAutocomplete
+                  key={key}
+                  id={`secop-filter-${key}`}
+                  label={label}
+                  value={draft[key] ?? ""}
+                  onChange={(value) =>
+                    setDraft((current) => ({ ...current, [key]: value }))
                   }
-                />
-              </label>
-              <label>
-                {t.entity}
-                <input
-                  list="secop-filter-entidad"
                   placeholder={t.anyValue}
-                  value={draft.entidad ?? ""}
-                  onChange={(event) =>
-                    setDraft({ ...draft, entidad: event.target.value })
-                  }
+                  toggleLabel={`${t.showOptions}: ${label}`}
+                  noOptionsLabel={t.noOptions}
+                  options={Array.from(
+                    new Set([
+                      ...(key === "estado"
+                        ? [
+                            "Publicado",
+                            "Borrador",
+                            "Evaluación",
+                            "Cancelado",
+                            "Aprobado",
+                          ]
+                        : []),
+                      ...(searchPage?.data ?? []).map((row) =>
+                        String(row[field] ?? "").trim(),
+                      ),
+                    ]),
+                  )
+                    .filter(Boolean)
+                    .sort()}
                 />
-              </label>
-              <label>
-                {t.modality}
-                <input
-                  list="secop-filter-modalidad"
-                  placeholder={t.anyValue}
-                  value={draft.modalidad ?? ""}
-                  onChange={(event) =>
-                    setDraft({ ...draft, modalidad: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                {t.department}
-                <input
-                  list="secop-filter-departamento"
-                  placeholder={t.anyValue}
-                  value={draft.departamento ?? ""}
-                  onChange={(event) =>
-                    setDraft({ ...draft, departamento: event.target.value })
-                  }
-                />
-              </label>
+              ))}
             </div>
-            {(
-              [
-                ["estado", "source_status"],
-                ["entidad", "entity"],
-                ["modalidad", "modality"],
-                ["departamento", "department"],
-              ] as const
-            ).map(([key, field]) => (
-              <datalist id={`secop-filter-${key}`} key={key}>
-                {Array.from(
-                  new Set([
-                    ...(key === "estado"
-                      ? [
-                          "Publicado",
-                          "Borrador",
-                          "Evaluación",
-                          "Cancelado",
-                          "Aprobado",
-                        ]
-                      : []),
-                    ...(searchPage?.data ?? []).map((row) =>
-                      String(row[field] ?? "").trim(),
-                    ),
-                  ]),
-                )
-                  .filter(Boolean)
-                  .sort()
-                  .map((value) => (
-                    <option key={value} value={value} />
-                  ))}
-              </datalist>
-            ))}
-            <p className="secop-filter-hint">{t.filtersHint}</p>
+            <p className="secop-filter-hint">
+              {t.filtersHint} {t.suggestionsHint}
+            </p>
             <div className="secop-search-actions">
               <button
                 type="button"
@@ -785,7 +773,11 @@ function Screen({ savia }: { savia: PluginApi }) {
             )}
             {searchError && !searchPage && (
               <p className="secop-error" role="alert">
-                {t.searchError}
+                {searchErrorKind === "authorization"
+                  ? t.searchAuthorization
+                  : searchErrorKind === "timeout"
+                    ? t.searchTimeout
+                    : t.searchError}
                 <button
                   type="button"
                   onClick={() => void feed.search(criteria)}
@@ -874,7 +866,11 @@ function Screen({ savia }: { savia: PluginApi }) {
               <div className="secop-load-more" ref={searchSentinel}>
                 {searchError && (
                   <p className="secop-error" role="alert">
-                    {t.moreError}
+                    {searchErrorKind === "authorization"
+                      ? t.searchAuthorization
+                      : searchErrorKind === "timeout"
+                        ? t.searchTimeout
+                        : t.moreError}
                   </p>
                 )}
                 {searchLoading && <p role="status">{t.loadingMore}</p>}

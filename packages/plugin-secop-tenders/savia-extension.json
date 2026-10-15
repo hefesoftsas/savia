@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "procurement.secop",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "label": "SECOP tenders",
   "labels": {
     "es": "Licitaciones SECOP",
