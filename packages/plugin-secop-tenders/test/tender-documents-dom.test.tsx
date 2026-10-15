@@ -239,6 +239,40 @@ describe("tender documents UI", () => {
     );
     expect(reports.create).not.toHaveBeenCalled();
   });
+  it("downloads non-PDF attachments without offering unsupported automatic analysis", async () => {
+    await mount({
+      data: [{ ...documentRow, nombre_archivo: "Anexo financiero.xlsx" }],
+      hasNext: false,
+    });
+    expect(host.querySelector('a[href*="RetrieveFile"]')).not.toBeNull();
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (button) => button.textContent === "Analizar este PDF",
+      ),
+    ).toBe(false);
+  });
+  it("preserves the PDF suffix while fitting long catalog names into the analysis API", async () => {
+    await mount({
+      data: [{ ...documentRow, nombre_archivo: "a".repeat(300) + ".PDF" }],
+      hasNext: false,
+    });
+    vi.mocked(analyzeTenderPdf).mockResolvedValue({
+      file: { id: "long", name: "short.pdf" },
+      analysis: "Long name supported",
+      model: "model",
+      analyzedAt: "2026-10-15T01:00:00Z",
+    });
+    await click("Analizar este PDF");
+    const input = vi.mocked(analyzeTenderPdf).mock.calls[0][0];
+    expect("filename" in input && input.filename.length).toBeLessThanOrEqual(
+      200,
+    );
+    expect("filename" in input && input.filename).toMatch(/\.pdf$/i);
+    expect(input).toHaveProperty(
+      "downloadUrl",
+      documentRow.url_descarga_documento.url,
+    );
+  });
   it("retains a completed analysis when saving fails, allowing a persistence retry", async () => {
     const { reports } = await mount();
     reports.create.mockRejectedValueOnce(new Error("offline"));

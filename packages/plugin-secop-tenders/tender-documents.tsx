@@ -154,6 +154,9 @@ const copy = {
     historyLoading: "Carregando análises salvas…",
   },
 };
+function analysisFilename(name: string) {
+  return name.length > 200 ? name.slice(0, 196) + name.slice(-4) : name;
+}
 type SavedAnalysis = Record<string, unknown> & {
   id: string;
   name: string;
@@ -299,8 +302,11 @@ export function TenderDocuments({
         ...(retryFile.current?.recordId === interest.record.id
           ? { fileId: retryFile.current.fileId }
           : remote
-            ? { filename: remote.name, downloadUrl: remote.url }
-            : { filename: file!.name, data: data! }),
+            ? {
+                filename: analysisFilename(remote.name),
+                downloadUrl: remote.url,
+              }
+            : { filename: analysisFilename(file!.name), data: data! }),
         locale,
         ...(document ? { sourceUrl: document.url } : {}),
       });
@@ -461,18 +467,20 @@ export function TenderDocuments({
                   <a href={item.url} target="_blank" rel="noopener noreferrer">
                     {t.download}
                   </a>
-                  <button
-                    type="button"
-                    disabled={busy || !!unsaved}
-                    onClick={() => {
-                      retryFile.current = null;
-                      void analyze(item);
-                    }}
-                  >
-                    {busy && selected?.id === item.id
-                      ? t.remoteRunning
-                      : t.analyze}
-                  </button>
+                  {/\.pdf$/i.test(item.name) && (
+                    <button
+                      type="button"
+                      disabled={busy || !!unsaved}
+                      onClick={() => {
+                        retryFile.current = null;
+                        void analyze(item);
+                      }}
+                    >
+                      {busy && selected?.id === item.id
+                        ? t.remoteRunning
+                        : t.analyze}
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
