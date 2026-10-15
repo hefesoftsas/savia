@@ -13,7 +13,7 @@ import "../../operations.css";
 const file = {
   id: "proposal_2026",
   name: new URLSearchParams(window.location.search).has("long-name")
-    ? "BEAC-8339_Alnylam_Vault_Mappings_and_Selection_Criteria_v2_human_readable.docx"
+    ? "DEMO-2026_Example_Company_Document_Mappings_and_Selection_Criteria_v2_sample.docx"
     : "proposal.docx",
   mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   size: 482_314,
