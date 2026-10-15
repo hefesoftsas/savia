@@ -38,8 +38,8 @@ export function filterAutocompleteOptions(
 
   return options.filter((option) => {
     const normalizedOption = normalizeForSearch(option);
-    if (seen.has(normalizedOption)) return false;
-    seen.add(normalizedOption);
+    if (seen.has(option)) return false;
+    seen.add(option);
     return normalizedOption.includes(normalizedQuery);
   });
 }
@@ -57,6 +57,7 @@ export function FilterAutocomplete({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(MAX_SUGGESTIONS);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [hasTypedSinceOpen, setHasTypedSinceOpen] = useState(false);
   const listboxId = `${id}-listbox`;
@@ -71,7 +72,7 @@ export function FilterAutocomplete({
         : allOptions,
     [allOptions, hasTypedSinceOpen, options, value],
   );
-  const suggestions = matchingOptions.slice(0, MAX_SUGGESTIONS);
+  const suggestions = matchingOptions.slice(0, visibleCount);
   const activeOption = isOpen ? suggestions[activeIndex] : undefined;
 
   useEffect(() => {
@@ -83,6 +84,7 @@ export function FilterAutocomplete({
   }, [activeIndex, activeOption, id, isOpen]);
 
   function openOptions() {
+    setVisibleCount(MAX_SUGGESTIONS);
     setIsOpen(true);
     setHasTypedSinceOpen(false);
     setActiveIndex(-1);
@@ -109,7 +111,14 @@ export function FilterAutocomplete({
         setHasTypedSinceOpen(false);
         setActiveIndex(allOptions.length > 0 ? 0 : -1);
       } else if (suggestions.length > 0) {
-        setActiveIndex((current) => (current + 1) % suggestions.length);
+        const next = activeIndex + 1;
+        if (
+          next >= suggestions.length &&
+          suggestions.length < matchingOptions.length
+        ) {
+          setVisibleCount((count) => count + MAX_SUGGESTIONS);
+          setActiveIndex(next);
+        } else setActiveIndex(next % suggestions.length);
       }
       return;
     }
@@ -164,6 +173,7 @@ export function FilterAutocomplete({
           onChange={(event) => {
             onChange(event.currentTarget.value);
             setIsOpen(true);
+            setVisibleCount(MAX_SUGGESTIONS);
             setHasTypedSinceOpen(true);
             setActiveIndex(-1);
           }}
@@ -194,6 +204,14 @@ export function FilterAutocomplete({
           id={listboxId}
           className="secop-autocomplete-listbox"
           role="listbox"
+          onScroll={(event) => {
+            const list = event.currentTarget;
+            if (list.scrollTop + list.clientHeight >= list.scrollHeight - 40) {
+              setVisibleCount((count) =>
+                Math.min(count + MAX_SUGGESTIONS, matchingOptions.length),
+              );
+            }
+          }}
           aria-label={label}
         >
           {suggestions.length > 0 ? (
@@ -204,6 +222,8 @@ export function FilterAutocomplete({
                 className="secop-autocomplete-option"
                 role="option"
                 aria-selected={activeIndex === index}
+                aria-setsize={matchingOptions.length}
+                aria-posinset={index + 1}
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => choose(option)}
               >

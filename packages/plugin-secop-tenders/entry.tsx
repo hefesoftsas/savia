@@ -12,6 +12,12 @@ import "./styles.css";
 import { SearchFeed } from "./search-feed";
 import { FilterAutocomplete } from "./filter-autocomplete";
 import {
+  CATALOG_FIELDS,
+  loadSecopCatalog,
+  type CatalogField,
+  type CatalogState,
+} from "./catalogs";
+import {
   COLLECTION,
   PAGE_SIZE,
   RequestSequence,
@@ -109,9 +115,12 @@ const messages = {
     filtersHint: "Combina los filtros y pulsa Buscar para aplicarlos.",
     anyValue: "Todos",
     showOptions: "Mostrar opciones",
+    loadingCatalog: "Cargando catálogo…",
+    catalogError: "No se pudo cargar el catálogo completo.",
+    optionsCount: "opciones",
     noOptions: "Sin coincidencias. Puedes escribir otro valor.",
     suggestionsHint:
-      "Las sugerencias usan los resultados cargados; también puedes escribir otro valor.",
+      "Opciones de los catálogos completos de SECOP; también puedes escribir otro valor.",
     searchTimeout: "SECOP tardó demasiado en responder. Inténtalo de nuevo.",
     searchAuthorization:
       "Revisa tus permisos y la conexión SECOP en Fuentes de datos para continuar.",
@@ -203,9 +212,12 @@ const messages = {
     filtersHint: "Combine filters and select Search to apply them.",
     anyValue: "All",
     showOptions: "Show options",
+    loadingCatalog: "Loading catalog…",
+    catalogError: "The complete catalog could not be loaded.",
+    optionsCount: "options",
     noOptions: "No matches. You can type another value.",
     suggestionsHint:
-      "Suggestions use the loaded results; you can also type another value.",
+      "Options come from complete SECOP catalogs; you can also type another value.",
     searchTimeout: "SECOP took too long to respond. Try again.",
     searchAuthorization:
       "Check your permissions and SECOP connection in Data sources to continue.",
@@ -298,9 +310,12 @@ const messages = {
     filtersHint: "Combine os filtros e selecione Buscar para aplicá-los.",
     anyValue: "Todos",
     showOptions: "Mostrar opções",
+    loadingCatalog: "Carregando catálogo…",
+    catalogError: "Não foi possível carregar o catálogo completo.",
+    optionsCount: "opções",
     noOptions: "Sem resultados. Você pode digitar outro valor.",
     suggestionsHint:
-      "As sugestões usam os resultados carregados; você também pode digitar outro valor.",
+      "As opções vêm dos catálogos completos do SECOP; você também pode digitar outro valor.",
     searchTimeout: "O SECOP demorou para responder. Tente novamente.",
     searchAuthorization:
       "Verifique suas permissões e a conexão SECOP em Fontes de dados para continuar.",
@@ -421,6 +436,43 @@ function Screen({ savia }: { savia: PluginApi }) {
     errorKind: searchErrorKind,
     searched,
   } = useSyncExternalStore(feed.subscribe, feed.getSnapshot, feed.getSnapshot);
+  const [catalogs, setCatalogs] = useState<Record<CatalogField, CatalogState>>(
+    () => ({
+      departamento: { options: [], loading: true, error: false },
+      entidad: { options: [], loading: true, error: false },
+      modalidad: { options: [], loading: true, error: false },
+    }),
+  );
+  const catalogRequests = useRef(new RequestSequence()).current;
+  const catalogGeneration = useRef(0);
+  async function loadCatalog(field: CatalogField, generation: number) {
+    setCatalogs((current) => ({
+      ...current,
+      [field]: { ...current[field], loading: true, error: false },
+    }));
+    try {
+      const options = await loadSecopCatalog(savia, field);
+      if (catalogRequests.isCurrent(generation))
+        setCatalogs((current) => ({
+          ...current,
+          [field]: { options, loading: false, error: false },
+        }));
+    } catch {
+      if (catalogRequests.isCurrent(generation))
+        setCatalogs((current) => ({
+          ...current,
+          [field]: { options: [], loading: false, error: true },
+        }));
+    }
+  }
+  useEffect(() => {
+    const generation = catalogRequests.begin();
+    catalogGeneration.current = generation;
+    void Promise.allSettled(
+      CATALOG_FIELDS.map((field) => loadCatalog(field, generation)),
+    );
+    return () => catalogRequests.invalidate();
+  }, [savia]);
   const searchSentinel = useRef<HTMLDivElement>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -675,36 +727,73 @@ function Screen({ savia }: { savia: PluginApi }) {
                   ["departamento", "department", t.department],
                 ] as const
               ).map(([key, field, label]) => (
-                <FilterAutocomplete
-                  key={key}
-                  id={`secop-filter-${key}`}
-                  label={label}
-                  value={draft[key] ?? ""}
-                  onChange={(value) =>
-                    setDraft((current) => ({ ...current, [key]: value }))
-                  }
-                  placeholder={t.anyValue}
-                  toggleLabel={`${t.showOptions}: ${label}`}
-                  noOptionsLabel={t.noOptions}
-                  options={Array.from(
-                    new Set([
-                      ...(key === "estado"
-                        ? [
-                            "Publicado",
-                            "Borrador",
-                            "Evaluación",
-                            "Cancelado",
-                            "Aprobado",
-                          ]
-                        : []),
-                      ...(searchPage?.data ?? []).map((row) =>
-                        String(row[field] ?? "").trim(),
-                      ),
-                    ]),
-                  )
-                    .filter(Boolean)
-                    .sort()}
-                />
+                <div key={key} className="secop-catalog-filter">
+                  <FilterAutocomplete
+                    id={`secop-filter-${key}`}
+                    label={label}
+                    value={draft[key] ?? ""}
+                    onChange={(value) =>
+                      setDraft((current) => ({ ...current, [key]: value }))
+                    }
+                    placeholder={t.anyValue}
+                    toggleLabel={`${t.showOptions}: ${label}`}
+                    noOptionsLabel={
+                      key !== "estado" && catalogs[key].loading
+                        ? t.loadingCatalog
+                        : t.noOptions
+                    }
+                    options={
+                      key === "estado"
+                        ? Array.from(
+                            new Set([
+                              "Publicado",
+                              "Borrador",
+                              "Evaluación",
+                              "Cancelado",
+                              "Aprobado",
+                              ...(searchPage?.data ?? []).map((row) =>
+                                String(row[field] ?? "").trim(),
+                              ),
+                            ]),
+                          )
+                            .filter(Boolean)
+                            .sort()
+                        : catalogs[key].options
+                    }
+                  />
+                  {key !== "estado" &&
+                    (catalogs[key].loading ? (
+                      <p
+                        className="secop-catalog-status secop-loading"
+                        role="status"
+                      >
+                        {t.loadingCatalog}
+                      </p>
+                    ) : catalogs[key].error ? (
+                      <div className="secop-catalog-error" role="alert">
+                        <span>{t.catalogError}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void loadCatalog(key, catalogGeneration.current);
+                          }}
+                        >
+                          {t.retry}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="secop-catalog-status">
+                        {catalogs[key].options.length.toLocaleString(
+                          locale === "es"
+                            ? "es-CO"
+                            : locale === "pt"
+                              ? "pt-BR"
+                              : "en-US",
+                        )}{" "}
+                        {t.optionsCount}
+                      </p>
+                    ))}
+                </div>
               ))}
             </div>
             <p className="secop-filter-hint">

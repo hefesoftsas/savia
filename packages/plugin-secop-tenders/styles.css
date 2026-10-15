@@ -414,3 +414,29 @@
     animation: none;
   }
 }
+
+.secop-catalog-filter {
+  min-width: 0;
+}
+.secop-catalog-status {
+  margin: 0.35rem 0 0;
+  color: var(--secop-muted);
+  font-size: 0.72rem;
+}
+.secop-catalog-status.secop-loading::before {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+.secop-catalog-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  color: var(--secop-danger);
+  font-size: 0.75rem;
+}
+.secop-app .secop-catalog-error button {
+  padding: 0.1rem 0.35rem;
+  min-height: 2rem;
+}

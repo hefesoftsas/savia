@@ -10,7 +10,10 @@ let host: HTMLDivElement;
 let submitted = 0;
 let bubbledKeys: string[] = [];
 
-function mountAutocomplete(initialValue = "Publicado") {
+function mountAutocomplete(
+  initialValue = "Publicado",
+  catalogOptions = ["Publicado", "Adjudicado", "En evaluación"],
+) {
   submitted = 0;
   bubbledKeys = [];
   host = document.createElement("div");
@@ -32,7 +35,7 @@ function mountAutocomplete(initialValue = "Publicado") {
           label="Status"
           value={value}
           onChange={setValue}
-          options={["Publicado", "Adjudicado", "En evaluación"]}
+          options={catalogOptions}
           toggleLabel="Show status options"
           noOptionsLabel="No statuses"
         />
@@ -162,4 +165,40 @@ describe("FilterAutocomplete interaction", () => {
     act(() => outside.focus());
     expect(host.querySelector("[role=listbox]")).toBeNull();
   });
+});
+
+it("finds and selects a value outside the first displayed batch", () => {
+  mountAutocomplete(
+    "",
+    Array.from({ length: 11881 }, (_, i) => `Entity ${i}`),
+  );
+  const input = getInput();
+  act(() => {
+    input.focus();
+    changeInput(input, "Entity 11880");
+  });
+  expect(options().map((option) => option.textContent)).toEqual([
+    "Entity 11880",
+  ]);
+  act(() => key(input, "ArrowDown"));
+  act(() => key(input, "Enter"));
+  expect(input.value).toBe("Entity 11880");
+});
+
+it("exposes the next option batch when scrolling the dropdown", () => {
+  mountAutocomplete(
+    "",
+    Array.from({ length: 120 }, (_, i) => `Entity ${i}`),
+  );
+  act(() => getInput().focus());
+  expect(options()).toHaveLength(50);
+  const list = host.querySelector<HTMLElement>("[role=listbox]")!;
+  Object.defineProperties(list, {
+    scrollHeight: { value: 1000 },
+    clientHeight: { value: 300 },
+    scrollTop: { value: 700 },
+  });
+  act(() => list.dispatchEvent(new Event("scroll", { bubbles: true })));
+  expect(options()).toHaveLength(100);
+  expect(options()[99].textContent).toBe("Entity 99");
 });

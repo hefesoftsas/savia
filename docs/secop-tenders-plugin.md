@@ -7,12 +7,18 @@ published as a tenant ZIP; procurement behavior does not become platform core.
 
 Open **SECOP tenders** in the installed workspace. Search submits your criteria to
 `buscar_licitaciones` through the configured MCP connection. The always-visible filters are
-entity, department, SECOP status and procurement method. Suggestions use provider
-values and the loaded results; free text is also accepted. Each filter has a
-visible dropdown control. Opening it shows the available options; typing narrows
-them without case or accent differences. Arrow keys and Enter select an option
-without submitting the search, Escape dismisses the list, and long entity names
-wrap within the dropdown. Suggestions are not an exhaustive remote catalog. Combine filters, then
+entity, department, SECOP status and procurement method. Department, entity and
+modality load independent complete catalogs on screen entry through the
+`opciones_licitaciones` MCP tool. They do not inherit the current search filters,
+keywords or result pagination. Each catalog shows its own loading state, count
+and retry action. If a catalog fails, the UI reports the failure instead of
+substituting values from loaded tenders. Free text remains accepted.
+
+Opening a filter shows options; typing searches the entire loaded catalog without
+case or accent differences. The dropdown progressively renders additional options
+when scrolled, and keyboard navigation can advance beyond the initial batch.
+Arrow keys and Enter select an option without submitting the search; Escape
+dismisses the list. Long entity names wrap within the dropdown. Combine filters, then
 select **Search**. Applied criteria remain visible above the results. **Clear
 search** resets all criteria and starts a new first page when a search is active. Search buttons and Enter
 in search inputs dispatch through React handlers, so searches work inside the
@@ -84,8 +90,34 @@ connection error and its creator must reconnect it in **Sources and collections*
 4. Search a live tender, save it intentionally, reload **My interests**, change its
    tracking fields, save, and reopen to verify backend persistence.
 
+The SECOP provider must expose the annotated read-only `opciones_licitaciones`
+tool before installing plugin 1.3.0. Its allowlisted `campo` values are
+`departamento`, `entidad` and `modalidad`; it groups the corresponding columns
+across the entire SECOP II processes dataset. It returns a single catalog record
+under `/data`, with `id`, `values`, `count`, `complete` and `updated_at` fields.
+The three plugin actions fix the requested field in metadata, so user input
+cannot inject a query or select another endpoint.
+
+`provider/catalogs.mjs` contains the optional provider extension and its tests.
+Bind a dedicated `CATALOG_KV` namespace for public snapshots, separate from OAuth
+storage, and seed each verified complete catalog before installing the UI.
+Snapshots have no storage expiration: fresh catalogs are served immediately for
+six hours; older complete snapshots are served while `waitUntil` refreshes them
+in the background. Refresh failures preserve the last valid complete snapshot.
+Cold aggregate reads can exceed Savia's MCP time budget, so deployment verification
+must include warm KV reads. Edge-cache freshness never extends the snapshot's
+remaining six-hour interval; concurrent reads are coalesced. Reaching the 50,000-value safety limit or the response-size bound fails
+closed rather than claiming a partial catalog is complete. No catalog is
+persisted in browser storage. `provider/patch-worker.mjs` is a guarded additive
+adapter for the inspected deployed provider bundle: it refuses ambiguous source
+or repeat installation. For future updates, integrate the helper in the provider's
+original source, or rebuild from a verified original bundle. Back up provider code
+and settings, preserve bindings and secrets using Cloudflare's
+[upload metadata](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/update/),
+and verify tool discovery and all catalogs before publishing the tenant ZIP.
+
 The plugin provisions `procurement_opportunities` with a unique `source_id` and
-native record-version support. It declares two fixed read actions and does not
+native record-version support. It declares fixed tender search/detail actions and three catalog read actions and does not
 contain a source URL, API key, OAuth token or secret. The action's source ID and
 mapping are metadata; user input cannot select a different endpoint or tool.
 

@@ -29,6 +29,48 @@
         "idField": ":id"
       },
       "inputArguments": ["id_del_proceso"]
+    },
+    {
+      "id": "catalog-departamento",
+      "kind": "mcp",
+      "sourceId": "secop_live",
+      "tool": "opciones_licitaciones",
+      "mapping": {
+        "arguments": {
+          "campo": "departamento"
+        },
+        "itemsPointer": "/data",
+        "idField": "id"
+      },
+      "inputArguments": []
+    },
+    {
+      "id": "catalog-entidad",
+      "kind": "mcp",
+      "sourceId": "secop_live",
+      "tool": "opciones_licitaciones",
+      "mapping": {
+        "arguments": {
+          "campo": "entidad"
+        },
+        "itemsPointer": "/data",
+        "idField": "id"
+      },
+      "inputArguments": []
+    },
+    {
+      "id": "catalog-modalidad",
+      "kind": "mcp",
+      "sourceId": "secop_live",
+      "tool": "opciones_licitaciones",
+      "mapping": {
+        "arguments": {
+          "campo": "modalidad"
+        },
+        "itemsPointer": "/data",
+        "idField": "id"
+      },
+      "inputArguments": []
     }
   ],
   "monitors": [
@@ -36,7 +78,10 @@
       "id": "tracking",
       "collection": "procurement_opportunities",
       "actionId": "detail",
-      "lookup": { "field": "process_id", "argument": "id_del_proceso" },
+      "lookup": {
+        "field": "process_id",
+        "argument": "id_del_proceso"
+      },
       "matchField": "source_id",
       "status": {
         "field": "source_status",
@@ -58,7 +103,10 @@
       "intervalMinutes": 60,
       "reminderHours": [168, 72, 24],
       "timeZone": "America/Bogota",
-      "pauseWhen": { "field": "status", "values": ["awarded", "discarded"] },
+      "pauseWhen": {
+        "field": "status",
+        "values": ["awarded", "discarded"]
+      },
       "notifications": {
         "changedTitle": "Cambió el estado SECOP: {name}",
         "changedBody": "Estado anterior: {previous}. Estado actual: {current}.",
