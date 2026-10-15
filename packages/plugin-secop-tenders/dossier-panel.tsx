@@ -458,7 +458,7 @@ export function DossierPanel({
           <h3>{doc.value.name}</h3>
           <p className="secop-dossier-status">
             {dossierStateLabel(doc.value.state)}
-            {doc.value.error ? ` · ${doc.value.error}` : ""}
+            {doc.value.error ? ` · ${dossierStateLabel(doc.value.error)}` : ""}
           </p>
           <div className="secop-dossier-actions">
             <button
@@ -481,7 +481,7 @@ export function DossierPanel({
                 disabled={busy}
                 onClick={() => void ticket(doc.id)}
               >
-                Aportar archivo
+                Aportar versión con texto
               </button>
             )}
             {doc.value.state === "review_required" && (
@@ -795,7 +795,8 @@ export function DossierPanel({
                   .map((job) => (
                     <div key={job.id} className="secop-dossier-notice">
                       <p>
-                        Trabajo pendiente de resolver: {job.error ?? job.kind}
+                        Trabajo pendiente de resolver:{" "}
+                        {dossierStateLabel(job.error ?? job.kind ?? "failed")}
                       </p>
                       <button
                         type="button"
@@ -1147,6 +1148,15 @@ export function DossierPanel({
                   falta a la empresa seleccionada. Las respuestas conservan la
                   versión de sus fuentes.
                 </p>
+                {report &&
+                  (report.coverage.pending.length > 0 ||
+                    report.coverage.reviewRequired.length > 0) && (
+                    <p className="secop-dossier-notice">
+                      El análisis es parcial. Confirma los requisitos en los
+                      documentos pendientes; una ausencia en el material leído
+                      no significa que el requisito no exista.
+                    </p>
+                  )}
                 <label>
                   Contexto de empresa
                   <select

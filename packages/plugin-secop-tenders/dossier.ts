@@ -161,6 +161,12 @@ export function dossierStateLabel(value: string) {
   return (
     (
       {
+        OCR_REQUIRED: "El PDF necesita OCR para extraer su texto",
+        OCR_OR_FORMAT_UNAVAILABLE: "Este archivo necesita otro lector u OCR",
+        HUMAN_HELP_REQUIRED: "SECOP requiere verificación manual",
+        DOWNLOAD_UNAVAILABLE:
+          "No se pudo descargar el archivo; puedes reintentar",
+        EXTRACTION_RETRIES_EXHAUSTED: "La extracción agotó sus reintentos",
         pending: "Pendiente",
         queued: "En cola",
         running: "Procesando",

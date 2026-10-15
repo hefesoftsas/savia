@@ -47,7 +47,7 @@ refused link shows recovery guidance rather than silently doing nothing.
 
 ## Private tender dossier and company assistant
 
-Version 1.6.0 opens a dossier with Summary, Documents, Requirements, Company and
+Version 1.6.5 opens a dossier with Summary, Documents, Requirements, Company and
 Assistant views from the existing Documents action. It preserves the previous
 per-PDF document workflow behind **Documents and previous PDF analyses**.
 
@@ -63,7 +63,7 @@ storage or packaged into the ZIP.
 **Save and prepare dossier** saves the interest and starts durable background
 processing. The service enumerates every available document page, records partial
 coverage, downloads permitted official files and keeps failed/CAPTCHA/unsupported
-items visible. The report and requirements cite immutable source versions and
+items visible. Scanned PDFs require the configured OCR provider or a replacement PDF with selectable text; the basic Cloudflare converter does not supply complete OCR. The report and requirements cite immutable source versions and
 parser pages or sections. Source changes mark reports stale. Protected one-use
 upload links provide recovery for blocked originals and private company evidence.
 
@@ -219,7 +219,9 @@ test asks for authorization, choose **Authorize again**, complete the existing
 read-only connection and reopen SECOP. The host coordinates concurrent token
 renewal across Workers; deploy its OAuth refresh lease migration with that fix.
 
-`provider/catalogs.mjs` contains the optional provider extension and its tests.
+The active provider source is maintained in the private
+`chibchombiano26/secop-live-worker` repository, including its public catalog and
+document adapters. The local `provider/` files are historical migration references.
 Bind a dedicated `CATALOG_KV` namespace for public snapshots, separate from OAuth
 storage, and seed each verified complete catalog before installing the UI.
 Snapshots have no storage expiration: fresh catalogs are served immediately for
@@ -229,18 +231,16 @@ Cold aggregate reads can exceed Savia's MCP time budget, so deployment verificat
 must include warm KV reads. Edge-cache freshness never extends the snapshot's
 remaining six-hour interval; concurrent reads are coalesced. Reaching the 50,000-value safety limit or the response-size bound fails
 closed rather than claiming a partial catalog is complete. No catalog is
-persisted in browser storage. `provider/patch-worker.mjs` is a guarded additive
-adapter for the inspected deployed provider bundle: it refuses ambiguous source
-or repeat installation. For future updates, integrate the helper in the provider's
-original source, or rebuild from a verified original bundle. Back up provider code
-and settings, preserve bindings and secrets using Cloudflare's
-[upload metadata](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/update/),
-and verify tool discovery and all catalogs before publishing the tenant ZIP.
+persisted in browser storage. The former `provider/patch-worker.mjs` bundle-patch
+workflow is obsolete for this provider. Deploy from the maintained service source,
+preserve existing OAuth/catalog namespaces and secrets, and verify public tool
+compatibility before updating the tenant ZIP.
 
 The plugin provisions `procurement_opportunities` with a unique `source_id` and
 native record-version support. It declares fixed tender search/detail actions and three catalog read actions and does not
-contain a source URL, API key, OAuth token or secret. The action's source ID and
-mapping are metadata; user input cannot select a different endpoint or tool.
+contain an API key, OAuth token or secret. Public actions reference their configured
+MCP source; private actions use a fixed service URL and declared connector. User
+input cannot select a different endpoint or tool.
 
 ## Shared preview delivery
 
