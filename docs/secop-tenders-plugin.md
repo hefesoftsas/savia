@@ -96,9 +96,11 @@ completed analysis fails, its text remains visible with **Save result**; returni
 is disabled until the result is saved. The saved history shows up to 50 analyses
 for the process. No document or report is persisted in browser storage.
 
-Plugin 1.5.1 raises the analysis field limit to 100,000 characters, so detailed
-reports can be saved without truncation. Installing that ZIP updates the document
-collection's field configuration while preserving existing reports.
+Plugin 1.5.1 declares a 100,000-character analysis field limit, so detailed
+reports can be saved without truncation. Existing collections preserve their
+workspace field settings during upgrades. For an existing installation, also set
+the **AI analysis** field's maximum length to 100,000 in **Fields and form**;
+new installations receive that limit from the plugin declaration.
 
 The 1.4.0 feature requires both the shared host document-analysis deployment and
 the updated tenant ZIP. Later UI-only document changes can be delivered by ZIP
