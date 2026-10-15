@@ -10,7 +10,7 @@ import { Bookmark, BookmarkCheck, ExternalLink, FileText } from "lucide-react";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { defineReactPlugin } from "@savia/plugin-sdk/react";
 import "./styles.css";
-import { TenderDocuments } from "./tender-documents";
+import { DossierPanel } from "./dossier-panel";
 import { SearchFeed } from "./search-feed";
 import { FilterAutocomplete } from "./filter-autocomplete";
 import {
@@ -668,7 +668,7 @@ function Screen({ savia }: { savia: PluginApi }) {
 
   if (documentRow)
     return (
-      <TenderDocuments
+      <DossierPanel
         key={String(documentRow.process_id)}
         savia={savia}
         row={documentRow}

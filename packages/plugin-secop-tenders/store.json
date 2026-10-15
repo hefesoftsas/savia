@@ -87,6 +87,20 @@
         }
       },
       "inputArguments": ["id_del_proceso"]
+    },
+    {
+      "id": "dossier-call",
+      "kind": "http",
+      "connector": "secop-dossier",
+      "request": {
+        "method": "POST",
+        "url": "https://secop-live-worker.jose-douglas-dev.workers.dev/private/v1/dispatch",
+        "headers": {
+          "Authorization": "Bearer {{connection.apiKey}}",
+          "Content-Type": "application/json"
+        },
+        "body": "{{input}}"
+      }
     }
   ],
   "monitors": [
@@ -124,12 +138,12 @@
         "values": ["awarded", "discarded"]
       },
       "notifications": {
-        "changedTitle": "Cambió el estado SECOP: {name}",
+        "changedTitle": "Cambi\u00f3 el estado SECOP: {name}",
         "changedBody": "Estado anterior: {previous}. Estado actual: {current}.",
-        "closingTitle": "Cierre próximo: {name}",
+        "closingTitle": "Cierre pr\u00f3ximo: {name}",
         "closingBody": "Cierre de {name}: {deadline}. Aviso dentro de las {hours} horas previas.",
         "connectionTitle": "No se pudo revisar: {name}",
-        "connectionBody": "Autoriza de nuevo tu conexión SECOP para continuar el monitoreo de {name}."
+        "connectionBody": "Autoriza de nuevo tu conexi\u00f3n SECOP para continuar el monitoreo de {name}."
       }
     }
   ],
@@ -196,9 +210,9 @@
               "type": "Textbox",
               "label": "Procurement modality",
               "labels": {
-                "es": "Modalidad de contratación",
+                "es": "Modalidad de contrataci\u00f3n",
                 "en": "Procurement modality",
-                "pt": "Modalidade de contratação"
+                "pt": "Modalidade de contrata\u00e7\u00e3o"
               }
             },
             "amount": {
@@ -214,18 +228,18 @@
               "type": "Textbox",
               "label": "Publication date",
               "labels": {
-                "es": "Fecha de publicación",
+                "es": "Fecha de publicaci\u00f3n",
                 "en": "Publication date",
-                "pt": "Data de publicação"
+                "pt": "Data de publica\u00e7\u00e3o"
               }
             },
             "deadline": {
               "type": "Textbox",
               "label": "Submission deadline",
               "labels": {
-                "es": "Fecha límite de presentación",
+                "es": "Fecha l\u00edmite de presentaci\u00f3n",
                 "en": "Submission deadline",
-                "pt": "Prazo para apresentação"
+                "pt": "Prazo para apresenta\u00e7\u00e3o"
               }
             },
             "source_status": {
@@ -249,11 +263,11 @@
             },
             "monitoring_checked_at": {
               "type": "Textbox",
-              "label": "Última revisión SECOP",
+              "label": "\u00daltima revisi\u00f3n SECOP",
               "labels": {
-                "es": "Última revisión SECOP",
+                "es": "\u00daltima revisi\u00f3n SECOP",
                 "en": "Last SECOP check",
-                "pt": "Última verificação SECOP"
+                "pt": "\u00daltima verifica\u00e7\u00e3o SECOP"
               }
             },
             "monitoring_error": {
@@ -292,9 +306,9 @@
                   "value": "evaluating",
                   "label": "Evaluating",
                   "labels": {
-                    "es": "En evaluación",
+                    "es": "En evaluaci\u00f3n",
                     "en": "Evaluating",
-                    "pt": "Em avaliação"
+                    "pt": "Em avalia\u00e7\u00e3o"
                   }
                 },
                 {
@@ -385,16 +399,16 @@
               "labels": {
                 "es": "Responsable",
                 "en": "Owner",
-                "pt": "Responsável"
+                "pt": "Respons\u00e1vel"
               }
             },
             "next_follow_up": {
               "type": "DateControl",
               "label": "Next follow-up",
               "labels": {
-                "es": "Próximo seguimiento",
+                "es": "Pr\u00f3ximo seguimiento",
                 "en": "Next follow-up",
-                "pt": "Próximo acompanhamento"
+                "pt": "Pr\u00f3ximo acompanhamento"
               }
             },
             "notes": {
@@ -504,7 +518,9 @@
             "analysis": {
               "type": "Textarea",
               "label": "AI analysis",
-              "config": { "maxLength": 100000 }
+              "config": {
+                "maxLength": 100000
+              }
             },
             "model": {
               "type": "Textbox",
@@ -547,5 +563,22 @@
   ],
   "documentDownloads": {
     "allowedHosts": ["community.secop.gov.co"]
-  }
+  },
+  "connectors": [
+    {
+      "id": "secop-dossier",
+      "label": "SECOP dossier assistant",
+      "secretFields": ["apiKey"],
+      "configSchema": {
+        "type": "object",
+        "required": ["apiKey"],
+        "properties": {
+          "apiKey": {
+            "type": "string"
+          }
+        }
+      },
+      "allowedHosts": ["secop-live-worker.jose-douglas-dev.workers.dev"]
+    }
+  ]
 }

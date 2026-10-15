@@ -1,0 +1,205 @@
+.secop-dossier .secop-dossier-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.secop-dossier h1 {
+  font-size: 1.55rem;
+  line-height: 1.25;
+  margin: 0.6rem 0;
+}
+.secop-dossier h2 {
+  font-size: 1.15rem;
+  margin: 1.5rem 0 0.75rem;
+}
+.secop-dossier .secop-tabs {
+  overflow-x: auto;
+  justify-content: flex-start;
+  gap: 0.25rem;
+  white-space: nowrap;
+  margin: 1rem 0;
+}
+.secop-dossier .secop-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+}
+.secop-dossier .secop-tabs [aria-selected="true"] {
+  border-bottom: 3px solid var(--secop-accent);
+  color: var(--secop-accent);
+  font-weight: 650;
+}
+.secop-dossier-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin: 1.2rem 0;
+}
+.secop-dossier-summary div {
+  padding: 1rem;
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+}
+.secop-dossier-summary dt {
+  color: var(--secop-muted);
+  font-size: 0.8rem;
+}
+.secop-dossier-summary dd {
+  margin: 0.25rem 0 0;
+  font-weight: 650;
+}
+.secop-dossier-notice {
+  padding: 1rem;
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+  background: var(--secop-soft);
+  margin: 1rem 0;
+  line-height: 1.6;
+}
+.secop-dossier-error {
+  border-left: 3px solid currentColor;
+  padding: 1rem;
+  margin: 1rem 0;
+  color: var(--secop-danger, #a12424);
+}
+.secop-dossier-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.7rem 0;
+}
+.secop-dossier-actions :is(button, a) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+}
+.secop-dossier :is(input, textarea, select) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  font: inherit;
+  line-height: 1.5;
+  padding: 0.65rem;
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+  background: var(--secop-bg);
+  color: var(--secop-ink);
+}
+.secop-dossier label {
+  display: block;
+  margin: 0.8rem 0;
+  font-weight: 600;
+}
+.secop-dossier label :is(input, textarea, select) {
+  margin-top: 0.4rem;
+  font-weight: 400;
+}
+.secop-dossier select {
+  min-height: 44px;
+}
+.secop-dossier form {
+  max-width: 52rem;
+}
+.secop-dossier-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.secop-dossier-list > li {
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--secop-line);
+  overflow-wrap: anywhere;
+}
+.secop-dossier-list h3 {
+  font-size: 1rem;
+  margin: 0 0 0.45rem;
+  line-height: 1.5;
+}
+.secop-dossier-status {
+  font-size: 0.8rem;
+  color: var(--secop-muted);
+  margin: 0.35rem 0;
+}
+.secop-dossier-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 85ch;
+  line-height: 1.7;
+}
+.secop-dossier-evidence {
+  padding: 1rem;
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+  margin: 0.8rem 0;
+}
+.secop-dossier-evidence blockquote {
+  white-space: pre-wrap;
+  margin: 0.8rem 0;
+  padding-left: 1rem;
+  border-left: 2px solid var(--secop-line);
+}
+.secop-dossier-chat article {
+  border-bottom: 1px solid var(--secop-line);
+  padding: 1rem 0;
+}
+.secop-dossier-chat article h3 {
+  font-size: 1rem;
+  margin: 0.4rem 0;
+}
+.secop-dossier-chat textarea {
+  min-height: 6rem;
+}
+.secop-dossier-help {
+  color: var(--secop-muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.secop-dossier-working {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.secop-dossier-working svg {
+  animation: secop-dossier-spin 1.2s linear infinite;
+}
+@keyframes secop-dossier-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .secop-dossier-working svg {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
+  .secop-dossier .secop-dossier-top {
+    display: block;
+  }
+  .secop-dossier .secop-tabs {
+    margin-inline: -0.25rem;
+  }
+  .secop-dossier .secop-tabs button {
+    padding: 0.65rem;
+  }
+  .secop-dossier-actions > * {
+    flex: 1 1 auto;
+  }
+  .secop-dossier-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.secop-dossier-top > div > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}

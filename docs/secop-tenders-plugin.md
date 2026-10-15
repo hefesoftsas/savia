@@ -45,6 +45,46 @@ Savia's host-mediated external-link bridge. Search cards and saved interests use
 the same behavior; the plugin iframe retains its sandbox. An unavailable or
 refused link shows recovery guidance rather than silently doing nothing.
 
+## Private tender dossier and company assistant
+
+Version 1.6.0 opens a dossier with Summary, Documents, Requirements, Company and
+Assistant views from the existing Documents action. It preserves the previous
+per-PDF document workflow behind **Documents and previous PDF analyses**.
+
+All new processing runs in the private secop-live-worker service. No
+SECOP-specific server/API/schema change is added to Savia. The plugin uses a
+fixed, secret-backed HTTP connector (secop-dossier) and one declared dispatch
+action, staying within the 20-action package limit. Public search continues to use
+the existing read-only MCP source. A private credential belongs to one workspace;
+never copy it to another workspace. Configure it through the dossier connection
+form or existing plugin connection management; it is not persisted in browser
+storage or packaged into the ZIP.
+
+**Save and prepare dossier** saves the interest and starts durable background
+processing. The service enumerates every available document page, records partial
+coverage, downloads permitted official files and keeps failed/CAPTCHA/unsupported
+items visible. The report and requirements cite immutable source versions and
+parser pages or sections. Source changes mark reports stale. Protected one-use
+upload links provide recovery for blocked originals and private company evidence.
+
+Select/create a company, upload its evidence and review any extracted numeric
+facts against their cited originals. Choose lot identifiers when relevant, then
+**Evaluate compliance**. Findings distinguish meets, does not meet, insufficient
+evidence and not applicable; missing evidence becomes preparation tasks. Expired
+or changed evidence invalidates old evaluations. User review notes stay separate
+from model findings. Readiness means ready for the team's review, not a submitted
+or officially approved bid.
+
+The Assistant keeps a conversation per tender/company and answers using scoped
+source evidence. Jobs and conversations survive navigation and reload. Reads,
+model calls and processing have explicit budgets; a limit or unavailable OCR
+provider is visible rather than silently dropping documents. The initial
+assistant interface and generated responses are in Spanish.
+
+Service setup, contracts, storage migrations and release checks are documented in
+`chibchombiano26/secop-live-worker/docs/operations.md`. Install this plugin only
+after the compatible service is deployed and the workspace credential provisioned.
+
 ## Tender documents and PDF analysis
 
 Version 1.5.3 adds decorative Lucide icons to the result actions while retaining
