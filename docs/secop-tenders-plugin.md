@@ -64,7 +64,8 @@ PDF** accepts a user-selected PDF up to 5 MiB; the analysis reads the uploaded b
 not the document title or URL. The selected file must begin with a PDF signature.
 Other attachments remain available through their original download links.
 
-**Save interest and analyze PDF** explicitly saves the tender as an interest,
+**Save interest and analyze PDF** runs through an explicit React click handler,
+so it works without enabling native form submissions in the sandbox. It saves the tender as an interest,
 attaches the PDF through the current user's collection permissions, and sends it
 to the workspace's existing configured AI provider. No provider key is included in
 the plugin. The shared host document-analysis capability validates the installed
