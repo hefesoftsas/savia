@@ -86,6 +86,29 @@ function isAllowed(path: string): boolean {
   );
 }
 
+function normalizeExternalNavigationUrl(value: unknown): string | null {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > 2048 ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  )
+    return null;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      !url.hostname ||
+      url.username ||
+      url.password
+    )
+      return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Ejecuta un plugin del store dentro de un iframe aislado
  * (`sandbox="allow-scripts"`, origen opaco). El plugin nunca toca la
@@ -426,6 +449,47 @@ export function CustomPluginFrame({
         return;
       }
       if (message.type !== "request" || typeof message.id !== "string") return;
+      if (message.path === "/navigation/external") {
+        const frame = frameRef.current?.contentWindow;
+        const respond = (ok: boolean, error?: string) => {
+          if (frame !== frameRef.current?.contentWindow) return;
+          frame?.postMessage(
+            {
+              ns: "savia-plugin",
+              type: "response",
+              id: message.id,
+              panelId: message.panelId,
+              ok,
+              ...(ok ? { data: null } : { error }),
+            },
+            "*",
+          );
+        };
+        if (message.method !== "POST") {
+          respond(false, "External navigation requires the POST method.");
+          return;
+        }
+        const body = message.body as { url?: unknown } | undefined;
+        const url = normalizeExternalNavigationUrl(body?.url);
+        if (!url) {
+          respond(false, "Only valid absolute HTTPS URLs can be opened.");
+          return;
+        }
+        if (navigator.userActivation?.isActive !== true) {
+          respond(
+            false,
+            "External navigation requires an active user gesture.",
+          );
+          return;
+        }
+        try {
+          window.open(url, "_blank", "noopener,noreferrer");
+          respond(true);
+        } catch {
+          respond(false, "The browser could not open the external URL.");
+        }
+        return;
+      }
       if (typeof message.path !== "string" || !isAllowed(message.path)) {
         frameRef.current?.contentWindow?.postMessage(
           {

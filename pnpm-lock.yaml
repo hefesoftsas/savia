@@ -1741,6 +1741,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.3.0(@types/react@19.2.18)
+      jsdom:
+        specifier: ^28.1.0
+        version: 28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

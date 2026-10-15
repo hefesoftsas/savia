@@ -1,0 +1,68 @@
+.secop-autocomplete {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.secop-autocomplete-control {
+  display: flex;
+  min-width: 0;
+}
+.secop-app .secop-autocomplete-control input {
+  width: 100%;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.secop-app .secop-autocomplete-toggle {
+  display: grid;
+  flex: 0 0 2.7rem;
+  place-items: center;
+  min-height: 42px;
+  margin-left: -1px;
+  padding: 0.45rem;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.secop-autocomplete-chevron {
+  color: var(--secop-muted);
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.secop-autocomplete-listbox {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.2rem);
+  right: 0;
+  left: 0;
+  max-height: min(18rem, 50vh);
+  margin: 0;
+  padding: 0.25rem;
+  overflow-y: auto;
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+  background: var(--secop-bg);
+  box-shadow: 0 8px 24px rgb(23 38 36 / 14%);
+  list-style: none;
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+.secop-autocomplete-option {
+  min-width: 0;
+  padding: 0.5rem 0.55rem;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.secop-autocomplete-option:hover,
+.secop-autocomplete-option[aria-selected="true"] {
+  color: var(--secop-ink);
+  background: var(--secop-soft);
+}
+.secop-autocomplete-empty {
+  padding: 0.55rem;
+  color: var(--secop-muted);
+  font-weight: 400;
+}

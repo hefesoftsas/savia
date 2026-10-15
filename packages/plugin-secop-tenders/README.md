@@ -28,3 +28,8 @@ To create the immutable tenant ZIP after verifying the package:
 ```sh
 pnpm store:pack packages/plugin-secop-tenders
 ```
+
+Plugin 1.3.0 additionally requires the read-only `opciones_licitaciones` tool
+from `provider/catalogs.mjs`. Department, entity and modality options load from
+complete catalogs independently of tender results. See the installation and
+provider deployment notes in `docs/secop-tenders-plugin.md`.
