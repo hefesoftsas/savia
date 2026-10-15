@@ -33,3 +33,9 @@ Plugin 1.3.0 additionally requires the read-only `opciones_licitaciones` tool
 from `provider/catalogs.mjs`. Department, entity and modality options load from
 complete catalogs independently of tender results. See the installation and
 provider deployment notes in `docs/secop-tenders-plugin.md`.
+
+Version 1.4.0 adds per-tender Documents and Overview tabs, exact portfolio-based
+file lookup through `documentos_licitacion`, official download links, and analysis
+of user-selected PDFs using the shared host's configured AI. Analysis explicitly
+saves an interest and persists the PDF and report in backend storage. See
+`docs/secop-tenders-plugin.md` for CAPTCHA handoff, limits, deployment and retries.

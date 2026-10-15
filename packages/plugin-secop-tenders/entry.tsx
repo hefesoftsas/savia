@@ -9,6 +9,7 @@ import {
 import type { PluginApi } from "@savia/plugin-sdk";
 import { defineReactPlugin } from "@savia/plugin-sdk/react";
 import "./styles.css";
+import { TenderDocuments } from "./tender-documents";
 import { SearchFeed } from "./search-feed";
 import { FilterAutocomplete } from "./filter-autocomplete";
 import {
@@ -422,6 +423,7 @@ function Screen({ savia }: { savia: PluginApi }) {
       return target[property as keyof typeof target];
     },
   });
+  const [documentRow, setDocumentRow] = useState<SecopRow | null>(null);
   const [surface, setSurface] = useState<"search" | "interests">("search");
   const [draft, setDraft] = useState<SearchInput>({});
   const feed = useMemo(
@@ -516,6 +518,7 @@ function Screen({ savia }: { savia: PluginApi }) {
   useEffect(() => {
     const sentinel = searchSentinel.current;
     if (
+      documentRow !== null ||
       surface !== "search" ||
       !sentinel ||
       !searchPage?.hasNext ||
@@ -532,7 +535,7 @@ function Screen({ savia }: { savia: PluginApi }) {
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [feed, surface, searchPage, searchLoading, searchError]);
+  }, [feed, surface, documentRow, searchPage, searchLoading, searchError]);
   const loadInterests = async (nextPage: number, query = interestQuery) => {
     const id = interestRequests.begin();
     setInterestLoading(true);
@@ -662,6 +665,16 @@ function Screen({ savia }: { savia: PluginApi }) {
   ];
   const totalInterestPages = Math.max(1, Math.ceil(interestTotal / PAGE_SIZE));
 
+  if (documentRow)
+    return (
+      <TenderDocuments
+        key={String(documentRow.process_id)}
+        savia={savia}
+        row={documentRow}
+        locale={locale}
+        onBack={() => setDocumentRow(null)}
+      />
+    );
   return (
     <main className="secop-app">
       <header className="secop-header">
@@ -921,6 +934,16 @@ function Screen({ savia }: { savia: PluginApi }) {
                         </div>
                       </dl>
                       <footer>
+                        <button
+                          type="button"
+                          onClick={() => setDocumentRow(row)}
+                        >
+                          {locale === "en"
+                            ? "Documents"
+                            : locale === "pt"
+                              ? "Documentos"
+                              : "Documentos"}
+                        </button>
                         {link ? (
                           <a
                             href={link}
@@ -1066,6 +1089,12 @@ function Screen({ savia }: { savia: PluginApi }) {
                       </a>
                     )}
                   </header>
+                  <button
+                    type="button"
+                    onClick={() => setDocumentRow({ ...record, id: record.id })}
+                  >
+                    {locale === "en" ? "Documents" : "Documentos"}
+                  </button>
                   <div
                     className="secop-monitor-facts"
                     aria-label={t.sourceStatusLabel}

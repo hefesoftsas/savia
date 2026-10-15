@@ -36,7 +36,11 @@ type PrefetchedSettings = {
 
 function safeErrorMetadata(error: unknown) {
   if (!(error instanceof Error)) return {};
-  const value = error as { status?: unknown; code?: unknown };
+  const value = error as {
+    status?: unknown;
+    code?: unknown;
+    detail?: { error?: { fileId?: unknown }; fileId?: unknown };
+  };
   const status =
     typeof value.status === "number" &&
     Number.isInteger(value.status) &&
@@ -49,7 +53,14 @@ function safeErrorMetadata(error: unknown) {
     /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(value.code)
       ? value.code
       : undefined;
+  const fileId = value.detail?.error?.fileId ?? value.detail?.fileId;
   return {
+    ...(typeof fileId === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      fileId,
+    )
+      ? { errorFileId: fileId }
+      : {}),
     ...(status === undefined ? {} : { errorStatus: status }),
     ...(code === undefined ? {} : { errorCode: code }),
   };

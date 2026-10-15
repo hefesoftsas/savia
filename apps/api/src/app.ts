@@ -340,6 +340,7 @@ export function createApp(
     saviaRequestService,
     realtime,
     personalIntegrations,
+    assistantConfiguration,
   );
   registerTenantWorkspaceRoutes(app, db);
   registerTenantUserCapacityRoutes(app, db);

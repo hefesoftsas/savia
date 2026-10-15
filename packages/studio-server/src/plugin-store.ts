@@ -1335,7 +1335,7 @@ function requestHost(path, method, body, panelId, consistency) {
         pending.delete(id);
         reject(new Error("El host no respondió a tiempo."));
       }
-    }, 30000);
+    }, path.startsWith("/extensions/") && path.endsWith("/document-analysis") ? 90000 : 30000);
   });
 }
 addEventListener("message", (event) => {
@@ -1366,6 +1366,8 @@ addEventListener("message", (event) => {
       error.status = message.errorStatus;
     if (typeof message.errorCode === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(message.errorCode))
       error.code = message.errorCode;
+    if (typeof message.errorFileId === "string" && /^[0-9a-f-]{36}$/i.test(message.errorFileId))
+      error.fileId = message.errorFileId;
     slot.reject(error);
   }
 });

@@ -45,6 +45,48 @@ Savia's host-mediated external-link bridge. Search cards and saved interests use
 the same behavior; the plugin iframe retains its sandbox. An unavailable or
 refused link shows recovery guidance rather than silently doing nothing.
 
+## Tender documents and PDF analysis
+
+Choose **Documents** on a search result or saved interest. The tender detail has
+**Overview** and **Documents** tabs; returning preserves the current search.
+Document lookup uses the tender's exact `id_del_portafolio` to match the public
+file dataset's `proceso`, and never associates files by entity or filename alone.
+The `documentos_licitacion` read-only MCP tool must be available before installing
+version 1.4.0. Missing or ambiguous portfolio associations produce a lookup error
+with retry and a link to the official process. Documents load in pages of 20 with explicit
+retry and load-more controls. The public file catalog covers documents since 2025;
+an empty catalog does not prove that the SECOP process has no attachments.
+
+**Download on SECOP** opens the original official document URL. If SECOP asks for
+a CAPTCHA, the user completes it on SECOP and downloads the file there. Savia does
+not solve or bypass that challenge. **Analyze this PDF** or **Analyze a downloaded
+PDF** accepts a user-selected PDF up to 5 MiB; the analysis reads the uploaded bytes,
+not the document title or URL. The selected file must begin with a PDF signature.
+Other attachments remain available through their original download links.
+
+**Save interest and analyze PDF** explicitly saves the tender as an interest,
+attaches the PDF through the current user's collection permissions, and sends it
+to the workspace's existing configured AI provider. No provider key is included in
+the plugin. The shared host document-analysis capability validates the installed
+extension and its declared collection, bounds the request and decoded PDF size,
+and uses OpenRouter's `pdf-text` parser with the configured summary/chat model.
+Scanned or unreadable PDFs may need OCR; the analysis must report unreadable or
+missing content instead of drawing conclusions from filenames. Page references
+are requested only when supported by the parsed document. Users must verify the
+analysis against the original file.
+
+Completed results are saved in `procurement_documents`, linked to the interest,
+source document, stored file, model and analysis time. Saved analyses reload from
+the backend and provide a download of the stored PDF. Provider failures preserve
+the stored file ID for an in-place retry without another attachment. If saving a
+completed analysis fails, its text remains visible with **Save result**; returning
+is disabled until the result is saved. The saved history shows up to 50 analyses
+for the process. No document or report is persisted in browser storage.
+
+The 1.4.0 feature requires both the shared host document-analysis deployment and
+the updated tenant ZIP. Later UI-only document changes can be delivered by ZIP
+without a host release.
+
 Choose **Track** on a result to save that selected row. **My interests** lists
 persisted opportunities, with tracking status, priority, owner, next follow-up date
 and notes. The same Socrata `:id` can be saved only once per workspace. Saving an

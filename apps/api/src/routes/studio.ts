@@ -1,5 +1,6 @@
 import { documentDeliveryBridge } from "../personal-integrations/document-delivery";
 import type { PersonalIntegrationRouteDependencies } from "./personal-integrations";
+import type { AssistantConfigurationRepository } from "../assistant/configuration";
 import { dialectFor } from "@savia/db/dialect";
 import { streamingRequest } from "../lib/streaming-request";
 import { publishRecordBundleChanges } from "../studio/record-bundle-realtime";
@@ -25,6 +26,13 @@ import type { SolutionOptions } from "@savia/studio-server/solutions";
 import type { RealtimeHubClient } from "../realtime/hub-client";
 import { publishRealtime } from "../realtime/hub-client";
 import { tenantRoom } from "../realtime/protocol";
+import { isExtensionAvailable } from "@savia/studio-server/extensions";
+import { storeConfigFor } from "@savia/studio-server/plugin-store";
+import { solutionOptions } from "../solutions/catalog";
+import {
+  DocumentAnalysisError,
+  handleStudioDocumentAnalysis,
+} from "../studio/document-analysis";
 import {
   assertOfficeSuiteEnabled,
   OfficeSettingsError,
@@ -53,6 +61,7 @@ export function registerStudioRoutes(
   saviaRequestService?: SaviaRequestService,
   realtime?: RealtimeHubClient,
   personalIntegrations?: PersonalIntegrationRouteDependencies,
+  assistantConfiguration?: AssistantConfigurationRepository,
 ) {
   const handleStudioRequest = async (c: any) => {
     const actor = actorFromContext(c);
@@ -342,6 +351,145 @@ export function registerStudioRoutes(
             .catch(() => undefined)) as
             { action?: string; id?: string } | undefined)
         : undefined;
+    const documentAnalysisMatch =
+      /^\/api\/extensions\/([^/]+)\/document-analysis$/.exec(path);
+    if (documentAnalysisMatch) {
+      const extensionId = decodeURIComponent(documentAnalysisMatch[1]);
+      const analysis = await handleStudioDocumentAnalysis({
+        request: c.req.raw,
+        tenantId,
+        actor,
+        extensionId,
+        assistantConfiguration,
+        isExtensionAvailable: (id) =>
+          isExtensionAvailable(
+            db,
+            tenantKey,
+            id,
+            solutionOptions.extensionRegistry,
+          ),
+        isCollectionDeclared: async (id, object) => {
+          const config = await storeConfigFor(db, tenantKey, id);
+          return Boolean(
+            config?.collections.some(
+              (collection) =>
+                collection.object &&
+                typeof collection.object === "object" &&
+                "name" in collection.object &&
+                collection.object.name === object,
+            ),
+          );
+        },
+        persist: async (document) => {
+          const form = new FormData();
+          const bytes = new Uint8Array(document.content.byteLength);
+          bytes.set(document.content);
+          form.set(
+            "file",
+            new File([bytes.buffer], document.filename, {
+              type: "application/pdf",
+            }),
+          );
+          const uploaded = await gateway.fetch(
+            new Request(
+              `https://crm.internal/api/files/${encodeURIComponent(document.object)}/${encodeURIComponent(document.recordId)}`,
+              { method: "POST", body: form },
+            ),
+          );
+          const body = (await uploaded.json().catch(() => null)) as {
+            data?: unknown;
+          } | null;
+          if (!uploaded.ok || !body?.data || typeof body.data !== "object")
+            throw new DocumentAnalysisError(
+              "The PDF could not be saved to this record.",
+              uploaded.status === 403
+                ? 403
+                : uploaded.status === 404
+                  ? 404
+                  : 422,
+              "DOCUMENT_UPLOAD_FAILED",
+            );
+          return body.data as {
+            id: string;
+            name: string;
+            mime: string;
+            size: number;
+            version: number;
+            created_at?: string;
+          };
+        },
+        loadExisting: async ({ object, recordId, fileId }) => {
+          const row = await db
+            .prepare(
+              "SELECT id,name,mime,size,version,created_at FROM studio_files WHERE tenant_id=? AND id=? AND object_name=? AND record_id=?",
+            )
+            .bind(tenantKey, fileId, object, recordId)
+            .first<{
+              id: string;
+              name: string;
+              mime: string;
+              size: number;
+              version: number;
+              created_at?: string;
+            }>();
+          if (
+            !row ||
+            row.mime.toLowerCase() !== "application/pdf" ||
+            row.size > 5 * 1024 * 1024
+          )
+            throw new DocumentAnalysisError(
+              "The saved PDF could not be found for this record.",
+              404,
+              "DOCUMENT_NOT_FOUND",
+            );
+          const downloaded = await gateway.fetch(
+            new Request(
+              `https://crm.internal/api/file/${encodeURIComponent(fileId)}/download`,
+            ),
+          );
+          if (!downloaded.ok)
+            throw new DocumentAnalysisError(
+              "The saved PDF could not be loaded for this record.",
+              downloaded.status === 403 ? 403 : 404,
+              "DOCUMENT_NOT_FOUND",
+            );
+          const buffer = await downloaded.arrayBuffer();
+          if (buffer.byteLength > 5 * 1024 * 1024)
+            throw new DocumentAnalysisError(
+              "PDF files must be 5 MB or smaller.",
+              413,
+              "DOCUMENT_TOO_LARGE",
+            );
+          const content = new Uint8Array(buffer);
+          if (new TextDecoder().decode(content.subarray(0, 5)) !== "%PDF-")
+            throw new DocumentAnalysisError(
+              "The saved file does not contain a valid PDF.",
+              415,
+              "INVALID_PDF",
+            );
+          let binary = "";
+          for (let offset = 0; offset < content.length; offset += 0x7ffe)
+            binary += String.fromCharCode(
+              ...content.subarray(offset, offset + 0x7ffe),
+            );
+          return {
+            file: row,
+            input: {
+              object,
+              recordId,
+              filename: row.name,
+              content,
+              base64: btoa(binary),
+              locale: "es",
+            },
+          };
+        },
+      });
+      return new Response(analysis.body, {
+        status: analysis.status,
+        headers: analysis.headers,
+      });
+    }
     const response = await gateway.fetch(request);
     const deliveryMatch = /^\/api\/file\/([^/]+)\/delivery\/confirm$/.exec(
       path,

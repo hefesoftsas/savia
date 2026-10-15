@@ -1,0 +1,167 @@
+/** @vitest-environment jsdom */
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { PluginApi } from "@savia/plugin-sdk";
+import { TenderDocuments } from "../tender-documents";
+import { analyzeTenderPdf, pdfBase64 } from "../documents";
+vi.mock("../documents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../documents")>()),
+  analyzeTenderPdf: vi.fn(),
+  pdfBase64: vi.fn().mockResolvedValue("JVBERi0="),
+}));
+let root: Root;
+let host: HTMLDivElement;
+afterEach(() => {
+  if (root) act(() => root.unmount());
+  host?.remove();
+  vi.clearAllMocks();
+});
+const documentRow = {
+  id_documento: "123",
+  id_del_proceso: "CO1.REQ.123",
+  nombre_archivo: "Pliego definitivo.pdf",
+  url_descarga_documento: {
+    url: "https://community.secop.gov.co/Public/Archive/RetrieveFile/Index?DocumentId=123",
+  },
+};
+async function mount(
+  output: unknown = { data: [documentRow], hasNext: false },
+) {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  const execute = vi.fn().mockResolvedValue({ output });
+  const reports = {
+    list: vi.fn().mockResolvedValue({ data: [] }),
+    create: vi
+      .fn()
+      .mockImplementation(async (data) => ({ id: "report-1", ...data })),
+  };
+  const interests = {
+    list: vi.fn().mockResolvedValue({
+      data: [{ id: "interest-1", source_id: "source-1" }],
+    }),
+  };
+  const savia = {
+    actions: { execute },
+    collections: {
+      collection: (name: string) =>
+        name === "procurement_documents" ? reports : interests,
+    },
+  } as unknown as PluginApi;
+  const back = vi.fn();
+  await act(async () =>
+    root.render(
+      <TenderDocuments
+        savia={savia}
+        row={{
+          id: "source-1",
+          process_id: "CO1.REQ.123",
+          name: "Software tender",
+          entity: "Entity",
+        }}
+        locale="es"
+        onBack={back}
+      />,
+    ),
+  );
+  return { execute, reports, interests, back };
+}
+async function click(text: string) {
+  const button = [...host.querySelectorAll("button")].find(
+    (el) => el.textContent === text,
+  );
+  expect(button).toBeDefined();
+  await act(async () => button!.click());
+}
+describe("tender documents UI", () => {
+  it("loads documents only for the selected process and exposes the official download plus accessible tabs", async () => {
+    const { execute } = await mount();
+    expect(execute).toHaveBeenCalledWith("documents", {
+      input: { id_del_proceso: "CO1.REQ.123", page: 1, perPage: 20 },
+    });
+    const link = host.querySelector<HTMLAnchorElement>(
+      'a[href*="RetrieveFile"]',
+    )!;
+    expect(link.target).toBe("_blank");
+    expect(link.textContent).toBe("Descargar en SECOP");
+    expect(
+      host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+    ).toBe("Documentos");
+    await click("Resumen");
+    expect(host.querySelector('[role="tabpanel"]')?.id).toBe(
+      "secop-overview-panel",
+    );
+  });
+  it("keeps a failed document lookup actionable and does not fabricate files", async () => {
+    await mount({ data: [{ ...documentRow, id_del_proceso: "CO1.REQ.999" }] });
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+      "No se pudieron cargar",
+    );
+    expect(host.querySelector('a[href*="RetrieveFile"]')).toBeNull();
+  });
+  it("analyzes selected PDF bytes and persists a report tied to the saved interest", async () => {
+    const { reports } = await mount();
+    vi.mocked(analyzeTenderPdf).mockResolvedValue({
+      file: { id: "file-1", name: "pliego.pdf" },
+      analysis: "Experience: see page 3.",
+      model: "configured/model",
+      analyzedAt: "2026-10-15T01:00:00Z",
+    });
+    await click("Analizar este PDF");
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, "files", {
+      value: [
+        new File(["%PDF-1.7"], "pliego.pdf", { type: "application/pdf" }),
+      ],
+    });
+    await act(async () =>
+      input.dispatchEvent(new Event("change", { bubbles: true })),
+    );
+    await click("Guardar interés y analizar PDF");
+    expect(pdfBase64).toHaveBeenCalled();
+    expect(analyzeTenderPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recordId: "interest-1",
+        data: "JVBERi0=",
+        sourceUrl: documentRow.url_descarga_documento.url,
+      }),
+    );
+    expect(reports.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        process_id: "CO1.REQ.123",
+        interest_id: "interest-1",
+        document_id: "123",
+        analysis: "Experience: see page 3.",
+      }),
+    );
+    expect(host.textContent).toContain("Experience: see page 3.");
+  });
+  it("retains a completed analysis when saving fails, allowing a persistence retry", async () => {
+    const { reports } = await mount();
+    reports.create.mockRejectedValueOnce(new Error("offline"));
+    vi.mocked(analyzeTenderPdf).mockResolvedValue({
+      file: { id: "file-1", name: "pliego.pdf" },
+      analysis: "Retained analysis",
+      model: "configured/model",
+      analyzedAt: "2026-10-15T01:00:00Z",
+    });
+    await click("Analizar un PDF descargado");
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, "files", {
+      value: [new File(["%PDF-1.7"], "pliego.pdf")],
+    });
+    await act(async () =>
+      input.dispatchEvent(new Event("change", { bubbles: true })),
+    );
+    await click("Guardar interés y analizar PDF");
+    expect(host.textContent).toContain("Retained analysis");
+    expect(host.querySelector<HTMLButtonElement>("button")?.disabled).toBe(
+      true,
+    );
+    await click("Guardar resultado");
+    expect(host.textContent).toContain("Retained analysis");
+    expect(reports.create).toHaveBeenCalledTimes(2);
+  });
+});

@@ -636,7 +636,11 @@ it("forwards only safe API error status and code through the iframe bridge", asy
   const transport = vi.fn(async () =>
     Response.json(
       {
-        error: { message: "Record version conflict", code: "VERSION_CONFLICT" },
+        error: {
+          message: "Record version conflict",
+          code: "VERSION_CONFLICT",
+          fileId: "550e8400-e29b-41d4-a716-446655440000",
+        },
       },
       { status: 409 },
     ),
@@ -670,6 +674,7 @@ it("forwards only safe API error status and code through the iframe bridge", asy
         error: "Record version conflict",
         errorStatus: 409,
         errorCode: "VERSION_CONFLICT",
+        errorFileId: "550e8400-e29b-41d4-a716-446655440000",
       }),
       "*",
     ),

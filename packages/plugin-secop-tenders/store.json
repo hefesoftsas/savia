@@ -71,6 +71,22 @@
         "idField": "id"
       },
       "inputArguments": []
+    },
+    {
+      "id": "documents",
+      "kind": "mcp",
+      "sourceId": "secop_live",
+      "tool": "documentos_licitacion",
+      "mapping": {
+        "arguments": {},
+        "itemsPointer": "/data",
+        "idField": "id_documento",
+        "pagination": {
+          "limitArgument": "limit",
+          "offsetArgument": "offset"
+        }
+      },
+      "inputArguments": ["id_del_proceso"]
     }
   ],
   "monitors": [
@@ -446,6 +462,59 @@
         },
         "priority": {
           "types": ["Dropdown"]
+        }
+      }
+    },
+    {
+      "object": {
+        "name": "procurement_documents",
+        "label": "SECOP document analyses",
+        "description": "PDF analyses intentionally requested by workspace users.",
+        "config": {
+          "version": 1,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Document"
+            },
+            "process_id": {
+              "type": "Textbox",
+              "label": "SECOP process"
+            },
+            "interest_id": {
+              "type": "Textbox",
+              "label": "Saved interest"
+            },
+            "document_id": {
+              "type": "Textbox",
+              "label": "SECOP document"
+            },
+            "source_url": {
+              "type": "Textbox",
+              "label": "SECOP download URL"
+            },
+            "file_id": {
+              "type": "Textbox",
+              "label": "Stored file"
+            },
+            "file_url": {
+              "type": "Textbox",
+              "label": "Stored PDF download URL"
+            },
+            "analysis": {
+              "type": "Textarea",
+              "label": "AI analysis"
+            },
+            "model": {
+              "type": "Textbox",
+              "label": "AI model"
+            },
+            "analyzed_at": {
+              "type": "Textbox",
+              "label": "Analysis date"
+            }
+          },
+          "lookupFields": ["name", "process_id"]
         }
       }
     }
