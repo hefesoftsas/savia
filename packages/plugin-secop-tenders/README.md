@@ -39,3 +39,5 @@ file lookup through `documentos_licitacion`, official download links, and analys
 of user-selected PDFs using the shared host's configured AI. Analysis explicitly
 saves an interest and persists the PDF and report in backend storage. See
 `docs/secop-tenders-plugin.md` for CAPTCHA handoff, limits, deployment and retries.
+
+The Documents tab downloads and analyzes official PDFs automatically. CAPTCHA/access challenges show an official link, automatic retry, and a manual upload fallback. Files and reports remain in Savia backend storage; browser sessions and credentials are never forwarded. See the [SECOP guide](../../docs/secop-tenders-plugin.md).

@@ -116,7 +116,11 @@ export async function analyzeTenderPdf(
     locale: string;
     sourceUrl?: string;
     opportunityContext?: string;
-  } & ({ filename: string; data: string } | { fileId: string }),
+  } & (
+    | { filename: string; data: string }
+    | { filename: string; downloadUrl: string }
+    | { fileId: string }
+  ),
 ) {
   const response = await fetch(
     "/api/extensions/procurement.secop/document-analysis",

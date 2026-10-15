@@ -543,5 +543,8 @@
         "department"
       ]
     }
-  ]
+  ],
+  "documentDownloads": {
+    "allowedHosts": ["community.secop.gov.co"]
+  }
 }

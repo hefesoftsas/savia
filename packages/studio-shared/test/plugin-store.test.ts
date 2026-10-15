@@ -913,3 +913,29 @@ describe("read-only MCP store actions", () => {
     ).toBe(false);
   });
 });
+
+describe("document download source declarations", () => {
+  it("preserves the installed plugin's download host policy", () => {
+    const config = storeJsonSchema.parse({
+      format: "savia.store",
+      formatVersion: 1,
+      documentDownloads: { allowedHosts: ["documents.example.com"] },
+    });
+    expect(config.documentDownloads?.allowedHosts).toEqual([
+      "documents.example.com",
+    ]);
+  });
+  it.each([
+    [],
+    ["https://documents.example.com/path"],
+    ["documents.example.com:8443"],
+  ])("rejects invalid download host declarations %j", (allowedHosts) => {
+    expect(
+      storeJsonSchema.safeParse({
+        format: "savia.store",
+        formatVersion: 1,
+        documentDownloads: { allowedHosts },
+      }).success,
+    ).toBe(false);
+  });
+});

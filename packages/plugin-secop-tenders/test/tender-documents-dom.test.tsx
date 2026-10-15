@@ -10,12 +10,14 @@ vi.mock("../documents", async (importOriginal) => ({
   analyzeTenderPdf: vi.fn(),
   pdfBase64: vi.fn().mockResolvedValue("JVBERi0="),
 }));
+vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 let root: Root;
 let host: HTMLDivElement;
 afterEach(() => {
   if (root) act(() => root.unmount());
   host?.remove();
   vi.clearAllMocks();
+  vi.mocked(analyzeTenderPdf).mockReset();
 });
 const documentRow = {
   id_documento: "123",
@@ -109,7 +111,7 @@ describe("tender documents UI", () => {
       model: "configured/model",
       analyzedAt: "2026-10-15T01:00:00Z",
     });
-    await click("Analizar este PDF");
+    await click("Analizar un PDF descargado");
     const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
     Object.defineProperty(input, "files", {
       value: [
@@ -130,18 +132,112 @@ describe("tender documents UI", () => {
       expect.objectContaining({
         recordId: "interest-1",
         data: "JVBERi0=",
-        sourceUrl: documentRow.url_descarga_documento.url,
       }),
     );
     expect(reports.create).toHaveBeenCalledWith(
       expect.objectContaining({
         process_id: "CO1.REQ.123",
         interest_id: "interest-1",
-        document_id: "123",
+        document_id: "",
         analysis: "Experience: see page 3.",
       }),
     );
     expect(host.textContent).toContain("Experience: see page 3.");
+  });
+  it("downloads and analyzes the official PDF on one click without requesting a file", async () => {
+    const { reports } = await mount();
+    vi.mocked(analyzeTenderPdf).mockResolvedValue({
+      file: { id: "file-remote", name: "Pliego definitivo.pdf" },
+      analysis: "Remote PDF requirements",
+      model: "configured/model",
+      analyzedAt: "2026-10-15T01:00:00Z",
+    });
+    await click("Analizar este PDF");
+    expect(analyzeTenderPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recordId: "interest-1",
+        downloadUrl: documentRow.url_descarga_documento.url,
+        filename: "Pliego definitivo.pdf",
+        sourceUrl: documentRow.url_descarga_documento.url,
+      }),
+    );
+    expect(pdfBase64).not.toHaveBeenCalled();
+    expect(host.querySelector('input[type="file"]')).toBeNull();
+    expect(reports.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        document_id: "123",
+        analysis: "Remote PDF requirements",
+      }),
+    );
+  });
+  it("requests help only after an access challenge and preserves the selected official document", async () => {
+    const { reports } = await mount();
+    vi.mocked(analyzeTenderPdf).mockRejectedValueOnce(
+      Object.assign(new Error("challenge"), {
+        code: "DOCUMENT_ACCESS_CHALLENGE",
+      }),
+    );
+    await click("Analizar este PDF");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+      "CAPTCHA",
+    );
+    expect(host.querySelector('input[type="file"]')).not.toBeNull();
+    expect(document.activeElement).toBe(host.querySelector('[role="alert"]'));
+    expect(reports.create).not.toHaveBeenCalled();
+    const link = host.querySelector<HTMLAnchorElement>('[role="alert"] a');
+    expect(link?.href).toBe(documentRow.url_descarga_documento.url);
+    vi.mocked(analyzeTenderPdf).mockResolvedValue({
+      file: { id: "file-retry", name: "pliego.pdf" },
+      analysis: "Retried",
+      model: "model",
+      analyzedAt: "2026-10-15T01:00:00Z",
+    });
+    await click("Reintentar descarga automática");
+    expect(reports.create).toHaveBeenCalledWith(
+      expect.objectContaining({ document_id: "123", analysis: "Retried" }),
+    );
+  });
+  it("retries an AI failure using the stored file instead of downloading another copy", async () => {
+    await mount();
+    vi.mocked(analyzeTenderPdf).mockRejectedValueOnce(
+      Object.assign(new Error("AI unavailable"), {
+        code: "ANALYSIS_PROVIDER_UNAVAILABLE",
+        fileId: "saved-file-1",
+      }),
+    );
+    await click("Analizar este PDF");
+    expect(host.querySelector('input[type="file"]')).toBeNull();
+    vi.mocked(analyzeTenderPdf).mockResolvedValue({
+      file: { id: "saved-file-1", name: "Pliego definitivo.pdf" },
+      analysis: "Recovered",
+      model: "model",
+      analyzedAt: "2026-10-15T01:00:00Z",
+    });
+    await click("Reintentar descarga automática");
+    expect(vi.mocked(analyzeTenderPdf).mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        fileId: "saved-file-1",
+        recordId: "interest-1",
+      }),
+    );
+    expect(vi.mocked(analyzeTenderPdf).mock.calls[1][0]).not.toHaveProperty(
+      "downloadUrl",
+    );
+    expect(host.textContent).toContain("Recovered");
+  });
+  it("keeps a failed download retryable without requesting a manual upload", async () => {
+    const { reports } = await mount();
+    vi.mocked(analyzeTenderPdf).mockRejectedValueOnce(
+      Object.assign(new Error("unavailable"), {
+        code: "DOCUMENT_DOWNLOAD_FAILED",
+      }),
+    );
+    await click("Analizar este PDF");
+    expect(host.querySelector('input[type="file"]')).toBeNull();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+      "descargar",
+    );
+    expect(reports.create).not.toHaveBeenCalled();
   });
   it("retains a completed analysis when saving fails, allowing a persistence retry", async () => {
     const { reports } = await mount();
