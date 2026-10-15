@@ -42,6 +42,20 @@ node scripts/preview-destroy.mjs --branch feat-x --force
 | savia-request sandbox | needs the account's Workers for Platforms entitlement, like prod                             |
 | D1 budget             | 2 databases per preview (free tier allows 10 total)                                          |
 
+## Trusted source requirement
+
+Run the manual workflow from `main`. Before dependencies or local actions run,
+it fetches the requested branch and requires its tip to be an ancestor of the
+immutable workflow commit on `main`. Deployment checks out that verified SHA
+with checkout hooks disabled. Unmerged and squash-merged branch tips are
+rejected. Supporting unmerged previews requires a separate build pipeline
+without infrastructure credentials.
+
+Destroy uses the trusted scripts from the workflow commit on `main`, so the
+resource branch may already be deleted. Branch and confirmation values are
+never inserted into shell source. A matching destroy confirmation is still
+required.
+
 ## Safety rails
 
 - `main`/`production`/`staging` (and case variants) are refused by the

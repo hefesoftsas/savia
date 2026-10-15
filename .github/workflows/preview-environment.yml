@@ -28,6 +28,7 @@ concurrency:
 
 jobs:
   preview:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
     name: Preview ${{ inputs.action }} (${{ inputs.branch }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -35,11 +36,46 @@ jobs:
       name: preview
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      PREVIEW_BRANCH: ${{ inputs.branch }}
+      PREVIEW_ACTION: ${{ inputs.action }}
     steps:
-      - name: Check out source
+      - name: Check out trusted workflow source
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate trusted preview source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git check-ref-format "refs/heads/$PREVIEW_BRANCH"
+          case "$PREVIEW_BRANCH" in
+            [mM][aA][iI][nN]|[pP][rR][oO][dD][uU][cC][tT][iI][oO][nN]|[sS][tT][aA][gG][iI][nN][gG])
+              echo "::error::Reserved preview branch name."
+              exit 1
+              ;;
+          esac
+          case "$PREVIEW_ACTION" in
+            deploy)
+              git fetch --no-tags --no-recurse-submodules origin "refs/heads/$PREVIEW_BRANCH"
+              target_sha="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+              if ! git merge-base --is-ancestor "$target_sha" "$GITHUB_SHA"; then
+                echo "::error::Preview source must already belong to the trusted main history."
+                exit 1
+              fi
+              git -c core.hooksPath=/dev/null checkout --detach "$target_sha"
+              ;;
+            destroy)
+              # Keep trusted main tooling; cleanup also works after branch deletion.
+              ;;
+            *)
+              echo "::error::Unsupported preview action."
+              exit 1
+              ;;
+          esac
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -58,19 +94,19 @@ jobs:
       - name: Refuse unconfirmed destroy
         if: ${{ inputs.action == 'destroy' && inputs.confirm != inputs.branch }}
         run: |
-          echo "Destroy requires confirm == branch name. Got confirm='${{ inputs.confirm }}'." >&2
+          echo "Destroy requires confirm to match the branch name." >&2
           exit 1
 
       - name: Deploy preview environment
         if: ${{ inputs.action == 'deploy' }}
-        run: node scripts/preview-deploy.mjs --branch "${{ inputs.branch }}"
+        run: node scripts/preview-deploy.mjs --branch "$PREVIEW_BRANCH"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Destroy preview environment
         if: ${{ inputs.action == 'destroy' && inputs.confirm == inputs.branch }}
-        run: node scripts/preview-destroy.mjs --branch "${{ inputs.branch }}" --force
+        run: node scripts/preview-destroy.mjs --branch "$PREVIEW_BRANCH" --force
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
