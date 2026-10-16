@@ -584,7 +584,9 @@
                 "pt": "Tarefa"
               },
               "required": true,
-              "config": { "maxLength": 500 }
+              "config": {
+                "maxLength": 500
+              }
             },
             "description": {
               "type": "Textarea",
@@ -594,7 +596,9 @@
                 "en": "Description",
                 "pt": "Descrição"
               },
-              "config": { "maxLength": 20000 }
+              "config": {
+                "maxLength": 20000
+              }
             },
             "assignee": {
               "type": "Textbox",
@@ -605,7 +609,9 @@
                 "pt": "Responsável"
               },
               "required": true,
-              "config": { "maxLength": 200 }
+              "config": {
+                "maxLength": 200
+              }
             },
             "due_date": {
               "type": "DateControl",
@@ -656,7 +662,10 @@
                 "pt": "Chave de origem"
               },
               "required": true,
-              "config": { "unique": true, "maxLength": 200 }
+              "config": {
+                "unique": true,
+                "maxLength": 200
+              }
             },
             "source_context": {
               "type": "Textarea",
@@ -666,7 +675,9 @@
                 "en": "Source context",
                 "pt": "Contexto de origem"
               },
-              "config": { "maxLength": 20000 }
+              "config": {
+                "maxLength": 20000
+              }
             },
             "source_reference": {
               "type": "Textarea",
@@ -676,7 +687,9 @@
                 "en": "Requirement reference",
                 "pt": "Referência do requisito"
               },
-              "config": { "maxLength": 20000 }
+              "config": {
+                "maxLength": 20000
+              }
             },
             "source_url": {
               "type": "Textbox",
@@ -686,7 +699,9 @@
                 "en": "Source URL",
                 "pt": "URL de origem"
               },
-              "config": { "maxLength": 2000 }
+              "config": {
+                "maxLength": 2000
+              }
             }
           },
           "fieldOrder": [
@@ -714,11 +729,26 @@
         }
       },
       "requiredFields": {
-        "name": { "types": ["Textbox"], "required": true },
-        "assignee": { "types": ["Textbox"], "required": true },
-        "due_date": { "types": ["DateControl"], "required": true },
-        "status": { "types": ["Dropdown"], "required": true },
-        "source_key": { "types": ["Textbox"], "required": true }
+        "name": {
+          "types": ["Textbox"],
+          "required": true
+        },
+        "assignee": {
+          "types": ["Textbox"],
+          "required": true
+        },
+        "due_date": {
+          "types": ["DateControl"],
+          "required": true
+        },
+        "status": {
+          "types": ["Dropdown"],
+          "required": true
+        },
+        "source_key": {
+          "types": ["Textbox"],
+          "required": true
+        }
       }
     }
   ],
@@ -733,11 +763,6 @@
         "entity",
         "department"
       ]
-    },
-    {
-      "object": "secop_application_tasks",
-      "view": "records",
-      "lookupFields": ["name", "assignee", "source_reference"]
     }
   ],
   "documentDownloads": {
