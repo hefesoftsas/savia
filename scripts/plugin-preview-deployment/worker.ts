@@ -189,6 +189,7 @@ async function preflight(db: D1Database, input: unknown) {
         installation.version === plugin.version &&
         artifact.sha256 === plugin.sha256 &&
         canonical(installedManifest) === canonical(candidateManifest) &&
+        canonical(currentManifest) === canonical(candidateManifest) &&
         currentStore === candidateStore;
       if (isCurrent) {
         tenantRows.push({
@@ -406,6 +407,11 @@ async function rollback(dbEnv: { DB: D1Database }, input: unknown) {
           );
           if (
             previousArtifact?.sha256 === target.previousArtifact?.sha256 &&
+            previousArtifact?.manifest === target.previousArtifact?.manifest &&
+            previousArtifact?.store_json ===
+              target.previousArtifact?.storeJson &&
+            base64Utf8(previousArtifact?.entry_js ?? "") ===
+              target.previousArtifact?.entryJsBase64 &&
             canonical(JSON.parse(installation.manifest)) ===
               canonical(JSON.parse(target.previousInstallation.manifest))
           ) {

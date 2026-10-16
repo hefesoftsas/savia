@@ -250,6 +250,14 @@ describe("private preview plugin deployment worker", () => {
     ]);
     expect(payload.skipped).toEqual([]);
   });
+  it("preserves concurrent artifact content changes even when the recorded digest matches", async () => {
+    const db = fixture();
+    const checkpoint = checkpointFor(plan().plugins[0]);
+    checkpoint.plugins[0].tenants[0].previousArtifact.entryJsBase64 = "changed";
+    const payload = (await (await rollback(db, checkpoint)).json()) as any;
+    expect(payload.unchanged).toEqual([]);
+    expect(payload.skipped).toHaveLength(1);
+  });
 });
 
 function checkpointFor(
@@ -278,7 +286,13 @@ function checkpointFor(
             previousArtifact: {
               version: "1.0.0",
               manifest: JSON.stringify(oldManifest),
-              entryJsBase64: "",
+              entryJsBase64: btoa(
+                unescape(
+                  encodeURIComponent(
+                    "export function render() { return '✓'; }",
+                  ),
+                ),
+              ),
               storeJson: JSON.stringify(normalizedStoreJson),
               sha256: "b".repeat(64),
             },
