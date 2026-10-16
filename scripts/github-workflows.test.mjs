@@ -34,6 +34,22 @@ test("CI validates main pushes and pull requests without deployment credentials"
   assert.doesNotMatch(ci, /CLOUDFLARE_API_TOKEN|self-hosted|secrets\./);
 });
 
+test("plugin validation is part of the required Contract tests gate", async () => {
+  const ci = await workflow("ci.yml");
+  const contracts = ci.slice(
+    ci.indexOf("  contracts:"),
+    ci.indexOf("  typecheck:"),
+  );
+
+  assert.match(contracts, /needs:\n\s+- changes\n\s+- plugin-validation/);
+  assert.match(contracts, /if: always\(\)/);
+  assert.match(
+    contracts,
+    /needs\.changes\.result != 'success'[\s\S]*needs\.plugin-validation\.result != 'success'/,
+  );
+  assert.match(contracts, /run: exit 1/);
+});
+
 test("production deployment is limited to main and has ordered Worker stages", async () => {
   const deploy = await workflow("deploy-cloudflare.yml");
 
@@ -237,4 +253,30 @@ test("coverage measures main and manual runs without duplicating required PR tes
   const ci = await workflow("ci.yml");
   assert.match(ci, /pull_request:/);
   assert.doesNotMatch(ci, /paths-ignore:|continue-on-error: true/);
+});
+
+test("Preview lanes are exclusive and plugin health stays within rollback protection", async () => {
+  const preview = await workflow("deploy-preview.yml");
+  assert.match(preview, /needs\.plan\.outputs\.kind == 'platform'/);
+  assert.match(preview, /needs\.plan\.outputs\.kind == 'plugin'/);
+  const pluginJob = preview.slice(preview.indexOf("\n  plugins:"));
+  assert.match(
+    pluginJob,
+    /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/,
+  );
+  assert.match(pluginJob, /verify-preview-resources\.mjs/);
+  assert.match(pluginJob, /git ls-remote --exit-code origin refs\/heads\/main/);
+  assert.match(pluginJob, /publish-preview-plugins\.mjs --plan/);
+  assert.match(pluginJob, /name: preview-plugin-recovery/);
+  assert.match(pluginJob, /name: preview-release/);
+  assert.doesNotMatch(
+    pluginJob,
+    /Verify existing Preview remains healthy|pulumi up|backup\.mjs|apply-d1-migrations/,
+  );
+});
+
+test("production promotion still requires the full verified Preview job", async () => {
+  const production = await workflow("deploy-cloudflare.yml");
+  assert.match(production, /Deploy preview/);
+  assert.doesNotMatch(production, /Publish changed Preview plugins/);
 });

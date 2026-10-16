@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -17,6 +17,7 @@ import {
   d1BackupTargets,
   flowsBucketTargets,
   hashBackupFiles,
+  downloadR2Objects,
 } from "./backup.mjs";
 
 describe("pulumi backup", () => {
@@ -25,6 +26,29 @@ describe("pulumi backup", () => {
     const dry = parseBackupArgs(["--stack", "preview", "--dry-run"]);
     assert.equal(dry.stack, "preview");
     assert.equal(dry.skipR2, false);
+    assert.equal(dry.r2Concurrency, 4);
+    assert.equal(
+      parseBackupArgs([
+        "--stack",
+        "preview",
+        "--dry-run",
+        "--r2-concurrency",
+        "7",
+      ]).r2Concurrency,
+      7,
+    );
+    for (const boundary of ["1", "8"]) {
+      assert.equal(
+        parseBackupArgs([
+          "--stack",
+          "preview",
+          "--dry-run",
+          "--r2-concurrency",
+          boundary,
+        ]).r2Concurrency,
+        Number(boundary),
+      );
+    }
     const skip = parseBackupArgs([
       "--stack",
       "production",
@@ -69,6 +93,129 @@ describe("pulumi backup", () => {
   it("rejects unknown stacks", () => {
     assert.throws(() => parseBackupArgs(["--stack", "qa", "--dry-run"]));
     assert.throws(() => parseBackupArgs(["--dry-run"]));
+  });
+
+  it("requires R2 concurrency to be an integer from 1 through 8", () => {
+    for (const value of ["0", "9", "1.5", "fast"]) {
+      assert.throws(
+        () =>
+          parseBackupArgs([
+            "--stack",
+            "preview",
+            "--dry-run",
+            "--r2-concurrency",
+            value,
+          ]),
+        /--r2-concurrency must be an integer from 1 through 8/,
+      );
+    }
+    assert.throws(
+      () =>
+        parseBackupArgs([
+          "--stack",
+          "preview",
+          "--dry-run",
+          "--r2-concurrency",
+        ]),
+      /--r2-concurrency must be an integer from 1 through 8/,
+    );
+  });
+
+  it("downloads every listed object with bounded concurrency and nested paths", async () => {
+    const destDir = await mkdtemp(join(tmpdir(), "backup-r2-pool-"));
+    const objects = Array.from({ length: 11 }, (_, index) => ({
+      key: index % 2 ? `nested/${index}.bin` : `${index}.bin`,
+      size: index,
+      etag: `etag-${index}`,
+    }));
+    let active = 0;
+    let peak = 0;
+    const downloaded = [];
+    await downloadR2Objects({
+      objects,
+      destDir,
+      bucket: "bucket",
+      accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+      token: "redacted",
+      concurrency: 3,
+      downloadImpl: async ({ key, destFile, expectedSize }) => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        await writeFile(destFile, String(expectedSize));
+        downloaded.push(key);
+        active--;
+      },
+    });
+    assert.equal(peak, 3);
+    assert.deepEqual(downloaded.sort(), objects.map(({ key }) => key).sort());
+    for (const object of objects) {
+      assert.equal(
+        await readFile(join(destDir, object.key), "utf8"),
+        String(object.size),
+      );
+    }
+  });
+
+  it("stops scheduling after an API object download fails and awaits active downloads", async () => {
+    const destDir = await mkdtemp(join(tmpdir(), "backup-r2-failure-"));
+    const objects = Array.from({ length: 8 }, (_, index) => ({
+      key: `${index}.bin`,
+      size: 1,
+    }));
+    const started = [];
+    const finished = [];
+    await assert.rejects(
+      downloadR2Objects({
+        objects,
+        destDir,
+        bucket: "bucket",
+        accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+        token: "redacted",
+        concurrency: 4,
+        downloadImpl: async ({ key, destFile }) => {
+          started.push(key);
+          if (key === "0.bin") {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            throw new Error("download failed");
+          }
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          await writeFile(destFile, "x");
+          finished.push(key);
+        },
+      }),
+      /download failed/,
+    );
+    assert.deepEqual(started.sort(), ["0.bin", "1.bin", "2.bin", "3.bin"]);
+    assert.deepEqual(finished.sort(), ["1.bin", "2.bin", "3.bin"]);
+  });
+
+  it("stops scheduling even when a download rejects with a non-Error value", async () => {
+    const destDir = await mkdtemp(join(tmpdir(), "backup-r2-reject-value-"));
+    const started = [];
+    await assert.rejects(
+      downloadR2Objects({
+        objects: Array.from({ length: 4 }, (_, index) => ({
+          key: `${index}.bin`,
+          size: 1,
+        })),
+        destDir,
+        bucket: "bucket",
+        accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+        token: "redacted",
+        concurrency: 2,
+        downloadImpl: async ({ key }) => {
+          started.push(key);
+          if (key === "0.bin") {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            throw null;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 15));
+        },
+      }),
+      (error) => error === null,
+    );
+    assert.deepEqual(started.sort(), ["0.bin", "1.bin"]);
   });
 
   it("builds wrangler D1 export commands", () => {
