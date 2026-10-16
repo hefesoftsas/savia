@@ -9,6 +9,7 @@ export type PluginAssistantOpenRequest = {
 
 export type PluginAssistantRequest =
   | { method: "load" }
+  | { method: "generate-document"; actionId: string }
   | { method: "open-source"; messageId: string; citationId: string }
   | {
       method: "send";
@@ -51,6 +52,8 @@ export type PluginAssistantResponse = {
     insufficientEvidence?: boolean;
   }>;
   source?: { url: string; page?: number };
+  documentActions?: Array<{ id: string; label: string; format: "docx" }>;
+  document?: { url: string; fileName: string; format: "docx" };
   pendingJobId?: string;
   coverage?: { label: string; complete: boolean };
 };
@@ -250,6 +253,39 @@ export function parsePluginAssistantResponse(
     )
       return null;
   }
+  if (nested.documentActions !== undefined) {
+    if (
+      !Array.isArray(nested.documentActions) ||
+      nested.documentActions.length > 4
+    )
+      return null;
+    const ids = new Set<string>();
+    for (const action of nested.documentActions) {
+      if (
+        !isRecord(action) ||
+        typeof action.id !== "string" ||
+        !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(action.id) ||
+        typeof action.label !== "string" ||
+        !action.label.trim() ||
+        action.label.length > 100 ||
+        action.format !== "docx" ||
+        ids.has(action.id)
+      )
+        return null;
+      ids.add(action.id);
+    }
+  }
+  if (
+    nested.document !== undefined &&
+    (!isRecord(nested.document) ||
+      !safeSourceUrl(nested.document.url) ||
+      typeof nested.document.fileName !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._ -]{0,180}\.docx$/.test(
+        nested.document.fileName,
+      ) ||
+      nested.document.format !== "docx")
+  )
+    return null;
   const messages: PluginAssistantResponse["messages"] = [];
   for (const item of nested.messages) {
     if (
@@ -356,6 +392,25 @@ export function parsePluginAssistantResponse(
     ...(nested.source === undefined
       ? {}
       : { source: nested.source as PluginAssistantResponse["source"] }),
+    ...(nested.documentActions === undefined
+      ? {}
+      : {
+          documentActions: (
+            nested.documentActions as NonNullable<
+              PluginAssistantResponse["documentActions"]
+            >
+          ).map(({ id, label, format }) => ({ id, label, format })),
+        }),
+    ...(nested.document === undefined
+      ? {}
+      : {
+          document: {
+            url: (nested.document as Record<string, unknown>).url as string,
+            fileName: (nested.document as Record<string, unknown>)
+              .fileName as string,
+            format: "docx" as const,
+          },
+        }),
     messages,
     ...(nested.pendingJobId === undefined
       ? {}

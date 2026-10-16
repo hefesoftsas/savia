@@ -54,6 +54,84 @@ describe("plugin assistant bridge contracts", () => {
     expect(parsePluginAssistantOpenRequest(value)).toBeNull();
   });
 
+  it("accepts bounded document actions and a private DOCX download", () => {
+    const response = {
+      revision: 0,
+      messages: [],
+      documentActions: [
+        {
+          id: "proposal-docx",
+          label: "Generar propuesta DOCX",
+          format: "docx",
+        },
+      ],
+      document: {
+        url: "https://service.test/private/proposal/ticket",
+        fileName: "proposal-1.docx",
+        format: "docx",
+      },
+    };
+    expect(parsePluginAssistantResponse(response)).toEqual(response);
+  });
+
+  it.each([
+    { documentActions: [{ id: "../run", label: "Export", format: "docx" }] },
+    { documentActions: [{ id: "run", label: " ", format: "docx" }] },
+    { documentActions: [{ id: "run", label: "Export", format: "exe" }] },
+    {
+      documentActions: Array.from({ length: 5 }, () => ({
+        id: "run",
+        label: "Export",
+        format: "docx",
+      })),
+    },
+    {
+      documentActions: [
+        { id: "run", label: "Export", format: "docx" },
+        { id: "run", label: "Again", format: "docx" },
+      ],
+    },
+    {
+      document: {
+        url: "javascript:alert(1)",
+        fileName: "proposal.docx",
+        format: "docx",
+      },
+    },
+    {
+      document: {
+        url: "https://user:secret@service.test/file",
+        fileName: "proposal.docx",
+        format: "docx",
+      },
+    },
+    {
+      document: {
+        url: "https://service.test/file",
+        fileName: "../proposal.docx",
+        format: "docx",
+      },
+    },
+    {
+      document: {
+        url: "https://service.test/file",
+        fileName: "proposal.exe",
+        format: "docx",
+      },
+    },
+    {
+      document: {
+        url: "https://service.test/file",
+        fileName: "proposal.docx",
+        format: "pdf",
+      },
+    },
+  ])("rejects unsafe or unbounded document capabilities %#", (extra) => {
+    expect(
+      parsePluginAssistantResponse({ revision: 0, messages: [], ...extra }),
+    ).toBeNull();
+  });
+
   it("normalizes the external action response and citations", () => {
     expect(
       parsePluginAssistantResponse({

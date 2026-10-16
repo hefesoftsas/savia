@@ -139,6 +139,12 @@ function validAssistantRequest(
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Record<string, unknown>;
   if (request.method === "load") return Object.keys(request).length === 1;
+  if (request.method === "generate-document")
+    return (
+      Object.keys(request).length === 2 &&
+      typeof request.actionId === "string" &&
+      /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(request.actionId)
+    );
   if (request.method === "open-source")
     return (
       Object.keys(request).length === 3 &&

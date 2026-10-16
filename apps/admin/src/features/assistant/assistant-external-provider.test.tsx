@@ -397,3 +397,71 @@ it("reloads after a failed terminal poll and allows sending again", async () => 
     invoke.mock.calls.filter(([request]) => request.method === "send"),
   ).toHaveLength(1);
 });
+
+it("generates an advertised document without replacing chat history or its draft", async () => {
+  const replace = vi.fn();
+  vi.spyOn(window, "open").mockReturnValue({
+    opener: window,
+    close: vi.fn(),
+    location: { replace },
+    document: { createElement: () => ({}), head: { append: vi.fn() } },
+  } as never);
+  const invoke = vi.fn(async (request: PluginAssistantRequest) =>
+    request.method === "generate-document"
+      ? {
+          revision: 0,
+          messages: [],
+          document: {
+            url: "https://provider.test/private/proposal/ticket",
+            fileName: "proposal.docx",
+            format: "docx" as const,
+          },
+        }
+      : {
+          revision: 4,
+          messages: [
+            {
+              id: "answer",
+              role: "assistant" as const,
+              text: "Saved dossier answer",
+            },
+          ],
+          documentActions: [
+            {
+              id: "proposal-docx",
+              label: "Generate proposal DOCX",
+              format: "docx" as const,
+            },
+          ],
+        },
+  );
+  const current: PluginAssistantProvider = {
+    sessionId: "document-integration",
+    title: "Tender",
+    actionId: "chat",
+    context: { dossierId: "tender", companyProfileId: "company" },
+    invoke,
+    close: vi.fn(),
+  };
+  render(
+    <ExternalAssistantConversation provider={current} onReturn={() => {}} />,
+  );
+  const button = await screen.findByRole("button", {
+    name: "Generate proposal DOCX",
+  });
+  fireEvent.change(screen.getByLabelText("Message"), {
+    target: { value: "Keep this draft" },
+  });
+  fireEvent.click(button);
+  await screen.findByText("Download started.");
+  expect(replace).toHaveBeenCalledWith(
+    "https://provider.test/private/proposal/ticket",
+  );
+  expect(screen.getByText("Saved dossier answer")).toBeVisible();
+  expect(screen.getByLabelText("Message")).toHaveValue("Keep this draft");
+  expect(invoke.mock.calls.map(([request]) => request.method)).toEqual([
+    "load",
+    "generate-document",
+  ]);
+  vi.restoreAllMocks();
+});

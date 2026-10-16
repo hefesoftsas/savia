@@ -1729,7 +1729,7 @@ it("forwards outbox-only conflicts even when no record revision changes", async 
   );
 });
 
-it("binds task writes and source resolution to the current assistant session", async () => {
+it("binds task writes, documents and source resolution to the current assistant session", async () => {
   const transport = vi.fn(async (path: string, init?: RequestInit) => {
     if (path.startsWith("/api/records/assistant_tasks?"))
       return Response.json({ data: [], total: 0, page: 1, perPage: 2 });
@@ -1746,6 +1746,11 @@ it("binds task writes and source resolution to the current assistant session", a
               source: {
                 url: "https://secop.example/private/source/ticket#page=4",
                 page: 4,
+              },
+              document: {
+                url: "https://secop.example/private/proposal/ticket",
+                fileName: "proposal.docx",
+                format: "docx",
               },
             },
           },
@@ -1785,6 +1790,24 @@ it("binds task writes and source resolution to the current assistant session", a
       })
     ).source?.page,
   ).toBe(4);
+  expect(
+    (
+      await provider.invoke({
+        method: "generate-document",
+        actionId: "proposal-docx",
+      })
+    ).document?.fileName,
+  ).toBe("proposal.docx");
+  const generationPost = transport.mock.calls.at(-1);
+  expect(JSON.parse(String(generationPost?.[1]?.body))).toMatchObject({
+    input: {
+      context: { dossierId: "tender-1" },
+      request: { method: "generate-document", actionId: "proposal-docx" },
+    },
+  });
+  await expect(
+    provider.invoke({ method: "generate-document", actionId: "../other" }),
+  ).rejects.toThrow("Invalid assistant operation");
   const draft = {
     suggestion: {
       id: "R1",
@@ -1815,5 +1838,8 @@ it("binds task writes and source resolution to the current assistant session", a
   await expect(provider.createTask!(draft)).rejects.toThrow(
     "session has ended",
   );
+  await expect(
+    provider.invoke({ method: "generate-document", actionId: "proposal-docx" }),
+  ).rejects.toThrow("session has ended");
   expect(transport.mock.calls.length).toBe(count);
 });

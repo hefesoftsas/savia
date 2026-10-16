@@ -1,6 +1,10 @@
 import { AssistantSourceAction } from "./assistant-source-action";
 import { AssistantTaskAction } from "./assistant-task-action";
 import {
+  AssistantDocumentAction,
+  isAssistantDocumentAction,
+} from "./assistant-document-action";
+import {
   AssistantQuoteResult,
   parseQuoteResult,
   quoteFieldLabels,
@@ -181,6 +185,7 @@ export function ExternalAssistantConversation({
   const draftRef = useRef(provider.initialMessage ?? "");
   const [loading, setLoading] = useState(true);
   const [loadedSuccessfully, setLoadedSuccessfully] = useState(false);
+  const [loadedContextKey, setLoadedContextKey] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [pollTimedOut, setPollTimedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,6 +202,12 @@ export function ExternalAssistantConversation({
   const latestMessage = useRef<HTMLElement>(null);
   const sendAttempt = useRef<{ message: string; key: string } | null>(null);
   const tx = useMessages(assistantExternalMessages);
+  const currentProviderContextKey = JSON.stringify([
+    provider.sessionId,
+    provider.connectionId ?? "",
+    provider.actionId,
+    provider.context,
+  ]);
 
   useLayoutEffect(() => {
     copyFeedbackGeneration.current += 1;
@@ -234,11 +245,13 @@ export function ExternalAssistantConversation({
   };
 
   const load = useCallback(async () => {
+    setLoadedContextKey(null);
     setError(null);
     try {
       const result = await provider.invoke({ method: "load" });
       if (!mounted.current) return;
       setLoadedSuccessfully(true);
+      setLoadedContextKey(currentProviderContextKey);
       setConversation(result);
       if (result.pendingJobId) refreshedAt.current = Date.now();
     } catch (caught) {
@@ -251,7 +264,7 @@ export function ExternalAssistantConversation({
     } finally {
       if (mounted.current) setLoading(false);
     }
-  }, [provider, tx]);
+  }, [currentProviderContextKey, provider, tx]);
 
   useEffect(() => {
     mounted.current = true;
@@ -273,6 +286,7 @@ export function ExternalAssistantConversation({
         const result = await provider.invoke({ method: "load" });
         if (!mounted.current) return;
         setLoadedSuccessfully(true);
+        setLoadedContextKey(currentProviderContextKey);
         setConversation(result);
         // Only a fresh provider load may retire a failed job. Keep the poll
         // error visible whether the provider reports it as terminal or still
@@ -282,7 +296,7 @@ export function ExternalAssistantConversation({
         if (mounted.current) setError(message);
       }
     },
-    [provider, tx],
+    [currentProviderContextKey, provider, tx],
   );
 
   useEffect(() => {
@@ -395,6 +409,17 @@ export function ExternalAssistantConversation({
     }
   };
 
+  const taskMessage = [...conversation.messages]
+    .reverse()
+    .find(
+      (message) =>
+        message.role === "assistant" && message.taskSuggestions?.length,
+    );
+  const documentActions =
+    loadedSuccessfully && loadedContextKey === currentProviderContextKey
+      ? (conversation.documentActions ?? []).filter(isAssistantDocumentAction)
+      : [];
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-3">
@@ -451,24 +476,27 @@ export function ExternalAssistantConversation({
           <TooltipContent side="top">{tx("Copy conversation")}</TooltipContent>
         </Tooltip>
       </div>
-      {[...conversation.messages]
-        .reverse()
-        .find(
-          (message) =>
-            message.role === "assistant" && message.taskSuggestions?.length,
-        ) && (
+      {taskMessage && (
         <div className="border-b px-4 pb-2">
           <AssistantTaskAction
             key={provider.sessionId}
             provider={provider}
-            message={[...conversation.messages]
-              .reverse()
-              .find(
-                (message) =>
-                  message.role === "assistant" &&
-                  message.taskSuggestions?.length,
-              )!}
+            message={taskMessage}
           />
+        </div>
+      )}
+      {documentActions.length > 0 && (
+        <div className="flex flex-wrap items-start gap-2 border-b px-4 pb-2">
+          {documentActions.map((action) => (
+            <AssistantDocumentAction
+              key={`${provider.sessionId}:${action.id}`}
+              provider={provider}
+              action={action}
+              disabled={
+                loading || sending || Boolean(conversation.pendingJobId)
+              }
+            />
+          ))}
         </div>
       )}
       {copyFeedback && (

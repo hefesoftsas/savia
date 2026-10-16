@@ -144,7 +144,7 @@ const copy = {
     reviewedExtraction: "Revisé la extracción completa",
     assistantTitle: "Esta licitación, en el chat de Savia",
     assistantHelp:
-      "Continúa la conversación con las fuentes de este expediente. La licitación y la empresa seleccionadas acompañan cada pregunta.",
+      "Consulta las fuentes y genera un borrador de propuesta DOCX desde el chat. La licitación y la empresa seleccionadas acompañan cada acción.",
     companyForRequirements: "Empresa para contrastar requisitos",
     tenderOnly: "Solo la licitación",
     openAssistant: "Abrir chat de Savia",
@@ -290,7 +290,7 @@ const copy = {
     reviewedExtraction: "I reviewed the full extraction",
     assistantTitle: "Discuss this tender in Savia chat",
     assistantHelp:
-      "Continue the conversation with this dossier's sources. The selected tender and company accompany each question.",
+      "Discuss the dossier sources and generate a DOCX proposal draft from chat. The selected tender and company accompany each action.",
     companyForRequirements: "Company for requirement checks",
     tenderOnly: "Tender only",
     openAssistant: "Open Savia chat",
@@ -435,7 +435,7 @@ const copy = {
     reviewedExtraction: "Revisei a extração completa",
     assistantTitle: "Converse sobre esta licitação no Savia",
     assistantHelp:
-      "Continue a conversa com as fontes deste dossiê. A licitação e a empresa selecionadas acompanham cada pergunta.",
+      "Consulte as fontes e gere um rascunho de proposta DOCX no chat. A licitação e a empresa selecionadas acompanham cada ação.",
     companyForRequirements: "Empresa para comparar requisitos",
     tenderOnly: "Somente a licitação",
     openAssistant: "Abrir chat do Savia",
