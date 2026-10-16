@@ -82,3 +82,22 @@ the task; a stable context/suggestion key makes retries reuse the original recor
 No task is saved by opening the form, and this capability does not send workflow
 assignment notifications. Tasks can be edited and completed in the collection's
 native records screen.
+
+## Generate a provider document
+
+Providers may return up to four unique `documentActions` with `{ id, label, format: "docx" }`.
+The native chat renders these bounded actions near its header. A click invokes
+`{ method: "generate-document", actionId }` through the same authorized provider
+and bound context; it does not send a chat message or replace the saved history.
+The provider returns `{ revision: 0, messages: [], document: { url, fileName, format: "docx" } }`.
+The HTTPS download URL must not contain embedded credentials, and the file name
+must be a bounded safe DOCX name. A context change revokes an unfinished download.
+Generation and failure states are visible, and errors can be retried explicitly.
+
+The SECOP provider generates an editable proposal using the current dossier and
+selected company profile. It checks the current complete report index and includes
+the saved requirements and source references, evidence gaps and review cautions.
+Missing company data, prices, experience and declarations remain placeholders;
+company evidence is not automatically treated as a verified compliance decision.
+The download is a short-lived private attachment served by the SECOP backend.
+No SECOP proposal logic or client-side persistence is added to Savia core.

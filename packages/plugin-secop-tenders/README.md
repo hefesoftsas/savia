@@ -47,3 +47,14 @@ the native dossier assistant, users can turn a missing requirement into a task
 after reviewing its title, responsible person and due date. Tasks can be edited
 and completed from the plugin's native records screen. This tracks preparation
 work; it does not infer company compliance or add SECOP logic to Savia core.
+
+### Proposal drafts in native chat
+
+The native assistant offers **Generar propuesta DOCX** when the private SECOP
+provider advertises document generation. Select the company in the tender's
+assistant tab before opening chat; generation uses that authorized profile and
+the current tender dossier, without mixing another tender or company. Missing
+profile data, prices and unverified statements are left for completion. Review
+the source citations, extraction warnings, process deadline and official forms
+before signing or presenting the editable draft. The SECOP service creates and
+serves the private short-lived download; the plugin does not submit an offer.

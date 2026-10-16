@@ -33,7 +33,7 @@ describe("SECOP plugin package contracts", () => {
         (screen) => screen.object === "secop_application_tasks",
       ),
     ).toBe(false);
-    expect(manifest.version).toBe("1.7.7");
+    expect(manifest.version).toBe("1.7.8");
   });
 
   it("persists detailed PDF reports beyond the default text field limit", () => {
