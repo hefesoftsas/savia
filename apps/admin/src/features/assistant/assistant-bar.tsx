@@ -96,6 +96,58 @@ import {
   type PluginAssistantResponse,
 } from "@savia/studio-shared/plugin-assistant";
 
+function ProviderSources({
+  citations,
+}: {
+  citations: NonNullable<
+    PluginAssistantResponse["messages"][number]["citations"]
+  >;
+}) {
+  const tx = useMessages(assistantExternalMessages);
+  const [query, setQuery] = useState("");
+  const search = query.trim().toLocaleLowerCase();
+  const shown = search
+    ? citations.filter((citation) =>
+        `${citation.id} ${citation.label}`.toLocaleLowerCase().includes(search),
+      )
+    : citations;
+  return (
+    <details className="mt-3 border-t border-current/15 pt-2 text-xs">
+      <summary className="cursor-pointer py-1 font-medium">
+        {tx("Sources (%{count})", { count: citations.length })}
+      </summary>
+      {citations.length > 8 && (
+        <label className="mt-3 block">
+          <span className="mb-1 block font-medium">{tx("Search sources")}</span>
+          <input
+            type="search"
+            aria-label={tx("Search sources")}
+            placeholder={tx("Reference or document name")}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          />
+        </label>
+      )}
+      {shown.length === 0 && (
+        <p className="mt-3">{tx("No sources match this search.")}</p>
+      )}
+      <ul className="mt-3 space-y-4">
+        {shown.map((citation) => (
+          <li key={citation.id}>
+            <strong>
+              {citation.id} · {citation.label}
+            </strong>
+            <p className="mt-1 whitespace-pre-wrap opacity-80">
+              {citation.excerpt}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 export function ExternalAssistantConversation({
   provider,
   onReturn,
@@ -314,7 +366,7 @@ export function ExternalAssistantConversation({
                 : undefined
             }
             className={cn(
-              "max-w-[92%] rounded-xl px-4 py-3",
+              "min-w-0 max-w-[92%] rounded-xl px-4 py-3 text-sm leading-6 [overflow-wrap:anywhere] [&_h2]:mt-6 [&_h2]:mb-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2:first-child]:mt-0 [&_h3]:mt-5 [&_h3]:mb-2 [&_h3]:font-semibold [&_strong]:text-inherit",
               message.role === "user"
                 ? "self-end bg-primary text-primary-foreground"
                 : "self-start bg-muted/70",
@@ -332,23 +384,7 @@ export function ExternalAssistantConversation({
               </p>
             )}
             {message.citations?.length ? (
-              <details className="mt-3 border-t border-current/15 pt-2 text-xs">
-                <summary className="cursor-pointer font-medium">
-                  {tx("Sources (%{count})", {
-                    count: message.citations.length,
-                  })}
-                </summary>
-                <ul className="mt-2 space-y-2">
-                  {message.citations.map((citation) => (
-                    <li key={citation.id}>
-                      <strong>
-                        {citation.id} · {citation.label}
-                      </strong>
-                      <p className="mt-1 opacity-80">{citation.excerpt}</p>
-                    </li>
-                  ))}
-                </ul>
-              </details>
+              <ProviderSources citations={message.citations} />
             ) : null}
           </article>
         ))}

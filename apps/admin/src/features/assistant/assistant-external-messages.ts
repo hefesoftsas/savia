@@ -1,6 +1,17 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const assistantExternalMessages = {
+  "Search sources": ["Buscar fuentes", "Search sources", "Buscar fontes"],
+  "Reference or document name": [
+    "Referencia o nombre del documento",
+    "Reference or document name",
+    "Referência ou nome do documento",
+  ],
+  "No sources match this search.": [
+    "No hay fuentes que coincidan con esta búsqueda.",
+    "No sources match this search.",
+    "Nenhuma fonte corresponde a esta busca.",
+  ],
   "General assistant": [
     "Asistente general",
     "General assistant",

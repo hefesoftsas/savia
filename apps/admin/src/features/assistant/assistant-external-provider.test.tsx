@@ -118,3 +118,40 @@ it("preserves the draft when the external action fails", async () => {
     idempotencyKey: firstAttempt.idempotencyKey,
   });
 });
+
+it("finds an exact source reference in a long cited answer", async () => {
+  const provider: PluginAssistantProvider = {
+    sessionId: "searchable-sources",
+    title: "Dossier",
+    actionId: "chat",
+    context: {},
+    close: vi.fn(),
+    invoke: vi
+      .fn()
+      .mockResolvedValue({
+        revision: 1,
+        messages: [
+          {
+            id: "answer",
+            role: "assistant",
+            text: "Use source S009.",
+            citations: Array.from({ length: 10 }, (_, i) => ({
+              id: `S${String(i + 1).padStart(3, "0")}`,
+              label: `Document ${i + 1}`,
+              excerpt: `Original passage ${i + 1}.`,
+            })),
+          },
+        ],
+      }),
+  };
+  render(
+    <ExternalAssistantConversation provider={provider} onReturn={() => {}} />,
+  );
+  await waitFor(() => expect(screen.getByText("Sources (10)")).toBeTruthy());
+  fireEvent.click(screen.getByText("Sources (10)"));
+  fireEvent.change(screen.getByRole("searchbox", { name: "Search sources" }), {
+    target: { value: "S009" },
+  });
+  expect(screen.getByText("Original passage 9.")).toBeTruthy();
+  expect(screen.queryByText("Original passage 1.")).toBeNull();
+});
