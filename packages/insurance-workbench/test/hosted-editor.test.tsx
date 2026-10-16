@@ -111,10 +111,12 @@ it("keeps dirty input after a rejected save and allows retry", async () => {
   await screen.findByText(/Version conflict/);
   expect(input).toHaveValue("Retry me");
   expect(a.ui.completePanel).not.toHaveBeenCalled();
-  expect(a.ui.setPanelState).toHaveBeenLastCalledWith({
-    dirty: true,
-    busy: false,
-  });
+  await waitFor(() =>
+    expect(a.ui.setPanelState).toHaveBeenLastCalledWith({
+      dirty: true,
+      busy: false,
+    }),
+  );
   fireEvent.click(save);
   await waitFor(() =>
     expect(a.ui.completePanel).toHaveBeenCalledWith({ status: "saved" }),
