@@ -308,4 +308,20 @@ describe("transient SECOP failures", () => {
       loading: false,
     });
   });
+  it("identifies a missing personal MCP source without retrying the same unauthorized search", async () => {
+    const request = vi
+      .fn()
+      .mockRejectedValue(
+        Object.assign(
+          new Error(
+            "Authorize the configured MCP source in Sources and collections first.",
+          ),
+          { status: 404 },
+        ),
+      );
+    const feed = new SearchFeed(request);
+    await feed.search({});
+    expect(feed.getSnapshot().errorKind).toBe("connection");
+    expect(request).toHaveBeenCalledTimes(1);
+  });
 });

@@ -2,7 +2,7 @@
 
 An optional Savia tenant plugin for searching live SECOP procurement records and saving selected opportunities to a workspace collection for follow-up. Search history is not persisted. The plugin has Spanish, English, and Portuguese interface copy.
 
-The search action expects the tenant's configured `secop_live` MCP source and its `buscar_licitaciones` tool. The backend action contract owns request pagination and normalizes the returned records. The plugin accepts common SECOP field aliases and retains source values; absent values remain blank. A source link is shown only when its value parses as an HTTP or HTTPS URL.
+The search action expects the signed-in user's configured `secop_live` MCP source in the current tenant and its `buscar_licitaciones` tool. The backend action contract owns request pagination and normalizes the returned records. The plugin accepts common SECOP field aliases and retains source values; absent values remain blank. A source link is shown only when its value parses as an HTTP or HTTPS URL.
 
 Saved interests are monitored hourly through the creator's own `secop_live`
 connection. The plugin package declares the fixed read-only detail action and

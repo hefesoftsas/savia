@@ -286,3 +286,18 @@ unreleased host changes. A branch preview has isolated databases, credentials an
 its own Platform workspace. Do not directly replace the shared preview gateway
 from an unrelated checkout. Preview installation and live verification must be
 reported separately from unit tests and ZIP packaging.
+
+## Personal MCP authorization
+
+Installing the SECOP plugin in a workspace does not authorize its MCP source for
+all accounts. Each signed-in user must create and authorize their own MCP source
+named `secop_live` in **Data sources**, within the same workspace. A platform
+administrator viewing another workspace does not inherit another user's OAuth
+tokens. Switching accounts can therefore leave the plugin installed while its
+search and catalogs have no authorized source.
+
+When that source is missing, the plugin displays one account-specific connection
+notice instead of three catalog failures. Connect the current account or sign in
+with the account that already authorized SECOP, then select **Check the connection
+again**. Genuine provider/catalog failures keep their normal retry controls.
+Existing interests and their original monitoring credentials remain unchanged.
