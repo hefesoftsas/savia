@@ -58,3 +58,27 @@ screen and other extensions' parameters, and rejects this API from panels and
 widgets. Keys and string values are bounded. URL state never grants access;
 normal backend authorization still applies. Never include credentials, evidence,
 private conversation content or personal data in a URL.
+
+## Source and task actions
+
+Citations may advertise `canOpen: true`. The host sends an `open-source` request
+with the assistant message ID and citation ID to the bound provider; the provider
+returns an optional `source: { url, page? }`. Only HTTPS links without embedded
+credentials are accepted. Providers must authorize the stored conversation,
+source version and context before issuing a short-lived read link; never accept
+arbitrary document URLs from the browser. The host reserves a new tab during the
+click to avoid popup blocking and closes it on failure or context change.
+
+An optional launcher `taskCollection` enables explicit task creation into an
+extension-owned collection using normal authenticated record CRUD and collection
+ACL. It does not grant new permissions or create workflow tasks. The collection
+uses `name`, `description`, `assignee`, `due_date`, `status`, `source_key` (unique),
+`source_context`, `source_reference` and `source_url` fields. Providers may return
+bounded per-message `taskSuggestions` with an ID, title, description and citation
+IDs. The user selects a suggestion and reviews the title, responsible person's
+name and due date before saving. Suggestions represent work to verify, not proof
+that a company fails a requirement. Source references and bound context accompany
+the task; a stable context/suggestion key makes retries reuse the original record.
+No task is saved by opening the form, and this capability does not send workflow
+assignment notifications. Tasks can be edited and completed in the collection's
+native records screen.

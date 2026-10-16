@@ -198,3 +198,91 @@ describe("plugin assistant bridge contracts", () => {
     unsubscribe();
   });
 });
+
+it("preserves bounded source and requirement task capabilities", () => {
+  const parsed = parsePluginAssistantResponse({
+    revision: 1,
+    messages: [
+      {
+        id: "a",
+        role: "assistant",
+        text: "Check experience",
+        citations: [
+          {
+            id: "S001",
+            label: "Terms",
+            excerpt: "Two certificates",
+            canOpen: true,
+          },
+        ],
+        taskSuggestions: [
+          {
+            id: "R1",
+            title: "Experience",
+            description: "Verify two certificates",
+            citationIds: ["S001"],
+          },
+        ],
+      },
+    ],
+    source: {
+      url: "https://example.com/private/source/ticket#page=4",
+      page: 4,
+    },
+  });
+  expect(parsed?.messages[0]?.citations?.[0]?.canOpen).toBe(true);
+  expect(parsed?.messages[0]?.taskSuggestions?.[0]?.id).toBe("R1");
+  expect(parsed?.source?.page).toBe(4);
+  expect(
+    parsePluginAssistantOpenRequest({
+      title: "Tender",
+      actionId: "chat",
+      context: { id: "x" },
+      taskCollection: "secop_application_tasks",
+    })?.taskCollection,
+  ).toBe("secop_application_tasks");
+});
+
+it("rejects unsafe source URLs and malformed task suggestions", () => {
+  for (const url of [
+    "javascript:alert(1)",
+    "http://example.com/a",
+    "https://user:secret@example.com/a",
+  ]) {
+    expect(
+      parsePluginAssistantResponse({
+        revision: 0,
+        messages: [],
+        source: { url },
+      }),
+    ).toBeNull();
+  }
+  expect(
+    parsePluginAssistantResponse({
+      revision: 0,
+      messages: [
+        {
+          id: "a",
+          role: "assistant",
+          text: "x",
+          taskSuggestions: [
+            {
+              id: "R1",
+              title: "x",
+              description: "x",
+              citationIds: ["unknown"],
+            },
+          ],
+        },
+      ],
+    }),
+  ).toBeNull();
+  expect(
+    parsePluginAssistantOpenRequest({
+      title: "Tender",
+      actionId: "chat",
+      context: {},
+      taskCollection: "../other",
+    }),
+  ).toBeNull();
+});

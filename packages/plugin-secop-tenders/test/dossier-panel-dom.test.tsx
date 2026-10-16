@@ -187,6 +187,7 @@ describe("tender dossier flow", () => {
       expect.objectContaining({
         actionId: "assistant-chat",
         connectionId: "secop-dossier",
+        taskCollection: "secop_application_tasks",
         context: { dossierId: "CO1.REQ.1" },
         initialMessage: expect.stringContaining("todos los requisitos"),
       }),

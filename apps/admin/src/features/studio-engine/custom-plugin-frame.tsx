@@ -10,6 +10,7 @@ import {
 } from "./plugin-panel-controller";
 import { PluginHostPanel } from "./plugin-host-panel";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createAssistantTaskRecord } from "../assistant/assistant-task-record";
 import { pluginRecordFetch } from "./plugin-record-transport";
 import { pluginApiFetch } from "./api";
 import { getStudioRuntime } from "./runtime";
@@ -138,6 +139,16 @@ function validAssistantRequest(
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Record<string, unknown>;
   if (request.method === "load") return Object.keys(request).length === 1;
+  if (request.method === "open-source")
+    return (
+      Object.keys(request).length === 3 &&
+      typeof request.messageId === "string" &&
+      request.messageId.length > 0 &&
+      request.messageId.length <= 256 &&
+      typeof request.citationId === "string" &&
+      request.citationId.length > 0 &&
+      request.citationId.length <= 256
+    );
   if (request.method === "send")
     return (
       Object.keys(request).every((key) =>
@@ -614,9 +625,58 @@ export function CustomPluginFrame({
         closeAssistantSession();
         assistantSession.current = sessionId;
         assistantPanelId.current = boundPanelId;
+        const assertActive = () => {
+          if (
+            revoked.current ||
+            !boundFrame ||
+            boundFrame !== frameRef.current?.contentWindow ||
+            boundSession !== uiSession.current ||
+            boundGeneration !== sessionGeneration.current ||
+            (panelBindingRef.current?.context?.panelId ?? null) !==
+              boundPanelId ||
+            assistantSession.current !== sessionId
+          )
+            throw new Error("The plugin assistant session has ended.");
+        };
         openPluginAssistantProvider({
           ...launch,
           sessionId,
+          ...(launch.taskCollection
+            ? {
+                createTask: async (
+                  draft: import("@savia/studio-shared/plugin-assistant").PluginAssistantTaskDraft,
+                ) => {
+                  assertActive();
+                  return createAssistantTaskRecord(
+                    {
+                      collection: launch.taskCollection!,
+                      pluginId,
+                      context: launch.context,
+                      sourceUrl: window.location.href,
+                      request: async <T,>(
+                        path: string,
+                        method = "GET",
+                        data?: unknown,
+                      ) => {
+                        assertActive();
+                        const result = await pluginRecordFetch<T>(
+                          "/api" + path,
+                          {
+                            method,
+                            ...(data === undefined
+                              ? {}
+                              : { body: JSON.stringify(data) }),
+                          },
+                        );
+                        assertActive();
+                        return result;
+                      },
+                    },
+                    draft,
+                  );
+                },
+              }
+            : {}),
           close: () => {
             if (assistantSession.current === sessionId) {
               assistantSession.current = null;

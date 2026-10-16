@@ -4,10 +4,12 @@ export type PluginAssistantOpenRequest = {
   connectionId?: string;
   context: Record<string, unknown>;
   initialMessage?: string;
+  taskCollection?: string;
 };
 
 export type PluginAssistantRequest =
   | { method: "load" }
+  | { method: "open-source"; messageId: string; citationId: string }
   | {
       method: "send";
       message: string;
@@ -17,6 +19,20 @@ export type PluginAssistantRequest =
     }
   | { method: "poll"; jobId: string };
 
+export type PluginAssistantTaskSuggestion = {
+  id: string;
+  title: string;
+  description: string;
+  citationIds: string[];
+};
+export type PluginAssistantTaskDraft = {
+  suggestion: PluginAssistantTaskSuggestion;
+  title: string;
+  assignee: string;
+  dueDate: string;
+  sourceReference: string;
+};
+
 export type PluginAssistantResponse = {
   conversationId?: string;
   revision: number;
@@ -24,10 +40,17 @@ export type PluginAssistantResponse = {
     id: string;
     role: "user" | "assistant";
     text: string;
-    citations?: Array<{ id: string; label: string; excerpt: string }>;
+    citations?: Array<{
+      id: string;
+      label: string;
+      excerpt: string;
+      canOpen?: boolean;
+    }>;
+    taskSuggestions?: PluginAssistantTaskSuggestion[];
     stale?: boolean;
     insufficientEvidence?: boolean;
   }>;
+  source?: { url: string; page?: number };
   pendingJobId?: string;
   coverage?: { label: string; complete: boolean };
 };
@@ -35,6 +58,9 @@ export type PluginAssistantResponse = {
 export type PluginAssistantProvider = PluginAssistantOpenRequest & {
   sessionId: string;
   invoke(request: PluginAssistantRequest): Promise<PluginAssistantResponse>;
+  createTask?(
+    draft: PluginAssistantTaskDraft,
+  ): Promise<{ id: string; created: boolean }>;
   close(): void;
 };
 
@@ -107,6 +133,7 @@ export function parsePluginAssistantOpenRequest(
           "connectionId",
           "context",
           "initialMessage",
+          "taskCollection",
         ].includes(key),
     )
   )
@@ -130,6 +157,12 @@ export function parsePluginAssistantOpenRequest(
   )
     return null;
   if (
+    value.taskCollection !== undefined &&
+    (typeof value.taskCollection !== "string" ||
+      !/^[A-Za-z][A-Za-z0-9_]{0,99}$/.test(value.taskCollection))
+  )
+    return null;
+  if (
     value.initialMessage !== undefined &&
     (typeof value.initialMessage !== "string" ||
       value.initialMessage.length > 8_000)
@@ -148,10 +181,28 @@ export function parsePluginAssistantOpenRequest(
       ? {}
       : { connectionId: value.connectionId }),
     context: value.context,
+    ...(value.taskCollection === undefined
+      ? {}
+      : { taskCollection: value.taskCollection as string }),
     ...(value.initialMessage === undefined
       ? {}
       : { initialMessage: value.initialMessage }),
   };
+}
+
+export function safeSourceUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 8192) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      !!url.hostname &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function parsePluginAssistantResponse(
@@ -189,6 +240,16 @@ export function parsePluginAssistantResponse(
       typeof nested.coverage.complete !== "boolean")
   )
     return null;
+  if (nested.source !== undefined) {
+    if (
+      !isRecord(nested.source) ||
+      !safeSourceUrl(nested.source.url) ||
+      (nested.source.page !== undefined &&
+        (!Number.isSafeInteger(nested.source.page) ||
+          (nested.source.page as number) < 1))
+    )
+      return null;
+  }
   const messages: PluginAssistantResponse["messages"] = [];
   for (const item of nested.messages) {
     if (
@@ -216,13 +277,18 @@ export function parsePluginAssistantResponse(
         typeof citation.label !== "string" ||
         citation.label.length > 2_000 ||
         typeof citation.excerpt !== "string" ||
-        citation.excerpt.length > 20_000
+        citation.excerpt.length > 20_000 ||
+        (citation.canOpen !== undefined &&
+          typeof citation.canOpen !== "boolean")
       )
         return null;
       citations.push({
         id: citation.id,
         label: citation.label,
         excerpt: citation.excerpt,
+        ...(citation.canOpen === undefined
+          ? {}
+          : { canOpen: citation.canOpen as boolean }),
       });
     }
     if (item.stale !== undefined && typeof item.stale !== "boolean")
@@ -232,11 +298,50 @@ export function parsePluginAssistantResponse(
       typeof item.insufficientEvidence !== "boolean"
     )
       return null;
+    const suggestions: PluginAssistantTaskSuggestion[] = [];
+    if (item.taskSuggestions !== undefined) {
+      if (
+        !Array.isArray(item.taskSuggestions) ||
+        item.taskSuggestions.length > 1000 ||
+        item.role !== "assistant"
+      )
+        return null;
+      const seen = new Set<string>();
+      for (const suggestion of item.taskSuggestions) {
+        if (
+          !isRecord(suggestion) ||
+          typeof suggestion.id !== "string" ||
+          !suggestion.id ||
+          suggestion.id.length > 256 ||
+          seen.has(suggestion.id) ||
+          typeof suggestion.title !== "string" ||
+          !suggestion.title.trim() ||
+          suggestion.title.length > 200 ||
+          typeof suggestion.description !== "string" ||
+          suggestion.description.length > 20_000 ||
+          !Array.isArray(suggestion.citationIds) ||
+          suggestion.citationIds.length > 1000 ||
+          suggestion.citationIds.some(
+            (id) =>
+              typeof id !== "string" || !citations.some((c) => c.id === id),
+          )
+        )
+          return null;
+        seen.add(suggestion.id);
+        suggestions.push({
+          id: suggestion.id,
+          title: suggestion.title,
+          description: suggestion.description,
+          citationIds: [...suggestion.citationIds] as string[],
+        });
+      }
+    }
     messages.push({
       id: item.id,
       role: item.role,
       text: item.text,
       ...(citations.length ? { citations } : {}),
+      ...(suggestions.length ? { taskSuggestions: suggestions } : {}),
       ...(item.stale === undefined ? {} : { stale: item.stale }),
       ...(item.insufficientEvidence === undefined
         ? {}
@@ -248,6 +353,9 @@ export function parsePluginAssistantResponse(
       ? {}
       : { conversationId: nested.conversationId as string }),
     revision: nested.revision as number,
+    ...(nested.source === undefined
+      ? {}
+      : { source: nested.source as PluginAssistantResponse["source"] }),
     messages,
     ...(nested.pendingJobId === undefined
       ? {}
