@@ -142,6 +142,32 @@ describe("plugin assistant bridge contracts", () => {
     ).toBeNull();
   });
 
+  it("accepts complete histories above 40 messages and rejects host-limit overflow", () => {
+    const messages = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `message-${index}`,
+        role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        text: `Message ${index}`,
+      }));
+    expect(
+      parsePluginAssistantResponse({ revision: 1, messages: messages(41) })
+        ?.messages,
+    ).toHaveLength(41);
+    expect(
+      parsePluginAssistantResponse({ revision: 1, messages: messages(2_001) }),
+    ).toBeNull();
+    expect(
+      parsePluginAssistantResponse({
+        revision: 1,
+        messages: Array.from({ length: 5 }, (_, index) => ({
+          id: `large-${index}`,
+          role: "assistant",
+          text: "x".repeat(450_000),
+        })),
+      }),
+    ).toBeNull();
+  });
+
   it("does not let a replaced or revoked provider close a newer session", () => {
     const changes: string[] = [];
     const unsubscribe = subscribePluginAssistantProvider(() => {

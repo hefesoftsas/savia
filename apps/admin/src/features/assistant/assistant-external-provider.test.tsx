@@ -126,23 +126,21 @@ it("finds an exact source reference in a long cited answer", async () => {
     actionId: "chat",
     context: {},
     close: vi.fn(),
-    invoke: vi
-      .fn()
-      .mockResolvedValue({
-        revision: 1,
-        messages: [
-          {
-            id: "answer",
-            role: "assistant",
-            text: "Use source S009.",
-            citations: Array.from({ length: 10 }, (_, i) => ({
-              id: `S${String(i + 1).padStart(3, "0")}`,
-              label: `Document ${i + 1}`,
-              excerpt: `Original passage ${i + 1}.`,
-            })),
-          },
-        ],
-      }),
+    invoke: vi.fn().mockResolvedValue({
+      revision: 1,
+      messages: [
+        {
+          id: "answer",
+          role: "assistant",
+          text: "Use source S009.",
+          citations: Array.from({ length: 10 }, (_, i) => ({
+            id: `S${String(i + 1).padStart(3, "0")}`,
+            label: `Document ${i + 1}`,
+            excerpt: `Original passage ${i + 1}.`,
+          })),
+        },
+      ],
+    }),
   };
   render(
     <ExternalAssistantConversation provider={provider} onReturn={() => {}} />,
@@ -154,4 +152,142 @@ it("finds an exact source reference in a long cited answer", async () => {
   });
   expect(screen.getByText("Original passage 9.")).toBeTruthy();
   expect(screen.queryByText("Original passage 1.")).toBeNull();
+});
+
+it("copies an answer and the loaded conversation with readable citations", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  const provider: PluginAssistantProvider = {
+    sessionId: "copy-conversation",
+    title: "Tender dossier",
+    actionId: "chat",
+    context: {},
+    close: vi.fn(),
+    invoke: vi.fn().mockResolvedValue({
+      revision: 4,
+      messages: [
+        {
+          id: "user-hash-is-private",
+          role: "user",
+          text: "Review this tender",
+        },
+        {
+          id: "answer-hash-is-private",
+          role: "assistant",
+          text: "The deadline is 15 June.",
+          citations: [
+            {
+              id: "source-7",
+              label: "Tender terms, page 4",
+              excerpt: "Submissions close on 15 June.",
+            },
+            {
+              id: "b48c6df284ed9a01",
+              label: "Evaluation guide",
+              excerpt: "The evaluation starts the next day.",
+            },
+          ],
+        },
+      ],
+    }),
+  };
+  render(
+    <ExternalAssistantConversation provider={provider} onReturn={() => {}} />,
+  );
+
+  const copyAnswer = await screen.findByRole("button", { name: "Copy answer" });
+  fireEvent.click(copyAnswer);
+  expect(await screen.findByRole("status")).toHaveTextContent("Answer copied.");
+  expect(writeText).toHaveBeenNthCalledWith(
+    1,
+    "The deadline is 15 June.\n\nSources:\n- Tender terms, page 4 [source-7]\n  > Submissions close on 15 June.\n- Evaluation guide\n  > The evaluation starts the next day.",
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Copy conversation" }));
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Conversation copied.",
+  );
+  const copiedConversation = writeText.mock.calls[1][0] as string;
+  expect(copiedConversation).toContain("# Tender dossier");
+  expect(copiedConversation).toContain("## You\n\nReview this tender");
+  expect(copiedConversation).toContain(
+    "## Assistant\n\nThe deadline is 15 June.",
+  );
+  expect(copiedConversation).toContain("Tender terms, page 4 [source-7]");
+  expect(copiedConversation).toContain("Evaluation guide");
+  expect(copiedConversation).not.toContain("b48c6df284ed9a01");
+  expect(copiedConversation).not.toContain("answer-hash-is-private");
+});
+
+it("announces clipboard failures", async () => {
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+  });
+  const provider: PluginAssistantProvider = {
+    sessionId: "copy-error",
+    title: "Dossier",
+    actionId: "chat",
+    context: {},
+    close: vi.fn(),
+    invoke: vi.fn().mockResolvedValue({
+      revision: 1,
+      messages: [{ id: "answer", role: "assistant", text: "Summary." }],
+    }),
+  };
+  render(
+    <ExternalAssistantConversation provider={provider} onReturn={() => {}} />,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Copy answer" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to copy. Clipboard access is unavailable.",
+  );
+});
+
+it("clears copy feedback when the conversation messages change", async () => {
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+  });
+  const provider: PluginAssistantProvider = {
+    sessionId: "copy-reset",
+    title: "Dossier",
+    actionId: "chat",
+    context: { companyProfileId: "company-1" },
+    close: vi.fn(),
+    invoke: vi
+      .fn()
+      .mockResolvedValueOnce({
+        revision: 1,
+        messages: [
+          { id: "answer-1", role: "assistant", text: "First answer." },
+        ],
+      })
+      .mockResolvedValueOnce({
+        revision: 2,
+        messages: [
+          { id: "answer-1", role: "assistant", text: "First answer." },
+          { id: "user-2", role: "user", text: "Follow-up" },
+          { id: "answer-2", role: "assistant", text: "Second answer." },
+        ],
+      }),
+  };
+  render(
+    <ExternalAssistantConversation provider={provider} onReturn={() => {}} />,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Copy answer" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("Answer copied.");
+
+  fireEvent.change(screen.getByLabelText("Message"), {
+    target: { value: "Follow-up" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^Send$/ }));
+  await screen.findByText("Second answer.");
+  await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+  expect(screen.getAllByRole("button", { name: "Copy answer" })).toHaveLength(
+    2,
+  );
 });

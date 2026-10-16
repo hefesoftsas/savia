@@ -29,6 +29,14 @@ still passes through normal extension installation and authorization checks.
 Provider job and conversation references must also be bound to the requested
 context; checking owner scope alone is insufficient when one owner has many items.
 
+In the native conversation, users can copy an individual assistant answer or the
+complete provider conversation. The conversation copy includes the provider title,
+message roles, answer text and available citation labels and excerpts. Providers
+must return the complete history or report a bounded-history error; they must not
+silently truncate it. Opaque message and citation identifiers are omitted; short
+human-readable citation references are kept. Copying uses the browser clipboard
+and reports success or failure in the conversation.
+
 The provider keeps history in its backend. The host does not copy it to browser
 storage or add it to general assistant threads. Returning to the general assistant
 preserves its existing behavior. Reopen the plugin's context to continue a saved

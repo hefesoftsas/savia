@@ -29,6 +29,7 @@ import {
   ArrowLeft,
   BarChart3,
   Check,
+  Copy,
   Cpu,
   Database,
   FileSpreadsheet,
@@ -89,6 +90,10 @@ import { AssistantThreadList } from "./assistant-thread-list";
 import { useMessages } from "@/i18n/core";
 import { uiMessages } from "@/i18n/locales/ui";
 import { assistantExternalMessages } from "./assistant-external-messages";
+import {
+  formatExternalAssistantAnswer,
+  formatExternalAssistantConversation,
+} from "./assistant-external-copy";
 import {
   getPluginAssistantProvider,
   subscribePluginAssistantProvider,
@@ -166,6 +171,11 @@ export function ExternalAssistantConversation({
   const [sending, setSending] = useState(false);
   const [pollTimedOut, setPollTimedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<
+    "answer" | "conversation" | "error" | null
+  >(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [copiedConversation, setCopiedConversation] = useState(false);
   const pollRunning = useRef(false);
   const mounted = useRef(true);
   const refreshedAt = useRef(0);
@@ -173,6 +183,31 @@ export function ExternalAssistantConversation({
   const latestMessage = useRef<HTMLElement>(null);
   const sendAttempt = useRef<{ message: string; key: string } | null>(null);
   const tx = useMessages(assistantExternalMessages);
+
+  useEffect(() => {
+    setCopyFeedback(null);
+    setCopiedMessageId(null);
+    setCopiedConversation(false);
+  }, [conversation.messages]);
+
+  const copyText = async (
+    text: string,
+    target: "answer" | "conversation",
+    messageId?: string,
+  ) => {
+    try {
+      if (!navigator.clipboard?.writeText)
+        throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback(target);
+      setCopiedMessageId(target === "answer" ? (messageId ?? null) : null);
+      setCopiedConversation(target === "conversation");
+    } catch {
+      setCopyFeedback("error");
+      setCopiedMessageId(null);
+      setCopiedConversation(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -335,7 +370,57 @@ export function ExternalAssistantConversation({
             {tx("Connected assistant")}
           </p>
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={tx("Copy conversation")}
+              title={tx("Copy conversation")}
+              disabled={loading || conversation.messages.length === 0}
+              onClick={() =>
+                void copyText(
+                  formatExternalAssistantConversation(
+                    provider.title,
+                    conversation.messages,
+                    {
+                      user: tx("You"),
+                      assistant: tx("Assistant"),
+                      sources: tx("Sources"),
+                    },
+                  ),
+                  "conversation",
+                )
+              }
+            >
+              {copiedConversation ? (
+                <Check className="size-4" aria-hidden="true" />
+              ) : (
+                <Copy className="size-4" aria-hidden="true" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{tx("Copy conversation")}</TooltipContent>
+        </Tooltip>
       </div>
+      {copyFeedback && (
+        <p
+          role={copyFeedback === "error" ? "alert" : "status"}
+          className={cn(
+            "px-4 py-1 text-xs",
+            copyFeedback === "error"
+              ? "text-destructive"
+              : "text-muted-foreground",
+          )}
+        >
+          {copyFeedback === "error"
+            ? tx("Unable to copy. Clipboard access is unavailable.")
+            : copyFeedback === "answer"
+              ? tx("Answer copied.")
+              : tx("Conversation copied.")}
+        </p>
+      )}
       {conversation.coverage && (
         <div className="border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
           {conversation.coverage.label}
@@ -386,6 +471,50 @@ export function ExternalAssistantConversation({
             {message.citations?.length ? (
               <ProviderSources citations={message.citations} />
             ) : null}
+            {message.role === "assistant" && (
+              <div className="mt-2 flex justify-end border-t border-current/10 pt-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      aria-label={
+                        copiedMessageId === message.id
+                          ? tx("Answer copied")
+                          : tx("Copy answer")
+                      }
+                      title={
+                        copiedMessageId === message.id
+                          ? tx("Answer copied")
+                          : tx("Copy answer")
+                      }
+                      onClick={() =>
+                        void copyText(
+                          formatExternalAssistantAnswer(message, {
+                            sources: tx("Sources"),
+                          }),
+                          "answer",
+                          message.id,
+                        )
+                      }
+                    >
+                      {copiedMessageId === message.id ? (
+                        <Check className="size-4" aria-hidden="true" />
+                      ) : (
+                        <Copy className="size-4" aria-hidden="true" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {copiedMessageId === message.id
+                      ? tx("Answer copied")
+                      : tx("Copy answer")}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            )}
           </article>
         ))}
         {conversation.pendingJobId && (
