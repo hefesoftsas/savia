@@ -29,7 +29,8 @@ still passes through normal extension installation and authorization checks.
 Provider job and conversation references must also be bound to the requested
 context; checking owner scope alone is insufficient when one owner has many items.
 
-In the native conversation, users can copy an individual assistant answer or the
+In the native conversation, the answer copy action is left-aligned below its sources.
+Users can copy an individual assistant answer or the
 complete provider conversation. The conversation copy includes the provider title,
 message roles, answer text and available citation labels and excerpts. Providers
 must return the complete history or report a bounded-history error; they must not

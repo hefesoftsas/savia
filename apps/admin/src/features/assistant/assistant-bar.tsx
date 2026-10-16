@@ -506,7 +506,7 @@ export function ExternalAssistantConversation({
               <ProviderSources citations={message.citations} />
             ) : null}
             {message.role === "assistant" && (
-              <div className="mt-2 flex justify-end border-t border-current/10 pt-1">
+              <div className="mt-2 flex justify-start border-t border-current/10 pt-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
