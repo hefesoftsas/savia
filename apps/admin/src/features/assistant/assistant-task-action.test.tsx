@@ -134,6 +134,10 @@ describe("assistant task action", () => {
       "Task created.",
     );
     expect(screen.getByRole("link", { name: "View tasks" })).toHaveAttribute(
+      "target",
+      "_blank",
+    );
+    expect(screen.getByRole("link", { name: "View tasks" })).toHaveAttribute(
       "href",
       "#/studio?tenantId=12&object=Assistant_Tasks&view=records",
     );
