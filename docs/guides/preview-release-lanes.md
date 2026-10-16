@@ -34,7 +34,9 @@ compatibility and writes a durable checkpoint with prior installation and
 artifact data. Plugin ZIPs use fixed timestamps and modes so the same source produces the
 same digest on retry. It publishes and verifies exact versions and digests. Partial
 failure triggers rollback; a concurrent manual disable/version change is not
-overwritten. Recovery artifacts are retained privately by the Preview workflow.
+overwritten. Recovery checkpoints are retained as GitHub Actions artifacts under the
+repository’s artifact access policy. They contain plugin source and installation
+metadata, but no connector credentials or business documents.
 
 Prior plugin artifacts remain available for recovery. The publisher fails
 explicitly when the store quota is full; it never deletes history automatically.
