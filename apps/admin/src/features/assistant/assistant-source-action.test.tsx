@@ -34,7 +34,7 @@ it("opens the server-resolved PDF at the cited page without sending document URL
     revision: 1,
     messages: [],
     source: {
-      url: "https://secop.example/private/source/ticket#page=4",
+      url: "https://secop.example/private/source/ticket",
       page: 4,
     },
   }));

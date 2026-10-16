@@ -594,7 +594,7 @@
                 "en": "Description",
                 "pt": "Descrição"
               },
-              "config": { "maxLength": 10000 }
+              "config": { "maxLength": 20000 }
             },
             "assignee": {
               "type": "Textbox",
@@ -666,7 +666,7 @@
                 "en": "Source context",
                 "pt": "Contexto de origem"
               },
-              "config": { "maxLength": 10000 }
+              "config": { "maxLength": 20000 }
             },
             "source_reference": {
               "type": "Textarea",
@@ -676,7 +676,7 @@
                 "en": "Requirement reference",
                 "pt": "Referência do requisito"
               },
-              "config": { "maxLength": 10000 }
+              "config": { "maxLength": 20000 }
             },
             "source_url": {
               "type": "Textbox",

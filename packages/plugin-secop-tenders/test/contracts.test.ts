@@ -78,3 +78,15 @@ describe("SECOP plugin package contracts", () => {
     });
   });
 });
+
+it("accepts the assistant task evidence bounds without truncating sources", () => {
+  const collection = store.collections.find(
+    (entry) => entry.object.name === "secop_application_tasks",
+  )!;
+  expect(collection.object.config.fields.description.config.maxLength).toBe(
+    20000,
+  );
+  expect(
+    collection.object.config.fields.source_reference.config.maxLength,
+  ).toBe(20000);
+});

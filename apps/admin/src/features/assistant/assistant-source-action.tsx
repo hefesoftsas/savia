@@ -60,7 +60,13 @@ export function AssistantSourceAction({
       }
       if (!result.source || !safeSourceUrl(result.source.url))
         throw new Error("Source unavailable");
-      popup.location.replace(result.source.url);
+      const destination = new URL(result.source.url);
+      if (result.source.page !== undefined) {
+        const fragment = new URLSearchParams(destination.hash.slice(1));
+        fragment.set("page", String(result.source.page));
+        destination.hash = fragment.toString();
+      }
+      popup.location.replace(destination.href);
     } catch {
       popup.close();
       if (current === generation.current) setError(true);
