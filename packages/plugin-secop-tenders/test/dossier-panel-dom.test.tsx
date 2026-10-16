@@ -72,7 +72,9 @@ async function mount(configured = true, report = false) {
     },
   );
   const create = vi.fn(async (input) => ({ id: "interest", ...input }));
+  const openAssistant = vi.fn().mockResolvedValue(undefined);
   const api = {
+    assistant: { open: openAssistant },
     connections: {
       list: vi
         .fn()
@@ -100,7 +102,7 @@ async function mount(configured = true, report = false) {
       />,
     );
   });
-  return { execute, create };
+  return { execute, create, openAssistant };
 }
 async function click(label: string) {
   const button = [...host.querySelectorAll("button")].find(
@@ -121,6 +123,20 @@ describe("tender dossier flow", () => {
     ).toBe(true);
     expect(host.textContent).toContain("segundo plano");
   });
+  it("opens the existing Savia chat with an opaque tender context and no duplicate composer", async () => {
+    const { openAssistant } = await mount(true, true);
+    await click("Asistente");
+    expect(host.querySelector("textarea")).toBeNull();
+    await click("Preparar lista completa");
+    expect(openAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionId: "assistant-chat",
+        connectionId: "private",
+        context: { dossierId: "CO1.REQ.1" },
+        initialMessage: expect.stringContaining("todos los requisitos"),
+      }),
+    );
+  });
   it("does not send company data before a private connection is configured", async () => {
     const { execute } = await mount(false);
     expect(host.textContent).toContain("Conectar el asistente de expedientes");
@@ -129,12 +145,11 @@ describe("tender dossier flow", () => {
   });
   it("marks partial coverage and keeps chat unavailable without a report", async () => {
     const { execute } = await mount(true, true);
-    const conversation = execute.mock.calls.find(
-      ([, a]) => a.input.operation === "conversation",
-    )?.[1].input as { operation: string; arguments: Record<string, unknown> };
-    expect(conversation.arguments).not.toHaveProperty("companyProfileId");
-    expect(host.textContent).toContain("Análisis parcial");
+    expect(
+      execute.mock.calls.some(([, a]) => a.input.operation === "conversation"),
+    ).toBe(false);
+    expect(host.textContent).toContain("Revisión de fuentes pendiente");
     await click("Asistente");
-    expect(host.textContent).toContain("Tu pregunta");
+    expect(host.textContent).toContain("Abrir chat de Savia");
   });
 });

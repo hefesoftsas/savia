@@ -10,13 +10,112 @@ import {
 import { afterEach, expect, it, vi } from "vitest";
 import { CustomPluginFrame } from "../custom-plugin-frame";
 import { setStudioRuntime } from "../runtime";
+import { getPluginAssistantProvider } from "@savia/studio-shared/plugin-assistant";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
   setStudioRuntime({ embedded: false });
+  getPluginAssistantProvider()?.close();
   delete (navigator as Navigator & { userActivation?: unknown }).userActivation;
+});
+
+it("opens only its own extension assistant and invokes its declared action through the host API", async () => {
+  const transport = vi.fn(async (_path: string, _init?: RequestInit) =>
+    Response.json({
+      data: {
+        run: { runId: "run-1", status: "succeeded" },
+        output: {
+          data: {
+            data: {
+              conversationId: "conversation-1",
+              revision: 1,
+              messages: [],
+            },
+          },
+        },
+      },
+    }),
+  );
+  setStudioRuntime({ embedded: false, transport });
+  render(<CustomPluginFrame pluginId="procurement.secop" title="SECOP" />);
+  const frame = screen.getByTitle("SECOP") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  const request = (path: string, id: string) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          id,
+          path,
+          method: "POST",
+          body: {
+            title: "Tender dossier",
+            actionId: "assistant-chat",
+            context: { dossierId: "dossier-1" },
+          },
+        },
+      }),
+    );
+
+  request("/extensions/other.plugin/assistant/open", "foreign");
+  expect(getPluginAssistantProvider()).toBeNull();
+  request("/extensions/procurement.secop/assistant/open", "own");
+  expect(getPluginAssistantProvider()?.title).toBe("Tender dossier");
+  await act(async () => {
+    await getPluginAssistantProvider()!.invoke({ method: "load" });
+  });
+  expect(transport).toHaveBeenCalledWith(
+    "/api/extensions/procurement.secop/actions/assistant-chat",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        input: {
+          context: { dossierId: "dossier-1" },
+          request: { method: "load" },
+        },
+      }),
+    }),
+  );
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "own", ok: true, data: null }),
+    "*",
+  );
+});
+
+it("revokes an external assistant callback when the authenticated session clears", async () => {
+  const transport = vi.fn();
+  setStudioRuntime({ embedded: false, transport });
+  render(<CustomPluginFrame pluginId="example.provider" title="Provider" />);
+  const frame = screen.getByTitle("Provider") as HTMLIFrameElement;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "open",
+        path: "/extensions/example.provider/assistant/open",
+        method: "POST",
+        body: {
+          title: "External assistant",
+          actionId: "chat",
+          context: { itemId: "item-1" },
+        },
+      },
+    }),
+  );
+  const provider = getPluginAssistantProvider()!;
+  fireEvent(window, new Event("savia:session-cleared"));
+  await expect(provider.invoke({ method: "load" })).rejects.toThrow(
+    "session has ended",
+  );
+  expect(transport).not.toHaveBeenCalled();
 });
 
 it("sizes plugin screens to their content and resets on navigation", () => {

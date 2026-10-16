@@ -23,7 +23,6 @@ import {
   type Company,
   type Stored,
   type Assessment,
-  type Conversation,
   type Citation,
   type Job,
   type DossierDocument,
@@ -86,14 +85,12 @@ export function DossierPanel({
     [companies, setCompanies] = useState<Stored<Company>[]>([]),
     [companyId, setCompanyId] = useState(""),
     [detail, setDetail] = useState<CompanyDetail | null>(null),
-    [assessment, setAssessment] = useState<Assessment | null>(null),
-    [conversation, setConversation] = useState<Conversation | null>(null);
+    [assessment, setAssessment] = useState<Assessment | null>(null);
   const [pendingJob, setPendingJob] = useState<Job | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [uploadLink, setUploadLink] = useState<string | null>(null),
-    [question, setQuestion] = useState(""),
     [evidence, setEvidence] = useState<{
       document: Stored<DossierDocument>;
       chunks: Array<Stored<{ text: string; page?: number; section?: string }>>;
@@ -187,7 +184,7 @@ export function DossierPanel({
       if (!alive.current || request !== sequence.current) return;
       setSnapshot(data);
       setCompanies(list.companies);
-      const [company, fit, chat] = await Promise.all([
+      const [company, fit] = await Promise.all([
         companyId
           ? active.call<CompanyDetail>("company-detail", { id: companyId })
           : Promise.resolve(null),
@@ -197,37 +194,16 @@ export function DossierPanel({
               companyId,
             })
           : Promise.resolve(null),
-        data.dossier
-          ? active.call<Conversation | null>("conversation", {
-              dossierId: processId,
-              ...(companyId ? { companyProfileId: companyId } : {}),
-            })
-          : Promise.resolve(null),
       ]);
       if (!alive.current || request !== sequence.current) return;
       setDetail(company);
       setAssessment(fit);
-      setConversation((previous) =>
-        previous && chat && previous.id === chat.id
-          ? {
-              ...chat,
-              turns: [
-                ...previous.turns.filter(
-                  (t) => !chat.turns.some((x) => x.id === t.id),
-                ),
-                ...chat.turns,
-              ],
-              previousCursor: previous.previousCursor ?? chat.previousCursor,
-            }
-          : chat,
-      );
     },
     [client, companyId, processId],
   );
   useEffect(() => {
     setDetail(null);
     setAssessment(null);
-    setConversation(null);
     if (client)
       void refresh().catch(() => {
         if (alive.current)
@@ -378,20 +354,25 @@ export function DossierPanel({
       setPendingJob(result.job);
     });
   }
-  async function sendQuestion() {
-    if (!client || !question.trim()) return;
-    await run(async () => {
-      const result = await client.call<{ job: Job }>("chat", {
-        dossierId: processId,
-        ...(companyId ? { companyProfileId: companyId } : {}),
-        ...(conversation ? { conversationId: conversation.id } : {}),
-        expectedRevision: conversation?.revision ?? 0,
-        message: question,
-        idempotencyKey: crypto.randomUUID(),
-      });
-      setPendingJob(result.job);
-      setQuestion("");
-    });
+  async function openAssistant(initialMessage?: string) {
+    if (!client || !savia.assistant) {
+      setError(
+        "El chat de Savia necesita la actualización de la plataforma. Recarga la página cuando termine el despliegue.",
+      );
+      return;
+    }
+    await run(() =>
+      savia.assistant!.open({
+        title: String(row.name ?? "Expediente de la licitación"),
+        actionId: "assistant-chat",
+        connectionId: client.connectionId,
+        context: {
+          dossierId: processId,
+          ...(companyId ? { companyProfileId: companyId } : {}),
+        },
+        ...(initialMessage ? { initialMessage } : {}),
+      }),
+    );
   }
   async function more() {
     if (!client || snapshot?.nextOffset == null) return;
@@ -734,9 +715,13 @@ export function DossierPanel({
                   <>
                     <dl className="secop-dossier-summary">
                       <div>
-                        <dt>Estado</dt>
+                        <dt>Análisis conjunto</dt>
                         <dd>
-                          {dossierStateLabel(snapshot.dossier.value.state)}
+                          {snapshot.dossier.value.needsSynthesis
+                            ? "Pendiente de actualizar"
+                            : report
+                              ? "Completado"
+                              : dossierStateLabel(snapshot.dossier.value.state)}
                         </dd>
                       </div>
                       <div>
@@ -767,15 +752,22 @@ export function DossierPanel({
                 )}
                 {report && (
                   <>
-                    <h2>Qué se necesita para participar</h2>
+                    <div className="secop-dossier-section-heading">
+                      <h2>Resumen del expediente</h2>
+                      <button type="button" onClick={() => setTab("chat")}>
+                        <ListChecks size={16} aria-hidden="true" /> Ver lista
+                        completa
+                      </button>
+                    </div>
                     <div className="secop-dossier-text">{report.summary}</div>
                     {(report.coverage.pending.length > 0 ||
                       report.coverage.reviewRequired.length > 0) && (
                       <p className="secop-dossier-notice">
-                        Análisis parcial: {report.coverage.pending.length}{" "}
-                        documentos pendientes y{" "}
-                        {report.coverage.reviewRequired.length} extracciones por
-                        revisar.
+                        Revisión de fuentes pendiente:{" "}
+                        {report.coverage.pending.length} documentos sin extraer
+                        y {report.coverage.reviewRequired.length} extracciones
+                        por revisar. El análisis conjunto y la revisión humana
+                        son pasos distintos.
                       </p>
                     )}
                     {report.conflicts.length > 0 && (
@@ -790,30 +782,37 @@ export function DossierPanel({
                     )}
                   </>
                 )}
-                {snapshot?.jobs
-                  .filter((j) => j.state === "failed")
-                  .map((job) => (
-                    <div key={job.id} className="secop-dossier-notice">
-                      <p>
-                        Trabajo pendiente de resolver:{" "}
-                        {dossierStateLabel(job.error ?? job.kind ?? "failed")}
-                      </p>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            const next = await client.call<Job>("retry", {
-                              jobId: job.id,
-                            });
-                            setPendingJob(next);
-                          })
-                        }
-                      >
-                        Reintentar trabajo
-                      </button>
-                    </div>
-                  ))}
+                {snapshot?.jobs.some((job) => job.state === "failed") && (
+                  <details className="secop-dossier-job-history">
+                    <summary>Historial de incidencias de procesamiento</summary>
+                    {snapshot?.jobs
+                      .filter((j) => j.state === "failed")
+                      .map((job) => (
+                        <div key={job.id} className="secop-dossier-notice">
+                          <p>
+                            Trabajo pendiente de resolver:{" "}
+                            {dossierStateLabel(
+                              job.error ?? job.kind ?? "failed",
+                            )}
+                          </p>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                const next = await client.call<Job>("retry", {
+                                  jobId: job.id,
+                                });
+                                setPendingJob(next);
+                              })
+                            }
+                          >
+                            Reintentar trabajo
+                          </button>
+                        </div>
+                      ))}
+                  </details>
+                )}
               </>
             )}
             {tab === "documents" && (
@@ -1141,24 +1140,18 @@ export function DossierPanel({
               </>
             )}
             {tab === "chat" && (
-              <div className="secop-dossier-chat">
-                <h2>Asistente de esta licitación</h2>
-                <p className="secop-dossier-help">
-                  Pregunta por requisitos, entregables, riesgos o lo que le
-                  falta a la empresa seleccionada. Las respuestas conservan la
-                  versión de sus fuentes.
-                </p>
-                {report &&
-                  (report.coverage.pending.length > 0 ||
-                    report.coverage.reviewRequired.length > 0) && (
-                    <p className="secop-dossier-notice">
-                      El análisis es parcial. Confirma los requisitos en los
-                      documentos pendientes; una ausencia en el material leído
-                      no significa que el requisito no exista.
-                    </p>
-                  )}
+              <div className="secop-dossier-assistant-entry">
+                <div>
+                  <MessageSquare size={24} aria-hidden="true" />
+                  <h2>Esta licitación, en el chat de Savia</h2>
+                  <p className="secop-dossier-help">
+                    Continúa la conversación con las fuentes de este expediente.
+                    La licitación y la empresa seleccionadas acompañan cada
+                    pregunta.
+                  </p>
+                </div>
                 <label>
-                  Contexto de empresa
+                  Empresa para contrastar requisitos
                   <select
                     value={companyId}
                     onChange={(event) => setCompanyId(event.target.value)}
@@ -1171,79 +1164,58 @@ export function DossierPanel({
                     ))}
                   </select>
                 </label>
-                {conversation?.turns.map((turn) => (
-                  <article key={turn.id}>
-                    <h3>Tu pregunta</h3>
-                    <p className="secop-dossier-text">
-                      {turn.value.userMessage}
-                    </p>
-                    <h3>Asistente · expediente v{turn.value.corpusRevision}</h3>
-                    <p className="secop-dossier-text">{turn.value.answer}</p>
-                    {turn.value.stale && (
-                      <p>
-                        Respuesta basada en una versión anterior; vuelve a
-                        comprobarla.
-                      </p>
-                    )}
-                    <CitationButtons
-                      citations={turn.value.citations}
-                      onOpen={(id) => void openEvidence(id)}
-                    />
-                  </article>
-                ))}
-                {conversation?.previousCursor != null && (
+                <div className="secop-dossier-actions">
                   <button
                     type="button"
-                    disabled={busy}
+                    className="secop-primary"
+                    disabled={busy || !report || !savia.assistant}
+                    onClick={() => void openAssistant()}
+                  >
+                    <MessageSquare size={16} aria-hidden="true" /> Abrir chat de
+                    Savia
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !report || !savia.assistant}
                     onClick={() =>
-                      void run(async () => {
-                        const next = await client.call<Conversation>(
-                          "conversation",
-                          {
-                            dossierId: processId,
-                            companyProfileId: companyId,
-                            offset: conversation.previousCursor,
-                          },
-                        );
-                        setConversation({
-                          ...next,
-                          turns: [
-                            ...next.turns,
-                            ...conversation.turns.filter(
-                              (t) => !next.turns.some((x) => x.id === t.id),
-                            ),
-                          ],
-                        });
-                      })
+                      void openAssistant(
+                        "Prepara la lista completa de todos los requisitos y documentos para aplicar a esta licitación, con evidencia por punto y todo lo que falta por verificar.",
+                      )
                     }
                   >
-                    Ver mensajes anteriores
+                    <ListChecks size={16} aria-hidden="true" /> Preparar lista
+                    completa
                   </button>
+                </div>
+                {!companyId && (
+                  <p className="secop-dossier-help">
+                    Aún no contrastamos el cumplimiento de tu empresa.
+                    Selecciona su perfil y aporta evidencias en «Mi empresa».
+                  </p>
                 )}
-                <DossierForm onSubmit={() => void sendQuestion()}>
-                  <label>
-                    Tu pregunta
-                    <textarea
-                      value={question}
-                      onChange={(event) => setQuestion(event.target.value)}
-                      placeholder="¿Qué requisitos nos faltan para participar?"
-                      required
-                      maxLength={8000}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    data-dossier-submit
-                    className="secop-primary"
-                    disabled={busy || Boolean(activeJobs) || !report}
-                  >
-                    Preguntar al asistente
-                  </button>
-                </DossierForm>
+                {report &&
+                  (report.coverage.pending.length > 0 ||
+                    report.coverage.reviewRequired.length > 0) && (
+                    <p className="secop-dossier-notice">
+                      {report.coverage.pending.length > 0
+                        ? `${report.coverage.pending.length} documentos siguen pendientes de extracción. `
+                        : "Todos los documentos disponibles tienen texto extraído. "}
+                      {report.coverage.reviewRequired.length} extracciones
+                      requieren revisión contra el original. El análisis
+                      automático no confirma cumplimiento.
+                    </p>
+                  )}
                 {!report && (
-                  <p>
-                    Primero prepara el expediente para que el asistente responda
-                    con sus documentos.
+                  <p className="secop-dossier-help">
+                    Primero prepara el expediente para conversar con sus
+                    documentos.
+                  </p>
+                )}
+                {!savia.assistant && (
+                  <p role="status" className="secop-dossier-notice">
+                    El chat integrado estará disponible al actualizar la
+                    plataforma. Tus conversaciones permanecen guardadas en el
+                    servicio.
                   </p>
                 )}
               </div>

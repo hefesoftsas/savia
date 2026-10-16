@@ -10,6 +10,7 @@ import {
 } from "./plugin-localization";
 import type { AccessPolicy } from "./access-control";
 import type { StudioObject } from "./metadata";
+import type { PluginAssistantOpenRequest } from "./plugin-assistant";
 
 export type PluginHostRequest = <T>(
   path: string,
@@ -113,11 +114,25 @@ export type PluginCollection<TRecord, TInput = Partial<TRecord>> = {
   describe(): Promise<PluginCollectionDefinition | undefined>;
 };
 
-export type PluginRecordReceipt<T> = { data: T; persistence: "local" | "server"; mutationId?: string };
-export type PluginLocalCollection<T, I = Partial<T>> = Pick<PluginCollection<T, I>, "list" | "get" | "describe"> & {
+export type PluginRecordReceipt<T> = {
+  data: T;
+  persistence: "local" | "server";
+  mutationId?: string;
+};
+export type PluginLocalCollection<T, I = Partial<T>> = Pick<
+  PluginCollection<T, I>,
+  "list" | "get" | "describe"
+> & {
   create(input: I): Promise<PluginRecordReceipt<T>>;
-  update(id: string, input: I, options?: PluginRecordVersion): Promise<PluginRecordReceipt<T>>;
-  remove(id: string, options?: PluginRecordVersion): Promise<PluginRecordReceipt<T>>;
+  update(
+    id: string,
+    input: I,
+    options?: PluginRecordVersion,
+  ): Promise<PluginRecordReceipt<T>>;
+  remove(
+    id: string,
+    options?: PluginRecordVersion,
+  ): Promise<PluginRecordReceipt<T>>;
 };
 
 export type PluginFile = {
@@ -137,9 +152,19 @@ export type PluginFiles = {
 export type PluginApi = {
   localRecords?: {
     collection<T, I = Partial<T>>(name: string): PluginLocalCollection<T, I>;
-    subscribe?(listener: (status?: { pending: number; conflicts: number; errors: number }) => void): () => void;
+    subscribe?(
+      listener: (status?: {
+        pending: number;
+        conflicts: number;
+        errors: number;
+      }) => void,
+    ): () => void;
   };
   ui?: PluginPanelApi;
+  /** Open Savia's native assistant using this extension's declared server action. */
+  assistant?: {
+    open(request: PluginAssistantOpenRequest): Promise<void>;
+  };
   i18n?: {
     readonly locale: PluginLocale;
     translate<C extends PluginMessages>(
@@ -303,6 +328,11 @@ export function createPluginApi({
         ),
       error: (error) =>
         localizeExternalError(error, normalizePluginLocale(getLocale())),
+    },
+    assistant: {
+      open: async (value) => {
+        await request(`${extensionPath}/assistant/open`, "POST", value);
+      },
     },
     access: {
       async effective() {

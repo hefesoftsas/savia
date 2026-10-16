@@ -104,6 +104,23 @@
           "arguments": "{{input.arguments}}"
         }
       }
+    },
+    {
+      "id": "assistant-chat",
+      "kind": "http",
+      "connector": "secop-dossier",
+      "request": {
+        "method": "POST",
+        "url": "https://secop-live-worker.jose-douglas-dev.workers.dev/private/v1/assistant",
+        "headers": {
+          "Authorization": "Bearer {{connection.apiKey}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "context": "{{input.context}}",
+          "request": "{{input.request}}"
+        }
+      }
     }
   ],
   "monitors": [

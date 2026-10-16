@@ -75,11 +75,24 @@ or changed evidence invalidates old evaluations. User review notes stay separate
 from model findings. Readiness means ready for the team's review, not a submitted
 or officially approved bid.
 
-The Assistant keeps a conversation per tender/company and answers using scoped
-source evidence. Jobs and conversations survive navigation and reload. Reads,
-model calls and processing have explicit budgets; a limit or unavailable OCR
-provider is visible rather than silently dropping documents. The initial
-assistant interface and generated responses are in Spanish.
+The **Assistant** tab opens Savia's native chat panel through the generic plugin
+assistant bridge. The title and selected company remain visible, and the existing
+conversation stays in the private SECOP service. There is no second chat composer
+inside the dossier. **Prepare complete checklist** prefills a question; it does not
+send it until the user presses Send. The same private workspace connection is used.
+
+Explicit questions asking for all requirements use every saved requirement record
+in the current report. Items preserve original wording and link to exact source
+quotes, with OCR/source-review and missing company-evidence notices shown first.
+This covers the saved extraction, not a certification that every obligation in the
+original documents was recognized. Focused questions retain bounded hybrid search.
+Source classification and automatic analysis do not certify company compliance.
+A finished joint analysis can still have source extractions awaiting human review.
+
+The native panel uses Savia's shared Markdown renderer, source disclosures and
+keyboard-accessible composer. Changing tender, company or principal changes the
+context; it never reuses a conversation from another scope. Jobs and conversations
+survive navigation and reload. See [plugin assistant integration](guides/plugin-assistant.md).
 
 Service setup, contracts, storage migrations and release checks are documented in
 `chibchombiano26/secop-live-worker/docs/operations.md`. Install this plugin only

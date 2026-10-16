@@ -15,6 +15,13 @@ import { getStudioRuntime } from "./runtime";
 import { Button } from "@/components/ui/button";
 import { useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
+import {
+  closePluginAssistantProvider,
+  openPluginAssistantProvider,
+  parsePluginAssistantOpenRequest,
+  parsePluginAssistantResponse,
+  type PluginAssistantRequest,
+} from "@savia/studio-shared/plugin-assistant";
 
 type PluginFrameRequest = {
   ns: "savia-plugin";
@@ -124,6 +131,44 @@ function normalizeExternalNavigationUrl(value: unknown): string | null {
   }
 }
 
+function validAssistantRequest(
+  value: unknown,
+): value is PluginAssistantRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const request = value as Record<string, unknown>;
+  if (request.method === "load") return Object.keys(request).length === 1;
+  if (request.method === "send")
+    return (
+      Object.keys(request).every((key) =>
+        [
+          "method",
+          "message",
+          "idempotencyKey",
+          "conversationId",
+          "expectedRevision",
+        ].includes(key),
+      ) &&
+      typeof request.message === "string" &&
+      request.message.trim().length > 0 &&
+      request.message.length <= 8_000 &&
+      typeof request.idempotencyKey === "string" &&
+      /^[A-Za-z0-9_-]{1,128}$/.test(request.idempotencyKey) &&
+      (request.conversationId === undefined ||
+        (typeof request.conversationId === "string" &&
+          request.conversationId.length <= 256)) &&
+      (request.expectedRevision === undefined ||
+        (Number.isSafeInteger(request.expectedRevision) &&
+          (request.expectedRevision as number) >= 0))
+    );
+  return (
+    request.method === "poll" &&
+    Object.keys(request).length === 2 &&
+    typeof request.jobId === "string" &&
+    request.jobId.length > 0 &&
+    request.jobId.length <= 256
+  );
+}
+
 /**
  * Ejecuta un plugin del store dentro de un iframe aislado
  * (`sandbox="allow-scripts"`, origen opaco). El plugin nunca toca la
@@ -168,6 +213,12 @@ export function CustomPluginFrame({
   const closeRef = useRef<HTMLButtonElement>(null);
   const retryAction = useRef<(() => void) | null>(null);
   const child = useRef<{ frame: Window; session: string } | null>(null);
+  const assistantSession = useRef<string | null>(null);
+  const closeAssistantSession = () => {
+    if (!assistantSession.current) return;
+    closePluginAssistantProvider(assistantSession.current);
+    assistantSession.current = null;
+  };
   function finishPanel(result: PluginPanelResult) {
     const active = controller.current.current;
     if (!active) return;
@@ -265,6 +316,7 @@ export function CustomPluginFrame({
     };
     const onSessionCleared = () => {
       revoked.current = true;
+      closeAssistantSession();
       setAccessEnded(true);
       invalidatePrefetch(false);
       controller.current.dispose();
@@ -286,12 +338,14 @@ export function CustomPluginFrame({
     };
     const onPrincipalChanged = () => {
       revoked.current = false;
+      closeAssistantSession();
       setAccessEnded(false);
       invalidatePrefetch(true);
     };
     window.addEventListener("savia:session-cleared", onSessionCleared);
     window.addEventListener("savia:principal-changed", onPrincipalChanged);
     return () => {
+      closeAssistantSession();
       window.removeEventListener("savia:session-cleared", onSessionCleared);
       window.removeEventListener("savia:principal-changed", onPrincipalChanged);
     };
@@ -433,6 +487,102 @@ export function CustomPluginFrame({
             height: Math.min(100_000, Math.ceil(message.height)),
           });
         }
+        return;
+      }
+      const assistantPath = `/extensions/${encodeURIComponent(pluginId)}/assistant/open`;
+      if (message.path === assistantPath) {
+        const frame = frameRef.current?.contentWindow;
+        const reply = (ok: boolean, data?: unknown, error?: string) => {
+          if (frame !== frameRef.current?.contentWindow) return;
+          frame?.postMessage(
+            {
+              ns: "savia-plugin",
+              type: "response",
+              id: message.id,
+              panelId: message.panelId,
+              ok,
+              ...(ok ? { data } : { error }),
+            },
+            "*",
+          );
+        };
+        if (message.method !== "POST") {
+          reply(false, undefined, "Opening the assistant requires POST.");
+          return;
+        }
+        const launch = parsePluginAssistantOpenRequest(message.body);
+        if (!launch) {
+          reply(false, undefined, "Invalid assistant request.");
+          return;
+        }
+        const sessionId = crypto.randomUUID();
+        const boundFrame = frame;
+        const boundSession = uiSession.current;
+        const boundGeneration = sessionGeneration.current;
+        closeAssistantSession();
+        assistantSession.current = sessionId;
+        openPluginAssistantProvider({
+          ...launch,
+          sessionId,
+          close: () => {
+            if (assistantSession.current === sessionId)
+              assistantSession.current = null;
+            closePluginAssistantProvider(sessionId);
+          },
+          invoke: async (request: PluginAssistantRequest) => {
+            if (
+              revoked.current ||
+              !boundFrame ||
+              boundFrame !== frameRef.current?.contentWindow ||
+              boundSession !== uiSession.current ||
+              boundGeneration !== sessionGeneration.current ||
+              assistantSession.current !== sessionId
+            )
+              throw new Error("The plugin assistant session has ended.");
+            if (!validAssistantRequest(request))
+              throw new Error("Invalid assistant operation.");
+            const response = await pluginRecordFetch<unknown>(
+              `/api/extensions/${encodeURIComponent(pluginId)}/actions/${encodeURIComponent(launch.actionId)}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  ...(launch.connectionId
+                    ? { connectionId: launch.connectionId }
+                    : {}),
+                  input: { context: launch.context, request },
+                }),
+              },
+            );
+            if (
+              revoked.current ||
+              boundFrame !== frameRef.current?.contentWindow ||
+              boundSession !== uiSession.current ||
+              boundGeneration !== sessionGeneration.current ||
+              assistantSession.current !== sessionId
+            )
+              throw new Error("The plugin assistant session has ended.");
+            const action =
+              typeof response === "object" &&
+              response !== null &&
+              "data" in response
+                ? (response as { data?: { output?: unknown } }).data
+                : response;
+            const output =
+              typeof action === "object" &&
+              action !== null &&
+              "output" in action
+                ? (action as { output: unknown }).output
+                : action;
+            const parsed = parsePluginAssistantResponse(output);
+            if (!parsed)
+              throw new Error(
+                "The assistant provider returned an invalid response.",
+              );
+            return parsed;
+          },
+        });
+        reply(true, null);
         return;
       }
       if (
