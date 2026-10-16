@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Download, FileText, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMessages, type MessageCatalog } from "@/i18n/core";
@@ -80,7 +80,7 @@ export function AssistantDocumentAction({
   const activePopup = useRef<Window | null>(null);
   const key = contextKey(provider);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     attempt.current += 1;
     setBusy(false);
     setFeedback(null);

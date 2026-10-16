@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useLayoutEffect } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { PluginAssistantProvider } from "@savia/studio-shared/plugin-assistant";
@@ -143,18 +144,22 @@ it("closes a reserved tab and ignores a late result after context changes or unm
   let resolve!: (value: never) => void;
   const invoke = vi.fn(() => new Promise<never>((done) => (resolve = done)));
   const currentProvider = provider(invoke);
-  const view = render(
-    <AssistantDocumentAction provider={currentProvider} action={action} />,
-  );
+  let closeCountDuringParentLayout = -1;
+  function ObserveProvider({ current }: { current: PluginAssistantProvider }) {
+    useLayoutEffect(() => {
+      if (current.sessionId === "session-2")
+        closeCountDuringParentLayout = reserved.close.mock.calls.length;
+    }, [current.sessionId]);
+    return <AssistantDocumentAction provider={current} action={action} />;
+  }
+  const view = render(<ObserveProvider current={currentProvider} />);
   fireEvent.click(screen.getByRole("button", { name: action.label }));
   expect(invoke).toHaveBeenCalledTimes(1);
 
   view.rerender(
-    <AssistantDocumentAction
-      provider={provider(invoke, { sessionId: "session-2" })}
-      action={action}
-    />,
+    <ObserveProvider current={provider(invoke, { sessionId: "session-2" })} />,
   );
+  expect(closeCountDuringParentLayout).toBe(1);
   expect(reserved.close).toHaveBeenCalledTimes(1);
   resolve({
     revision: 1,
