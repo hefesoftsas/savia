@@ -11,6 +11,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { CustomPluginFrame } from "../custom-plugin-frame";
 import { setStudioRuntime } from "../runtime";
 import { getPluginAssistantProvider } from "@savia/studio-shared/plugin-assistant";
+import { HashRouter, useSearchParams } from "react-router-dom";
 
 afterEach(() => {
   cleanup();
@@ -19,6 +20,175 @@ afterEach(() => {
   setStudioRuntime({ embedded: false });
   getPluginAssistantProvider()?.close();
   delete (navigator as Navigator & { userActivation?: unknown }).userActivation;
+});
+
+it("keeps plugin URL state scoped to the current screen and broadcasts back navigation", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/#/studio?tenantId=12&object=tenders&plugin.demo.tab=documents",
+  );
+  const navigate = vi.fn((query: string) =>
+    window.history.pushState(null, "", "/#/studio?" + query),
+  );
+  const transport = vi.fn(async () => Response.json({ data: null }));
+  setStudioRuntime({ embedded: true, navigate, transport });
+  render(
+    <CustomPluginFrame
+      pluginId="demo"
+      title="Route demo"
+      screen={{ object: "tenders", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Route demo") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  const request = (method: string, body?: unknown) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          id: method,
+          path: "/extensions/demo/route",
+          method,
+          body,
+        },
+      }),
+    );
+  request("GET");
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "GET",
+        ok: true,
+        data: { tab: "documents" },
+      }),
+      "*",
+    ),
+  );
+  request("PUT", {
+    state: { tender: "CO1.REQ.1", tab: "chat" },
+    replace: false,
+  });
+  await waitFor(() =>
+    expect(navigate).toHaveBeenCalledWith(
+      expect.stringContaining("tenantId=12&object=tenders"),
+      false,
+    ),
+  );
+  expect(window.location.hash).toContain("plugin.demo.tender=CO1.REQ.1");
+  window.history.replaceState(
+    null,
+    "",
+    "/#/studio?tenantId=12&object=tenders&plugin.demo.tab=summary",
+  );
+  fireEvent(window, new PopStateEvent("popstate"));
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "route-changed",
+      state: { tab: "summary" },
+    }),
+    "*",
+  );
+  const notifications = send.mock.calls.filter(
+    ([data]) => data.type === "route-changed",
+  ).length;
+  fireEvent(window, new HashChangeEvent("hashchange"));
+  expect(
+    send.mock.calls.filter(([data]) => data.type === "route-changed"),
+  ).toHaveLength(notifications);
+  expect(transport).not.toHaveBeenCalledWith(
+    expect.stringContaining("/route"),
+    expect.anything(),
+  );
+  window.history.replaceState(null, "", "/");
+});
+
+it("round trips actual HashRouter history, preserving scope and replace semantics", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/#/studio?tenantId=12&object=tenders&plugin.other.tab=keep",
+  );
+  function Host() {
+    const [, setParams] = useSearchParams();
+    setStudioRuntime({
+      embedded: true,
+      navigate: (query, replace) =>
+        setParams(new URLSearchParams(query), { replace }),
+    });
+    return (
+      <CustomPluginFrame
+        pluginId="demo"
+        title="History demo"
+        screen={{ object: "tenders", view: "records" }}
+      />
+    );
+  }
+  render(
+    <HashRouter>
+      <Host />
+    </HashRouter>,
+  );
+  const frame = screen.getByTitle("History demo") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  const setRoute = (tab: string, replace = false) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          id: tab,
+          path: "/extensions/demo/route",
+          method: "PUT",
+          body: { state: { tender: "CO1.REQ.1", tab }, replace },
+        },
+      }),
+    );
+  const initialLength = window.history.length;
+  setRoute("documents");
+  await waitFor(() =>
+    expect(window.location.hash).toContain("plugin.demo.tab=documents"),
+  );
+  expect(window.history.length).toBe(initialLength + 1);
+  setRoute("chat", true);
+  await waitFor(() =>
+    expect(window.location.hash).toContain("plugin.demo.tab=chat"),
+  );
+  expect(window.history.length).toBe(initialLength + 1);
+  expect(window.location.hash).toContain(
+    "tenantId=12&object=tenders&plugin.other.tab=keep",
+  );
+  const beforeBack = send.mock.calls.filter(
+    ([data]) => data.type === "route-changed",
+  ).length;
+  await act(async () => {
+    window.history.back();
+  });
+  await waitFor(() =>
+    expect(window.location.hash).not.toContain("plugin.demo.tab"),
+  );
+  await waitFor(() =>
+    expect(
+      send.mock.calls.filter(([data]) => data.type === "route-changed"),
+    ).toHaveLength(beforeBack + 1),
+  );
+  await act(async () => {
+    window.history.forward();
+  });
+  await waitFor(() =>
+    expect(window.location.hash).toContain("plugin.demo.tab=chat"),
+  );
+  await waitFor(() =>
+    expect(
+      send.mock.calls.filter(([data]) => data.type === "route-changed"),
+    ).toHaveLength(beforeBack + 2),
+  );
+  window.history.replaceState(null, "", "/");
 });
 
 it("opens only its own extension assistant and invokes its declared action through the host API", async () => {

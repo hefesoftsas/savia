@@ -1,4 +1,5 @@
 import { PwaSplash } from "@/pwa/pwa-splash";
+import { readPluginRoute, writePluginRoute } from "./plugin-route";
 import type {
   PluginPanelContext,
   PluginPanelResult,
@@ -393,6 +394,22 @@ export function CustomPluginFrame({
 
   useEffect(() => {
     let handshakeNonce = "";
+    let lastRouteState: string | undefined;
+    function sendRoute() {
+      if (revoked.current || !screen || panelBindingRef.current) return;
+      const state = readPluginRoute(window.location.href, pluginId);
+      const serialized = JSON.stringify(state);
+      if (serialized === lastRouteState) return;
+      lastRouteState = serialized;
+      frameRef.current?.contentWindow?.postMessage(
+        {
+          ns: "savia-plugin",
+          type: "route-changed",
+          state,
+        },
+        "*",
+      );
+    }
     function sendTheme() {
       const host = getComputedStyle(document.documentElement);
       frameRef.current?.contentWindow?.postMessage(
@@ -495,6 +512,67 @@ export function CustomPluginFrame({
         return;
       }
       const assistantPath = `/extensions/${encodeURIComponent(pluginId)}/assistant/open`;
+      if (
+        message.path === `/extensions/${encodeURIComponent(pluginId)}/route`
+      ) {
+        if (message.type !== "request" || typeof message.id !== "string")
+          return;
+        const frame = frameRef.current?.contentWindow;
+        const reply = (ok: boolean, data?: unknown, error?: string) =>
+          frame?.postMessage(
+            {
+              ns: "savia-plugin",
+              type: "response",
+              id: message.id,
+              panelId: message.panelId,
+              ok,
+              ...(ok ? { data } : { error }),
+            },
+            "*",
+          );
+        if (!screen || panelBindingRef.current) {
+          reply(
+            false,
+            undefined,
+            "URL state is only available to the active plugin screen.",
+          );
+          return;
+        }
+        try {
+          if (message.method === "GET") {
+            reply(true, readPluginRoute(window.location.href, pluginId));
+          } else if (message.method === "PUT") {
+            const body = message.body as {
+              state?: unknown;
+              replace?: unknown;
+            } | null;
+            const next = writePluginRoute(
+              window.location.href,
+              pluginId,
+              body?.state,
+            );
+            if (next.href !== window.location.href) {
+              const navigate = getStudioRuntime().navigate;
+              if (navigate) {
+                const route = next.hash.startsWith("#/")
+                  ? new URL(next.hash.slice(1), next.origin)
+                  : next;
+                navigate(route.search.slice(1), body?.replace === true);
+              } else {
+                window.history[
+                  body?.replace === true ? "replaceState" : "pushState"
+                ](window.history.state, "", next.href);
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }
+            }
+            sendRoute();
+            reply(true, null);
+          } else reply(false, undefined, "URL state requires GET or PUT.");
+        } catch {
+          reply(false, undefined, "Invalid plugin URL state.");
+        }
+        return;
+      }
       if (message.path === assistantPath) {
         if (message.type !== "request" || typeof message.id !== "string")
           return;
@@ -771,6 +849,8 @@ export function CustomPluginFrame({
       }
     }
     window.addEventListener("message", onMessage);
+    window.addEventListener("popstate", sendRoute);
+    window.addEventListener("hashchange", sendRoute);
     const observer = new MutationObserver(sendTheme);
     observer.observe(document.documentElement, {
       attributes: true,
@@ -795,6 +875,8 @@ export function CustomPluginFrame({
       setPanel(null);
       setPrepared(false);
       window.removeEventListener("message", onMessage);
+      window.removeEventListener("popstate", sendRoute);
+      window.removeEventListener("hashchange", sendRoute);
       observer.disconnect();
     };
   }, [frameKey, fitContent]);

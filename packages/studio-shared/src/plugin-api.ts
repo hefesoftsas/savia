@@ -150,6 +150,15 @@ export type PluginFiles = {
   remove(id: string, version: number): Promise<void>;
 };
 export type PluginApi = {
+  /** Public view identifiers only; never put credentials or private content in URLs. */
+  route?: {
+    get(): Promise<Record<string, string>>;
+    set(
+      state: Record<string, string>,
+      options?: { replace?: boolean },
+    ): Promise<void>;
+    subscribe?(listener: (state: Record<string, string>) => void): () => void;
+  };
   localRecords?: {
     collection<T, I = Partial<T>>(name: string): PluginLocalCollection<T, I>;
     subscribe?(

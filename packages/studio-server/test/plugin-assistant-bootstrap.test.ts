@@ -14,8 +14,9 @@ function installedPluginApi(
     "requestHost",
     "PLUGIN_ID",
     "recordListeners",
+    "routeListeners",
     `${factory}; return createSavia;`,
-  )(requestHost, "custom.demo", new Set());
+  )(requestHost, "custom.demo", new Set(), new Set());
   return { api: create(panelId), requestHost };
 }
 
@@ -53,6 +54,36 @@ describe("installed plugin native assistant capability", () => {
       api.assistant.open({ title: "Tender", actionId: "chat", context: {} }),
     ).rejects.toThrow("Session ended");
   });
+});
+
+it("exposes URL state through the owning screen bridge, including history subscriptions", async () => {
+  const request = vi
+    .fn()
+    .mockResolvedValue({ tender: "CO1.REQ.1", tab: "chat" });
+  const { api } = installedPluginApi(null, request);
+  await expect(api.route.get()).resolves.toEqual({
+    tender: "CO1.REQ.1",
+    tab: "chat",
+  });
+  expect(request).toHaveBeenLastCalledWith(
+    "/extensions/custom.demo/route",
+    "GET",
+    undefined,
+    null,
+    undefined,
+  );
+  await api.route.set(
+    { tender: "CO1.REQ.1", tab: "documents" },
+    { replace: true },
+  );
+  expect(request).toHaveBeenLastCalledWith(
+    "/extensions/custom.demo/route",
+    "PUT",
+    { state: { tender: "CO1.REQ.1", tab: "documents" }, replace: true },
+    null,
+    undefined,
+  );
+  expect(api.route.subscribe(vi.fn())).toBeTypeOf("function");
 });
 
 it("versions the bootstrap URL independently of the installed plugin artifact", () => {

@@ -33,3 +33,19 @@ The provider keeps history in its backend. The host does not copy it to browser
 storage or add it to general assistant threads. Returning to the general assistant
 preserves its existing behavior. Reopen the plugin's context to continue a saved
 provider conversation.
+
+## Keep plugin screens addressable
+
+Installed plugin screens can use `savia.route.get()`,
+`savia.route.set({ item: "public-id", tab: "summary" })`, and
+`savia.route.subscribe(listener)` to restore public view state after refresh or
+Back/Forward navigation. Pass `{ replace: true }` as the second argument to
+replace the current history entry. Setting an empty object clears the current
+plugin's view state. Plugins must load the referenced records from their authorized
+backend, validate returned identifiers, and cancel stale restores.
+
+The host prefixes query keys with `plugin.<extension-id>.`, preserves tenant,
+screen and other extensions' parameters, and rejects this API from panels and
+widgets. Keys and string values are bounded. URL state never grants access;
+normal backend authorization still applies. Never include credentials, evidence,
+private conversation content or personal data in a URL.

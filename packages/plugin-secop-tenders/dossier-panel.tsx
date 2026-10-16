@@ -503,11 +503,17 @@ export function DossierPanel({
   row,
   locale,
   onBack,
+  tab: controlledTab,
+  onTabChange,
 }: {
   savia: PluginApi;
   row: SecopRow;
   locale: "es" | "en" | "pt";
   onBack: () => void;
+  tab?: "summary" | "documents" | "requirements" | "company" | "chat";
+  onTabChange?: (
+    tab: "summary" | "documents" | "requirements" | "company" | "chat",
+  ) => void;
 }) {
   const t = copy[locale];
   const tabs = [
@@ -519,7 +525,16 @@ export function DossierPanel({
   ] as const;
   const processId = String(row.process_id ?? "");
   const [legacy, setLegacy] = useState(false),
-    [tab, setTab] = useState("summary");
+    [localTab, setLocalTab] = useState<
+      "summary" | "documents" | "requirements" | "company" | "chat"
+    >("summary");
+  const tab = controlledTab ?? localTab;
+  const selectTab = (
+    next: "summary" | "documents" | "requirements" | "company" | "chat",
+  ) => {
+    setLocalTab(next);
+    onTabChange?.(next);
+  };
   const [client, setClient] = useState<DossierClient | null>(null),
     [initializing, setInitializing] = useState(true),
     [token, setToken] = useState("");
@@ -1016,7 +1031,7 @@ export function DossierPanel({
                           : -1;
                   if (next >= 0) {
                     event.preventDefault();
-                    setTab(tabs[next][0]);
+                    selectTab(tabs[next][0]);
                     requestAnimationFrame(() =>
                       document
                         .getElementById(`dossier-tab-${tabs[next][0]}`)
@@ -1027,7 +1042,7 @@ export function DossierPanel({
                 aria-selected={tab === id}
                 aria-controls={`dossier-panel-${id}`}
                 onClick={() => {
-                  setTab(id);
+                  selectTab(id);
                   setEvidence(null);
                   setUploadLink(null);
                 }}
@@ -1165,7 +1180,7 @@ export function DossierPanel({
                   <>
                     <div className="secop-dossier-section-heading">
                       <h2>{t.reportSummary}</h2>
-                      <button type="button" onClick={() => setTab("chat")}>
+                      <button type="button" onClick={() => selectTab("chat")}>
                         <ListChecks size={16} aria-hidden="true" /> {t.viewAll}
                       </button>
                     </div>
