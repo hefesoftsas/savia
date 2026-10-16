@@ -1,9 +1,11 @@
+import { needsSecopConnection } from "./catalogs";
 import { PAGE_SIZE, type SearchInput, type SearchPage } from "./logic";
 
 export type SearchErrorKind =
-  "authorization" | "timeout" | "unavailable" | "unknown";
+  "connection" | "authorization" | "timeout" | "unavailable" | "unknown";
 
 function errorKind(error: unknown): SearchErrorKind {
+  if (needsSecopConnection(error)) return "connection";
   const status =
     error && typeof error === "object" && "status" in error
       ? error.status

@@ -481,3 +481,8 @@
   padding: 0.1rem 0.35rem;
   min-height: 2rem;
 }
+
+.secop-connection-required p {
+  max-width: 65ch;
+  margin: 0.4rem 0 0.75rem;
+}

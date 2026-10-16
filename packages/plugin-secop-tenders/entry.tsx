@@ -16,6 +16,7 @@ import { FilterAutocomplete } from "./filter-autocomplete";
 import {
   CATALOG_FIELDS,
   loadSecopCatalog,
+  needsSecopConnection,
   type CatalogField,
   type CatalogState,
 } from "./catalogs";
@@ -138,6 +139,10 @@ const messages = {
     showOptions: "Mostrar opciones",
     loadingCatalog: "Cargando catálogo…",
     catalogError: "No se pudo cargar el catálogo completo.",
+    connectionHeading: "Conecta SECOP para esta cuenta",
+    connectionHelp:
+      "Esta cuenta aún no tiene una conexión SECOP autorizada. Abre Fuentes de datos para conectarla, o inicia sesión con la cuenta que ya la autorizó.",
+    connectionCheck: "Volver a comprobar la conexión",
     optionsCount: "opciones",
     noOptions: "Sin coincidencias. Puedes escribir otro valor.",
     suggestionsHint:
@@ -239,6 +244,10 @@ const messages = {
     showOptions: "Show options",
     loadingCatalog: "Loading catalog…",
     catalogError: "The complete catalog could not be loaded.",
+    connectionHeading: "Connect SECOP for this account",
+    connectionHelp:
+      "This account does not have an authorized SECOP connection yet. Open Data sources to connect it, or sign in with the account that already authorized it.",
+    connectionCheck: "Check the connection again",
     optionsCount: "options",
     noOptions: "No matches. You can type another value.",
     suggestionsHint:
@@ -341,6 +350,10 @@ const messages = {
     showOptions: "Mostrar opções",
     loadingCatalog: "Carregando catálogo…",
     catalogError: "Não foi possível carregar o catálogo completo.",
+    connectionHeading: "Conecte o SECOP a esta conta",
+    connectionHelp:
+      "Esta conta ainda não tem uma conexão SECOP autorizada. Abra Fontes de dados para conectá-la ou entre com a conta que já a autorizou.",
+    connectionCheck: "Verificar a conexão novamente",
     optionsCount: "opções",
     noOptions: "Sem resultados. Você pode digitar outro valor.",
     suggestionsHint:
@@ -500,11 +513,16 @@ function Screen({ savia }: { savia: PluginApi }) {
           ...current,
           [field]: { options, loading: false, error: false },
         }));
-    } catch {
+    } catch (error) {
       if (catalogRequests.isCurrent(generation))
         setCatalogs((current) => ({
           ...current,
-          [field]: { options: [], loading: false, error: true },
+          [field]: {
+            options: [],
+            loading: false,
+            error: true,
+            connectionRequired: needsSecopConnection(error),
+          },
         }));
     }
   }
@@ -516,6 +534,9 @@ function Screen({ savia }: { savia: PluginApi }) {
     );
     return () => catalogRequests.invalidate();
   }, [savia]);
+  const connectionRequired =
+    Object.values(catalogs).some((item) => item.connectionRequired) ||
+    searchErrorKind === "connection";
   const searchSentinel = useRef<HTMLDivElement>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -705,6 +726,7 @@ function Screen({ savia }: { savia: PluginApi }) {
   };
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
+    if (connectionRequired) return;
     setNotice("");
     void feed.search(draft);
   };
@@ -948,6 +970,25 @@ function Screen({ savia }: { savia: PluginApi }) {
       )}
       {surface === "search" ? (
         <>
+          {connectionRequired && (
+            <aside
+              className="secop-notice secop-connection-required"
+              role="alert"
+            >
+              <strong>{t.connectionHeading}</strong>
+              <p>{t.connectionHelp}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  for (const field of CATALOG_FIELDS)
+                    void loadCatalog(field, catalogGeneration.current);
+                  if (searched) void feed.search(criteria);
+                }}
+              >
+                {t.connectionCheck}
+              </button>
+            </aside>
+          )}
           <form
             className="secop-search"
             onSubmit={submitSearch}
@@ -1020,7 +1061,8 @@ function Screen({ savia }: { savia: PluginApi }) {
                       >
                         {t.loadingCatalog}
                       </p>
-                    ) : catalogs[key].error ? (
+                    ) : catalogs[key].connectionRequired ? null : catalogs[key]
+                        .error ? (
                       <div className="secop-catalog-error" role="alert">
                         <span>{t.catalogError}</span>
                         <button
@@ -1057,7 +1099,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                 onClick={() => {
                   setDraft({});
                   setNotice("");
-                  if (searched) void feed.search({});
+                  if (searched && !connectionRequired) void feed.search({});
                 }}
               >
                 {t.clearSearch}
@@ -1066,7 +1108,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                 className="secop-primary"
                 type="button"
                 onClick={submitSearch}
-                disabled={searchLoading && !searchPage}
+                disabled={connectionRequired || (searchLoading && !searchPage)}
               >
                 {searchLoading && !searchPage ? t.loading : t.run}
               </button>
@@ -1111,7 +1153,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                 {t.loading}
               </p>
             )}
-            {searchError && !searchPage && (
+            {searchError && !searchPage && !connectionRequired && (
               <p className="secop-error" role="alert">
                 {searchErrorKind === "authorization"
                   ? t.searchAuthorization
