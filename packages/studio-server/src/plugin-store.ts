@@ -1273,6 +1273,18 @@ async function assertCanManage(
 const SHELL_CSP =
   "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none';";
 
+let bootstrapRevision: string | undefined;
+function shellBootstrapRevision(): string {
+  if (bootstrapRevision === undefined) {
+    // Cache identity only; integrity and authorization use separate controls.
+    let hash = 2166136261;
+    for (const character of shellBootstrapJs())
+      hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+    bootstrapRevision = (hash >>> 0).toString(36);
+  }
+  return bootstrapRevision;
+}
+
 export function shellBootstrapPath(
   pluginId: string,
   entryUrl: string,
@@ -1282,6 +1294,7 @@ export function shellBootstrapPath(
   const params = new URLSearchParams({ plugin: pluginId, entry: entryUrl });
   for (const [key, value] of Object.entries(extra ?? {}))
     params.set(key, value);
+  params.set("runtime", shellBootstrapRevision());
   return `${storeBasePath}/shell-bootstrap.js?${params}`;
 }
 
@@ -1423,6 +1436,11 @@ function collection(name, local = false) {
 const extensionPath = "/extensions/" + encodeURIComponent(PLUGIN_ID);
 const savia = {
   pluginId: PLUGIN_ID,
+  assistant: {
+    async open(value) {
+      await callHost(extensionPath + "/assistant/open", "POST", value);
+    },
+  },
   localRecords: {
     collection: (name) => collection(name, true),
     subscribe(listener) { recordListeners.add(listener); return () => recordListeners.delete(listener); }

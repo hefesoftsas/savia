@@ -1,6 +1,10 @@
 # Open the native assistant from a plugin
 
 Plugins can open Savia's existing assistant panel with `savia.assistant.open`.
+The installed plugin shell exposes the same capability as the shared SDK factory,
+including active panel scope and host error propagation. Its script URL carries a
+revision derived from the generated source so host SDK fixes refresh independently
+of the immutable plugin artifact version.
 The host owns the panel, Markdown rendering, composer and loading/error states.
 The declared server action owns domain logic and authoritative conversation history.
 This avoids a separate chat UI and does not add domain-specific logic to Savia.
