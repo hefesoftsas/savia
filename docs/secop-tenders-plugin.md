@@ -47,7 +47,7 @@ refused link shows recovery guidance rather than silently doing nothing.
 
 ## Private tender dossier and company assistant
 
-Version 1.6.5 opens a dossier with Summary, Documents, Requirements, Company and
+The plugin opens a dossier with Summary, Documents, Requirements, Company and
 Assistant views from the existing Documents action. It preserves the previous
 per-PDF document workflow behind **Documents and previous PDF analyses**.
 
@@ -80,6 +80,10 @@ assistant bridge. The title and selected company remain visible, and the existin
 conversation stays in the private SECOP service. There is no second chat composer
 inside the dossier. **Prepare complete checklist** prefills a question; it does not
 send it until the user presses Send. The same private workspace connection is used.
+Ordinary workspace members use that configured connection without listing or
+managing credentials; an administrator provisions or repairs it. Dossier controls
+follow the selected Spanish, English or Portuguese locale. Active durable jobs can
+be canceled after returning to the dossier, including after a reload.
 
 Explicit questions asking for all requirements use every saved requirement record
 in the current report. Items preserve original wording and link to exact source

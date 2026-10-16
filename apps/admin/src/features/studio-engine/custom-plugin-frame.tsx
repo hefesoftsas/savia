@@ -214,10 +214,15 @@ export function CustomPluginFrame({
   const retryAction = useRef<(() => void) | null>(null);
   const child = useRef<{ frame: Window; session: string } | null>(null);
   const assistantSession = useRef<string | null>(null);
+  const assistantPanelId = useRef<string | null>(null);
   const closeAssistantSession = () => {
-    if (!assistantSession.current) return;
+    if (!assistantSession.current) {
+      assistantPanelId.current = null;
+      return;
+    }
     closePluginAssistantProvider(assistantSession.current);
     assistantSession.current = null;
+    assistantPanelId.current = null;
   };
   function finishPanel(result: PluginPanelResult) {
     const active = controller.current.current;
@@ -491,6 +496,14 @@ export function CustomPluginFrame({
       }
       const assistantPath = `/extensions/${encodeURIComponent(pluginId)}/assistant/open`;
       if (message.path === assistantPath) {
+        if (message.type !== "request" || typeof message.id !== "string")
+          return;
+        const binding = panelBindingRef.current;
+        if (
+          binding?.reusable &&
+          (!binding.context || message.panelId !== binding.context.panelId)
+        )
+          return;
         const frame = frameRef.current?.contentWindow;
         const reply = (ok: boolean, data?: unknown, error?: string) => {
           if (frame !== frameRef.current?.contentWindow) return;
@@ -519,14 +532,18 @@ export function CustomPluginFrame({
         const boundFrame = frame;
         const boundSession = uiSession.current;
         const boundGeneration = sessionGeneration.current;
+        const boundPanelId = binding?.context?.panelId ?? null;
         closeAssistantSession();
         assistantSession.current = sessionId;
+        assistantPanelId.current = boundPanelId;
         openPluginAssistantProvider({
           ...launch,
           sessionId,
           close: () => {
-            if (assistantSession.current === sessionId)
+            if (assistantSession.current === sessionId) {
               assistantSession.current = null;
+              assistantPanelId.current = null;
+            }
             closePluginAssistantProvider(sessionId);
           },
           invoke: async (request: PluginAssistantRequest) => {
@@ -536,6 +553,8 @@ export function CustomPluginFrame({
               boundFrame !== frameRef.current?.contentWindow ||
               boundSession !== uiSession.current ||
               boundGeneration !== sessionGeneration.current ||
+              (panelBindingRef.current?.context?.panelId ?? null) !==
+                boundPanelId ||
               assistantSession.current !== sessionId
             )
               throw new Error("The plugin assistant session has ended.");
@@ -559,6 +578,8 @@ export function CustomPluginFrame({
               boundFrame !== frameRef.current?.contentWindow ||
               boundSession !== uiSession.current ||
               boundGeneration !== sessionGeneration.current ||
+              (panelBindingRef.current?.context?.panelId ?? null) !==
+                boundPanelId ||
               assistantSession.current !== sessionId
             )
               throw new Error("The plugin assistant session has ended.");
@@ -756,6 +777,7 @@ export function CustomPluginFrame({
       attributeFilter: ["class", "style", "data-color-theme"],
     });
     return () => {
+      closeAssistantSession();
       frameRef.current?.contentWindow?.postMessage(
         {
           ns: "savia-plugin-ui",
@@ -792,6 +814,17 @@ export function CustomPluginFrame({
         "*",
       );
   }, [panelBinding?.context?.panelId, frameKey]);
+
+  useEffect(() => {
+    const panelId = panelBinding?.context?.panelId ?? null;
+    return () => {
+      if (
+        assistantPanelId.current !== null &&
+        assistantPanelId.current === panelId
+      )
+        closeAssistantSession();
+    };
+  }, [panelBinding?.context?.panelId]);
 
   useEffect(() => {
     if (panelBinding) return;

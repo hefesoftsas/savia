@@ -28,20 +28,454 @@ import {
   type DossierDocument,
 } from "./dossier";
 import "./dossier-panel.css";
-const tabs = [
-  ["summary", "Resumen", FolderOpen],
-  ["documents", "Documentos", FileText],
-  ["requirements", "Requisitos", ListChecks],
-  ["company", "Mi empresa", Building2],
-  ["chat", "Asistente", MessageSquare],
-] as const;
+const copy = {
+  es: {
+    tabs: ["Resumen", "Documentos", "Requisitos", "Mi empresa", "Asistente"],
+    evidence: "Ver evidencia",
+    page: "pág.",
+    back: "Volver a licitaciones",
+    eyebrow: "EXPEDIENTE SECOP",
+    headingFallback: "Expediente de la licitación",
+    help: "Documentos, requisitos y preparación de la oferta en un mismo lugar.",
+    updateDossier: "Actualizar expediente",
+    prepareDossier: "Guardar y preparar expediente",
+    update: "Actualizar",
+    checking: "Comprobando conexión privada…",
+    connectionError:
+      "No se pudo comprobar la conexión privada. Vuelve a abrir el expediente.",
+    loadError:
+      "No se pudo cargar el expediente. Conservamos lo que ya estaba visible. Reintenta Actualizar.",
+    invalidDossier:
+      "El servicio devolvió un expediente inválido. Reintenta Actualizar.",
+    changedDuringRead:
+      "El expediente cambió durante la lectura. Actualiza para ver la nueva versión.",
+    connectTitle: "Conectar el asistente de expedientes",
+    connectHelp:
+      "Usa la credencial privada de este espacio, distinta de la conexión pública de búsquedas SECOP. Se guardará como secreto en Savia.",
+    credential: "Credencial del servicio",
+    saveConnection: "Guardar conexión privada",
+    legacy: "Ver documentos y análisis anteriores",
+    tablist: "Expediente de la licitación",
+    working: "Procesando en segundo plano. Puedes salir y volver.",
+    cancel: "Cancelar trabajo",
+    uploadLink: "Abrir carga privada del documento",
+    uploadHint:
+      "El enlace admite una carga durante 10 minutos. Después de cargar, pulsa Actualizar.",
+    evidenceLabel: "Evidencia del documento",
+    closeEvidence: "Cerrar evidencia",
+    pageWord: "Página",
+    section: "Sección",
+    moreText: "Cargar más texto",
+    prepareHeading: "Prepara el expediente completo",
+    prepareHelp:
+      "Guardaremos la licitación de interés y revisaremos la descripción, pliegos, anexos y adendas disponibles. Verás qué archivos se procesaron y qué falta.",
+    jointAnalysis: "Análisis conjunto",
+    pendingUpdate: "Pendiente de actualizar",
+    completed: "Completado",
+    catalogDocuments: "Documentos del catálogo",
+    analyzedDocuments: "Documentos analizados",
+    preparing: "En preparación",
+    dossierVersion: "Versión del expediente",
+    coverage:
+      "Cobertura del catálogo público disponible en SECOP. Los archivos bloqueados, faltantes o sin extraer permanecen pendientes.",
+    dossierChanged:
+      "El expediente cambió. El informe anterior se conserva y requiere actualización.",
+    reportSummary: "Resumen del expediente",
+    viewAll: "Ver lista completa",
+    pendingSources: "Revisión de fuentes pendiente: ",
+    docsUnextracted: "documentos sin extraer y ",
+    extractionsReview:
+      "extracciones por revisar. El análisis conjunto y la revisión humana son pasos distintos.",
+    conflicts: "Conflictos y adendas por revisar",
+    jobHistory: "Historial de incidencias de procesamiento",
+    unresolvedJob: "Trabajo pendiente de resolver: ",
+    retryJob: "Reintentar trabajo",
+    dossierDocuments: "Documentos del expediente",
+    showing: "Mostrando ",
+    of: " de ",
+    captchaHint:
+      ". Un CAPTCHA requiere tu ayuda; no se omiten archivos en silencio. Confirma una extracción solo después de compararla con el original.",
+    moreDocuments: "Cargar más documentos y requisitos",
+    legacyDocuments: "Documentos públicos y análisis anteriores por PDF",
+    sourcedRequirements: "Requisitos con fuente",
+    prepareForRequirements:
+      "Prepara el expediente para extraer los requisitos conjuntos.",
+    mandatory: "Obligatorio",
+    informative: "Informativo o puntuable",
+    lot: "Lote",
+    moreRequirements: "Cargar más requisitos",
+    evaluateCompany: "Evaluar mi empresa",
+    lotsToEvaluate: "Lotes a evaluar (opcional)",
+    lotPlaceholder: "Identificadores de lote separados por comas",
+    lotHelp:
+      "En blanco se revisan todos los lotes. Usa los identificadores que aparecen en los requisitos.",
+    company: "Empresa",
+    selectCompany: "Selecciona una empresa",
+    createCompany: "Crear perfil de empresa",
+    companyName: "Nombre de la empresa",
+    taxId: "Identificación tributaria",
+    activity: "Actividad y capacidades",
+    addCompanyEvidence: "Agregar evidencia de empresa",
+    evaluate: "Evaluar cumplimiento",
+    companyHelp:
+      "Agrega certificados de experiencia, registros y estados financieros. Lo declarado en el perfil no reemplaza los documentos probatorios. Esta evaluación prepara la oferta; no presenta una postulación.",
+    extractedFacts: "Datos extraídos de la empresa",
+    factsHelp:
+      "Confirma las cifras, unidades y períodos contra la fuente antes de usarlos en comparaciones numéricas.",
+    reviewedFact: "Dato revisado",
+    confirmFact: "Confirmo este dato y su evidencia",
+    staleAssessment:
+      "La empresa, sus evidencias o el expediente cambiaron. Vuelve a evaluar.",
+    priorReviews:
+      "Se conservan revisiones anteriores para volver a comprobarlas con estas fuentes.",
+    missingToApply: "Qué falta para aplicar",
+    teamReview: "Revisión del equipo:",
+    addTeamReview: "Registrar revisión del equipo",
+    decision: "Decisión",
+    insufficient: "Falta evidencia",
+    meets: "Cumple según revisión del equipo",
+    doesNotMeet: "No cumple",
+    notApplicable: "No aplica",
+    justification: "Justificación",
+    saveReview: "Guardar revisión",
+    documentText: "Ver texto y citas",
+    officialFile: "Archivo oficial",
+    provideText: "Aportar versión con texto",
+    reviewedExtraction: "Revisé la extracción completa",
+    assistantTitle: "Esta licitación, en el chat de Savia",
+    assistantHelp:
+      "Continúa la conversación con las fuentes de este expediente. La licitación y la empresa seleccionadas acompañan cada pregunta.",
+    companyForRequirements: "Empresa para contrastar requisitos",
+    tenderOnly: "Solo la licitación",
+    openAssistant: "Abrir chat de Savia",
+    prepareList: "Preparar lista completa",
+    companyNotCompared:
+      "Aún no contrastamos el cumplimiento de tu empresa. Selecciona su perfil y aporta evidencias en «Mi empresa».",
+    pendingDocs: " documentos siguen pendientes de extracción. ",
+    extractedAll: "Todos los documentos disponibles tienen texto extraído. ",
+    needsReview:
+      " extracciones requieren revisión contra el original. El análisis automático no confirma cumplimiento.",
+    prepareBeforeChat:
+      "Primero prepara el expediente para conversar con sus documentos.",
+    assistantUnavailable:
+      "El chat integrado estará disponible al actualizar la plataforma. Tus conversaciones permanecen guardadas en el servicio.",
+    genericError: "No se pudo completar la operación.",
+    invalidTender: "No se pudo identificar la licitación.",
+    invalidUpload: "El servicio devolvió un enlace de carga inválido.",
+    savedInterest:
+      "Guardamos la licitación de interés. El expediente se prepara en segundo plano.",
+    companyCreated:
+      "Empresa creada. Agrega su evidencia para evaluar los requisitos.",
+    assistantUpdate:
+      "El chat de Savia necesita la actualización de la plataforma. Recarga la página cuando termine el despliegue.",
+    finishedJob: "El trabajo terminó. El expediente conserva sus resultados.",
+    failedJob: "El trabajo requiere atención: ",
+    pollError:
+      "No pudimos actualizar el progreso. Tus archivos y trabajos permanecen guardados.",
+    evidenceLoadError: "No se pudo cargar la evidencia del documento.",
+    jobBackground: "El trabajo se prepara en segundo plano.",
+  },
+  en: {
+    tabs: ["Summary", "Documents", "Requirements", "My company", "Assistant"],
+    evidence: "View evidence",
+    page: "p.",
+    back: "Back to tenders",
+    eyebrow: "SECOP DOSSIER",
+    headingFallback: "Tender dossier",
+    help: "Documents, requirements, and bid preparation in one place.",
+    updateDossier: "Update dossier",
+    prepareDossier: "Save and prepare dossier",
+    update: "Refresh",
+    checking: "Checking private connection…",
+    connectionError:
+      "Could not check the private connection. Reopen the dossier.",
+    loadError:
+      "Could not load the dossier. Previously visible content is retained. Try Refresh again.",
+    invalidDossier:
+      "The service returned an invalid dossier. Try Refresh again.",
+    changedDuringRead:
+      "The dossier changed while it was being read. Refresh to see the latest version.",
+    connectTitle: "Connect the dossier assistant",
+    connectHelp:
+      "Use this workspace's private credential, separate from the public SECOP search connection. Savia stores it as a secret.",
+    credential: "Service credential",
+    saveConnection: "Save private connection",
+    legacy: "View earlier documents and analyses",
+    tablist: "Tender dossier",
+    working: "Processing in the background. You can leave and return.",
+    cancel: "Cancel job",
+    uploadLink: "Open private document upload",
+    uploadHint:
+      "This link accepts one upload for 10 minutes. After uploading, select Refresh.",
+    evidenceLabel: "Document evidence",
+    closeEvidence: "Close evidence",
+    pageWord: "Page",
+    section: "Section",
+    moreText: "Load more text",
+    prepareHeading: "Prepare the complete dossier",
+    prepareHelp:
+      "We will save this tender to your interests and review its description, specifications, annexes, and available amendments. You will see what was processed and what is missing.",
+    jointAnalysis: "Combined analysis",
+    pendingUpdate: "Update pending",
+    completed: "Complete",
+    catalogDocuments: "Catalog documents",
+    analyzedDocuments: "Documents analyzed",
+    preparing: "Preparing",
+    dossierVersion: "Dossier version",
+    coverage:
+      "Coverage of the public SECOP catalog. Blocked, missing, or unextracted files remain pending.",
+    dossierChanged:
+      "The dossier changed. The previous report is retained and needs an update.",
+    reportSummary: "Dossier summary",
+    viewAll: "View full list",
+    pendingSources: "Source review pending: ",
+    docsUnextracted: " documents not extracted and ",
+    extractionsReview:
+      " extractions to review. Combined analysis and human review are separate steps.",
+    conflicts: "Conflicts and amendments to review",
+    jobHistory: "Processing issue history",
+    unresolvedJob: "Job needing attention: ",
+    retryJob: "Retry job",
+    dossierDocuments: "Dossier documents",
+    showing: "Showing ",
+    of: " of ",
+    captchaHint:
+      ". A CAPTCHA needs your help; files are never silently skipped. Confirm an extraction only after comparing it with the original.",
+    moreDocuments: "Load more documents and requirements",
+    legacyDocuments: "Public documents and earlier PDF analyses",
+    sourcedRequirements: "Requirements with sources",
+    prepareForRequirements:
+      "Prepare the dossier to extract combined requirements.",
+    mandatory: "Mandatory",
+    informative: "Informative or scored",
+    lot: "Lot",
+    moreRequirements: "Load more requirements",
+    evaluateCompany: "Evaluate my company",
+    lotsToEvaluate: "Lots to evaluate (optional)",
+    lotPlaceholder: "Comma-separated lot identifiers",
+    lotHelp:
+      "Leave blank to review all lots. Use the identifiers shown in the requirements.",
+    company: "Company",
+    selectCompany: "Select a company",
+    createCompany: "Create company profile",
+    companyName: "Company name",
+    taxId: "Tax ID",
+    activity: "Activities and capabilities",
+    addCompanyEvidence: "Add company evidence",
+    evaluate: "Evaluate compliance",
+    companyHelp:
+      "Add experience certificates, registrations, and financial statements. Profile claims do not replace supporting documents. This evaluation prepares a bid; it does not submit one.",
+    extractedFacts: "Extracted company facts",
+    factsHelp:
+      "Check figures, units, and periods against the source before using them in numeric comparisons.",
+    reviewedFact: "Fact reviewed",
+    confirmFact: "I confirm this fact and its evidence",
+    staleAssessment:
+      "The company, its evidence, or the dossier changed. Evaluate again.",
+    priorReviews:
+      "Earlier reviews are retained so you can check them again against these sources.",
+    missingToApply: "What is missing to apply",
+    teamReview: "Team review:",
+    addTeamReview: "Record team review",
+    decision: "Decision",
+    insufficient: "Evidence missing",
+    meets: "Meets based on team review",
+    doesNotMeet: "Does not meet",
+    notApplicable: "Not applicable",
+    justification: "Rationale",
+    saveReview: "Save review",
+    documentText: "View text and citations",
+    officialFile: "Official file",
+    provideText: "Provide a text version",
+    reviewedExtraction: "I reviewed the full extraction",
+    assistantTitle: "Discuss this tender in Savia chat",
+    assistantHelp:
+      "Continue the conversation with this dossier's sources. The selected tender and company accompany each question.",
+    companyForRequirements: "Company for requirement checks",
+    tenderOnly: "Tender only",
+    openAssistant: "Open Savia chat",
+    prepareList: "Prepare full checklist",
+    companyNotCompared:
+      "Your company's compliance has not been checked yet. Select its profile and add evidence in “My company”.",
+    pendingDocs: " documents still need extraction. ",
+    extractedAll: "All available documents have extracted text. ",
+    needsReview:
+      " extractions need review against the original. Automated analysis does not confirm compliance.",
+    prepareBeforeChat:
+      "Prepare the dossier before chatting with its documents.",
+    assistantUnavailable:
+      "Integrated chat will be available after the platform is updated. Your conversations remain saved in the service.",
+    genericError: "The operation could not be completed.",
+    invalidTender: "Could not identify the tender.",
+    invalidUpload: "The service returned an invalid upload link.",
+    savedInterest:
+      "The tender was saved to your interests. The dossier is preparing in the background.",
+    companyCreated:
+      "Company created. Add its evidence to evaluate the requirements.",
+    assistantUpdate:
+      "Savia chat needs a platform update. Reload the page after deployment finishes.",
+    finishedJob: "The job finished. The dossier retains its results.",
+    failedJob: "The job needs attention: ",
+    pollError: "Could not update progress. Your files and jobs remain saved.",
+    evidenceLoadError: "Could not load document evidence.",
+    jobBackground: "The job is preparing in the background.",
+  },
+  pt: {
+    tabs: ["Resumo", "Documentos", "Requisitos", "Minha empresa", "Assistente"],
+    evidence: "Ver evidência",
+    page: "pág.",
+    back: "Voltar às licitações",
+    eyebrow: "DOSSIÊ SECOP",
+    headingFallback: "Dossiê da licitação",
+    help: "Documentos, requisitos e preparação da proposta em um só lugar.",
+    updateDossier: "Atualizar dossiê",
+    prepareDossier: "Salvar e preparar dossiê",
+    update: "Atualizar",
+    checking: "Verificando conexão privada…",
+    connectionError:
+      "Não foi possível verificar a conexão privada. Abra o dossiê novamente.",
+    loadError:
+      "Não foi possível carregar o dossiê. O conteúdo já exibido foi mantido. Tente Atualizar novamente.",
+    invalidDossier:
+      "O serviço retornou um dossiê inválido. Tente Atualizar novamente.",
+    changedDuringRead:
+      "O dossiê mudou durante a leitura. Atualize para ver a versão mais recente.",
+    connectTitle: "Conectar o assistente de dossiês",
+    connectHelp:
+      "Use a credencial privada deste espaço, separada da conexão pública de busca do SECOP. O Savia a armazenará como segredo.",
+    credential: "Credencial do serviço",
+    saveConnection: "Salvar conexão privada",
+    legacy: "Ver documentos e análises anteriores",
+    tablist: "Dossiê da licitação",
+    working: "Processando em segundo plano. Você pode sair e voltar.",
+    cancel: "Cancelar trabalho",
+    uploadLink: "Abrir envio privado do documento",
+    uploadHint:
+      "Este link aceita um envio por 10 minutos. Depois do envio, selecione Atualizar.",
+    evidenceLabel: "Evidência do documento",
+    closeEvidence: "Fechar evidência",
+    pageWord: "Página",
+    section: "Seção",
+    moreText: "Carregar mais texto",
+    prepareHeading: "Prepare o dossiê completo",
+    prepareHelp:
+      "Vamos salvar a licitação nos seus interesses e revisar a descrição, o edital, os anexos e as adendas disponíveis. Você verá o que foi processado e o que falta.",
+    jointAnalysis: "Análise conjunta",
+    pendingUpdate: "Atualização pendente",
+    completed: "Concluído",
+    catalogDocuments: "Documentos do catálogo",
+    analyzedDocuments: "Documentos analisados",
+    preparing: "Em preparação",
+    dossierVersion: "Versão do dossiê",
+    coverage:
+      "Cobertura do catálogo público disponível no SECOP. Arquivos bloqueados, ausentes ou sem extração permanecem pendentes.",
+    dossierChanged:
+      "O dossiê mudou. O relatório anterior foi mantido e precisa ser atualizado.",
+    reportSummary: "Resumo do dossiê",
+    viewAll: "Ver lista completa",
+    pendingSources: "Revisão de fontes pendente: ",
+    docsUnextracted: " documentos sem extração e ",
+    extractionsReview:
+      " extrações para revisar. Análise conjunta e revisão humana são etapas diferentes.",
+    conflicts: "Conflitos e adendas para revisar",
+    jobHistory: "Histórico de problemas de processamento",
+    unresolvedJob: "Trabalho que precisa de atenção: ",
+    retryJob: "Tentar trabalho novamente",
+    dossierDocuments: "Documentos do dossiê",
+    showing: "Exibindo ",
+    of: " de ",
+    captchaHint:
+      ". Um CAPTCHA precisa da sua ajuda; nenhum arquivo é ignorado sem aviso. Confirme uma extração somente depois de compará-la com o original.",
+    moreDocuments: "Carregar mais documentos e requisitos",
+    legacyDocuments: "Documentos públicos e análises anteriores de PDF",
+    sourcedRequirements: "Requisitos com fonte",
+    prepareForRequirements:
+      "Prepare o dossiê para extrair os requisitos conjuntos.",
+    mandatory: "Obrigatório",
+    informative: "Informativo ou pontuável",
+    lot: "Lote",
+    moreRequirements: "Carregar mais requisitos",
+    evaluateCompany: "Avaliar minha empresa",
+    lotsToEvaluate: "Lotes para avaliar (opcional)",
+    lotPlaceholder: "Identificadores de lote separados por vírgula",
+    lotHelp:
+      "Deixe em branco para revisar todos os lotes. Use os identificadores exibidos nos requisitos.",
+    company: "Empresa",
+    selectCompany: "Selecione uma empresa",
+    createCompany: "Criar perfil da empresa",
+    companyName: "Nome da empresa",
+    taxId: "Identificação fiscal",
+    activity: "Atividades e capacidades",
+    addCompanyEvidence: "Adicionar evidência da empresa",
+    evaluate: "Avaliar conformidade",
+    companyHelp:
+      "Adicione certificados de experiência, registros e demonstrações financeiras. As declarações do perfil não substituem documentos comprobatórios. Esta avaliação prepara a proposta; não envia uma candidatura.",
+    extractedFacts: "Dados extraídos da empresa",
+    factsHelp:
+      "Confira números, unidades e períodos na fonte antes de usá-los em comparações numéricas.",
+    reviewedFact: "Dado revisado",
+    confirmFact: "Confirmo este dado e sua evidência",
+    staleAssessment:
+      "A empresa, suas evidências ou o dossiê mudaram. Avalie novamente.",
+    priorReviews:
+      "As revisões anteriores foram mantidas para que você possa conferi-las novamente nestas fontes.",
+    missingToApply: "O que falta para se candidatar",
+    teamReview: "Revisão da equipe:",
+    addTeamReview: "Registrar revisão da equipe",
+    decision: "Decisão",
+    insufficient: "Falta evidência",
+    meets: "Atende segundo a revisão da equipe",
+    doesNotMeet: "Não atende",
+    notApplicable: "Não se aplica",
+    justification: "Justificativa",
+    saveReview: "Salvar revisão",
+    documentText: "Ver texto e citações",
+    officialFile: "Arquivo oficial",
+    provideText: "Enviar versão com texto",
+    reviewedExtraction: "Revisei a extração completa",
+    assistantTitle: "Converse sobre esta licitação no Savia",
+    assistantHelp:
+      "Continue a conversa com as fontes deste dossiê. A licitação e a empresa selecionadas acompanham cada pergunta.",
+    companyForRequirements: "Empresa para comparar requisitos",
+    tenderOnly: "Somente a licitação",
+    openAssistant: "Abrir chat do Savia",
+    prepareList: "Preparar lista completa",
+    companyNotCompared:
+      "A conformidade da sua empresa ainda não foi verificada. Selecione o perfil e adicione evidências em “Minha empresa”.",
+    pendingDocs: " documentos ainda aguardam extração. ",
+    extractedAll: "Todos os documentos disponíveis têm texto extraído. ",
+    needsReview:
+      " extrações precisam ser conferidas com o original. A análise automática não confirma conformidade.",
+    prepareBeforeChat: "Prepare o dossiê antes de conversar com os documentos.",
+    assistantUnavailable:
+      "O chat integrado estará disponível após a atualização da plataforma. Suas conversas continuam salvas no serviço.",
+    genericError: "Não foi possível concluir a operação.",
+    invalidTender: "Não foi possível identificar a licitação.",
+    invalidUpload: "O serviço retornou um link de envio inválido.",
+    savedInterest:
+      "A licitação foi salva nos seus interesses. O dossiê está sendo preparado em segundo plano.",
+    companyCreated:
+      "Empresa criada. Adicione evidências para avaliar os requisitos.",
+    assistantUpdate:
+      "O chat do Savia precisa de uma atualização da plataforma. Recarregue a página após a implantação.",
+    finishedJob: "O trabalho terminou. O dossiê mantém os resultados.",
+    failedJob: "O trabalho precisa de atenção: ",
+    pollError:
+      "Não foi possível atualizar o progresso. Seus arquivos e trabalhos continuam salvos.",
+    evidenceLoadError: "Não foi possível carregar a evidência do documento.",
+    jobBackground: "O trabalho está sendo preparado em segundo plano.",
+  },
+} as const;
 function CitationButtons({
   citations,
   onOpen,
+  locale,
 }: {
   citations: Citation[];
   onOpen: (id: string) => void;
+  locale: "es" | "en" | "pt";
 }) {
+  const t = copy[locale];
   return (
     <div className="secop-dossier-actions">
       {Array.from(
@@ -57,8 +491,8 @@ function CitationButtons({
           type="button"
           onClick={() => onOpen(c.documentVersionId)}
         >
-          Ver evidencia {i + 1}
-          {c.page ? ` · pág. ${c.page}` : ""}
+          {t.evidence} {i + 1}
+          {c.page ? ` · ${t.page} ${c.page}` : ""}
         </button>
       ))}
     </div>
@@ -75,6 +509,14 @@ export function DossierPanel({
   locale: "es" | "en" | "pt";
   onBack: () => void;
 }) {
+  const t = copy[locale];
+  const tabs = [
+    ["summary", t.tabs[0], FolderOpen],
+    ["documents", t.tabs[1], FileText],
+    ["requirements", t.tabs[2], ListChecks],
+    ["company", t.tabs[3], Building2],
+    ["chat", t.tabs[4], MessageSquare],
+  ] as const;
   const processId = String(row.process_id ?? "");
   const [legacy, setLegacy] = useState(false),
     [tab, setTab] = useState("summary");
@@ -109,33 +551,19 @@ export function DossierPanel({
     pollLock = useRef(false);
   useEffect(() => {
     alive.current = true;
-    let current = true;
-    savia.connections
-      .list()
-      .then((list) => {
-        if (current) {
-          const connection = list.find(
-            (c) => c.connectorId === DOSSIER_CONNECTOR,
-          );
-          if (connection)
-            setClient(new DossierClient(savia, connection.connectionId));
-        }
-      })
-      .catch(() => {
-        if (current)
-          setError(
-            "No se pudo comprobar la conexión privada. Vuelve a abrir el expediente.",
-          );
-      })
-      .finally(() => {
-        if (current) setInitializing(false);
-      });
+    setClient(new DossierClient(savia, DOSSIER_CONNECTOR));
+    setInitializing(false);
     return () => {
-      current = false;
       alive.current = false;
       sequence.current++;
     };
   }, [savia]);
+  function isMissingConnection(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return /connection.{0,40}(not configured|not found|missing)|conexión.{0,40}(no está configurada|no configurada|no se encontró)|configura la conexión/i.test(
+      message,
+    );
+  }
   const refresh = useCallback(
     async (active = client) => {
       if (!active) return;
@@ -154,9 +582,7 @@ export function DossierPanel({
         !Array.isArray(data.jobs) ||
         !Array.isArray(list?.companies)
       )
-        throw new Error(
-          "El servicio devolvió un expediente inválido. Reintenta Actualizar.",
-        );
+        throw new Error(t.invalidDossier);
       const loaded = Math.max(
         snapshotRef.current?.documents.length ?? 0,
         snapshotRef.current?.requirements.length ?? 0,
@@ -174,9 +600,7 @@ export function DossierPanel({
           next.dossier?.value.corpusRevision !==
           data.dossier?.value.corpusRevision
         )
-          throw new Error(
-            "El expediente cambió durante la lectura. Actualiza para ver la nueva versión.",
-          );
+          throw new Error(t.changedDuringRead);
         data.documents.push(...next.documents);
         data.requirements.push(...next.requirements);
         data.nextOffset = next.nextOffset;
@@ -199,23 +623,33 @@ export function DossierPanel({
       setDetail(company);
       setAssessment(fit);
     },
-    [client, companyId, processId],
+    [client, companyId, processId, t.invalidDossier, t.changedDuringRead],
   );
   useEffect(() => {
     setDetail(null);
     setAssessment(null);
     if (client)
-      void refresh().catch(() => {
-        if (alive.current)
-          setError(
-            "No se pudo cargar el expediente. Conservamos lo que ya estaba visible. Reintenta Actualizar.",
-          );
+      void refresh().catch((cause: unknown) => {
+        if (alive.current && isMissingConnection(cause)) {
+          setClient(null);
+          setError("");
+        } else if (alive.current) setError(t.loadError);
       });
-  }, [client, refresh]);
+  }, [client, refresh, t.loadError]);
   const activeJobs =
     Boolean(pendingJob) ||
     snapshot?.jobs.some((j) => j.state === "queued" || j.state === "running") ||
     detail?.jobs.some((j) => j.state === "queued" || j.state === "running");
+  const cancellableJobs = Array.from(
+    new Map(
+      [pendingJob, ...(snapshot?.jobs ?? []), ...(detail?.jobs ?? [])]
+        .filter(
+          (job): job is Job =>
+            job !== null && ["queued", "running"].includes(job.state),
+        )
+        .map((job) => [job.id, job]),
+    ).values(),
+  );
   useEffect(() => {
     if (!client || !activeJobs) return;
     const timer = setInterval(() => {
@@ -228,29 +662,29 @@ export function DossierPanel({
           if (["succeeded", "failed", "cancelled"].includes(job.state)) {
             setPendingJob(null);
             if (job.state === "failed")
-              setError(
-                `El trabajo requiere atención: ${job.error ?? "error de procesamiento"}. Puedes reintentarlo.`,
-              );
-            else
-              setNotice(
-                "El trabajo terminó. El expediente conserva sus resultados.",
-              );
+              setError(`${t.failedJob}${job.error ?? "processing error"}.`);
+            else setNotice(t.finishedJob);
           } else setPendingJob(job);
         }
         await refresh();
       })()
         .catch(() => {
-          if (alive.current)
-            setError(
-              "No pudimos actualizar el progreso. Tus archivos y trabajos permanecen guardados.",
-            );
+          if (alive.current) setError(t.pollError);
         })
         .finally(() => {
           pollLock.current = false;
         });
     }, 4000);
     return () => clearInterval(timer);
-  }, [activeJobs, client, pendingJob, refresh]);
+  }, [
+    activeJobs,
+    client,
+    pendingJob,
+    refresh,
+    t.failedJob,
+    t.finishedJob,
+    t.pollError,
+  ]);
   async function run(action: () => Promise<void>) {
     if (busy) return;
     setBusy(true);
@@ -260,9 +694,7 @@ export function DossierPanel({
       await action();
     } catch (e) {
       if (alive.current)
-        setError(
-          e instanceof Error ? e.message : "No se pudo completar la operación.",
-        );
+        setError(e instanceof Error ? e.message : t.genericError);
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -274,16 +706,14 @@ export function DossierPanel({
         ...row,
         id: String(row.source_id ?? row.id),
       });
-      if (!normalized) throw new Error("No se pudo identificar la licitación.");
+      if (!normalized) throw new Error(t.invalidTender);
       await saveInterest(savia, normalized);
       const result = await client.call<{ job: Job }>("prepare", {
         processId,
         idempotencyKey: crypto.randomUUID(),
       });
       setPendingJob(result.job);
-      setNotice(
-        "Guardamos la licitación de interés. El expediente se prepara en segundo plano.",
-      );
+      setNotice(t.savedInterest);
       await refresh();
     });
   }
@@ -295,8 +725,7 @@ export function DossierPanel({
         documentId ? { documentId } : { companyId },
       );
       const url = safeDossierUploadUrl(result.url);
-      if (!url)
-        throw new Error("El servicio devolvió un enlace de carga inválido.");
+      if (!url) throw new Error(t.invalidUpload);
       setUploadLink(url);
     });
   }
@@ -328,9 +757,7 @@ export function DossierPanel({
       setCompanyName("");
       setLegalId("");
       setActivities("");
-      setNotice(
-        "Empresa creada. Agrega su evidencia para evaluar los requisitos.",
-      );
+      setNotice(t.companyCreated);
     });
   }
   async function evaluate() {
@@ -356,18 +783,15 @@ export function DossierPanel({
   }
   async function openAssistant(initialMessage?: string) {
     if (!client || !savia.assistant) {
-      setError(
-        "El chat de Savia necesita la actualización de la plataforma. Recarga la página cuando termine el despliegue.",
-      );
+      setError(t.assistantUpdate);
       return;
     }
     await run(() =>
       savia.assistant!.open({
-        title:
-          `${processId} · ${String(row.name ?? "Expediente de la licitación")}`.slice(
-            0,
-            160,
-          ),
+        title: `${processId} · ${String(row.name ?? t.headingFallback)}`.slice(
+          0,
+          160,
+        ),
         actionId: "assistant-chat",
         connectionId: client.connectionId,
         context: {
@@ -442,8 +866,10 @@ export function DossierPanel({
         <li key={doc.id}>
           <h3>{doc.value.name}</h3>
           <p className="secop-dossier-status">
-            {dossierStateLabel(doc.value.state)}
-            {doc.value.error ? ` · ${dossierStateLabel(doc.value.error)}` : ""}
+            {dossierStateLabel(doc.value.state, locale)}
+            {doc.value.error
+              ? ` · ${dossierStateLabel(doc.value.error, locale)}`
+              : ""}
           </p>
           <div className="secop-dossier-actions">
             <button
@@ -453,11 +879,11 @@ export function DossierPanel({
               }
               onClick={() => void openEvidence(doc.id)}
             >
-              Ver texto y citas
+              {t.documentText}
             </button>
             {doc.value.url && (
               <a href={doc.value.url} target="_blank" rel="noopener noreferrer">
-                Archivo oficial <ExternalLink size={14} aria-hidden="true" />
+                {t.officialFile} <ExternalLink size={14} aria-hidden="true" />
               </a>
             )}
             {["blocked", "failed"].includes(doc.value.state) && (
@@ -466,7 +892,7 @@ export function DossierPanel({
                 disabled={busy}
                 onClick={() => void ticket(doc.id)}
               >
-                Aportar versión con texto
+                {t.provideText}
               </button>
             )}
             {doc.value.state === "review_required" && (
@@ -475,7 +901,7 @@ export function DossierPanel({
                 disabled={busy}
                 onClick={() => void reviewDocument(doc)}
               >
-                Revisé la extracción completa
+                {t.reviewedExtraction}
               </button>
             )}
           </div>
@@ -484,17 +910,17 @@ export function DossierPanel({
     </ul>
   );
   return (
-    <main className="secop-app secop-dossier" lang="es">
+    <main className="secop-app secop-dossier" lang={locale}>
       <header className="secop-dossier-top">
         <div>
           <button type="button" onClick={onBack}>
-            <ArrowLeft size={16} aria-hidden="true" /> Volver a licitaciones
+            <ArrowLeft size={16} aria-hidden="true" /> {t.back}
           </button>
-          <p className="secop-eyebrow">EXPEDIENTE SECOP · {processId}</p>
-          <h1>{String(row.name ?? "Expediente de la licitación")}</h1>
-          <p className="secop-dossier-help">
-            Documentos, requisitos y preparación de la oferta en un mismo lugar.
+          <p className="secop-eyebrow">
+            {t.eyebrow} · {processId}
           </p>
+          <h1>{String(row.name ?? t.headingFallback)}</h1>
+          <p className="secop-dossier-help">{t.help}</p>
         </div>
         {client && (
           <div className="secop-dossier-actions">
@@ -504,21 +930,19 @@ export function DossierPanel({
               className="secop-primary"
               onClick={() => void prepare()}
             >
-              {snapshot?.dossier
-                ? "Actualizar expediente"
-                : "Guardar y preparar expediente"}
+              {snapshot?.dossier ? t.updateDossier : t.prepareDossier}
             </button>
             <button
               type="button"
               disabled={busy}
               onClick={() => void run(() => refresh())}
             >
-              <RefreshCw size={16} aria-hidden="true" /> Actualizar
+              <RefreshCw size={16} aria-hidden="true" /> {t.update}
             </button>
           </div>
         )}
       </header>
-      {initializing && <p role="status">Comprobando conexión privada…</p>}
+      {initializing && <p role="status">{t.checking}</p>}
       {error && (
         <div className="secop-dossier-error" role="alert">
           {error}
@@ -531,25 +955,22 @@ export function DossierPanel({
       )}
       {!initializing && !client && (
         <section>
-          <h2>Conectar el asistente de expedientes</h2>
-          <p className="secop-dossier-help">
-            Usa la credencial privada de este espacio, distinta de la conexión
-            pública de búsquedas SECOP. Se guardará como secreto en Savia.
-          </p>
+          <h2>{t.connectTitle}</h2>
+          <p className="secop-dossier-help">{t.connectHelp}</p>
           <DossierForm
             onSubmit={() => {
               void run(async () => {
-                await savia.connections.replace("secop-dossier", {
+                await savia.connections.replace(DOSSIER_CONNECTOR, {
                   connectorId: DOSSIER_CONNECTOR,
                   values: { apiKey: token },
                 });
                 setToken("");
-                setClient(new DossierClient(savia, "secop-dossier"));
+                setClient(new DossierClient(savia, DOSSIER_CONNECTOR));
               });
             }}
           >
             <label>
-              Credencial del servicio
+              {t.credential}
               <input
                 type="password"
                 autoComplete="off"
@@ -559,21 +980,17 @@ export function DossierPanel({
               />
             </label>
             <button disabled={busy} type="button" data-dossier-submit>
-              Guardar conexión privada
+              {t.saveConnection}
             </button>
           </DossierForm>
           <button type="button" onClick={() => setLegacy(true)}>
-            Ver documentos y análisis anteriores
+            {t.legacy}
           </button>
         </section>
       )}
       {client && (
         <>
-          <div
-            className="secop-tabs"
-            role="tablist"
-            aria-label="Expediente de la licitación"
-          >
+          <div className="secop-tabs" role="tablist" aria-label={t.tablist}>
             {tabs.map(([id, label, Icon]) => (
               <button
                 key={id}
@@ -622,54 +1039,52 @@ export function DossierPanel({
           </div>
           {activeJobs && (
             <p className="secop-dossier-working" role="status">
-              <RefreshCw size={16} aria-hidden="true" /> Procesando en segundo
-              plano. Puedes salir y volver.
-              {pendingJob && (
+              <RefreshCw size={16} aria-hidden="true" /> {t.working}
+              {cancellableJobs.map((job) => (
                 <button
+                  key={job.id}
                   type="button"
+                  aria-label={`${t.cancel} ${job.kind ?? job.id}`}
                   disabled={busy}
                   onClick={() =>
                     void run(async () => {
-                      await client.call("cancel", { id: pendingJob.id });
-                      setPendingJob(null);
+                      await client.call("cancel", { id: job.id });
+                      if (pendingJob?.id === job.id) setPendingJob(null);
                       await refresh();
                     })
                   }
                 >
-                  Cancelar trabajo
+                  {t.cancel}
+                  {cancellableJobs.length > 1 ? ` · ${job.kind ?? job.id}` : ""}
                 </button>
-              )}
+              ))}
             </p>
           )}
           {uploadLink && (
             <div className="secop-dossier-notice">
               <a href={uploadLink} target="_blank" rel="noopener noreferrer">
-                Abrir carga privada del documento{" "}
-                <ExternalLink size={14} aria-hidden="true" />
+                {t.uploadLink} <ExternalLink size={14} aria-hidden="true" />
               </a>
-              <p>
-                El enlace admite una carga durante 10 minutos. Después de
-                cargar, pulsa Actualizar.
-              </p>
+              <p>{t.uploadHint}</p>
             </div>
           )}
           {evidence && (
             <aside
               className="secop-dossier-evidence"
-              aria-label="Evidencia del documento"
+              aria-label={t.evidenceLabel}
             >
               <div className="secop-dossier-actions">
                 <h2>{evidence.document.value.name}</h2>
                 <button type="button" onClick={() => setEvidence(null)}>
-                  Cerrar evidencia
+                  {t.closeEvidence}
                 </button>
               </div>
               {evidence.chunks.map((chunk) => (
                 <blockquote key={chunk.id}>
                   <strong>
                     {chunk.value.page
-                      ? `Página ${chunk.value.page}`
-                      : (chunk.value.section ?? "Sección")}
+                      ? `${t.pageWord} ${chunk.value.page}`
+                      : (chunk.value.section ?? t.section)}
                   </strong>
                   <p>{chunk.value.text}</p>
                 </blockquote>
@@ -694,7 +1109,7 @@ export function DossierPanel({
                     })
                   }
                 >
-                  Cargar más texto
+                  {t.moreText}
                 </button>
               )}
             </aside>
@@ -708,75 +1123,66 @@ export function DossierPanel({
               <>
                 {!snapshot?.dossier ? (
                   <div className="secop-dossier-notice">
-                    <h2>Prepara el expediente completo</h2>
-                    <p>
-                      Guardaremos la licitación de interés y revisaremos la
-                      descripción, pliegos, anexos y adendas disponibles. Verás
-                      qué archivos se procesaron y qué falta.
-                    </p>
+                    <h2>{t.prepareHeading}</h2>
+                    <p>{t.prepareHelp}</p>
                   </div>
                 ) : (
                   <>
                     <dl className="secop-dossier-summary">
                       <div>
-                        <dt>Análisis conjunto</dt>
+                        <dt>{t.jointAnalysis}</dt>
                         <dd>
                           {snapshot.dossier.value.needsSynthesis
-                            ? "Pendiente de actualizar"
+                            ? t.pendingUpdate
                             : report
-                              ? "Completado"
-                              : dossierStateLabel(snapshot.dossier.value.state)}
+                              ? t.completed
+                              : dossierStateLabel(
+                                  snapshot.dossier.value.state,
+                                  locale,
+                                )}
                         </dd>
                       </div>
                       <div>
-                        <dt>Documentos del catálogo</dt>
+                        <dt>{t.catalogDocuments}</dt>
                         <dd>{snapshot.documentTotal}</dd>
                       </div>
                       <div>
-                        <dt>Documentos analizados</dt>
-                        <dd>{report?.coverage.indexed ?? "En preparación"}</dd>
+                        <dt>{t.analyzedDocuments}</dt>
+                        <dd>{report?.coverage.indexed ?? t.preparing}</dd>
                       </div>
                       <div>
-                        <dt>Versión del expediente</dt>
+                        <dt>{t.dossierVersion}</dt>
                         <dd>{snapshot.dossier.value.corpusRevision}</dd>
                       </div>
                     </dl>
-                    <p className="secop-dossier-help">
-                      Cobertura del catálogo público disponible en SECOP. Los
-                      archivos bloqueados, faltantes o sin extraer permanecen
-                      pendientes.
-                    </p>
+                    <p className="secop-dossier-help">{t.coverage}</p>
                   </>
                 )}
                 {stale && (
-                  <p className="secop-dossier-notice">
-                    El expediente cambió. El informe anterior se conserva y
-                    requiere actualización.
-                  </p>
+                  <p className="secop-dossier-notice">{t.dossierChanged}</p>
                 )}
                 {report && (
                   <>
                     <div className="secop-dossier-section-heading">
-                      <h2>Resumen del expediente</h2>
+                      <h2>{t.reportSummary}</h2>
                       <button type="button" onClick={() => setTab("chat")}>
-                        <ListChecks size={16} aria-hidden="true" /> Ver lista
-                        completa
+                        <ListChecks size={16} aria-hidden="true" /> {t.viewAll}
                       </button>
                     </div>
                     <div className="secop-dossier-text">{report.summary}</div>
                     {(report.coverage.pending.length > 0 ||
                       report.coverage.reviewRequired.length > 0) && (
                       <p className="secop-dossier-notice">
-                        Revisión de fuentes pendiente:{" "}
-                        {report.coverage.pending.length} documentos sin extraer
-                        y {report.coverage.reviewRequired.length} extracciones
-                        por revisar. El análisis conjunto y la revisión humana
-                        son pasos distintos.
+                        {t.pendingSources}
+                        {report.coverage.pending.length}
+                        {t.docsUnextracted}
+                        {report.coverage.reviewRequired.length}
+                        {t.extractionsReview}
                       </p>
                     )}
                     {report.conflicts.length > 0 && (
                       <>
-                        <h2>Conflictos y adendas por revisar</h2>
+                        <h2>{t.conflicts}</h2>
                         <ul>
                           {report.conflicts.map((c, i) => (
                             <li key={i}>{c}</li>
@@ -788,15 +1194,16 @@ export function DossierPanel({
                 )}
                 {snapshot?.jobs.some((job) => job.state === "failed") && (
                   <details className="secop-dossier-job-history">
-                    <summary>Historial de incidencias de procesamiento</summary>
+                    <summary>{t.jobHistory}</summary>
                     {snapshot?.jobs
                       .filter((j) => j.state === "failed")
                       .map((job) => (
                         <div key={job.id} className="secop-dossier-notice">
                           <p>
-                            Trabajo pendiente de resolver:{" "}
+                            {t.unresolvedJob}
                             {dossierStateLabel(
                               job.error ?? job.kind ?? "failed",
+                              locale,
                             )}
                           </p>
                           <button
@@ -811,7 +1218,7 @@ export function DossierPanel({
                               })
                             }
                           >
-                            Reintentar trabajo
+                            {t.retryJob}
                           </button>
                         </div>
                       ))}
@@ -821,12 +1228,13 @@ export function DossierPanel({
             )}
             {tab === "documents" && (
               <>
-                <h2>Documentos del expediente</h2>
+                <h2>{t.dossierDocuments}</h2>
                 <p className="secop-dossier-help">
-                  Mostrando {snapshot?.documents.length ?? 0} de{" "}
-                  {snapshot?.documentTotal ?? 0}. Un CAPTCHA requiere tu ayuda;
-                  no se omiten archivos en silencio. Confirma una extracción
-                  solo después de compararla con el original.
+                  {t.showing}
+                  {snapshot?.documents.length ?? 0}
+                  {t.of}
+                  {snapshot?.documentTotal ?? 0}
+                  {t.captchaHint}
                 </p>
                 {documents(snapshot?.documents ?? [])}
                 {snapshot?.nextOffset !== null &&
@@ -836,38 +1244,33 @@ export function DossierPanel({
                       disabled={busy}
                       onClick={() => void more()}
                     >
-                      Cargar más documentos y requisitos
+                      {t.moreDocuments}
                     </button>
                   )}
                 <div className="secop-dossier-actions">
                   <button type="button" onClick={() => setLegacy(true)}>
-                    Documentos públicos y análisis anteriores por PDF
+                    {t.legacyDocuments}
                   </button>
                 </div>
               </>
             )}
             {tab === "requirements" && (
               <>
-                <h2>Requisitos con fuente</h2>
-                {!report && (
-                  <p>
-                    Prepara el expediente para extraer los requisitos conjuntos.
-                  </p>
-                )}
+                <h2>{t.sourcedRequirements}</h2>
+                {!report && <p>{t.prepareForRequirements}</p>}
                 <ul className="secop-dossier-list">
                   {snapshot?.requirements.map((req) => (
                     <li key={req.id}>
                       <p className="secop-dossier-status">
                         {req.value.category} ·{" "}
-                        {req.value.mandatory
-                          ? "Obligatorio"
-                          : "Informativo o puntuable"}
-                        {req.value.lot ? ` · Lote ${req.value.lot}` : ""}
+                        {req.value.mandatory ? t.mandatory : t.informative}
+                        {req.value.lot ? ` · ${t.lot} ${req.value.lot}` : ""}
                       </p>
                       <h3>{req.value.wording}</h3>
                       <CitationButtons
                         citations={req.value.citations}
                         onOpen={(id) => void openEvidence(id)}
+                        locale={locale}
                       />
                     </li>
                   ))}
@@ -879,30 +1282,27 @@ export function DossierPanel({
                       disabled={busy}
                       onClick={() => void more()}
                     >
-                      Cargar más requisitos
+                      {t.moreRequirements}
                     </button>
                   )}
               </>
             )}
             {tab === "company" && (
               <>
-                <h2>Evaluar mi empresa</h2>
+                <h2>{t.evaluateCompany}</h2>
                 <label>
-                  Lotes a evaluar (opcional)
+                  {t.lotsToEvaluate}
                   <input
                     value={selectedLotsText}
                     onChange={(event) =>
                       setSelectedLotsText(event.target.value)
                     }
-                    placeholder="Identificadores de lote separados por comas"
+                    placeholder={t.lotPlaceholder}
                   />
                 </label>
-                <p className="secop-dossier-help">
-                  En blanco se revisan todos los lotes. Usa los identificadores
-                  que aparecen en los requisitos.
-                </p>
+                <p className="secop-dossier-help">{t.lotHelp}</p>
                 <label>
-                  Empresa
+                  {t.company}
                   <select
                     value={companyId}
                     onChange={(event) => {
@@ -910,7 +1310,7 @@ export function DossierPanel({
                       setUploadLink(null);
                     }}
                   >
-                    <option value="">Selecciona una empresa</option>
+                    <option value="">{t.selectCompany}</option>
                     {companies.map((company) => (
                       <option key={company.id} value={company.id}>
                         {company.value.name}
@@ -919,10 +1319,10 @@ export function DossierPanel({
                   </select>
                 </label>
                 <details>
-                  <summary>Crear perfil de empresa</summary>
+                  <summary>{t.createCompany}</summary>
                   <DossierForm onSubmit={() => void createCompany()}>
                     <label>
-                      Nombre de la empresa
+                      {t.companyName}
                       <input
                         required
                         value={companyName}
@@ -930,21 +1330,21 @@ export function DossierPanel({
                       />
                     </label>
                     <label>
-                      Identificación tributaria
+                      {t.taxId}
                       <input
                         value={legalId}
                         onChange={(event) => setLegalId(event.target.value)}
                       />
                     </label>
                     <label>
-                      Actividad y capacidades
+                      {t.activity}
                       <textarea
                         value={activities}
                         onChange={(event) => setActivities(event.target.value)}
                       />
                     </label>
                     <button type="button" data-dossier-submit disabled={busy}>
-                      Crear empresa
+                      {t.createCompany}
                     </button>
                   </DossierForm>
                 </details>
@@ -956,7 +1356,7 @@ export function DossierPanel({
                         disabled={busy}
                         onClick={() => void ticket()}
                       >
-                        Agregar evidencia de empresa
+                        {t.addCompanyEvidence}
                       </button>
                       <button
                         type="button"
@@ -966,23 +1366,15 @@ export function DossierPanel({
                         }
                         onClick={() => void evaluate()}
                       >
-                        Evaluar cumplimiento
+                        {t.evaluate}
                       </button>
                     </div>
-                    <p className="secop-dossier-help">
-                      Agrega certificados de experiencia, registros y estados
-                      financieros. Lo declarado en el perfil no reemplaza los
-                      documentos probatorios. Esta evaluación prepara la oferta;
-                      no presenta una postulación.
-                    </p>
+                    <p className="secop-dossier-help">{t.companyHelp}</p>
                     {documents(detail.documents)}
                     {detail.company.value.facts.length > 0 && (
                       <>
-                        <h2>Datos extraídos de la empresa</h2>
-                        <p className="secop-dossier-help">
-                          Confirma las cifras, unidades y períodos contra la
-                          fuente antes de usarlos en comparaciones numéricas.
-                        </p>
+                        <h2>{t.extractedFacts}</h2>
+                        <p className="secop-dossier-help">{t.factsHelp}</p>
                         <ul className="secop-dossier-list">
                           {detail.company.value.facts.map((fact, index) => (
                             <li key={index}>
@@ -993,9 +1385,10 @@ export function DossierPanel({
                               <CitationButtons
                                 citations={fact.citations}
                                 onOpen={(id) => void openEvidence(id)}
+                                locale={locale}
                               />
                               {fact.reviewed ? (
-                                <p>Dato revisado</p>
+                                <p>{t.reviewedFact}</p>
                               ) : (
                                 <button
                                   type="button"
@@ -1013,7 +1406,7 @@ export function DossierPanel({
                                     })
                                   }
                                 >
-                                  Confirmo este dato y su evidencia
+                                  {t.confirmFact}
                                 </button>
                               )}
                             </li>
@@ -1028,24 +1421,23 @@ export function DossierPanel({
                             lotsMismatch
                               ? "requires_review"
                               : assessment.readiness,
+                            locale,
                           )}
                         </h2>
                         {(assessment.stale || lotsMismatch) && (
                           <p className="secop-dossier-notice">
-                            La empresa, sus evidencias o el expediente
-                            cambiaron. Vuelve a evaluar.
+                            {t.staleAssessment}
                           </p>
                         )}
                         {assessment.priorReviews?.length > 0 && (
-                          <p>
-                            Se conservan revisiones anteriores para volver a
-                            comprobarlas con estas fuentes.
-                          </p>
+                          <p>{t.priorReviews}</p>
                         )}
                         <ul className="secop-dossier-list">
                           {assessment.value.findings.map((finding) => (
                             <li key={finding.requirementId}>
-                              <h3>{dossierStateLabel(finding.status)}</h3>
+                              <h3>
+                                {dossierStateLabel(finding.status, locale)}
+                              </h3>
                               <p>
                                 {snapshot?.requirements.find(
                                   (r) => r.id === finding.requirementId,
@@ -1054,7 +1446,7 @@ export function DossierPanel({
                               <p>{finding.reason}</p>
                               {finding.missing.length > 0 && (
                                 <>
-                                  <strong>Qué falta para aplicar</strong>
+                                  <strong>{t.missingToApply}</strong>
                                   <ul>
                                     {finding.missing.map((missing, i) => (
                                       <li key={i}>{missing}</li>
@@ -1065,6 +1457,7 @@ export function DossierPanel({
                               <CitationButtons
                                 citations={finding.companyCitations}
                                 onOpen={(id) => void openEvidence(id)}
+                                locale={locale}
                               />
                               {assessment.reviews
                                 .filter(
@@ -1074,13 +1467,16 @@ export function DossierPanel({
                                 )
                                 .map((review) => (
                                   <p key={review.id}>
-                                    <strong>Revisión del equipo:</strong>{" "}
-                                    {dossierStateLabel(review.value.decision)} ·{" "}
-                                    {review.value.note}
+                                    <strong>{t.teamReview}</strong>{" "}
+                                    {dossierStateLabel(
+                                      review.value.decision,
+                                      locale,
+                                    )}{" "}
+                                    · {review.value.note}
                                   </p>
                                 ))}
                               <details>
-                                <summary>Registrar revisión del equipo</summary>
+                                <summary>{t.addTeamReview}</summary>
                                 <DossierForm
                                   onSubmit={(form) => {
                                     const data = new FormData(form);
@@ -1097,27 +1493,25 @@ export function DossierPanel({
                                   }}
                                 >
                                   <label>
-                                    Decisión
+                                    {t.decision}
                                     <select
                                       name="decision"
                                       defaultValue="insufficient_evidence"
                                     >
                                       <option value="insufficient_evidence">
-                                        Falta evidencia
+                                        {t.insufficient}
                                       </option>
-                                      <option value="meets">
-                                        Cumple según revisión del equipo
-                                      </option>
+                                      <option value="meets">{t.meets}</option>
                                       <option value="does_not_meet">
-                                        No cumple
+                                        {t.doesNotMeet}
                                       </option>
                                       <option value="not_applicable">
-                                        No aplica
+                                        {t.notApplicable}
                                       </option>
                                     </select>
                                   </label>
                                   <label>
-                                    Justificación
+                                    {t.justification}
                                     <textarea
                                       name="note"
                                       required
@@ -1130,7 +1524,7 @@ export function DossierPanel({
                                     data-dossier-submit
                                     disabled={busy}
                                   >
-                                    Guardar revisión
+                                    {t.saveReview}
                                   </button>
                                 </DossierForm>
                               </details>
@@ -1147,20 +1541,16 @@ export function DossierPanel({
               <div className="secop-dossier-assistant-entry">
                 <div>
                   <MessageSquare size={24} aria-hidden="true" />
-                  <h2>Esta licitación, en el chat de Savia</h2>
-                  <p className="secop-dossier-help">
-                    Continúa la conversación con las fuentes de este expediente.
-                    La licitación y la empresa seleccionadas acompañan cada
-                    pregunta.
-                  </p>
+                  <h2>{t.assistantTitle}</h2>
+                  <p className="secop-dossier-help">{t.assistantHelp}</p>
                 </div>
                 <label>
-                  Empresa para contrastar requisitos
+                  {t.companyForRequirements}
                   <select
                     value={companyId}
                     onChange={(event) => setCompanyId(event.target.value)}
                   >
-                    <option value="">Solo la licitación</option>
+                    <option value="">{t.tenderOnly}</option>
                     {companies.map((company) => (
                       <option key={company.id} value={company.id}>
                         {company.value.name}
@@ -1175,8 +1565,8 @@ export function DossierPanel({
                     disabled={busy || !report || !savia.assistant}
                     onClick={() => void openAssistant()}
                   >
-                    <MessageSquare size={16} aria-hidden="true" /> Abrir chat de
-                    Savia
+                    <MessageSquare size={16} aria-hidden="true" />{" "}
+                    {t.openAssistant}
                   </button>
                   <button
                     type="button"
@@ -1187,26 +1577,21 @@ export function DossierPanel({
                       )
                     }
                   >
-                    <ListChecks size={16} aria-hidden="true" /> Preparar lista
-                    completa
+                    <ListChecks size={16} aria-hidden="true" /> {t.prepareList}
                   </button>
                 </div>
                 {!companyId && (
-                  <p className="secop-dossier-help">
-                    Aún no contrastamos el cumplimiento de tu empresa.
-                    Selecciona su perfil y aporta evidencias en «Mi empresa».
-                  </p>
+                  <p className="secop-dossier-help">{t.companyNotCompared}</p>
                 )}
                 {report &&
                   (report.coverage.pending.length > 0 ||
                     report.coverage.reviewRequired.length > 0) && (
                     <p className="secop-dossier-notice">
                       {report.coverage.pending.length > 0
-                        ? `${report.coverage.pending.length} documentos siguen pendientes de extracción. `
-                        : "Todos los documentos disponibles tienen texto extraído. "}
-                      {report.coverage.reviewRequired.length} extracciones
-                      requieren revisión contra el original. El análisis
-                      automático no confirma cumplimiento.
+                        ? `${report.coverage.pending.length}${t.pendingDocs}`
+                        : t.extractedAll}
+                      {report.coverage.reviewRequired.length}
+                      {t.needsReview}
                     </p>
                   )}
                 {!report && (
@@ -1217,9 +1602,7 @@ export function DossierPanel({
                 )}
                 {!savia.assistant && (
                   <p role="status" className="secop-dossier-notice">
-                    El chat integrado estará disponible al actualizar la
-                    plataforma. Tus conversaciones permanecen guardadas en el
-                    servicio.
+                    {t.assistantUnavailable}
                   </p>
                 )}
               </div>

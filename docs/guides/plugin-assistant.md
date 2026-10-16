@@ -19,7 +19,8 @@ job reference while work continues. The private action uses the existing server
 connection; the browser never receives the credential. Invalid or oversized
 responses fail explicitly instead of silently dropping items.
 
-Frame, installation and principal changes revoke the host session. Every action
+Frame, installation, active reusable-panel and principal changes revoke the host
+session. Only the current panel activation may open or invoke its provider. Every action
 still passes through normal extension installation and authorization checks.
 Provider job and conversation references must also be bound to the requested
 context; checking owner scope alone is insufficient when one owner has many items.

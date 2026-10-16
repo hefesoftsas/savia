@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PluginApi } from "@savia/plugin-sdk";
+import type { DossierDocument, Job, Stored } from "../dossier";
 import { DossierPanel } from "../dossier-panel";
 vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 let root: Root;
@@ -12,12 +13,20 @@ afterEach(() => {
   host?.remove();
   vi.clearAllMocks();
 });
-async function mount(configured = true, report = false) {
+async function mount(
+  configured = true,
+  report = false,
+  jobs: Job[] = [],
+  locale: "es" | "en" | "pt" = "es",
+  detailJobs: Job[] = [],
+  documents: Stored<DossierDocument>[] = [],
+) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   const execute = vi.fn(
     async (_action: string, { input }: { input: { operation: string } }) => {
+      if (!configured) throw new Error("La conexión no está configurada.");
       const state = {
         dossier: report
           ? {
@@ -30,7 +39,7 @@ async function mount(configured = true, report = false) {
               },
             }
           : null,
-        documents: [],
+        documents,
         documentTotal: 2,
         report: report
           ? {
@@ -50,8 +59,28 @@ async function mount(configured = true, report = false) {
               },
             }
           : null,
-        requirements: [],
-        jobs: [],
+        requirements: report
+          ? [
+              {
+                id: "req-1",
+                revision: 1,
+                updatedAt: 1,
+                value: {
+                  wording: "Experience requirement",
+                  category: "experience",
+                  mandatory: true,
+                  citations: [
+                    {
+                      documentVersionId: "doc-v1",
+                      page: 4,
+                      excerpt: "Source excerpt",
+                    },
+                  ],
+                },
+              },
+            ]
+          : [],
+        jobs,
         nextOffset: null,
       };
       return {
@@ -60,12 +89,43 @@ async function mount(configured = true, report = false) {
           data: {
             data:
               input.operation === "companies"
-                ? { companies: [] }
+                ? {
+                    companies: [
+                      {
+                        id: "company-1",
+                        revision: 1,
+                        updatedAt: 1,
+                        value: {
+                          name: "Example Co.",
+                          legalId: "",
+                          activities: "",
+                          facts: [],
+                        },
+                      },
+                    ],
+                  }
                 : input.operation === "dossier"
                   ? state
-                  : input.operation === "conversation"
-                    ? null
-                    : { job: { id: "job", state: "queued" } },
+                  : input.operation === "company-detail"
+                    ? {
+                        company: {
+                          id: "company-1",
+                          revision: 1,
+                          updatedAt: 1,
+                          value: {
+                            name: "Example Co.",
+                            legalId: "",
+                            activities: "",
+                            facts: [],
+                          },
+                        },
+                        documents: [],
+                        expiredDocumentIds: [],
+                        jobs: detailJobs,
+                      }
+                    : input.operation === "conversation"
+                      ? null
+                      : { job: { id: "job", state: "queued" } },
           },
         },
       };
@@ -76,13 +136,7 @@ async function mount(configured = true, report = false) {
   const api = {
     assistant: { open: openAssistant },
     connections: {
-      list: vi
-        .fn()
-        .mockResolvedValue(
-          configured
-            ? [{ connectionId: "private", connectorId: "secop-dossier" }]
-            : [],
-        ),
+      list: vi.fn().mockRejectedValue(new Error("Manager access required")),
     },
     actions: { execute },
     collections: {
@@ -97,12 +151,12 @@ async function mount(configured = true, report = false) {
       <DossierPanel
         savia={api}
         row={{ id: "source", process_id: "CO1.REQ.1", name: "Software" }}
-        locale="es"
+        locale={locale}
         onBack={() => {}}
       />,
     );
   });
-  return { execute, create, openAssistant };
+  return { execute, create, openAssistant, api };
 }
 async function click(label: string) {
   const button = [...host.querySelectorAll("button")].find(
@@ -113,7 +167,7 @@ async function click(label: string) {
 }
 describe("tender dossier flow", () => {
   it("starts with a clear preparation state without mistaking an absent dossier for an error", async () => {
-    const { execute, create } = await mount();
+    const { execute, create, api } = await mount();
     expect(host.textContent).toContain("Prepara el expediente completo");
     expect(host.querySelector('[role="alert"]')).toBeNull();
     await click("Guardar y preparar expediente");
@@ -121,6 +175,7 @@ describe("tender dossier flow", () => {
     expect(
       execute.mock.calls.some(([, a]) => a.input.operation === "prepare"),
     ).toBe(true);
+    expect(api.connections.list).not.toHaveBeenCalled();
     expect(host.textContent).toContain("segundo plano");
   });
   it("opens the existing Savia chat with an opaque tender context and no duplicate composer", async () => {
@@ -131,17 +186,21 @@ describe("tender dossier flow", () => {
     expect(openAssistant).toHaveBeenCalledWith(
       expect.objectContaining({
         actionId: "assistant-chat",
-        connectionId: "private",
+        connectionId: "secop-dossier",
         context: { dossierId: "CO1.REQ.1" },
         initialMessage: expect.stringContaining("todos los requisitos"),
       }),
     );
   });
-  it("does not send company data before a private connection is configured", async () => {
+  it("shows setup only after the configured connection is reported missing", async () => {
     const { execute } = await mount(false);
     expect(host.textContent).toContain("Conectar el asistente de expedientes");
     expect(host.querySelector('input[type="password"]')).not.toBeNull();
-    expect(execute).not.toHaveBeenCalled();
+    expect(
+      execute.mock.calls.some(([, a]) =>
+        ["prepare", "company", "assess"].includes(a.input.operation),
+      ),
+    ).toBe(false);
   });
   it("marks partial coverage and keeps chat unavailable without a report", async () => {
     const { execute } = await mount(true, true);
@@ -152,4 +211,82 @@ describe("tender dossier flow", () => {
     await click("Asistente");
     expect(host.textContent).toContain("Abrir chat de Savia");
   });
+
+  it("shows cancellation for a restored active job in the dossier snapshot", async () => {
+    const { execute } = await mount(true, false, [
+      { id: "restored-job", state: "running" },
+    ]);
+    await click("Cancelar trabajo");
+    expect(
+      execute.mock.calls.some(
+        ([, action]) =>
+          action.input.operation === "cancel" &&
+          (action.input as unknown as { arguments: { id: string } }).arguments
+            .id === "restored-job",
+      ),
+    ).toBe(true);
+  });
+
+  it("shows cancellation for a restored active job in the selected company detail", async () => {
+    const { execute } = await mount(true, false, [], "es", [
+      { id: "company-job", state: "queued" },
+    ]);
+    await click("Mi empresa");
+    const select = host.querySelector("select");
+    expect(select).not.toBeNull();
+    await act(async () => {
+      select!.value = "company-1";
+      select!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(host.textContent).toContain("Cancelar trabajo");
+    await click("Cancelar trabajo");
+    expect(
+      execute.mock.calls.some(
+        ([, action]) =>
+          action.input.operation === "cancel" &&
+          (action.input as unknown as { arguments: { id: string } }).arguments
+            .id === "company-job",
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["en", "Back to tenders", "View evidence 1 · p. 4", "Requirements"],
+    ["pt", "Voltar às licitações", "Ver evidência 1 · pág. 4", "Requisitos"],
+  ] as const)(
+    "localizes panel controls and citations for %s",
+    async (locale, back, citation, requirements) => {
+      await mount(true, true, [], locale);
+      expect(host.querySelector("main")?.getAttribute("lang")).toBe(locale);
+      expect(host.textContent).toContain(back);
+      await click(requirements);
+      expect(host.textContent).toContain(citation);
+    },
+  );
+
+  it.each([
+    ["en", "Documents", "Processed"],
+    ["pt", "Documentos", "Processado"],
+  ] as const)(
+    "localizes dossier processing states for %s",
+    async (locale, documentsTab, processedState) => {
+      await mount(
+        true,
+        false,
+        [],
+        locale,
+        [],
+        [
+          {
+            id: "document-1",
+            revision: 1,
+            updatedAt: 1,
+            value: { name: "Specification", state: "ready" },
+          },
+        ],
+      );
+      await click(documentsTab);
+      expect(host.textContent).toContain(processedState);
+    },
+  );
 });

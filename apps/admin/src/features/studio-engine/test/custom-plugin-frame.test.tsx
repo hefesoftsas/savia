@@ -118,6 +118,186 @@ it("revokes an external assistant callback when the authenticated session clears
   expect(transport).not.toHaveBeenCalled();
 });
 
+it("requires the active reusable panel owner before opening its assistant", async () => {
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, { type: "prepare", session: main.session });
+  const editor = document.querySelector(
+    'iframe[src*="standby=1"]',
+  ) as HTMLIFrameElement;
+  const child = handshake(editor);
+  const request = { view: "record-editor", title: "Editor", params: {} };
+  uiMessage(list, {
+    type: "open",
+    id: "open-editor",
+    request,
+    session: main.session,
+  });
+  const activation = child.send.mock.calls.find(
+    ([message]) => message.type === "activate",
+  )![0];
+  const panelId = activation.panel.panelId as string;
+  const assistantRequest = (requestedPanelId: string) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: editor.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          id: "assistant-open",
+          path: "/extensions/custom.editor/assistant/open",
+          method: "POST",
+          panelId: requestedPanelId,
+          body: {
+            title: "Editor assistant",
+            actionId: "chat",
+            context: { itemId: "item-1" },
+          },
+        },
+      }),
+    );
+
+  assistantRequest("another-panel");
+  expect(getPluginAssistantProvider()).toBeNull();
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: editor.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "ready",
+        id: "wrong-type",
+        path: "/extensions/custom.editor/assistant/open",
+        method: "POST",
+        panelId,
+        body: {
+          title: "Editor assistant",
+          actionId: "chat",
+          context: { itemId: "item-1" },
+        },
+      },
+    }),
+  );
+  expect(getPluginAssistantProvider()).toBeNull();
+  assistantRequest(panelId);
+  const provider = getPluginAssistantProvider()!;
+  expect(provider.title).toBe("Editor assistant");
+
+  uiMessage(editor, {
+    type: "state",
+    session: child.session,
+    panelId,
+    state: { dirty: false, busy: false },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(getPluginAssistantProvider()).toBeNull();
+  await expect(provider.invoke({ method: "load" })).rejects.toThrow(
+    "session has ended",
+  );
+  assistantRequest(panelId);
+  expect(getPluginAssistantProvider()).toBeNull();
+});
+
+it("accepts assistant requests from a directly bound panel with the SDK null panel ID", () => {
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, {
+    type: "open",
+    id: "open-editor",
+    request: { view: "record-editor", title: "Editor", params: {} },
+    session: main.session,
+  });
+  const editor = screen.getByTitle("Editor") as HTMLIFrameElement;
+  const child = handshake(editor);
+  expect(child.panelId).toBeTruthy();
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: editor.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "assistant-open",
+        path: "/extensions/custom.editor/assistant/open",
+        method: "POST",
+        panelId: null,
+        body: {
+          title: "Editor assistant",
+          actionId: "chat",
+          context: { itemId: "item-1" },
+        },
+      },
+    }),
+  );
+  expect(getPluginAssistantProvider()?.title).toBe("Editor assistant");
+  uiMessage(editor, {
+    type: "state",
+    session: child.session,
+    panelId: child.panelId,
+    state: { dirty: false, busy: false },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(getPluginAssistantProvider()).toBeNull();
+});
+
+it("closes the assistant provider when its iframe is replaced", () => {
+  const { rerender } = render(
+    <CustomPluginFrame
+      pluginId="custom.editor"
+      title="List"
+      installationVersion="v1"
+    />,
+  );
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, { type: "prepare", session: main.session });
+  const editor = document.querySelector(
+    'iframe[src*="standby=1"]',
+  ) as HTMLIFrameElement;
+  const child = handshake(editor);
+  uiMessage(list, {
+    type: "open",
+    id: "open-editor",
+    request: { view: "record-editor", title: "Editor", params: {} },
+    session: main.session,
+  });
+  const panelId = child.send.mock.calls.find(
+    ([message]) => message.type === "activate",
+  )![0].panel.panelId as string;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: editor.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "assistant-open",
+        path: "/extensions/custom.editor/assistant/open",
+        method: "POST",
+        panelId,
+        body: {
+          title: "Editor assistant",
+          actionId: "chat",
+          context: { itemId: "item-1" },
+        },
+      },
+    }),
+  );
+  expect(getPluginAssistantProvider()).not.toBeNull();
+
+  rerender(
+    <CustomPluginFrame
+      pluginId="custom.editor"
+      title="List"
+      installationVersion="v2"
+    />,
+  );
+  expect(getPluginAssistantProvider()).toBeNull();
+});
+
 it("sizes plugin screens to their content and resets on navigation", () => {
   const { rerender } = render(
     <CustomPluginFrame
