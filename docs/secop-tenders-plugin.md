@@ -45,7 +45,68 @@ Savia's host-mediated external-link bridge. Search cards and saved interests use
 the same behavior; the plugin iframe retains its sandbox. An unavailable or
 refused link shows recovery guidance rather than silently doing nothing.
 
+## Private tender dossier and company assistant
+
+The plugin opens a dossier with Summary, Documents, Requirements, Company and
+Assistant views from the existing Documents action. It preserves the previous
+per-PDF document workflow behind **Documents and previous PDF analyses**.
+
+All new processing runs in the private secop-live-worker service. No
+SECOP-specific server/API/schema change is added to Savia. The plugin uses a
+fixed, secret-backed HTTP connector (secop-dossier) and one declared dispatch
+action, staying within the 20-action package limit. Public search continues to use
+the existing read-only MCP source. A private credential belongs to one workspace;
+never copy it to another workspace. Configure it through the dossier connection
+form or existing plugin connection management; it is not persisted in browser
+storage or packaged into the ZIP.
+
+**Save and prepare dossier** saves the interest and starts durable background
+processing. The service enumerates every available document page, records partial
+coverage, downloads permitted official files and keeps failed/CAPTCHA/unsupported
+items visible. Scanned PDFs require the configured OCR provider or a replacement PDF with selectable text; the basic Cloudflare converter does not supply complete OCR. The report and requirements cite immutable source versions and
+parser pages or sections. Source changes mark reports stale. Protected one-use
+upload links provide recovery for blocked originals and private company evidence.
+
+Select/create a company, upload its evidence and review any extracted numeric
+facts against their cited originals. Choose lot identifiers when relevant, then
+**Evaluate compliance**. Findings distinguish meets, does not meet, insufficient
+evidence and not applicable; missing evidence becomes preparation tasks. Expired
+or changed evidence invalidates old evaluations. User review notes stay separate
+from model findings. Readiness means ready for the team's review, not a submitted
+or officially approved bid.
+
+The **Assistant** tab opens Savia's native chat panel through the generic plugin
+assistant bridge. The title and selected company remain visible, and the existing
+conversation stays in the private SECOP service. There is no second chat composer
+inside the dossier. **Prepare complete checklist** prefills a question; it does not
+send it until the user presses Send. The same private workspace connection is used.
+Ordinary workspace members use that configured connection without listing or
+managing credentials; an administrator provisions or repairs it. Dossier controls
+follow the selected Spanish, English or Portuguese locale. Active durable jobs can
+be canceled after returning to the dossier, including after a reload.
+
+Explicit questions asking for all requirements use every saved requirement record
+in the current report. Items preserve original wording and link to exact source
+quotes, with OCR/source-review and missing company-evidence notices shown first.
+This covers the saved extraction, not a certification that every obligation in the
+original documents was recognized. Focused questions retain bounded hybrid search.
+Source classification and automatic analysis do not certify company compliance.
+A finished joint analysis can still have source extractions awaiting human review.
+
+The native panel uses Savia's shared Markdown renderer, source disclosures and
+keyboard-accessible composer. Changing tender, company or principal changes the
+context; it never reuses a conversation from another scope. Jobs and conversations
+survive navigation and reload. See [plugin assistant integration](guides/plugin-assistant.md).
+
+Service setup, contracts, storage migrations and release checks are documented in
+`chibchombiano26/secop-live-worker/docs/operations.md`. Install this plugin only
+after the compatible service is deployed and the workspace credential provisioned.
+
 ## Tender documents and PDF analysis
+
+Version 1.5.3 adds decorative Lucide icons to the result actions while retaining
+visible labels and keyboard-accessible controls. Followed tenders use a checked
+bookmark to reinforce their saved state.
 
 Version 1.5.2 groups each search result's Documents, SECOP link and Follow actions
 with matching control heights and spacing. On narrow screens, Documents and the
@@ -175,7 +236,9 @@ test asks for authorization, choose **Authorize again**, complete the existing
 read-only connection and reopen SECOP. The host coordinates concurrent token
 renewal across Workers; deploy its OAuth refresh lease migration with that fix.
 
-`provider/catalogs.mjs` contains the optional provider extension and its tests.
+The active provider source is maintained in the private
+`chibchombiano26/secop-live-worker` repository, including its public catalog and
+document adapters. The local `provider/` files are historical migration references.
 Bind a dedicated `CATALOG_KV` namespace for public snapshots, separate from OAuth
 storage, and seed each verified complete catalog before installing the UI.
 Snapshots have no storage expiration: fresh catalogs are served immediately for
@@ -185,18 +248,16 @@ Cold aggregate reads can exceed Savia's MCP time budget, so deployment verificat
 must include warm KV reads. Edge-cache freshness never extends the snapshot's
 remaining six-hour interval; concurrent reads are coalesced. Reaching the 50,000-value safety limit or the response-size bound fails
 closed rather than claiming a partial catalog is complete. No catalog is
-persisted in browser storage. `provider/patch-worker.mjs` is a guarded additive
-adapter for the inspected deployed provider bundle: it refuses ambiguous source
-or repeat installation. For future updates, integrate the helper in the provider's
-original source, or rebuild from a verified original bundle. Back up provider code
-and settings, preserve bindings and secrets using Cloudflare's
-[upload metadata](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/update/),
-and verify tool discovery and all catalogs before publishing the tenant ZIP.
+persisted in browser storage. The former `provider/patch-worker.mjs` bundle-patch
+workflow is obsolete for this provider. Deploy from the maintained service source,
+preserve existing OAuth/catalog namespaces and secrets, and verify public tool
+compatibility before updating the tenant ZIP.
 
 The plugin provisions `procurement_opportunities` with a unique `source_id` and
 native record-version support. It declares fixed tender search/detail actions and three catalog read actions and does not
-contain a source URL, API key, OAuth token or secret. The action's source ID and
-mapping are metadata; user input cannot select a different endpoint or tool.
+contain an API key, OAuth token or secret. Public actions reference their configured
+MCP source; private actions use a fixed service URL and declared connector. User
+input cannot select a different endpoint or tool.
 
 ## Shared preview delivery
 

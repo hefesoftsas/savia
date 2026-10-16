@@ -87,6 +87,40 @@
         }
       },
       "inputArguments": ["id_del_proceso"]
+    },
+    {
+      "id": "dossier-call",
+      "kind": "http",
+      "connector": "secop-dossier",
+      "request": {
+        "method": "POST",
+        "url": "https://secop-live-worker.jose-douglas-dev.workers.dev/private/v1/dispatch",
+        "headers": {
+          "Authorization": "Bearer {{connection.apiKey}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "{{input.operation}}",
+          "arguments": "{{input.arguments}}"
+        }
+      }
+    },
+    {
+      "id": "assistant-chat",
+      "kind": "http",
+      "connector": "secop-dossier",
+      "request": {
+        "method": "POST",
+        "url": "https://secop-live-worker.jose-douglas-dev.workers.dev/private/v1/assistant",
+        "headers": {
+          "Authorization": "Bearer {{connection.apiKey}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "context": "{{input.context}}",
+          "request": "{{input.request}}"
+        }
+      }
     }
   ],
   "monitors": [
@@ -504,7 +538,9 @@
             "analysis": {
               "type": "Textarea",
               "label": "AI analysis",
-              "config": { "maxLength": 100000 }
+              "config": {
+                "maxLength": 100000
+              }
             },
             "model": {
               "type": "Textbox",
@@ -547,5 +583,22 @@
   ],
   "documentDownloads": {
     "allowedHosts": ["community.secop.gov.co"]
-  }
+  },
+  "connectors": [
+    {
+      "id": "secop-dossier",
+      "label": "SECOP dossier assistant",
+      "secretFields": ["apiKey"],
+      "configSchema": {
+        "type": "object",
+        "required": ["apiKey"],
+        "properties": {
+          "apiKey": {
+            "type": "string"
+          }
+        }
+      },
+      "allowedHosts": ["secop-live-worker.jose-douglas-dev.workers.dev"]
+    }
+  ]
 }

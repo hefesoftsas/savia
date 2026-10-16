@@ -4,7 +4,15 @@ import {
   quoteFieldLabels,
   formatQuoteField,
 } from "./assistant-quote-result";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   AssistantRuntimeProvider,
   AttachmentPrimitive,
@@ -80,6 +88,391 @@ import { assistantSyncMessages } from "./assistant-sync-messages";
 import { AssistantThreadList } from "./assistant-thread-list";
 import { useMessages } from "@/i18n/core";
 import { uiMessages } from "@/i18n/locales/ui";
+import { assistantExternalMessages } from "./assistant-external-messages";
+import {
+  getPluginAssistantProvider,
+  subscribePluginAssistantProvider,
+  type PluginAssistantProvider,
+  type PluginAssistantResponse,
+} from "@savia/studio-shared/plugin-assistant";
+
+function ProviderSources({
+  citations,
+}: {
+  citations: NonNullable<
+    PluginAssistantResponse["messages"][number]["citations"]
+  >;
+}) {
+  const tx = useMessages(assistantExternalMessages);
+  const [query, setQuery] = useState("");
+  const search = query.trim().toLocaleLowerCase();
+  const shown = search
+    ? citations.filter((citation) =>
+        `${citation.id} ${citation.label}`.toLocaleLowerCase().includes(search),
+      )
+    : citations;
+  return (
+    <details className="mt-3 border-t border-current/15 pt-2 text-xs">
+      <summary className="cursor-pointer py-1 font-medium">
+        {tx("Sources (%{count})", { count: citations.length })}
+      </summary>
+      {citations.length > 8 && (
+        <label className="mt-3 block">
+          <span className="mb-1 block font-medium">{tx("Search sources")}</span>
+          <input
+            type="search"
+            aria-label={tx("Search sources")}
+            placeholder={tx("Reference or document name")}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          />
+        </label>
+      )}
+      {shown.length === 0 && (
+        <p className="mt-3">{tx("No sources match this search.")}</p>
+      )}
+      <ul className="mt-3 space-y-4">
+        {shown.map((citation) => (
+          <li key={citation.id}>
+            <strong>
+              {citation.id} · {citation.label}
+            </strong>
+            <p className="mt-1 whitespace-pre-wrap opacity-80">
+              {citation.excerpt}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+export function ExternalAssistantConversation({
+  provider,
+  onReturn,
+}: {
+  provider: PluginAssistantProvider;
+  onReturn: () => void;
+}) {
+  const [conversation, setConversation] = useState<PluginAssistantResponse>({
+    revision: 0,
+    messages: [],
+  });
+  const [draft, setDraft] = useState(provider.initialMessage ?? "");
+  const draftRef = useRef(provider.initialMessage ?? "");
+  const [loading, setLoading] = useState(true);
+  const [loadedSuccessfully, setLoadedSuccessfully] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pollRunning = useRef(false);
+  const mounted = useRef(true);
+  const refreshedAt = useRef(0);
+  const scrollArea = useRef<HTMLDivElement>(null);
+  const latestMessage = useRef<HTMLElement>(null);
+  const sendAttempt = useRef<{ message: string; key: string } | null>(null);
+  const tx = useMessages(assistantExternalMessages);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const result = await provider.invoke({ method: "load" });
+      if (!mounted.current) return;
+      setLoadedSuccessfully(true);
+      setConversation(result);
+      if (result.pendingJobId) refreshedAt.current = Date.now();
+    } catch (caught) {
+      if (mounted.current)
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : tx("Could not load this conversation."),
+        );
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }, [provider, tx]);
+
+  useEffect(() => {
+    mounted.current = true;
+    void load();
+    return () => {
+      mounted.current = false;
+    };
+  }, [load]);
+
+  useEffect(() => {
+    if (!conversation.pendingJobId) return;
+    const timer = window.setInterval(() => {
+      if (pollRunning.current || pollTimedOut) return;
+      if (Date.now() - refreshedAt.current > 180_000) {
+        setPollTimedOut(true);
+        setError(
+          tx(
+            "The response is taking longer than expected. Check its status to continue.",
+          ),
+        );
+        return;
+      }
+      pollRunning.current = true;
+      void provider
+        .invoke({ method: "poll", jobId: conversation.pendingJobId! })
+        .then((result) => {
+          if (mounted.current) {
+            setLoadedSuccessfully(true);
+            setConversation(result);
+            if (!result.pendingJobId) setError(null);
+          }
+        })
+        .catch((caught) => {
+          if (mounted.current)
+            setError(
+              caught instanceof Error
+                ? caught.message
+                : tx("Could not update the response."),
+            );
+        })
+        .finally(() => {
+          pollRunning.current = false;
+        });
+    }, 1_500);
+    return () => window.clearInterval(timer);
+  }, [conversation.pendingJobId, pollTimedOut, provider, tx]);
+
+  useLayoutEffect(() => {
+    const area = scrollArea.current;
+    const latest = latestMessage.current;
+    if (area && latest)
+      area.scrollTop = Math.max(0, latest.offsetTop - area.offsetTop - 12);
+  }, [conversation.messages.length]);
+
+  const checkStatus = async () => {
+    if (!conversation.pendingJobId || pollRunning.current) return;
+    pollRunning.current = true;
+    setError(null);
+    setPollTimedOut(false);
+    refreshedAt.current = Date.now();
+    try {
+      const result = await provider.invoke({
+        method: "poll",
+        jobId: conversation.pendingJobId,
+      });
+      if (mounted.current) {
+        setLoadedSuccessfully(true);
+        setConversation(result);
+      }
+    } catch (caught) {
+      if (mounted.current)
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : tx("Could not update the response."),
+        );
+    } finally {
+      pollRunning.current = false;
+    }
+  };
+
+  const send = async () => {
+    const sentDraft = draft;
+    const message = sentDraft.trim();
+    if (!message || !loadedSuccessfully || sending || conversation.pendingJobId)
+      return;
+    setSending(true);
+    setError(null);
+    const idempotencyKey =
+      sendAttempt.current?.message === message
+        ? sendAttempt.current.key
+        : crypto.randomUUID();
+    sendAttempt.current = { message, key: idempotencyKey };
+    try {
+      const result = await provider.invoke({
+        method: "send",
+        message,
+        idempotencyKey,
+        ...(conversation.conversationId
+          ? { conversationId: conversation.conversationId }
+          : {}),
+        expectedRevision: conversation.revision,
+      });
+      if (!mounted.current) return;
+      setConversation(result);
+      if (draftRef.current === sentDraft) {
+        draftRef.current = "";
+        setDraft("");
+      }
+      sendAttempt.current = null;
+      setPollTimedOut(false);
+      if (result.pendingJobId) refreshedAt.current = Date.now();
+    } catch (caught) {
+      if (mounted.current)
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : tx("Could not send this message."),
+        );
+    } finally {
+      if (mounted.current) setSending(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-2 border-b px-4 py-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onReturn}
+          className="h-8 gap-1.5 px-2"
+        >
+          <ArrowLeft className="size-4" /> {tx("General assistant")}
+        </Button>
+        <div className="min-w-0 flex-1 text-right">
+          <p className="truncate text-sm font-medium">{provider.title}</p>
+          <p className="text-xs text-muted-foreground">
+            {tx("Connected assistant")}
+          </p>
+        </div>
+      </div>
+      {conversation.coverage && (
+        <div className="border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+          {conversation.coverage.label}
+          {conversation.coverage.complete ? "" : ` · ${tx("partial")}`}
+        </div>
+      )}
+      <div
+        ref={scrollArea}
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5"
+        aria-live="polite"
+      >
+        {loading && (
+          <p className="text-sm text-muted-foreground">
+            {tx("Loading conversation…")}
+          </p>
+        )}
+        {!loading && conversation.messages.length === 0 && !error && (
+          <p className="text-sm text-muted-foreground">
+            {tx("Ask a question about this workspace item.")}
+          </p>
+        )}
+        {conversation.messages.map((message, index) => (
+          <article
+            key={message.id}
+            ref={
+              index === conversation.messages.length - 1
+                ? latestMessage
+                : undefined
+            }
+            className={cn(
+              "min-w-0 max-w-[92%] rounded-xl px-4 py-3 text-sm leading-6 [overflow-wrap:anywhere] [&_h2]:mt-6 [&_h2]:mb-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2:first-child]:mt-0 [&_h3]:mt-5 [&_h3]:mb-2 [&_h3]:font-semibold [&_strong]:text-inherit",
+              message.role === "user"
+                ? "self-end bg-primary text-primary-foreground"
+                : "self-start bg-muted/70",
+            )}
+          >
+            <AssistantMarkdown text={message.text} />
+            {message.insufficientEvidence && (
+              <p className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs text-amber-800 dark:text-amber-200">
+                {tx("The available sources do not support a complete answer.")}
+              </p>
+            )}
+            {message.stale && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {tx("This answer uses an earlier source version.")}
+              </p>
+            )}
+            {message.citations?.length ? (
+              <ProviderSources citations={message.citations} />
+            ) : null}
+          </article>
+        ))}
+        {conversation.pendingJobId && (
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {tx("Preparing a response…")}
+            </p>
+            {pollTimedOut && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                onClick={() => void checkStatus()}
+              >
+                {tx("Check status")}
+              </Button>
+            )}
+          </div>
+        )}
+        {error && (
+          <div
+            role="alert"
+            className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+          >
+            {error}
+            {!conversation.pendingJobId && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                onClick={() => void load()}
+                className="ml-2 h-auto p-0"
+              >
+                {tx("Retry")}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="border-t p-4">
+        <label className="sr-only" htmlFor="external-assistant-composer">
+          {tx("Message")}
+        </label>
+        <textarea
+          id="external-assistant-composer"
+          value={draft}
+          onChange={(event) => {
+            draftRef.current = event.target.value;
+            setDraft(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void send();
+            }
+          }}
+          maxLength={8_000}
+          placeholder={tx("Write your question…")}
+          className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">
+            {tx("Shift+Enter for a new line")}
+          </span>
+          <Button
+            type="button"
+            onClick={() => void send()}
+            disabled={
+              !draft.trim() ||
+              loading ||
+              !loadedSuccessfully ||
+              sending ||
+              Boolean(conversation.pendingJobId)
+            }
+          >
+            {sending ? (
+              <LoaderCircle className="mr-2 size-4 animate-spin" />
+            ) : (
+              <SendHorizontal className="mr-2 size-4" />
+            )}
+            {tx("Send")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type PreparedAction = {
   actionId: string;
@@ -1662,8 +2055,14 @@ export function AssistantConversation({
 
 export function AssistantBar() {
   const t = useMessages(uiMessages);
+  const txExternal = useMessages(assistantExternalMessages);
   const [open, setOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"chat" | "history">("chat");
+  const externalProvider = useSyncExternalStore(
+    subscribePluginAssistantProvider,
+    getPluginAssistantProvider,
+    () => null,
+  );
   const history = useAssistantThreads(open);
   const { threads, activeThread } = history;
   const activeThreadId = activeThread?.id ?? null;
@@ -1690,9 +2089,22 @@ export function AssistantBar() {
   const handleDeleteThread = (id: string) => {
     void history.remove(id);
   };
+  useEffect(() => {
+    if (externalProvider) {
+      setViewMode("chat");
+      setOpen(true);
+    }
+  }, [externalProvider]);
+  const returnToGeneralAssistant = () => externalProvider?.close();
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) externalProvider?.close();
+        setOpen(next);
+      }}
+    >
       <SheetTrigger asChild>
         <Button
           className="size-11 shrink-0 gap-2.5 rounded-full border border-primary/20 bg-primary p-0 font-medium text-primary-foreground transition-all hover:bg-primary/90 sm:fixed sm:right-6 sm:bottom-6 sm:z-40 sm:h-12 sm:w-auto sm:px-4.5 sm:shadow-xl sm:hover:scale-[1.02] sm:active:scale-[0.98]"
@@ -1705,7 +2117,16 @@ export function AssistantBar() {
       <SheetContent className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b border-border/60 bg-card/60 px-4 py-3 backdrop-blur-xs">
           <div className="flex items-center justify-between gap-2 pr-8">
-            {viewMode === "history" ? (
+            {externalProvider ? (
+              <div>
+                <SheetTitle className="text-sm font-semibold tracking-tight text-foreground">
+                  {externalProvider.title}
+                </SheetTitle>
+                <p className="text-[11px] text-muted-foreground">
+                  {txExternal("Connected assistant")}
+                </p>
+              </div>
+            ) : viewMode === "history" ? (
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
@@ -1744,7 +2165,7 @@ export function AssistantBar() {
             )}
 
             <div className="flex items-center gap-1">
-              {viewMode === "chat" ? (
+              {!externalProvider && viewMode === "chat" ? (
                 <>
                   <Button
                     variant="ghost"
@@ -1776,7 +2197,7 @@ export function AssistantBar() {
                     <SquarePen className="size-4" />
                   </Button>
                 </>
-              ) : (
+              ) : !externalProvider ? (
                 <Button
                   size="sm"
                   variant="default"
@@ -1787,31 +2208,48 @@ export function AssistantBar() {
                   <Plus className="size-3.5" />
                   <span>{t("New")}</span>
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
         </SheetHeader>
 
-        <AssistantSyncStatus history={history} />
-        {history.loading ? null : viewMode === "history" ? (
+        {!externalProvider && <AssistantSyncStatus history={history} />}
+        {externalProvider ? (
+          <ExternalAssistantConversation
+            key={externalProvider.sessionId}
+            provider={externalProvider}
+            onReturn={returnToGeneralAssistant}
+          />
+        ) : null}
+        {viewMode === "chat" && activeThread ? (
+          <div
+            className={cn(
+              "min-h-0 flex-1 flex-col",
+              externalProvider ? "hidden" : "flex",
+            )}
+            hidden={Boolean(externalProvider)}
+            aria-hidden={externalProvider ? true : undefined}
+            inert={Boolean(externalProvider)}
+          >
+            <AssistantConversation
+              key={`${activeThreadId}:${history.epoch}`}
+              threadId={activeThreadId ?? "fresh"}
+              initialMessages={activeThread?.messages ?? []}
+              onSaveThread={history.save}
+              onOpenHistory={handleOpenHistory}
+              threadTitle={activeThread?.title}
+              onRunningChange={handleRunning}
+              recordingContext={activeThread.context}
+              disabled={Boolean(history.error)}
+            />
+          </div>
+        ) : history.loading ? null : viewMode === "history" ? (
           <AssistantThreadList
             threads={threads}
             activeThreadId={activeThreadId}
             onSelectThread={handleSelectThread}
             onNewThread={handleNewThread}
             onDeleteThread={handleDeleteThread}
-          />
-        ) : activeThread ? (
-          <AssistantConversation
-            key={`${activeThreadId}:${history.epoch}`}
-            threadId={activeThreadId ?? "fresh"}
-            initialMessages={activeThread?.messages ?? []}
-            onSaveThread={history.save}
-            onOpenHistory={handleOpenHistory}
-            threadTitle={activeThread?.title}
-            onRunningChange={handleRunning}
-            recordingContext={activeThread.context}
-            disabled={Boolean(history.error)}
           />
         ) : null}
       </SheetContent>

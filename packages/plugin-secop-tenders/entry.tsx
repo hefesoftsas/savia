@@ -6,10 +6,11 @@ import {
   useSyncExternalStore,
   type FormEvent,
 } from "react";
+import { Bookmark, BookmarkCheck, ExternalLink, FileText } from "lucide-react";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { defineReactPlugin } from "@savia/plugin-sdk/react";
 import "./styles.css";
-import { TenderDocuments } from "./tender-documents";
+import { DossierPanel } from "./dossier-panel";
 import { SearchFeed } from "./search-feed";
 import { FilterAutocomplete } from "./filter-autocomplete";
 import {
@@ -667,7 +668,7 @@ function Screen({ savia }: { savia: PluginApi }) {
 
   if (documentRow)
     return (
-      <TenderDocuments
+      <DossierPanel
         key={String(documentRow.process_id)}
         savia={savia}
         row={documentRow}
@@ -938,6 +939,11 @@ function Screen({ savia }: { savia: PluginApi }) {
                           type="button"
                           onClick={() => setDocumentRow(row)}
                         >
+                          <FileText
+                            className="secop-action-icon"
+                            size={16}
+                            aria-hidden="true"
+                          />
                           {locale === "en"
                             ? "Documents"
                             : locale === "pt"
@@ -950,6 +956,11 @@ function Screen({ savia }: { savia: PluginApi }) {
                             target="_blank"
                             rel="noopener noreferrer"
                           >
+                            <ExternalLink
+                              className="secop-action-icon"
+                              size={16}
+                              aria-hidden="true"
+                            />
                             {t.source}
                           </a>
                         ) : (
@@ -962,6 +973,19 @@ function Screen({ savia }: { savia: PluginApi }) {
                           disabled={isSaved || savingId === row.id}
                           onClick={() => void markInterest(row)}
                         >
+                          {isSaved ? (
+                            <BookmarkCheck
+                              className="secop-action-icon"
+                              size={16}
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Bookmark
+                              className="secop-action-icon"
+                              size={16}
+                              aria-hidden="true"
+                            />
+                          )}
                           {savingId === row.id
                             ? t.saving
                             : isSaved
