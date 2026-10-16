@@ -51,6 +51,15 @@ The plugin opens a dossier with Summary, Documents, Requirements, Company and
 Assistant views from the existing Documents action. It preserves the previous
 per-PDF document workflow behind **Documents and previous PDF analyses**.
 
+Each tender and dossier tab has a shareable URL. Opening Documents records the
+process ID and tab through the host's generic `savia.route` bridge. Refreshing,
+opening a copied link, and browser Back/Forward restore that tender directly
+through the fixed read-only detail action, even when no search results are loaded.
+Only public view identifiers enter the URL; documents, company evidence and chat
+history remain in the backend. A failed lookup offers Retry without discarding the
+link, and a missing tender shows a return action. Links still require normal
+workspace access and the workspace's SECOP connection.
+
 All new processing runs in the private secop-live-worker service. No
 SECOP-specific server/API/schema change is added to Savia. The plugin uses a
 fixed, secret-backed HTTP connector (secop-dossier) and one declared dispatch

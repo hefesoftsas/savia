@@ -23,6 +23,7 @@ import {
   COLLECTION,
   PAGE_SIZE,
   RequestSequence,
+  getSecopDetail,
   isTrackingConflict,
   saveInterest,
   searchSecop,
@@ -34,6 +35,20 @@ import {
 } from "./logic";
 
 type Locale = "es" | "en" | "pt";
+type RouteState = Record<string, string>;
+type DossierTab = "summary" | "documents" | "requirements" | "company" | "chat";
+const dossierTabs = new Set<DossierTab>([
+  "summary",
+  "documents",
+  "requirements",
+  "company",
+  "chat",
+]);
+function routeTab(value: string | undefined): DossierTab {
+  return dossierTabs.has(value as DossierTab)
+    ? (value as DossierTab)
+    : "summary";
+}
 const messages = {
   es: {
     title: "Licitaciones SECOP",
@@ -50,6 +65,10 @@ const messages = {
     loading: "Consultando SECOP…",
     searchFirst:
       "Ingresa criterios y busca para consultar procesos disponibles.",
+    deepLinkLoading: "Cargando licitación…",
+    deepLinkError: "No se pudo cargar esta licitación.",
+    deepLinkNotFound: "No encontramos esta licitación en SECOP.",
+    back: "Volver a licitaciones",
     noResults: "No se encontraron procesos con estos criterios.",
     searchError: "No se pudo consultar SECOP. Inténtalo de nuevo.",
     resultCount: "procesos cargados",
@@ -148,6 +167,10 @@ const messages = {
     run: "Search",
     loading: "Searching SECOP…",
     searchFirst: "Enter criteria and search to see available opportunities.",
+    deepLinkLoading: "Loading tender…",
+    deepLinkError: "Could not load this tender.",
+    deepLinkNotFound: "This tender could not be found in SECOP.",
+    back: "Back to tenders",
     noResults: "No tenders match these criteria.",
     searchError: "SECOP search failed. Try again.",
     resultCount: "tenders loaded",
@@ -246,6 +269,10 @@ const messages = {
     loading: "Consultando SECOP…",
     searchFirst:
       "Informe os critérios e busque para consultar oportunidades disponíveis.",
+    deepLinkLoading: "Carregando licitação…",
+    deepLinkError: "Não foi possível carregar esta licitação.",
+    deepLinkNotFound: "Esta licitação não foi encontrada no SECOP.",
+    back: "Voltar às licitações",
     noResults: "Nenhuma licitação encontrada com estes critérios.",
     searchError: "Não foi possível consultar o SECOP. Tente novamente.",
     resultCount: "licitações carregadas",
@@ -413,6 +440,7 @@ function formatAmount(value: unknown, locale: Locale) {
 }
 
 function Screen({ savia }: { savia: PluginApi }) {
+  const routeApi = savia.route;
   const locale = isLocale(savia.i18n?.locale);
   const t = new Proxy(messages[locale], {
     get(target, property: string) {
@@ -425,6 +453,18 @@ function Screen({ savia }: { savia: PluginApi }) {
     },
   });
   const [documentRow, setDocumentRow] = useState<SecopRow | null>(null);
+  const [routeState, setRouteState] = useState<RouteState | null>(
+    routeApi ? null : {},
+  );
+  const [routeLoad, setRouteLoad] = useState<
+    "idle" | "loading" | "error" | "not-found" | "ready"
+  >(routeApi ? "loading" : "idle");
+  const [loadedTender, setLoadedTender] = useState("");
+  const [routeRetry, setRouteRetry] = useState(0);
+  const routeLookup = useRef(0);
+  const routeRevision = useRef(0);
+  const routeRead = useRef(0);
+  const routeWrite = useRef(0);
   const [surface, setSurface] = useState<"search" | "interests">("search");
   const [draft, setDraft] = useState<SearchInput>({});
   const feed = useMemo(
@@ -503,6 +543,91 @@ function Screen({ savia }: { savia: PluginApi }) {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const interestRequests = useRef(new RequestSequence()).current;
   const mounted = useRef(true);
+
+  useEffect(() => {
+    if (!routeApi) return;
+    let active = true;
+    const unsubscribe = routeApi.subscribe?.((next) => {
+      routeRevision.current++;
+      routeWrite.current++;
+      setRouteState({ ...next });
+    });
+    const revision = routeRevision.current;
+    const writeRevision = routeWrite.current;
+    const request = ++routeRead.current;
+    void routeApi
+      .get()
+      .then((state) => {
+        if (
+          active &&
+          request === routeRead.current &&
+          revision === routeRevision.current &&
+          writeRevision === routeWrite.current
+        ) {
+          setRouteState({ ...state });
+          routeWrite.current++;
+        }
+      })
+      .catch(() => {
+        if (
+          active &&
+          request === routeRead.current &&
+          revision === routeRevision.current &&
+          writeRevision === routeWrite.current
+        )
+          setRouteLoad("error");
+      });
+    return () => {
+      active = false;
+      routeRead.current++;
+      unsubscribe?.();
+    };
+  }, [routeApi]);
+
+  const routedTender = routeState?.tender?.trim() ?? "";
+  useEffect(() => {
+    if (!routeApi || routeState === null) return;
+    if (!routedTender) {
+      routeLookup.current++;
+      setRouteLoad("idle");
+      setDocumentRow(null);
+      setLoadedTender("");
+      return;
+    }
+    if (
+      routedTender.length > 200 ||
+      /[\u0000-\u001f\u007f]/.test(routedTender)
+    ) {
+      routeLookup.current++;
+      setDocumentRow(null);
+      setLoadedTender("");
+      setRouteLoad("not-found");
+      return;
+    }
+    let active = true;
+    const request = ++routeLookup.current;
+    setDocumentRow(null);
+    setLoadedTender("");
+    setRouteLoad("loading");
+    void getSecopDetail(savia, routedTender)
+      .then((row) => {
+        if (!active || request !== routeLookup.current) return;
+        if (!row || String(row.process_id ?? "") !== routedTender) {
+          setRouteLoad("not-found");
+          return;
+        }
+        setDocumentRow(row);
+        setLoadedTender(routedTender);
+        setRouteLoad("ready");
+      })
+      .catch(() => {
+        if (active && request === routeLookup.current) setRouteLoad("error");
+      });
+    return () => {
+      active = false;
+      if (routeLookup.current === request) routeLookup.current++;
+    };
+  }, [routeApi, routeState !== null, routedTender, routeRetry, savia]);
 
   const collection = useMemo(
     () => savia.collections.collection<Interest>(COLLECTION),
@@ -665,15 +790,127 @@ function Screen({ savia }: { savia: PluginApi }) {
     "discarded",
   ];
   const totalInterestPages = Math.max(1, Math.ceil(interestTotal / PAGE_SIZE));
+  const activeDocumentRow = routeApi
+    ? loadedTender === routedTender && routeLoad === "ready"
+      ? documentRow
+      : null
+    : documentRow;
 
-  if (documentRow)
+  const openTender = (row: SecopRow, tab: DossierTab = "documents") => {
+    if (!routeApi) {
+      setDocumentRow(row);
+      return;
+    }
+    const processId = String(row.process_id ?? "").trim();
+    if (
+      !processId ||
+      processId.length > 200 ||
+      /[\u0000-\u001f\u007f]/.test(processId)
+    )
+      return;
+    const next = { tender: processId, tab };
+    setRouteState(next);
+    const write = ++routeWrite.current;
+    void routeApi.set(next).catch(() => {
+      if (routeWrite.current === write) setRouteLoad("error");
+    });
+  };
+  const leaveTender = () => {
+    setDocumentRow(null);
+    if (!routeApi) return;
+    setRouteState({});
+    const write = ++routeWrite.current;
+    void routeApi.set({}, { replace: true }).catch(() => {
+      if (routeWrite.current === write) setRouteLoad("error");
+    });
+  };
+  const changeTenderTab = (tab: DossierTab) => {
+    if (!routeApi || !routedTender) return;
+    const next = { ...(routeState ?? {}), tender: routedTender, tab };
+    setRouteState(next);
+    const write = ++routeWrite.current;
+    void routeApi.set(next).catch(() => {
+      if (routeWrite.current === write) setRouteLoad("error");
+    });
+  };
+
+  if (
+    routeApi &&
+    (routeState === null ||
+      (routedTender &&
+        (routeLoad !== "ready" || loadedTender !== routedTender)))
+  )
+    return (
+      <main className="secop-app" lang={locale}>
+        <header className="secop-header">
+          <div>
+            <p className="secop-eyebrow">SECOP · Colombia</p>
+            <h1>{t.title}</h1>
+          </div>
+        </header>
+        <p
+          className="secop-state"
+          role={routeLoad === "error" ? "alert" : "status"}
+        >
+          {routeLoad === "loading"
+            ? t.deepLinkLoading
+            : routeLoad === "not-found"
+              ? t.deepLinkNotFound
+              : t.deepLinkError}
+        </p>
+        {routeLoad === "error" && (
+          <button
+            type="button"
+            onClick={() => {
+              if (routeState === null) {
+                setRouteLoad("loading");
+                const request = ++routeRead.current;
+                const revision = routeRevision.current;
+                const writeRevision = routeWrite.current;
+                void routeApi
+                  .get()
+                  .then((state) => {
+                    if (
+                      request === routeRead.current &&
+                      revision === routeRevision.current &&
+                      writeRevision === routeWrite.current
+                    ) {
+                      setRouteState({ ...state });
+                      routeWrite.current++;
+                    }
+                  })
+                  .catch(() => {
+                    if (
+                      request === routeRead.current &&
+                      revision === routeRevision.current &&
+                      writeRevision === routeWrite.current
+                    )
+                      setRouteLoad("error");
+                  });
+              } else setRouteRetry((attempt) => attempt + 1);
+            }}
+          >
+            {t.retry}
+          </button>
+        )}
+        {(routeLoad === "error" || routeLoad === "not-found") && (
+          <button type="button" onClick={leaveTender}>
+            {t.back}
+          </button>
+        )}
+      </main>
+    );
+
+  if (activeDocumentRow)
     return (
       <DossierPanel
-        key={String(documentRow.process_id)}
+        key={String(activeDocumentRow.process_id)}
         savia={savia}
-        row={documentRow}
+        row={activeDocumentRow}
         locale={locale}
-        onBack={() => setDocumentRow(null)}
+        tab={routeApi ? routeTab(routeState?.tab) : undefined}
+        onTabChange={routeApi ? changeTenderTab : undefined}
+        onBack={leaveTender}
       />
     );
   return (
@@ -937,7 +1174,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                       <footer>
                         <button
                           type="button"
-                          onClick={() => setDocumentRow(row)}
+                          onClick={() => openTender(row, "documents")}
                         >
                           <FileText
                             className="secop-action-icon"
@@ -1115,7 +1352,9 @@ function Screen({ savia }: { savia: PluginApi }) {
                   </header>
                   <button
                     type="button"
-                    onClick={() => setDocumentRow({ ...record, id: record.id })}
+                    onClick={() =>
+                      openTender({ ...record, id: record.id }, "documents")
+                    }
                   >
                     {locale === "en" ? "Documents" : "Documentos"}
                   </button>
