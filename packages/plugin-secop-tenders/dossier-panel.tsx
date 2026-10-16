@@ -363,7 +363,11 @@ export function DossierPanel({
     }
     await run(() =>
       savia.assistant!.open({
-        title: String(row.name ?? "Expediente de la licitación"),
+        title:
+          `${processId} · ${String(row.name ?? "Expediente de la licitación")}`.slice(
+            0,
+            160,
+          ),
         actionId: "assistant-chat",
         connectionId: client.connectionId,
         context: {

@@ -2027,7 +2027,7 @@ export function AssistantBar() {
     getPluginAssistantProvider,
     () => null,
   );
-  const history = useAssistantThreads(open && !externalProvider);
+  const history = useAssistantThreads(open);
   const { threads, activeThread } = history;
   const activeThreadId = activeThread?.id ?? null;
   const [isAssistantBusy, setIsAssistantBusy] = useState(false);
@@ -2184,6 +2184,29 @@ export function AssistantBar() {
             provider={externalProvider}
             onReturn={returnToGeneralAssistant}
           />
+        ) : null}
+        {viewMode === "chat" && activeThread ? (
+          <div
+            className={cn(
+              "min-h-0 flex-1 flex-col",
+              externalProvider ? "hidden" : "flex",
+            )}
+            hidden={Boolean(externalProvider)}
+            aria-hidden={externalProvider ? true : undefined}
+            inert={Boolean(externalProvider)}
+          >
+            <AssistantConversation
+              key={`${activeThreadId}:${history.epoch}`}
+              threadId={activeThreadId ?? "fresh"}
+              initialMessages={activeThread?.messages ?? []}
+              onSaveThread={history.save}
+              onOpenHistory={handleOpenHistory}
+              threadTitle={activeThread?.title}
+              onRunningChange={handleRunning}
+              recordingContext={activeThread.context}
+              disabled={Boolean(history.error)}
+            />
+          </div>
         ) : history.loading ? null : viewMode === "history" ? (
           <AssistantThreadList
             threads={threads}
@@ -2191,18 +2214,6 @@ export function AssistantBar() {
             onSelectThread={handleSelectThread}
             onNewThread={handleNewThread}
             onDeleteThread={handleDeleteThread}
-          />
-        ) : activeThread ? (
-          <AssistantConversation
-            key={`${activeThreadId}:${history.epoch}`}
-            threadId={activeThreadId ?? "fresh"}
-            initialMessages={activeThread?.messages ?? []}
-            onSaveThread={history.save}
-            onOpenHistory={handleOpenHistory}
-            threadTitle={activeThread?.title}
-            onRunningChange={handleRunning}
-            recordingContext={activeThread.context}
-            disabled={Boolean(history.error)}
           />
         ) : null}
       </SheetContent>
