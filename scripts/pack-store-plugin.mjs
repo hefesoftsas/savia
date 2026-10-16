@@ -1,12 +1,14 @@
 import { execFileSync } from "node:child_process";
 import {
   cpSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
+  utimesSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -276,6 +278,12 @@ function packageStorePlugin({ portDir, outputPath, versionOverride }) {
       cpSync(join(portRoot, "store.json"), join(stagingRoot, "store.json"));
       zipInputs.splice(1, 0, "store.json");
     }
+    const zipEpoch = new Date("1980-01-01T00:00:00.000Z");
+    for (const input of zipInputs) {
+      const path = join(stagingRoot, input);
+      chmodSync(path, 0o644);
+      utimesSync(path, zipEpoch, zipEpoch);
+    }
     const artifact = outputPath
       ? resolve(workspaceRoot, outputPath)
       : join(
@@ -290,6 +298,7 @@ function packageStorePlugin({ portDir, outputPath, versionOverride }) {
     rmSync(artifact, { force: true });
     execFileSync("zip", ["-q", "-X", "-r", artifact, ...zipInputs], {
       cwd: stagingRoot,
+      env: { ...process.env, TZ: "UTC" },
     });
     const sha256 = createHash("sha256")
       .update(readFileSync(artifact))

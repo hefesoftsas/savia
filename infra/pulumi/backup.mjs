@@ -31,6 +31,7 @@ export function parseBackupArgs(argv) {
   const dryRun = argv.includes("--dry-run");
   const apply = argv.includes("--apply");
   const skipR2 = argv.includes("--skip-r2");
+  const r2Concurrency = parseR2Concurrency(argv);
   const flowsSnapshotIndex = argv.indexOf("--flows-snapshot");
   const flowsSnapshot =
     flowsSnapshotIndex === -1 ? null : flagValue(argv, "--flows-snapshot");
@@ -49,7 +50,25 @@ export function parseBackupArgs(argv) {
     !argv[outDirFlag + 1].startsWith("--")
       ? argv[outDirFlag + 1]
       : null;
-  return { stack, dryRun, skipR2, outDir, confirmQuiescent, flowsSnapshot };
+  return {
+    stack,
+    dryRun,
+    skipR2,
+    outDir,
+    confirmQuiescent,
+    flowsSnapshot,
+    r2Concurrency,
+  };
+}
+
+function parseR2Concurrency(argv) {
+  const index = argv.indexOf("--r2-concurrency");
+  if (index === -1) return 4;
+  const value = argv[index + 1];
+  if (!/^[1-8]$/.test(value ?? "")) {
+    throw new Error("--r2-concurrency must be an integer from 1 through 8");
+  }
+  return Number(value);
 }
 
 export function assertSafeTableDumpFallback(stack, confirmation) {
@@ -331,6 +350,59 @@ export async function listR2Objects({
   return objects;
 }
 
+// Downloads an already complete R2 listing. The pool stops assigning new
+// objects as soon as one fails, then waits for active downloads to settle.
+export async function downloadR2Objects({
+  objects,
+  destDir,
+  bucket,
+  accountId,
+  token,
+  concurrency = 4,
+  downloadImpl = downloadR2Object,
+}) {
+  if (!Array.isArray(objects)) throw new Error("objects must be an array");
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 8) {
+    throw new Error("R2 concurrency must be an integer from 1 through 8");
+  }
+  if (typeof downloadImpl !== "function") {
+    throw new Error("downloadImpl must be a function");
+  }
+  let nextIndex = 0;
+  let hasFailed = false;
+  let firstError;
+  const worker = async () => {
+    while (!hasFailed) {
+      const index = nextIndex++;
+      if (index >= objects.length) return;
+      const object = objects[index];
+      try {
+        assertSafeR2Key(object.key);
+        const destFile = join(destDir, object.key);
+        await mkdir(dirname(destFile), { recursive: true });
+        await downloadImpl({
+          bucket,
+          key: object.key,
+          destFile,
+          accountId,
+          token,
+          expectedSize: object.size,
+          contentEncoding: object.httpMetadata?.contentEncoding,
+        });
+      } catch (error) {
+        if (!hasFailed) {
+          hasFailed = true;
+          firstError = error;
+        }
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, objects.length) }, worker),
+  );
+  if (hasFailed) throw firstError;
+}
+
 export function manifestFor({
   stack,
   outputs,
@@ -538,20 +610,14 @@ async function main() {
         await execFileAsync(command, args, { cwd: repoRoot });
         method = "s3-sync";
       } else {
-        for (const object of objects) {
-          assertSafeR2Key(object.key);
-          const destFile = join(destDir, object.key);
-          await mkdir(dirname(destFile), { recursive: true });
-          await downloadR2Object({
-            bucket,
-            key: object.key,
-            destFile,
-            accountId,
-            token,
-            expectedSize: object.size,
-            contentEncoding: object.httpMetadata?.contentEncoding,
-          });
-        }
+        await downloadR2Objects({
+          objects,
+          destDir,
+          bucket,
+          accountId,
+          token,
+          concurrency: plan.r2Concurrency,
+        });
         method = "object-get";
       }
       await assertCapturedR2Files(destDir, objects);

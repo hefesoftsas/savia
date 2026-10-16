@@ -21,6 +21,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [Preview release lanes](guides/preview-release-lanes.md) — compatible plugin publication, affected CI checks, recovery checkpoints and bounded backup concurrency.
+
 - [Stable background refresh](guides/background-refresh.md) — scoped queries, initial versus background loading, session changes, draft preservation and migration coverage.
 - [Browser connectivity](guides/connectivity.md) — verified offline hints, shared checks and reconnect behavior.
 
