@@ -416,6 +416,8 @@ function TaskActionForm({
                 <a
                   className="font-medium text-primary underline underline-offset-4"
                   href={collectionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
                   {t("Ver pendientes")}
                 </a>
