@@ -1,6 +1,11 @@
 import type { PluginAssistantResponse } from "@savia/studio-shared/plugin-assistant";
 
 type ExternalAssistantMessage = PluginAssistantResponse["messages"][number];
+type ExternalAssistantCopyLabels = {
+  sources: string;
+  insufficientEvidence: string;
+  stale: string;
+};
 
 function citationText(
   citations: ExternalAssistantMessage["citations"],
@@ -23,9 +28,17 @@ function citationText(
 
 export function formatExternalAssistantAnswer(
   message: ExternalAssistantMessage,
-  labels: { sources: string },
+  labels: ExternalAssistantCopyLabels,
 ): string {
-  return [message.text, citationText(message.citations, labels.sources)]
+  const qualifications = [
+    message.insufficientEvidence ? labels.insufficientEvidence : "",
+    message.stale ? labels.stale : "",
+  ];
+  return [
+    message.text,
+    ...qualifications,
+    citationText(message.citations, labels.sources),
+  ]
     .filter(Boolean)
     .join("\n\n");
 }
@@ -33,7 +46,7 @@ export function formatExternalAssistantAnswer(
 export function formatExternalAssistantConversation(
   title: string,
   messages: PluginAssistantResponse["messages"],
-  labels: { user: string; assistant: string; sources: string },
+  labels: ExternalAssistantCopyLabels & { user: string; assistant: string },
 ): string {
   const entries = messages.map((message) => {
     const role = message.role === "user" ? labels.user : labels.assistant;

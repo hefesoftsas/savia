@@ -176,6 +176,7 @@ export function ExternalAssistantConversation({
   >(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [copiedConversation, setCopiedConversation] = useState(false);
+  const copyFeedbackGeneration = useRef(0);
   const pollRunning = useRef(false);
   const mounted = useRef(true);
   const refreshedAt = useRef(0);
@@ -184,25 +185,35 @@ export function ExternalAssistantConversation({
   const sendAttempt = useRef<{ message: string; key: string } | null>(null);
   const tx = useMessages(assistantExternalMessages);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    copyFeedbackGeneration.current += 1;
     setCopyFeedback(null);
     setCopiedMessageId(null);
     setCopiedConversation(false);
-  }, [conversation.messages]);
+  }, [
+    conversation.messages,
+    provider.sessionId,
+    provider.actionId,
+    provider.connectionId,
+    provider.context,
+  ]);
 
   const copyText = async (
     text: string,
     target: "answer" | "conversation",
     messageId?: string,
   ) => {
+    const generation = copyFeedbackGeneration.current;
     try {
       if (!navigator.clipboard?.writeText)
         throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(text);
+      if (generation !== copyFeedbackGeneration.current) return;
       setCopyFeedback(target);
       setCopiedMessageId(target === "answer" ? (messageId ?? null) : null);
       setCopiedConversation(target === "conversation");
     } catch {
+      if (generation !== copyFeedbackGeneration.current) return;
       setCopyFeedback("error");
       setCopiedMessageId(null);
       setCopiedConversation(false);
@@ -237,6 +248,30 @@ export function ExternalAssistantConversation({
     };
   }, [load]);
 
+  const recoverFromPollFailure = useCallback(
+    async (caught: unknown) => {
+      const message =
+        caught instanceof Error
+          ? caught.message
+          : tx("Could not update the response.");
+      if (!mounted.current) return;
+      setError(message);
+      try {
+        const result = await provider.invoke({ method: "load" });
+        if (!mounted.current) return;
+        setLoadedSuccessfully(true);
+        setConversation(result);
+        // Only a fresh provider load may retire a failed job. Keep the poll
+        // error visible whether the provider reports it as terminal or still
+        // pending, so the user can understand the recovery state.
+        setError(message);
+      } catch {
+        if (mounted.current) setError(message);
+      }
+    },
+    [provider, tx],
+  );
+
   useEffect(() => {
     if (!conversation.pendingJobId) return;
     const timer = window.setInterval(() => {
@@ -261,19 +296,19 @@ export function ExternalAssistantConversation({
           }
         })
         .catch((caught) => {
-          if (mounted.current)
-            setError(
-              caught instanceof Error
-                ? caught.message
-                : tx("Could not update the response."),
-            );
+          return recoverFromPollFailure(caught);
         })
         .finally(() => {
           pollRunning.current = false;
         });
     }, 1_500);
     return () => window.clearInterval(timer);
-  }, [conversation.pendingJobId, pollTimedOut, provider, tx]);
+  }, [
+    conversation.pendingJobId,
+    pollTimedOut,
+    provider,
+    recoverFromPollFailure,
+  ]);
 
   useLayoutEffect(() => {
     const area = scrollArea.current;
@@ -298,12 +333,7 @@ export function ExternalAssistantConversation({
         setConversation(result);
       }
     } catch (caught) {
-      if (mounted.current)
-        setError(
-          caught instanceof Error
-            ? caught.message
-            : tx("Could not update the response."),
-        );
+      await recoverFromPollFailure(caught);
     } finally {
       pollRunning.current = false;
     }
@@ -388,6 +418,10 @@ export function ExternalAssistantConversation({
                       user: tx("You"),
                       assistant: tx("Assistant"),
                       sources: tx("Sources"),
+                      insufficientEvidence: tx(
+                        "The available sources do not support a complete answer.",
+                      ),
+                      stale: tx("This answer uses an earlier source version."),
                     },
                   ),
                   "conversation",
@@ -494,6 +528,12 @@ export function ExternalAssistantConversation({
                         void copyText(
                           formatExternalAssistantAnswer(message, {
                             sources: tx("Sources"),
+                            insufficientEvidence: tx(
+                              "The available sources do not support a complete answer.",
+                            ),
+                            stale: tx(
+                              "This answer uses an earlier source version.",
+                            ),
                           }),
                           "answer",
                           message.id,
