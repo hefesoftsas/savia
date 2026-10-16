@@ -801,21 +801,21 @@ export function DossierPanel({
       setError(t.assistantUpdate);
       return;
     }
-    await run(() =>
-      savia.assistant!.open({
-        title: `${processId} · ${String(row.name ?? t.headingFallback)}`.slice(
-          0,
-          160,
-        ),
-        actionId: "assistant-chat",
-        connectionId: client.connectionId,
-        context: {
-          dossierId: processId,
-          ...(companyId ? { companyProfileId: companyId } : {}),
-        },
-        ...(initialMessage ? { initialMessage } : {}),
-      }),
-    );
+    const assistantRequest = {
+      title: `${processId} · ${String(row.name ?? t.headingFallback)}`.slice(
+        0,
+        160,
+      ),
+      actionId: "assistant-chat",
+      connectionId: client.connectionId,
+      taskCollection: "secop_application_tasks",
+      context: {
+        dossierId: processId,
+        ...(companyId ? { companyProfileId: companyId } : {}),
+      },
+      ...(initialMessage ? { initialMessage } : {}),
+    };
+    await run(() => savia.assistant!.open(assistantRequest));
   }
   async function more() {
     if (!client || snapshot?.nextOffset == null) return;

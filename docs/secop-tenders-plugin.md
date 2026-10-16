@@ -110,6 +110,17 @@ silently truncating it. Changing tender, company or principal changes the contex
 it never reuses a conversation from another scope. Jobs and conversations survive
 navigation and reload. See [plugin assistant integration](guides/plugin-assistant.md).
 
+When the assistant identifies a missing requirement, **Create task** opens a
+review step for its title, responsible person and due date. Confirming creates a
+record in the plugin-owned `secop_application_tasks` collection through Savia's
+tenant-authenticated records API. The record keeps the tender and requirement
+references so the team can review the source later. Users can edit a task or set
+its status to **Done** in the native **SECOP preparation tasks** records screen.
+The responsible person is stored as the name selected by the user. A task tracks
+preparation work and does not decide or imply company compliance. The collection
+and its behavior belong to this optional SECOP plugin; Savia core gains no
+SECOP-specific task logic.
+
 Service setup, contracts, storage migrations and release checks are documented in
 `chibchombiano26/secop-live-worker/docs/operations.md`. Install this plugin only
 after the compatible service is deployed and the workspace credential provisioned.

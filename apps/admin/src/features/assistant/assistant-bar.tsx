@@ -1,3 +1,5 @@
+import { AssistantSourceAction } from "./assistant-source-action";
+import { AssistantTaskAction } from "./assistant-task-action";
 import {
   AssistantQuoteResult,
   parseQuoteResult,
@@ -102,8 +104,12 @@ import {
 } from "@savia/studio-shared/plugin-assistant";
 
 function ProviderSources({
+  provider,
+  messageId,
   citations,
 }: {
+  provider: PluginAssistantProvider;
+  messageId: string;
   citations: NonNullable<
     PluginAssistantResponse["messages"][number]["citations"]
   >;
@@ -146,6 +152,13 @@ function ProviderSources({
             <p className="mt-1 whitespace-pre-wrap opacity-80">
               {citation.excerpt}
             </p>
+            {citation.canOpen && (
+              <AssistantSourceAction
+                provider={provider}
+                messageId={messageId}
+                citationId={citation.id}
+              />
+            )}
           </li>
         ))}
       </ul>
@@ -438,6 +451,26 @@ export function ExternalAssistantConversation({
           <TooltipContent side="top">{tx("Copy conversation")}</TooltipContent>
         </Tooltip>
       </div>
+      {[...conversation.messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.role === "assistant" && message.taskSuggestions?.length,
+        ) && (
+        <div className="border-b px-4 pb-2">
+          <AssistantTaskAction
+            key={provider.sessionId}
+            provider={provider}
+            message={[...conversation.messages]
+              .reverse()
+              .find(
+                (message) =>
+                  message.role === "assistant" &&
+                  message.taskSuggestions?.length,
+              )!}
+          />
+        </div>
+      )}
       {copyFeedback && (
         <p
           role={copyFeedback === "error" ? "alert" : "status"}
@@ -503,7 +536,11 @@ export function ExternalAssistantConversation({
               </p>
             )}
             {message.citations?.length ? (
-              <ProviderSources citations={message.citations} />
+              <ProviderSources
+                provider={provider}
+                messageId={message.id}
+                citations={message.citations}
+              />
             ) : null}
             {message.role === "assistant" && (
               <div className="mt-2 flex justify-start border-t border-current/10 pt-1">

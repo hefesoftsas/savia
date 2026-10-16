@@ -1728,3 +1728,92 @@ it("forwards outbox-only conflicts even when no record revision changes", async 
     "*",
   );
 });
+
+it("binds task writes and source resolution to the current assistant session", async () => {
+  const transport = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.startsWith("/api/records/assistant_tasks?"))
+      return Response.json({ data: [], total: 0, page: 1, perPage: 2 });
+    if (path === "/api/records/assistant_tasks" && init?.method === "POST")
+      return Response.json({ data: { id: "task-1" } });
+    return Response.json({
+      data: {
+        run: { status: "succeeded" },
+        output: {
+          data: {
+            data: {
+              revision: 1,
+              messages: [],
+              source: {
+                url: "https://secop.example/private/source/ticket#page=4",
+                page: 4,
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+  setStudioRuntime({ embedded: false, transport });
+  render(<CustomPluginFrame pluginId="example.provider" title="Provider" />);
+  const frame = screen.getByTitle("Provider") as HTMLIFrameElement;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "open",
+        path: "/extensions/example.provider/assistant/open",
+        method: "POST",
+        body: {
+          title: "Tender",
+          actionId: "chat",
+          context: { dossierId: "tender-1" },
+          taskCollection: "assistant_tasks",
+        },
+      },
+    }),
+  );
+  const provider = getPluginAssistantProvider()!;
+  expect(
+    (
+      await provider.invoke({
+        method: "open-source",
+        messageId: "answer-1",
+        citationId: "S001",
+      })
+    ).source?.page,
+  ).toBe(4);
+  const draft = {
+    suggestion: {
+      id: "R1",
+      title: "Verify",
+      description: "Two certificates",
+      citationIds: [],
+    },
+    title: "Collect certificates",
+    assignee: "José",
+    dueDate: "2026-10-20",
+    sourceReference: "Terms page 4",
+  };
+  expect(await provider.createTask!(draft)).toEqual({
+    id: "task-1",
+    created: true,
+  });
+  const post = transport.mock.calls.find(
+    ([path, init]) =>
+      path === "/api/records/assistant_tasks" && init?.method === "POST",
+  );
+  expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({
+    name: "Collect certificates",
+    assignee: "José",
+    status: "open",
+  });
+  fireEvent(window, new Event("savia:session-cleared"));
+  const count = transport.mock.calls.length;
+  await expect(provider.createTask!(draft)).rejects.toThrow(
+    "session has ended",
+  );
+  expect(transport.mock.calls.length).toBe(count);
+});

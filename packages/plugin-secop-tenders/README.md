@@ -41,3 +41,9 @@ saves an interest and persists the PDF and report in backend storage. See
 `docs/secop-tenders-plugin.md` for CAPTCHA handoff, limits, deployment and retries.
 
 The Documents tab downloads and analyzes official PDFs automatically. CAPTCHA/access challenges show an official link, automatic retry, and a manual upload fallback. Files and reports remain in Savia backend storage; browser sessions and credentials are never forwarded. See the [SECOP guide](../../docs/secop-tenders-plugin.md).
+
+Version 1.7.6 adds a plugin-owned **SECOP preparation tasks** collection. From
+the native dossier assistant, users can turn a missing requirement into a task
+after reviewing its title, responsible person and due date. Tasks can be edited
+and completed from the plugin's native records screen. This tracks preparation
+work; it does not infer company compliance or add SECOP logic to Savia core.

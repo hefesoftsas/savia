@@ -12,6 +12,31 @@ import {
 } from "../../studio-shared/src/plugin-store";
 
 describe("SECOP plugin package contracts", () => {
+  it("declares a native collection for tender preparation tasks", () => {
+    const parsed = storeJsonSchema.parse(store);
+    const { object } = parsed.collections
+      .map(sanitizeStoreCollection)
+      .find((item) => item.object.name === "secop_application_tasks")!;
+    expect(object.config.fields).toMatchObject({
+      name: { type: "Textbox", required: true },
+      description: { type: "Textarea" },
+      assignee: { type: "Textbox", required: true },
+      due_date: { type: "DateControl", required: true },
+      status: { type: "Dropdown", required: true },
+      source_key: { type: "Textbox", required: true, config: { unique: true } },
+      source_context: { type: "Textarea" },
+      source_reference: { type: "Textarea" },
+      source_url: { type: "Textbox" },
+    });
+    expect(parsed.screens).toContainEqual(
+      expect.objectContaining({
+        object: "secop_application_tasks",
+        view: "records",
+      }),
+    );
+    expect(manifest.version).toBe("1.7.6");
+  });
+
   it("persists detailed PDF reports beyond the default text field limit", () => {
     const parsed = storeJsonSchema.parse(store);
     const { object } = parsed.collections
