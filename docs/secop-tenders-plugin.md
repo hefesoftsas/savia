@@ -315,3 +315,9 @@ notice instead of three catalog failures. Connect the current account or sign in
 with the account that already authorized SECOP, then select **Check the connection
 again**. Genuine provider/catalog failures keep their normal retry controls.
 Existing interests and their original monitoring credentials remain unchanged.
+
+After saving, **View tasks** opens the SECOP task collection in a separate tab,
+keeping the tender's connected chat and its conversation open in the original tab.
+**Open source** opens the service's PDF viewer at the cited page, with page
+navigation and a download of the original PDF. Source links expire after ten
+minutes; return to the citation and open it again to issue a new link.
