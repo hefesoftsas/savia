@@ -103,9 +103,12 @@ Source classification and automatic analysis do not certify company compliance.
 A finished joint analysis can still have source extractions awaiting human review.
 
 The native panel uses Savia's shared Markdown renderer, source disclosures and
-keyboard-accessible composer. Changing tender, company or principal changes the
-context; it never reuses a conversation from another scope. Jobs and conversations
-survive navigation and reload. See [plugin assistant integration](guides/plugin-assistant.md).
+keyboard-accessible composer. Users can copy one answer or the full conversation,
+including history pages from the same tender, company and principal scope. The
+provider reports an error when the history exceeds export limits instead of
+silently truncating it. Changing tender, company or principal changes the context;
+it never reuses a conversation from another scope. Jobs and conversations survive
+navigation and reload. See [plugin assistant integration](guides/plugin-assistant.md).
 
 Service setup, contracts, storage migrations and release checks are documented in
 `chibchombiano26/secop-live-worker/docs/operations.md`. Install this plugin only

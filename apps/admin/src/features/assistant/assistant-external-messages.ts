@@ -88,4 +88,29 @@ export const assistantExternalMessages = {
     "Shift+Enter para uma nova linha",
   ],
   Send: ["Enviar", "Send", "Enviar"],
+  "Copy answer": ["Copiar respuesta", "Copy answer", "Copiar resposta"],
+  "Answer copied": ["Respuesta copiada", "Answer copied", "Resposta copiada"],
+  "Copy conversation": [
+    "Copiar conversación",
+    "Copy conversation",
+    "Copiar conversa",
+  ],
+  "Conversation copied.": [
+    "Conversación copiada.",
+    "Conversation copied.",
+    "Conversa copiada.",
+  ],
+  "Answer copied.": [
+    "Respuesta copiada.",
+    "Answer copied.",
+    "Resposta copiada.",
+  ],
+  "Unable to copy. Clipboard access is unavailable.": [
+    "No se pudo copiar. El portapapeles no está disponible.",
+    "Unable to copy. Clipboard access is unavailable.",
+    "Não foi possível copiar. A área de transferência não está disponível.",
+  ],
+  You: ["Tú", "You", "Você"],
+  Assistant: ["Asistente", "Assistant", "Assistente"],
+  Sources: ["Fuentes", "Sources", "Fontes"],
 } as const satisfies MessageCatalog;

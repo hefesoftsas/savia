@@ -29,6 +29,7 @@ import {
   ArrowLeft,
   BarChart3,
   Check,
+  Copy,
   Cpu,
   Database,
   FileSpreadsheet,
@@ -89,6 +90,10 @@ import { AssistantThreadList } from "./assistant-thread-list";
 import { useMessages } from "@/i18n/core";
 import { uiMessages } from "@/i18n/locales/ui";
 import { assistantExternalMessages } from "./assistant-external-messages";
+import {
+  formatExternalAssistantAnswer,
+  formatExternalAssistantConversation,
+} from "./assistant-external-copy";
 import {
   getPluginAssistantProvider,
   subscribePluginAssistantProvider,
@@ -166,6 +171,12 @@ export function ExternalAssistantConversation({
   const [sending, setSending] = useState(false);
   const [pollTimedOut, setPollTimedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<
+    "answer" | "conversation" | "error" | null
+  >(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [copiedConversation, setCopiedConversation] = useState(false);
+  const copyFeedbackGeneration = useRef(0);
   const pollRunning = useRef(false);
   const mounted = useRef(true);
   const refreshedAt = useRef(0);
@@ -173,6 +184,41 @@ export function ExternalAssistantConversation({
   const latestMessage = useRef<HTMLElement>(null);
   const sendAttempt = useRef<{ message: string; key: string } | null>(null);
   const tx = useMessages(assistantExternalMessages);
+
+  useLayoutEffect(() => {
+    copyFeedbackGeneration.current += 1;
+    setCopyFeedback(null);
+    setCopiedMessageId(null);
+    setCopiedConversation(false);
+  }, [
+    conversation.messages,
+    provider.sessionId,
+    provider.actionId,
+    provider.connectionId,
+    provider.context,
+  ]);
+
+  const copyText = async (
+    text: string,
+    target: "answer" | "conversation",
+    messageId?: string,
+  ) => {
+    const generation = copyFeedbackGeneration.current;
+    try {
+      if (!navigator.clipboard?.writeText)
+        throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(text);
+      if (generation !== copyFeedbackGeneration.current) return;
+      setCopyFeedback(target);
+      setCopiedMessageId(target === "answer" ? (messageId ?? null) : null);
+      setCopiedConversation(target === "conversation");
+    } catch {
+      if (generation !== copyFeedbackGeneration.current) return;
+      setCopyFeedback("error");
+      setCopiedMessageId(null);
+      setCopiedConversation(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -202,6 +248,30 @@ export function ExternalAssistantConversation({
     };
   }, [load]);
 
+  const recoverFromPollFailure = useCallback(
+    async (caught: unknown) => {
+      const message =
+        caught instanceof Error
+          ? caught.message
+          : tx("Could not update the response.");
+      if (!mounted.current) return;
+      setError(message);
+      try {
+        const result = await provider.invoke({ method: "load" });
+        if (!mounted.current) return;
+        setLoadedSuccessfully(true);
+        setConversation(result);
+        // Only a fresh provider load may retire a failed job. Keep the poll
+        // error visible whether the provider reports it as terminal or still
+        // pending, so the user can understand the recovery state.
+        setError(message);
+      } catch {
+        if (mounted.current) setError(message);
+      }
+    },
+    [provider, tx],
+  );
+
   useEffect(() => {
     if (!conversation.pendingJobId) return;
     const timer = window.setInterval(() => {
@@ -226,19 +296,19 @@ export function ExternalAssistantConversation({
           }
         })
         .catch((caught) => {
-          if (mounted.current)
-            setError(
-              caught instanceof Error
-                ? caught.message
-                : tx("Could not update the response."),
-            );
+          return recoverFromPollFailure(caught);
         })
         .finally(() => {
           pollRunning.current = false;
         });
     }, 1_500);
     return () => window.clearInterval(timer);
-  }, [conversation.pendingJobId, pollTimedOut, provider, tx]);
+  }, [
+    conversation.pendingJobId,
+    pollTimedOut,
+    provider,
+    recoverFromPollFailure,
+  ]);
 
   useLayoutEffect(() => {
     const area = scrollArea.current;
@@ -263,12 +333,7 @@ export function ExternalAssistantConversation({
         setConversation(result);
       }
     } catch (caught) {
-      if (mounted.current)
-        setError(
-          caught instanceof Error
-            ? caught.message
-            : tx("Could not update the response."),
-        );
+      await recoverFromPollFailure(caught);
     } finally {
       pollRunning.current = false;
     }
@@ -335,7 +400,61 @@ export function ExternalAssistantConversation({
             {tx("Connected assistant")}
           </p>
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={tx("Copy conversation")}
+              title={tx("Copy conversation")}
+              disabled={loading || conversation.messages.length === 0}
+              onClick={() =>
+                void copyText(
+                  formatExternalAssistantConversation(
+                    provider.title,
+                    conversation.messages,
+                    {
+                      user: tx("You"),
+                      assistant: tx("Assistant"),
+                      sources: tx("Sources"),
+                      insufficientEvidence: tx(
+                        "The available sources do not support a complete answer.",
+                      ),
+                      stale: tx("This answer uses an earlier source version."),
+                    },
+                  ),
+                  "conversation",
+                )
+              }
+            >
+              {copiedConversation ? (
+                <Check className="size-4" aria-hidden="true" />
+              ) : (
+                <Copy className="size-4" aria-hidden="true" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{tx("Copy conversation")}</TooltipContent>
+        </Tooltip>
       </div>
+      {copyFeedback && (
+        <p
+          role={copyFeedback === "error" ? "alert" : "status"}
+          className={cn(
+            "px-4 py-1 text-xs",
+            copyFeedback === "error"
+              ? "text-destructive"
+              : "text-muted-foreground",
+          )}
+        >
+          {copyFeedback === "error"
+            ? tx("Unable to copy. Clipboard access is unavailable.")
+            : copyFeedback === "answer"
+              ? tx("Answer copied.")
+              : tx("Conversation copied.")}
+        </p>
+      )}
       {conversation.coverage && (
         <div className="border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
           {conversation.coverage.label}
@@ -386,6 +505,56 @@ export function ExternalAssistantConversation({
             {message.citations?.length ? (
               <ProviderSources citations={message.citations} />
             ) : null}
+            {message.role === "assistant" && (
+              <div className="mt-2 flex justify-end border-t border-current/10 pt-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      aria-label={
+                        copiedMessageId === message.id
+                          ? tx("Answer copied")
+                          : tx("Copy answer")
+                      }
+                      title={
+                        copiedMessageId === message.id
+                          ? tx("Answer copied")
+                          : tx("Copy answer")
+                      }
+                      onClick={() =>
+                        void copyText(
+                          formatExternalAssistantAnswer(message, {
+                            sources: tx("Sources"),
+                            insufficientEvidence: tx(
+                              "The available sources do not support a complete answer.",
+                            ),
+                            stale: tx(
+                              "This answer uses an earlier source version.",
+                            ),
+                          }),
+                          "answer",
+                          message.id,
+                        )
+                      }
+                    >
+                      {copiedMessageId === message.id ? (
+                        <Check className="size-4" aria-hidden="true" />
+                      ) : (
+                        <Copy className="size-4" aria-hidden="true" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {copiedMessageId === message.id
+                      ? tx("Answer copied")
+                      : tx("Copy answer")}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            )}
           </article>
         ))}
         {conversation.pendingJobId && (
