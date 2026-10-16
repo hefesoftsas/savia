@@ -61,6 +61,29 @@ function latestValue(onChange: ReturnType<typeof vi.fn>) {
   return onChange.mock.calls.at(-1)?.[0] as Value;
 }
 
+it("converts a code fence on Enter and exits code with Control Enter", async () => {
+  const { editor, textbox, onChange } = mountEditor([
+    { type: "p", children: [{ text: "```ts" }] },
+  ]);
+  // Keyboard behavior must not depend on Slate's throttled DOM selection sync.
+  select(editor, [0, 0], 5);
+  expect(editor.selection?.focus).toEqual({ path: [0, 0], offset: 5 });
+  fireEvent.keyDown(textbox, { key: "Enter" });
+  expect(
+    await screen.findByRole("combobox", { name: "Code language" }),
+  ).toHaveValue("typescript");
+  fireEvent.paste(textbox, {
+    clipboardData: { getData: () => "const x = 1;\n  x++;" },
+  });
+  await waitFor(() =>
+    expect(document.querySelector(".page-code-block code")?.textContent).toBe(
+      "const x = 1;\n  x++;",
+    ),
+  );
+  fireEvent.keyDown(textbox, { key: "Enter", ctrlKey: true });
+  await waitFor(() => expect(latestValue(onChange).at(-1)?.type).toBe("p"));
+});
+
 it("keeps code Enter and Tab inside the code node, then exits with Ctrl+Enter", async () => {
   const { editor, textbox, onChange } = mountEditor([
     {
