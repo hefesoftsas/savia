@@ -28,13 +28,12 @@ describe("SECOP plugin package contracts", () => {
       source_reference: { type: "Textarea" },
       source_url: { type: "Textbox" },
     });
-    expect(parsed.screens).toContainEqual(
-      expect.objectContaining({
-        object: "secop_application_tasks",
-        view: "records",
-      }),
-    );
-    expect(manifest.version).toBe("1.7.6");
+    expect(
+      parsed.screens.some(
+        (screen) => screen.object === "secop_application_tasks",
+      ),
+    ).toBe(false);
+    expect(manifest.version).toBe("1.7.7");
   });
 
   it("persists detailed PDF reports beyond the default text field limit", () => {
@@ -83,10 +82,10 @@ it("accepts the assistant task evidence bounds without truncating sources", () =
   const collection = store.collections.find(
     (entry) => entry.object.name === "secop_application_tasks",
   )!;
-  expect(collection.object.config.fields.description.config.maxLength).toBe(
+  expect(collection.object.config.fields.description?.config.maxLength).toBe(
     20000,
   );
   expect(
-    collection.object.config.fields.source_reference.config.maxLength,
+    collection.object.config.fields.source_reference?.config.maxLength,
   ).toBe(20000);
 });

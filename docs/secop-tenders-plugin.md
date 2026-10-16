@@ -321,3 +321,7 @@ keeping the tender's connected chat and its conversation open in the original ta
 **Open source** opens the service's PDF viewer at the cited page, with page
 navigation and a download of the original PDF. Source links expire after ten
 minutes; return to the citation and open it again to issue a new link.
+
+The task collection deliberately has no custom plugin screen contribution. Savia
+therefore uses its standard records table and editor for tasks instead of
+mounting the tender search interface for that collection.
