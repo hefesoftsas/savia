@@ -386,3 +386,7 @@ its current version. It does not delete the official tender or the SECOP dossier
 Conflicts keep the record visible and require reviewing the latest version.
 The saved count and bookmark state update after success. Saving tracking remains
 available as a labelled Save icon at the start of each record footer.
+
+### Compact dossier navigation
+
+The dossier header uses labeled icon actions for preparation and status refresh, preserving the full tender title. Tabs stay in a single horizontally scrollable row on narrow screens. The Documents tab distinguishes an empty inventory from blocked document extraction; extraction assistance appears only when a document is actually blocked. Public documents remain available through the folder action beside the section heading.

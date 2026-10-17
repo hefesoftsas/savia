@@ -33,7 +33,7 @@ describe("SECOP plugin package contracts", () => {
         (screen) => screen.object === "secop_application_tasks",
       ),
     ).toBe(false);
-    expect(manifest.version).toBe("1.8.4");
+    expect(manifest.version).toBe("1.8.5");
   });
 
   it("hides stored PDF-analysis records while retaining task navigation", () => {
