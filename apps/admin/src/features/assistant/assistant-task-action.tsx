@@ -135,9 +135,15 @@ export function AssistantTaskAction({ provider, message }: Props) {
   if (!provider.createTask || suggestions.length === 0) return null;
   if (message.stale) {
     return (
-      <div className="mt-3 flex justify-start">
+      <div className="min-w-0">
         <div className="w-full max-w-xl text-sm">
-          <Button type="button" variant="outline" size="sm" disabled>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-9"
+            disabled
+          >
             <CheckSquare2 aria-hidden="true" />
             {t("Crear pendiente")}
           </Button>
@@ -265,12 +271,13 @@ function TaskActionForm({
   }
 
   return (
-    <div className="mt-3 flex justify-start">
+    <div className={expanded ? "w-full min-w-0" : "min-w-0"}>
       <div className="w-full max-w-xl text-sm">
         <Button
           type="button"
           variant="outline"
           size="sm"
+          className="min-h-9"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
         >

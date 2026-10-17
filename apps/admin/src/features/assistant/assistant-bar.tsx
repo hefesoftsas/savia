@@ -1,3 +1,4 @@
+import type { ApiClient } from "@/api/api-client";
 import { AssistantSourceAction } from "./assistant-source-action";
 import { AssistantTaskAction } from "./assistant-task-action";
 import {
@@ -173,9 +174,11 @@ function ProviderSources({
 export function ExternalAssistantConversation({
   provider,
   onReturn,
+  apiClient,
 }: {
   provider: PluginAssistantProvider;
   onReturn: () => void;
+  apiClient?: Pick<ApiClient, "postForm">;
 }) {
   const [conversation, setConversation] = useState<PluginAssistantResponse>({
     revision: 0,
@@ -422,7 +425,7 @@ export function ExternalAssistantConversation({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
+      <div className="flex items-center justify-between gap-2 px-4 py-2">
         <Button
           type="button"
           variant="ghost"
@@ -432,12 +435,6 @@ export function ExternalAssistantConversation({
         >
           <ArrowLeft className="size-4" /> {tx("General assistant")}
         </Button>
-        <div className="min-w-0 flex-1 text-right">
-          <p className="truncate text-sm font-medium">{provider.title}</p>
-          <p className="text-xs text-muted-foreground">
-            {tx("Connected assistant")}
-          </p>
-        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -476,27 +473,28 @@ export function ExternalAssistantConversation({
           <TooltipContent side="top">{tx("Copy conversation")}</TooltipContent>
         </Tooltip>
       </div>
-      {taskMessage && (
-        <div className="border-b px-4 pb-2">
-          <AssistantTaskAction
-            key={provider.sessionId}
-            provider={provider}
-            message={taskMessage}
-          />
-        </div>
-      )}
-      {documentActions.length > 0 && (
-        <div className="flex flex-wrap items-start gap-2 border-b px-4 pb-2">
-          {documentActions.map((action) => (
-            <AssistantDocumentAction
-              key={`${provider.sessionId}:${action.id}`}
+      {(taskMessage || documentActions.length > 0) && (
+        <div className="flex flex-wrap items-start gap-2 border-b px-4 pb-3">
+          {documentActions.length > 0 &&
+            apiClient &&
+            documentActions.map((action) => (
+              <AssistantDocumentAction
+                key={`${provider.sessionId}:${action.id}`}
+                provider={provider}
+                action={action}
+                apiClient={apiClient}
+                disabled={
+                  loading || sending || Boolean(conversation.pendingJobId)
+                }
+              />
+            ))}
+          {taskMessage && (
+            <AssistantTaskAction
+              key={provider.sessionId}
               provider={provider}
-              action={action}
-              disabled={
-                loading || sending || Boolean(conversation.pendingJobId)
-              }
+              message={taskMessage}
             />
-          ))}
+          )}
         </div>
       )}
       {copyFeedback && (
@@ -2288,6 +2286,7 @@ export function AssistantConversation({
 }
 
 export function AssistantBar() {
+  const { apiClient } = useAppServices();
   const t = useMessages(uiMessages);
   const txExternal = useMessages(assistantExternalMessages);
   const [open, setOpen] = useState(false);
@@ -2348,12 +2347,17 @@ export function AssistantBar() {
           <span className="hidden sm:inline">{t("Asistente")}</span>
         </Button>
       </SheetTrigger>
-      <SheetContent className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-xl">
+      <SheetContent
+        className={cn(
+          "flex h-full w-full flex-col gap-0 p-0",
+          externalProvider ? "sm:max-w-2xl" : "sm:max-w-xl",
+        )}
+      >
         <SheetHeader className="border-b border-border/60 bg-card/60 px-4 py-3 backdrop-blur-xs">
           <div className="flex items-center justify-between gap-2 pr-8">
             {externalProvider ? (
               <div>
-                <SheetTitle className="text-sm font-semibold tracking-tight text-foreground">
+                <SheetTitle className="break-words text-base font-semibold leading-snug text-foreground">
                   {externalProvider.title}
                 </SheetTitle>
                 <p className="text-[11px] text-muted-foreground">
@@ -2452,6 +2456,7 @@ export function AssistantBar() {
           <ExternalAssistantConversation
             key={externalProvider.sessionId}
             provider={externalProvider}
+            apiClient={apiClient}
             onReturn={returnToGeneralAssistant}
           />
         ) : null}
