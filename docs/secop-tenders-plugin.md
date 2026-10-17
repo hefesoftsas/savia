@@ -372,3 +372,7 @@ the selected values in one truncated line and a count for multiple selections;
 opening the control exposes searchable options and removable selection chips.
 Keyword and availability fields share a row when space permits. Search actions
 are grouped at the start of the form, clear of the floating assistant.
+
+Version 1.8.3 dismisses filter popups on an outside pointer, click or focus
+change, when focus leaves the plugin window, with Escape, or on a second toggle
+press. Opening another field closes the previous popup; selections are retained.

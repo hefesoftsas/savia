@@ -90,6 +90,32 @@ export function FilterAutocomplete(props: FilterAutocompleteProps) {
     }
   }, [activeIndex, activeOption, id, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const root = rootRef.current;
+    const ownerDocument = root?.ownerDocument;
+    if (!root || !ownerDocument) return;
+    const close = () => {
+      setIsOpen(false);
+      setActiveIndex(-1);
+    };
+    const closeOutside = (event: Event) => {
+      if (!event.composedPath().includes(root)) close();
+    };
+    // Pointer capture also handles non-focusable targets. Click covers
+    // assistive activation that does not dispatch a pointer event.
+    ownerDocument.addEventListener("pointerdown", closeOutside, true);
+    ownerDocument.addEventListener("click", closeOutside, true);
+    ownerDocument.addEventListener("focusin", closeOutside, true);
+    ownerDocument.defaultView?.addEventListener("blur", close);
+    return () => {
+      ownerDocument.removeEventListener("pointerdown", closeOutside, true);
+      ownerDocument.removeEventListener("click", closeOutside, true);
+      ownerDocument.removeEventListener("focusin", closeOutside, true);
+      ownerDocument.defaultView?.removeEventListener("blur", close);
+    };
+  }, [isOpen]);
+
   function openOptions() {
     setVisibleCount(MAX_SUGGESTIONS);
     setIsOpen(true);
@@ -192,7 +218,20 @@ export function FilterAutocomplete(props: FilterAutocompleteProps) {
   }
 
   return (
-    <div ref={rootRef} className="secop-autocomplete" onBlur={handleBlur}>
+    <div
+      ref={rootRef}
+      className="secop-autocomplete"
+      onBlur={handleBlur}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && isOpen) {
+          event.preventDefault();
+          event.stopPropagation();
+          inputRef.current?.focus();
+          setIsOpen(false);
+          setActiveIndex(-1);
+        }
+      }}
+    >
       <label htmlFor={id}>{label}</label>
       <div className="secop-autocomplete-control">
         <input
@@ -210,6 +249,9 @@ export function FilterAutocomplete(props: FilterAutocompleteProps) {
           title={props.multiple && !isOpen ? props.value.join(", ") : undefined}
           placeholder={placeholder}
           onFocus={openOptions}
+          onClick={() => {
+            if (!isOpen) openOptions();
+          }}
           onChange={(event) => {
             if (props.multiple) setQuery(event.currentTarget.value);
             else props.onChange(event.currentTarget.value);
