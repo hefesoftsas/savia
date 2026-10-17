@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -422,34 +429,51 @@ describe("pulumi backup", () => {
       });
     };
 
+    const plan = {
+      stack: "production",
+      dryRun: false,
+      skipR2: true,
+      outDir: join(root, "capture"),
+      confirmQuiescent: null,
+      flowsSnapshot: null,
+      r2Concurrency: 4,
+    };
+    const dependencies = {
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: accountId,
+        CLOUDFLARE_API_TOKEN: "token",
+      },
+      fetchImpl,
+      run: async (command, args) => {
+        commands.push([command, args]);
+        assert.equal(
+          command,
+          "pulumi",
+          "production must not use Wrangler export",
+        );
+        return { stdout: JSON.stringify(outputs), stderr: "" };
+      },
+    };
+    let monitorStarts = 0;
+    let monitorStopped = false;
     try {
-      const manifest = await createBackup(
-        {
-          stack: "production",
-          dryRun: false,
-          skipR2: true,
-          outDir: join(root, "capture"),
-          confirmQuiescent: null,
-          flowsSnapshot: null,
-          r2Concurrency: 4,
+      const manifest = await createBackup(plan, {
+        ...dependencies,
+        startMonitor(boundary, options) {
+          monitorStarts++;
+          assert.equal(boundary.d1[databases.auth.name].id, databases.auth.id);
+          assert.equal(options.token, "token");
+          return async () => {
+            if (monitorStopped) return;
+            monitorStopped = true;
+            await assert.rejects(access(join(plan.outDir, "manifest.json")), {
+              code: "ENOENT",
+            });
+          };
         },
-        {
-          env: {
-            CLOUDFLARE_ACCOUNT_ID: accountId,
-            CLOUDFLARE_API_TOKEN: "token",
-          },
-          fetchImpl,
-          run: async (command, args) => {
-            commands.push([command, args]);
-            assert.equal(
-              command,
-              "pulumi",
-              "production must not use Wrangler export",
-            );
-            return { stdout: JSON.stringify(outputs), stderr: "" };
-          },
-        },
-      );
+      });
+      assert.equal(monitorStarts, 1);
+      assert.equal(monitorStopped, true);
 
       assert.deepEqual(manifest.d1Methods, {
         [databases.auth.name]: "schema-dump",
@@ -464,6 +488,84 @@ describe("pulumi backup", () => {
         assert.match(sql, new RegExp(`CREATE TABLE \\"${db.table}\\"`));
         assert.match(sql, new RegExp(`INSERT INTO \\"${db.table}\\"`));
       }
+
+      const failedPlan = { ...plan, outDir: join(root, "failed-monitor") };
+      await assert.rejects(
+        createBackup(failedPlan, {
+          ...dependencies,
+          startMonitor: () => async () => {
+            throw new Error("Bookmark monitor failed");
+          },
+        }),
+        /Bookmark monitor failed/,
+      );
+      await assert.rejects(access(join(failedPlan.outDir, "manifest.json")), {
+        code: "ENOENT",
+      });
+
+      let failedCaptureStopped = false;
+      const failedCapturePlan = { ...plan, outDir: join(root, "failed-query") };
+      await assert.rejects(
+        createBackup(failedCapturePlan, {
+          ...dependencies,
+          fetchImpl: async (url, init) => {
+            if (String(url).endsWith("/query"))
+              throw new Error("D1 transport failed");
+            return fetchImpl(url, init);
+          },
+          startMonitor: () => async () => {
+            failedCaptureStopped = true;
+          },
+        }),
+        /D1 transport failed/,
+      );
+      assert.equal(failedCaptureStopped, true);
+      await assert.rejects(
+        access(join(failedCapturePlan.outDir, "manifest.json")),
+        { code: "ENOENT" },
+      );
+
+      const previewNames = resolveInfraNames({
+        environment: "preview",
+        documentsBucket: "savia-documents-preview",
+        publicOrigin: "https://savia-preview.hefesoft.com",
+      });
+      const previewOutputs = {
+        ...outputs,
+        resolvedEnvironment: "preview",
+        resolvedPublicOrigin: "https://savia-preview.hefesoft.com",
+        workerNames: previewNames.workers,
+        databaseNames: previewNames.databases,
+        documentsBucketName: previewNames.bucket,
+        plannedFlowsResourceNames: previewNames.flows,
+      };
+      const previewManifest = await createBackup(
+        { ...plan, stack: "preview", outDir: join(root, "preview") },
+        {
+          ...dependencies,
+          fetchImpl: async () => {
+            throw new Error("Preview native export must not query D1 metadata");
+          },
+          startMonitor: () => {
+            throw new Error("Preview must not start the production monitor");
+          },
+          run: async (command, args) => {
+            if (command === "pulumi")
+              return { stdout: JSON.stringify(previewOutputs), stderr: "" };
+            const outputIndex = args.indexOf("--output");
+            assert.notEqual(outputIndex, -1);
+            await writeFile(
+              args[outputIndex + 1],
+              "CREATE TABLE preview_records (id INTEGER PRIMARY KEY);\n",
+            );
+            return { stdout: "", stderr: "" };
+          },
+        },
+      );
+      assert.deepEqual(Object.values(previewManifest.d1Methods), [
+        "export",
+        "export",
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
