@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ExternalAssistantConversation } from "./assistant-bar";
+import { OfficeAvailabilityContext } from "@/features/office-settings/office-availability";
 import type {
   PluginAssistantProvider,
   PluginAssistantRequest,
@@ -457,11 +458,15 @@ it("generates an advertised document without replacing chat history or its draft
     close: vi.fn(),
   };
   render(
-    <ExternalAssistantConversation
-      provider={current}
-      onReturn={() => {}}
-      apiClient={{ postForm } as never}
-    />,
+    <OfficeAvailabilityContext.Provider
+      value={{ enabled: true, loading: false, error: false }}
+    >
+      <ExternalAssistantConversation
+        provider={current}
+        onReturn={() => {}}
+        apiClient={{ postForm } as never}
+      />
+    </OfficeAvailabilityContext.Provider>,
   );
   const button = await screen.findByRole("button", {
     name: "Generate proposal DOCX",

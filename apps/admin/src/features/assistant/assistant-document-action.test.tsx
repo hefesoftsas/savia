@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, type PropsWithChildren } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ApiClient } from "@/api/api-client";
 import type { PluginAssistantProvider } from "@savia/studio-shared/plugin-assistant";
 import { OFFICE_MAX_SIZE } from "@savia/studio-shared/office";
+import { OfficeAvailabilityContext } from "@/features/office-settings/office-availability";
 import {
   AssistantDocumentAction,
   type AssistantDocumentActionDefinition,
@@ -75,6 +76,16 @@ function api(
   return { postForm } as unknown as Pick<ApiClient, "postForm">;
 }
 
+function AvailableOffice({ children }: PropsWithChildren) {
+  return (
+    <OfficeAvailabilityContext.Provider
+      value={{ enabled: true, loading: false, error: false }}
+    >
+      {children}
+    </OfficeAvailabilityContext.Provider>
+  );
+}
+
 function renderAction(
   invoke: PluginAssistantProvider["invoke"] = generated(),
   apiClient = api(),
@@ -85,12 +96,84 @@ function renderAction(
       action={action}
       apiClient={apiClient}
     />,
+    { wrapper: AvailableOffice },
   );
 }
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+
+it.each([
+  ["disabled", { enabled: false, loading: false, error: false }],
+  ["loading", { enabled: false, loading: true, error: false }],
+  ["unavailable", { enabled: false, loading: false, error: true }],
+])(
+  "hides the action and does not generate while Office is %s",
+  (_state, value) => {
+    const invoke = vi.fn();
+    const open = vi.spyOn(window, "open");
+    render(
+      <OfficeAvailabilityContext.Provider value={value}>
+        <AssistantDocumentAction
+          provider={provider(invoke)}
+          action={action}
+          apiClient={api()}
+        />
+      </OfficeAvailabilityContext.Provider>,
+    );
+
+    expect(screen.queryByRole("button", { name: action.label })).toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+  },
+);
+
+it("aborts the upload and closes the pending editor tab when Office is disabled", async () => {
+  const reserved = popup();
+  vi.spyOn(window, "open").mockReturnValue(reserved as never);
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
+  );
+  let resolveUpload!: (value: { data: { id: string } }) => void;
+  const postForm: PostFormMock = vi.fn(
+    (_path: string, _form: FormData, _init?: RequestInit) =>
+      new Promise<{ data: { id: string } }>(
+        (resolve) => (resolveUpload = resolve),
+      ),
+  );
+  const invoke = generated();
+  const availability = {
+    enabled: true,
+    loading: false,
+    error: false,
+  };
+  function AvailabilityHarness({ enabled }: { enabled: boolean }) {
+    return (
+      <OfficeAvailabilityContext.Provider value={{ ...availability, enabled }}>
+        <AssistantDocumentAction
+          provider={provider(invoke)}
+          action={action}
+          apiClient={api(postForm)}
+        />
+      </OfficeAvailabilityContext.Provider>
+    );
+  }
+  const view = render(<AvailabilityHarness enabled />);
+  fireEvent.click(screen.getByRole("button", { name: action.label }));
+  await screen.findByText("Saving to Office suite…");
+  const uploadSignal = postForm.mock.calls[0]![2]?.signal;
+  expect(uploadSignal).toBeInstanceOf(AbortSignal);
+  expect(uploadSignal!.aborted).toBe(false);
+
+  view.rerender(<AvailabilityHarness enabled={false} />);
+  expect(uploadSignal!.aborted).toBe(true);
+  expect(reserved.close).toHaveBeenCalledTimes(1);
+  resolveUpload({ data: { id: "office_doc_late" } });
+  await Promise.resolve();
+  expect(reserved.location.replace).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: action.label })).toBeNull();
 });
 
 it("uploads the generated DOCX to Savia, then opens its Office editor", async () => {
@@ -219,7 +302,9 @@ it("aborts work on context change before a late provider result can fetch or nav
       />
     );
   }
-  const view = render(<ObserveProvider current={currentProvider} />);
+  const view = render(<ObserveProvider current={currentProvider} />, {
+    wrapper: AvailableOffice,
+  });
   fireEvent.click(screen.getByRole("button", { name: action.label }));
   view.rerender(
     <ObserveProvider current={provider(invoke, { sessionId: "session-2" })} />,
@@ -265,7 +350,9 @@ it("aborts an in-flight authenticated upload when the context changes", async ()
       />
     );
   }
-  const view = render(<ObserveProvider sessionId="session-1" />);
+  const view = render(<ObserveProvider sessionId="session-1" />, {
+    wrapper: AvailableOffice,
+  });
   fireEvent.click(screen.getByRole("button", { name: action.label }));
   await screen.findByText("Saving to Office suite…");
   const uploadSignal = postForm.mock.calls[0]![2]?.signal;

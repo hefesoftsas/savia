@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/tooltip";
 import { officeEditorUrl } from "@/features/office/office-api";
 import { useMessages, type MessageCatalog } from "@/i18n/core";
+import { useOfficeAvailability } from "@/features/office-settings/office-availability";
 import {
   safeSourceUrl,
   type PluginAssistantProvider,
@@ -143,6 +144,12 @@ export function AssistantDocumentAction({
   disabled?: boolean;
 }) {
   const t = useMessages(messages);
+  const {
+    enabled: officeEnabled,
+    loading: officeLoading,
+    error: officeError,
+  } = useOfficeAvailability();
+  const officeAvailable = officeEnabled && !officeLoading && !officeError;
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<"prepare" | "save">("prepare");
   const [error, setError] = useState(false);
@@ -171,10 +178,10 @@ export function AssistantDocumentAction({
       activePopup.current?.close();
       activePopup.current = null;
     };
-  }, [key, action.id]);
+  }, [key, action.id, officeAvailable]);
 
   async function generate() {
-    if (running.current || disabled) return;
+    if (!officeAvailable || running.current || disabled) return;
     running.current = true;
     const currentAttempt = ++attempt.current;
     const abortController = new AbortController();
@@ -269,6 +276,8 @@ export function AssistantDocumentAction({
       }
     }
   }
+
+  if (!officeAvailable) return null;
 
   return (
     <div className="min-w-0 max-w-full">
