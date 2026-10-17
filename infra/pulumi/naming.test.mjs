@@ -12,6 +12,9 @@ import {
   validateFlowsResources,
   stateBackendName,
   stateBackendUrl,
+  PRODUCTION_BACKUP_BUCKET,
+  PRODUCTION_BACKUP_RETENTION_DAYS,
+  productionBackupLifecycleRule,
 } from "./naming.mjs";
 
 describe("pulumi naming", () => {
@@ -61,6 +64,57 @@ describe("pulumi naming", () => {
       queue: "savia-flows-execute",
       deadLetterQueue: "savia-flows-execute-dlq",
       workflow: "savia-flows-execute",
+    });
+  });
+
+  it("opts in only the isolated production backup bucket", () => {
+    const production = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.app.hefesoft.com",
+      backupBucket: PRODUCTION_BACKUP_BUCKET,
+    });
+    assert.equal(production.backupBucket, PRODUCTION_BACKUP_BUCKET);
+    assert.equal(
+      resolveInfraNames({
+        environment: "production",
+        documentsBucket: "savia-documents",
+        publicOrigin: "https://savia.app.hefesoft.com",
+      }).backupBucket,
+      undefined,
+    );
+    for (const backupBucket of [
+      "savia-documents",
+      "savia-pulumi-state",
+      "savia-production-backups-preview",
+      "other-bucket",
+      " ",
+    ]) {
+      assert.throws(() =>
+        resolveInfraNames({
+          environment: "production",
+          documentsBucket: "savia-documents",
+          publicOrigin: "https://savia.app.hefesoft.com",
+          backupBucket,
+        }),
+      );
+    }
+    assert.throws(() =>
+      resolveInfraNames({
+        environment: "preview",
+        documentsBucket: "savia-documents-preview",
+        publicOrigin: PREVIEW_PUBLIC_ORIGIN,
+        backupBucket: PRODUCTION_BACKUP_BUCKET,
+      }),
+    );
+    assert.equal(PRODUCTION_BACKUP_RETENTION_DAYS, 30);
+    assert.deepEqual(productionBackupLifecycleRule(), {
+      id: "expire-production-backups-after-30-days",
+      enabled: true,
+      conditions: { prefix: "production/" },
+      deleteObjectsTransition: {
+        condition: { type: "Age", maxAge: 30 * 24 * 60 * 60 },
+      },
     });
   });
 

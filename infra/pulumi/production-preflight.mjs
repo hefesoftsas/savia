@@ -35,6 +35,9 @@ function validateProductionConfig(config) {
   const values = Object.fromEntries(
     fields.map(([name, value]) => [name, required(value, `config ${name}`)]),
   );
+  if (config?.backupBucket !== undefined && config.backupBucket !== null) {
+    values.backupBucket = required(config.backupBucket, "config backupBucket");
+  }
   if (values.environment !== "production")
     throw new Error("Production Pulumi config must select production");
   if (!/^[a-f\d]{32}$/i.test(values.accountId))
@@ -55,6 +58,7 @@ function validateProductionConfig(config) {
     publicOrigin: values.publicOrigin,
     authDatabaseName: values.authDatabaseName,
     domainDatabaseName: values.domainDatabaseName,
+    ...(values.backupBucket ? { backupBucket: values.backupBucket } : {}),
   });
   if (
     names.databases.auth !== values.authDatabaseName ||
@@ -145,6 +149,69 @@ function assertAdoptedResources(resources, outputs, accountId) {
     ) {
       throw new Error(
         `Production state is missing a matching mandatory production resource: ${logicalName}`,
+      );
+    }
+  }
+  if (
+    outputs.backupBucketName !== undefined &&
+    outputs.backupBucketName !== null
+  ) {
+    const bucket = resources.find((entry) =>
+      entry.urn?.endsWith("::production-backups"),
+    );
+    if (
+      !bucket ||
+      bucket.type !== "cloudflare:index/r2Bucket:R2Bucket" ||
+      bucket.protect !== true ||
+      bucket.outputs?.name !== outputs.backupBucketName ||
+      bucket.outputs?.accountId !== accountId ||
+      bucket.outputs?.storageClass !== "Standard"
+    ) {
+      throw new Error(
+        "Production state is missing a matching protected production backup bucket",
+      );
+    }
+
+    const lifecycle = resources.find((entry) =>
+      entry.urn?.endsWith("::production-backups-lifecycle"),
+    );
+    const rules = lifecycle?.outputs?.rules;
+    const rule = Array.isArray(rules) ? rules[0] : undefined;
+    const condition = rule?.deleteObjectsTransition?.condition;
+    if (
+      !lifecycle ||
+      lifecycle.type !==
+        "cloudflare:index/r2BucketLifecycle:R2BucketLifecycle" ||
+      lifecycle.protect !== true ||
+      lifecycle.outputs?.accountId !== accountId ||
+      lifecycle.outputs?.bucketName !== outputs.backupBucketName ||
+      !Array.isArray(rules) ||
+      rules.length !== 1 ||
+      rule?.id !== "expire-production-backups-after-30-days" ||
+      rule?.enabled !== true ||
+      rule?.conditions?.prefix !== "production/" ||
+      condition?.type !== "Age" ||
+      condition?.maxAge !== 30 * 24 * 60 * 60
+    ) {
+      throw new Error(
+        "Production state is missing the exact protected production backup lifecycle rule",
+      );
+    }
+
+    const publicAccess = resources.find((entry) =>
+      entry.urn?.endsWith("::production-backups-public-access"),
+    );
+    if (
+      !publicAccess ||
+      publicAccess.type !==
+        "cloudflare:index/r2ManagedDomain:R2ManagedDomain" ||
+      publicAccess.protect !== true ||
+      publicAccess.outputs?.accountId !== accountId ||
+      publicAccess.outputs?.bucketName !== outputs.backupBucketName ||
+      publicAccess.outputs?.enabled !== false
+    ) {
+      throw new Error(
+        "Production backup bucket must have a matching protected disabled public access domain",
       );
     }
   }
@@ -270,6 +337,27 @@ export function validateProductionReadiness({
     throw new Error(
       "Production state backend bucket does not match Pulumi config",
     );
+  const outputBackupBucket = outputs.backupBucketName ?? null;
+  const outputBackupRetention = outputs.backupRetentionDays ?? null;
+  if ((outputBackupBucket === null) !== (outputBackupRetention === null)) {
+    throw new Error(
+      "Production backup bucket and retention outputs must be configured together",
+    );
+  }
+  if (outputBackupBucket !== null && outputBackupRetention !== 30) {
+    throw new Error("Production backup retention output must be 30 days");
+  }
+  if (
+    outputBackupBucket !== null &&
+    config.backupBucket !== outputBackupBucket
+  ) {
+    throw new Error(
+      "Production backup bucket output does not match Pulumi config",
+    );
+  }
+  // A newly enabled resource has no outputs until the reviewed Pulumi apply.
+  // This preflight allows that plan/apply bootstrap and validates any
+  // provisioned bucket strictly on subsequent runs.
   for (const name of ["authD1Id", "domainD1Id"]) {
     if (!UUID.test(required(outputs[name], `${name} output`)))
       throw new Error(`Production ${name} is not a real D1 identifier`);
@@ -369,6 +457,9 @@ export function normalizeProductionConfig(raw) {
     stateBucket: get("stateBucket"),
     authDatabaseName: get("authDatabaseName"),
     domainDatabaseName: get("domainDatabaseName"),
+    ...(get("backupBucket") == null
+      ? {}
+      : { backupBucket: get("backupBucket") }),
     flowsEnabled: get("flowsEnabled") ?? false,
     flowsExecutionEnabled: get("flowsExecutionEnabled") ?? false,
   };

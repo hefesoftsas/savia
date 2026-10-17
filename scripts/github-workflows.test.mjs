@@ -65,7 +65,7 @@ test("production deployment is limited to main and has ordered Worker stages", a
   assert.doesNotMatch(deploy, /pnpm test && pnpm run typecheck/);
   assert.match(
     deploy,
-    /runs-on: ubuntu-24\.04\n\s+environment: production\n\s+env:\n\s+PNPM_CONFIG_STRICT_DEP_BUILDS: "false"\n\s+steps:/,
+    /runs-on: ubuntu-24\.04\n\s+environment: production\n\s+env:\n\s+PNPM_CONFIG_STRICT_DEP_BUILDS: "false"\n\s+SAVIA_BACKUP_ENVIRONMENT: production\n\s+steps:/,
   );
   assert.match(deploy, /savia-auth/);
   assert.match(deploy, /- name: Deploy private Savia FastMCP/);

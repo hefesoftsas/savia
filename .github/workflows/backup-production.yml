@@ -21,6 +21,10 @@ jobs:
     environment: production-backup
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      SAVIA_BACKUP_ENVIRONMENT: production
+      SAVIA_DEPLOY_ENVIRONMENT: production
+      R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+      R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
       PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
       PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
@@ -81,13 +85,8 @@ jobs:
           fi
           node scripts/production-backup.mjs "${backup_args[@]}"
 
-      - name: Retain encrypted production backup
-        uses: actions/upload-artifact@v4
-        with:
-          name: production-backup-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/production-backup.enc
-          if-no-files-found: error
-          retention-days: 30
+      - name: Retain and verify encrypted production backup in private R2
+        run: node scripts/production-backup-r2.mjs --artifact "$RUNNER_TEMP/production-backup.enc" --kind daily
 
       - name: Remove plaintext recovery files
         if: always()
@@ -95,4 +94,4 @@ jobs:
         run: |
           rm -rf "$RUNNER_TEMP/production-backup"
           rm -rf "$RUNNER_TEMP"/savia-production-backup-*
-          rm -f "$RUNNER_TEMP/production-backup.tar.gz" "$RUNNER_TEMP/production-flows-snapshot.json"
+          rm -f "$RUNNER_TEMP/production-backup.enc" "$RUNNER_TEMP/production-backup.tar.gz" "$RUNNER_TEMP/production-flows-snapshot.json"

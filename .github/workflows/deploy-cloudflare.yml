@@ -51,6 +51,7 @@ jobs:
     environment: production
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      SAVIA_BACKUP_ENVIRONMENT: production
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -141,6 +142,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
+      - name: Deploy savia backup coordinator
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.production.jsonc
+          workingDirectory: apps/backup-coordinator
+          wranglerVersion: 4.127.1
+
       - name: Pause production Savia writes for persistence backup
         id: pause_agencies
         if: env.SAVIA_FLOWS_PROVISIONED == 'true'
@@ -179,7 +189,7 @@ jobs:
 
       - name: Capture production backup before apply
         if: env.SAVIA_FLOWS_PROVISIONED != 'true'
-        run: node scripts/production-backup-gate.mjs --stack production --apply --out-dir "$RUNNER_TEMP/flows-release-backup"
+        run: node scripts/production-backup.mjs --artifact "$RUNNER_TEMP/flows-release-backup.enc" --work-root "$RUNNER_TEMP"
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
@@ -193,7 +203,7 @@ jobs:
 
       - name: Capture production backup with existing Flows snapshot
         if: env.SAVIA_FLOWS_PROVISIONED == 'true'
-        run: node scripts/production-backup-gate.mjs --stack production --apply --confirm-quiescent production --flows-snapshot "$RUNNER_TEMP/flows-snapshot.json" --out-dir "$RUNNER_TEMP/flows-release-backup"
+        run: node scripts/production-backup.mjs --artifact "$RUNNER_TEMP/flows-release-backup.enc" --work-root "$RUNNER_TEMP" --flows-snapshot "$RUNNER_TEMP/flows-snapshot.json"
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
@@ -205,27 +215,17 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Encrypt production recovery archive
-        shell: bash
-        run: |
-          umask 077
-          tar -czf "$RUNNER_TEMP/flows-release-backup.tar.gz" -C "$RUNNER_TEMP" flows-release-backup
-          node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/flows-release-backup.tar.gz" --output "$RUNNER_TEMP/flows-release-backup.enc"
-          rm "$RUNNER_TEMP/flows-release-backup.tar.gz"
+      - name: Retain and verify encrypted production recovery archive in private R2
+        run: node scripts/production-backup-r2.mjs --artifact "$RUNNER_TEMP/flows-release-backup.enc" --kind release
         env:
-          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
-
-      - name: Retain encrypted production recovery archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: savia-production-backup-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/flows-release-backup.enc
-          if-no-files-found: error
-          retention-days: 30
+          SAVIA_DEPLOY_ENVIRONMENT: production
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
 
       - name: Remove plaintext production backup material
         if: always()
-        run: rm -rf "$RUNNER_TEMP/flows-release-backup" "$RUNNER_TEMP/flows-snapshot.json" "$RUNNER_TEMP/flows-release-backup.tar.gz"
+        run: rm -rf "$RUNNER_TEMP/flows-release-backup.enc" "$RUNNER_TEMP/flows-release-backup" "$RUNNER_TEMP/flows-snapshot.json" "$RUNNER_TEMP/flows-release-backup.tar.gz"
 
       - name: Apply infrastructure before Worker deployment
         run: node infra/pulumi/deploy-stack.mjs --stack production --apply
@@ -330,15 +330,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.production.jsonc
           workingDirectory: apps/flows/api
-          wranglerVersion: 4.127.1
-
-      - name: Deploy savia backup coordinator
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc
-          workingDirectory: apps/backup-coordinator
           wranglerVersion: 4.127.1
 
       - name: Deploy savia-agencies
