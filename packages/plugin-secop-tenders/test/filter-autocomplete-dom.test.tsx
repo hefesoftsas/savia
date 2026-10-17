@@ -249,6 +249,13 @@ describe("multiple selections", () => {
     expect(host.querySelector(".secop-filter-chip")?.textContent).toBe(
       "Boyacá",
     );
+    act(() => key(getInput(), "Escape"));
+    expect(host.querySelector(".secop-autocomplete-popup")).toBeNull();
+    expect(getInput().value).toBe("Boyacá");
+    act(() => key(getInput(), "ArrowDown"));
+    expect(host.querySelector(".secop-filter-chip")?.textContent).toBe(
+      "Boyacá",
+    );
   });
   it("adds a typed value with Enter and preserves prior selections", () => {
     mountMultiple();

@@ -194,32 +194,6 @@ export function FilterAutocomplete(props: FilterAutocompleteProps) {
   return (
     <div ref={rootRef} className="secop-autocomplete" onBlur={handleBlur}>
       <label htmlFor={id}>{label}</label>
-      {props.multiple && props.value.length > 0 && (
-        <div className="secop-filter-selections">
-          {props.value.map((selected) => (
-            <span className="secop-filter-chip" key={selected}>
-              <span title={selected}>{selected}</span>
-              <button
-                type="button"
-                aria-label={`${removeLabel}: ${selected}`}
-                title={`${removeLabel}: ${selected}`}
-                onClick={() =>
-                  props.onChange(
-                    props.value.filter((value) => value !== selected),
-                  )
-                }
-              >
-                <X size={13} aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      {props.multiple && props.value.length >= 20 && (
-        <span className="secop-filter-limit" role="status">
-          {limitLabel}
-        </span>
-      )}
       <div className="secop-autocomplete-control">
         <input
           ref={inputRef}
@@ -232,7 +206,8 @@ export function FilterAutocomplete(props: FilterAutocompleteProps) {
           aria-activedescendant={
             activeOption ? `${id}-option-${activeIndex}` : undefined
           }
-          value={value}
+          value={props.multiple && !isOpen ? props.value.join(", ") : value}
+          title={props.multiple && !isOpen ? props.value.join(", ") : undefined}
           placeholder={placeholder}
           onFocus={openOptions}
           onChange={(event) => {
@@ -245,6 +220,11 @@ export function FilterAutocomplete(props: FilterAutocompleteProps) {
           }}
           onKeyDown={handleKeyDown}
         />
+        {props.multiple && props.value.length > 1 && (
+          <span className="secop-selection-count" aria-hidden="true">
+            {props.value.length}
+          </span>
+        )}
         <button
           className="secop-autocomplete-toggle"
           type="button"
@@ -266,65 +246,96 @@ export function FilterAutocomplete(props: FilterAutocompleteProps) {
         </button>
       </div>
       {isOpen && (
-        <ul
-          id={listboxId}
-          className="secop-autocomplete-listbox"
-          role="listbox"
-          onScroll={(event) => {
-            const list = event.currentTarget;
-            if (list.scrollTop + list.clientHeight >= list.scrollHeight - 40) {
-              setVisibleCount((count) =>
-                Math.min(count + MAX_SUGGESTIONS, matchingOptions.length),
-              );
-            }
-          }}
-          aria-label={label}
-          aria-multiselectable={props.multiple || undefined}
-        >
-          {suggestions.length > 0 ? (
-            suggestions.map((option, index) => (
-              <li
-                id={`${id}-option-${index}`}
-                key={`${option}-${index}`}
-                className="secop-autocomplete-option"
-                role="option"
-                aria-selected={
-                  props.multiple
-                    ? props.value.includes(option)
-                    : activeIndex === index
-                }
-                data-active={activeIndex === index || undefined}
-                aria-disabled={
-                  (props.multiple &&
-                    props.value.length >= 20 &&
-                    !props.value.includes(option)) ||
-                  undefined
-                }
-                aria-setsize={matchingOptions.length}
-                aria-posinset={index + 1}
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={() => choose(option)}
-              >
-                {props.multiple && (
-                  <Check
-                    size={14}
-                    aria-hidden="true"
-                    className={
-                      props.value.includes(option)
-                        ? "secop-option-check"
-                        : "secop-option-check secop-option-unchecked"
+        <div className="secop-autocomplete-popup">
+          {props.multiple && props.value.length > 0 && (
+            <div className="secop-filter-selections">
+              {props.value.map((selected) => (
+                <span className="secop-filter-chip" key={selected}>
+                  <span title={selected}>{selected}</span>
+                  <button
+                    type="button"
+                    aria-label={`${removeLabel}: ${selected}`}
+                    title={`${removeLabel}: ${selected}`}
+                    onClick={() =>
+                      props.onChange(
+                        props.value.filter((value) => value !== selected),
+                      )
                     }
-                  />
-                )}
-                <span>{option}</span>
-              </li>
-            ))
-          ) : (
-            <li className="secop-autocomplete-empty" role="presentation">
-              {noOptionsLabel}
-            </li>
+                  >
+                    <X size={13} aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+            </div>
           )}
-        </ul>
+          {props.multiple && props.value.length >= 20 && (
+            <span className="secop-filter-limit" role="status">
+              {limitLabel}
+            </span>
+          )}
+          <ul
+            id={listboxId}
+            className="secop-autocomplete-listbox"
+            role="listbox"
+            onScroll={(event) => {
+              const list = event.currentTarget;
+              if (
+                list.scrollTop + list.clientHeight >=
+                list.scrollHeight - 40
+              ) {
+                setVisibleCount((count) =>
+                  Math.min(count + MAX_SUGGESTIONS, matchingOptions.length),
+                );
+              }
+            }}
+            aria-label={label}
+            aria-multiselectable={props.multiple || undefined}
+          >
+            {suggestions.length > 0 ? (
+              suggestions.map((option, index) => (
+                <li
+                  id={`${id}-option-${index}`}
+                  key={`${option}-${index}`}
+                  className="secop-autocomplete-option"
+                  role="option"
+                  aria-selected={
+                    props.multiple
+                      ? props.value.includes(option)
+                      : activeIndex === index
+                  }
+                  data-active={activeIndex === index || undefined}
+                  aria-disabled={
+                    (props.multiple &&
+                      props.value.length >= 20 &&
+                      !props.value.includes(option)) ||
+                    undefined
+                  }
+                  aria-setsize={matchingOptions.length}
+                  aria-posinset={index + 1}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => choose(option)}
+                >
+                  {props.multiple && (
+                    <Check
+                      size={14}
+                      aria-hidden="true"
+                      className={
+                        props.value.includes(option)
+                          ? "secop-option-check"
+                          : "secop-option-check secop-option-unchecked"
+                      }
+                    />
+                  )}
+                  <span>{option}</span>
+                </li>
+              ))
+            ) : (
+              <li className="secop-autocomplete-empty" role="presentation">
+                {noOptionsLabel}
+              </li>
+            )}
+          </ul>
+        </div>
       )}
     </div>
   );

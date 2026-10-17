@@ -160,8 +160,7 @@ const messages = {
     connectionCheck: "Volver a comprobar la conexión",
     optionsCount: "opciones",
     noOptions: "Sin coincidencias. Puedes escribir otro valor.",
-    suggestionsHint:
-      "Elige varios valores por filtro. Escribe para buscar; Enter añade otro valor.",
+    suggestionsHint: "Puedes seleccionar varias opciones por filtro.",
     searchTimeout: "SECOP tardó demasiado en responder. Inténtalo de nuevo.",
     searchAuthorization:
       "Revisa tus permisos y la conexión SECOP en Fuentes de datos para continuar.",
@@ -273,8 +272,7 @@ const messages = {
     connectionCheck: "Check the connection again",
     optionsCount: "options",
     noOptions: "No matches. You can type another value.",
-    suggestionsHint:
-      "Choose several values per filter. Type to search; Enter adds another value.",
+    suggestionsHint: "You can select several options per filter.",
     searchTimeout: "SECOP took too long to respond. Try again.",
     searchAuthorization:
       "Check your permissions and SECOP connection in Data sources to continue.",
@@ -387,8 +385,7 @@ const messages = {
     connectionCheck: "Verificar a conexão novamente",
     optionsCount: "opções",
     noOptions: "Sem resultados. Você pode digitar outro valor.",
-    suggestionsHint:
-      "Escolha vários valores por filtro. Digite para buscar; Enter adiciona outro valor.",
+    suggestionsHint: "Você pode selecionar várias opções por filtro.",
     searchTimeout: "O SECOP demorou para responder. Tente novamente.",
     searchAuthorization:
       "Verifique suas permissões e a conexão SECOP em Fontes de dados para continuar.",
@@ -1052,30 +1049,32 @@ function Screen({ savia }: { savia: PluginApi }) {
             }}
             aria-label={t.searchAria}
           >
-            <label className="secop-query">
-              {t.query}
-              <input
-                value={draft.q ?? ""}
-                onChange={(event) =>
-                  setDraft({ ...draft, q: event.target.value })
-                }
-              />
-            </label>
-            <label className="secop-availability">
-              {t.availability}
-              <select
-                value={draft.vigentes === false ? "all" : "active"}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    vigentes: event.target.value === "active",
-                  }))
-                }
-              >
-                <option value="active">{t.activeOnly}</option>
-                <option value="all">{t.allTenders}</option>
-              </select>
-            </label>
+            <div className="secop-search-leading">
+              <label className="secop-query">
+                {t.query}
+                <input
+                  value={draft.q ?? ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, q: event.target.value })
+                  }
+                />
+              </label>
+              <label className="secop-availability">
+                {t.availability}
+                <select
+                  value={draft.vigentes === false ? "all" : "active"}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      vigentes: event.target.value === "active",
+                    }))
+                  }
+                >
+                  <option value="active">{t.activeOnly}</option>
+                  <option value="all">{t.allTenders}</option>
+                </select>
+              </label>
+            </div>
             <div className="secop-advanced">
               {(
                 [
@@ -1167,9 +1166,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                 </div>
               ))}
             </div>
-            <p className="secop-filter-hint">
-              {t.filtersHint} {t.suggestionsHint}
-            </p>
+            <p className="secop-filter-hint">{t.suggestionsHint}</p>
             <div className="secop-search-actions">
               <button
                 type="button"

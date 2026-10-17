@@ -112,9 +112,9 @@
 }
 .secop-search-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  gap: 0.8rem;
+  gap: 1rem;
   margin-top: 0.85rem;
 }
 .secop-app .secop-text-button {
@@ -525,5 +525,28 @@
   .secop-app .secop-filter-chip button {
     min-height: 44px;
     min-width: 44px;
+  }
+}
+
+.secop-search-leading {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: end;
+}
+.secop-search-leading .secop-query,
+.secop-search-leading .secop-availability {
+  margin-top: 0;
+  max-width: none;
+}
+.secop-search-actions .secop-primary {
+  order: -1;
+}
+.secop-app {
+  padding-bottom: 6rem;
+}
+@media (max-width: 560px) {
+  .secop-search-leading {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

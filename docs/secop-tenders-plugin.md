@@ -364,3 +364,11 @@ Complete catalogs are cached independently from searches. Renewal runs in the
 SECOP service background; a compact retry icon appears beside an unavailable
 catalog. Existing selections and previously loaded options survive refresh
 failures. No catalog is silently replaced with the currently loaded results.
+
+## Compact filter layout
+
+Version 1.8.2 keeps multi-select fields at a stable height. Closed controls show
+the selected values in one truncated line and a count for multiple selections;
+opening the control exposes searchable options and removable selection chips.
+Keyword and availability fields share a row when space permits. Search actions
+are grouped at the start of the form, clear of the floating assistant.

@@ -2,7 +2,7 @@
 
 An optional Savia tenant plugin for searching live SECOP procurement records and saving selected opportunities to a workspace collection for follow-up. Search history is not persisted. The plugin has Spanish, English, and Portuguese interface copy.
 
-Version 1.8.1 keeps compact contextual actions icon-only with localized
+Version 1.8.2 keeps compact contextual actions icon-only with localized
 accessible names and tooltips. PDF analysis records remain persisted in the
 `procurement_documents` collection but are hidden from the Studio sidebar;
 preparation tasks remain available in their native records screen.
@@ -74,3 +74,7 @@ Status, entity, modality and department support multiple selected values (up to
 fields combine with AND. Complete catalog failures use a small labelled retry
 icon and retain prior options. The SECOP service refreshes stale snapshots in
 the background instead of blocking the UI on slow Socrata queries.
+
+Multi-select fields show a single-line summary and selection count when closed.
+Removable chips live inside the open popup, keeping all filter controls aligned.
+Search and clear actions are grouped away from the floating assistant.
